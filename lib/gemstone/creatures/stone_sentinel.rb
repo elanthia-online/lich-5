@@ -104,7 +104,7 @@
   },
   messaging: {
     description: [
-      "Comprised of solid blocks of granite, the immense stone sentinel stands and moves very stiffly.  Each portion of its anatomy is chiseled in rectangular pieces with sharp right angles.  It is not apparent how this animated construct moves, or how it even stays together, but somehow it does both effectively.  The attacks of a stone sentinel carry the weight of tons of rock behind them.  Being in the path of one is not an experience to be recommended."
+      "Comprised of solid blocks of granite, the immense stone sentinel stands and moves very stiffly. Each portion of its anatomy is chiseled in rectangular pieces with sharp right angles. It is not apparent how this animated construct moves, or how it even stays together, but somehow it does both effectively. The attacks of a stone sentinel carry the weight of tons of rock behind them. Being in the path of one is not an experience to be recommended."
     ],
     arrival: [],
     flee: [],

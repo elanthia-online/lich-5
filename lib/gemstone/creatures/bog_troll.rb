@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "Hunched over and bow-legged, the bog troll bears many resemblances to the frogs that inhabit the bogs along with it.  Its skin is a dark yellow mottled with patches of brownish green.  Its mouth, wide and thick-lipped, displays rows of misaligned, jagged teeth, and the troll keeps a constant grin, as if its teeth are too large for it to completely close its mouth.  Bulbous green eyes sit nearly atop its flat cranium, and sharp claws extend from its oversized, webbed hands and feet."
+      "Hunched over and bow-legged, the bog troll bears many resemblances to the frogs that inhabit the bogs along with it. Its skin is a dark yellow mottled with patches of brownish green. Its mouth, wide and thick-lipped, displays rows of misaligned, jagged teeth, and the troll keeps a constant grin, as if its teeth are too large for it to completely close its mouth. Bulbous green eyes sit nearly atop its flat cranium, and sharp claws extend from its oversized, webbed hands and feet."
     ],
     arrival: [],
     flee: [],

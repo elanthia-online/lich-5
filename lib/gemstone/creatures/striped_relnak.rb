@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The striped relnak is a low-slung, wide-bodied reptile of the chameleon family.  Only a few feet long, it is deceptively fast despite its girth.  Its skin is scaly and rough with alternating strips of red and charcoal grey, except for the flaring, spiny sail that stands erect on its back which is solid grey.  Extending from its thick neck to nearly the tip of its flicking tail, the sail's charcoal grey is punctuated by evenly spaced iridescent blue spines which glow brightly when the relnak is agitated.</pre>"
+      "The striped relnak is a low-slung, wide-bodied reptile of the chameleon family. Only a few feet long, it is deceptively fast despite its girth. Its skin is scaly and rough with alternating strips of red and charcoal grey, except for the flaring, spiny sail that stands erect on its back which is solid grey. Extending from its thick neck to nearly the tip of its flicking tail, the sail's charcoal grey is punctuated by evenly spaced iridescent blue spines which glow brightly when the relnak is agitated."
     ],
     arrival: [],
     flee: [],

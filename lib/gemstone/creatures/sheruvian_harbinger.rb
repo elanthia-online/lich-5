@@ -104,11 +104,11 @@
     gems: true,
     boxes: true,
     skin: "No",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "The Sheruvian harbinger is a handsome woman with hypnotic eyes and fair skin. Her demeanor appears emotionless, but you can see some sort of evil fire burning within those dark pupils.  A sleek, black breastplate covers most of her torso, and you can see it is made of fine quality.  The mere look of the harbinger reminds most people of the tales of the Harbinger of Chaos, spawned forth to do great evil."
+      "The Sheruvian harbinger is a handsome woman with hypnotic eyes and fair skin. Her demeanor appears emotionless, but you can see some sort of evil fire burning within those dark pupils. A sleek, black breastplate covers most of her torso, and you can see it is made of fine quality. The mere look of the harbinger reminds most people of the tales of the Harbinger of Chaos, spawned forth to do great evil."
     ],
     arrival: [],
     flee: [],

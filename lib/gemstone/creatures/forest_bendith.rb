@@ -83,11 +83,11 @@
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "[[Glowing violet essence shard]]"
+    other: "Glowing violet essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Short and stumpy with pale yellowish skin, the forest bendith is hunched and her body is covered with greenish mosses of varying thickness.  Imbedded into the soft flesh of her bulbous head are a pair of watery purple eyes which peer forth with a sense of malignant inquisitiveness.  An odor of damp mold and rotting vegetation seems to hang about the diminutive being.</pre>"
+      "Short and stumpy with pale yellowish skin, the forest bendith is hunched and her body is covered with greenish mosses of varying thickness. Imbedded into the soft flesh of her bulbous head are a pair of watery purple eyes which peer forth with a sense of malignant inquisitiveness. An odor of damp mold and rotting vegetation seems to hang about the diminutive being."
     ],
     arrival: [],
     flee: [],

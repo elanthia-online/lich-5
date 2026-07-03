@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "The myklian is a fearsome beast, some form of large lizard or amphibian that usually travels on four legs, but sometimes stands upright on two legs.  It has a short, stubby tail which is triangular in shape and covered with a luminescent, chitinous plate.  Hard scales cover the rest of the beast's body, except for the soft underbelly.  Bony spikes and knobs guard the beast's joints.  The coloration of the myklian species ranges the entire spectrum, red, orange, yellow, green, blue and purple."
+      "The myklian is a fearsome beast, some form of large lizard or amphibian that usually travels on four legs, but sometimes stands upright on two legs. It has a short, stubby tail which is triangular in shape and covered with a luminescent, chitinous plate. Hard scales cover the rest of the beast's body, except for the soft underbelly. Bony spikes and knobs guard the beast's joints. The coloration of the myklian species ranges the entire spectrum, red, orange, yellow, green, blue and purple."
     ],
     arrival: [],
     flee: [],

@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=35%}}>Though this plant with its droopy leafs and sickly flowers is a bit on the far gone side, it might still benefit from being re-potted.  Preferably six feet under!</pre>"
+      "Though this plant with its droopy leafs and sickly flowers is a bit on the far gone side, it might still benefit from being re-potted. Preferably six feet under!"
     ],
     arrival: [],
     flee: [],

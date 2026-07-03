@@ -55,7 +55,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Attack strength]] boost"
+        name: "Attack strength boost"
       }
     ],
     special_notes: []
@@ -82,7 +82,7 @@
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
-      "Immune to [[Unbalance]]"
+      "Immune to Unbalance"
     ]
   },
   special_other: nil,
@@ -99,7 +99,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The spectral warrior shimmers for an instant, seemingly half real and half phantom, his semi-ethereal armor faintly gleaming as it moves.  A gaunt face stares out from beneath the ghostly helm, his eyes swirling pits of blackness that seek out living foes, hatefully wishing to resign others to his own horrible fate.</pre>"
+      "The spectral warrior shimmers for an instant, seemingly half real and half phantom, his semi-ethereal armor faintly gleaming as it moves. A gaunt face stares out from beneath the ghostly helm, his eyes swirling pits of blackness that seek out living foes, hatefully wishing to resign others to his own horrible fate."
     ],
     arrival: [],
     flee: [],

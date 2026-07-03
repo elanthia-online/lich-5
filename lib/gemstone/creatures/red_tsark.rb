@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Circling and pacing, the red tsark creeps closer, her eyes glowing red with fury.  The scaled creature moves constantly, crouched on her powerful back legs like a tightly wound spring, ready to launch an attack at any opportunity.  Small front legs are held poised in front of the reptile's chest, armed with formidable claws that could easily disembowel an unwary adversary.  Smoke trails from the red tsark's nostrils, punctuated by flames each time she snorts a challenge.</pre>"
+      "Circling and pacing, the red tsark creeps closer, her eyes glowing red with fury. The scaled creature moves constantly, crouched on her powerful back legs like a tightly wound spring, ready to launch an attack at any opportunity. Small front legs are held poised in front of the reptile's chest, armed with formidable claws that could easily disembowel an unwary adversary. Smoke trails from the red tsark's nostrils, punctuated by flames each time she snorts a challenge."
     ],
     arrival: [],
     flee: [],

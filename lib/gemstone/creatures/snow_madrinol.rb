@@ -81,11 +81,11 @@
     gems: true,
     boxes: nil,
     skin: "a madrinol skin",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The heavily armored snow madrinol moves ponderously through the area searching for easy prey to consume.  Plates of extremely thick slate grey skin cover this quadruped on nearly all its exterior surfaces except its long, leathery tail and cupped, upright ears.  Tufts of off-white fur protrude between the plates, however, giving the impression that the madrinol is wearing pieces of armor rather than a total covering.  Unique to the snow madrinol seems to be its flared, circular hooves.  Sharp claws protrude from all sides of each hoof, allowing the creature to grip the ice or frozen ground for greater stability.</pre>"
+      "The heavily armored snow madrinol moves ponderously through the area searching for easy prey to consume. Plates of extremely thick slate grey skin cover this quadruped on nearly all its exterior surfaces except its long, leathery tail and cupped, upright ears. Tufts of off-white fur protrude between the plates, however, giving the impression that the madrinol is wearing pieces of armor rather than a total covering. Unique to the snow madrinol seems to be its flared, circular hooves. Sharp claws protrude from all sides of each hoof, allowing the creature to grip the ice or frozen ground for greater stability."
     ],
     arrival: [],
     flee: [],

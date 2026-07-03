@@ -80,11 +80,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet mote of essence]]"
+    other: "Glowing violet mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Muscular and lean, a phantasmal bestial swordsman stands shorter than most giantmen, dressed only in the ragged remains of leather pants.  His skin is the color of a starless night and is wrapped tightly around brawny arms and legs.  Long, pointed ears extend from the sides of his bald head with large, pitch black eyes set closely together over two large slits in place of a proper nose.  Long yellow canines stick up from behind the lower lip of the swordsman.</pre>"
+      "Muscular and lean, a phantasmal bestial swordsman stands shorter than most giantmen, dressed only in the ragged remains of leather pants. His skin is the color of a starless night and is wrapped tightly around brawny arms and legs. Long, pointed ears extend from the sides of his bald head with large, pitch black eyes set closely together over two large slits in place of a proper nose. Long yellow canines stick up from behind the lower lip of the swordsman."
     ],
     arrival: [],
     flee: [],

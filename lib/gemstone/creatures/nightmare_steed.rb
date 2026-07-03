@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "The mighty nightmare steed stands defiantly at all around it staring blankly with cold rage, filled with malice and a clear desire to rend flesh from limb to limb.  It has midnight black hair and a silky silver mane with occasional black streaks.  The eyes of a nightmare steed shine with a brilliant red glow that never are seen to blink very often, if at all."
+      "The mighty nightmare steed stands defiantly at all around it staring blankly with cold rage, filled with malice and a clear desire to rend flesh from limb to limb. It has midnight black hair and a silky silver mane with occasional black streaks. The eyes of a nightmare steed shine with a brilliant red glow that never are seen to blink very often, if at all."
     ],
     arrival: [],
     flee: [],

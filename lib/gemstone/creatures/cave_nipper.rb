@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "More serpent than lizard, the cave nipper is nearly as long as a human is tall, though less thick.  It has a short and stubby tail, virtually no neck, and legs so stumpy that they are nearly nonexistent.  A brown back shading off to a tannish underside allows this beast to blend in among the rocks and moss of its habitat.  Moving swiftly and showing great strength for its size, the cave nipper will pursue and capture prey much larger than itself.  This one is sizing up its next meal through cold, unblinking, reptilian eyes that stare out from its thick, blunt-nosed head.  Its tongue flicks out quickly, as if gathering your scent."
+      "More serpent than lizard, the cave nipper is nearly as long as a human is tall, though less thick. It has a short and stubby tail, virtually no neck, and legs so stumpy that they are nearly nonexistent. A brown back shading off to a tannish underside allows this beast to blend in among the rocks and moss of its habitat. Moving swiftly and showing great strength for its size, the cave nipper will pursue and capture prey much larger than itself. This one is sizing up its next meal through cold, unblinking, reptilian eyes that stare out from its thick, blunt-nosed head. Its tongue flicks out quickly, as if gathering your scent."
     ],
     arrival: [],
     flee: [],

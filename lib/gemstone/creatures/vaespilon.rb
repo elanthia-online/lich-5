@@ -89,11 +89,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Inky necrotic core]]"
+    other: "Inky necrotic core"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The vaespilon's features are so terribly deformed by death's ravages, her expression is one of almost comical surprise, until her smile widens into a grin that is a study in terror.  The skin covering the walking corpse is mottled and stretched unevenly over the bones, and the surface ripples and bulges as if putrescence is bubbling underneath.  The vaespilon hisses in glee as she moves, a wave of stench preceding her like an invisible assailant.</pre>"
+      "The vaespilon's features are so terribly deformed by death's ravages, her expression is one of almost comical surprise, until her smile widens into a grin that is a study in terror. The skin covering the walking corpse is mottled and stretched unevenly over the bones, and the surface ripples and bulges as if putrescence is bubbling underneath. The vaespilon hisses in glee as she moves, a wave of stench preceding her like an invisible assailant."
     ],
     arrival: [],
     flee: [],

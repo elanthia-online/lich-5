@@ -101,7 +101,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The plains orc shaman watches his surroundings diligently through shifting yellow eyes that hint at a cunning and dangerous intelligence.  His heavily-muscled limbs bear an almost runelike pattern of ritually inflicted scars, and his tangled red beard is adorned with crude bone and wood beads.  The shaman mutters to himself in a series of guttural incantations.</pre>"
+      "The plains orc shaman watches his surroundings diligently through shifting yellow eyes that hint at a cunning and dangerous intelligence. His heavily-muscled limbs bear an almost runelike pattern of ritually inflicted scars, and his tangled red beard is adorned with crude bone and wood beads. The shaman mutters to himself in a series of guttural incantations."
     ],
     arrival: [],
     flee: [],

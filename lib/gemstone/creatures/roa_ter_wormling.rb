@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The roa'ter wormling is large worm that seems not quite fully grown, and yet it is still a massive creature around fifteen feet long.  Though young, it possesses great strength and moves quickly about.  Light red in color, it seems to have no eyes, but its keen tremor sense quickly finds targets.</pre>"
+      "The roa'ter wormling is large worm that seems not quite fully grown, and yet it is still a massive creature around fifteen feet long. Though young, it possesses great strength and moves quickly about. Light red in color, it seems to have no eyes, but its keen tremor sense quickly finds targets."
     ],
     arrival: [],
     flee: [],

@@ -79,11 +79,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[glimmering blue essence shard]]"
+    other: "glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Dressed in a cassock and veil, the Arachne servant looks thin and malnourished.  Staring from behind the veil are a pair of eyes that reflect both terror and determination.  Bound to the service of Arachne, the Arachne servants are totally dedicated to their master, performing whatever duty is required.</pre>"
+      "Dressed in a cassock and veil, the Arachne servant looks thin and malnourished. Staring from behind the veil are a pair of eyes that reflect both terror and determination. Bound to the service of Arachne, the Arachne servants are totally dedicated to their master, performing whatever duty is required."
     ],
     arrival: [],
     flee: [],

@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Often first noticed as just a large clump of moving snow, the greater ice spider resolves into a wide, low-slung spider three feet across and half again as long.  Covered with thick, white hair to ward against the cold wind, the greater ice spider roams the snowfields looking for anything living it can web and consume.</pre>"
+      "Often first noticed as just a large clump of moving snow, the greater ice spider resolves into a wide, low-slung spider three feet across and half again as long. Covered with thick, white hair to ward against the cold wind, the greater ice spider roams the snowfields looking for anything living it can web and consume."
     ],
     arrival: [],
     flee: [],

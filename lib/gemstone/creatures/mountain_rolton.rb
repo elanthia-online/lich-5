@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This is obviously a prime example of the beast of legend, the fiend of song and tale.  Known near and far as an implacable enemy of early settlers, it was this ferocious sheeplike creature that earned the epithet of Warrior-Killer in its sordid past.  The rolton is covered with a dirty, matted, disgusting-looking grey pelt that might once have been white and is still abysmally smelly.  However, it isn't this trait alone that gives him such a terrifying appearance.  As the animal bleats at you, it is then you get a view of the 'maw of death', with its long, curved incisors that gnash and gnaw.  The critter has some nasty-looking hooves as well.</pre>"
+      "This is obviously a prime example of the beast of legend, the fiend of song and tale. Known near and far as an implacable enemy of early settlers, it was this ferocious sheeplike creature that earned the epithet of Warrior-Killer in its sordid past. The rolton is covered with a dirty, matted, disgusting-looking grey pelt that might once have been white and is still abysmally smelly. However, it isn't this trait alone that gives him such a terrifying appearance. As the animal bleats at you, it is then you get a view of the 'maw of death', with its long, curved incisors that gnash and gnaw. The critter has some nasty-looking hooves as well."
     ],
     arrival: [],
     flee: [],

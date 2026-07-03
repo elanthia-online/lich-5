@@ -74,7 +74,7 @@
   },
   messaging: {
     description: [
-      "The outfit this gnoll is dressed in couldn't exactly be called a uniform, but there is a badge pinned on the front, signifying him as a member of the guard.  The faint scent of fermented mushrooms wafts from the guard."
+      "The outfit this gnoll is dressed in couldn't exactly be called a uniform, but there is a badge pinned on the front, signifying him as a member of the guard. The faint scent of fermented mushrooms wafts from the guard."
     ],
     arrival: [],
     flee: [],

@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing nearly nine feet in height, the tusked ursian  appears to be an unnatural union between a boar and a bear.  Her yellow-tusked maw is lined with jagged fangs and beady eyes peer over a moist snout.  Powerful limbs ending in black-nailed claws attest to the ferocity of this beast.</pre>"
+      "Standing nearly nine feet in height, the tusked ursian appears to be an unnatural union between a boar and a bear. Her yellow-tusked maw is lined with jagged fangs and beady eyes peer over a moist snout. Powerful limbs ending in black-nailed claws attest to the ferocity of this beast."
     ],
     arrival: [],
     flee: [],

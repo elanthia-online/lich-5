@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Wide, pupil-less green eyes peer about, quickly assessing both threats and terrain.  The Ithzir scout stalks in a fluid, half-crouch that is as graceful as it is lightning fast, his whole demeanor underscoring his menace and obvious intelligence.  The Ithzir scout is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance.  The scout wears a charcoal grey tunic with no apparent identifiers of his station.</pre>"
+      "Wide, pupil-less green eyes peer about, quickly assessing both threats and terrain. The Ithzir scout stalks in a fluid, half-crouch that is as graceful as it is lightning fast, his whole demeanor underscoring his menace and obvious intelligence. The Ithzir scout is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance. The scout wears a charcoal grey tunic with no apparent identifiers of his station."
     ],
     arrival: [],
     flee: [],

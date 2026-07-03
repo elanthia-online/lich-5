@@ -113,11 +113,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The shan ranger stands in a half-crouch, his long, knotty legs giving him that lanky, dangerous look of a wolf.  Walking upright, the body covered with mottled grey fur and his long arms conclude in large, clawed hands with semi-opposable thumbs.  The shan ranger's dog-like visage is fierce, with slavering jaws and eyes that glow like something out of a bad dream.</pre>"
+      "The shan ranger stands in a half-crouch, his long, knotty legs giving him that lanky, dangerous look of a wolf. Walking upright, the body covered with mottled grey fur and his long arms conclude in large, clawed hands with semi-opposable thumbs. The shan ranger's dog-like visage is fierce, with slavering jaws and eyes that glow like something out of a bad dream."
     ],
     arrival: [],
     flee: [],

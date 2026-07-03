@@ -75,7 +75,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "Immune to [[Limb Disruption]]"
+      "Immune to Limb Disruption"
     ]
   },
   special_other: nil,
@@ -88,11 +88,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet mote of essence]]"
+    other: "Glowing violet mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>At first glance, the fire sprite looks like nothing more than a ball of whirling flame, spitting smoke and ricocheting about the rocks like a dervish.  Gradually, her form coalesces, extending elongated arms and fingers, and short gnarled legs from the sphere of fire.  The fire sprite's hideous features are pulled into a grimace of hate, and her eyes are like two glowing coals, which spout sparks as the creature wavers in and out of her tenuous configuration.</pre>"
+      "At first glance, the fire sprite looks like nothing more than a ball of whirling flame, spitting smoke and ricocheting about the rocks like a dervish. Gradually, her form coalesces, extending elongated arms and fingers, and short gnarled legs from the sphere of fire. The fire sprite's hideous features are pulled into a grimace of hate, and her eyes are like two glowing coals, which spout sparks as the creature wavers in and out of her tenuous configuration."
     ],
     arrival: [],
     flee: [],

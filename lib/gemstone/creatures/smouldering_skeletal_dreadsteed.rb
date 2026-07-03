@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Clad in fatigued barding, the skeletal dreadsteed is an ossified vestige of a powerful steed.  Bits of dried flesh cling to the bones, but its ribcage is an open ruin that holds a twisting, nebulous orb of phantasmal blue flame.  More cerulean fire sprouts from its skull, neck, and hinquarters as an unearthly mane and tail.  Its bony hooves are shod in old steel.</pre>\n\nAppraisal:\n<pre{{log2}}>\nThe skeletal dreadsteed is large in size and about five feet high in its current state.\n</pre>"
+      "Clad in fatigued barding, the skeletal dreadsteed is an ossified vestige of a powerful steed. Bits of dried flesh cling to the bones, but its ribcage is an open ruin that holds a twisting, nebulous orb of phantasmal blue flame. More cerulean fire sprouts from its skull, neck, and hinquarters as an unearthly mane and tail. Its bony hooves are shod in old steel.\n\nAppraisal:\n\nThe skeletal dreadsteed is large in size and about five feet high in its current state."
     ],
     arrival: [],
     flee: [],

@@ -107,7 +107,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A pale scaled shaper is far taller than a woman ought to be, with a stretched appearance like that of a doll tugged by battling children.  That is, if she is even female: the pale robes that she wears, with their faint appliqued patterns of winking copper scales, betray only the most suggestive promise of a feminine form beneath.  There is something upsettingly inhuman about the shaper's face, which has the shape and proportions of a human's, but eyes that glow like green embers and a dusting of ridged scales on its cheeks and brow.</pre>"
+      "A pale scaled shaper is far taller than a woman ought to be, with a stretched appearance like that of a doll tugged by battling children. That is, if she is even female: the pale robes that she wears, with their faint appliqued patterns of winking copper scales, betray only the most suggestive promise of a feminine form beneath. There is something upsettingly inhuman about the shaper's face, which has the shape and proportions of a human's, but eyes that glow like green embers and a dusting of ridged scales on its cheeks and brow."
     ],
     arrival: [],
     flee: [],

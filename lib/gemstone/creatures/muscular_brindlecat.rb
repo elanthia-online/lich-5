@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The muscular brindlecat is a large, tawny brown animal of the cat family with a slender body and long tail.  Larger than her cougar and puma cousins, her sleek build disguises her power.  Both claws and jaws are to be feared, as the muscular brindlecat strikes quickly with each.  Prized for her soft pelt, this feline is a proud and fierce hunter of the great eastern plains.<!-- Creature description text from in-game verb DESCRIBE goes here.--> </pre>"
+      "The muscular brindlecat is a large, tawny brown animal of the cat family with a slender body and long tail. Larger than her cougar and puma cousins, her sleek build disguises her power. Both claws and jaws are to be feared, as the muscular brindlecat strikes quickly with each. Prized for her soft pelt, this feline is a proud and fierce hunter of the great eastern plains."
     ],
     arrival: [],
     flee: [],

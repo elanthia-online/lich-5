@@ -89,11 +89,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]<br>[[Glimmering blue mote of essence]]"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A muddy black cowl obscures the monk's face. Given the burning green eyes and foul stench he exudes, perhaps that is for the best.  Tattered black rags cloak his form, while the only marking visible on his ragged clothing is that of a haphazardly stitched crescent moon symbol.</pre>"
+      "A muddy black cowl obscures the monk's face. Given the burning green eyes and foul stench he exudes, perhaps that is for the best. Tattered black rags cloak his form, while the only marking visible on his ragged clothing is that of a haphazardly stitched crescent moon symbol."
     ],
     arrival: [],
     flee: [],

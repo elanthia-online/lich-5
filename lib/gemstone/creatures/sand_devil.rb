@@ -121,7 +121,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Mutiple attack abilities, including a command of many offensive spells, make the sand devil a most dangerous adversary.  Its name comes from the appearance of its leathery, yellowish, reptilian head crowned with two long, upright, black horns.  The sand devil swirls in and out of areas, constantly rotating to keep the wind and dust whipping around it.  This allows its sharp claws to remain hidden, emerging suddenly from the sandstorm to slash at surprised foes.</pre>"
+      "Mutiple attack abilities, including a command of many offensive spells, make the sand devil a most dangerous adversary. Its name comes from the appearance of its leathery, yellowish, reptilian head crowned with two long, upright, black horns. The sand devil swirls in and out of areas, constantly rotating to keep the wind and dust whipping around it. This allows its sharp claws to remain hidden, emerging suddenly from the sandstorm to slash at surprised foes."
     ],
     arrival: [],
     flee: [],

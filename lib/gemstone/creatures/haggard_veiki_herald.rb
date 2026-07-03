@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Power rumbles and thrums through the limbs of the Veiki herald.  That barely contained might and the intensity of his devotion have colluded to burn the meat from his bones, leaving him skeletally thin.  The hollows of his face are deep and haunted, the crags cast in deep shadow by the flashes of brilliant azure that flicker and fade within his mesmerizing stare.  The herald's hair is brittle and blanched, starkly pale against his sun-darkened skin.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The Veiki herald is huge in size and about thirteen feet high in his current state.</pre>"
+      "Power rumbles and thrums through the limbs of the Veiki herald. That barely contained might and the intensity of his devotion have colluded to burn the meat from his bones, leaving him skeletally thin. The hollows of his face are deep and haunted, the crags cast in deep shadow by the flashes of brilliant azure that flicker and fade within his mesmerizing stare. The herald's hair is brittle and blanched, starkly pale against his sun-darkened skin.\n\n;Assess\nThe Veiki herald is huge in size and about thirteen feet high in his current state."
     ],
     arrival: [],
     flee: [],

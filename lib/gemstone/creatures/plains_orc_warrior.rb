@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>As tall as a giantman and twice as muscular as most, the plains orc warrior is taller and more agile than his more primitive orcish brothers, and judging by the cleverness in his beady yellow eyes, probably quite a bit more intelligent as well.  Leathery brown skin covers his bulging limbs, the same color as the crude armor that protects his massive torso, and a scraggly red beard frames his heavy jowls.</pre>"
+      "As tall as a giantman and twice as muscular as most, the plains orc warrior is taller and more agile than his more primitive orcish brothers, and judging by the cleverness in his beady yellow eyes, probably quite a bit more intelligent as well. Leathery brown skin covers his bulging limbs, the same color as the crude armor that protects his massive torso, and a scraggly red beard frames his heavy jowls."
     ],
     arrival: [],
     flee: [],

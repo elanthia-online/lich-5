@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This large, stocky owl seems designed for predation.  Its sharp talons are only partially concealed by its feathered legs, and the hawk-owl's beak is comparatively small, but razor sharp.  Coal black eyes are set deep in the great bird's mottled facial disks.</pre>"
+      "This large, stocky owl seems designed for predation. Its sharp talons are only partially concealed by its feathered legs, and the hawk-owl's beak is comparatively small, but razor sharp. Coal black eyes are set deep in the great bird's mottled facial disks."
     ],
     arrival: [],
     flee: [],

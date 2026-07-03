@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Possessed with a ferocious nature far out of proportion to its size, this wolverine appears to be an extremely vicious opponent.  Swift and agile, with claws and teeth backed by muscles like coiled springs, the wolverine will take on and defeat foes three times its size.  Even stout boiled leather is oft times no match for its powerful claws and ferocious bite.  There is commonly a touch of foam about its mouth, which may indicate some type of virulent disease.</pre>"
+      "Possessed with a ferocious nature far out of proportion to its size, this wolverine appears to be an extremely vicious opponent. Swift and agile, with claws and teeth backed by muscles like coiled springs, the wolverine will take on and defeat foes three times its size. Even stout boiled leather is oft times no match for its powerful claws and ferocious bite. There is commonly a touch of foam about its mouth, which may indicate some type of virulent disease."
     ],
     arrival: [],
     flee: [],

@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The greater faeroth looks as though he might be a relative to a yeti, although his fur is a mottled dingy brown and carries a pungent stench. Similar to its lesser cousin, the greater faeroth stands on mighty forelimbs that lift his entire body into the air.  Much more powerful hind legs dangle with sharp, filthy claws extruding.  The beast stands at least seven feet tall, with a face that might look human if not for the heavy brow and deeply set eyes.  Black lips curl over ivory white teeth that appear to drip some sort of vile green liquid.</pre>"
+      "The greater faeroth looks as though he might be a relative to a yeti, although his fur is a mottled dingy brown and carries a pungent stench. Similar to its lesser cousin, the greater faeroth stands on mighty forelimbs that lift his entire body into the air. Much more powerful hind legs dangle with sharp, filthy claws extruding. The beast stands at least seven feet tall, with a face that might look human if not for the heavy brow and deeply set eyes. Black lips curl over ivory white teeth that appear to drip some sort of vile green liquid."
     ],
     arrival: [],
     flee: [],

@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=27em}}>Leathery, ochre wings extending as wide as a giantman is tall, the aivren wheels and swoops with amazing dexterity.  The aivren flies low over the landscape, snapping up anything remotely edible in its long, pointed beak or sharp, descending claws.  Charcoal grey on the underbelly and a dusky ochre on the back, its speed often surprises its foes, allowing the aivren to strike the death blow before the opponent can react.</pre>"
+      "Leathery, ochre wings extending as wide as a giantman is tall, the aivren wheels and swoops with amazing dexterity. The aivren flies low over the landscape, snapping up anything remotely edible in its long, pointed beak or sharp, descending claws. Charcoal grey on the underbelly and a dusky ochre on the back, its speed often surprises its foes, allowing the aivren to strike the death blow before the opponent can react."
     ],
     arrival: [],
     flee: [],

@@ -45,16 +45,16 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Sunburst (609)]]"
+        name: "Sunburst (609)"
       },
       {
-        name: "[[Tangleweed (610)]]"
+        name: "Tangleweed (610)"
       },
       {
-        name: "[[Spike Thorn (616)]]"
+        name: "Spike Thorn (616)"
       },
       {
-        name: "[[Stealth]]"
+        name: "Stealth"
       }
     ],
     special_notes: []
@@ -106,7 +106,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A faded coat of sun-bleached oilskin graces the muscular shoulders of a triton warden, the rusted ornamentations covered in grey-cast barnacles and dried kelp.  His trident-branded knuckles are exposed through his desiccated leather gloves, the shreds of hide clinging tightly to his green-tinged forearms.  The warden growls softly through his clenched teeth, the sharp protrusions biting down on a broken driftwood pipe.</pre>"
+      "A faded coat of sun-bleached oilskin graces the muscular shoulders of a triton warden, the rusted ornamentations covered in grey-cast barnacles and dried kelp. His trident-branded knuckles are exposed through his desiccated leather gloves, the shreds of hide clinging tightly to his green-tinged forearms. The warden growls softly through his clenched teeth, the sharp protrusions biting down on a broken driftwood pipe."
     ],
     arrival: [],
     flee: [],

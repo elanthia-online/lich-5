@@ -89,11 +89,11 @@
     gems: true,
     boxes: true,
     skin: "a massive troll king hide",
-    other: "trolls blood, [[Glowing violet essence dust]]"
+    other: "trolls blood, Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "Massive troll kings are the largest, ugliest, dumbest, and most powerful creatures in the troll family.\n\nThis fierce monster is roughly humanoid, standing nearly 9 feet tall, with long arms ending in razor-sharp claws.  Dark green and covered with ugly warts, this hideous being appears unintelligent yet incredibly strong."
+      "Massive troll kings are the largest, ugliest, dumbest, and most powerful creatures in the troll family.\n\nThis fierce monster is roughly humanoid, standing nearly 9 feet tall, with long arms ending in razor-sharp claws. Dark green and covered with ugly warts, this hideous being appears unintelligent yet incredibly strong."
     ],
     arrival: [],
     flee: [],

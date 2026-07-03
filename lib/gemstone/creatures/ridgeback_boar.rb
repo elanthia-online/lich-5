@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The ridgeback boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth.  His body is covered with coarse, reddish-brown hair, and gleaming tusks protrude from each side of his gaping mouth.  A good eight feet long from dripping snout to curly tail and weighing nearly a half ton, the ridgeback boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey.  The boar's bony backbone lends the beast his name, as it juts up through his bristly hair.</pre>"
+      "The ridgeback boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth. His body is covered with coarse, reddish-brown hair, and gleaming tusks protrude from each side of his gaping mouth. A good eight feet long from dripping snout to curly tail and weighing nearly a half ton, the ridgeback boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey. The boar's bony backbone lends the beast his name, as it juts up through his bristly hair."
     ],
     arrival: [],
     flee: [],

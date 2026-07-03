@@ -94,7 +94,7 @@
   },
   messaging: {
     description: [
-      "The lava elemental is a bubbling mound of lava, across which an occasional warped face appears before dissolving away.  Various appendages form and melt away constantly, as the alien creature goes about its business."
+      "The lava elemental is a bubbling mound of lava, across which an occasional warped face appears before dissolving away. Various appendages form and melt away constantly, as the alien creature goes about its business."
     ],
     arrival: [],
     flee: [],

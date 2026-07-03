@@ -43,7 +43,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Pounce]]"
+        name: "Pounce"
       }
     ],
     special_notes: []
@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The mountain lion is a muscular and athletic animal.  Covered with a uniform coat of reddish-brown fur, her long, lithe body is equipped with powerful legs, displaying a proportionately greater difference in the length of the forelegs compared to the extenuated hind limbs.  The feline's head is topped with rounded ears, and a very long, balancing tail completes the lion's physique.</pre>"
+      "The mountain lion is a muscular and athletic animal. Covered with a uniform coat of reddish-brown fur, her long, lithe body is equipped with powerful legs, displaying a proportionately greater difference in the length of the forelegs compared to the extenuated hind limbs. The feline's head is topped with rounded ears, and a very long, balancing tail completes the lion's physique."
     ],
     arrival: [],
     flee: [],

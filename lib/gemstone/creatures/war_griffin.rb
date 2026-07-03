@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The war griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation.  Its front legs, forebody, wings, and head are those of a great eagle, complete with large golden feathers and aquiline beak.  The rear half of the creature's body is that of a powerful lion, with short white fur and a long feline tail.  Trained by its captors to enhance its fighting prowess, the massive war griffin is poetry in motion, its beautiful ferocity the last sight its foes ever see.</pre>"
+      "The war griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation. Its front legs, forebody, wings, and head are those of a great eagle, complete with large golden feathers and aquiline beak. The rear half of the creature's body is that of a powerful lion, with short white fur and a long feline tail. Trained by its captors to enhance its fighting prowess, the massive war griffin is poetry in motion, its beautiful ferocity the last sight its foes ever see."
     ],
     arrival: [],
     flee: [],

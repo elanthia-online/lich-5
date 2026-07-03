@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "Standing twice as tall as the tallest giantman, the ice giant trails frost and snow in her wake.  Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the ice giant's dull white frost-covered skin."
+      "Standing twice as tall as the tallest giantman, the ice giant trails frost and snow in her wake. Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the ice giant's dull white frost-covered skin."
     ],
     arrival: [],
     flee: [],

@@ -103,7 +103,7 @@
   },
   messaging: {
     description: [
-      "The air elemental is a vaguely humanoid whirlwind of unusually dense air.  Its constant spin is almost hypnotic, though it radiates a palpable disdain for all solid life."
+      "The air elemental is a vaguely humanoid whirlwind of unusually dense air. Its constant spin is almost hypnotic, though it radiates a palpable disdain for all solid life."
     ],
     arrival: [],
     flee: [],

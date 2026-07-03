@@ -110,7 +110,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>{{addmetext}} </pre>"
+      ""
     ],
     arrival: [],
     flee: [],

@@ -40,7 +40,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[MSTRIKE]]"
+        name: "MSTRIKE"
       }
     ],
     special_notes: []
@@ -78,11 +78,11 @@
     gems: true,
     boxes: true,
     skin: "No",
-    other: "[[Glowing violet essence dust]],"
+    other: "Glowing violet essence dust,"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing somewhere near average height for a human, the muscular supplicant is a lean frame of wiry muscle covered by scarred and dry skin.  A great mop of greasy hair covers her eyes, twisted up in long braids.  Intricate tattoos cover the exposed flesh, drawing unrecognizable patterns.</pre>"
+      "Standing somewhere near average height for a human, the muscular supplicant is a lean frame of wiry muscle covered by scarred and dry skin. A great mop of greasy hair covers her eyes, twisted up in long braids. Intricate tattoos cover the exposed flesh, drawing unrecognizable patterns."
     ],
     arrival: [],
     flee: [],

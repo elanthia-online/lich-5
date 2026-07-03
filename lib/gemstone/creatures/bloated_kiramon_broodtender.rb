@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Possessed of a small, glossy black head with a long proboscis, the kiramon broodtender would be comical in shape were it not so grotesque.  Most of its abdomen is bloated, gelatinous, and yielding.  Riotous colors ooze across flesh like the surface hues of an oil slick.  Eight glinting black eyes stare from her undersized head, nestled amidst a thicket of coarse hairs.  Wrapped around the monstrosity's abdomen are a number of gooey sensory tendrils.</pre>"
+      "Possessed of a small, glossy black head with a long proboscis, the kiramon broodtender would be comical in shape were it not so grotesque. Most of its abdomen is bloated, gelatinous, and yielding. Riotous colors ooze across flesh like the surface hues of an oil slick. Eight glinting black eyes stare from her undersized head, nestled amidst a thicket of coarse hairs. Wrapped around the monstrosity's abdomen are a number of gooey sensory tendrils."
     ],
     arrival: [],
     flee: [],

@@ -77,11 +77,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "It is hard to tell if the Sheruvian monk is human, or some foul spawn of inhuman parents.  The head of the warrior-monk has been shaved smooth and is covered in dark, mystic runes tattooed on its scalp.  A heavy brow hangs low over its cold, calculating eyes."
+      "It is hard to tell if the Sheruvian monk is human, or some foul spawn of inhuman parents. The head of the warrior-monk has been shaved smooth and is covered in dark, mystic runes tattooed on its scalp. A heavy brow hangs low over its cold, calculating eyes."
     ],
     arrival: [],
     flee: [],

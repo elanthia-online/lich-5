@@ -22,11 +22,11 @@
   attack_attributes: {
     physical_attacks: [
       {
-        name: "[[Claw (attack)|Branch rake]]",
+        name: "Branch rake",
         as: 355
       },
       {
-        name: "[[Ensnare (attack)|Root lash]]",
+        name: "Root lash",
         as: 355
       }
     ],
@@ -78,7 +78,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing approximately five feet tall, this relatively mature sapling sways menacingly before you.  Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree.  Leaves cover the sapling from head to trunk, with two arm-shaped branches protruding from the canopy.</pre>"
+      "Standing approximately five feet tall, this relatively mature sapling sways menacingly before you. Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree. Leaves cover the sapling from head to trunk, with two arm-shaped branches protruding from the canopy."
     ],
     arrival: [],
     flee: [],

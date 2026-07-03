@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>An undead version of the domesticated breed, these were one of the earlier attempts by the Council of Twelve to create undead.  They litter the countryside, viciously attacking any living thing they see.</pre>"
+      "An undead version of the domesticated breed, these were one of the earlier attempts by the Council of Twelve to create undead. They litter the countryside, viciously attacking any living thing they see."
     ],
     arrival: [],
     flee: [],

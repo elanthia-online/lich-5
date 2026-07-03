@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The troll scout grimaces as it surveys its surroundings with suspicion.  Crudely drawn runic symbols painted with ash cover its face.  Tufts of straggly, yellow hair are spread over its otherwise barren body giving it a vaguely lionish appearance.  Only occasionally can sparks of true intelligence be seen in its otherwise dull eyes.</pre>"
+      "The troll scout grimaces as it surveys its surroundings with suspicion. Crudely drawn runic symbols painted with ash cover its face. Tufts of straggly, yellow hair are spread over its otherwise barren body giving it a vaguely lionish appearance. Only occasionally can sparks of true intelligence be seen in its otherwise dull eyes."
     ],
     arrival: [],
     flee: [],

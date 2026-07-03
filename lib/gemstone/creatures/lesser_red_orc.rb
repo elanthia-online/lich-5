@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Erect, the red orc would stand approximately six feet high.  However, her hunched shoulders and curved spine bring her head nearly two feet closer to the ground.  Thick, matted, deep burgundy fur covers most of the orc's body, probably accounting for the red name applied to her.  Her muzzle protrudes from the bony cranium, and her lips seem to be constantly pulled back to reveal pointed, discolored fangs.  The evil smile goes well with the malevolent yellow eyes behind it.</pre>"
+      "Erect, the red orc would stand approximately six feet high. However, her hunched shoulders and curved spine bring her head nearly two feet closer to the ground. Thick, matted, deep burgundy fur covers most of the orc's body, probably accounting for the red name applied to her. Her muzzle protrudes from the bony cranium, and her lips seem to be constantly pulled back to reveal pointed, discolored fangs. The evil smile goes well with the malevolent yellow eyes behind it."
     ],
     arrival: [],
     flee: [],

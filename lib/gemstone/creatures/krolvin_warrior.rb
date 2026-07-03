@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>As tall as the average human, the warrior has the characteristic long-fingered hands and sturdy musculature that denote most of the krolvin race.  The warrior also sports the trademark grey-blue skin and thick, coarse, white hair covers his head and spreads across his shoulders and down his back.</pre>"
+      "As tall as the average human, the warrior has the characteristic long-fingered hands and sturdy musculature that denote most of the krolvin race. The warrior also sports the trademark grey-blue skin and thick, coarse, white hair covers his head and spreads across his shoulders and down his back."
     ],
     arrival: [],
     flee: [],

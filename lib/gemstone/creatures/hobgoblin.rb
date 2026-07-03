@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "This is a large humanoid creature, similar to its smaller cousin the goblin.  It has a snub nose and wide mouth with large and very sharp teeth and a greenish-yellow, leathery skin.  Reputed to be uncommonly fond of collecting treasure, these are among the most hunted beings known to exist.  But many are the whitening skulls that adorn the crude dwellings of the hobgoblin, for treasure is not all they collect."
+      "This is a large humanoid creature, similar to its smaller cousin the goblin. It has a snub nose and wide mouth with large and very sharp teeth and a greenish-yellow, leathery skin. Reputed to be uncommonly fond of collecting treasure, these are among the most hunted beings known to exist. But many are the whitening skulls that adorn the crude dwellings of the hobgoblin, for treasure is not all they collect."
     ],
     arrival: [],
     flee: [],

@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The carceris makes a peculiar rustling sound as she moves, reminiscent of dried up parchment. The carceris's ragged robes lift and swirl about her like animated tendrils, and bare bones protrude from similar tatters of skin hanging from her hands and hollow cheeks.  The specter bares yellowed teeth, the roots discolored a deep brown where they are anchored in the visible jawbones.  As she circles, constantly whispering a litany of magic, gooey pools of darkness which were once the horror's eyes weep rivulets of stain down the remnants of her face.</pre>"
+      "The carceris makes a peculiar rustling sound as she moves, reminiscent of dried up parchment. The carceris's ragged robes lift and swirl about her like animated tendrils, and bare bones protrude from similar tatters of skin hanging from her hands and hollow cheeks. The specter bares yellowed teeth, the roots discolored a deep brown where they are anchored in the visible jawbones. As she circles, constantly whispering a litany of magic, gooey pools of darkness which were once the horror's eyes weep rivulets of stain down the remnants of her face."
     ],
     arrival: [],
     flee: [],

@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A burly goliath engineer is a towering figure of muscle and sinew, clad in simple garments of white cloth that strain against his powerful frame.  Broad shoulders and bulging arms speak of great physical strength, while his eyes are sharp and alert, constantly scanning his surroundings with a practised eye.  Here and there, stains of oil and smudges of char mar his pale garb.<!-- Add creature description--> </pre>"
+      "A burly goliath engineer is a towering figure of muscle and sinew, clad in simple garments of white cloth that strain against his powerful frame. Broad shoulders and bulging arms speak of great physical strength, while his eyes are sharp and alert, constantly scanning his surroundings with a practised eye. Here and there, stains of oil and smudges of char mar his pale garb."
     ],
     arrival: [],
     flee: [],

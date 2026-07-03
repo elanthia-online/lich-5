@@ -94,11 +94,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[pristine nymph's hair]]"
+    other: "pristine nymph's hair"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Never found far from the life-giving sea, the sea nymph slips onto dry land to waylay unwary adventurers.  Depending mostly on her seductive song, she charms her prey into submission, then strikes quickly and deeply with her dagger.  From a distance she is often mistaken for a slim sylvan lady.  The flowing robe she wears conceals the webbed appendages that give her speed in the ocean.</pre>"
+      "Never found far from the life-giving sea, the sea nymph slips onto dry land to waylay unwary adventurers. Depending mostly on her seductive song, she charms her prey into submission, then strikes quickly and deeply with her dagger. From a distance she is often mistaken for a slim sylvan lady. The flowing robe she wears conceals the webbed appendages that give her speed in the ocean."
     ],
     arrival: [],
     flee: [],

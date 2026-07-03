@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lost soul appears as the flickering shade of a normal humanoid, his face contorted into a soundless, agonized scream.  His flesh slowly melts off his frame, bubbling, dripping to the ground, and his clothing turns into rags, dropping off in shreds, until nothing is left but a skeleton with hate-filled red eyes.  Slowly the flesh reforms, the clothing regains its form, all in nearly reverse order, until the lost soul is once again whole.  Then, horribly, he begins to deteriorate again.</pre>"
+      "The lost soul appears as the flickering shade of a normal humanoid, his face contorted into a soundless, agonized scream. His flesh slowly melts off his frame, bubbling, dripping to the ground, and his clothing turns into rags, dropping off in shreds, until nothing is left but a skeleton with hate-filled red eyes. Slowly the flesh reforms, the clothing regains its form, all in nearly reverse order, until the lost soul is once again whole. Then, horribly, he begins to deteriorate again."
     ],
     arrival: [],
     flee: [],

@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The striped warcat is a large ornery cat.  It is fairly large, standing roughly a head over a halfling.  Wide, tapering grey stripes run down the side of its black fur.  Its amber eyes gleam hypnotically as it stares back in your direction.</pre>"
+      "The striped warcat is a large ornery cat. It is fairly large, standing roughly a head over a halfling. Wide, tapering grey stripes run down the side of its black fur. Its amber eyes gleam hypnotically as it stares back in your direction."
     ],
     arrival: [],
     flee: [],

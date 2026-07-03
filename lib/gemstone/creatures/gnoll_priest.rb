@@ -74,7 +74,7 @@
   },
   messaging: {
     description: [
-      "The gnoll priest is dressed as you might expect a member of the clergy to be.  He appears quite affable.  As with most gnolls, however, looks can be deceiving."
+      "The gnoll priest is dressed as you might expect a member of the clergy to be. He appears quite affable. As with most gnolls, however, looks can be deceiving."
     ],
     arrival: [],
     flee: [],

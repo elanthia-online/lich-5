@@ -167,7 +167,7 @@
   },
   messaging: {
     description: [
-      "It is hard to see much of the hooded figure because of the voluminous hooded cloak.  However, the figure does appear to be that of a young human, or humanoid, male.  His skin is very pale, almost an opalescent white in color and his eyes are an ominous dull grey.  You can see a few locks of curly black hair streaked with stark white tufts concealed by the hood of his cloak.  When he glances in your direction, you can feel his gaze almost as a physical blow.  He holds himself erect, a tall and imposing figure giving evidence of great pride."
+      "It is hard to see much of the hooded figure because of the voluminous hooded cloak. However, the figure does appear to be that of a young human, or humanoid, male. His skin is very pale, almost an opalescent white in color and his eyes are an ominous dull grey. You can see a few locks of curly black hair streaked with stark white tufts concealed by the hood of his cloak. When he glances in your direction, you can feel his gaze almost as a physical blow. He holds himself erect, a tall and imposing figure giving evidence of great pride."
     ],
     arrival: [],
     flee: [],

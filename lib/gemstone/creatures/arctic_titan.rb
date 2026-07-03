@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "Commanding the elements of cold and ice, the arctic titan pounds through the snowy countryside, looking to destroy those that would invade its domain. The arctic titan stands tall amidst the howling winds and pounding sleet, its muscular torso and thick legs carrying it effortlessly through the elements to unleash savage attacks against its enemies.  Its deep blue skin coloration is not a result of exposure to the icy wind but rather from the blue lichen that supplements its diet of meat."
+      "Commanding the elements of cold and ice, the arctic titan pounds through the snowy countryside, looking to destroy those that would invade its domain. The arctic titan stands tall amidst the howling winds and pounding sleet, its muscular torso and thick legs carrying it effortlessly through the elements to unleash savage attacks against its enemies. Its deep blue skin coloration is not a result of exposure to the icy wind but rather from the blue lichen that supplements its diet of meat."
     ],
     arrival: [],
     flee: [],

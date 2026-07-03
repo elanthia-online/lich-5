@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The corpse-like face of the half-krolvin strigoi bears little resemblance to a living half-krolvin save in its heavy brow and dense brows.  Eyes like pits of shadow stare out from the sunken hollows of the strigoi's altered visage, hungry and hateful.  The strigoi has yellowed fangs that distend her lips in an ugly fashion.  Her motions are distinctly unnatural, fluid in a way that a living being's are not.<!-- Creature description text from in-game verb DESCRIBE goes here.--> </pre>\n\nAppraisal:\n<pre{{log2|margin-right=26em}}>The half-krolvin strigoi is medium in size, about six feet high in her current state.</pre>"
+      "The corpse-like face of the half-krolvin strigoi bears little resemblance to a living half-krolvin save in its heavy brow and dense brows. Eyes like pits of shadow stare out from the sunken hollows of the strigoi's altered visage, hungry and hateful. The strigoi has yellowed fangs that distend her lips in an ugly fashion. Her motions are distinctly unnatural, fluid in a way that a living being's are not. \n\nAppraisal:\nThe half-krolvin strigoi is medium in size, about six feet high in her current state."
     ],
     arrival: [],
     flee: [],

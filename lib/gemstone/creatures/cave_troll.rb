@@ -95,7 +95,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Huge and dangerous, the cave troll towers above even a tall giantman.  Grey skin so thick that it serves quite well as armor covers most of the troll, with tufts of thick hair sprouting here and there like weeds between cracked stones.  A hideous grin splits its face displaying fangs crusted with dried blood and less guessable matter.  No light of intellect glows in its narrow piggish eyes.  The lust for slaughter and thirst for blood are what drive this hulkish beast's existence.</pre>"
+      "Huge and dangerous, the cave troll towers above even a tall giantman. Grey skin so thick that it serves quite well as armor covers most of the troll, with tufts of thick hair sprouting here and there like weeds between cracked stones. A hideous grin splits its face displaying fangs crusted with dried blood and less guessable matter. No light of intellect glows in its narrow piggish eyes. The lust for slaughter and thirst for blood are what drive this hulkish beast's existence."
     ],
     arrival: [],
     flee: [],

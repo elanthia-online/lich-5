@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A transparent, flickering, light-grey canine, the ghost wolf is the captured spirit of a member of the wolf packs that used to roam the lands.  The ghost wolf uses its snapping jaws and rending claws to best advantage.  As it did in life, the ghost wolf prefers to hunt with other members of its species, carefully watching its prey through bright yellow eyes, darting in to bite, then rushing away while another ghost wolf attacks from the rear.</pre>"
+      "A transparent, flickering, light-grey canine, the ghost wolf is the captured spirit of a member of the wolf packs that used to roam the lands. The ghost wolf uses its snapping jaws and rending claws to best advantage. As it did in life, the ghost wolf prefers to hunt with other members of its species, carefully watching its prey through bright yellow eyes, darting in to bite, then rushing away while another ghost wolf attacks from the rear."
     ],
     arrival: [],
     flee: [],

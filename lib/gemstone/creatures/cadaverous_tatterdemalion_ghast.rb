@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Clad in the dilapidated remains of homespun clothing, the ghast's form is only passingly humanoid.  Death has transformed his features, filming over his eyes and leaving him with only a sloughing remnant of a nose.  His hind legs are powerfully muscled, but his hands have atrophied into long talons that are unsettlingly spare of flesh.  He is a scabrous and unwholesome beast, and the smear of dried blood and effluvia around his mouth hints at distasteful appetites.<!-- Creature description text from in-game verb DESCRIBE goes here.--> </pre>\n\nAppraisal:\n<pre{{log2}}>\nThe tatterdemalion ghast is medium in size and about five feet high in her current state.\n</pre>"
+      "Clad in the dilapidated remains of homespun clothing, the ghast's form is only passingly humanoid. Death has transformed his features, filming over his eyes and leaving him with only a sloughing remnant of a nose. His hind legs are powerfully muscled, but his hands have atrophied into long talons that are unsettlingly spare of flesh. He is a scabrous and unwholesome beast, and the smear of dried blood and effluvia around his mouth hints at distasteful appetites. \n\nAppraisal:\n\nThe tatterdemalion ghast is medium in size and about five feet high in her current state."
     ],
     arrival: [],
     flee: [],

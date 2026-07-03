@@ -99,7 +99,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Only tattered rags are left of the corsair's colorfully piratical attire.  The remnants are faded by sun and stained with salt, their ragged holes revealing sunburnt skin beneath.  Despite her tatterdemain state and the ravages of the elements to her exposed flesh, the charmed corsair's expression is dispassionate and her eyes devoid of sentience.  A faint aura of magic tinged an unsavory pink enshrouds her.\n</pre>"
+      "Only tattered rags are left of the corsair's colorfully piratical attire. The remnants are faded by sun and stained with salt, their ragged holes revealing sunburnt skin beneath. Despite her tatterdemain state and the ravages of the elements to her exposed flesh, the charmed corsair's expression is dispassionate and her eyes devoid of sentience. A faint aura of magic tinged an unsavory pink enshrouds her."
     ],
     arrival: [],
     flee: [],

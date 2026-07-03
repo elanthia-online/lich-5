@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The giant pale crab is about a foot across and has large pincers at the end of each of its two arms.  Its multiple legs make a skittering noise as it walks.  The pale color seems to be the result of living in dark, wet caves for its entire life.</pre>"
+      "The giant pale crab is about a foot across and has large pincers at the end of each of its two arms. Its multiple legs make a skittering noise as it walks. The pale color seems to be the result of living in dark, wet caves for its entire life."
     ],
     arrival: [],
     flee: [],

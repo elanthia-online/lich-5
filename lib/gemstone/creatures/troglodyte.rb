@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Short and massively squat, the troglodyte resembles a clay figure of a human left in the hot sun until it settled into an untidy lump, misshapen and unlovely.  Dressed in the crudest of untanned hides, the creature glares out at you with brutish cunning and hate from narrow eyes set deep beneath a heavily boned forehead.  Massive arms and ragged claws caked with dirt twitch reflexively, ready to dig in the earth or to tear the throat out of anything it can catch and eat.</pre>"
+      "Short and massively squat, the troglodyte resembles a clay figure of a human left in the hot sun until it settled into an untidy lump, misshapen and unlovely. Dressed in the crudest of untanned hides, the creature glares out at you with brutish cunning and hate from narrow eyes set deep beneath a heavily boned forehead. Massive arms and ragged claws caked with dirt twitch reflexively, ready to dig in the earth or to tear the throat out of anything it can catch and eat."
     ],
     arrival: [],
     flee: [],

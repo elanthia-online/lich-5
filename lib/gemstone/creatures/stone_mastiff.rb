@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The stone mastiff is a huge grey dog that seems to be formed of living stone.  The mastiff is rectangular in shape, and the length of the mastiff from forechest to rear is around five feet.  Massive and heavy boned, with a powerful muscle structure, this stone mastiff presents a formidable foe.</pre>"
+      "The stone mastiff is a huge grey dog that seems to be formed of living stone. The mastiff is rectangular in shape, and the length of the mastiff from forechest to rear is around five feet. Massive and heavy boned, with a powerful muscle structure, this stone mastiff presents a formidable foe."
     ],
     arrival: [],
     flee: [],

@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The dark, beady eyes of the scaly burgee gleam with feral menace beneath two jutting ridges.  Flexible diamond-shaped scales cover its carapace and its small, triangular head.  Thinly coated around its surprisingly wide mouth is a greyish substance.</pre>"
+      "The dark, beady eyes of the scaly burgee gleam with feral menace beneath two jutting ridges. Flexible diamond-shaped scales cover its carapace and its small, triangular head. Thinly coated around its surprisingly wide mouth is a greyish substance."
     ],
     arrival: [],
     flee: [],

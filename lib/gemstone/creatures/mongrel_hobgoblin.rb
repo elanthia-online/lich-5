@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The mongrel hobgoblin is a horribly misshapen beast, with a hideously deformed face.  The large, knotted muscles on her arms betray the creature's strength, which is capable of rending a man's limbs right out of their sockets.  Mottled skin with a greenish-yellow hue is splotched with randomly scattered patches of reddish-brown fur.  The dark beady eyes of the hobgoblin glare menacingly, as if crushing the life from someone would somehow make her life more bearable.</pre>"
+      "The mongrel hobgoblin is a horribly misshapen beast, with a hideously deformed face. The large, knotted muscles on her arms betray the creature's strength, which is capable of rending a man's limbs right out of their sockets. Mottled skin with a greenish-yellow hue is splotched with randomly scattered patches of reddish-brown fur. The dark beady eyes of the hobgoblin glare menacingly, as if crushing the life from someone would somehow make her life more bearable."
     ],
     arrival: [],
     flee: [],

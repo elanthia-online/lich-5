@@ -114,7 +114,7 @@
   },
   messaging: {
     description: [
-      "The lightning elemental is a crackling mass of solidified power, definitely alien to Elanthia.  Nearly gelatinous in substance, solid bolts of lightning weave themselves into the skeletal form of some horrible beast, only to arc in an instant to a vaguely humanoid form and then back again."
+      "The lightning elemental is a crackling mass of solidified power, definitely alien to Elanthia. Nearly gelatinous in substance, solid bolts of lightning weave themselves into the skeletal form of some horrible beast, only to arc in an instant to a vaguely humanoid form and then back again."
     ],
     arrival: [],
     flee: [],

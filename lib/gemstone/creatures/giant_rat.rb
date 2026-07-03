@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Larger than a domestic cat, the giant rat stands over a foot high.  Dark brown in color, shading off to white on the belly, with naked pink ears and narrow glinting eyes, the rat glares with unrestrained bloodlust.  Known to exist in great packs, the rat has brought more than one over-eager adventurer to an early grave.</pre>"
+      "Larger than a domestic cat, the giant rat stands over a foot high. Dark brown in color, shading off to white on the belly, with naked pink ears and narrow glinting eyes, the rat glares with unrestrained bloodlust. Known to exist in great packs, the rat has brought more than one over-eager adventurer to an early grave."
     ],
     arrival: [],
     flee: [],

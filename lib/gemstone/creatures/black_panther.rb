@@ -67,7 +67,7 @@
   },
   messaging: {
     description: [
-      "The black panther is a large, black cat with a slender body and long tail. The black panther often approaches and strikes silently, affording her prey little warning.  Powerful jaws bite and sharp claws rend as the black panther attempts to secure enough food for another day.  Even when satiated, though, the black panther enjoys killing just for the pleasure of it."
+      "The black panther is a large, black cat with a slender body and long tail. The black panther often approaches and strikes silently, affording her prey little warning. Powerful jaws bite and sharp claws rend as the black panther attempts to secure enough food for another day. Even when satiated, though, the black panther enjoys killing just for the pleasure of it."
     ],
     arrival: [],
     flee: [],

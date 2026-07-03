@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The great brown bear weighs around 500 pounds and is about eight feet long.  This bear is dark brown in color and has a characteristic muscle hump over the shoulders and longer claws on her front paws than on her rear paws.</pre>"
+      "The great brown bear weighs around 500 pounds and is about eight feet long. This bear is dark brown in color and has a characteristic muscle hump over the shoulders and longer claws on her front paws than on her rear paws."
     ],
     arrival: [],
     flee: [],

@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This massive worm is probably over twenty to thirty feet long, making it an easy target to hit, but having incomparable force and strength.  Dark red in color, it seems to have no eyes, but its keen sense of smell quickly finds targets.</pre>"
+      "This massive worm is probably over twenty to thirty feet long, making it an easy target to hit, but having incomparable force and strength. Dark red in color, it seems to have no eyes, but its keen sense of smell quickly finds targets."
     ],
     arrival: [],
     flee: [],

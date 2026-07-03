@@ -93,11 +93,11 @@
     gems: true,
     boxes: true,
     skin: "a centaur ranger hide",
-    other: "[[Glimmering blue essence shard]]<br>[[Glimmering blue mote of essence]]"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Seeming to be a blend of mannish torso upon the body of a light horse, the ranger has a certain charm and aura of mystery.  That is, until you encounter one, for the ranger is a savage and wilder cousin to the great centaurs of legend and will lash out in terrible fury when it deems a threat is at hand.  Its hide is valued for its toughness and durability and thus, many will brave the danger of flying hooves and the threat held by these fierce creatures to gain this prize.</pre>"
+      "Seeming to be a blend of mannish torso upon the body of a light horse, the ranger has a certain charm and aura of mystery. That is, until you encounter one, for the ranger is a savage and wilder cousin to the great centaurs of legend and will lash out in terrible fury when it deems a threat is at hand. Its hide is valued for its toughness and durability and thus, many will brave the danger of flying hooves and the threat held by these fierce creatures to gain this prize."
     ],
     arrival: [],
     flee: [],

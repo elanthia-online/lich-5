@@ -100,11 +100,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]<br>[[Glimmering blue mote of essence]]"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Draped in tattered robes, the spirit forever wanders the forests and swamps in search of the sacred objects he once guarded in life.  Forever frustrated in his attempts to find his cherished but long-destroyed artifacts, the spirit lashes out violently at all those who would dare trespass into his unholy domain.</pre>"
+      "Draped in tattered robes, the spirit forever wanders the forests and swamps in search of the sacred objects he once guarded in life. Forever frustrated in his attempts to find his cherished but long-destroyed artifacts, the spirit lashes out violently at all those who would dare trespass into his unholy domain."
     ],
     arrival: [],
     flee: [],

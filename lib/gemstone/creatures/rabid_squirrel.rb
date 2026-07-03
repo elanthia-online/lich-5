@@ -80,7 +80,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A rabid squirrel is twice the size of your average squirrel.  Its beady little eyes are blood-shot and watery and its mangy coat is a lusterless grey.  The evil little creature slavers constantly and moves with terrifying speed.</pre>"
+      "A rabid squirrel is twice the size of your average squirrel. Its beady little eyes are blood-shot and watery and its mangy coat is a lusterless grey. The evil little creature slavers constantly and moves with terrifying speed."
     ],
     arrival: [],
     flee: [],

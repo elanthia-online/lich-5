@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The little gremlin is a small furless creature with beady little eyes and sharp teeth that have been filed into triangular fangs.  It has long, metal capped, nails protruding several inches from the tip of each finger.  Though humanoid in form, it has a natural facial expression that is as wicked as any other known to nature.</pre>"
+      "The little gremlin is a small furless creature with beady little eyes and sharp teeth that have been filed into triangular fangs. It has long, metal capped, nails protruding several inches from the tip of each finger. Though humanoid in form, it has a natural facial expression that is as wicked as any other known to nature."
     ],
     arrival: [],
     flee: [],

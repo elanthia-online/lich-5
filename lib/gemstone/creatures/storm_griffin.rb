@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The storm griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation.  Its front legs, forebody, wings, and head are those of a great eagle, complete with large powder-blue feathers and aquiline beak.  The rear half of the creature's body is that of a powerful lion, with short, sandy blonde fur and a long feline tail.  A tendril of electricity snakes across one outstreched claw as the storm griffin glares about with its piercing blue eyes.</pre>"
+      "The storm griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation. Its front legs, forebody, wings, and head are those of a great eagle, complete with large powder-blue feathers and aquiline beak. The rear half of the creature's body is that of a powerful lion, with short, sandy blonde fur and a long feline tail. A tendril of electricity snakes across one outstreched claw as the storm griffin glares about with its piercing blue eyes."
     ],
     arrival: [],
     flee: [],

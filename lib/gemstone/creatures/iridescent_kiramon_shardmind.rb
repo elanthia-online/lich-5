@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}><!-- description from DESCRIBE placed here --></pre>"
+      ""
     ],
     arrival: [],
     flee: [],

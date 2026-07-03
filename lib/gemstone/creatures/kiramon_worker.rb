@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The kiramon worker has a mobile head with huge, bulging, eyes that sparkle in a faceted clustering around a lidless perimeter.  Protruding from its massive head is a vicious-looking snout with insectile mandibles, while the back of the cranium is a distended, two-lobed case.  Remarkably powerful rear legs jut backward from an extremely hard, resilient exoskeleton that seems to be in constant motion.  Though its middle legs have evolved away long ago, the front legs end in strong opposing claws and knobby-jointed fingers.  Stunted wings flap uselessly from its long cylindrical body.</pre>"
+      "The kiramon worker has a mobile head with huge, bulging, eyes that sparkle in a faceted clustering around a lidless perimeter. Protruding from its massive head is a vicious-looking snout with insectile mandibles, while the back of the cranium is a distended, two-lobed case. Remarkably powerful rear legs jut backward from an extremely hard, resilient exoskeleton that seems to be in constant motion. Though its middle legs have evolved away long ago, the front legs end in strong opposing claws and knobby-jointed fingers. Stunted wings flap uselessly from its long cylindrical body."
     ],
     arrival: [],
     flee: [],

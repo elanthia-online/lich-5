@@ -34,11 +34,11 @@
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Dhara{{!}}Dhara (Rogues)",
+        name: "DharaDhara (Rogues)",
         as: 340
       },
       {
-        name: "Closed fist{{!}}Closed fist (Wizards)",
+        name: "Closed fistClosed fist (Wizards)",
         as: 294
       }
     ],
@@ -90,7 +90,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Familiar Gate (930)]]"
+        name: "Familiar Gate (930)"
       },
       {
         name: "Foam"
@@ -140,11 +140,11 @@
     gems: true,
     boxes: true,
     skin: "no",
-    other: "[[Glowing violet essence shard]]"
+    other: "Glowing violet essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A black forest ogre plods through the countryside, her immense arm and leg muscles rippling with each wide step.  An oversized, slavering lower jaw and two long, pointed, lower teeth give the ogre a constant toothy sneer.  The thick bones of her protruding forehead shade beady black eyes, and if there is any intelligence in those eyes, it is completely obscured by the black forest ogre's vicious malevolence.  Short, coal black hair covers the creature's body and appendages, though in many places the hair is broken by long, deep scars.</pre>"
+      "A black forest ogre plods through the countryside, her immense arm and leg muscles rippling with each wide step. An oversized, slavering lower jaw and two long, pointed, lower teeth give the ogre a constant toothy sneer. The thick bones of her protruding forehead shade beady black eyes, and if there is any intelligence in those eyes, it is completely obscured by the black forest ogre's vicious malevolence. Short, coal black hair covers the creature's body and appendages, though in many places the hair is broken by long, deep scars."
     ],
     arrival: [],
     flee: [],

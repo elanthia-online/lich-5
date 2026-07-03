@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fanged viper slithers quickly through the landscape, searching for small prey upon which to feed.  Its massive venomous fangs hidden by small flaps of skin, this docile snake until disturbed, appears non-threatening.  Once it is disturbed and its ire is aroused, the small flaps pull back revealing the true monster it is.  Death rapidly awaits any who doubt its abilities.</pre>"
+      "The fanged viper slithers quickly through the landscape, searching for small prey upon which to feed. Its massive venomous fangs hidden by small flaps of skin, this docile snake until disturbed, appears non-threatening. Once it is disturbed and its ire is aroused, the small flaps pull back revealing the true monster it is. Death rapidly awaits any who doubt its abilities."
     ],
     arrival: [],
     flee: [],

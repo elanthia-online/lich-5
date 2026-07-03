@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Covered in dozens of tiny pustules, the jungle toad has a dry skin that is pigmented with varying hues.  Ridges around its eyes culminate at its chin, while the thin lips framing its mouth are limned in ebon.  Patterns resembling bark decorate its back, and darken closest to the center of its spine.  Large, wide, and fat, the jungle toad has a large parotoid gland that lies behind its eyes, which have horizontal pupils set within sickly yellow irises.  Fleshy webbing spreads between its toes, though its fingers are oddly free of it.</pre>"
+      "Covered in dozens of tiny pustules, the jungle toad has a dry skin that is pigmented with varying hues. Ridges around its eyes culminate at its chin, while the thin lips framing its mouth are limned in ebon. Patterns resembling bark decorate its back, and darken closest to the center of its spine. Large, wide, and fat, the jungle toad has a large parotoid gland that lies behind its eyes, which have horizontal pupils set within sickly yellow irises. Fleshy webbing spreads between its toes, though its fingers are oddly free of it."
     ],
     arrival: [],
     flee: [],

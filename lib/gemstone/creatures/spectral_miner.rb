@@ -78,7 +78,7 @@
   },
   messaging: {
     description: [
-      "This somewhat orc-like looking humanoid creature is surrounded with an eerie white glow and appears to be transparent.  An abundance of excessively wrinkled skin and long bushy grey eyebrows serve to make spectral miner appear ancient."
+      "This somewhat orc-like looking humanoid creature is surrounded with an eerie white glow and appears to be transparent. An abundance of excessively wrinkled skin and long bushy grey eyebrows serve to make spectral miner appear ancient."
     ],
     arrival: [],
     flee: [],

@@ -125,7 +125,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Maggots crawl and writhe in the eye sockets of a putrefied Citadel herald.  Replete in immaculate costume, the herald stands stiffly with an expression of disdain on her withered face of grey putrified skin.  A large signet ring graces one of her two large wrinkled hands patiently folded one over the other.  A polished, leather scroll case hangs at the herald's side, embossed with a large letter \"E.\"</pre>"
+      "Maggots crawl and writhe in the eye sockets of a putrefied Citadel herald. Replete in immaculate costume, the herald stands stiffly with an expression of disdain on her withered face of grey putrified skin. A large signet ring graces one of her two large wrinkled hands patiently folded one over the other. A polished, leather scroll case hangs at the herald's side, embossed with a large letter \"E.\""
     ],
     arrival: [],
     flee: [],

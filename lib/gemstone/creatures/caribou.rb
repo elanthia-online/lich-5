@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "A hoofed herbivore of the northern snowfields, the caribou is very similar to a large deer with a bad attitude.  The caribou uses her large rack of antlers to eagerly impale anything that would encroach upon her territory.  Light brown hide affords the caribou some camouflage against the more barren slopes, but the caribou relies on her defenses and running in herds to handle most predators."
+      "A hoofed herbivore of the northern snowfields, the caribou is very similar to a large deer with a bad attitude. The caribou uses her large rack of antlers to eagerly impale anything that would encroach upon her territory. Light brown hide affords the caribou some camouflage against the more barren slopes, but the caribou relies on her defenses and running in herds to handle most predators."
     ],
     arrival: [],
     flee: [],

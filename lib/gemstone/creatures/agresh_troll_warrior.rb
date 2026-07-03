@@ -79,7 +79,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The troll warrior stands silenty still.  Disdain touches its face as it awaits any who would challenge its bulking muscles.  Stripes of ash run down its cheeks in illegible runes as bits of its straggly hair blow in front of it.  The eyes that stare out from under its low brow are those of a natural born killer awaiting its next victim.</pre>"
+      "The troll warrior stands silenty still. Disdain touches its face as it awaits any who would challenge its bulking muscles. Stripes of ash run down its cheeks in illegible runes as bits of its straggly hair blow in front of it. The eyes that stare out from under its low brow are those of a natural born killer awaiting its next victim."
     ],
     arrival: [],
     flee: [],

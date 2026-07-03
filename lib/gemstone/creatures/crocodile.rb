@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A large scaled lizard, with a wide gaping mouth full of sharp teeth, it has short powerful legs barely long enough to lift the beast off the ground.  The crocodile also has a long powerful tail that looks rather dangerous.</pre>"
+      "A large scaled lizard, with a wide gaping mouth full of sharp teeth, it has short powerful legs barely long enough to lift the beast off the ground. The crocodile also has a long powerful tail that looks rather dangerous."
     ],
     arrival: [],
     flee: [],

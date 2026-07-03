@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lesser mummy scrapes slowly across the floor, dragging its form tirelessly in an attempt to find final rest.  Its decayed flesh is barely contained in the remnants of its embalming strips, torn and unwrapping in its wake.  Once a member of a proud and wealthy family, it has left its sarcophagus to discover someone who can help it and to kill all those who cannot.</pre>"
+      "The lesser mummy scrapes slowly across the floor, dragging its form tirelessly in an attempt to find final rest. Its decayed flesh is barely contained in the remnants of its embalming strips, torn and unwrapping in its wake. Once a member of a proud and wealthy family, it has left its sarcophagus to discover someone who can help it and to kill all those who cannot."
     ],
     arrival: [],
     flee: [],

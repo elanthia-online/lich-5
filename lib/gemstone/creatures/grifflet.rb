@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The grifflet is a young, yet magnificent beast.  Mottled brown feathers marked with light splotches cover the grifflet's front legs, forebody, and wings, while the creature's eagle-like head is almost completely grey.  The rear half of the grifflet's body is that of a young lion, with short, pale yellow fur and a long feline tail.  Even at this immature stage of life, the horse-sized grifflet is a deadly foe.</pre>"
+      "The grifflet is a young, yet magnificent beast. Mottled brown feathers marked with light splotches cover the grifflet's front legs, forebody, and wings, while the creature's eagle-like head is almost completely grey. The rear half of the grifflet's body is that of a young lion, with short, pale yellow fur and a long feline tail. Even at this immature stage of life, the horse-sized grifflet is a deadly foe."
     ],
     arrival: [],
     flee: [],

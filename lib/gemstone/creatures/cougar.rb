@@ -78,7 +78,7 @@
   },
   messaging: {
     description: [
-      "The cougar is a large, tawny brown animal of the cat family with a slender body and long tail.  Her sleek build disguises her power.  Both claws and jaws are to be feared, as the cougar strikes quickly with each.  Prized for her soft pelt, this cat's hunting grounds have been severely diminished in recent years due to overhunting, though many of her breed can still be found in more remote areas and backwaters."
+      "The cougar is a large, tawny brown animal of the cat family with a slender body and long tail. Her sleek build disguises her power. Both claws and jaws are to be feared, as the cougar strikes quickly with each. Prized for her soft pelt, this cat's hunting grounds have been severely diminished in recent years due to overhunting, though many of her breed can still be found in more remote areas and backwaters."
     ],
     arrival: [],
     flee: [],

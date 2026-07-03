@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nVeins of mica and quartz crystal run along and through the towering krynch's barrel chest and thick, powerful limbs, causing it to shimmer in even the dimmest light.  A crown of rough rock and crystal spikes protrude from the top of its otherwise perfectly spherical head, adding to the creature's powerful stature.  Its mouth is fixed in a perpetual scowl, and glossy black eyes glare at you with malevolent intensity.\n</pre>"
+      "Veins of mica and quartz crystal run along and through the towering krynch's barrel chest and thick, powerful limbs, causing it to shimmer in even the dimmest light. A crown of rough rock and crystal spikes protrude from the top of its otherwise perfectly spherical head, adding to the creature's powerful stature. Its mouth is fixed in a perpetual scowl, and glossy black eyes glare at you with malevolent intensity."
     ],
     arrival: [],
     flee: [],

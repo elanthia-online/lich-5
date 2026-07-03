@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The water moccasin appears to be at least three feet long, with dark olive-colored skin.  You also note a faint diamond pattern travelling down from head to tail.  When the mouth opens you can see a sickly white lining within.</pre>"
+      "The water moccasin appears to be at least three feet long, with dark olive-colored skin. You also note a faint diamond pattern travelling down from head to tail. When the mouth opens you can see a sickly white lining within."
     ],
     arrival: [],
     flee: [],

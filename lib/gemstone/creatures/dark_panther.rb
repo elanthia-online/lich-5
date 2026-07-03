@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The dark panther is a large, black cat with a slender body and long tail.  The dark panther often approaches and strikes silently, affording her prey little warning.  Powerful jaws bite and sharp claws rend as the dark panther attempts to secure enough food for another day.  Even when satiated, though, the dark panther enjoys killing just for the pleasure of it.</pre>"
+      "The dark panther is a large, black cat with a slender body and long tail. The dark panther often approaches and strikes silently, affording her prey little warning. Powerful jaws bite and sharp claws rend as the dark panther attempts to secure enough food for another day. Even when satiated, though, the dark panther enjoys killing just for the pleasure of it."
     ],
     arrival: [],
     flee: [],

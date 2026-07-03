@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The brown gak is a big, ugly beast with a dirt-encrusted brown pelt.  A marked odor of dung and musty wool surround him in a noxious cloud.  The gak chomps vicious-looking teeth, a mix of distrust and hatred in his large doe-like eyes.  A pair of sharp horns curves up above his short, broad head in a shape that resembles a lyre.  The animal looks ungainly with his tall shoulders and shorter hindquarters, which give his a jerky, uneven gait.  Suddenly, he bares his bovine ivories and brays loudly!</pre>"
+      "The brown gak is a big, ugly beast with a dirt-encrusted brown pelt. A marked odor of dung and musty wool surround him in a noxious cloud. The gak chomps vicious-looking teeth, a mix of distrust and hatred in his large doe-like eyes. A pair of sharp horns curves up above his short, broad head in a shape that resembles a lyre. The animal looks ungainly with his tall shoulders and shorter hindquarters, which give his a jerky, uneven gait. Suddenly, he bares his bovine ivories and brays loudly!"
     ],
     arrival: [],
     flee: [],

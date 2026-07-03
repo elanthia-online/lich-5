@@ -65,7 +65,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Gas cloud]]"
+        name: "Gas cloud"
       }
     ],
     special_notes: []
@@ -96,7 +96,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "Shake off [[Stun|stuns]]"
+      "Shake off stuns"
     ]
   },
   special_other: nil,
@@ -113,7 +113,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing in the center of a swirling whorl of wind, the wind witch cackles evilly.  Dull grey eyes stare out at you from under an unruly mop of tangled grey hair.  The wind witch's bluish skin stands out against the tattered robes it wears.</pre>"
+      "Standing in the center of a swirling whorl of wind, the wind witch cackles evilly. Dull grey eyes stare out at you from under an unruly mop of tangled grey hair. The wind witch's bluish skin stands out against the tattered robes it wears."
     ],
     arrival: [],
     flee: [],

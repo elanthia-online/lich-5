@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The mammoth arachnid towers over its prey, fangs dripping poison mixed with fresh blood from its last kill shortly ago.  Its entire body is draped with long, coal black hair, with the exception of a small patch on the very rear tip of its bulbous abdomen.  This contains the spinnerets it uses to effectively web its prey before injecting the victim with a caustic poison, resulting in slow disintegration from the inside.  The arachnid's eight crimson eyes dart about, making certain no prey, no matter how small, escapes.</pre>"
+      "The mammoth arachnid towers over its prey, fangs dripping poison mixed with fresh blood from its last kill shortly ago. Its entire body is draped with long, coal black hair, with the exception of a small patch on the very rear tip of its bulbous abdomen. This contains the spinnerets it uses to effectively web its prey before injecting the victim with a caustic poison, resulting in slow disintegration from the inside. The arachnid's eight crimson eyes dart about, making certain no prey, no matter how small, escapes."
     ],
     arrival: [],
     flee: [],

@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "The herbivorous black urgh resembles, if anything, an overgrown, hairy pig.  He stands on four feet and has a dusty black coat and curled, hairless tail.  Instead of the usual upper and lower jaw in the front of his head, though, the black urgh has an extremely long upper lip, which he can extend a good two feet to drag vegetation back into his mouth.  Under the mouth reside two long, sharp tusks, used for digging up peat and other grasses upon which the urgh feeds, and for defense."
+      "The herbivorous black urgh resembles, if anything, an overgrown, hairy pig. He stands on four feet and has a dusty black coat and curled, hairless tail. Instead of the usual upper and lower jaw in the front of his head, though, the black urgh has an extremely long upper lip, which he can extend a good two feet to drag vegetation back into his mouth. Under the mouth reside two long, sharp tusks, used for digging up peat and other grasses upon which the urgh feeds, and for defense."
     ],
     arrival: [],
     flee: [],

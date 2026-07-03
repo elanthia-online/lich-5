@@ -113,7 +113,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>An ethereal triton psionicist scowls about the area, her unsubstantial bluish skin rippling like waves across the ocean.  Her tongue flickers out, pierced by a tiny atoll crab, and barnacles encircle each muscular arm.  Sigil-carved shell rings adorn each finger, and a broken ivory trident dangles from an intangible coral belt.</pre>"
+      "An ethereal triton psionicist scowls about the area, her unsubstantial bluish skin rippling like waves across the ocean. Her tongue flickers out, pierced by a tiny atoll crab, and barnacles encircle each muscular arm. Sigil-carved shell rings adorn each finger, and a broken ivory trident dangles from an intangible coral belt."
     ],
     arrival: [],
     flee: [],

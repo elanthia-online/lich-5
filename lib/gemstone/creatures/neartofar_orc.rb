@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Taller than a common human and of a substantially heavier build, the Neartofar orc has a build of solid bone and gristle.  Piercing, yellow eyes glare angrily out from under a thick ridge of bone on his forehead.  Irregular clumps of rank hair litter his oddly striking brown and green hued-body from head to toe.  His arms resemble thick and twisted tree trunks, ending in ragged claws crusted with dried gore.</pre>"
+      "Taller than a common human and of a substantially heavier build, the Neartofar orc has a build of solid bone and gristle. Piercing, yellow eyes glare angrily out from under a thick ridge of bone on his forehead. Irregular clumps of rank hair litter his oddly striking brown and green hued-body from head to toe. His arms resemble thick and twisted tree trunks, ending in ragged claws crusted with dried gore."
     ],
     arrival: [],
     flee: [],

@@ -66,10 +66,10 @@
     ],
     special_abilities: [
       {
-        name: "[[Cyclone]]"
+        name: "Cyclone"
       },
       {
-        name: "[[Mstrike]]"
+        name: "Mstrike"
       }
     ],
     special_notes: []
@@ -116,7 +116,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A triton fanatic  visibly twitches as he clutches a contorted driftwood fetish within his sigil-gouged fingers, his crazed bloodshot eyes darting to and fro beneath a shredded miter of dark oilskin.  The last vestiges of a hair-sewn tunic barely cling to his emaciated form, stained in rust-colored splotches from collar to knee, and lashed together with knots of thick sinew.  Branded across his forehead is the image of a broken trident, the forks splayed between his brows.</pre>"
+      "A triton fanatic visibly twitches as he clutches a contorted driftwood fetish within his sigil-gouged fingers, his crazed bloodshot eyes darting to and fro beneath a shredded miter of dark oilskin. The last vestiges of a hair-sewn tunic barely cling to his emaciated form, stained in rust-colored splotches from collar to knee, and lashed together with knots of thick sinew. Branded across his forehead is the image of a broken trident, the forks splayed between his brows."
     ],
     arrival: [],
     flee: [],

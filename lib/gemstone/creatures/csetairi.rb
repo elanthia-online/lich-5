@@ -65,7 +65,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[MOC|Multi-strike]]"
+        name: "Multi-strike"
       },
       {
         name: "Dispel"
@@ -117,7 +117,7 @@
   },
   messaging: {
     description: [
-      "__noTOC__\n<pre{{log2|margin-right=26em}}>The csetairi has several humanoid features, appearing as a shapely woman with long, silky, black hair.  However, the differences are readily apparent.  Instead of legs, she has a long, thick, coiled tail, and her locomotion is definitely snakelike.  Four arms sprout from her chest, and long, pointed fangs extend down below her upper lip.  Her slitted, olive green eyes scan the area rapidly, looking for potential victims.</pre>"
+      "__noTOC__\nThe csetairi has several humanoid features, appearing as a shapely woman with long, silky, black hair. However, the differences are readily apparent. Instead of legs, she has a long, thick, coiled tail, and her locomotion is definitely snakelike. Four arms sprout from her chest, and long, pointed fangs extend down below her upper lip. Her slitted, olive green eyes scan the area rapidly, looking for potential victims."
     ],
     arrival: [],
     flee: [],

@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A thin, tall creature, the jungle troll scampers over the terrain in quick bursts, its long legs and arms seemingly moving in different directions as it shifts course.  The jungle troll's dark green, mottled skin displays an oily sheen, and hair is nowhere to be found on its body.  The jungle troll's most striking feature, though, is its elongated face.  An exaggerated chin extends a foot or more below a thin-lipped mouth, and tall, pointed ears stand up straight atop its head.  Its eyes appear stretched, and the silver, slitted pupils could almost be called cat-like if they didn't run horizontally instead of vertically.</pre>"
+      "A thin, tall creature, the jungle troll scampers over the terrain in quick bursts, its long legs and arms seemingly moving in different directions as it shifts course. The jungle troll's dark green, mottled skin displays an oily sheen, and hair is nowhere to be found on its body. The jungle troll's most striking feature, though, is its elongated face. An exaggerated chin extends a foot or more below a thin-lipped mouth, and tall, pointed ears stand up straight atop its head. Its eyes appear stretched, and the silver, slitted pupils could almost be called cat-like if they didn't run horizontally instead of vertically."
     ],
     arrival: [],
     flee: [],

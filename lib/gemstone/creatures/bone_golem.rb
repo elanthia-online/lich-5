@@ -51,7 +51,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Tail sweep]]"
+        name: "Tail sweep"
       }
     ],
     special_notes: []
@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Dried bones send sickening clacking sounds throughout the area at the barest movement of a bone golem.  Its large skull capped with twin horns formed of sharply spiraled bone begins a long spine ending in a sharp tail that whips back and forth in a vicious swipe.  Even longer than the snout of the bone golem are its sickly jointed claws which have been filed at the ends into terrifying weapons.  Contrary to the empty feeling of its bones, it moves with the blocky movement of an enormous, fleshed creature.</pre>"
+      "Dried bones send sickening clacking sounds throughout the area at the barest movement of a bone golem. Its large skull capped with twin horns formed of sharply spiraled bone begins a long spine ending in a sharp tail that whips back and forth in a vicious swipe. Even longer than the snout of the bone golem are its sickly jointed claws which have been filed at the ends into terrifying weapons. Contrary to the empty feeling of its bones, it moves with the blocky movement of an enormous, fleshed creature."
     ],
     arrival: [],
     flee: [],

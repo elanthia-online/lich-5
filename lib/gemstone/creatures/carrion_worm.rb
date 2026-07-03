@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The carrion worm eagerly consumes anything dead and anything living that doesn't put up too much of a fight.  Its long, slimy body tapers to a point at the tail end.  At the business end, several hundred waving cilia force food into the worm's maw where the food is crushed by rows of short, sharp teeth.  The carrion worm hunts blindly, using its keen sense of smell and hearing to locate its prey.</pre>"
+      "The carrion worm eagerly consumes anything dead and anything living that doesn't put up too much of a fight. Its long, slimy body tapers to a point at the tail end. At the business end, several hundred waving cilia force food into the worm's maw where the food is crushed by rows of short, sharp teeth. The carrion worm hunts blindly, using its keen sense of smell and hearing to locate its prey."
     ],
     arrival: [],
     flee: [],

@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A branded goliath diviner's is tall and with a rangy build, clad in flowing robes of white and silver that shimmer with faint hints of other colors.  His head is shaven bald, or perhaps is naturally that way, and the skin there is decorated with an intricate knotwork tattoo in shades of electric blue and intense violet.  Elsewhere on his body, the design recurs in livid-looking brands marring his flesh.<!-- Add creature description--> </pre>"
+      "A branded goliath diviner's is tall and with a rangy build, clad in flowing robes of white and silver that shimmer with faint hints of other colors. His head is shaven bald, or perhaps is naturally that way, and the skin there is decorated with an intricate knotwork tattoo in shades of electric blue and intense violet. Elsewhere on his body, the design recurs in livid-looking brands marring his flesh."
     ],
     arrival: [],
     flee: [],

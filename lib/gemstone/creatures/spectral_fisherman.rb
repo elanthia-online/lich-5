@@ -40,7 +40,7 @@
         name: "Bite"
       },
       {
-        name: "Claw (attack){{!}}Claw"
+        name: "Claw (attack)Claw"
       }
     ],
     bolt_spells: [],
@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Excruciating pain reflected in his tired eyes and weathered face, the spectral fisherman still guards his now-destroyed fishing grounds, held by his love of the sea and the curse that binds his soul to the shore.  Human in appearance, the spectral fisherman wields his weapon capably in defense of what he considers to be his, by right, by ancestry, and earned long ago by his own hand.</pre>"
+      "Excruciating pain reflected in his tired eyes and weathered face, the spectral fisherman still guards his now-destroyed fishing grounds, held by his love of the sea and the curse that binds his soul to the shore. Human in appearance, the spectral fisherman wields his weapon capably in defense of what he considers to be his, by right, by ancestry, and earned long ago by his own hand."
     ],
     arrival: [],
     flee: [],

@@ -84,7 +84,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "[[Slippery Mind]]"
+      "Slippery Mind"
     ]
   },
   special_other: nil,
@@ -101,7 +101,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Wearing only a linen and leather pteruges, a triton brawler is covered in roughly inked black tattoos, a cavalcade of runes, sigils, and symbols twining about one another and obscuring his grey-blue flesh.  Across his amphibian-like head is a tattoo of a powerful tentacle crushing a trident in its suckered grip.  The brawler's eyes dart warily this way and that, and his tongue flicks in and out with deceptive laziness.</pre>"
+      "Wearing only a linen and leather pteruges, a triton brawler is covered in roughly inked black tattoos, a cavalcade of runes, sigils, and symbols twining about one another and obscuring his grey-blue flesh. Across his amphibian-like head is a tattoo of a powerful tentacle crushing a trident in its suckered grip. The brawler's eyes dart warily this way and that, and his tongue flicks in and out with deceptive laziness."
     ],
     arrival: [],
     flee: [],

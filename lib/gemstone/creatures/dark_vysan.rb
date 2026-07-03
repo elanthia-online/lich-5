@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The dark vysan is a peculiar beast, dapple gray and extremely bloated with gas to the point that it can float from place to place. Its appendages extend straight out from its rotund body, and its head resembles an overturned kettle. Afraid of bright light, it prefers to inhabit underground passageways, moving slowly from room to room in search of food and treasure.</pre>"
+      "The dark vysan is a peculiar beast, dapple gray and extremely bloated with gas to the point that it can float from place to place. Its appendages extend straight out from its rotund body, and its head resembles an overturned kettle. Afraid of bright light, it prefers to inhabit underground passageways, moving slowly from room to room in search of food and treasure."
     ],
     arrival: [],
     flee: [],

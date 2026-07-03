@@ -79,11 +79,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Radiant crimson mote of essence]]"
+    other: "Radiant crimson mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The gnarled being is a twisted amalgamation of flesh and other, less mentionable things.  Tusks and horns grow from its head in an impressive array of weaponry.  The tough, pale yellow skin of the being looks burnt and scorched in places, but this doesn't seem to bother it.  The gnarled being's twisted hands and feet end with wicked, razor-sharp claws that refuse to shine in the light.</pre>"
+      "The gnarled being is a twisted amalgamation of flesh and other, less mentionable things. Tusks and horns grow from its head in an impressive array of weaponry. The tough, pale yellow skin of the being looks burnt and scorched in places, but this doesn't seem to bother it. The gnarled being's twisted hands and feet end with wicked, razor-sharp claws that refuse to shine in the light."
     ],
     arrival: [],
     flee: [],

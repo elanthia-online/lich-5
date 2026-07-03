@@ -80,7 +80,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Hugely bloated, the abdomen of the kresh ravager is fleshy and sickly white-yellow.  It jiggles as the ravager skitters around on undersized legs that, while thin and short, appear to possess enough strength to support the ticklike monstrosity's great bulk.  By contrast, the ravager's forelegs are powerful and armored in a glittering substance that resembles diamond.  Comically undersized mandibles frame its small mouth, which constantly drips an unsavory yellow-green ichor.</pre>"
+      "Hugely bloated, the abdomen of the kresh ravager is fleshy and sickly white-yellow. It jiggles as the ravager skitters around on undersized legs that, while thin and short, appear to possess enough strength to support the ticklike monstrosity's great bulk. By contrast, the ravager's forelegs are powerful and armored in a glittering substance that resembles diamond. Comically undersized mandibles frame its small mouth, which constantly drips an unsavory yellow-green ichor."
     ],
     arrival: [],
     flee: [],

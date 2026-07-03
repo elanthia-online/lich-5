@@ -75,11 +75,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nMassive and imposing, the Illoke mystic towers over adventurers.  It is more than three times the size of the largest giantman, with smooth grey skin and deep black eyes that glare out from under a heavy brow.  The eyes regard potential victims with disdain, as if they were nothing more than an offering to be sacrificed.  Chiseled deep into the forehead of the shaman, the symbol of Illoke glows red with power.\n</pre>"
+      "Massive and imposing, the Illoke mystic towers over adventurers. It is more than three times the size of the largest giantman, with smooth grey skin and deep black eyes that glare out from under a heavy brow. The eyes regard potential victims with disdain, as if they were nothing more than an offering to be sacrificed. Chiseled deep into the forehead of the shaman, the symbol of Illoke glows red with power."
     ],
     arrival: [],
     flee: [],

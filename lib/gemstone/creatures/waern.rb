@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The waern is a vicious-looking embodiment of canine malice and tenacity.  The waern's fiendish green eyes glow with insane appetite and her mangy pelt is so ragged, the rotting bones show through in spots.  Long, malicious teeth curve out of the waern's rotting muzzle, and the tail that curves over the waern's back is hardly more than segments of bone interspersed with a few pieces of fuzzy, matted hair.  Floating over the ground, her paws scarcely leaving a track, the waern dodges almost quicker than the eye can follow.</pre>"
+      "The waern is a vicious-looking embodiment of canine malice and tenacity. The waern's fiendish green eyes glow with insane appetite and her mangy pelt is so ragged, the rotting bones show through in spots. Long, malicious teeth curve out of the waern's rotting muzzle, and the tail that curves over the waern's back is hardly more than segments of bone interspersed with a few pieces of fuzzy, matted hair. Floating over the ground, her paws scarcely leaving a track, the waern dodges almost quicker than the eye can follow."
     ],
     arrival: [],
     flee: [],

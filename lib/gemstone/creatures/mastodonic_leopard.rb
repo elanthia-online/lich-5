@@ -48,7 +48,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Pounce]]"
+        name: "Pounce"
       }
     ],
     special_notes: []
@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The mastodonic leopard has a long, narrow body, relatively short muscular legs and large broad paws.  His large, broad tail is used for balancing himself in the trees.  Two alert yellow eyes gaze over his broad snout, capped on the leopard's narrow head by his tufted ears.  Most striking are his markings: six large, narrow, brown blotches, edged in black, with pale areas separating the blotches on his sides.  Along his back, the leopard has a series of large open-centered spots, and his underside is solidly pale.  The mastodonic leopard's square jaw and extra long canine teeth, characteristic of the northern sabre-toothed tiger, are ideal for shredding meat.</pre>"
+      "The mastodonic leopard has a long, narrow body, relatively short muscular legs and large broad paws. His large, broad tail is used for balancing himself in the trees. Two alert yellow eyes gaze over his broad snout, capped on the leopard's narrow head by his tufted ears. Most striking are his markings: six large, narrow, brown blotches, edged in black, with pale areas separating the blotches on his sides. Along his back, the leopard has a series of large open-centered spots, and his underside is solidly pale. The mastodonic leopard's square jaw and extra long canine teeth, characteristic of the northern sabre-toothed tiger, are ideal for shredding meat."
     ],
     arrival: [],
     flee: [],

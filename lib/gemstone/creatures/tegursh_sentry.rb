@@ -47,7 +47,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Tail sweep]]"
+        name: "Tail sweep"
       }
     ],
     special_notes: []
@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Taller than a common human and of substantially heavier build, the tegursh sentry is a solid mass of bone and gristle overlaid with bony plates that cover most of his torso, legs, and arms.  Beady, black eyes rimmed in red peer out from a twisted, deformed face, clearly orcish but with an elongated snout.  The sentry's arms are as thick as tree branches, ending in three incredibly sharp claws.  Unlike any orc you have seen, this creature has an armored tail tipped with pointy spikes.</pre>"
+      "Taller than a common human and of substantially heavier build, the tegursh sentry is a solid mass of bone and gristle overlaid with bony plates that cover most of his torso, legs, and arms. Beady, black eyes rimmed in red peer out from a twisted, deformed face, clearly orcish but with an elongated snout. The sentry's arms are as thick as tree branches, ending in three incredibly sharp claws. Unlike any orc you have seen, this creature has an armored tail tipped with pointy spikes."
     ],
     arrival: [],
     flee: [],

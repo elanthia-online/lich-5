@@ -99,11 +99,11 @@
     gems: true,
     boxes: true,
     skin: "a fenghai fur",
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fenghai seems to be a furry little ball with feet.  Sparkling eyes peer out from a mop of russet fur, looking about with a happy curiousity.  Stubby arms end in pudgy little hands that appear dextrous despite their dimensions, and the round-toed feet are covered in hair and dirt.  While comical in appearance, it is obvious that the furball can take care of itself.</pre>"
+      "The fenghai seems to be a furry little ball with feet. Sparkling eyes peer out from a mop of russet fur, looking about with a happy curiousity. Stubby arms end in pudgy little hands that appear dextrous despite their dimensions, and the round-toed feet are covered in hair and dirt. While comical in appearance, it is obvious that the furball can take care of itself."
     ],
     arrival: [],
     flee: [],

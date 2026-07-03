@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The flattened body of the giant veaba is divided into a head and trunk comprised of several segments.  Pairs of legs, too numerous to count, flank each segment of the body.  Just below a gaping maw, two appendages of the first segment have large claws that are equipped with poison glands.  Long antennae extend from the eyeless head.</pre>"
+      "The flattened body of the giant veaba is divided into a head and trunk comprised of several segments. Pairs of legs, too numerous to count, flank each segment of the body. Just below a gaping maw, two appendages of the first segment have large claws that are equipped with poison glands. Long antennae extend from the eyeless head."
     ],
     arrival: [],
     flee: [],

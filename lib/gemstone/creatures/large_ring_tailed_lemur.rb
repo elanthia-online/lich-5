@@ -79,7 +79,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Tufts of white hair stand straight out from the ears and face of the ring-tail lemur before trailing down to cover his neck and abdomen.  Black rings surround his eyes like a mask and short, black fur covers his pointed muzzle.  Soft, fluffy brown fur covers the ring-tail lemur short body as well as his thin arms and legs.  The lemur's long bushy tail has alternating bands of black and white rings that are capped with fuzz.</pre>"
+      "Tufts of white hair stand straight out from the ears and face of the ring-tail lemur before trailing down to cover his neck and abdomen. Black rings surround his eyes like a mask and short, black fur covers his pointed muzzle. Soft, fluffy brown fur covers the ring-tail lemur short body as well as his thin arms and legs. The lemur's long bushy tail has alternating bands of black and white rings that are capped with fuzz."
     ],
     arrival: [],
     flee: [],

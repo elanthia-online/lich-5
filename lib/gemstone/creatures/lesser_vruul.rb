@@ -114,7 +114,7 @@
   },
   messaging: {
     description: [
-      "The lesser vruul has tough, leathery hide, as black as midnight.  Bat-like wings sprout from its back, but they do not look large or strong enough to support its weight in flight.  The vruul's claws are long, sharp and appear to be stained with the blood of many victims.  Its eyes are eerie, solid green orbs that seem to glow with an inner power."
+      "The lesser vruul has tough, leathery hide, as black as midnight. Bat-like wings sprout from its back, but they do not look large or strong enough to support its weight in flight. The vruul's claws are long, sharp and appear to be stained with the blood of many victims. Its eyes are eerie, solid green orbs that seem to glow with an inner power."
     ],
     arrival: [],
     flee: [],

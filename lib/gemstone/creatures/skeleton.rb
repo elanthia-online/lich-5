@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The skeleton clatters noisily about as if lost in the world of the living.  Bleached bones, barely connected by stiff, crystallized tendons, tell a story of flesh long rotted away.  Cockroaches, maggots and other insect types, perhaps still feeding on the rotting remains of the brain of the skeleton, scuttle and slither liberally in and out of the cranial sockets.</pre>"
+      "The skeleton clatters noisily about as if lost in the world of the living. Bleached bones, barely connected by stiff, crystallized tendons, tell a story of flesh long rotted away. Cockroaches, maggots and other insect types, perhaps still feeding on the rotting remains of the brain of the skeleton, scuttle and slither liberally in and out of the cranial sockets."
     ],
     arrival: [],
     flee: [],

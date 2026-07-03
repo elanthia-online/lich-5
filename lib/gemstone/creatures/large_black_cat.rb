@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nNo ordinary house cat, the large black cat has grown to the size of a forest wildcat.  Roaming the halls of his domain, he feasts on vermin and other things that do not belong here.  The large black cat strikes quickly with his razor-sharp claws, rending his prey quickly and fatally.  His attack is difficult to avoid, for he can change from docile feline to streaking ball of midnight black fur in an instant.  He bares his fangs, hissing loudly, and raises his back in warning at a stranger's approach. </pre>"
+      "No ordinary house cat, the large black cat has grown to the size of a forest wildcat. Roaming the halls of his domain, he feasts on vermin and other things that do not belong here. The large black cat strikes quickly with his razor-sharp claws, rending his prey quickly and fatally. His attack is difficult to avoid, for he can change from docile feline to streaking ball of midnight black fur in an instant. He bares his fangs, hissing loudly, and raises his back in warning at a stranger's approach."
     ],
     arrival: [],
     flee: [],

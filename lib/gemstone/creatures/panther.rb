@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The panther is a large, black cat with a slender body and long tail.  Often approaching and striking silently, he affords his prey little warning.  Powerful jaws bite and sharp claws rend as the panther attempts to secure enough food for another day.  Even when satiated, though, the panther enjoys killing just for the pleasure of it.</pre>"
+      "The panther is a large, black cat with a slender body and long tail. Often approaching and striking silently, he affords his prey little warning. Powerful jaws bite and sharp claws rend as the panther attempts to secure enough food for another day. Even when satiated, though, the panther enjoys killing just for the pleasure of it."
     ],
     arrival: [],
     flee: [],

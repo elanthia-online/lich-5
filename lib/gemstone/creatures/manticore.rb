@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The first thing that strikes you about the manticore is its noxious smell.  At first it appears somewhat like an unkempt lion, but after you wipe away the tears brought to your eyes by its vile stench, you see that its head is more like that of a man, and it has a long segmented tail like that of a scorpion.</pre>\n\nThe manticore is large in size and about three feet high."
+      "The first thing that strikes you about the manticore is its noxious smell. At first it appears somewhat like an unkempt lion, but after you wipe away the tears brought to your eyes by its vile stench, you see that its head is more like that of a man, and it has a long segmented tail like that of a scorpion.\n\nThe manticore is large in size and about three feet high."
     ],
     arrival: [],
     flee: [],

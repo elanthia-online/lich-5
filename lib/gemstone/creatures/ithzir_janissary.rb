@@ -95,7 +95,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Ithzir janissary's movements are both aggressive and graceful, his muscular, lithe form the envy of any acrobat or student of the martial arts.  Wide, upward-slanted, green eyes take in his surroundings with an easy confidence, as if the fate of any opponent is not a matter of chance, only of time.  The Ithzir janissary is a head taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance.  The janissary wears a crisply-cut silvery blue tunic emblazoned with a feline silhouette on the right breast.</pre>"
+      "The Ithzir janissary's movements are both aggressive and graceful, his muscular, lithe form the envy of any acrobat or student of the martial arts. Wide, upward-slanted, green eyes take in his surroundings with an easy confidence, as if the fate of any opponent is not a matter of chance, only of time. The Ithzir janissary is a head taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance. The janissary wears a crisply-cut silvery blue tunic emblazoned with a feline silhouette on the right breast."
     ],
     arrival: [],
     flee: [],

@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThe undead tree spirit resides among its living brethren, barely distinguishable from them until it is awakened from its slumber.  Once awakened, terrible gashes and scars appear across its trunk, many of which would have been entirely fatal in life.  Its outline is not quite defined and its appearance shifts noticeably as it moves.  The occasional flicker reveals a horrifically malformed visage, before fading back to its normal tree-like state.\n</pre>"
+      "The undead tree spirit resides among its living brethren, barely distinguishable from them until it is awakened from its slumber. Once awakened, terrible gashes and scars appear across its trunk, many of which would have been entirely fatal in life. Its outline is not quite defined and its appearance shifts noticeably as it moves. The occasional flicker reveals a horrifically malformed visage, before fading back to its normal tree-like state."
     ],
     arrival: [],
     flee: [],

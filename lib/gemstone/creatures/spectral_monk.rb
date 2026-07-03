@@ -107,7 +107,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A tattered black cowl obscures the spectral monk's face.  Given the burning green eyes and foul stench he exudes, perhaps that is for the best.  Tattered rags cloak his shimmering pellucid form.  Its ghostly body flickers in and out of existance, as if only his desire to destroy keeps him bound to this plane.</pre>"
+      "A tattered black cowl obscures the spectral monk's face. Given the burning green eyes and foul stench he exudes, perhaps that is for the best. Tattered rags cloak his shimmering pellucid form. Its ghostly body flickers in and out of existance, as if only his desire to destroy keeps him bound to this plane."
     ],
     arrival: [],
     flee: [],

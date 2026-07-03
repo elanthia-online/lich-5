@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "Similar to its smaller cousin, the bog troll, the greater bog troll's skin is a dark yellow mottled with patches of brownish green.  However, where the bog troll is hairless, the greater bog troll displays a thick mane of oily, dark brown hair that flows both down the center of its back and across its shoulders.  Its head is barren, and bulbous green eyes sit nearly atop the flat cranium.  Sharp claws extend from its oversized, webbed hands and feet, and long, jagged teeth glint menacingly within its wide mouth."
+      "Similar to its smaller cousin, the bog troll, the greater bog troll's skin is a dark yellow mottled with patches of brownish green. However, where the bog troll is hairless, the greater bog troll displays a thick mane of oily, dark brown hair that flows both down the center of its back and across its shoulders. Its head is barren, and bulbous green eyes sit nearly atop the flat cranium. Sharp claws extend from its oversized, webbed hands and feet, and long, jagged teeth glint menacingly within its wide mouth."
     ],
     arrival: [],
     flee: [],

@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>More than his great height, it is the shimmer of colors that play beneath a radiant-eyed goliath auramancer's skin and simmer, in his eyes that mark him as a being of power.  He wears loose-fitting garments of white and silver, his billowing pantaloons cinched at the waist by a sash dyed in rainbow colors.  Flashes of prismatic light occasionally illuminate his garb from within, hinting at a powerfully athletic physique.\n<!-- Add creature description--> </pre>"
+      "More than his great height, it is the shimmer of colors that play beneath a radiant-eyed goliath auramancer's skin and simmer, in his eyes that mark him as a being of power. He wears loose-fitting garments of white and silver, his billowing pantaloons cinched at the waist by a sash dyed in rainbow colors. Flashes of prismatic light occasionally illuminate his garb from within, hinting at a powerfully athletic physique."
     ],
     arrival: [],
     flee: [],

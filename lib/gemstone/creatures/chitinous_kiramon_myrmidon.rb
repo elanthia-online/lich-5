@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The myrmidon's chitin is a cold and lustrous black, infused with an oil slick of darkly rainbowed colors that are almost hypnotically beautiful to behold.  Clusters of barbed spines protrude from the upper segments of his spindly arms, each of which ends in a sharp scythe-like claw.  Above a set of oversized, prehensile mandibles, the kiramon myrmidon's orb-shaped eyes are a sullen red and are faceted like pristine rubies.  They are possessed of an intellect that is as vast as it is otherworldly.</pre>"
+      "The myrmidon's chitin is a cold and lustrous black, infused with an oil slick of darkly rainbowed colors that are almost hypnotically beautiful to behold. Clusters of barbed spines protrude from the upper segments of his spindly arms, each of which ends in a sharp scythe-like claw. Above a set of oversized, prehensile mandibles, the kiramon myrmidon's orb-shaped eyes are a sullen red and are faceted like pristine rubies. They are possessed of an intellect that is as vast as it is otherworldly."
     ],
     arrival: [],
     flee: [],

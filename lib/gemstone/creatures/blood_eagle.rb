@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With a body length of nearly 3 feet and a wingspan of 8 feet, the blood eagle is without a doubt the largest eagle you've ever seen.  The body is covered with brown and black feathers and its powerful wings raise dust whenever the eagle nears ground.  Large black eyes gleam with intelligence and claws sharp enough to rip apart a bear give this creature a distinctively threatening appearance.</pre>"
+      "With a body length of nearly 3 feet and a wingspan of 8 feet, the blood eagle is without a doubt the largest eagle you've ever seen. The body is covered with brown and black feathers and its powerful wings raise dust whenever the eagle nears ground. Large black eyes gleam with intelligence and claws sharp enough to rip apart a bear give this creature a distinctively threatening appearance."
     ],
     arrival: [],
     flee: [],

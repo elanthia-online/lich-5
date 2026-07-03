@@ -99,11 +99,11 @@
     gems: true,
     boxes: true,
     skin: "No",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The emaciated hierophant stands short for a human, and might pass for one except for the storm grey eyes that swirl with unearthly energy.  Long robes that appear to float in the air gap to reveal an ornate tunic and breeches with polished green leather boots to the knee.  A long golden chain hangs about his neck, a small glowing red crystal suspended as a pendant there.  Intricate tattoos cover his flesh, drawing ornate and unrecognizable patterns that glow a dull red and seem to pulse along as if it were blood.</pre>"
+      "The emaciated hierophant stands short for a human, and might pass for one except for the storm grey eyes that swirl with unearthly energy. Long robes that appear to float in the air gap to reveal an ornate tunic and breeches with polished green leather boots to the knee. A long golden chain hangs about his neck, a small glowing red crystal suspended as a pendant there. Intricate tattoos cover his flesh, drawing ornate and unrecognizable patterns that glow a dull red and seem to pulse along as if it were blood."
     ],
     arrival: [],
     flee: [],

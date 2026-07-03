@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The firethorn shoot is comprised of a light brown, round, bamboo-like stalk rising off flexible roots.  Near the top, several leafy green fronds, laden with thorns, curl away from the main stalk.  A mobile, half-intelligent plant, the firethorn shoot ambles about looking for carriers in which to implant its thorny seeds in the hope that they will be taken far from the original plant to grown a new firethorn shoot.  Unfortunately, the implantation process often kills the carrier.</pre>"
+      "The firethorn shoot is comprised of a light brown, round, bamboo-like stalk rising off flexible roots. Near the top, several leafy green fronds, laden with thorns, curl away from the main stalk. A mobile, half-intelligent plant, the firethorn shoot ambles about looking for carriers in which to implant its thorny seeds in the hope that they will be taken far from the original plant to grown a new firethorn shoot. Unfortunately, the implantation process often kills the carrier."
     ],
     arrival: [],
     flee: [],

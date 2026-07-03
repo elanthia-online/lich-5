@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The skeletal lord still stands proudly erect.  Skilled in the art of battle, it takes its time, carefully measuring each powerful attack to strike at the enemy's most exposed point.  Its body reduced to shreds of flesh, eye sockets now empty, the skeletal lord still attacks with amazing accuracy.</pre>"
+      "The skeletal lord still stands proudly erect. Skilled in the art of battle, it takes its time, carefully measuring each powerful attack to strike at the enemy's most exposed point. Its body reduced to shreds of flesh, eye sockets now empty, the skeletal lord still attacks with amazing accuracy."
     ],
     arrival: [],
     flee: [],

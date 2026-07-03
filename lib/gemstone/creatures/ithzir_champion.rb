@@ -58,10 +58,10 @@
     ],
     special_abilities: [
       {
-        name: "[[Quickstrike]]"
+        name: "Quickstrike"
       },
       {
-        name: "[[Seanette's Shout]]"
+        name: "Seanette's Shout"
       }
     ],
     special_notes: []
@@ -109,7 +109,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With a competely tattooed forehead and hands, the champion bears an imperious, domineering presence.  Muscular and athletic, the Ithzir champion is a full head taller than the average man, and her light-blue skin is completely hairless.  Exuding an air of calm and in control, she appears dangerous and fearsome in any situation - and while she seems mostly humanoid, strange proportions and awkward construction make her alien and unknownable.  The champion wears a well made royal blue tunic, with the image of a rearing griffin emblazoned in gold thread on the right breast.</pre>"
+      "With a competely tattooed forehead and hands, the champion bears an imperious, domineering presence. Muscular and athletic, the Ithzir champion is a full head taller than the average man, and her light-blue skin is completely hairless. Exuding an air of calm and in control, she appears dangerous and fearsome in any situation - and while she seems mostly humanoid, strange proportions and awkward construction make her alien and unknownable. The champion wears a well made royal blue tunic, with the image of a rearing griffin emblazoned in gold thread on the right breast."
     ],
     arrival: [],
     flee: [],

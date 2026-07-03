@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "Glistening in the light, the crone's snow white skin is covered with frost and snow.  Seemingly formed of living snow, the crone is a cold, imposing creature.  The snow crone has a mop of tangle ice blue hair sticking out wildly in all directions."
+      "Glistening in the light, the crone's snow white skin is covered with frost and snow. Seemingly formed of living snow, the crone is a cold, imposing creature. The snow crone has a mop of tangle ice blue hair sticking out wildly in all directions."
     ],
     arrival: [],
     flee: [],

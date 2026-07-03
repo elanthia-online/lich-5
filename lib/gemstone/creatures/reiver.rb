@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The reiver stands tall and proud.  Moss-green eyes dominate the strong face and tousled, dark hair crowns the head.  The reiver is well-muscled and toned, with calloused hands used to the wielding of weapons.  Forged by a hard history and a harsh climate, the reiver is a tough fighter with a sense of honor and duty.  Normally calm and amiable, the reiver's visage is thunderous when kith and kin are threatened or there are krolvins lurking.</pre>"
+      "The reiver stands tall and proud. Moss-green eyes dominate the strong face and tousled, dark hair crowns the head. The reiver is well-muscled and toned, with calloused hands used to the wielding of weapons. Forged by a hard history and a harsh climate, the reiver is a tough fighter with a sense of honor and duty. Normally calm and amiable, the reiver's visage is thunderous when kith and kin are threatened or there are krolvins lurking."
     ],
     arrival: [],
     flee: [],

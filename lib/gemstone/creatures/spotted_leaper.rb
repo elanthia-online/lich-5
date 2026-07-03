@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The spotted leaper appears a bizarre cross between a wolf and a frog.  Perhaps six feet from snout to rump, covered with slick, hairless skin that is a dark green color with occasional pink splotches, it lacks all trace of fur but has a set of fangs worthy of any wolf that ever strode the land.  Extra long front legs tipped with raking claws give it the bounding gait that has earned it its name.</pre>"
+      "The spotted leaper appears a bizarre cross between a wolf and a frog. Perhaps six feet from snout to rump, covered with slick, hairless skin that is a dark green color with occasional pink splotches, it lacks all trace of fur but has a set of fangs worthy of any wolf that ever strode the land. Extra long front legs tipped with raking claws give it the bounding gait that has earned it its name."
     ],
     arrival: [],
     flee: [],

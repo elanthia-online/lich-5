@@ -60,7 +60,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Gas cloud]]"
+        name: "Gas cloud"
       }
     ],
     special_notes: []
@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>You have never seen anything quite like a spectre, so you are not really sure what to make of it or how dangerous it might be.</pre>"
+      "You have never seen anything quite like a spectre, so you are not really sure what to make of it or how dangerous it might be."
     ],
     arrival: [],
     flee: [],

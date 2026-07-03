@@ -101,11 +101,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet mote of essence]]"
+    other: "Glowing violet mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A barely visible spirit, the phantasma floats silently across the room.  Its bald head, thick neck, muscular forearms and fixed sneer reflect its former positions of jailer and torturer.  Rotting leather armor drapes the phantasma, providing it with its only solid link to the living past.</pre>"
+      "A barely visible spirit, the phantasma floats silently across the room. Its bald head, thick neck, muscular forearms and fixed sneer reflect its former positions of jailer and torturer. Rotting leather armor drapes the phantasma, providing it with its only solid link to the living past."
     ],
     arrival: [],
     flee: [],

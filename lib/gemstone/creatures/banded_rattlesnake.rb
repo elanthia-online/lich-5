@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The banded rattlesnake is recognizable by the wide black and red bands that encircle its tubular-shaped body.  The beaded, reptilian eyes constantly stare about in an unflickering gaze as it searches for intruders.  Very territorial, this snake provides warning to potential aggressors that they have intruded on its domain by sending the rattles on its tail into flickering motion, emitting a constant rattling hum.  When coiled in preparation to attack, the rattlesnake's tongue darts in and out of its mouth to assist in gauging its attack.  As the tongue flicks in and out, the rattlesnake's main weapon can be seen, the venom-filled fangs that are its bringers of death.</pre>"
+      "The banded rattlesnake is recognizable by the wide black and red bands that encircle its tubular-shaped body. The beaded, reptilian eyes constantly stare about in an unflickering gaze as it searches for intruders. Very territorial, this snake provides warning to potential aggressors that they have intruded on its domain by sending the rattles on its tail into flickering motion, emitting a constant rattling hum. When coiled in preparation to attack, the rattlesnake's tongue darts in and out of its mouth to assist in gauging its attack. As the tongue flicks in and out, the rattlesnake's main weapon can be seen, the venom-filled fangs that are its bringers of death."
     ],
     arrival: [],
     flee: [],

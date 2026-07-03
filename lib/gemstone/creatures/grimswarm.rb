@@ -67,7 +67,7 @@
   },
   messaging: {
     description: [
-      "__TOC__\nGrimswarm are a loose culture of organized orcs, trolls, and giants, which can be found in all parts of Elanthia. They are most often encountered by members of the Guardians of Sunfist, an organization committed to striking out against the Grimswarm forces and their allies.\n\nIn virtually all cases, Grimswarm are encountered in one of two locations: war parties and warcamps. Warparties are roving bands of Grimswarm found in a specific hunting ground or road, which only appear when a warparty task is assigned to a member of Sunfist. Warcamps are hidden bases which can contain hundreds of individual Grimswarm, and can only be located in various hunting grounds by members of Sunfist."
+      "Grimswarm are a loose culture of organized orcs, trolls, and giants, which can be found in all parts of Elanthia. They are most often encountered by members of the Guardians of Sunfist, an organization committed to striking out against the Grimswarm forces and their allies.\n\nIn virtually all cases, Grimswarm are encountered in one of two locations: war parties and warcamps. Warparties are roving bands of Grimswarm found in a specific hunting ground or road, which only appear when a warparty task is assigned to a member of Sunfist. Warcamps are hidden bases which can contain hundreds of individual Grimswarm, and can only be located in various hunting grounds by members of Sunfist."
     ],
     arrival: [],
     flee: [],

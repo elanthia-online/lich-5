@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The siren lizard has multicolored pastel skin which appears to be rather scaly, a long, blunt snout, sharp teeth, and a swiftly moving tail.</pre>"
+      "The siren lizard has multicolored pastel skin which appears to be rather scaly, a long, blunt snout, sharp teeth, and a swiftly moving tail."
     ],
     arrival: [],
     flee: [],

@@ -108,7 +108,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The amphibian visage of a triton warlock gazes out beneath a frayed dark blue robe, her sun-cracked lips curled back into a sneer as she observes the area with slitted, sickly yellow eyes.  Her emaciated form leans backwards, leaving her sinewy arms exposed to the elements as they grip tightly to her staff, her green-fleshed knuckles branded in rough runes.  Her head rotates at the most minute of changes, nostrils flaring as she murmurs indecipherable incantations to herself in preparation of the unknown.</pre>"
+      "The amphibian visage of a triton warlock gazes out beneath a frayed dark blue robe, her sun-cracked lips curled back into a sneer as she observes the area with slitted, sickly yellow eyes. Her emaciated form leans backwards, leaving her sinewy arms exposed to the elements as they grip tightly to her staff, her green-fleshed knuckles branded in rough runes. Her head rotates at the most minute of changes, nostrils flaring as she murmurs indecipherable incantations to herself in preparation of the unknown."
     ],
     arrival: [],
     flee: [],

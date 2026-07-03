@@ -84,11 +84,11 @@
     gems: false,
     boxes: false,
     skin: "storm hound paw",
-    other: "[[Essence of air]]"
+    other: "Essence of air"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>You have never seen anything quite like a storm hound, so you are not really sure what to make of it or how dangerous it might be.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The vapor hound is medium in size and about three feet high in its current state.</pre>"
+      "You have never seen anything quite like a storm hound, so you are not really sure what to make of it or how dangerous it might be.\n\n;Assess\nThe vapor hound is medium in size and about three feet high in its current state."
     ],
     arrival: [],
     flee: [],

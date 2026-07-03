@@ -75,7 +75,7 @@
   },
   messaging: {
     description: [
-      "Carrying an air of piety and grace, the Sheruvian priest is a figure of cold dedication to his deity.  Undecipherable runes cover his shaved head and every other visible part of his body.  His hands are soft, unused to manual labor or the rigors of combat, yet he is a dangerous foe when confronted.  It is unusual to find the Sheruvian priest unaccompanied by his minions, as he prefers the halls of worship where he can perform his rituals undisturbed."
+      "Carrying an air of piety and grace, the Sheruvian priest is a figure of cold dedication to his deity. Undecipherable runes cover his shaved head and every other visible part of his body. His hands are soft, unused to manual labor or the rigors of combat, yet he is a dangerous foe when confronted. It is unusual to find the Sheruvian priest unaccompanied by his minions, as he prefers the halls of worship where he can perform his rituals undisturbed."
     ],
     arrival: [],
     flee: [],

@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "{{Otheruses4|the creature found in the Rift|the scripting engine|Lich (software)}}\nA Lich can be found in the Scatter in the Rift. This is a highly intelligent spell caster who went to great lengths to gain power and longevity, at the cost of his soul.\n\nLiches can spawn as frostborne or infernal, depending on the temperature of the Scatter at the time."
+      ""
     ],
     arrival: [],
     flee: [],

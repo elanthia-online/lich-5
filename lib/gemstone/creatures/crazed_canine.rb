@@ -7,13 +7,13 @@
   level: 10,
   family: "Canine",
   type: "Quadruped",
-  undead: true,
+  undead: false,
   has_blood: nil,
   has_bones: nil,
   muggable: nil,
   boss: false,
   otherclass: [
-    "<!-- Other classification limited to corporeal undead, non-corporeal undead, elemental, extra planar, magical; insert otherclass2= for 2nd classification (up to 3) -->Living"
+    "Living"
   ],
   bcs: true,
   max_hp: 100,

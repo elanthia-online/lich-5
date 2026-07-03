@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The arctic puma is a muscular and athletic animal.  Covered with a uniform coat of greyish-brown fur, her long, lithe body is equipped with powerful legs, displaying a proportionately greater difference in the length of the forelegs compared to the extenuated hind legs.  The feline's head is topped with rounded ears, and a very long, balancing tail completes the puma's physique.</pre>"
+      "The arctic puma is a muscular and athletic animal. Covered with a uniform coat of greyish-brown fur, her long, lithe body is equipped with powerful legs, displaying a proportionately greater difference in the length of the forelegs compared to the extenuated hind legs. The feline's head is topped with rounded ears, and a very long, balancing tail completes the puma's physique."
     ],
     arrival: [],
     flee: [],

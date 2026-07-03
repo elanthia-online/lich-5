@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Towering about three yards tall, a crystal golem's form is nothing short of massive.  Deeply set fires glimmer coldly from its eye sockets, throwing a myriad of colors throughout the large crystal spikes jutting sharply away from its thick crystalline skin.  As it moves, the rainbow color flickers through the facets of its body in a dizzying array of color.</pre>"
+      "Towering about three yards tall, a crystal golem's form is nothing short of massive. Deeply set fires glimmer coldly from its eye sockets, throwing a myriad of colors throughout the large crystal spikes jutting sharply away from its thick crystalline skin. As it moves, the rainbow color flickers through the facets of its body in a dizzying array of color."
     ],
     arrival: [],
     flee: [],

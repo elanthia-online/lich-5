@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The caedera looms malevolently over its prey.  Yellow ichor drips from its slavering jaws as its massive head lolls blindly from side to side.  Keen senses of smell and sound lead this gargantuan worm to the location of its next meal.  Its segmented body contracts and expands powerfully, allowing the beast to burrow through rock and soil with the same ease that other creatures move through the air.  Each segment is dark orange with mottled brown spots, though the rings where the segments join are a charcoal grey.</pre>"
+      "The caedera looms malevolently over its prey. Yellow ichor drips from its slavering jaws as its massive head lolls blindly from side to side. Keen senses of smell and sound lead this gargantuan worm to the location of its next meal. Its segmented body contracts and expands powerfully, allowing the beast to burrow through rock and soil with the same ease that other creatures move through the air. Each segment is dark orange with mottled brown spots, though the rings where the segments join are a charcoal grey."
     ],
     arrival: [],
     flee: [],

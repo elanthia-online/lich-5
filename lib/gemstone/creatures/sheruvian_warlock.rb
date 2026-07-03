@@ -75,7 +75,7 @@
   },
   messaging: {
     description: [
-      "The Sheruvian warlock stands proudly, his coal black eyes scanning the room as a nobleman would haughtily survey his domain.  His long, black hair courses wildly about his face and spills down over the upturned collar of his flaring cape.  His taut lips twist into a malignant sneer and his eyes narrow suspiciously.  Undecipherable runes, tattooed over his entire face, stand out starkly against his pale, white skin."
+      "The Sheruvian warlock stands proudly, his coal black eyes scanning the room as a nobleman would haughtily survey his domain. His long, black hair courses wildly about his face and spills down over the upturned collar of his flaring cape. His taut lips twist into a malignant sneer and his eyes narrow suspiciously. Undecipherable runes, tattooed over his entire face, stand out starkly against his pale, white skin."
     ],
     arrival: [],
     flee: [],

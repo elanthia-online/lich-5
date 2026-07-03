@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A red-scaled thrak is nearly twice the size of its mundane relative, the common thrak.  Armed with heavy claws on all four feet and a nasty set of long razor-sharp fangs, it appears rather well equipped for offense.  Its skin has a rough pebbled texture, dark gray to black on the back, with a brilliant red underbelly and tail.</pre>"
+      "A red-scaled thrak is nearly twice the size of its mundane relative, the common thrak. Armed with heavy claws on all four feet and a nasty set of long razor-sharp fangs, it appears rather well equipped for offense. Its skin has a rough pebbled texture, dark gray to black on the back, with a brilliant red underbelly and tail."
     ],
     arrival: [],
     flee: [],

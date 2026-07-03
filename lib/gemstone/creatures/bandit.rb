@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "Dressed to kill, the bandit appears rather able to take care of himself.  The menacing predatory look in his eyes expresses both greed for wealth and a disdain for life.  However this otherwise ordinary person came to an awful life of crime, the bandit's appearance can only mean his next plundering victim is just around the corner, and then he'll move on down the road."
+      "Dressed to kill, the bandit appears rather able to take care of himself. The menacing predatory look in his eyes expresses both greed for wealth and a disdain for life. However this otherwise ordinary person came to an awful life of crime, the bandit's appearance can only mean his next plundering victim is just around the corner, and then he'll move on down the road."
     ],
     arrival: [],
     flee: [],

@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The long, thin, varicolored cobra slithers quickly through the landscape, searching for small prey upon which to feed.  It is a docile snake until disturbed, at which time it raises its head high off the ground and expands the loose skin around its neck, forming an intimidating dark hood.  An angered cobra is not to be trifled with, as its fangs contain a potent poison known to cause death in many instances.</pre>"
+      "The long, thin, varicolored cobra slithers quickly through the landscape, searching for small prey upon which to feed. It is a docile snake until disturbed, at which time it raises its head high off the ground and expands the loose skin around its neck, forming an intimidating dark hood. An angered cobra is not to be trifled with, as its fangs contain a potent poison known to cause death in many instances."
     ],
     arrival: [],
     flee: [],

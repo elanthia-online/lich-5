@@ -56,7 +56,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Gas cloud]]"
+        name: "Gas cloud"
       }
     ],
     special_notes: []
@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The wood wight stalks the forest, searching for  decaying and not-so-decaying flesh.  Perhaps once a powerful  human ranger, the wood wight is still powerful, but its tattered clothing is covered with mold, fungus and moss.  The wood wight shambles about, mercilessly attacking anything living.  Its cold, grey eyes and clammy fingers  wield magic and weaponry with equal skill.</pre>"
+      "The wood wight stalks the forest, searching for decaying and not-so-decaying flesh. Perhaps once a powerful human ranger, the wood wight is still powerful, but its tattered clothing is covered with mold, fungus and moss. The wood wight shambles about, mercilessly attacking anything living. Its cold, grey eyes and clammy fingers wield magic and weaponry with equal skill."
     ],
     arrival: [],
     flee: [],

@@ -78,7 +78,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The rotting woodsman staggers about through the forests she once knew in life, now unable to obtain rest.  Putrid flesh drips from her exposed bones, and only ragged patches of hair remain on her thick skull.  Despite the lack of solid muscle, the rotting woodsman swings her axe with enormous power, felling the living as she once felled the immense trees of the forest.</pre>"
+      "The rotting woodsman staggers about through the forests she once knew in life, now unable to obtain rest. Putrid flesh drips from her exposed bones, and only ragged patches of hair remain on her thick skull. Despite the lack of solid muscle, the rotting woodsman swings her axe with enormous power, felling the living as she once felled the immense trees of the forest."
     ],
     arrival: [],
     flee: [],

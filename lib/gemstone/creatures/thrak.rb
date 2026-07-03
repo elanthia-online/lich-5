@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This odd creature looks unnatural, as though some wizard had been meddling with its shape.  It looks like a large, 4-foot-long lizard, with an uncomfortably large variety of teeth in its long snout.</pre>"
+      "This odd creature looks unnatural, as though some wizard had been meddling with its shape. It looks like a large, 4-foot-long lizard, with an uncomfortably large variety of teeth in its long snout."
     ],
     arrival: [],
     flee: [],

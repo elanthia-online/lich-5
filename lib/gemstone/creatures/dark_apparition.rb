@@ -94,7 +94,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>It is difficult to focus on the shape of the dark apparition.  It wavers and shifts as an image seen through dark waters yet each shape it assumes has some aspect of horror and bloody death.  One form is that of a corpse mutilated beyond words with arms hacked to stumps yet tipped with shining claws.  Another is that of a waif horribly burned and scarred so that her features run like melted wax.  Yet another is something apparently torn apart by huge razors...flesh hanging in sheets that blow in some ill-spawned breeze like leaves of sea-grass in the current.  The sight would make any normal person turn and gag, being unable to bear any more.</pre>"
+      "It is difficult to focus on the shape of the dark apparition. It wavers and shifts as an image seen through dark waters yet each shape it assumes has some aspect of horror and bloody death. One form is that of a corpse mutilated beyond words with arms hacked to stumps yet tipped with shining claws. Another is that of a waif horribly burned and scarred so that her features run like melted wax. Yet another is something apparently torn apart by huge razors...flesh hanging in sheets that blow in some ill-spawned breeze like leaves of sea-grass in the current. The sight would make any normal person turn and gag, being unable to bear any more."
     ],
     arrival: [],
     flee: [],

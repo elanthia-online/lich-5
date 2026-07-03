@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Long, muscular legs support the small body of the bully.  Her skin is nut brown and she has mustard yellow hair that falls to the small of her back in tangled, unwashed locks.  She has big almond-shaped eyes that are oddly wide-set and a pointed nose that looks like a thorn sticking out of her round, plump face.</pre>"
+      "Long, muscular legs support the small body of the bully. Her skin is nut brown and she has mustard yellow hair that falls to the small of her back in tangled, unwashed locks. She has big almond-shaped eyes that are oddly wide-set and a pointed nose that looks like a thorn sticking out of her round, plump face."
     ],
     arrival: [],
     flee: [],

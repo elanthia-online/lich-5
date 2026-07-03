@@ -99,7 +99,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThe hulking frame of the Illoke jarl towers high overhead, ready to obliterate any who would intrude upon his territory.  Craggy, deep grey skin sheathes him in a natural armor, with little hindrance to his movements.  A pair of piercing black eyes stare out with contempt, barely distinguishable against his dark complexion.  In contrast, a shimmering crimson symbol of Illoke is chiseled deep into his forehead, radiating a dull red glow.\n</pre>"
+      "The hulking frame of the Illoke jarl towers high overhead, ready to obliterate any who would intrude upon his territory. Craggy, deep grey skin sheathes him in a natural armor, with little hindrance to his movements. A pair of piercing black eyes stare out with contempt, barely distinguishable against his dark complexion. In contrast, a shimmering crimson symbol of Illoke is chiseled deep into his forehead, radiating a dull red glow."
     ],
     arrival: [],
     flee: [],

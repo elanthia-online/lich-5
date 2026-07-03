@@ -82,11 +82,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Reticulated orbs<br>[[Glimmering blue essence shard]]"
+    other: "Reticulated orbsGlimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The niirsha floats just above the ground, his appearance that of glorious beauty.  However, as one approaches the niirsha, his majestic visage begins to crack and peel away to reveal the horrible face of an undead monster.  Continually shedding and regenerating his flesh, the niirsha seems locked in a never-ending battle to recapture his former beauty.  The niirsha violently preys upon all passers-by, hoping to replace his own cursed flesh with that of the living.</pre>"
+      "The niirsha floats just above the ground, his appearance that of glorious beauty. However, as one approaches the niirsha, his majestic visage begins to crack and peel away to reveal the horrible face of an undead monster. Continually shedding and regenerating his flesh, the niirsha seems locked in a never-ending battle to recapture his former beauty. The niirsha violently preys upon all passers-by, hoping to replace his own cursed flesh with that of the living."
     ],
     arrival: [],
     flee: [],

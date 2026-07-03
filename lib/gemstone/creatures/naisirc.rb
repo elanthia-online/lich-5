@@ -88,11 +88,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Inky necrotic core]]"
+    other: "Inky necrotic core"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>A dense cloud of flickering green pinpoints slowly revolves just above the ground, its mass spiked fitfully with outbursts of static electricity.  In the next heartbeat, features, a tremendous torso, then massive arms knotted with thick muscles claim form from the hypnotic vapor.  The naisirc moves lithely, belying its mighty proportions.  As the naisirc stares at you, making a curious whispering noise, the spheres of glittering motes comprising its eyes send off crackles of furious viridian energy.</pre>"
+      "A dense cloud of flickering green pinpoints slowly revolves just above the ground, its mass spiked fitfully with outbursts of static electricity. In the next heartbeat, features, a tremendous torso, then massive arms knotted with thick muscles claim form from the hypnotic vapor. The naisirc moves lithely, belying its mighty proportions. As the naisirc stares at you, making a curious whispering noise, the spheres of glittering motes comprising its eyes send off crackles of furious viridian energy."
     ],
     arrival: [],
     flee: [],

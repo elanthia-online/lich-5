@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The medium-sized lynx possesses a lush coat, greyish-white marked with a pattern of black spots and a dark dorsal stripe.  Black tufts top both of the lynx's large ears and her jaws sport long whiskery fur, giving the animals a mischievous look.  Her black-tipped tail is only a few inches long and it whips back and forth nervously as the lynx moves.</pre>"
+      "The medium-sized lynx possesses a lush coat, greyish-white marked with a pattern of black spots and a dark dorsal stripe. Black tufts top both of the lynx's large ears and her jaws sport long whiskery fur, giving the animals a mischievous look. Her black-tipped tail is only a few inches long and it whips back and forth nervously as the lynx moves."
     ],
     arrival: [],
     flee: [],

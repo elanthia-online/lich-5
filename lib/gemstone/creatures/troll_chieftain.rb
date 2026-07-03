@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "Similar to most trolls, the grey muscular body of the troll chieftain displays immense strength from head to toe.  It is different from its lesser-ranked brethren in two respects, however.  First, there is a glimmer of intelligence in its small, close-set, pink eyes.  Second, two long, inflamed scars run from its chest, down its forearms, to end at its elbows.  These signify the testing the troll shamans have put the troll chieftain through to ensure it is qualified for its rank.  It is rumored that no one ever again sees those that do not qualify."
+      "Similar to most trolls, the grey muscular body of the troll chieftain displays immense strength from head to toe. It is different from its lesser-ranked brethren in two respects, however. First, there is a glimmer of intelligence in its small, close-set, pink eyes. Second, two long, inflamed scars run from its chest, down its forearms, to end at its elbows. These signify the testing the troll shamans have put the troll chieftain through to ensure it is qualified for its rank. It is rumored that no one ever again sees those that do not qualify."
     ],
     arrival: [],
     flee: [],

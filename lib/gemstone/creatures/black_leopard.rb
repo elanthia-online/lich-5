@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>At first glance, the black leopard has pure black fur but upon the shifting of light, faint auburn rosette patterns fade in and out of sight against the sleek darkness.  The only visible part of the leopard when she's stealthily hidden in the wilds is her deeply-toned amber eyes, which are always gazing warily at her surroundings.  With the ability to retract her claws into her large padded paws, the black leopard is able to conceal her movement and stalk silently behind her prey with great success.</pre>"
+      "At first glance, the black leopard has pure black fur but upon the shifting of light, faint auburn rosette patterns fade in and out of sight against the sleek darkness. The only visible part of the leopard when she's stealthily hidden in the wilds is her deeply-toned amber eyes, which are always gazing warily at her surroundings. With the ability to retract her claws into her large padded paws, the black leopard is able to conceal her movement and stalk silently behind her prey with great success."
     ],
     arrival: [],
     flee: [],

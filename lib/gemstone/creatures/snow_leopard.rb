@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With her distinctive markings, the reclusive snow leopard is endowed with an almost uncanny ability to blend into the rocky vastness she inhabits.  Adapted to living in the rugged mountains, she has large forepaws, short forelimbs, well-developed chest muscles and a long, elegant tail.  The leopard's fur is a beautiful combination of dark spots set against a field of tan that fades from a dorsal stripe to luminous white on the leopard's belly.  Small ears crown the animal's head.</pre>"
+      "With her distinctive markings, the reclusive snow leopard is endowed with an almost uncanny ability to blend into the rocky vastness she inhabits. Adapted to living in the rugged mountains, she has large forepaws, short forelimbs, well-developed chest muscles and a long, elegant tail. The leopard's fur is a beautiful combination of dark spots set against a field of tan that fades from a dorsal stripe to luminous white on the leopard's belly. Small ears crown the animal's head."
     ],
     arrival: [],
     flee: [],

@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nEven while slightly hunched over, the large ogre is taller than any giantman.  Heavily muscled, his long arms hang nearly to the ground, ending in massive hands that easily crush anything unlucky enough to be in their grasp.  The large ogre squints, as if barely able to see through his long, matted hair or extremely puzzled by the world around him.  When standing downwind of this creature, it is evident that a bath is long overdue.\n</pre>"
+      "Even while slightly hunched over, the large ogre is taller than any giantman. Heavily muscled, his long arms hang nearly to the ground, ending in massive hands that easily crush anything unlucky enough to be in their grasp. The large ogre squints, as if barely able to see through his long, matted hair or extremely puzzled by the world around him. When standing downwind of this creature, it is evident that a bath is long overdue."
     ],
     arrival: [],
     flee: [],

@@ -112,11 +112,11 @@
     gems: true,
     boxes: true,
     skin: "a giant skin",
-    other: "[[essence of air]]"
+    other: "essence of air"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>The storm giant's regal bearing and calm demeanor stand in sharp contrast to the raging tempest surrounding it.  Standing taller than the tallest giantman, the storm giant stares at others with dull grey eyes that refuse to reflect the sparks of electricity that crackle out from them.</pre>"
+      "The storm giant's regal bearing and calm demeanor stand in sharp contrast to the raging tempest surrounding it. Standing taller than the tallest giantman, the storm giant stares at others with dull grey eyes that refuse to reflect the sparks of electricity that crackle out from them."
     ],
     arrival: [],
     flee: [],

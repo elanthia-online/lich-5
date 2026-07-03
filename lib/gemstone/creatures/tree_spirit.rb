@@ -100,11 +100,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The undead tree spirit resides among its living brethren, barely distinguishable from them until it is awakened from its slumber.  It resembles many different types of towering trees, for a tree spirit is able to take on the shape and appearance of the forest around it.  Being spirit, though, it is not quite solid, not quite sharply defined, and its appearance shifts slightly as it moves.  Many are fooled by a tree spirit's soft, soothing whispering, only to realize with horror that it is the preparation of a lethal spell.</pre>"
+      "The undead tree spirit resides among its living brethren, barely distinguishable from them until it is awakened from its slumber. It resembles many different types of towering trees, for a tree spirit is able to take on the shape and appearance of the forest around it. Being spirit, though, it is not quite solid, not quite sharply defined, and its appearance shifts slightly as it moves. Many are fooled by a tree spirit's soft, soothing whispering, only to realize with horror that it is the preparation of a lethal spell."
     ],
     arrival: [],
     flee: [],

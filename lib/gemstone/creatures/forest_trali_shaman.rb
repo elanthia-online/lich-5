@@ -103,11 +103,11 @@
     gems: true,
     boxes: true,
     skin: "a trali scalp",
-    other: "[[Glowing violet essence dust]],"
+    other: "Glowing violet essence dust,"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing nearly six feet tall, the man-like trali shaman watches adventurers' every move with piercing grey eyes.  A short matted, reddish grey mane covers his head and his skin has a greenish grey hue.  There is little doubt that the stealthy trali shaman can be a formidable opponent when need arises, or when he is hard pressed.</pre>"
+      "Standing nearly six feet tall, the man-like trali shaman watches adventurers' every move with piercing grey eyes. A short matted, reddish grey mane covers his head and his skin has a greenish grey hue. There is little doubt that the stealthy trali shaman can be a formidable opponent when need arises, or when he is hard pressed."
     ],
     arrival: [],
     flee: [],

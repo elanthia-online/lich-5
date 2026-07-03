@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "Blazing white balefire fills the eye sockets of the Citadel guardsman, who is dressed in the deteriorating remains of a once resplendent uniform of buff and blue.  The taut, sinewy flesh stretched over the guardsman's exposed face and hands is riddled with gaping holes that reveal the desiccated remains of muscle and cartilage.  Gripped firmly in hands of exposed bone and flesh is an immaculate Hammer of Kai, which is aflame in a radiant white fire that burns along its blade.\n__NOTOC__"
+      "Blazing white balefire fills the eye sockets of the Citadel guardsman, who is dressed in the deteriorating remains of a once resplendent uniform of buff and blue. The taut, sinewy flesh stretched over the guardsman's exposed face and hands is riddled with gaping holes that reveal the desiccated remains of muscle and cartilage. Gripped firmly in hands of exposed bone and flesh is an immaculate Hammer of Kai, which is aflame in a radiant white fire that burns along its blade."
     ],
     arrival: [],
     flee: [],

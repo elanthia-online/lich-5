@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A supple Ivasian inciter is a surpassingly attractive figure clad in a loose silken shirt of shimmering green cloth of a vivid bile green hue and a darker loincloth.  More than just a hint of zealotry glimmers in her kohl-rimmed eyes.  She wears a glinting steel symbol, painted red and bordered in a wreath of tentacles, that depicts a stylized wisp of green smoke.</pre>"
+      "A supple Ivasian inciter is a surpassingly attractive figure clad in a loose silken shirt of shimmering green cloth of a vivid bile green hue and a darker loincloth. More than just a hint of zealotry glimmers in her kohl-rimmed eyes. She wears a glinting steel symbol, painted red and bordered in a wreath of tentacles, that depicts a stylized wisp of green smoke."
     ],
     arrival: [],
     flee: [],

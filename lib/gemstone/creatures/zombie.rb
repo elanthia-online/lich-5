@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "Pity the poor zombie, an animated corpse abandoned long ago by her creator.  The skin of the zombie has turned a sickly grey, her clothing hangs in tattered ribbons, and she barely keeps control over her death-stiffened muscles.  Her mouth, once sewn shut to hold the salt necessary in the animation process, has broken open again, salt dribbling from the parched, thread-covered lips.  The zombie verbally threatens and attacks anyone she believes may interfere with her quest to return to the grave."
+      "Pity the poor zombie, an animated corpse abandoned long ago by her creator. The skin of the zombie has turned a sickly grey, her clothing hangs in tattered ribbons, and she barely keeps control over her death-stiffened muscles. Her mouth, once sewn shut to hold the salt necessary in the animation process, has broken open again, salt dribbling from the parched, thread-covered lips. The zombie verbally threatens and attacks anyone she believes may interfere with her quest to return to the grave."
     ],
     arrival: [],
     flee: [],

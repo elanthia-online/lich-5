@@ -40,13 +40,13 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Dizzying Swing]]"
+        name: "Dizzying Swing"
       },
       {
-        name: "[[Mstrike]]"
+        name: "Mstrike"
       },
       {
-        name: "[[Hurl]]"
+        name: "Hurl"
       }
     ],
     special_notes: []
@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Coral-spiked pauldrons are draped across a spectral triton protector's shoulders, the leather straps taut across her bare chest, the hide cutting into her tattooed blue-green flesh.  Thick rings of ivory encircle her forearms and calves, etched in crude runes caked with blackish mud.  Uneven streaks of pigment decorate her sunken cheekbones, the remnants splattered across her trident-inked collarbones.</pre>"
+      "Coral-spiked pauldrons are draped across a spectral triton protector's shoulders, the leather straps taut across her bare chest, the hide cutting into her tattooed blue-green flesh. Thick rings of ivory encircle her forearms and calves, etched in crude runes caked with blackish mud. Uneven streaks of pigment decorate her sunken cheekbones, the remnants splattered across her trident-inked collarbones."
     ],
     arrival: [],
     flee: [],

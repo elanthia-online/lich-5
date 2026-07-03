@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The scorpion is like any other scorpion in general body structure.  This particular variety, however, is about seven feet in length, with potent venom brewing in its cauda.  The huge insectoid creature is entirely white, except for its pincers and stinger, which are a light pink.  The eyes of the albino scorpion are crimson -- not to mention entirely blind.</pre>"
+      "The scorpion is like any other scorpion in general body structure. This particular variety, however, is about seven feet in length, with potent venom brewing in its cauda. The huge insectoid creature is entirely white, except for its pincers and stinger, which are a light pink. The eyes of the albino scorpion are crimson -- not to mention entirely blind."
     ],
     arrival: [],
     flee: [],

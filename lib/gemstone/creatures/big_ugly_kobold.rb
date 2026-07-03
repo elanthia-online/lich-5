@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This big ugly kobold is large for a kobold and ugly, even by kobold beauty standards.  Smaller than a dwarf and even many halflings, she has ruddy skin and a hairless pate topped with small horns.  Long-limbed for her size, the big ugly kobold eschews any display of brute strength and relies on what agility she pretends to have.  The big ugly kobold stares back at you with beady little black eyes, sizing you up as a foe.</pre>"
+      "This big ugly kobold is large for a kobold and ugly, even by kobold beauty standards. Smaller than a dwarf and even many halflings, she has ruddy skin and a hairless pate topped with small horns. Long-limbed for her size, the big ugly kobold eschews any display of brute strength and relies on what agility she pretends to have. The big ugly kobold stares back at you with beady little black eyes, sizing you up as a foe."
     ],
     arrival: [],
     flee: [],

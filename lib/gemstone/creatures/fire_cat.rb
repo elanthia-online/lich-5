@@ -45,7 +45,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Pounce]]"
+        name: "Pounce"
       }
     ],
     special_notes: []
@@ -85,11 +85,11 @@
     gems: nil,
     boxes: nil,
     skin: "a fire cat claw",
-    other: "[[essence of fire]]"
+    other: "essence of fire"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fire cat is a sleek cat, a real beauty to behold.  It is fairly large, standing roughly head-high to a halfling.  Its fur ranges from red to orange in color and it has long claws that have a metallic glint.</pre>"
+      "The fire cat is a sleek cat, a real beauty to behold. It is fairly large, standing roughly head-high to a halfling. Its fur ranges from red to orange in color and it has long claws that have a metallic glint."
     ],
     arrival: [],
     flee: [],

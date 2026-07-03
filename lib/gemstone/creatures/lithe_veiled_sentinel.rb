@@ -61,7 +61,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Unholy Quickening]]"
+        name: "Unholy Quickening"
       }
     ],
     special_notes: []
@@ -114,7 +114,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Blessed with an improbably lithe physique and muscles like corded iron, a lithe veiled sentinel is a short female with a face deeply darkened and lined by the sun's ungentle kiss.  Her eyes are constantly, warily moving, and with every darting motion, they flash with a sharp-edged lambency like the glint of moonlight off of a shard of blue-green glass.  The woman wears her shirt open to the waist, but is swathed in a shroud of green silk that flows in a rippling current on the air behind her.  She is deadly grace embodied.</pre>"
+      "Blessed with an improbably lithe physique and muscles like corded iron, a lithe veiled sentinel is a short female with a face deeply darkened and lined by the sun's ungentle kiss. Her eyes are constantly, warily moving, and with every darting motion, they flash with a sharp-edged lambency like the glint of moonlight off of a shard of blue-green glass. The woman wears her shirt open to the waist, but is swathed in a shroud of green silk that flows in a rippling current on the air behind her. She is deadly grace embodied."
     ],
     arrival: [],
     flee: [],

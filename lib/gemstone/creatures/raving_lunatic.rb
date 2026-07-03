@@ -75,11 +75,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Perhaps driven mad by the shifting world around her, the raving lunatic babbles and chatters to herself, sometimes gleefully, sometimes angrily.  A disgustingly corpulent humanoid, her rolls of pink flesh bounce and quiver as the raving lunatic staggers from area to area, not comprehending her surroundings.  Clear spittle drools from her open mouth, and her unblinking eyes dart wildly about in unfocused confusion.  She is a totally unpredictable foe.</pre>"
+      "Perhaps driven mad by the shifting world around her, the raving lunatic babbles and chatters to herself, sometimes gleefully, sometimes angrily. A disgustingly corpulent humanoid, her rolls of pink flesh bounce and quiver as the raving lunatic staggers from area to area, not comprehending her surroundings. Clear spittle drools from her open mouth, and her unblinking eyes dart wildly about in unfocused confusion. She is a totally unpredictable foe."
     ],
     arrival: [],
     flee: [],

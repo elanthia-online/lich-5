@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Sleekly built despite his height and breadth, a masked goliath plunderer conceals the loose-fitting white garments he wears beneath a diaphanous cloak of darker cloth.  The latter garment seems to take on the shades and hues of the surroundings, making it difficult to tell where the plunderer's silhouette ends and the background begins.  He wears a severe mask of metal so dark a gold that it is nearly bronze, its scaled visage placid and expressionless.  The plunderer's eyes are visible through two narrow apertures in the mask.<!-- Add creature description--> </pre>"
+      "Sleekly built despite his height and breadth, a masked goliath plunderer conceals the loose-fitting white garments he wears beneath a diaphanous cloak of darker cloth. The latter garment seems to take on the shades and hues of the surroundings, making it difficult to tell where the plunderer's silhouette ends and the background begins. He wears a severe mask of metal so dark a gold that it is nearly bronze, its scaled visage placid and expressionless. The plunderer's eyes are visible through two narrow apertures in the mask."
     ],
     arrival: [],
     flee: [],

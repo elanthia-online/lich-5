@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fire rat is a large animal, roughly the size of a small dog.  Its fur is shaggy, and rusty red in color.  It has a long hairless tail, and glinting red eyes. Most dangerous are its claws which spark flame when attacking its prey.</pre>"
+      "The fire rat is a large animal, roughly the size of a small dog. Its fur is shaggy, and rusty red in color. It has a long hairless tail, and glinting red eyes. Most dangerous are its claws which spark flame when attacking its prey."
     ],
     arrival: [],
     flee: [],

@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "The steam elemental is a dense cloud of solid steam, occasionally manifesting a mouth or tendrils with which to affect its surroundings.  It constantly expands and contracts, but never loses its unbearably hot aura."
+      "The steam elemental is a dense cloud of solid steam, occasionally manifesting a mouth or tendrils with which to affect its surroundings. It constantly expands and contracts, but never loses its unbearably hot aura."
     ],
     arrival: [],
     flee: [],

@@ -67,7 +67,7 @@
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
-      "30% [[damage factor]] reduction"
+      "30% damage factor reduction"
     ]
   },
   special_other: nil,
@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nMassive and thick, with broad shoulders but no apparent head, the earth elemental appears to be a composite of the earth itself.  A large, craggy maw in the middle of the elemental's chest appears to be the creature's mouth, and the earth elemental's huge feet and giant-sized fists look like they would pulverize flesh without much effort at all.\n</pre>\nGreater earth elementals have DFRedux which will reduce the damage factors of weapons, including bolt spells, by 30% for AS-based attacks. This is in addition to their natural full plate equivalent armor."
+      "Massive and thick, with broad shoulders but no apparent head, the earth elemental appears to be a composite of the earth itself. A large, craggy maw in the middle of the elemental's chest appears to be the creature's mouth, and the earth elemental's huge feet and giant-sized fists look like they would pulverize flesh without much effort at all.\n\nGreater earth elementals have DFRedux which will reduce the damage factors of weapons, including bolt spells, by 30% for AS-based attacks. This is in addition to their natural full plate equivalent armor."
     ],
     arrival: [],
     flee: [],

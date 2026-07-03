@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Once a priestess, this woman's service to her deity has ended tragically with her binding to life after death.  Tattered robes hang from her form, and although she is lovely in spite of her glowing eyes, you cannot look upon her for long without feeling that you might run from her in fear.</pre>"
+      "Once a priestess, this woman's service to her deity has ended tragically with her binding to life after death. Tattered robes hang from her form, and although she is lovely in spite of her glowing eyes, you cannot look upon her for long without feeling that you might run from her in fear."
     ],
     arrival: [],
     flee: [],

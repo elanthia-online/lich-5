@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "The lesser orc stands almost man high but is much thicker so that it appears stunted for its height.  Heavy brow ridges and a sloping forehead give the beast a brutish appearance not aided by its rank breath and foul odor.  It glares blankly around ignoring anything that it can't eat or pillage."
+      "The lesser orc stands almost man high but is much thicker so that it appears stunted for its height. Heavy brow ridges and a sloping forehead give the beast a brutish appearance not aided by its rank breath and foul odor. It glares blankly around ignoring anything that it can't eat or pillage."
     ],
     arrival: [],
     flee: [],

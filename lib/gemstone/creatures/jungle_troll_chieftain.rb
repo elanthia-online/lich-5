@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A thin, tall creature, the troll chieftain scampers over the terrain in quick bursts.  The a jungle troll chieftain's dark green, mottled skin displays an oily sheen, and hair is nowhere to be found on its body.  An elongated face, perhaps two feet from the end of the exaggerated chin to the tips of the pointed ears, sits atop a thin, rubbery neck.  Deep orange, slitted pupils nest horizontally in the steel grey eyes, and clusters of sharp orange horns poke up from the troll chieftain's head to surround the extended ears.</pre>"
+      "A thin, tall creature, the troll chieftain scampers over the terrain in quick bursts. The a jungle troll chieftain's dark green, mottled skin displays an oily sheen, and hair is nowhere to be found on its body. An elongated face, perhaps two feet from the end of the exaggerated chin to the tips of the pointed ears, sits atop a thin, rubbery neck. Deep orange, slitted pupils nest horizontally in the steel grey eyes, and clusters of sharp orange horns poke up from the troll chieftain's head to surround the extended ears."
     ],
     arrival: [],
     flee: [],

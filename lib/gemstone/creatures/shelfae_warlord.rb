@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The shelfae warlord is the noble class of the shelfae reptilian society and is highly trained in the art of physical warfare.  Its scaly skin carries the bright orange color of the shelfae officers, but it also contains an odd bluish design, which some say is merely a genetic discoloration, and others maintain is a likeness of Charl holding aloft his trident.  Either way, the shelfae warlord is a quick, powerful opponent.</pre>"
+      "The shelfae warlord is the noble class of the shelfae reptilian society and is highly trained in the art of physical warfare. Its scaly skin carries the bright orange color of the shelfae officers, but it also contains an odd bluish design, which some say is merely a genetic discoloration, and others maintain is a likeness of Charl holding aloft his trident. Either way, the shelfae warlord is a quick, powerful opponent."
     ],
     arrival: [],
     flee: [],

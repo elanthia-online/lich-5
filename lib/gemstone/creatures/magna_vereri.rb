@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2}}>A horrific magna vereri is the animated corpse of a woman, twisted into a perverse parody of beauty.  Glowing white eyes glare out of a face whose cheeks are rouged with streaks of blood, and the lips are bloated and red around needle-like teeth.  The obscene curvature of her body is at odds with her skeletal limbs, which are little more than bones clad in pale blue-grey corpseflesh.  The vereri's movements are jerky and uneven as she totters around, driven by feral rage.</pre>"
+      "A horrific magna vereri is the animated corpse of a woman, twisted into a perverse parody of beauty. Glowing white eyes glare out of a face whose cheeks are rouged with streaks of blood, and the lips are bloated and red around needle-like teeth. The obscene curvature of her body is at odds with her skeletal limbs, which are little more than bones clad in pale blue-grey corpseflesh. The vereri's movements are jerky and uneven as she totters around, driven by feral rage."
     ],
     arrival: [],
     flee: [],

@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      ";Description\n<pre{{log2|margin-right=26em}}>When planting a garden or a yard, often one will plant these to prevent unwanted guests and prying eyes.  If that was the case for these, they apparently have taken their job a bit too seriously.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The icy bush is medium in size and about three feet high in its current state.\n</pre>"
+      ";Description\nWhen planting a garden or a yard, often one will plant these to prevent unwanted guests and prying eyes. If that was the case for these, they apparently have taken their job a bit too seriously.\n\n;Assess\nThe icy bush is medium in size and about three feet high in its current state."
     ],
     arrival: [],
     flee: [],

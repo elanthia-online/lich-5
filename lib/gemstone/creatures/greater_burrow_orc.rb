@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The burrow orc would stand roughly six feet high, were he not stooped over.  He is thinner and more gaunt than the land-roaming orcs, with sickly white skin and no hair on his smelly frame.  He seems more interested in stuffing himself and protecting his burrow than anything else.</pre>"
+      "The burrow orc would stand roughly six feet high, were he not stooped over. He is thinner and more gaunt than the land-roaming orcs, with sickly white skin and no hair on his smelly frame. He seems more interested in stuffing himself and protecting his burrow than anything else."
     ],
     arrival: [],
     flee: [],

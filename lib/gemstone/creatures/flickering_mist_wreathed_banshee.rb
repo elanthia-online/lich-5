@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Mists pirouette about the tattered hem of the mist-wreathed banshee's gown so that it is unclear where the garment ends and they begin.  Though there are the remnants of loveliness to her visage, the banshee's cheeks are sunken and her eyes are empty chasms of shadow.  Dark hair, wild and unkempt, swirls around her face as if constantly blown by a howling breeze.  The banshee's form is barely substantial and light filters grimly through her.</pre>\n\nAppraisal:\n<pre{{log2|margin-right=26em}}>The mist-wreathed banshee is medium in size and about five feet high in her current state.\n</pre>"
+      "Mists pirouette about the tattered hem of the mist-wreathed banshee's gown so that it is unclear where the garment ends and they begin. Though there are the remnants of loveliness to her visage, the banshee's cheeks are sunken and her eyes are empty chasms of shadow. Dark hair, wild and unkempt, swirls around her face as if constantly blown by a howling breeze. The banshee's form is barely substantial and light filters grimly through her.\n\nAppraisal:\nThe mist-wreathed banshee is medium in size and about five feet high in her current state."
     ],
     arrival: [],
     flee: [],

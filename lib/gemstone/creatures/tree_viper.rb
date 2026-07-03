@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The tree viper is a striking, brilliant green, complemented by its pale yellow underbelly that is usually only seen when the viper drapes over a tree branch.  Much larger than a typical snake, the viper is nearly ten feet long, and it is quite capable of slaying foes as large as a human.  The snake's lazy movement belies its ability to strike rapidly when threatened.</pre>"
+      "The tree viper is a striking, brilliant green, complemented by its pale yellow underbelly that is usually only seen when the viper drapes over a tree branch. Much larger than a typical snake, the viper is nearly ten feet long, and it is quite capable of slaying foes as large as a human. The snake's lazy movement belies its ability to strike rapidly when threatened."
     ],
     arrival: [],
     flee: [],

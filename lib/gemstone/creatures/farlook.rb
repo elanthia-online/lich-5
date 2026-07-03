@@ -49,7 +49,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Lightning mote]]"
+        name: "Lightning mote"
       }
     ],
     special_notes: []
@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "Torrents of spiritual magic dance around the farlook in a vivid display of black and white wisps.  A soft liquid membrane is covered with a thickened skin that covers three-fourths of sphere-shape.  A large,  iris takes up the remaining quarter, which can be protected by a folded layer of skin just just above it.  A sick goo constantly drips from the severed nerve ending jutting out of the back of the farlook.  Crimson energy ripples emanate from the bottom of the farlook, causing it to bob up and down a few inches off the ground."
+      "Torrents of spiritual magic dance around the farlook in a vivid display of black and white wisps. A soft liquid membrane is covered with a thickened skin that covers three-fourths of sphere-shape. A large, iris takes up the remaining quarter, which can be protected by a folded layer of skin just just above it. A sick goo constantly drips from the severed nerve ending jutting out of the back of the farlook. Crimson energy ripples emanate from the bottom of the farlook, causing it to bob up and down a few inches off the ground."
     ],
     arrival: [],
     flee: [],

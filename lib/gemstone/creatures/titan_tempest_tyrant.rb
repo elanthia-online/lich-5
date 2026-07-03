@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Though powerfully muscled, the tempest tyrant is so tall and long of limb that she looks well-proportioned, even agile.  Ritual scars like lightning bolts fork down her immense arms, and matching tattoos in metallic ink gleam electric blue from her severe face.  They curve around each eye and fan out onto her hollow cheeks, lending her unforgiving features an alien cast.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The tempest tyrant is huge in size and about thirteen feet high in her current state.</pre>"
+      "Though powerfully muscled, the tempest tyrant is so tall and long of limb that she looks well-proportioned, even agile. Ritual scars like lightning bolts fork down her immense arms, and matching tattoos in metallic ink gleam electric blue from her severe face. They curve around each eye and fan out onto her hollow cheeks, lending her unforgiving features an alien cast.\n\n;Assess\nThe tempest tyrant is huge in size and about thirteen feet high in her current state."
     ],
     arrival: [],
     flee: [],

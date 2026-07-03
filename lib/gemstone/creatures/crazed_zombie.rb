@@ -78,11 +78,11 @@
     gems: true,
     boxes: true,
     skin: "a zombie scalp",
-    other: "[[Glimmering blue essence shard]]<br>[[Glimmering blue mote of essence]]"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Pity the poor crazed zombie, an animated corpse abandoned long ago by her creator.  The skin of the crazed zombie has turned a sickly grey, her clothing hangs in tattered ribbons, and she barely keeps control over her death-stiffened muscles.  Her mouth, once sewn shut to hold the salt necessary in the animation process, has broken open again, salt dribbling from the parched, thread-covered lips.  The crazed zombie verbally threatens and attacks anyone she believes may interfere with her quest to return to the grave.</pre>"
+      "Pity the poor crazed zombie, an animated corpse abandoned long ago by her creator. The skin of the crazed zombie has turned a sickly grey, her clothing hangs in tattered ribbons, and she barely keeps control over her death-stiffened muscles. Her mouth, once sewn shut to hold the salt necessary in the animation process, has broken open again, salt dribbling from the parched, thread-covered lips. The crazed zombie verbally threatens and attacks anyone she believes may interfere with her quest to return to the grave."
     ],
     arrival: [],
     flee: [],

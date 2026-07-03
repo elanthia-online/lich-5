@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>When safe in the confines of its underground home, the cave lizard is easily mistaken for just another rock on the floor, albeit a rather long, thick rock.  Its low-slung body and stubby legs allow it to squeeze through cracks that would defy attempts by the smaller humanoid races.  A mottled, scaly hide of charcoal grey intermixed with deep crimson helps it hide in low light conditions.  Bright light reveals not only the more scintillating aspects of its crimson coloration but rows of razor-sharp teeth set in a protruding snout.  One should not fixate on the snout, though, lest the powerful tail of the cave lizard land a devastating blow.</pre>"
+      "When safe in the confines of its underground home, the cave lizard is easily mistaken for just another rock on the floor, albeit a rather long, thick rock. Its low-slung body and stubby legs allow it to squeeze through cracks that would defy attempts by the smaller humanoid races. A mottled, scaly hide of charcoal grey intermixed with deep crimson helps it hide in low light conditions. Bright light reveals not only the more scintillating aspects of its crimson coloration but rows of razor-sharp teeth set in a protruding snout. One should not fixate on the snout, though, lest the powerful tail of the cave lizard land a devastating blow."
     ],
     arrival: [],
     flee: [],

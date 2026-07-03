@@ -73,7 +73,7 @@
   },
   messaging: {
     description: [
-      "The most stunning thing about the appearance of a ghostly pooka is the odd illusion surrounding this pitiful equine which seems to absorb all the color from everything around it.  The ghostly horse appears to be weighed down by some heavy chains which cover its entire body.  The sight of its obvious torment tears at the souls of all who lay eyes upon it."
+      "The most stunning thing about the appearance of a ghostly pooka is the odd illusion surrounding this pitiful equine which seems to absorb all the color from everything around it. The ghostly horse appears to be weighed down by some heavy chains which cover its entire body. The sight of its obvious torment tears at the souls of all who lay eyes upon it."
     ],
     arrival: [],
     flee: [],

@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Long barbed spines erupt outward from the cavern urchin, almost completely covering its body.  The spear-like growths form a formidable defense, and also pose a lethal threat to anything that might find itself close enough to become impaled upon the spiked ends.</pre>"
+      "Long barbed spines erupt outward from the cavern urchin, almost completely covering its body. The spear-like growths form a formidable defense, and also pose a lethal threat to anything that might find itself close enough to become impaled upon the spiked ends."
     ],
     arrival: [],
     flee: [],

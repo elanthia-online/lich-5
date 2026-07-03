@@ -51,16 +51,16 @@
     ],
     special_abilities: [
       {
-        name: "[[Ambush]]"
+        name: "Ambush"
       },
       {
-        name: "[[Stealth]]"
+        name: "Stealth"
       },
       {
-        name: "[[Vanish]]"
+        name: "Vanish"
       },
       {
-        name: "[[Hurl]]"
+        name: "Hurl"
       }
     ],
     special_notes: []
@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Dressed in grey-on-black, a triton assassin watches the area intently.  The assassin bares her sharply serrated teeth, and her thick tail twitches silently with each breath.  Inked upon one muscular forearm is a broken ivory trident overlaying a series of spiky runes.</pre>"
+      "Dressed in grey-on-black, a triton assassin watches the area intently. The assassin bares her sharply serrated teeth, and her thick tail twitches silently with each breath. Inked upon one muscular forearm is a broken ivory trident overlaying a series of spiky runes."
     ],
     arrival: [],
     flee: [],

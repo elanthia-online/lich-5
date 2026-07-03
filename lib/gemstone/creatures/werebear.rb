@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Smaller than a normal bear, the werebear still presents a menacing aspect.  Eyes that glitter with a shred of their former humanity glare out at the world with undisguised rage and hate.  Thick dark fur combined with a tough hide gives the beast a solid defense, and huge paws tipped with razor sharp claws give pause to even the well-armed adventurer.</pre>"
+      "Smaller than a normal bear, the werebear still presents a menacing aspect. Eyes that glitter with a shred of their former humanity glare out at the world with undisguised rage and hate. Thick dark fur combined with a tough hide gives the beast a solid defense, and huge paws tipped with razor sharp claws give pause to even the well-armed adventurer."
     ],
     arrival: [],
     flee: [],

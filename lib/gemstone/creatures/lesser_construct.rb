@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The white granite-like features of the lesser construct hold no hints of the giant creature's intentions or motivations.  Its alabaster skin made more of the hardest rock than any living tissue makes the construct a formidable opponent for any who dare to trifle with it.  Massing more than ten giantmen, it is a a mountain of rock when in motion and very little, man or animal can oppose its desired path of travel once it is in motion.</pre>"
+      "The white granite-like features of the lesser construct hold no hints of the giant creature's intentions or motivations. Its alabaster skin made more of the hardest rock than any living tissue makes the construct a formidable opponent for any who dare to trifle with it. Massing more than ten giantmen, it is a a mountain of rock when in motion and very little, man or animal can oppose its desired path of travel once it is in motion."
     ],
     arrival: [],
     flee: [],

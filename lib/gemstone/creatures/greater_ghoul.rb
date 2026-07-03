@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Larger and meaner then its lesser brethren, the greater ghoul shambles along with filth-encrusted claws and ragged bits of decaying flesh hanging from sharp fangs in its decaying jaws.  A few filthy bits of rotting cloth still cling to its diseased and festering body as it wanders dimly in search of more flesh.</pre>"
+      "Larger and meaner then its lesser brethren, the greater ghoul shambles along with filth-encrusted claws and ragged bits of decaying flesh hanging from sharp fangs in its decaying jaws. A few filthy bits of rotting cloth still cling to its diseased and festering body as it wanders dimly in search of more flesh."
     ],
     arrival: [],
     flee: [],

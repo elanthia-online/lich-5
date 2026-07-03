@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "Graceful as an antelope, this member of the deer family stands proud and fierce before you.  The spotted velnalin is covered with a satiny sheen of brown fur that is occasionally broken by tufts of coarse black fur giving her the spotted look from which she draws her name.  Long, straight horns the length of a good sword jut from her head.  The deadly horns glimmer like hard, polished bone and taper to hard, sharp points.  The beast moves like quicksilver as she brings her formidable weapons to bear."
+      "Graceful as an antelope, this member of the deer family stands proud and fierce before you. The spotted velnalin is covered with a satiny sheen of brown fur that is occasionally broken by tufts of coarse black fur giving her the spotted look from which she draws her name. Long, straight horns the length of a good sword jut from her head. The deadly horns glimmer like hard, polished bone and taper to hard, sharp points. The beast moves like quicksilver as she brings her formidable weapons to bear."
     ],
     arrival: [],
     flee: [],

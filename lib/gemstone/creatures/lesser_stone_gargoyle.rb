@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "Like its cousin, the stone gargoyle, the lesser stone gargoyle was a grey, granite carving originally placed to overlook the castle's walls.  Now animated, it pounds about on powerful hind legs looking for beings it can smash into dust.  It has a demon's face, with pointed beard, ruby eyes and long, sweeping goat horns.   Bat wings, useless for flying, adorn its scaly back."
+      "Like its cousin, the stone gargoyle, the lesser stone gargoyle was a grey, granite carving originally placed to overlook the castle's walls. Now animated, it pounds about on powerful hind legs looking for beings it can smash into dust. It has a demon's face, with pointed beard, ruby eyes and long, sweeping goat horns. Bat wings, useless for flying, adorn its scaly back."
     ],
     arrival: [],
     flee: [],

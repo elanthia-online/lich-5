@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A smaller relative of the basilisk, the cockatrice has a serpentine body, with feathered head, wings, and legs.  Having the cold, freezing gaze of its larger cousin, the cockatrice should not be treated lightly.  A sharp beak and raking claws complete this small but deadly package of evil.</pre>"
+      "A smaller relative of the basilisk, the cockatrice has a serpentine body, with feathered head, wings, and legs. Having the cold, freezing gaze of its larger cousin, the cockatrice should not be treated lightly. A sharp beak and raking claws complete this small but deadly package of evil."
     ],
     arrival: [],
     flee: [],

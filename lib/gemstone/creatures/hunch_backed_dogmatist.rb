@@ -105,11 +105,11 @@
     gems: nil,
     boxes: true,
     skin: nil,
-    other: "[[Farlook vitreous humor]]"
+    other: "Farlook vitreous humor"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A hunch-backed dogmatist's frail frame has seen many years of toil and abuse.  Evidence of such hardship appears in the stooped posture of the dogmatist.  A defined hump protrudes from behind the dogmatist's head, easily discerned through layers of clothing and leather armor.  The hunch-backed dogmatist's eyes glance frequently from side-to-side, as if constantly waiting for something to appear.</pre>"
+      "A hunch-backed dogmatist's frail frame has seen many years of toil and abuse. Evidence of such hardship appears in the stooped posture of the dogmatist. A defined hump protrudes from behind the dogmatist's head, easily discerned through layers of clothing and leather armor. The hunch-backed dogmatist's eyes glance frequently from side-to-side, as if constantly waiting for something to appear."
     ],
     arrival: [],
     flee: [],

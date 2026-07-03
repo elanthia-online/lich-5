@@ -94,7 +94,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The revenant howls in pain, excruciatingly remembering its grisly demise.  It presents a ghostly visage of skin shredded by the torturer's whip to display exposed muscles, shriveled organs, and protruding bones.  This gaunt creature strikes quickly in its attempt to eradicate all that is living, thereby making sure its enemies die as well.</pre>\n\nLook:\n<pre{{log2|margin-right=26em}}>You see a fairly typical revenant.  It appears to be undead.\nIt appears to be in good shape.\nIt has a wooden shield, a broadsword and some reinforced leather (worn).</pre>\n\nAssess:<br>\n<pre{{log2|margin-right=26em}}>The revenant is medium in size and about five feet high in its current state.</pre>"
+      "The revenant howls in pain, excruciatingly remembering its grisly demise. It presents a ghostly visage of skin shredded by the torturer's whip to display exposed muscles, shriveled organs, and protruding bones. This gaunt creature strikes quickly in its attempt to eradicate all that is living, thereby making sure its enemies die as well.\n\nLook:\nYou see a fairly typical revenant. It appears to be undead.\nIt appears to be in good shape.\nIt has a wooden shield, a broadsword and some reinforced leather (worn).\n\nAssess:\nThe revenant is medium in size and about five feet high in its current state."
     ],
     arrival: [],
     flee: [],

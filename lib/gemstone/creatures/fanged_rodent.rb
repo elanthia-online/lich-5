@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With scruffy brown fur and dark black naked ears, the fanged rodent stands nearly two feet in height.  An elongated snout with violently twitching whiskers gives this ferocious beast its keen sense of smell and the ability to detect even the most stealthy of adventurers.  Its beady eyes glare back with unrestrained hatred as drool dribbles down from its vicious maw and clings to the neck of its dirty pelt.  Routinely seen in great packs, the rodent has brought more than one over-eager adventurer to an early grave.</pre>"
+      "With scruffy brown fur and dark black naked ears, the fanged rodent stands nearly two feet in height. An elongated snout with violently twitching whiskers gives this ferocious beast its keen sense of smell and the ability to detect even the most stealthy of adventurers. Its beady eyes glare back with unrestrained hatred as drool dribbles down from its vicious maw and clings to the neck of its dirty pelt. Routinely seen in great packs, the rodent has brought more than one over-eager adventurer to an early grave."
     ],
     arrival: [],
     flee: [],

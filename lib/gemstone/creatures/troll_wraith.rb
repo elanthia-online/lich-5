@@ -77,11 +77,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Glowing_violet_essence_dust | Glowing Violet Essence Dust]],"
+    other: "Glowing Violet Essence Dust,"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A sickly, ebony mist encircles the troll wraith, obscuring the entire lower portion of the wraith, if there was one.  Brilliant, platinum-hued orbs suspend in the air where the wraith's eyes once resided.  The only true evidence of the wraith's former life are remnants of blackened steel gauntlets protecting the hands with only a few boney fingers being exposed.</pre>"
+      "A sickly, ebony mist encircles the troll wraith, obscuring the entire lower portion of the wraith, if there was one. Brilliant, platinum-hued orbs suspend in the air where the wraith's eyes once resided. The only true evidence of the wraith's former life are remnants of blackened steel gauntlets protecting the hands with only a few boney fingers being exposed."
     ],
     arrival: [],
     flee: [],

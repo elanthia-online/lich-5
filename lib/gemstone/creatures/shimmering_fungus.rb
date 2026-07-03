@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A shimmering fungus has got to be one of the largest fungi in the lands.  Easily four feet tall, the fungi is nearly invisible against the backdrop of its surroundings thanks to its blended colors.  The wide cap of the fungus exposes the large sacs on its underside, waiting to spread new spores on the wind.  Light catches off the top of the cap, causing it to glitter slightly.</pre>"
+      "A shimmering fungus has got to be one of the largest fungi in the lands. Easily four feet tall, the fungi is nearly invisible against the backdrop of its surroundings thanks to its blended colors. The wide cap of the fungus exposes the large sacs on its underside, waiting to spread new spores on the wind. Light catches off the top of the cap, causing it to glitter slightly."
     ],
     arrival: [],
     flee: [],

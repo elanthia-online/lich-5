@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "The siren is a peculiar vision of beauty from the sea.  Though her lower body is that of an iridescently scaled fish, it takes away nothing from the rest of her ravishingly feminine figure draped in long, golden blonde hair and surrounded by a mystical aura.  Discretely hidden webbing beneath her arms that aids in navigating deep waters has given rise to the erroneous legend that the siren can also fly.  The soothing song from these strangely beautiful creatures has pulled many sailors to their deaths, and every moment that the siren gazes at you with her captivating brilliant blue eyes and serenades you with liquid notes from her glistening full lips is a moment that you plunge deeper into danger yourself."
+      "The siren is a peculiar vision of beauty from the sea. Though her lower body is that of an iridescently scaled fish, it takes away nothing from the rest of her ravishingly feminine figure draped in long, golden blonde hair and surrounded by a mystical aura. Discretely hidden webbing beneath her arms that aids in navigating deep waters has given rise to the erroneous legend that the siren can also fly. The soothing song from these strangely beautiful creatures has pulled many sailors to their deaths, and every moment that the siren gazes at you with her captivating brilliant blue eyes and serenades you with liquid notes from her glistening full lips is a moment that you plunge deeper into danger yourself."
     ],
     arrival: [],
     flee: [],

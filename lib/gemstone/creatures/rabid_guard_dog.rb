@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Smaller than most dogs, the short hair of this beast is mangy and unkempt.  Its beady eyes gaze alertly in all directions, while his stubby tail flicks back and forth with rhythmic precision.</pre>"
+      "Smaller than most dogs, the short hair of this beast is mangy and unkempt. Its beady eyes gaze alertly in all directions, while his stubby tail flicks back and forth with rhythmic precision."
     ],
     arrival: [],
     flee: [],

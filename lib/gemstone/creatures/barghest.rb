@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The ghostly counterpart of her living canine brothers, the barghest shimmers like a growling mass of mist as she raises her spectral head in a piercing, mournful howl.  The undead beast appears to be nearly transparent, but the blood and shreds of flesh on her slavering jaws suggest that she is capable of considerable corpoeral harm.</pre>"
+      "The ghostly counterpart of her living canine brothers, the barghest shimmers like a growling mass of mist as she raises her spectral head in a piercing, mournful howl. The undead beast appears to be nearly transparent, but the blood and shreds of flesh on her slavering jaws suggest that she is capable of considerable corpoeral harm."
     ],
     arrival: [],
     flee: [],

@@ -113,7 +113,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Huge and hulking, the basalt grotesque is an imposing figure cut from black basalt.  Roughly humanoid in shape though not in particulars, the grotesque has a bestial visage.  The carved musculature of its back joins with two great wings that span wider than it is tall.  From its head sprouts a quintet of rounded horns.  Its eyes, a burning green, match the hue of a viridian soulstone embedded into the rock of its broad chest.</pre>\n\nAppraisal:\n<pre{{log2|margin-right=26em}}>The basalt grotesque is large in size, about eight feet high in its current state, appears to be of exceptionally hardy constitution, is in a guarded stance, and is in relatively good shape.</pre>"
+      "Huge and hulking, the basalt grotesque is an imposing figure cut from black basalt. Roughly humanoid in shape though not in particulars, the grotesque has a bestial visage. The carved musculature of its back joins with two great wings that span wider than it is tall. From its head sprouts a quintet of rounded horns. Its eyes, a burning green, match the hue of a viridian soulstone embedded into the rock of its broad chest.\n\nAppraisal:\nThe basalt grotesque is large in size, about eight feet high in its current state, appears to be of exceptionally hardy constitution, is in a guarded stance, and is in relatively good shape."
     ],
     arrival: [],
     flee: [],

@@ -101,11 +101,11 @@
     gems: true,
     boxes: true,
     skin: "a vesperti claw",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The vesperti stands roughly six feet tall, with coarse black fur covering his willowy frame.  A veined membrane of skin extends from his ankle up to his wrists, edges scalloped like those of a bat's wings.  Capping off the wings are taloned hands and feet, the long, tapered digits bearing glossy black claws.  Intense eyes stare out from beneath a mane of tousled hair, looking far too sentient for any measure of comfort.</pre>"
+      "The vesperti stands roughly six feet tall, with coarse black fur covering his willowy frame. A veined membrane of skin extends from his ankle up to his wrists, edges scalloped like those of a bat's wings. Capping off the wings are taloned hands and feet, the long, tapered digits bearing glossy black claws. Intense eyes stare out from beneath a mane of tousled hair, looking far too sentient for any measure of comfort."
     ],
     arrival: [],
     flee: [],

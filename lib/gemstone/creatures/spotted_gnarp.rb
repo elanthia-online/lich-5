@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Oh, what a thing of horror is the curl-horned spotted gnarp!  Huge floppy ears stand out from her long snout like horizontal bunny ears, and her eyes are deep, liquid pools of irascibility and indecision.  The creature's ponderous spotted belly hangs from a ridge-like backbone, which tapers in a long tail with a curly tip.  Swishing her tail viciously, the gnarp minces about on cloven hooves, her massive curled horns overbalancing her head as she tears at the scattered herbage with her large, formidable teeth.</pre>"
+      "Oh, what a thing of horror is the curl-horned spotted gnarp! Huge floppy ears stand out from her long snout like horizontal bunny ears, and her eyes are deep, liquid pools of irascibility and indecision. The creature's ponderous spotted belly hangs from a ridge-like backbone, which tapers in a long tail with a curly tip. Swishing her tail viciously, the gnarp minces about on cloven hooves, her massive curled horns overbalancing her head as she tears at the scattered herbage with her large, formidable teeth."
     ],
     arrival: [],
     flee: [],

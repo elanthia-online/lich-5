@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Resembling a decaying corpse more than anything else, the lesser ghoul is hunched over so that its long arms trail along the ground.  Sharp claw-like nails tip both hands and feet and the stench of corruption wafts thickly from the sodden rags of clothing that cling to its leprous body.  Strings of gnawed flesh drop from the creature's loose-lipped mouth as it continues to chew on something better left unknown.</pre>"
+      "Resembling a decaying corpse more than anything else, the lesser ghoul is hunched over so that its long arms trail along the ground. Sharp claw-like nails tip both hands and feet and the stench of corruption wafts thickly from the sodden rags of clothing that cling to its leprous body. Strings of gnawed flesh drop from the creature's loose-lipped mouth as it continues to chew on something better left unknown."
     ],
     arrival: [],
     flee: [],

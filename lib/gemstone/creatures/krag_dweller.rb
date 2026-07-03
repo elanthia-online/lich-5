@@ -84,11 +84,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Essence of earth]]"
+    other: "Essence of earth"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The krag dweller appears to be a cross between a troll and elemental rock.  It towers over 8 feet tall with massive limbs.  Jet black hairs grow between the plates of its brown scaly hide while long razor sharp fangs and claws provide the krag dweller with all the weapons it will ever need.  Even darker than the blackest night, its eyes reveal the smouldering malice within.</pre>"
+      "The krag dweller appears to be a cross between a troll and elemental rock. It towers over 8 feet tall with massive limbs. Jet black hairs grow between the plates of its brown scaly hide while long razor sharp fangs and claws provide the krag dweller with all the weapons it will ever need. Even darker than the blackest night, its eyes reveal the smouldering malice within."
     ],
     arrival: [],
     flee: [],

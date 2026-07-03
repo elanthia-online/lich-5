@@ -83,11 +83,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The image of a wandering minstrel greets the scrutinizing eye.  The ghostly mara takes many forms, often times wearing the rotting and wornout gear of foreign lands.  Her voice, so essential to her lifestyle in the former life, has taken on the unearthly sounds of a spirit long dead.</pre>"
+      "The image of a wandering minstrel greets the scrutinizing eye. The ghostly mara takes many forms, often times wearing the rotting and wornout gear of foreign lands. Her voice, so essential to her lifestyle in the former life, has taken on the unearthly sounds of a spirit long dead."
     ],
     arrival: [],
     flee: [],

@@ -111,7 +111,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A grey-splotched pink, the glistening cerebralite is a fleshy mass that somewhat resembles a humanoid brain, though it is oversized and grossly proportioned.  Eye-stalks sprout from either hemisphere, supporting a pair of lidless eyes with iridescent irises and ebony pupils.  Thick veins span the wrinkled surface of the creature's body, pulsing rhythmically with a writhing mass of barbed tentacles sprouting from its underside.  A viscous fluid coats the cerebralite's surface, the substance phlegm-like in consistency.</pre>"
+      "A grey-splotched pink, the glistening cerebralite is a fleshy mass that somewhat resembles a humanoid brain, though it is oversized and grossly proportioned. Eye-stalks sprout from either hemisphere, supporting a pair of lidless eyes with iridescent irises and ebony pupils. Thick veins span the wrinkled surface of the creature's body, pulsing rhythmically with a writhing mass of barbed tentacles sprouting from its underside. A viscous fluid coats the cerebralite's surface, the substance phlegm-like in consistency."
     ],
     arrival: [],
     flee: [],

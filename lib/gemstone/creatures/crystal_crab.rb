@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The multi-faceted shell of this oversized crab resembles a massive oval gem.  Underneath the protective covering are its formidable claws and pincers, the front pair easily the largest.  The creature's eyestalks peer about nervously at even the slightest sound.</pre>"
+      "The multi-faceted shell of this oversized crab resembles a massive oval gem. Underneath the protective covering are its formidable claws and pincers, the front pair easily the largest. The creature's eyestalks peer about nervously at even the slightest sound."
     ],
     arrival: [],
     flee: [],

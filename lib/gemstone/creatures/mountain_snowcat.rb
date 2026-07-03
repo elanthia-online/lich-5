@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With its distinctive markings, the reclusive mountain snowcat is endowed with an almost uncanny ability to blend into the rocky vastness she inhabits.  Adapted to living in the rugged mountains, she has large forepaws, short forelimbs, well-developed chest muscles and a long, elegant tail.  Smaller than her cousin the snow leopard, the snowcat's fur shows many of the same beautiful combinations of dark spots that mark the snow leopards.  Small ears crown the snowcat's head.</pre>"
+      "With its distinctive markings, the reclusive mountain snowcat is endowed with an almost uncanny ability to blend into the rocky vastness she inhabits. Adapted to living in the rugged mountains, she has large forepaws, short forelimbs, well-developed chest muscles and a long, elegant tail. Smaller than her cousin the snow leopard, the snowcat's fur shows many of the same beautiful combinations of dark spots that mark the snow leopards. Small ears crown the snowcat's head."
     ],
     arrival: [],
     flee: [],

@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A grisly corpse hulk is a collection of corpse parts roughly arranged into a humanoid form within a handspan of a giant's height.  Milky pinkish fluid drips from the uneven stitches that hold its body together.  Its eyes are tiny and appear piggish in such an oversized head.  They hold only a rudimentary spark of intellect.<!-- Creature description text from in-game verb DESCRIBE goes here.--> </pre>\n\nAppraisal:\n<pre{{log2}}>The corpse hulk is large in size, about eight feet high in its current state.</pre>"
+      "A grisly corpse hulk is a collection of corpse parts roughly arranged into a humanoid form within a handspan of a giant's height. Milky pinkish fluid drips from the uneven stitches that hold its body together. Its eyes are tiny and appear piggish in such an oversized head. They hold only a rudimentary spark of intellect. \n\nAppraisal:\nThe corpse hulk is large in size, about eight feet high in its current state."
     ],
     arrival: [],
     flee: [],

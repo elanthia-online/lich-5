@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "Glistening from head to toe with brilliant clear ice, the ice wraith is a picture of deadly beauty.  Long, razor-sharp shards of ice form his claws, and two thin ice stalactites serve as fangs.  When illuminated by the sun, the crystalline ice wraith reflects all colors of the rainbow, often mesmerizing his prey, then striking with potent magic."
+      "Glistening from head to toe with brilliant clear ice, the ice wraith is a picture of deadly beauty. Long, razor-sharp shards of ice form his claws, and two thin ice stalactites serve as fangs. When illuminated by the sun, the crystalline ice wraith reflects all colors of the rainbow, often mesmerizing his prey, then striking with potent magic."
     ],
     arrival: [],
     flee: [],

@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The white vysan is a peculiar beast, ivory white and extremely bloated with gas to the point that it can float from place to place.  Its appendages extend straight out from its rotund body, and its head resembles an overturned kettle.  Blending in well with snowy backgrounds, it prefers cold, icy areas, moving slowly from location to location in search of food.</pre>"
+      "The white vysan is a peculiar beast, ivory white and extremely bloated with gas to the point that it can float from place to place. Its appendages extend straight out from its rotund body, and its head resembles an overturned kettle. Blending in well with snowy backgrounds, it prefers cold, icy areas, moving slowly from location to location in search of food."
     ],
     arrival: [],
     flee: [],

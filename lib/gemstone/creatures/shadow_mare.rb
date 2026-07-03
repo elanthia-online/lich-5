@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "The features of this horror are difficult to make out due to the shifting of its shadowy hide which instantly assumes the color of its surroundings.  Despite the strange effect, its eyes glow red and a wave of ethereal light flashes across its mane."
+      "The features of this horror are difficult to make out due to the shifting of its shadowy hide which instantly assumes the color of its surroundings. Despite the strange effect, its eyes glow red and a wave of ethereal light flashes across its mane."
     ],
     arrival: [],
     flee: [],

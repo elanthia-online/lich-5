@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Taller than a giant, the massive grahnk bears similarities to both a troll and an ogre.  The beast has rippling muscles easily capable of tearing an arm or leg from its socket.</pre>"
+      "Taller than a giant, the massive grahnk bears similarities to both a troll and an ogre. The beast has rippling muscles easily capable of tearing an arm or leg from its socket."
     ],
     arrival: [],
     flee: [],

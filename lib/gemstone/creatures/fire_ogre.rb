@@ -82,11 +82,11 @@
     gems: nil,
     boxes: nil,
     skin: "ogre tooth",
-    other: "shimmering blue essence shard<br>essence of fire"
+    other: "shimmering blue essence shardessence of fire"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Easily three times as large as the largest giantman, this brutish creature glares about with fire red eyes.  The fire ogre has black, soot-covered skin and fiery orange hair.  Steam pours from her nose as she flexes her massive claws.</pre>"
+      "Easily three times as large as the largest giantman, this brutish creature glares about with fire red eyes. The fire ogre has black, soot-covered skin and fiery orange hair. Steam pours from her nose as she flexes her massive claws."
     ],
     arrival: [],
     flee: [],

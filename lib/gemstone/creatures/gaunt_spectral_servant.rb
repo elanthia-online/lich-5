@@ -68,11 +68,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet mote of essence]]"
+    other: "Glowing violet mote of essence"
   },
   messaging: {
     description: [
-      "The spectral servant silently floats several inches above the ground.  His eyes gaze downward submissively as his gaunt form, dressed in the ragged remains of livery, waivers in and out of visibility.  Scabs and open sores cover his features, while patches of transparent hair fall from his skull, vanishing into the air at his feet."
+      "The spectral servant silently floats several inches above the ground. His eyes gaze downward submissively as his gaunt form, dressed in the ragged remains of livery, waivers in and out of visibility. Scabs and open sores cover his features, while patches of transparent hair fall from his skull, vanishing into the air at his feet."
     ],
     arrival: [],
     flee: [],

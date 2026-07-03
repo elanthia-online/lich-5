@@ -77,11 +77,11 @@
     gems: true,
     boxes: true,
     skin: "an arctic manticore mane",
-    other: "[[Glimmering blue essence dust]]"
+    other: "Glimmering blue essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The first thing that will strike you about the manticore is its noxious smell.  Looking much like a snow-white lion, if such a thing could naturally exist, it appears somewhat like an unkempt lion, but after you wipe away the tears brought to your eyes by its vile stench, you will see that its head is more like that of a man, and it has a long segmented tail like that of a scorpion.</pre>"
+      "The first thing that will strike you about the manticore is its noxious smell. Looking much like a snow-white lion, if such a thing could naturally exist, it appears somewhat like an unkempt lion, but after you wipe away the tears brought to your eyes by its vile stench, you will see that its head is more like that of a man, and it has a long segmented tail like that of a scorpion."
     ],
     arrival: [],
     flee: [],

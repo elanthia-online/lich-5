@@ -108,7 +108,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "Shake off [[Stun|stuns]]"
+      "Shake off stuns"
     ]
   },
   special_other: "Summon Ki-lin",
@@ -125,7 +125,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Garbed in the tattered finery of his lost faith, this monastic lich is a decomposing humanoid of indiscernable heritage.  Standing as high as a human, his distinguishing features have skin wrapped about a thin skeletal frame.  Held together by nothing more than smouldering malice and some long forgotten curse, the monastic lich's flesh falls off in stinking bits as he shudders in agonizing ecstasy.  In the center of his chest is a ragged hole, as if his heart had been ripped from its body.</pre>"
+      "Garbed in the tattered finery of his lost faith, this monastic lich is a decomposing humanoid of indiscernable heritage. Standing as high as a human, his distinguishing features have skin wrapped about a thin skeletal frame. Held together by nothing more than smouldering malice and some long forgotten curse, the monastic lich's flesh falls off in stinking bits as he shudders in agonizing ecstasy. In the center of his chest is a ragged hole, as if his heart had been ripped from its body."
     ],
     arrival: [],
     flee: [],

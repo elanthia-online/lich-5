@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "A rodent-like creature with a small head and distinct ears, its head covered with a fine textured short fur.  The undertaker bat's leathery wings outstretch to three times its body length, with its skeletal features visable through its black skin.  Small fangs protrude beyond its closed mouth."
+      "A rodent-like creature with a small head and distinct ears, its head covered with a fine textured short fur. The undertaker bat's leathery wings outstretch to three times its body length, with its skeletal features visable through its black skin. Small fangs protrude beyond its closed mouth."
     ],
     arrival: [],
     flee: [],

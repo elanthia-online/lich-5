@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Large enough to encompass a horse in her grasp, the major spider needs no web to feed from though she uses her sticky traps well when it suits her.  Agile and aggressive, this demon among spiders crouches before you, her unwinking eyes showing no emotion as she waits to attack or defend.  The palps around her mouth work continuously and a thin line of digestive slime drools down her mandibles.</pre>"
+      "Large enough to encompass a horse in her grasp, the major spider needs no web to feed from though she uses her sticky traps well when it suits her. Agile and aggressive, this demon among spiders crouches before you, her unwinking eyes showing no emotion as she waits to attack or defend. The palps around her mouth work continuously and a thin line of digestive slime drools down her mandibles."
     ],
     arrival: [],
     flee: [],

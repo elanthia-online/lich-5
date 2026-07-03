@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "The qyn'arj is a creature of legend, a massive serpent held aloft on brightly colored wings.  But the lich qyn'arj before you has been animated by some means.  The qyn'arj's body seems to hover there without the need to beat its rotting and mottled wings.  Decaying flesh covers its body, but the head is completely skeletal and polished to the fine white of bleached bone.  Swirling red pinpoints float where eyes used to be, and dagger sharp teeth can be seen inside its maw."
+      "The qyn'arj is a creature of legend, a massive serpent held aloft on brightly colored wings. But the lich qyn'arj before you has been animated by some means. The qyn'arj's body seems to hover there without the need to beat its rotting and mottled wings. Decaying flesh covers its body, but the head is completely skeletal and polished to the fine white of bleached bone. Swirling red pinpoints float where eyes used to be, and dagger sharp teeth can be seen inside its maw."
     ],
     arrival: [],
     flee: [],

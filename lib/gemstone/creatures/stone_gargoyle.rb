@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "The stone gargoyle, an animated being, was once a huge, grey, granite carving that overlooked the castle walls.  Standing over fifteen feet tall on its powerful hind legs, the stone gargoyle was sculpted with a body similar to a lion's and a head that is a grotesque union between a human and a bat.  Long horns protrude from the forehead and needle-like fangs extend menacingly below the upper lip. Swirling, yellow-green eyes, the only non-rock portion of the beast's anatomy, coldly examine the surrounding area."
+      "The stone gargoyle, an animated being, was once a huge, grey, granite carving that overlooked the castle walls. Standing over fifteen feet tall on its powerful hind legs, the stone gargoyle was sculpted with a body similar to a lion's and a head that is a grotesque union between a human and a bat. Long horns protrude from the forehead and needle-like fangs extend menacingly below the upper lip. Swirling, yellow-green eyes, the only non-rock portion of the beast's anatomy, coldly examine the surrounding area."
     ],
     arrival: [],
     flee: [],

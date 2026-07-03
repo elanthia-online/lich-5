@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The ice hound, protected by a long fur coat, is at home in the most frozen areas of the lands.  One of the largest breeds of dog, its blue and silver fur blends well with the frozen lakes and rivers.  A nasty bite and frosty breath make this canine a very formidable foe.  A strange feature of this hound is that its eyes are completely white, giving its gaze a vacant, unfocused look.</pre>"
+      "The ice hound, protected by a long fur coat, is at home in the most frozen areas of the lands. One of the largest breeds of dog, its blue and silver fur blends well with the frozen lakes and rivers. A nasty bite and frosty breath make this canine a very formidable foe. A strange feature of this hound is that its eyes are completely white, giving its gaze a vacant, unfocused look."
     ],
     arrival: [],
     flee: [],

@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Found near graveyards and other resting places of the dead, the ghost presents itself as a pale reflection of what it once was, a living, breathing person.  Eyes long rotted away, appendages barely discernable, it knows not why it fights, but attacks the living at every occasion.  The ghost fights relentlessly, knowing no fear, until victorious or utterly destroyed.  Its agonized, horrific moans often chill those who face it.</pre>"
+      "Found near graveyards and other resting places of the dead, the ghost presents itself as a pale reflection of what it once was, a living, breathing person. Eyes long rotted away, appendages barely discernable, it knows not why it fights, but attacks the living at every occasion. The ghost fights relentlessly, knowing no fear, until victorious or utterly destroyed. Its agonized, horrific moans often chill those who face it."
     ],
     arrival: [],
     flee: [],

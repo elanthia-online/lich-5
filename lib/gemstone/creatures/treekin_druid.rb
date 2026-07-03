@@ -117,7 +117,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing approximately eight feet tall, the treekin druid glares at you with malevolent intent.  Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree.  Leaves cover the druid from head to trunk, with two arm-shaped branches protruding from the canopy. A long mossy beard dangles below a crooked knothole under the eyes, giving gnarled look to an already imposing foe.</pre>"
+      "Standing approximately eight feet tall, the treekin druid glares at you with malevolent intent. Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree. Leaves cover the druid from head to trunk, with two arm-shaped branches protruding from the canopy. A long mossy beard dangles below a crooked knothole under the eyes, giving gnarled look to an already imposing foe."
     ],
     arrival: [],
     flee: [],

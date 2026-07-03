@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The wolfshade is the animated spirit of a powerful northern grey wolf, one of the larger members of the wolf species.  Even in death, the wolfshade still possesses the instincts and abilities of its living form, including keen hearing, smell, sight, and extremely quick reflexes.  Dark grey with bloodshot eyes, the wolfshade is driven onward by a hunger for living flesh that it can never hope to satisfy.</pre>"
+      "The wolfshade is the animated spirit of a powerful northern grey wolf, one of the larger members of the wolf species. Even in death, the wolfshade still possesses the instincts and abilities of its living form, including keen hearing, smell, sight, and extremely quick reflexes. Dark grey with bloodshot eyes, the wolfshade is driven onward by a hunger for living flesh that it can never hope to satisfy."
     ],
     arrival: [],
     flee: [],

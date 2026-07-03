@@ -78,7 +78,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The wind wraith is a miniature windstorm all unto itself.  Heavy air currents swirl around the wind wraith, obscuring its form and making it much more difficult to hit the elusive creature.  The wind wraith bobs and weaves within the gusting air streams, directing them to maximum effect against its foes.  The only part of the wind wraith that seems easy to see is its crimson, glowing eyes, which appear to float steadily despite the thunderous winds around it.</pre>"
+      "The wind wraith is a miniature windstorm all unto itself. Heavy air currents swirl around the wind wraith, obscuring its form and making it much more difficult to hit the elusive creature. The wind wraith bobs and weaves within the gusting air streams, directing them to maximum effect against its foes. The only part of the wind wraith that seems easy to see is its crimson, glowing eyes, which appear to float steadily despite the thunderous winds around it."
     ],
     arrival: [],
     flee: [],

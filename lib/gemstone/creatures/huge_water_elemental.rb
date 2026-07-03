@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "The water elemental's upper body is that of a humanoid, while its lower body forms a turbulent, watery vortex.  The facial features of the elemental creature are vague and shifting, rippling with every contortion of its face.  Sloshing and splashing noises accompany each movement of the water elemental, along with an odd gurgling."
+      "The water elemental's upper body is that of a humanoid, while its lower body forms a turbulent, watery vortex. The facial features of the elemental creature are vague and shifting, rippling with every contortion of its face. Sloshing and splashing noises accompany each movement of the water elemental, along with an odd gurgling."
     ],
     arrival: [],
     flee: [],

@@ -79,7 +79,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Lithe but powerful in a bestial fashion, the body of the steelwing harpy is plumed in a cascade of smoky grey feathers that gleam like tarnished silver.  The remiges of her wings are as sharp-tipped as daggers and look nearly as substantial.  A crest of downy semiplume feathers sweeps back from her face, which has a feral facsimile of pinched human features and golden eyes like a hawk's.  The harpy's talons are as dark as coal and tipped with claws that are wickedly sharp.</pre>"
+      "Lithe but powerful in a bestial fashion, the body of the steelwing harpy is plumed in a cascade of smoky grey feathers that gleam like tarnished silver. The remiges of her wings are as sharp-tipped as daggers and look nearly as substantial. A crest of downy semiplume feathers sweeps back from her face, which has a feral facsimile of pinched human features and golden eyes like a hawk's. The harpy's talons are as dark as coal and tipped with claws that are wickedly sharp."
     ],
     arrival: [],
     flee: [],

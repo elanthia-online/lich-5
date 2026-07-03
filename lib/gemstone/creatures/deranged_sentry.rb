@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Garbed in bright crimson armor, the deranged sentry appears alert and ready for battle.  The sentry is haphazardly dressed with unlaced boots, leathers and a helm that looks to be about three sizes to big.</pre>"
+      "Garbed in bright crimson armor, the deranged sentry appears alert and ready for battle. The sentry is haphazardly dressed with unlaced boots, leathers and a helm that looks to be about three sizes to big."
     ],
     arrival: [],
     flee: [],

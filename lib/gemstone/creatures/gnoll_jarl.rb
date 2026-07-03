@@ -74,7 +74,7 @@
   },
   messaging: {
     description: [
-      "The gnoll jarl is sort of a gnollish chieftain.  His beard is long and well-groomed, and wisdom sparkles in his eyes.  Though just as short as other gnolls, around three feet in all, he has trained long and hard to be in peak physical and mental condition, setting an example for others.  He would be a formidable foe."
+      "The gnoll jarl is sort of a gnollish chieftain. His beard is long and well-groomed, and wisdom sparkles in his eyes. Though just as short as other gnolls, around three feet in all, he has trained long and hard to be in peak physical and mental condition, setting an example for others. He would be a formidable foe."
     ],
     arrival: [],
     flee: [],

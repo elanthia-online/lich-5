@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "The magru appears to be a huge, gelatinous red lump that pulses, swelling and shrinking slightly with a hypnotic rhythm.  Its skin glistens with a dark, disgusting ooze."
+      "The magru appears to be a huge, gelatinous red lump that pulses, swelling and shrinking slightly with a hypnotic rhythm. Its skin glistens with a dark, disgusting ooze."
     ],
     arrival: [],
     flee: [],

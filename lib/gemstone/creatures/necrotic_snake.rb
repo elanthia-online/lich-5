@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "The fearsome product of magical experimentation, the necrotic snake is larger than most men.  Rotting scales cover the length of the undead reptile in a diamond pattern formed of various hues of brown, gold, and black.  Large gashes in the snake's side reveal thin rib bones and the carcasses of previous meals, while leaking rancid fumes into the surrounding air."
+      "The fearsome product of magical experimentation, the necrotic snake is larger than most men. Rotting scales cover the length of the undead reptile in a diamond pattern formed of various hues of brown, gold, and black. Large gashes in the snake's side reveal thin rib bones and the carcasses of previous meals, while leaking rancid fumes into the surrounding air."
     ],
     arrival: [],
     flee: [],

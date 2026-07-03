@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>If it wasn't for the huge size of this hornet, you might even call it kinda cute.  The fuzzy body measures about 8 inches long and almost that big around.  The wings are moving so fast that it seems as though the hornet is surrounded with a faint green haze.  Darting here and there, with an agility astonishing in something this pudgy looking, it's enough to make one think twice before getting too close!</pre>"
+      "If it wasn't for the huge size of this hornet, you might even call it kinda cute. The fuzzy body measures about 8 inches long and almost that big around. The wings are moving so fast that it seems as though the hornet is surrounded with a faint green haze. Darting here and there, with an agility astonishing in something this pudgy looking, it's enough to make one think twice before getting too close!"
     ],
     arrival: [],
     flee: [],

@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With a body length of nearly 1 foot, and a wingspan of 18 inches, a cinder wasp is without a doubt, the biggest wasp to be seen.  The body is black with irridescent blue highlights.  The wings are like soap bubbles, clear with rainbows of color shimmering across them.  Large redly glowing compound eyes and a stinger large enough to make a nasty stiletto give this creature a distinctly threatening appearance.</pre>"
+      "With a body length of nearly 1 foot, and a wingspan of 18 inches, a cinder wasp is without a doubt, the biggest wasp to be seen. The body is black with irridescent blue highlights. The wings are like soap bubbles, clear with rainbows of color shimmering across them. Large redly glowing compound eyes and a stinger large enough to make a nasty stiletto give this creature a distinctly threatening appearance."
     ],
     arrival: [],
     flee: [],

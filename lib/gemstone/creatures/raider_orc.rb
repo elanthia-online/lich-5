@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A glimmer of intelligence actually resides behind the crimson eyes of the raider orc, unusual for a member of the orc species.  He shares the same bony cranium and noxious odor of his brethren, but he strides much more upright, and his sharp teeth are only revealed when necessary for rending something.  Interestingly, the raider orc's clawed fingers show webbing in between, indicating that this orc may be as much at home on bodies of water as he is on land.</pre>"
+      "A glimmer of intelligence actually resides behind the crimson eyes of the raider orc, unusual for a member of the orc species. He shares the same bony cranium and noxious odor of his brethren, but he strides much more upright, and his sharp teeth are only revealed when necessary for rending something. Interestingly, the raider orc's clawed fingers show webbing in between, indicating that this orc may be as much at home on bodies of water as he is on land."
     ],
     arrival: [],
     flee: [],

@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing only three feet tall, the man-like gnoll watches your every move with piercing grey eyes.  It mutters something in an oddly resonant voice that sounds like the ring of hammer on stone.  There is little doubt that the stealthy gnoll can be a formidable opponent when need arises, or when it is hard pressed.  A faint odor of fermented mushroom wine wafts from its drab and slightly musty clothing.</pre>"
+      "Standing only three feet tall, the man-like gnoll watches your every move with piercing grey eyes. It mutters something in an oddly resonant voice that sounds like the ring of hammer on stone. There is little doubt that the stealthy gnoll can be a formidable opponent when need arises, or when it is hard pressed. A faint odor of fermented mushroom wine wafts from its drab and slightly musty clothing."
     ],
     arrival: [],
     flee: [],

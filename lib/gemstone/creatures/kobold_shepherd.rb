@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The kobold shepherd is very similar to its kobold brethren.  Smaller than a dwarf and even many halflings, it has ruddy skin and a hairless pate topped with small horns.  The kobold shepherd does, however, have better habits of cleanliness and a better sense of responsibility.  It spends long hours herding the roltons that provide sustenance for it and its family.  When its herds are threatened, the kobold shepherd fights valiantly in their defense.</pre>"
+      "The kobold shepherd is very similar to its kobold brethren. Smaller than a dwarf and even many halflings, it has ruddy skin and a hairless pate topped with small horns. The kobold shepherd does, however, have better habits of cleanliness and a better sense of responsibility. It spends long hours herding the roltons that provide sustenance for it and its family. When its herds are threatened, the kobold shepherd fights valiantly in their defense."
     ],
     arrival: [],
     flee: [],

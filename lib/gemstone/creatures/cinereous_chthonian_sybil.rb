@@ -95,7 +95,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Draped by diaphanous silks that appear so light as to have been woven from shreds of evening mist, a cinereous chthonian sybil is a thin, almost skeletal figure.  Wings with iridescent grey feathers enshroud her form.  Her face is unsettling in its agelessness, and her eyes are nothing human.  They are two pools of luminous mist, and in their depths flit strange shapes and half-formed figures that are at once tantalizingly familiar and distressingly vague.</pre>"
+      "Draped by diaphanous silks that appear so light as to have been woven from shreds of evening mist, a cinereous chthonian sybil is a thin, almost skeletal figure. Wings with iridescent grey feathers enshroud her form. Her face is unsettling in its agelessness, and her eyes are nothing human. They are two pools of luminous mist, and in their depths flit strange shapes and half-formed figures that are at once tantalizingly familiar and distressingly vague."
     ],
     arrival: [],
     flee: [],

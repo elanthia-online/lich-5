@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The cave worm is a colorless and legless serpentine creature.  Its bizarre head is encircled with six three-foot horns, which cut through obstacles as it moves through subterranean caverns.  Over 20 feet in length, it feeds on both rock and flesh, and caustic acid oozes from its body and its 10-foot prehensile tongue.  Six-inch fangs allow it to casually tear through any armor, and its pungent acid dissolves what it cannot consume.</pre>"
+      "The cave worm is a colorless and legless serpentine creature. Its bizarre head is encircled with six three-foot horns, which cut through obstacles as it moves through subterranean caverns. Over 20 feet in length, it feeds on both rock and flesh, and caustic acid oozes from its body and its 10-foot prehensile tongue. Six-inch fangs allow it to casually tear through any armor, and its pungent acid dissolves what it cannot consume."
     ],
     arrival: [],
     flee: [],

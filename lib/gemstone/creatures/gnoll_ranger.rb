@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This gnoll is dressed for the out-of-doors.  His rough clothing that blends into the landscape marks him as a ranger.  Used to the ways of weapons and hunting, the gnoll's small stature should not be cause to regard him lightly.</pre>"
+      "This gnoll is dressed for the out-of-doors. His rough clothing that blends into the landscape marks him as a ranger. Used to the ways of weapons and hunting, the gnoll's small stature should not be cause to regard him lightly."
     ],
     arrival: [],
     flee: [],

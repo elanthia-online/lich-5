@@ -123,11 +123,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Radiant crimson essence shard]]"
+    other: "Radiant crimson essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Vvrael warlock's figure is tall and thin, with stark proportions that call to mind sharp, unforgiving angles.  His features are stoic, however the eyes held in that pale, rigidly handsome face are full of fury and malignant intent.  The creature seems to move in slow motion, each gesture full of drama and elegance.  But the appearance of languid grace is insubstantial.  Experience soon dispells this illusion and reveals the true nature of this enemy, whose movements are both lightning quick and deadly.</pre>"
+      "The Vvrael warlock's figure is tall and thin, with stark proportions that call to mind sharp, unforgiving angles. His features are stoic, however the eyes held in that pale, rigidly handsome face are full of fury and malignant intent. The creature seems to move in slow motion, each gesture full of drama and elegance. But the appearance of languid grace is insubstantial. Experience soon dispells this illusion and reveals the true nature of this enemy, whose movements are both lightning quick and deadly."
     ],
     arrival: [],
     flee: [],

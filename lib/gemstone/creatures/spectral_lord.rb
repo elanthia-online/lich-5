@@ -81,11 +81,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Glowing violet essence shard]]"
+    other: "Glowing violet essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>But a shade of its original self, the spectral lord is a dim and flickering image of a noble.  Sharp, hawk-like features, and narrowed brilliant eyes give the appearance of a keen intellect.  Worn and rotting gear hangs from its body, deteriorating from centuries of disuse.</pre>"
+      "But a shade of its original self, the spectral lord is a dim and flickering image of a noble. Sharp, hawk-like features, and narrowed brilliant eyes give the appearance of a keen intellect. Worn and rotting gear hangs from its body, deteriorating from centuries of disuse."
     ],
     arrival: [],
     flee: [],

@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Similar to the shelfae soldier but taller by nearly two feet, the shelfae chieftain guides the legions of shelfae in combat.  Its taller stature, significantly brighter orange coloration, and protruding crest mark it as an officer.  Although formidably armed, the shelfae chieftain prefers to bring its opponents down first by sweeping its tail to produce a quake effect.</pre>"
+      "Similar to the shelfae soldier but taller by nearly two feet, the shelfae chieftain guides the legions of shelfae in combat. Its taller stature, significantly brighter orange coloration, and protruding crest mark it as an officer. Although formidably armed, the shelfae chieftain prefers to bring its opponents down first by sweeping its tail to produce a quake effect."
     ],
     arrival: [],
     flee: [],

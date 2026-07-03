@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Gnarled white hair drapes in locks over the krolvin pirate's face, which is fixed in a constant murderous leer.  The pirate's puffy grayish-blue skin is slashed and punctured with what must have been mortal wounds, but the foul creature before you pays the ancient injuries no heed as she seeks to continue her plundering ways well beyond the grave.</pre>"
+      "Gnarled white hair drapes in locks over the krolvin pirate's face, which is fixed in a constant murderous leer. The pirate's puffy grayish-blue skin is slashed and punctured with what must have been mortal wounds, but the foul creature before you pays the ancient injuries no heed as she seeks to continue her plundering ways well beyond the grave."
     ],
     arrival: [],
     flee: [],

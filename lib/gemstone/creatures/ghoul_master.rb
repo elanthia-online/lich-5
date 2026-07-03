@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Broader and taller then the more common ghouls, this one stands with some cold bearing of command and power.  Tattered rags of velvet and silk still drape the corrupt form and a keen light of evil will and force dominates the ruined face now rotting and festered.  The aura of its power tingles along your nerves and brings a cold sweat to your brow as you gaze into eyes, now vacant, which seem to stare back at you with cruel disdain.</pre>\n\nThe ghoul master is large in size and about seven feet high in its current state."
+      "Broader and taller then the more common ghouls, this one stands with some cold bearing of command and power. Tattered rags of velvet and silk still drape the corrupt form and a keen light of evil will and force dominates the ruined face now rotting and festered. The aura of its power tingles along your nerves and brings a cold sweat to your brow as you gaze into eyes, now vacant, which seem to stare back at you with cruel disdain.\n\nThe ghoul master is large in size and about seven feet high in its current state."
     ],
     arrival: [],
     flee: [],

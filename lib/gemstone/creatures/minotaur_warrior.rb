@@ -84,11 +84,11 @@
     gems: true,
     boxes: true,
     skin: "a minotaur horn",
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The minotaur warrior has the head of a bull while his muscular body is humanoid with thick arms and broad shoulders.  Wearing a mish-mash of leather and chain armor, the fierce minotaur stomps about with hoofed feet brandishing its longsword at every possible foe.</pre>"
+      "The minotaur warrior has the head of a bull while his muscular body is humanoid with thick arms and broad shoulders. Wearing a mish-mash of leather and chain armor, the fierce minotaur stomps about with hoofed feet brandishing its longsword at every possible foe."
     ],
     arrival: [],
     flee: [],

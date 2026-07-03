@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With its naked head resembling that of a vulture and a wingspan of almost three feet, the black-winged daggerbeak gets its name from its wickedly pointed beak and the way it uses it.  Created by a mean-spirited enchanter for the bedevilment of some peasants who had offended him, the daggerbeak survives by stabbing domesticated herd animals with its beak and drinking their blood.</pre>"
+      "With its naked head resembling that of a vulture and a wingspan of almost three feet, the black-winged daggerbeak gets its name from its wickedly pointed beak and the way it uses it. Created by a mean-spirited enchanter for the bedevilment of some peasants who had offended him, the daggerbeak survives by stabbing domesticated herd animals with its beak and drinking their blood."
     ],
     arrival: [],
     flee: [],

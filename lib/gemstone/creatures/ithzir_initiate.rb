@@ -132,7 +132,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Ithzir initiate carries herself with a humble bearing, her arresting, pupil-less green eyes taking in her surroundings with confidence and surety.  Even when battle rages around her, each movement of the initiate seems eerily effortless and calm.  The Ithzir initiate is slightly taller than a human, and while her humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance.  The initiate wears a crisply-cut, blue tunic with a green palm-print emblazoned on the right breast.</pre>"
+      "The Ithzir initiate carries herself with a humble bearing, her arresting, pupil-less green eyes taking in her surroundings with confidence and surety. Even when battle rages around her, each movement of the initiate seems eerily effortless and calm. The Ithzir initiate is slightly taller than a human, and while her humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance. The initiate wears a crisply-cut, blue tunic with a green palm-print emblazoned on the right breast."
     ],
     arrival: [],
     flee: [],

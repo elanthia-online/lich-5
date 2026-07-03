@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "The triton executioner scans his surroundings with merciless eyes as if seeking his next client.  Heavy, leathery lips are pulled into a perpetually disgusted sneer, pinching the creature's nostrils into narrow slits.  Animal muscles, powerfully knotted beneath his moist blue-green skin, seem ready to spring in any direction.  The executioner wears a dark blue tabard emblazoned with a silver wave upon the chest."
+      "The triton executioner scans his surroundings with merciless eyes as if seeking his next client. Heavy, leathery lips are pulled into a perpetually disgusted sneer, pinching the creature's nostrils into narrow slits. Animal muscles, powerfully knotted beneath his moist blue-green skin, seem ready to spring in any direction. The executioner wears a dark blue tabard emblazoned with a silver wave upon the chest."
     ],
     arrival: [],
     flee: [],

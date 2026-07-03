@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Barely still connected to the living plane, the phantom flickers in and out as it confronts those that would intrude upon its rest.  The outlines of its shape are barely apparent, suggesting a once-humanoid appearance, now disguised in a transparent, flickering whiteness.  The phantom must move and strike quickly, as it is only able to glimpse the figures of the targets around it when the phantom is at its most visible state.</pre>"
+      "Barely still connected to the living plane, the phantom flickers in and out as it confronts those that would intrude upon its rest. The outlines of its shape are barely apparent, suggesting a once-humanoid appearance, now disguised in a transparent, flickering whiteness. The phantom must move and strike quickly, as it is only able to glimpse the figures of the targets around it when the phantom is at its most visible state."
     ],
     arrival: [],
     flee: [],

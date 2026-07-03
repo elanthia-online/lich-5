@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This mongrel kobold mostly resembles her kobold brethren.  Smaller than a dwarf and even many halflings, she has splotchy skin and a fairly hairy head topped with small horns.  Long-limbed for her size, the mongrel kobold eschews any display of brute strength and relies on what agility she pretends to have.  The mongrel kobold stares back at you with beady little black eyes, sizing you up as a foe.</pre>"
+      "This mongrel kobold mostly resembles her kobold brethren. Smaller than a dwarf and even many halflings, she has splotchy skin and a fairly hairy head topped with small horns. Long-limbed for her size, the mongrel kobold eschews any display of brute strength and relies on what agility she pretends to have. The mongrel kobold stares back at you with beady little black eyes, sizing you up as a foe."
     ],
     arrival: [],
     flee: [],

@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "Blackened, dirt-filled lumps of ice hold together the broken and shattered bones of the ice skeleton, in some places replacing the bone structure entirely.  It clatters about, dropping fragments of its former self, shards of ice, or dripping brackish water.  Locked in its undead form, the ice skeleton knows nothing but to attack anything living it finds in its path, to kill as much as it can, to destroy or be destroyed."
+      "Blackened, dirt-filled lumps of ice hold together the broken and shattered bones of the ice skeleton, in some places replacing the bone structure entirely. It clatters about, dropping fragments of its former self, shards of ice, or dripping brackish water. Locked in its undead form, the ice skeleton knows nothing but to attack anything living it finds in its path, to kill as much as it can, to destroy or be destroyed."
     ],
     arrival: [],
     flee: [],

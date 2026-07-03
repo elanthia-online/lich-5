@@ -79,7 +79,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The gnoll worker is about three feet tall and vaguely man-like.  Gnolls in general have a dwarven or gnomish appearance, but are markedly different in a way that can't quite be pin-pointed.  This particular gnoll is part of the working class with well-muscled arms and callused hands.  There is little doubt that the gnoll would be a formidable opponent if the need should arise, or if backed into a corner.</pre>"
+      "The gnoll worker is about three feet tall and vaguely man-like. Gnolls in general have a dwarven or gnomish appearance, but are markedly different in a way that can't quite be pin-pointed. This particular gnoll is part of the working class with well-muscled arms and callused hands. There is little doubt that the gnoll would be a formidable opponent if the need should arise, or if backed into a corner."
     ],
     arrival: [],
     flee: [],

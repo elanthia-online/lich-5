@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The beast before you bears similarities to an earthworm, except it is considerably larger.  The beast has a gaping maw filled with tiny sharp teeth.  The phosphorescent slime coating the worm serves to both protect the beast and perhaps distract its foes.</pre>"
+      "The beast before you bears similarities to an earthworm, except it is considerably larger. The beast has a gaping maw filled with tiny sharp teeth. The phosphorescent slime coating the worm serves to both protect the beast and perhaps distract its foes."
     ],
     arrival: [],
     flee: [],

@@ -99,11 +99,11 @@
     gems: true,
     boxes: false,
     skin: "ruffed tawny griffin pelt",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lesser griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation.  Its front legs, forebody, wings, and head are those of a great eagle, complete with large white feathers and aquiline beak.  The rear half of the creature's body is that of a powerful lion, with short tawny fur and a long feline tail.  Emphasized by its size, which is larger than a warhorse, the griffin's renowned majestic presence and great bravery have earned the creature a place on many nobles' coats-of-arms.</pre>"
+      "The lesser griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation. Its front legs, forebody, wings, and head are those of a great eagle, complete with large white feathers and aquiline beak. The rear half of the creature's body is that of a powerful lion, with short tawny fur and a long feline tail. Emphasized by its size, which is larger than a warhorse, the griffin's renowned majestic presence and great bravery have earned the creature a place on many nobles' coats-of-arms."
     ],
     arrival: [],
     flee: [],

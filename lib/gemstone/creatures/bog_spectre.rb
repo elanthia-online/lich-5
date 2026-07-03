@@ -98,11 +98,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence shard]]"
+    other: "Glowing violet essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>The bog spectre's misty form fades to a faint silhouette at times, the outlines of its form barely visible against its surroundings.  Two malevolent eyes stare out from under its deeply hooded robe, each illuminated by an unholy crimson glow.  Its thin, lanky arms end in unnaturally long taloned fingers, the semi-translucent claws still holding a twinge of glistening red on their surface.  The creature is completely silent, its flickering form stalking with surprising speed and grace as it traverses the bog.</pre>"
+      "The bog spectre's misty form fades to a faint silhouette at times, the outlines of its form barely visible against its surroundings. Two malevolent eyes stare out from under its deeply hooded robe, each illuminated by an unholy crimson glow. Its thin, lanky arms end in unnaturally long taloned fingers, the semi-translucent claws still holding a twinge of glistening red on their surface. The creature is completely silent, its flickering form stalking with surprising speed and grace as it traverses the bog."
     ],
     arrival: [],
     flee: [],

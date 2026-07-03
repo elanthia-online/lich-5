@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The coyote, a quick, buff-colored creature, is a smaller cousin of the wolf.  However, the coyote lacks the wolf's braver tendencies, preferring to slash and run rather than risk a frontal assault in an attempt to go for the throat.  The coyote must be approached with care, as the coyote has been known to take an adventurer's hand off with one quick snap of the jaws.</pre>"
+      "The coyote, a quick, buff-colored creature, is a smaller cousin of the wolf. However, the coyote lacks the wolf's braver tendencies, preferring to slash and run rather than risk a frontal assault in an attempt to go for the throat. The coyote must be approached with care, as the coyote has been known to take an adventurer's hand off with one quick snap of the jaws."
     ],
     arrival: [],
     flee: [],

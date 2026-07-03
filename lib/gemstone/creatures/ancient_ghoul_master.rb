@@ -44,7 +44,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Gas cloud]]"
+        name: "Gas cloud"
       }
     ],
     special_notes: []
@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The ancient ghoul master is a mass of blackened muscle in humanoid form.  Striding boldly upright and with a determined gaze, the ancient ghoul master marches through the world of the dead, seeking the bodies of the recently deceased.  Though, in fact, dead itself, its putrid breath reveals its consumption of a steady diet of decayed flesh.  If none can be found, the ancient ghoul master is more than happy to cause the living to become the recently deceased.</pre>"
+      "The ancient ghoul master is a mass of blackened muscle in humanoid form. Striding boldly upright and with a determined gaze, the ancient ghoul master marches through the world of the dead, seeking the bodies of the recently deceased. Though, in fact, dead itself, its putrid breath reveals its consumption of a steady diet of decayed flesh. If none can be found, the ancient ghoul master is more than happy to cause the living to become the recently deceased."
     ],
     arrival: [],
     flee: [],

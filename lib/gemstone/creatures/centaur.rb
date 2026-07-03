@@ -93,11 +93,11 @@
     gems: true,
     boxes: true,
     skin: "a centaur hide",
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "Seeming to be a blend of mannish torso upon the body of a light horse, the centaur has a certain charm and aura of mystery. That is, until you encounter one, for the centaur is a savage and wilder cousin to the great centaurs of legend and will lash out in terrible fury when it deems a threat is at hand.  Their hide which varies in color from tan, black, white or roan is valued for its toughness and durability and thus, many will brave the danger of flying hooves and the threat held by these fierce creatures to gain this prize."
+      "Seeming to be a blend of mannish torso upon the body of a light horse, the centaur has a certain charm and aura of mystery. That is, until you encounter one, for the centaur is a savage and wilder cousin to the great centaurs of legend and will lash out in terrible fury when it deems a threat is at hand. Their hide which varies in color from tan, black, white or roan is valued for its toughness and durability and thus, many will brave the danger of flying hooves and the threat held by these fierce creatures to gain this prize."
     ],
     arrival: [],
     flee: [],

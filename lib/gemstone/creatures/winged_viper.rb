@@ -114,7 +114,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The viper has a sinuous scaley body of purest white, feathered from snout to tail.  Two majestic wings arch from its body roughly one-third of the way down its length.  The viper's mouth is filled with long, needle sharp fangs, and its forked tongue flickers constantly to taste the air hungrily.</pre>"
+      "The viper has a sinuous scaley body of purest white, feathered from snout to tail. Two majestic wings arch from its body roughly one-third of the way down its length. The viper's mouth is filled with long, needle sharp fangs, and its forked tongue flickers constantly to taste the air hungrily."
     ],
     arrival: [],
     flee: [],

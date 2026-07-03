@@ -40,7 +40,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Tremors]]"
+        name: "Tremors"
       }
     ],
     special_notes: []
@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Flecked with bits of mica and quartz crystal, the krynch shimmers in even the dimmest light.  Moving with a fluid grace that belies the granite composition of its body, the creature has a barrel chest and thick, powerful limbs.  The krynch has no visible ears or nose on its perfectly spherical head.  Its mouth is fixed in a perpetual scowl and its glossy black eyes glare at you with malevolent intensity.</pre>"
+      "Flecked with bits of mica and quartz crystal, the krynch shimmers in even the dimmest light. Moving with a fluid grace that belies the granite composition of its body, the creature has a barrel chest and thick, powerful limbs. The krynch has no visible ears or nose on its perfectly spherical head. Its mouth is fixed in a perpetual scowl and its glossy black eyes glare at you with malevolent intensity."
     ],
     arrival: [],
     flee: [],

@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This creature's monstrous form has the appearance of liquid, distorted glass overlying a fog-swamped night.  Its outer flesh is translucent and glossy, run through with thready veins of black and purple.  Beneath, the creature seems to have a secondary skin of darkest grey.  Not scaled, but segmented, the body within its vitreous shell undulates in a way only smoke can.  It roils and shifts as though it were an insubstantial core within a confining barrier.  Its maw is a gaping round of ring upon ring of jagged, obsidian-like teeth.</pre>"
+      "This creature's monstrous form has the appearance of liquid, distorted glass overlying a fog-swamped night. Its outer flesh is translucent and glossy, run through with thready veins of black and purple. Beneath, the creature seems to have a secondary skin of darkest grey. Not scaled, but segmented, the body within its vitreous shell undulates in a way only smoke can. It roils and shifts as though it were an insubstantial core within a confining barrier. Its maw is a gaping round of ring upon ring of jagged, obsidian-like teeth."
     ],
     arrival: [],
     flee: [],

@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>This \"little\" vine seems to be a bit on the feeling poorly side but if it catches you, likely you'll feel pretty bad too.</pre>"
+      "This \"little\" vine seems to be a bit on the feeling poorly side but if it catches you, likely you'll feel pretty bad too."
     ],
     arrival: [],
     flee: [],

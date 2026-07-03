@@ -104,7 +104,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The seraceris stands tall and slender, its body appearing almost two-dimensional as it moves.  In the creature's angular face sit two pools of blinding white light, and rays extend from the eye sockets in stark beams which arc around it in a nightmarish aurora.  Waves of energy shed by the malign magic permeating the seraceris lift its ragged robes in a jagged halo, echoing its long, gnarled fingers as they dance in a constant blur of spell-summoning.</pre>"
+      "The seraceris stands tall and slender, its body appearing almost two-dimensional as it moves. In the creature's angular face sit two pools of blinding white light, and rays extend from the eye sockets in stark beams which arc around it in a nightmarish aurora. Waves of energy shed by the malign magic permeating the seraceris lift its ragged robes in a jagged halo, echoing its long, gnarled fingers as they dance in a constant blur of spell-summoning."
     ],
     arrival: [],
     flee: [],

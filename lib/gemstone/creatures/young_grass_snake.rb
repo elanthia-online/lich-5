@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Pale green and about a foot long, the grass snake relies on camouflage to avoid predators long enough to survive until adulthood.  Though young, this creature is more deadly than its darker-in-color adult kin as it has yet to control its venom glands.  Many an overconfident adventurer has died from the noxious poisons the grass snake is capable of delivering.</pre>"
+      "Pale green and about a foot long, the grass snake relies on camouflage to avoid predators long enough to survive until adulthood. Though young, this creature is more deadly than its darker-in-color adult kin as it has yet to control its venom glands. Many an overconfident adventurer has died from the noxious poisons the grass snake is capable of delivering."
     ],
     arrival: [],
     flee: [],

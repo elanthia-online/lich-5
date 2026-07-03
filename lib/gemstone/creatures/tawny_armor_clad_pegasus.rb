@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A magnificent creature, a tawny armor-clad pegasus has the body of a majestic horse, with a sleek coat that is the pale hue of the sky on a hazy, newborn day.  Wings with feathers in all the pigments of the dawn, from soft pinks and corals to strident golds and fiery oranges, sprout from its shoulders, stretching to an impressive span.  Its eyes are large and dark, full of intelligence, and its mane flows like liquid silver.  The pegasus's hooves are shod in pure golvern.<!-- Add creature description--> </pre>"
+      "A magnificent creature, a tawny armor-clad pegasus has the body of a majestic horse, with a sleek coat that is the pale hue of the sky on a hazy, newborn day. Wings with feathers in all the pigments of the dawn, from soft pinks and corals to strident golds and fiery oranges, sprout from its shoulders, stretching to an impressive span. Its eyes are large and dark, full of intelligence, and its mane flows like liquid silver. The pegasus's hooves are shod in pure golvern."
     ],
     arrival: [],
     flee: [],

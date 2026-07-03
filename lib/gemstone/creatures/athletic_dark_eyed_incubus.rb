@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2}}>Almost lewdly handsome, an athletic dark-eyed incubus moves with the grace of a fencer and has the body of a wrestler.  He is bare to the waist and clad only in form-fitting trousers of supple, dark leather.  The incubus's eyes are inky black pools that lend an otherworldly quality to his intensely masculine beauty.</pre>"
+      "Almost lewdly handsome, an athletic dark-eyed incubus moves with the grace of a fencer and has the body of a wrestler. He is bare to the waist and clad only in form-fitting trousers of supple, dark leather. The incubus's eyes are inky black pools that lend an otherworldly quality to his intensely masculine beauty."
     ],
     arrival: [],
     flee: [],

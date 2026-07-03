@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This orc, midway in size between a lesser and a greater orc, the grey orc has a greyish cast to its skin, lending an unhealthy pallor to an already hideous countenance.  Dim intelligence flickers behind the narrow eyes and a mocking grin shows blackened and rotting teeth.</pre>"
+      "This orc, midway in size between a lesser and a greater orc, the grey orc has a greyish cast to its skin, lending an unhealthy pallor to an already hideous countenance. Dim intelligence flickers behind the narrow eyes and a mocking grin shows blackened and rotting teeth."
     ],
     arrival: [],
     flee: [],

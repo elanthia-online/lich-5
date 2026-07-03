@@ -129,7 +129,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Ithzir adept carries a bearing of absolute confidence, his piercing, pupil-less green eyes shrewdly taking in his surroundings.  The Ithzir adept is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance.  The adept wears a crisply-cut, silvery-blue tunic with high shoulders and a deep vee-neck.  Emblazoned on the right breast of the tunic is a single green eye.</pre>"
+      "The Ithzir adept carries a bearing of absolute confidence, his piercing, pupil-less green eyes shrewdly taking in his surroundings. The Ithzir adept is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance. The adept wears a crisply-cut, silvery-blue tunic with high shoulders and a deep vee-neck. Emblazoned on the right breast of the tunic is a single green eye."
     ],
     arrival: [],
     flee: [],

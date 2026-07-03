@@ -68,11 +68,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>As if the shadows themselves had come alive, two swirling red eyes stare at you from a vaguely humanoid shape.  The body of the darken seems to shift and meld into the shadows.  Small writhing tendrils of shadow seem to snake from the darken's shape, searching along the ground for something.</pre>"
+      "As if the shadows themselves had come alive, two swirling red eyes stare at you from a vaguely humanoid shape. The body of the darken seems to shift and meld into the shadows. Small writhing tendrils of shadow seem to snake from the darken's shape, searching along the ground for something."
     ],
     arrival: [],
     flee: [],

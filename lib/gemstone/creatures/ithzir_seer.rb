@@ -144,7 +144,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Ithzir seer carries an authoritative bearing, her arresting, pupil-less green eyes taking in her surroundings with both confidence and cunning.  Even when battle rages around her, each movement of the seer seems eerily effortless and calm.  The Ithzir seer is slightly taller than a human, and while her humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance.  The seer wears a crisply-cut, silvery-blue tunic with high shoulders and a deep vee-neck.  Emblazoned on the right breast of the tunic is a twelve-pointed golden star.</pre>"
+      "The Ithzir seer carries an authoritative bearing, her arresting, pupil-less green eyes taking in her surroundings with both confidence and cunning. Even when battle rages around her, each movement of the seer seems eerily effortless and calm. The Ithzir seer is slightly taller than a human, and while her humanoid form is similar to scores of other races, the hairless, blue-skinned body is nonetheless alien in its appearance. The seer wears a crisply-cut, silvery-blue tunic with high shoulders and a deep vee-neck. Emblazoned on the right breast of the tunic is a twelve-pointed golden star."
     ],
     arrival: [],
     flee: [],

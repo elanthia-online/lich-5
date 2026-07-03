@@ -77,11 +77,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Radiant crimson essence dust]]"
+    other: "Radiant crimson essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The gremlock is larger than her relative, the gremlin, stretching five to six feet in height.  The back hunched over from her time spent in the shadows stalking her prey, her actual height cannot be determined accurately.  Tufts of dirty fur form a straggly mane around the savage looking face.  Her long bulky arms tipped with massive claws only add to the deformity of the gremlock with her razor-sharp maw and potentially fatal, hungry glare.</pre>"
+      "The gremlock is larger than her relative, the gremlin, stretching five to six feet in height. The back hunched over from her time spent in the shadows stalking her prey, her actual height cannot be determined accurately. Tufts of dirty fur form a straggly mane around the savage looking face. Her long bulky arms tipped with massive claws only add to the deformity of the gremlock with her razor-sharp maw and potentially fatal, hungry glare."
     ],
     arrival: [],
     flee: [],

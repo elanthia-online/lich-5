@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A creature of sublime beauty, the nonomino floats just above the ground in a pulsing sphere of unearthly light.  As you watch, he abruptly turns his head to stare, as cracks distend across his visage and the glorious mantle peels away to reveal disease and decay.  The incarnation constantly molts his epidermis, regenerating it moments later in a hideous parody of the struggle between life and death.  Frozen by the hypnotic horror of his appearance, you almost fail to notice the nonomino's fluid movement, and the adept dance of his hands as he summons his theurgical arsenal.</pre>"
+      "A creature of sublime beauty, the nonomino floats just above the ground in a pulsing sphere of unearthly light. As you watch, he abruptly turns his head to stare, as cracks distend across his visage and the glorious mantle peels away to reveal disease and decay. The incarnation constantly molts his epidermis, regenerating it moments later in a hideous parody of the struggle between life and death. Frozen by the hypnotic horror of his appearance, you almost fail to notice the nonomino's fluid movement, and the adept dance of his hands as he summons his theurgical arsenal."
     ],
     arrival: [],
     flee: [],

@@ -85,11 +85,11 @@
     gems: true,
     boxes: true,
     skin: "an ogre tooth",
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The ogre warrior's bulging muscles and long arms give it an advantage in any encounter it might have.  The heavy, rock hard skin serves equally well as armor or to just keep itself dry from the elements.  Dark, smoking eyes glare out as it challenges any to oppose it.</pre>"
+      "The ogre warrior's bulging muscles and long arms give it an advantage in any encounter it might have. The heavy, rock hard skin serves equally well as armor or to just keep itself dry from the elements. Dark, smoking eyes glare out as it challenges any to oppose it."
     ],
     arrival: [],
     flee: [],

@@ -101,7 +101,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThis smallish humanoid sports a pair of expressive sparkling eyes, lightly tanned skin, and a wide grin from ear to ear. Cute is too kind of a word for this caricature of elven descent. A faintly shimmering golden aura surrounds him.\n</pre>"
+      "This smallish humanoid sports a pair of expressive sparkling eyes, lightly tanned skin, and a wide grin from ear to ear. Cute is too kind of a word for this caricature of elven descent. A faintly shimmering golden aura surrounds him."
     ],
     arrival: [],
     flee: [],

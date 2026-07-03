@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Glittering, spherical eyes stand out from the matte black of the kiramon stalker's carapace, which is so dark that it seems to drink the surrounding light.  The stalker is a creature seemingly tailored for speed and stealth.  Roughly shaped like a mantis, it balances on stick-like legs with powerful hindquarters, and it looks ever ready to spring.  Wings like gossamer shadows enfold the stalker's thorax like a dusky cloak.</pre>"
+      "Glittering, spherical eyes stand out from the matte black of the kiramon stalker's carapace, which is so dark that it seems to drink the surrounding light. The stalker is a creature seemingly tailored for speed and stealth. Roughly shaped like a mantis, it balances on stick-like legs with powerful hindquarters, and it looks ever ready to spring. Wings like gossamer shadows enfold the stalker's thorax like a dusky cloak."
     ],
     arrival: [],
     flee: [],

@@ -94,7 +94,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lesser shade bears the outline of a man and looks solid, but you can see faint images of the background through it.</pre>"
+      "The lesser shade bears the outline of a man and looks solid, but you can see faint images of the background through it."
     ],
     arrival: [],
     flee: [],

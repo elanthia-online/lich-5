@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The little grub is a small yellowish white creature little more than six inches long.  It is covered in a sickly green slime that leaves a trail behind it.</pre>"
+      "The little grub is a small yellowish white creature little more than six inches long. It is covered in a sickly green slime that leaves a trail behind it."
     ],
     arrival: [],
     flee: [],

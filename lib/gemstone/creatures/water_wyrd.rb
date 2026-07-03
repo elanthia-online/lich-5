@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The water wyrd's upper body is that of a humanoid, while its lower body forms a turbulent, watery vortex.  The facial features of the elemental creature are vague and shifting, rippling with every contortion of its face.  Sloshing and splashing noises accompany each movement of the water wyrd, along with an odd gurgling.</pre>"
+      "The water wyrd's upper body is that of a humanoid, while its lower body forms a turbulent, watery vortex. The facial features of the elemental creature are vague and shifting, rippling with every contortion of its face. Sloshing and splashing noises accompany each movement of the water wyrd, along with an odd gurgling."
     ],
     arrival: [],
     flee: [],

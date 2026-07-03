@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "Not dead so long that its body has begun to lose the unwinnable war against decay, a shambling lurk is firmly in the grip of rigor mortis.  Its face is paralyzed in a slack-jawed smile that reveals broken teeth and a dry and swollen tongue.  From the viridian firelight dancing in its eyes, it is clear that it is beyond the services of a cleric, except perhaps to grant the blessing of a swift release."
+      "Not dead so long that its body has begun to lose the unwinnable war against decay, a shambling lurk is firmly in the grip of rigor mortis. Its face is paralyzed in a slack-jawed smile that reveals broken teeth and a dry and swollen tongue. From the viridian firelight dancing in its eyes, it is clear that it is beyond the services of a cleric, except perhaps to grant the blessing of a swift release."
     ],
     arrival: [],
     flee: [],

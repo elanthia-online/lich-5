@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "One of the largest of the bears, the grizzly bear weighs around 860 pounds and has about ten feet of total body length.  This bear is dark brown in color.  The tips of her guard hairs are white, giving the bear a grizzled appearance.  The grizzly bear has a characteristic muscle hump over the shoulders, and longer claws on her front paws than on her rear paws."
+      "One of the largest of the bears, the grizzly bear weighs around 860 pounds and has about ten feet of total body length. This bear is dark brown in color. The tips of her guard hairs are white, giving the bear a grizzled appearance. The grizzly bear has a characteristic muscle hump over the shoulders, and longer claws on her front paws than on her rear paws."
     ],
     arrival: [],
     flee: [],

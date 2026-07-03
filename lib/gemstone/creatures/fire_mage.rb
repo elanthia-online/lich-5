@@ -113,7 +113,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fire mage isn't tall, standing no more than five feet, but her harrowing image is more than intimidating.  Blackened skin of her face is framed with a wild mane of silvery hair, which lifts in the smoke and flames rising from the mage's robes like writhing serpents.  Twin pits of fire glare out of the apparition's eye sockets, constantly sweeping her surroundings with maleficent intent.</pre>"
+      "The fire mage isn't tall, standing no more than five feet, but her harrowing image is more than intimidating. Blackened skin of her face is framed with a wild mane of silvery hair, which lifts in the smoke and flames rising from the mage's robes like writhing serpents. Twin pits of fire glare out of the apparition's eye sockets, constantly sweeping her surroundings with maleficent intent."
     ],
     arrival: [],
     flee: [],

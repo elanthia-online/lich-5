@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The giant ant looks like a giant armored version of a common ordinary ant.  Its faceted eyes stare out into air with constant disinterest.</pre>"
+      "The giant ant looks like a giant armored version of a common ordinary ant. Its faceted eyes stare out into air with constant disinterest."
     ],
     arrival: [],
     flee: [],

@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This servant of the huntress is both guardian and warrior for its mistress.  Its brown coloring and smaller size makes it seem less dangerous than other, larger spiders.  However, the fine brown hair on its body is probably used to seek out hidden spies, and its spinnaret to immobilize them.</pre>"
+      "This servant of the huntress is both guardian and warrior for its mistress. Its brown coloring and smaller size makes it seem less dangerous than other, larger spiders. However, the fine brown hair on its body is probably used to seek out hidden spies, and its spinnaret to immobilize them."
     ],
     arrival: [],
     flee: [],

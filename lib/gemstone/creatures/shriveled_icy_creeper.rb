@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=35%}}>Looking nearly to expire, this creeper definitely falls into the unhealthy category but don't let looks fool you.  If you or a friend falls into it, it is likely that you or they will fall into an unhealthy ... or dead category too!</pre>"
+      "Looking nearly to expire, this creeper definitely falls into the unhealthy category but don't let looks fool you. If you or a friend falls into it, it is likely that you or they will fall into an unhealthy ... or dead category too!"
     ],
     arrival: [],
     flee: [],

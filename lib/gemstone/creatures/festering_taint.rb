@@ -124,7 +124,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The festering taint is a putrescent collection of rotting flesh and disease.  The gender of the taint is impossible to make out due to the scabs and boils which cover its skin, oozing out disgustingly.  Black and yellow rotting teeth are displayed in a mouth that is unnaturally wide underneath two black eyes that stare out with a frightening spark of intelligence.  No nose or ears are visible on the festering taint, but it has a mop of greasy, filthy black hair that sprouts from the top of its head.</pre>"
+      "The festering taint is a putrescent collection of rotting flesh and disease. The gender of the taint is impossible to make out due to the scabs and boils which cover its skin, oozing out disgustingly. Black and yellow rotting teeth are displayed in a mouth that is unnaturally wide underneath two black eyes that stare out with a frightening spark of intelligence. No nose or ears are visible on the festering taint, but it has a mop of greasy, filthy black hair that sprouts from the top of its head."
     ],
     arrival: [],
     flee: [],

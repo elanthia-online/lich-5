@@ -95,7 +95,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The shaman has a surprisingly intelligent look for a hobgoblin shaman, though he is no less primitive and vicious than his tribesmen.  His voice seems to be constantly uttering the harsh, guttural prayers that appease his barbaric deity.  The fervor in the shaman's heart is clear from the frenzied gleam in his eyes.</pre>"
+      "The shaman has a surprisingly intelligent look for a hobgoblin shaman, though he is no less primitive and vicious than his tribesmen. His voice seems to be constantly uttering the harsh, guttural prayers that appease his barbaric deity. The fervor in the shaman's heart is clear from the frenzied gleam in his eyes."
     ],
     arrival: [],
     flee: [],

@@ -73,11 +73,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence dust]]"
+    other: "Glimmering blue essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>At one time the rotting farmhand would have chosen to be left alone. Now she seeks the company of the living, if only for the short time it takes for her to kill them. Her clothes hang in tatters, waving gently in the breeze as she stumbles about on decaying legs, her putrid flesh barely adhering to her bones. In life the rotting farmhand raised fields of living things. Now her mission seems to be one of filling fields with dead things.</pre>"
+      "At one time the rotting farmhand would have chosen to be left alone. Now she seeks the company of the living, if only for the short time it takes for her to kill them. Her clothes hang in tatters, waving gently in the breeze as she stumbles about on decaying legs, her putrid flesh barely adhering to her bones. In life the rotting farmhand raised fields of living things. Now her mission seems to be one of filling fields with dead things."
     ],
     arrival: [],
     flee: [],

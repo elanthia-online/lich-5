@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThe direbear is a huge powerful beast with baleful red eyes that seem to bore through to the very soul. Impressively large bone deposits protrude across the breadth of the beast's back and neck. Large teeth that seem too big even for the massive maw can easily be seen even when the powerful jaws are closed. Mist, or perhaps tendrils of smoke, occasionally drift up from the flaring nostrils. Sharp eyes, a sense of smell to match, and a cunning said to rival demons make a direbear something to be avoid.\n</pre>\n{{TOC limit}}"
+      "The direbear is a huge powerful beast with baleful red eyes that seem to bore through to the very soul. Impressively large bone deposits protrude across the breadth of the beast's back and neck. Large teeth that seem too big even for the massive maw can easily be seen even when the powerful jaws are closed. Mist, or perhaps tendrils of smoke, occasionally drift up from the flaring nostrils. Sharp eyes, a sense of smell to match, and a cunning said to rival demons make a direbear something to be avoid."
     ],
     arrival: [],
     flee: [],

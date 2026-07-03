@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The forest ogre is similar to its troll cousins, being very large, very strong, and very stupid.  However, two differences are immediately noticeable.  The forest ogre moves nearly silently, not in the heavy, lumbering gait of its cousins, and it does not smell nearly as bad, perhaps due to its constant contact with the pine sap and needles of the forest conifers.  It is still just as dangerous.</pre>"
+      "The forest ogre is similar to its troll cousins, being very large, very strong, and very stupid. However, two differences are immediately noticeable. The forest ogre moves nearly silently, not in the heavy, lumbering gait of its cousins, and it does not smell nearly as bad, perhaps due to its constant contact with the pine sap and needles of the forest conifers. It is still just as dangerous."
     ],
     arrival: [],
     flee: [],

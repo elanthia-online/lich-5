@@ -102,11 +102,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Arachne priest's lithe body is covered by heavy silk robes that also cowl most of the facial features.  A single visible image of a black spider over a crimson background is clearly emblazoned upon the backside.  Draped in their macabre attire, the Arachne priest goes about its zealous duties in worship of Arachne.  Upon close inspection, one can make out partial shapes of sigils formed by welts and mutilations on the hands and face.</pre>"
+      "The Arachne priest's lithe body is covered by heavy silk robes that also cowl most of the facial features. A single visible image of a black spider over a crimson background is clearly emblazoned upon the backside. Draped in their macabre attire, the Arachne priest goes about its zealous duties in worship of Arachne. Upon close inspection, one can make out partial shapes of sigils formed by welts and mutilations on the hands and face."
     ],
     arrival: [],
     flee: [],

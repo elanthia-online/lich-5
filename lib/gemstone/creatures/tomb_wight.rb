@@ -80,7 +80,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A tomb wight is a mass of blackened muscle in humanoid form.  Striding boldly upright and with a determined gaze, a tomb wight marches through the world of the dead, seeking the bodies of the recently deceased.  Though, in fact, dead itself, its putrid breath reveals its consumption of a steady diet of decayed flesh.  If none can be found, a tomb wight is more than happy to cause the living to become the recently deceased.</pre>"
+      "A tomb wight is a mass of blackened muscle in humanoid form. Striding boldly upright and with a determined gaze, a tomb wight marches through the world of the dead, seeking the bodies of the recently deceased. Though, in fact, dead itself, its putrid breath reveals its consumption of a steady diet of decayed flesh. If none can be found, a tomb wight is more than happy to cause the living to become the recently deceased."
     ],
     arrival: [],
     flee: [],

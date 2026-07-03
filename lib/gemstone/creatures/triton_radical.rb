@@ -124,7 +124,7 @@
   },
   messaging: {
     description: [
-      "Glaring angrily and gnashing his sharp yellowed teeth, the triton radical stalks along muttering to himself as if involved in angry debate with a phantasmal antagonist.  Pale, red-rimmed eyes sit deep in a heavy-boned skull, which perches upon a long, slender neck.  The radical's body pitches forward alarmingly, so only the weight of his tail prevents a return to a four-legged posture.  Upon his tapered brow is set a golden crown bearing a large, wave-etched crystal drop."
+      "Glaring angrily and gnashing his sharp yellowed teeth, the triton radical stalks along muttering to himself as if involved in angry debate with a phantasmal antagonist. Pale, red-rimmed eyes sit deep in a heavy-boned skull, which perches upon a long, slender neck. The radical's body pitches forward alarmingly, so only the weight of his tail prevents a return to a four-legged posture. Upon his tapered brow is set a golden crown bearing a large, wave-etched crystal drop."
     ],
     arrival: [],
     flee: [],

@@ -107,11 +107,11 @@
     gems: true,
     boxes: nil,
     skin: "a kiramon tongue",
-    other: "[[glowing mineral water]]"
+    other: "glowing mineral water"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The kiramon defender has a mobile head with huge, bulging, eyes that sparkle in a faceted clustering around a lidless perimeter.  Protruding from his massive head is a vicious-looking snout with insectile mandibles, while the back of his cranium is a distended, two-lobed case.  Remarkably powerful rear legs jut backward from an extremely hard, resilient exoskeleton that seems to be in constant motion.  Though his middle legs have evolved away long ago, his front legs end in strong opposing claws and knobby-jointed fingers.  Stunted wings flap uselessly from his long cylindrical body.</pre>"
+      "The kiramon defender has a mobile head with huge, bulging, eyes that sparkle in a faceted clustering around a lidless perimeter. Protruding from his massive head is a vicious-looking snout with insectile mandibles, while the back of his cranium is a distended, two-lobed case. Remarkably powerful rear legs jut backward from an extremely hard, resilient exoskeleton that seems to be in constant motion. Though his middle legs have evolved away long ago, his front legs end in strong opposing claws and knobby-jointed fingers. Stunted wings flap uselessly from his long cylindrical body."
     ],
     arrival: [],
     flee: [],

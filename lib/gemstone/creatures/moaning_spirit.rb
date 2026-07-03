@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "Intense hatred for those living drives the moaning spirit to traverse the bounds of space to attack its enemies.  Crying out in constant pain, it marshals magic, claw and fist against its foes, destroying relentlessly to sate the desires of the forces that bind it, then returning whence it came to await the intrusion of another living creature.  Its semi-transparent countenance is passably humanoid, save for the eagle-like claws replacing what would normally be the human's feet."
+      "Intense hatred for those living drives the moaning spirit to traverse the bounds of space to attack its enemies. Crying out in constant pain, it marshals magic, claw and fist against its foes, destroying relentlessly to sate the desires of the forces that bind it, then returning whence it came to await the intrusion of another living creature. Its semi-transparent countenance is passably humanoid, save for the eagle-like claws replacing what would normally be the human's feet."
     ],
     arrival: [],
     flee: [],

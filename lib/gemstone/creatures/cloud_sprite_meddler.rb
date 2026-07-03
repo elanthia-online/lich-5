@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Diminutive in size and with long, spindly limbs, a cloud sprite meddler has enormous almond-shaped eyes that peer curiously out of a heart-shaped face.  Tresses of chestnut brown hair fall in a wild mane to just beneath her shoulders, complementing her nut brown skin.</pre>"
+      "Diminutive in size and with long, spindly limbs, a cloud sprite meddler has enormous almond-shaped eyes that peer curiously out of a heart-shaped face. Tresses of chestnut brown hair fall in a wild mane to just beneath her shoulders, complementing her nut brown skin."
     ],
     arrival: [],
     flee: [],

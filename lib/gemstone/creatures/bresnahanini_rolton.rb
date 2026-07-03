@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Nearly four feet at the shoulder, and graced with a pair of large, curled horns, the Bresnahanini rolton is a larger and meaner version of his standard cousin.  Sometimes called the curly-horned rolton, this species is reputed to have even killed a lord or two.</pre>"
+      "Nearly four feet at the shoulder, and graced with a pair of large, curled horns, the Bresnahanini rolton is a larger and meaner version of his standard cousin. Sometimes called the curly-horned rolton, this species is reputed to have even killed a lord or two."
     ],
     arrival: [],
     flee: [],

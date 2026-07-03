@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A rock troll zombie is a towering sight to behold.  Standing well over the height of two giantkin combined, the troll zombie is clad in rock armor, composed entirely of granite.  Golden embers burn with a hatred of life out from under the zombie's massive granite helm.</pre>"
+      "A rock troll zombie is a towering sight to behold. Standing well over the height of two giantkin combined, the troll zombie is clad in rock armor, composed entirely of granite. Golden embers burn with a hatred of life out from under the zombie's massive granite helm."
     ],
     arrival: [],
     flee: [],

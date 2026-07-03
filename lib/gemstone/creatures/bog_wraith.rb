@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2}}|margin-right=26em>A haze of cloaked blackness and violet vapors, the bog wraith floats in the air just above the ground.  Its violet eyes illuminate between a soft glow and an angry blazoned appearance.  A pair of clawed hands extend from the middle of its being, abnormally tiny in comparison to the rest of its body.</pre>"
+      "A haze of cloaked blackness and violet vapors, the bog wraith floats in the air just above the ground. Its violet eyes illuminate between a soft glow and an angry blazoned appearance. A pair of clawed hands extend from the middle of its being, abnormally tiny in comparison to the rest of its body."
     ],
     arrival: [],
     flee: [],

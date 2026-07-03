@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "The ice golem is a mammoth construct of freezing cold ice and snow.  Towering over twenty feet in height, this ice golem surely weighs several tons.  The ice golem's rime-covered face displays its sharp, angular features, over which whisps from its frosty brow droop."
+      "The ice golem is a mammoth construct of freezing cold ice and snow. Towering over twenty feet in height, this ice golem surely weighs several tons. The ice golem's rime-covered face displays its sharp, angular features, over which whisps from its frosty brow droop."
     ],
     arrival: [],
     flee: [],

@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Once beautiful beyond comprehension, the moor wight before you is now as disgusting as it was once charming.  The wight has a slender, decaying body hidden by tattered and fading robes.  Plainly written across the moor wight's face is an expression of eternal anguish and pain, silently speaking of the horrofic events which unfolded during its life to bring it to this sad state.</pre>"
+      "Once beautiful beyond comprehension, the moor wight before you is now as disgusting as it was once charming. The wight has a slender, decaying body hidden by tattered and fading robes. Plainly written across the moor wight's face is an expression of eternal anguish and pain, silently speaking of the horrofic events which unfolded during its life to bring it to this sad state."
     ],
     arrival: [],
     flee: [],

@@ -68,11 +68,11 @@
     gems: true,
     boxes: nil,
     skin: "a silvery tail",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "As magnificent as any living horse, this shadow steed stares beyond you with glowing red eyes.  Its matte black coat provides a sharp contrast to its shining silvery tail and mane.  The shadow steed paws the ground restlessly with its front hooves as it swishes its tail, flickering into and out of the shadows."
+      "As magnificent as any living horse, this shadow steed stares beyond you with glowing red eyes. Its matte black coat provides a sharp contrast to its shining silvery tail and mane. The shadow steed paws the ground restlessly with its front hooves as it swishes its tail, flickering into and out of the shadows."
     ],
     arrival: [],
     flee: [],

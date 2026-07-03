@@ -96,11 +96,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence dust]],"
+    other: "Glowing violet essence dust,"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Her emaciated form roughly humanoid, the baesrukha glides along the ground, clawing at the air with bloodied talons.  Her burning red eyes stare malevolently at any intruder, gazing out from a nearly featureless face above a fanged, lipless mouth.  Whitish tendrils of ectoplasm coil and whip around her tattered robes, writhing in the miasma that surrounds the ancient wraithlike creature like hungry snakes.</pre>"
+      "Her emaciated form roughly humanoid, the baesrukha glides along the ground, clawing at the air with bloodied talons. Her burning red eyes stare malevolently at any intruder, gazing out from a nearly featureless face above a fanged, lipless mouth. Whitish tendrils of ectoplasm coil and whip around her tattered robes, writhing in the miasma that surrounds the ancient wraithlike creature like hungry snakes."
     ],
     arrival: [],
     flee: [],

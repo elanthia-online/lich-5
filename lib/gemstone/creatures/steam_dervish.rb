@@ -83,11 +83,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Essence of water]]"
+    other: "Essence of water"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This wiry humanoid resembles a gaunt human with badly blistered and burnt skin.  In the place of eyes, two steaming holes glower with malevolent intent.  A persistent cloud of steam emanates from the steam dervish, extending an aura of oppressive humidity around her.</pre>"
+      "This wiry humanoid resembles a gaunt human with badly blistered and burnt skin. In the place of eyes, two steaming holes glower with malevolent intent. A persistent cloud of steam emanates from the steam dervish, extending an aura of oppressive humidity around her."
     ],
     arrival: [],
     flee: [],

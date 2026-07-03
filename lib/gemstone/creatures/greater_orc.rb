@@ -101,7 +101,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Taller than a human and of substantially heavier build, the greater orc is a solid mass of bone and gristle.  Red-rimmed eyes glare angrily out from under a thick bony forehead.  Irregular clumps of rank hair cover its body and head.  Its arms resemble thick and twisted tree trunks, ending in ragged claws crusted with dried gore.</pre>"
+      "Taller than a human and of substantially heavier build, the greater orc is a solid mass of bone and gristle. Red-rimmed eyes glare angrily out from under a thick bony forehead. Irregular clumps of rank hair cover its body and head. Its arms resemble thick and twisted tree trunks, ending in ragged claws crusted with dried gore."
     ],
     arrival: [],
     flee: [],

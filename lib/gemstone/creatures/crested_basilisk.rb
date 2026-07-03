@@ -94,7 +94,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The crested basilisk is the size of a large dog, but its vicious-looking talons and sharp, hooked beak are fearsome weapons indeed.  Looking like a cross between a huge fighting rooster and a serpentine lizard, the crested basilisk gazes around with its hypnotic, paralyzing eyes as its scaled reptilian tail whips back and forth.  A bright red crest, more reminiscent of a lizard than of a chicken, adorns its feathered head and neck.</pre>"
+      "The crested basilisk is the size of a large dog, but its vicious-looking talons and sharp, hooked beak are fearsome weapons indeed. Looking like a cross between a huge fighting rooster and a serpentine lizard, the crested basilisk gazes around with its hypnotic, paralyzing eyes as its scaled reptilian tail whips back and forth. A bright red crest, more reminiscent of a lizard than of a chicken, adorns its feathered head and neck."
     ],
     arrival: [],
     flee: [],

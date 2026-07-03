@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Easily twice as large as the largest giantman, this brutish creature glares with coal black eyes.  The lava troll has reddened, blistered skin and soot-black hair.  Steam pours from her ears when she bares her blackened fangs.</pre>"
+      "Easily twice as large as the largest giantman, this brutish creature glares with coal black eyes. The lava troll has reddened, blistered skin and soot-black hair. Steam pours from her ears when she bares her blackened fangs."
     ],
     arrival: [],
     flee: [],

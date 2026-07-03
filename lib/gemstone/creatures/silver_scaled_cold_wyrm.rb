@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Resplendent scales of royal blue brighter than cut gemstones form nigh-impregnable armor over the cold wyrm's sinuous form, sheened with iridescent silver that leavens the intensity of their hue.  For all her preternatural beauty, there is a cruel cast to the wyrm's visage.  Her snout is tapered and full of serrated teeth, and her predatory amber eyes have slitted pupils.  A frill of spines frames the wyrm's head, bright with bands of silver that glint threateningly in the ambient light.  Two vast wings branch from the wyrm's shoulders, membranous and paler than the rest of her body, immensely sized to hold the wyrm aloft when riding on currents of air.</pre>\n{{TOC limit|2}}"
+      "Resplendent scales of royal blue brighter than cut gemstones form nigh-impregnable armor over the cold wyrm's sinuous form, sheened with iridescent silver that leavens the intensity of their hue. For all her preternatural beauty, there is a cruel cast to the wyrm's visage. Her snout is tapered and full of serrated teeth, and her predatory amber eyes have slitted pupils. A frill of spines frames the wyrm's head, bright with bands of silver that glint threateningly in the ambient light. Two vast wings branch from the wyrm's shoulders, membranous and paler than the rest of her body, immensely sized to hold the wyrm aloft when riding on currents of air."
     ],
     arrival: [],
     flee: [],

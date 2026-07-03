@@ -78,11 +78,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet mote of essence]]"
+    other: "Glowing violet mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Cloaked in a thick shroud of mist that perpetually follows it, the bog wight moves with a quick grace.  Two burning red orbs stare out from its gaunt, emaciated face, devoid of any compassion or mercy.  A fanged, lipless mouth accompanies its haunting eyes, the maggot-white skin of its face pulled so taught over its skull that it gives the impression of a bestial grin.  Wisps of the miasma that enshrouds its nearly skeletal form whipback and forth as it glides about, writhing against its tattered robes.</pre>"
+      "Cloaked in a thick shroud of mist that perpetually follows it, the bog wight moves with a quick grace. Two burning red orbs stare out from its gaunt, emaciated face, devoid of any compassion or mercy. A fanged, lipless mouth accompanies its haunting eyes, the maggot-white skin of its face pulled so taught over its skull that it gives the impression of a bestial grin. Wisps of the miasma that enshrouds its nearly skeletal form whipback and forth as it glides about, writhing against its tattered robes."
     ],
     arrival: [],
     flee: [],

@@ -96,11 +96,11 @@
     gems: true,
     boxes: true,
     skin: "a minotaur hoof",
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The minotaur magus is an ugly, brutish looking beast.  Taller than most average men, the minotaur has a bull-like appearance while his muscular body is humanoid with thick arms and broad shoulders.  The minotaur magi feet end in hooves that rattle the ground with every step.  Despite his barbaric features, a great intelligence is reflected in the depths of his eyes and mannerisms.</pre>"
+      "The minotaur magus is an ugly, brutish looking beast. Taller than most average men, the minotaur has a bull-like appearance while his muscular body is humanoid with thick arms and broad shoulders. The minotaur magi feet end in hooves that rattle the ground with every step. Despite his barbaric features, a great intelligence is reflected in the depths of his eyes and mannerisms."
     ],
     arrival: [],
     flee: [],

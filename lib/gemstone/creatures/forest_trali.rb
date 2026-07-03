@@ -77,11 +77,11 @@
     gems: true,
     boxes: true,
     skin: "a trali hide",
-    other: "[[Glowing violet essence shard]]"
+    other: "Glowing violet essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing nearly six feet tall, the man-like forest trali watches adventurers' every move with piercing grey eyes.  A short matted, reddish grey mane covers her head and her skin has a greenish grey hue.  There is little doubt that the stealthy forest trali can be a formidable opponent when need arises, or when she is hard pressed.</pre>"
+      "Standing nearly six feet tall, the man-like forest trali watches adventurers' every move with piercing grey eyes. A short matted, reddish grey mane covers her head and her skin has a greenish grey hue. There is little doubt that the stealthy forest trali can be a formidable opponent when need arises, or when she is hard pressed."
     ],
     arrival: [],
     flee: [],

@@ -108,7 +108,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Smoldering black eyes and a sharp golden beak display the fury of the firebird.  A golden crest of feathers adorn the head of this large but nimble avian that continues down its long craning neck, transitioning to orange around its sleek body, then deep red along its narrow legs that end in wickedly sharp black talons.  Flames dance from the firebird's wide arcing wings that leave a trail with its long tail feathers in its wake.</pre>"
+      "Smoldering black eyes and a sharp golden beak display the fury of the firebird. A golden crest of feathers adorn the head of this large but nimble avian that continues down its long craning neck, transitioning to orange around its sleek body, then deep red along its narrow legs that end in wickedly sharp black talons. Flames dance from the firebird's wide arcing wings that leave a trail with its long tail feathers in its wake."
     ],
     arrival: [],
     flee: [],

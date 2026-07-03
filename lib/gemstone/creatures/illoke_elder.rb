@@ -104,7 +104,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThe enormous form of the Illoke elder occupies a large section of the area, over twenty feet at his full height.  He carries himself with an air of confident superiority, casting a hate-filled gaze around him.  Thick and rough grey skin covers him from head to toe, providing protection against all but the strongest of blows.  A deep crimson symbol of Illoke is chiseled into his forehead, bathing his face in a lurid illumination.\n</pre>"
+      "The enormous form of the Illoke elder occupies a large section of the area, over twenty feet at his full height. He carries himself with an air of confident superiority, casting a hate-filled gaze around him. Thick and rough grey skin covers him from head to toe, providing protection against all but the strongest of blows. A deep crimson symbol of Illoke is chiseled into his forehead, bathing his face in a lurid illumination."
     ],
     arrival: [],
     flee: [],

@@ -99,7 +99,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Composed entirely of elemental flame, the majestic blazing red phoenix resembles a deadly bird of prey, with a short hooked beak, a compact muscular frame, wide wingspan, and sharp talons.  Its unearthly form is a constant wreathing of elemental fire that is at once blinding as it is scalding.</pre>"
+      "Composed entirely of elemental flame, the majestic blazing red phoenix resembles a deadly bird of prey, with a short hooked beak, a compact muscular frame, wide wingspan, and sharp talons. Its unearthly form is a constant wreathing of elemental fire that is at once blinding as it is scalding."
     ],
     arrival: [],
     flee: [],

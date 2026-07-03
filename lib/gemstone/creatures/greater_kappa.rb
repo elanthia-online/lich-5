@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The greater kappa moves slowly on land, its bulk more suited to shallow bays and underwater cities.  It stands on short, fleshy legs and observes the world through lidless, bulbous eyes.  Totally black from head to webbed foot, the greater kappa easily blends in with the dark sands of its hunting area and is nearly impossible to see once underwater. The flesh of the greater kappa is very oily and, though a good source of lamp fuel, is not good to eat.</pre>"
+      "The greater kappa moves slowly on land, its bulk more suited to shallow bays and underwater cities. It stands on short, fleshy legs and observes the world through lidless, bulbous eyes. Totally black from head to webbed foot, the greater kappa easily blends in with the dark sands of its hunting area and is nearly impossible to see once underwater. The flesh of the greater kappa is very oily and, though a good source of lamp fuel, is not good to eat."
     ],
     arrival: [],
     flee: [],

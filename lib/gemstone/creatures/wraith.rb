@@ -80,7 +80,7 @@
   },
   messaging: {
     description: [
-      "A creature of darkness, the wraith shies away from the light, preferring to ambush and rend its prey in the safety of the deep shadows.  Its crimson eyes glare hatefully at the world around it, while its tortured grimace displays sharp, gleaming fangs.  Proficient with weaponry, a disarmed wraith is still a formidable foe, as its long, sharp talons indicate."
+      "A creature of darkness, the wraith shies away from the light, preferring to ambush and rend its prey in the safety of the deep shadows. Its crimson eyes glare hatefully at the world around it, while its tortured grimace displays sharp, gleaming fangs. Proficient with weaponry, a disarmed wraith is still a formidable foe, as its long, sharp talons indicate."
     ],
     arrival: [],
     flee: [],

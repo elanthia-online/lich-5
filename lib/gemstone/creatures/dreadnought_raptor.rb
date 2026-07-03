@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The dreadnought raptor is a large, distinctly marked bird, with a wingspan twice the height of a giantman.  Glossy black feathers and white markings on its broad wings and rounded tail give the raptor an ominous appearance, and feathers cover its legs to its feet.  A dark ruff borders the dreadnought raptor's bald red head and neck.  Its hooked bill and powerful talons are well suited for hunting.</pre>"
+      "The dreadnought raptor is a large, distinctly marked bird, with a wingspan twice the height of a giantman. Glossy black feathers and white markings on its broad wings and rounded tail give the raptor an ominous appearance, and feathers cover its legs to its feet. A dark ruff borders the dreadnought raptor's bald red head and neck. Its hooked bill and powerful talons are well suited for hunting."
     ],
     arrival: [],
     flee: [],

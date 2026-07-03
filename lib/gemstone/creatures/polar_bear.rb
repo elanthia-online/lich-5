@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "The polar bear is the largest of all bears, weighing in at close to 2000 pounds with an overall body length of around nine feet long.  The bear has a distinctive all white coat, triangular profile, long neck, and small ears.  The polar bear's nose, lips and all skin under his fur are black.  This bear's front paws are very wide for paddling through arctic waters.  Heavy fur, dense underfur, and thick layer of insulating fat allow the bear to maintain a normal body temperature when the outside temperature drops far below freezing."
+      "The polar bear is the largest of all bears, weighing in at close to 2000 pounds with an overall body length of around nine feet long. The bear has a distinctive all white coat, triangular profile, long neck, and small ears. The polar bear's nose, lips and all skin under his fur are black. This bear's front paws are very wide for paddling through arctic waters. Heavy fur, dense underfur, and thick layer of insulating fat allow the bear to maintain a normal body temperature when the outside temperature drops far below freezing."
     ],
     arrival: [],
     flee: [],

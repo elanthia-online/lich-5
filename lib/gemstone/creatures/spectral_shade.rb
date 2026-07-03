@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "The spectral shade is a mere shadow of a creature most of the time, yet it can resolve itself into immediate solidity when on the attack.  Possessed of both potent physical and magical attacks, the spectral shade calls upon its many offensive capabilities to strike the living whenever possible.  The spectral shade is best hunted in the daytime, as it blends easily into the darkness of night."
+      "The spectral shade is a mere shadow of a creature most of the time, yet it can resolve itself into immediate solidity when on the attack. Possessed of both potent physical and magical attacks, the spectral shade calls upon its many offensive capabilities to strike the living whenever possible. The spectral shade is best hunted in the daytime, as it blends easily into the darkness of night."
     ],
     arrival: [],
     flee: [],

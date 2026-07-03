@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The snow spectre floats easily over the ground, seeming to move through solid obstacles with little effort. Its appearance alternates between a flickering, semi-transparent apparition and a near-blinding, white, icy solidity. Its face is permanently twisted into a tortured, leering grin and its eyes stare far ahead, as if transfixed on something horrible in the distance.</pre>"
+      "The snow spectre floats easily over the ground, seeming to move through solid obstacles with little effort. Its appearance alternates between a flickering, semi-transparent apparition and a near-blinding, white, icy solidity. Its face is permanently twisted into a tortured, leering grin and its eyes stare far ahead, as if transfixed on something horrible in the distance."
     ],
     arrival: [],
     flee: [],

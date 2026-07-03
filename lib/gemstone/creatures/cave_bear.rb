@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The cave bear is one of the smaller breeds of bear, her dark coloration enabling her to conceal herself well in the shadows of cave depths.  She is also one of the fiercest bears, readily defending her chosen territory against all comers.  The cave bear has especially large paws, well-padded to handle the sharp outcroppings and stalagmites of the cave surfaces, but with extremely sharp claws honed on the rough surfaces.  Keen eyesight in low light conditions gives the cave bear an advantage over her intended prey in the caves.</pre>"
+      "The cave bear is one of the smaller breeds of bear, her dark coloration enabling her to conceal herself well in the shadows of cave depths. She is also one of the fiercest bears, readily defending her chosen territory against all comers. The cave bear has especially large paws, well-padded to handle the sharp outcroppings and stalagmites of the cave surfaces, but with extremely sharp claws honed on the rough surfaces. Keen eyesight in low light conditions gives the cave bear an advantage over her intended prey in the caves."
     ],
     arrival: [],
     flee: [],

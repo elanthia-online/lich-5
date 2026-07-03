@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Towering high above you, the fire giant stands taller than four of the tallest giantman.  Plumes of steam pour from her smoldering black skin and her flaming hair burns bright red.  Eyes ablaze with fiery red hatred under its heavy brow, she looks at you as a human may look at an gnat.</pre>"
+      "Towering high above you, the fire giant stands taller than four of the tallest giantman. Plumes of steam pour from her smoldering black skin and her flaming hair burns bright red. Eyes ablaze with fiery red hatred under its heavy brow, she looks at you as a human may look at an gnat."
     ],
     arrival: [],
     flee: [],

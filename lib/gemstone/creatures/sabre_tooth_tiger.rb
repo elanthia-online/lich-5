@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "The huge sabre-tooth tiger is obviously a formidable predator, measuring more than 15 feet from the nose to the tip of her tail.  Flexing massive shoulders above powerful forelegs, the tiger growls and snarls, exposing the elongated canines that give her her name.  The tiger's magnificent striped pelt gradates from a soft tan undertone along the spine to a powder white on belly and legs."
+      "The huge sabre-tooth tiger is obviously a formidable predator, measuring more than 15 feet from the nose to the tip of her tail. Flexing massive shoulders above powerful forelegs, the tiger growls and snarls, exposing the elongated canines that give her her name. The tiger's magnificent striped pelt gradates from a soft tan undertone along the spine to a powder white on belly and legs."
     ],
     arrival: [],
     flee: [],

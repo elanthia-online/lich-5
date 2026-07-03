@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With a body about the size of a human hand, and a wingspan approaching a foot, the mud wasp is a rather intimidating sight.  It is a superb example of camouflage, with a brown body covered in splatters of mud, and eyes the color of muddy water.  The wings are the only exception to the brown color scheme, being transparent with a faint touch of blue.</pre>"
+      "With a body about the size of a human hand, and a wingspan approaching a foot, the mud wasp is a rather intimidating sight. It is a superb example of camouflage, with a brown body covered in splatters of mud, and eyes the color of muddy water. The wings are the only exception to the brown color scheme, being transparent with a faint touch of blue."
     ],
     arrival: [],
     flee: [],

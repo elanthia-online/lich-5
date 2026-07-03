@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A fiercely sculptured reptilian head curves sinuously into a rigid glaes body.  A mixture of ophidian grace and rock hard volcanic glass with the impassive frigidity of both, the soul golem radiates power and malice.  Standing about eight feet tall and four feet wide at the shoulder, its massive frame dominates the area.  Within the chest of the golem, a pure white mist is frozen solid in the glass, pulsing with a sickly glow.  As a contrast to the frozen horror of its chest, its soulstone eyes flare with a brilliant viridian light.</pre>"
+      "A fiercely sculptured reptilian head curves sinuously into a rigid glaes body. A mixture of ophidian grace and rock hard volcanic glass with the impassive frigidity of both, the soul golem radiates power and malice. Standing about eight feet tall and four feet wide at the shoulder, its massive frame dominates the area. Within the chest of the golem, a pure white mist is frozen solid in the glass, pulsing with a sickly glow. As a contrast to the frozen horror of its chest, its soulstone eyes flare with a brilliant viridian light."
     ],
     arrival: [],
     flee: [],

@@ -75,11 +75,11 @@
     gems: true,
     boxes: true,
     skin: "a chipped troll tusk",
-    other: "[[Small troll tooth]]"
+    other: "Small troll tooth"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The mongrel troll is a repulsive combination of troll and some other lesser creature, if there could be a creature considered lower on the scale of life than a troll.  Loathesome and hideous, the mongrel troll would tower above you if its bent, crooked spine didn't force it to hunch over.  Mottled grey and brown skin so lumpy and loose, that it doesn't so much cover the troll, but sags loosely over from the troll's frame.  Tufts of thick black hair sprout over the skin like a series of ill placed shrubs.  A hideously toothy grin spreads across the troll's face displaying misshapen fangs crusted with dried blood.  No spark of intellect fires in its narrow piggish eyes.</pre>"
+      "The mongrel troll is a repulsive combination of troll and some other lesser creature, if there could be a creature considered lower on the scale of life than a troll. Loathesome and hideous, the mongrel troll would tower above you if its bent, crooked spine didn't force it to hunch over. Mottled grey and brown skin so lumpy and loose, that it doesn't so much cover the troll, but sags loosely over from the troll's frame. Tufts of thick black hair sprout over the skin like a series of ill placed shrubs. A hideously toothy grin spreads across the troll's face displaying misshapen fangs crusted with dried blood. No spark of intellect fires in its narrow piggish eyes."
     ],
     arrival: [],
     flee: [],

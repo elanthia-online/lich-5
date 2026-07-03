@@ -110,7 +110,7 @@
   },
   messaging: {
     description: [
-      "Small and rather unimposing, the swamp hag is a dangerous, magical foe.  Her stringy, oiled-flat hair glistens as her eerie, coal-black eyes dart about her surroundings always searching for victims.  Bright red sparks scatter from her fingertips whenever she clenches her clawed hands.  Dark grey skin and thin emaciated arms and legs provide stark contrast to the hag's distended, bulbous stomach."
+      "Small and rather unimposing, the swamp hag is a dangerous, magical foe. Her stringy, oiled-flat hair glistens as her eerie, coal-black eyes dart about her surroundings always searching for victims. Bright red sparks scatter from her fingertips whenever she clenches her clawed hands. Dark grey skin and thin emaciated arms and legs provide stark contrast to the hag's distended, bulbous stomach."
     ],
     arrival: [],
     flee: [],

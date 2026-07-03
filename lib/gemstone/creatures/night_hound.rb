@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>You have never seen anything quite like a night hound, so you are not really sure what to make of it or how dangerous it might be.</pre>"
+      "You have never seen anything quite like a night hound, so you are not really sure what to make of it or how dangerous it might be."
     ],
     arrival: [],
     flee: [],

@@ -67,7 +67,7 @@
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
-      "Immune to [[Unbalance (110)]]"
+      "Immune to Unbalance (110)"
     ]
   },
   special_other: nil,
@@ -80,11 +80,11 @@
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "[[Essence of fire]], [[Crystal core]]"
+    other: "Essence of fire, Crystal core"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lava golem is a mammoth construct of molten red hot rock and white hot eyes.  Towering over twelve feet in height, it surely weighs several tons.</pre>"
+      "The lava golem is a mammoth construct of molten red hot rock and white hot eyes. Towering over twelve feet in height, it surely weighs several tons."
     ],
     arrival: [],
     flee: [],

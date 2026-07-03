@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Normally rodents don't grow this big, but these must have been eating something special.  The giant marmot is as long as a human is tall.  Thick-bodied, with coarse, brown fur and a stubby tail, the giant marmot still moves with amazing speed, zipping around obstacles and through doorways in search of its next meal.  Fresh blood and pieces of flesh surrounding its mouth indicate that it's been using its long incisors to gnaw on something that probably didn't wish to be gnawed on.</pre>"
+      "Normally rodents don't grow this big, but these must have been eating something special. The giant marmot is as long as a human is tall. Thick-bodied, with coarse, brown fur and a stubby tail, the giant marmot still moves with amazing speed, zipping around obstacles and through doorways in search of its next meal. Fresh blood and pieces of flesh surrounding its mouth indicate that it's been using its long incisors to gnaw on something that probably didn't wish to be gnawed on."
     ],
     arrival: [],
     flee: [],

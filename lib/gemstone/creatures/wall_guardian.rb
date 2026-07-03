@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The wall guardian is a bit taller than a halfling, but not by much.  Filthy, stinky and smelly, she looks as if she hasn't bathed in years.  A faint smirk is etched on the face of the guardian.</pre>"
+      "The wall guardian is a bit taller than a halfling, but not by much. Filthy, stinky and smelly, she looks as if she hasn't bathed in years. A faint smirk is etched on the face of the guardian."
     ],
     arrival: [],
     flee: [],

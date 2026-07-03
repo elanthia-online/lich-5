@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      ";Description\n<pre{{log2|margin-right=26em}}>Flashes of brilliant azure flicker and fade within the lightning fiend's mesmerizing shape, an amorphous form woven from threads of wildly dancing electricity.  At times, the elemental takes the shape of a vaguely humanoid figure, its translucent helm graced by two wildly twisting horns.  Arcing arteries of lightning leap from the heart of the fiend to shimmer up nearby surfaces.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>\nThe lightning fiend is medium in size and about six feet high in its current state.</pre>"
+      ";Description\nFlashes of brilliant azure flicker and fade within the lightning fiend's mesmerizing shape, an amorphous form woven from threads of wildly dancing electricity. At times, the elemental takes the shape of a vaguely humanoid figure, its translucent helm graced by two wildly twisting horns. Arcing arteries of lightning leap from the heart of the fiend to shimmer up nearby surfaces.\n\n;Assess\n\nThe lightning fiend is medium in size and about six feet high in its current state."
     ],
     arrival: [],
     flee: [],

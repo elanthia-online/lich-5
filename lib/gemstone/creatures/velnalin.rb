@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Graceful as an antelope, this member of the deer family stands proud and fierce before you.  The velnalin is covered with thick mottled brown and white fur, and from his head, long, straight horns the length of a good sword taper to points that glimmer like hard, polished bone.  The beast moves like quicksilver as he brings his formidable weapons to bear.</pre>"
+      "Graceful as an antelope, this member of the deer family stands proud and fierce before you. The velnalin is covered with thick mottled brown and white fur, and from his head, long, straight horns the length of a good sword taper to points that glimmer like hard, polished bone. The beast moves like quicksilver as he brings his formidable weapons to bear."
     ],
     arrival: [],
     flee: [],

@@ -83,11 +83,11 @@
     gems: true,
     boxes: true,
     skin: "a tundra giant tooth",
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing twice as tall as as the tallest giantman, the ice giant trails frost and snow in its wake.  Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the ice giant's dull white frost-covered skin.</pre>"
+      "Standing twice as tall as as the tallest giantman, the ice giant trails frost and snow in its wake. Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the ice giant's dull white frost-covered skin."
     ],
     arrival: [],
     flee: [],

@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "The dobrem is a dog of medium size, with a body that is square, compactly built, muscular and powerful.  The fierce animal is elegant in appearance, of proud carriage, reflecting great nobility.  Almost three feet tall at the shoulders, the dobrem is covered by short black fur with sharply defined rust coloured markings appearing about each eye and on muzzle, throat and forechest, on all legs and feet and below the tail."
+      "The dobrem is a dog of medium size, with a body that is square, compactly built, muscular and powerful. The fierce animal is elegant in appearance, of proud carriage, reflecting great nobility. Almost three feet tall at the shoulders, the dobrem is covered by short black fur with sharply defined rust coloured markings appearing about each eye and on muzzle, throat and forechest, on all legs and feet and below the tail."
     ],
     arrival: [],
     flee: [],

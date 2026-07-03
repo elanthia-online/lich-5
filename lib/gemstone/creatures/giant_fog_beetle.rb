@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The giant fog beetle appears to be some sort of giant insect.  It looks a little like some misshapen scorpion, but the tail on it is not as long as a scorpion's would be, and it flares like the tail of a lobster rather than ending in a poison sting.  The segmented body is wide, supported by six short multi-jointed legs.  A dull red chitinous shell covers most of its body, and a broad carapace protects its head.  Two massive claws provide the creature with formidable weapons.</pre>"
+      "The giant fog beetle appears to be some sort of giant insect. It looks a little like some misshapen scorpion, but the tail on it is not as long as a scorpion's would be, and it flares like the tail of a lobster rather than ending in a poison sting. The segmented body is wide, supported by six short multi-jointed legs. A dull red chitinous shell covers most of its body, and a broad carapace protects its head. Two massive claws provide the creature with formidable weapons."
     ],
     arrival: [],
     flee: [],

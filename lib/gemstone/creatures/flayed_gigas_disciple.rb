@@ -84,7 +84,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A flayed gigas disciple is a hugely imposing figure.  His monumental physique is all the more evident because his skin has been torn away, revealing wet and weeping tendons and raw muscle beneath.  With no lips to conceal his teeth, the disciple appears to be ever grinning, but above his ruined nose are scarlet eyes ablaze with hateful zeal.  A flayed gigas disciple wears a hooded shroud, ragged and threadbare, that is stained through with his own blood.</pre>"
+      "A flayed gigas disciple is a hugely imposing figure. His monumental physique is all the more evident because his skin has been torn away, revealing wet and weeping tendons and raw muscle beneath. With no lips to conceal his teeth, the disciple appears to be ever grinning, but above his ruined nose are scarlet eyes ablaze with hateful zeal. A flayed gigas disciple wears a hooded shroud, ragged and threadbare, that is stained through with his own blood."
     ],
     arrival: [],
     flee: [],

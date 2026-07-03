@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The smaller cousin to the normal lifeleeching wraith, the mist wraith is the spirit of a soldier vanquished in a great battle.  The spirits trap the mist of the local area and use it to give them a semi-physical form with which to exact vengeance.  This results in their powerful claws and arms with which to rip the living apart.</pre>"
+      "The smaller cousin to the normal lifeleeching wraith, the mist wraith is the spirit of a soldier vanquished in a great battle. The spirits trap the mist of the local area and use it to give them a semi-physical form with which to exact vengeance. This results in their powerful claws and arms with which to rip the living apart."
     ],
     arrival: [],
     flee: [],

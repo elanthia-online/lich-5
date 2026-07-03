@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Agresh bear is all muscle and bone and presents a formidable appearance when standing on his hindlegs.  He is a tawny gold in color allowing him to blend more easily into his surroundings or at least as much as a 600 pound bear can.  The deadly claws that tip each front paw completes the total package of death known as the Agresh bear.</pre>"
+      "The Agresh bear is all muscle and bone and presents a formidable appearance when standing on his hindlegs. He is a tawny gold in color allowing him to blend more easily into his surroundings or at least as much as a 600 pound bear can. The deadly claws that tip each front paw completes the total package of death known as the Agresh bear."
     ],
     arrival: [],
     flee: [],

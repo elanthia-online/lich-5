@@ -99,11 +99,11 @@
     gems: true,
     boxes: true,
     skin: "a vor'taz horn, a shiny vor'taz horn",
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>His fanged mouth frothing and snapping at the air, the horned vor'taz glares about with hate-filled eyes.  Greater than the size of a human, the frame of the vor'taz is covered in dull grey flesh which is spotted with wart-like bumps.  Affixed to his heavily muscled neck, the bony skull of the vor'taz supports a cruel horn which slashes back and forth in a menacing fashion.</pre>"
+      "His fanged mouth frothing and snapping at the air, the horned vor'taz glares about with hate-filled eyes. Greater than the size of a human, the frame of the vor'taz is covered in dull grey flesh which is spotted with wart-like bumps. Affixed to his heavily muscled neck, the bony skull of the vor'taz supports a cruel horn which slashes back and forth in a menacing fashion."
     ],
     arrival: [],
     flee: [],

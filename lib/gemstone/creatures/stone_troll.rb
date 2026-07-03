@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nTowering above you, the stone troll is an ugly, brutish looking creature.  Its marbled grey skin is covered with pocks and divots.  This lumpy grotesque troll grins maniacally at you, sending cracks and fissures across its face."
+      "Towering above you, the stone troll is an ugly, brutish looking creature. Its marbled grey skin is covered with pocks and divots. This lumpy grotesque troll grins maniacally at you, sending cracks and fissures across its face."
     ],
     arrival: [],
     flee: [],

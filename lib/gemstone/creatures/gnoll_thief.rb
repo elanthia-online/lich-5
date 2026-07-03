@@ -39,7 +39,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Thrown weapons|Hurl]]"
+        name: "Hurl"
       }
     ],
     special_notes: []
@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Light fingered and agile, the gnoll thief is easily at home in both the dark stone corridors of his lair and anywhere that loot may be gained.  Wiry and lithe, with pale skin and large, colorless eyes, the thief stands around three feet tall as it regards you uneasily.</pre>"
+      "Light fingered and agile, the gnoll thief is easily at home in both the dark stone corridors of his lair and anywhere that loot may be gained. Wiry and lithe, with pale skin and large, colorless eyes, the thief stands around three feet tall as it regards you uneasily."
     ],
     arrival: [],
     flee: [],

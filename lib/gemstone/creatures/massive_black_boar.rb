@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The black boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth.  His body is covered with coarse, black hair, and dull grey tusks protrude from each side of his gaping mouth.  A good ten feet long from dripping snout to curly tail and weighing more than a ton, the black boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey.  The murderous glint in the boar's eyes betrays an intelligence much greater than his mundane kin.</pre>"
+      "The black boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth. His body is covered with coarse, black hair, and dull grey tusks protrude from each side of his gaping mouth. A good ten feet long from dripping snout to curly tail and weighing more than a ton, the black boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey. The murderous glint in the boar's eyes betrays an intelligence much greater than his mundane kin."
     ],
     arrival: [],
     flee: [],

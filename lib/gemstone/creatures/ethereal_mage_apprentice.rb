@@ -68,11 +68,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence dust]]"
+    other: "Glowing violet essence dust"
   },
   messaging: {
     description: [
-      "Twisted and warped in the service of the Council of Twelve, the apprentice floats several inches over the floor, hunched over, gazing at his surroundings with abnormally large yellow-hued eyes framed by translucent, rotting and pestilent skin.  Draped over his broken form are the remnants of a once simple, but finely crafted robe.  Cinching the robe at the waist is a thick black belt, adorned with numerous leather pouches once used to hold the supplies desired by his arcane master."
+      "Twisted and warped in the service of the Council of Twelve, the apprentice floats several inches over the floor, hunched over, gazing at his surroundings with abnormally large yellow-hued eyes framed by translucent, rotting and pestilent skin. Draped over his broken form are the remnants of a once simple, but finely crafted robe. Cinching the robe at the waist is a thick black belt, adorned with numerous leather pouches once used to hold the supplies desired by his arcane master."
     ],
     arrival: [],
     flee: [],

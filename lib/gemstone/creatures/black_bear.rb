@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The black bear is a medium sized bear with a body about six feet long and appears to weigh around 440 pounds.  Mostly blackish in color, asone would expect from a black bear, its muzzle is somewhat lighter and a distinct V-shaped patch of cream colored fur can be found on the chest.  Also of note are the ears which appear much larger than those of other bears.</pre>"
+      "The black bear is a medium sized bear with a body about six feet long and appears to weigh around 440 pounds. Mostly blackish in color, asone would expect from a black bear, its muzzle is somewhat lighter and a distinct V-shaped patch of cream colored fur can be found on the chest. Also of note are the ears which appear much larger than those of other bears."
     ],
     arrival: [],
     flee: [],

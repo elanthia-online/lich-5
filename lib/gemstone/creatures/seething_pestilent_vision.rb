@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Writhing green smoke comprises the form of a seething pestilent vision.  It has only the suggestion of a humanoid form, and a buzzing like that of countless swarming flies fills the air around it.  Where eyes ought to be, it has only a pair of luminous orbs that pulse between phosphorescent white and toxic green.</pre>"
+      "Writhing green smoke comprises the form of a seething pestilent vision. It has only the suggestion of a humanoid form, and a buzzing like that of countless swarming flies fills the air around it. Where eyes ought to be, it has only a pair of luminous orbs that pulse between phosphorescent white and toxic green."
     ],
     arrival: [],
     flee: [],

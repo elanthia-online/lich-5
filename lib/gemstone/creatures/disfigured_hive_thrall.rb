@@ -61,7 +61,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Spirit Strike]]"
+        name: "Spirit Strike"
       },
       {
         name: "Project Misery"
@@ -113,7 +113,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The thrall looks to have once been humanoid, but her form has been mutilated into a tortured, stooped shape with a mismatch of clashing parts.  One eye is huge and insectoid, but the other remains painfully close to mammalian, its pupil bleeding into the bright green iris.  Her jaw hangs slack, forced open at all times by a set of bristled mandibles that seem to have a mind of their own as they twitch and clench.  Tumorous growths stud the thrall's spine, unsavory green where they are not blotchy violet-red with pustules.  One has burst to reveal a single rudimentary wing that resembles a fly's.</pre>"
+      "The thrall looks to have once been humanoid, but her form has been mutilated into a tortured, stooped shape with a mismatch of clashing parts. One eye is huge and insectoid, but the other remains painfully close to mammalian, its pupil bleeding into the bright green iris. Her jaw hangs slack, forced open at all times by a set of bristled mandibles that seem to have a mind of their own as they twitch and clench. Tumorous growths stud the thrall's spine, unsavory green where they are not blotchy violet-red with pustules. One has burst to reveal a single rudimentary wing that resembles a fly's."
     ],
     arrival: [],
     flee: [],

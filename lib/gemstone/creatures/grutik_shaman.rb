@@ -107,7 +107,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This misshapen humanoid has large luminous eyes from many years of living underground.  It's dressed in scraps of mismatched cloth in an apparent attempt to make a crude patchwork robe.  While not overly muscled, its eyes shine with a crude intelligence.</pre>"
+      "This misshapen humanoid has large luminous eyes from many years of living underground. It's dressed in scraps of mismatched cloth in an apparent attempt to make a crude patchwork robe. While not overly muscled, its eyes shine with a crude intelligence."
     ],
     arrival: [],
     flee: [],

@@ -95,7 +95,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing approximately twelve feet tall, the treekin warrior towers menacingly before you.  Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree.  Leaves cover the warrior from head to trunk, with two arm-shaped branches protruding from the canopy.  Numerous gashes and chips indicate that this particular specimen has seen much combat in the past.</pre>"
+      "Standing approximately twelve feet tall, the treekin warrior towers menacingly before you. Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree. Leaves cover the warrior from head to trunk, with two arm-shaped branches protruding from the canopy. Numerous gashes and chips indicate that this particular specimen has seen much combat in the past."
     ],
     arrival: [],
     flee: [],

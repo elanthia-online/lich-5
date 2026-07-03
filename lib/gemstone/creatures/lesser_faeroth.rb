@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The lesser faeroth looks as though she is a near relative to a monkey. Standing on powerful forelimbs, her body is lifted entirely off the ground. Two atrophied legs with filthy claws dangle loosely below the body and look to be double-jointed.  A spark of malevolent intelligence burns in her eyes.</pre>"
+      "The lesser faeroth looks as though she is a near relative to a monkey. Standing on powerful forelimbs, her body is lifted entirely off the ground. Two atrophied legs with filthy claws dangle loosely below the body and look to be double-jointed. A spark of malevolent intelligence burns in her eyes."
     ],
     arrival: [],
     flee: [],

@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>The pyrothag is a huge creature, towering over the tallest of giantmen.  Scorched black by the heat of its environment, its thick skin protects it from blows and the hostile lava flows.  The most striking thing aside from its size, is the lack of facial features.  A smooth face matching its smooth black skin leaves one wondering how such a thing could have evolved.</pre>"
+      "The pyrothag is a huge creature, towering over the tallest of giantmen. Scorched black by the heat of its environment, its thick skin protects it from blows and the hostile lava flows. The most striking thing aside from its size, is the lack of facial features. A smooth face matching its smooth black skin leaves one wondering how such a thing could have evolved."
     ],
     arrival: [],
     flee: [],

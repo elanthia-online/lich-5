@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A swirling column of ice that is somehow animate faces you.  A biting cold mist flows around it to chill you and to sink a numbing dampness deep into your bones.  Moisture condenses from the very air onto the guardian and pale frost collects on its surface only to grow heavy and break free with a cold, brittle sound that echoes like faint mocking laughter.</pre>"
+      "A swirling column of ice that is somehow animate faces you. A biting cold mist flows around it to chill you and to sink a numbing dampness deep into your bones. Moisture condenses from the very air onto the guardian and pale frost collects on its surface only to grow heavy and break free with a cold, brittle sound that echoes like faint mocking laughter."
     ],
     arrival: [],
     flee: [],

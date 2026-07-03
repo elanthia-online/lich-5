@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=350px}}>Clad in broken chain armor, the soldier's pale white bones are exposed in certain points in which the armor has completely rusted away.  Dark leather gloves cover its bony hands.  A very small glimmer of life can be seen in the depths of the soldier's eye sockets.</pre>"
+      "Clad in broken chain armor, the soldier's pale white bones are exposed in certain points in which the armor has completely rusted away. Dark leather gloves cover its bony hands. A very small glimmer of life can be seen in the depths of the soldier's eye sockets."
     ],
     arrival: [],
     flee: [],

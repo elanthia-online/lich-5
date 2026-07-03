@@ -70,7 +70,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A maw spore is a spore of the Elanthian variety.</pre>"
+      "A maw spore is a spore of the Elanthian variety."
     ],
     arrival: [],
     flee: [],

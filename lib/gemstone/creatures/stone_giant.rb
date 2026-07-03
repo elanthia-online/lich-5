@@ -103,7 +103,7 @@
   },
   messaging: {
     description: [
-      "Looming high above you, taller than three of the tallest giantmen, this stone giant dominates the surrounding area.  The stone giant's skin is a smooth dull grey with mottled brown splotches and its eyes, concealed under a heavy brow, gleam black with hatred."
+      "Looming high above you, taller than three of the tallest giantmen, this stone giant dominates the surrounding area. The stone giant's skin is a smooth dull grey with mottled brown splotches and its eyes, concealed under a heavy brow, gleam black with hatred."
     ],
     arrival: [],
     flee: [],

@@ -50,7 +50,7 @@
         name: "Arm Entrapment/Bear Hug"
       },
       {
-        name: "[[Ground slap]]"
+        name: "Ground slap"
       }
     ],
     special_notes: []
@@ -88,11 +88,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "A towering mound of fur that belies her swift blinding speed, the krag yeti is at home either in the sub-zero wasteland or on rocky mountain tops.  The krag yeti's white fur allows an almost perfect blend with the natural surroundings, enabling the creature to move with uncommon stealth.  Legendary strength and fury make her a formidable opponent for any who would cross her."
+      "A towering mound of fur that belies her swift blinding speed, the krag yeti is at home either in the sub-zero wasteland or on rocky mountain tops. The krag yeti's white fur allows an almost perfect blend with the natural surroundings, enabling the creature to move with uncommon stealth. Legendary strength and fury make her a formidable opponent for any who would cross her."
     ],
     arrival: [],
     flee: [],

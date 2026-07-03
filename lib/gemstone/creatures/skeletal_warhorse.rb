@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A bulky skeleton belies the skeletal warhorse's speed and quick reflexes.  Even encased in heavy steel barding and lacking its muscular body, the warhorse charges, stomps and bites with the same ferocity it displayed in life.  Now, long decomposed, its hide has turned to a moldy gray and the once-proud mane hangs in tattered strands.</pre>"
+      "A bulky skeleton belies the skeletal warhorse's speed and quick reflexes. Even encased in heavy steel barding and lacking its muscular body, the warhorse charges, stomps and bites with the same ferocity it displayed in life. Now, long decomposed, its hide has turned to a moldy gray and the once-proud mane hangs in tattered strands."
     ],
     arrival: [],
     flee: [],

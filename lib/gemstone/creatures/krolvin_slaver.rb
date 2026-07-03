@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "Although taller than the average krolvin, the slaver retains the characteristic long-fingered hands.  His sturdy musculature is apparent beneath the grey-blue skin.  Thick, coarse, white hair covers his head and spreads across his shoulders and down his back."
+      "Although taller than the average krolvin, the slaver retains the characteristic long-fingered hands. His sturdy musculature is apparent beneath the grey-blue skin. Thick, coarse, white hair covers his head and spreads across his shoulders and down his back."
     ],
     arrival: [],
     flee: [],

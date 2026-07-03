@@ -41,7 +41,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Charge]]"
+        name: "Charge"
       }
     ],
     special_notes: []
@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Tall and broad of shoulder, the tapir is an enormous beast similar to a boar.  A short, thick coat of ebon fur spreads across her tightly muscled body, though the pelt fades to pale brown under the tapir's neck and stomach.  Tubular nasal cavities stand out from her snout, while a healthy row of chisel-shaped teeth line her narrow mouth.  Twin oval ears, each tipped with white, crown the tapir's head.  They are spaced a full hand's span apart over her dark brown eyes.  A short, stubby tail lays against her protruding rump, and the beast is supported by thick legs that end in splayed hooves.</pre>"
+      "Tall and broad of shoulder, the tapir is an enormous beast similar to a boar. A short, thick coat of ebon fur spreads across her tightly muscled body, though the pelt fades to pale brown under the tapir's neck and stomach. Tubular nasal cavities stand out from her snout, while a healthy row of chisel-shaped teeth line her narrow mouth. Twin oval ears, each tipped with white, crown the tapir's head. They are spaced a full hand's span apart over her dark brown eyes. A short, stubby tail lays against her protruding rump, and the beast is supported by thick legs that end in splayed hooves."
     ],
     arrival: [],
     flee: [],

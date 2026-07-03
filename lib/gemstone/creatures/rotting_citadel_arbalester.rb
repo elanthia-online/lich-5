@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "A rusted conical helmet, wrapped in a band of buff and blue, sits above the empty eye sockets of a skull draped in the rotting remains of a rotting Citadel arbalester's face.  Residual juices drip from the head of the arbalester and down a ragged surcoat of buff and blue cinched with a tattered leather belt buckled with a rusted shield stamped with a large letter \"E.\"  A quiver hangs from the belt, flush with feathered bolts and within easy reach of the arbalester's gloved hands."
+      "A rusted conical helmet, wrapped in a band of buff and blue, sits above the empty eye sockets of a skull draped in the rotting remains of a rotting Citadel arbalester's face. Residual juices drip from the head of the arbalester and down a ragged surcoat of buff and blue cinched with a tattered leather belt buckled with a rusted shield stamped with a large letter \"E.\" A quiver hangs from the belt, flush with feathered bolts and within easy reach of the arbalester's gloved hands."
     ],
     arrival: [],
     flee: [],

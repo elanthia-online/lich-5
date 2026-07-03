@@ -81,7 +81,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "Immune to [[Unbalance (110)]]"
+      "Immune to Unbalance (110)"
     ]
   },
   special_other: nil,
@@ -94,11 +94,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Essence of fire]]"
+    other: "Essence of fire"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Flame suddenly hisses and spits from thin air, which shimmers in the resulting smoke like reflective crystal.  Then abruptly, the air roils and begins to take on form.  In mere heartbeats, it becomes obvious that the transparent bubble of conflagration is a sentient being.  The greater skayl opens its gaping maw of fire and bellows a malign growl that is more felt than heard.  In the next instant, the greater skayl melts down then reforms a short distance away, leaving a drift of smoke in its wake like a fraying shadow.</pre>"
+      "Flame suddenly hisses and spits from thin air, which shimmers in the resulting smoke like reflective crystal. Then abruptly, the air roils and begins to take on form. In mere heartbeats, it becomes obvious that the transparent bubble of conflagration is a sentient being. The greater skayl opens its gaping maw of fire and bellows a malign growl that is more felt than heard. In the next instant, the greater skayl melts down then reforms a short distance away, leaving a drift of smoke in its wake like a fraying shadow."
     ],
     arrival: [],
     flee: [],

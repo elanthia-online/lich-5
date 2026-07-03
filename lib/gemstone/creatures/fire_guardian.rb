@@ -94,11 +94,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Essence of fire]]"
+    other: "Essence of fire"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A towering mass of flame and smoke formed into a caricature of a living being, the fire guardian is awesome to behold.  The fumes of endless burning and the fierce heat serve this foul thing as well as any armor made by mortal; and the power of its flame has fused even the finest vultite shields to the hands of their wearers and turned mighty swords into dripping stubs of molten alloy.</pre>"
+      "A towering mass of flame and smoke formed into a caricature of a living being, the fire guardian is awesome to behold. The fumes of endless burning and the fierce heat serve this foul thing as well as any armor made by mortal; and the power of its flame has fused even the finest vultite shields to the hands of their wearers and turned mighty swords into dripping stubs of molten alloy."
     ],
     arrival: [],
     flee: [],

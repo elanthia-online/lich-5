@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Nearly as big as a large boulder and as thick as the rock in one, the mountain ogre spends the majority of its time pounding around, killing, eating and sleeping, not necessarily in order of importance.  Its skin is a blotchy mix of light brown and slate grey, much of which is hidden by its long, matted dirt-brown hair.  A huge, protruding lower lip hides the pointed rending teeth of the mountain ogre, and its claws are kept nicely sharpened by constant dragging over the hard rock surfaces.</pre>"
+      "Nearly as big as a large boulder and as thick as the rock in one, the mountain ogre spends the majority of its time pounding around, killing, eating and sleeping, not necessarily in order of importance. Its skin is a blotchy mix of light brown and slate grey, much of which is hidden by its long, matted dirt-brown hair. A huge, protruding lower lip hides the pointed rending teeth of the mountain ogre, and its claws are kept nicely sharpened by constant dragging over the hard rock surfaces."
     ],
     arrival: [],
     flee: [],

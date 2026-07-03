@@ -90,11 +90,11 @@
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: "[[Radiant crimson essence shard]]<br>[[Tiny golden seed]]"
+    other: "Radiant crimson essence shardTiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Vvrael witch rises from the ground in a pillar of shadow, tall and slim, the outline of her perfect form frayed by a strange atmospheric disturbance.  Her face is a vision of beauty.  However, darkness fills her features like a secret biding in her glance, lending her visage an indistinct appearance.  Her eyes are dark and wide, framed with fringes of long lashes, and in the depths of those expressive wells there flickers highlights of energy.  Or perhaps they are coals of hatred waiting to be unearthed.  The witch's hands move constantly, her long fingers and elegant nails making constant motions as if they have manic agendas of their own.</pre>"
+      "The Vvrael witch rises from the ground in a pillar of shadow, tall and slim, the outline of her perfect form frayed by a strange atmospheric disturbance. Her face is a vision of beauty. However, darkness fills her features like a secret biding in her glance, lending her visage an indistinct appearance. Her eyes are dark and wide, framed with fringes of long lashes, and in the depths of those expressive wells there flickers highlights of energy. Or perhaps they are coals of hatred waiting to be unearthed. The witch's hands move constantly, her long fingers and elegant nails making constant motions as if they have manic agendas of their own."
     ],
     arrival: [],
     flee: [],

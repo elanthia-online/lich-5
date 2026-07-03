@@ -99,7 +99,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The great boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth.  His body is covered with coarse, mottled, grey-brown hair, and gleaming tusks protrude from each side of his gaping mouth.  A good six feet long from dripping snout to curly tail and weighing more than a quarter ton, the great boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey.  This is one mean brute.</pre>"
+      "The great boar snorts loudly and scrapes at the ground, peering around with his close-set, bloodshot eyes in hopes of finding something he can gore into a bloody pulp or pound into the earth. His body is covered with coarse, mottled, grey-brown hair, and gleaming tusks protrude from each side of his gaping mouth. A good six feet long from dripping snout to curly tail and weighing more than a quarter ton, the great boar moves with surprising speed and dexterity as he bears down, squealing furiously, on his intended prey. This is one mean brute."
     ],
     arrival: [],
     flee: [],

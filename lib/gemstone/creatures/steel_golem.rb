@@ -91,7 +91,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The squeal of rusty gears and the shriek of cracked pipes expelling steam is nearly deafening, but the sharp sound of a steel golem's claws rhythmically sharpening themselves against each other still grate distinctly throughout the area.  Thick plates of armor cover the golem, but nothing could hide the mass of mechanized motion underneath.  In a horrifying mimicry of life, a lining of sharp steel teeth are embedded within its large jaw, just underneath eye sockets that slowly expel a stream of black smoke.</pre>"
+      "The squeal of rusty gears and the shriek of cracked pipes expelling steam is nearly deafening, but the sharp sound of a steel golem's claws rhythmically sharpening themselves against each other still grate distinctly throughout the area. Thick plates of armor cover the golem, but nothing could hide the mass of mechanized motion underneath. In a horrifying mimicry of life, a lining of sharp steel teeth are embedded within its large jaw, just underneath eye sockets that slowly expel a stream of black smoke."
     ],
     arrival: [],
     flee: [],

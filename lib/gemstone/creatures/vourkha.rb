@@ -89,11 +89,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence dust]],"
+    other: "Glowing violet essence dust,"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Empty black soulless eyes gaze from the gaunt, grey form of the wraithlike vourkha.  His thin-lipped mouth gaped in a silent howl, he grasps at the fetid air with gnarled, clawed hands as he glides just above the ground, trailing tendrils of thick white ectoplasm that seem to seep from his shredded clothing.  The creature seems to fade in and out of corporeal existence as if he walked in an eternal patch of shadow.</pre>"
+      "Empty black soulless eyes gaze from the gaunt, grey form of the wraithlike vourkha. His thin-lipped mouth gaped in a silent howl, he grasps at the fetid air with gnarled, clawed hands as he glides just above the ground, trailing tendrils of thick white ectoplasm that seem to seep from his shredded clothing. The creature seems to fade in and out of corporeal existence as if he walked in an eternal patch of shadow."
     ],
     arrival: [],
     flee: [],

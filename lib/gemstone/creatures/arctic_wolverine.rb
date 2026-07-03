@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Similar to his cousin of the more temperate climates, the arctic wolverine is possessed with a ferocious nature far out of proportion to his size, making him an extremely vicious opponent.  Swift and agile, with claws and teeth backed by muscles like coiled springs, the arctic wolverine will take on and defeat foes three times his size.  His shaggy hide is a mixture of light brown and icy white, affording him good cover in the frosty fields, and his toes are webbed, providing a snowshoe effect for increased agility in the snow.</pre>"
+      "Similar to his cousin of the more temperate climates, the arctic wolverine is possessed with a ferocious nature far out of proportion to his size, making him an extremely vicious opponent. Swift and agile, with claws and teeth backed by muscles like coiled springs, the arctic wolverine will take on and defeat foes three times his size. His shaggy hide is a mixture of light brown and icy white, affording him good cover in the frosty fields, and his toes are webbed, providing a snowshoe effect for increased agility in the snow."
     ],
     arrival: [],
     flee: [],

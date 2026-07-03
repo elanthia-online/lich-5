@@ -76,7 +76,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>You are not quite sure what to make of the ogre sentry, as you have never seen anything that looks quite like it.  Stopping a moment, you try to commit this creature to memory so that you can tell tales of it to your fellow adventurers back in the safety of the local tavern.</pre>"
+      "You are not quite sure what to make of the ogre sentry, as you have never seen anything that looks quite like it. Stopping a moment, you try to commit this creature to memory so that you can tell tales of it to your fellow adventurers back in the safety of the local tavern."
     ],
     arrival: [],
     flee: [],

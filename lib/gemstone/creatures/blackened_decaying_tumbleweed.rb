@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      ";Description\n<pre{{log2|margin-right=26em}}>Not exactly the best representative of its Species, let alone its Genus, none-the-less, the inclusion of this particular tumbleweed would make a fine addition to anyone's tumbleweed collection.  Just for its uniqueness if nothing else.  Of course unlike most tumbleweed, this one might object to being collected, VIGOUROUSLY.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The decaying tumbleweed is medium in size and about three feet high in its current state.</pre>"
+      ";Description\nNot exactly the best representative of its Species, let alone its Genus, none-the-less, the inclusion of this particular tumbleweed would make a fine addition to anyone's tumbleweed collection. Just for its uniqueness if nothing else. Of course unlike most tumbleweed, this one might object to being collected, VIGOUROUSLY.\n\n;Assess\nThe decaying tumbleweed is medium in size and about three feet high in its current state."
     ],
     arrival: [],
     flee: [],

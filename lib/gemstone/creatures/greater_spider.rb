@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>With a spread of nearly eight feet from leg-tip to leg-tip, the greater spider needs fear little as she squats, silent and deadly in her massive web.  Shockingly fast for all her bulk, she responds instantly to any vibration along the thousand strands of the web she controls.  Her glossy black carapace glistens with the lustre of fine onyx and her multiple eyes stare out at the world with cunning and patience.</pre>"
+      "With a spread of nearly eight feet from leg-tip to leg-tip, the greater spider needs fear little as she squats, silent and deadly in her massive web. Shockingly fast for all her bulk, she responds instantly to any vibration along the thousand strands of the web she controls. Her glossy black carapace glistens with the lustre of fine onyx and her multiple eyes stare out at the world with cunning and patience."
     ],
     arrival: [],
     flee: [],

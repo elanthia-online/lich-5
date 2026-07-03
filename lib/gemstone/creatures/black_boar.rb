@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The black boar snorts and snuffles at the ground, peering around with his close-set, bloodshot eyes in hopes of finding a target for his anger and aggression.  Any who get in his way will most likely rapidly regret having done so.  His body is covered with coarse, black hair, and yellowed tusks protrude from each side of his gaping mouth.  Larger than most men, he is a good six feet long from dripping snout to curly tail and weighs more than a quarter ton.  When in motion, the black boar moves with a surprising speed and dexterity for a beast his size.  It is not unusual to find oneself snacked by this beast if not properly prepared.</pre>"
+      "The black boar snorts and snuffles at the ground, peering around with his close-set, bloodshot eyes in hopes of finding a target for his anger and aggression. Any who get in his way will most likely rapidly regret having done so. His body is covered with coarse, black hair, and yellowed tusks protrude from each side of his gaping mouth. Larger than most men, he is a good six feet long from dripping snout to curly tail and weighs more than a quarter ton. When in motion, the black boar moves with a surprising speed and dexterity for a beast his size. It is not unusual to find oneself snacked by this beast if not properly prepared."
     ],
     arrival: [],
     flee: [],

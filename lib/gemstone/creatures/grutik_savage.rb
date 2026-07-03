@@ -77,11 +77,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>This misshapen humanoid has large luminous eyes from many years of living underground.  It's dressed in scraps of leather armor and odd bits of mismatched clothing, apparently scavenged from various sources.  The flesh you can see underneath is mostly grey though well muscled.</pre>"
+      "This misshapen humanoid has large luminous eyes from many years of living underground. It's dressed in scraps of leather armor and odd bits of mismatched clothing, apparently scavenged from various sources. The flesh you can see underneath is mostly grey though well muscled."
     ],
     arrival: [],
     flee: [],

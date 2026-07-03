@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2}}>The swiftly writhing coils and flared, triangular head tells one all they need to know about the sidewinder: it is fast, and it is deadly.  Scales as white as ivory flakes proceed in a sinuous pattern down the sidewinder's back, the muscles beneath undulating from side to side to propel it forward.</pre>"
+      "The swiftly writhing coils and flared, triangular head tells one all they need to know about the sidewinder: it is fast, and it is deadly. Scales as white as ivory flakes proceed in a sinuous pattern down the sidewinder's back, the muscles beneath undulating from side to side to propel it forward."
     ],
     arrival: [],
     flee: [],

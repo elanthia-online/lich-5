@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Robed and hooded, the Tenthsworn occultist has fervent eyes the color of dried blood and the sort of pallor earned from days spent out of the sun.  His dark robes are stitched with serpentine patterns in crimson, a theme repeated in the symbol at his throat, which takes the form of a pair of intertwined asps.  The occultist's face is hollow and he looks as if he has not eaten in some time, though perhaps the zeal within him has burned all spare flesh away.<!-- Creature description text from in-game verb DESCRIBE goes here.--> </pre>\n\nAppraisal:\n<pre{{log2}}>The Tenthsworn occultist is small in size, about four feet high in his current state.</pre>"
+      "Robed and hooded, the Tenthsworn occultist has fervent eyes the color of dried blood and the sort of pallor earned from days spent out of the sun. His dark robes are stitched with serpentine patterns in crimson, a theme repeated in the symbol at his throat, which takes the form of a pair of intertwined asps. The occultist's face is hollow and he looks as if he has not eaten in some time, though perhaps the zeal within him has burned all spare flesh away. \n\nAppraisal:\nThe Tenthsworn occultist is small in size, about four feet high in his current state."
     ],
     arrival: [],
     flee: [],

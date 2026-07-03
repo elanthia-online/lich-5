@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing almost twelve feet tall, the yeti is a large humanoid creature covered in long, stringy black and red hair.  His domed pate is matted with twigs and dirt, and his heavy brow forms a shelf over his tiny black eyes.  With arms nearly long enough to brush the ground, the yeti has a ferociously strong grip and excellent leverage for the tossing of heavy objects.  Broad, flat feet provide stability and traction in the icy, mountainous environments that are his normal habitat.</pre>"
+      "Standing almost twelve feet tall, the yeti is a large humanoid creature covered in long, stringy black and red hair. His domed pate is matted with twigs and dirt, and his heavy brow forms a shelf over his tiny black eyes. With arms nearly long enough to brush the ground, the yeti has a ferociously strong grip and excellent leverage for the tossing of heavy objects. Broad, flat feet provide stability and traction in the icy, mountainous environments that are his normal habitat."
     ],
     arrival: [],
     flee: [],

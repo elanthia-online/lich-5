@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A skeletal tree-trunk with long straggling branches, the darkwoode holds the unliving force of a once sentient tree-spirit.  An unfelt breeze seems to stir the dead and decaying leaves that still cling to it, giving it a travesty of the beauty it once held as a living tree.  Given its original form long ago to protect sacred groves, it remains now, warped and twisted, yet still attempting to carry out the duties it failed in long ago.</pre>"
+      "A skeletal tree-trunk with long straggling branches, the darkwoode holds the unliving force of a once sentient tree-spirit. An unfelt breeze seems to stir the dead and decaying leaves that still cling to it, giving it a travesty of the beauty it once held as a living tree. Given its original form long ago to protect sacred groves, it remains now, warped and twisted, yet still attempting to carry out the duties it failed in long ago."
     ],
     arrival: [],
     flee: [],

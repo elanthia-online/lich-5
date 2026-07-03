@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Even while slightly hunched over, the plains ogre is taller than any giantman.  Long-limbed and lithe for rapid travel over the plains, his body is the antithesis of most of his cousins.  The one exception is in his massive hands that can easily crush anything unlucky enough to be in caught in their grasp.  The plains ogre's face is pinched in a permanent squint from countless hours out on the sun-baked plains.  When standing downwind of this creature, it is evident that he is in much need of a bath.</pre>"
+      "Even while slightly hunched over, the plains ogre is taller than any giantman. Long-limbed and lithe for rapid travel over the plains, his body is the antithesis of most of his cousins. The one exception is in his massive hands that can easily crush anything unlucky enough to be in caught in their grasp. The plains ogre's face is pinched in a permanent squint from countless hours out on the sun-baked plains. When standing downwind of this creature, it is evident that he is in much need of a bath."
     ],
     arrival: [],
     flee: [],

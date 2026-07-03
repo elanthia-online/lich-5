@@ -109,7 +109,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A trio of black tattooed stripes run from center of the Ithzir herald's forehead and over the crown of his bald, blue-skinned head.  The Ithzir herald is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue body is nonetheless alien in its appearance.  The herald wears a fine silvery-blue tunic crossed with a green tabard.</pre>"
+      "A trio of black tattooed stripes run from center of the Ithzir herald's forehead and over the crown of his bald, blue-skinned head. The Ithzir herald is slightly taller than a human, and while his humanoid form is similar to scores of other races, the hairless, blue body is nonetheless alien in its appearance. The herald wears a fine silvery-blue tunic crossed with a green tabard."
     ],
     arrival: [],
     flee: [],

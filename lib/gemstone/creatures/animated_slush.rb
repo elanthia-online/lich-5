@@ -97,7 +97,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>An animated slush could easily be mistaken for a huge pile of snow that has partially melted then refrozen.  It presents a squat, icy white cone ten feet wide at the base but only rising five feet high.  The edges are slightly transparent and tinged a light blue, while the interior is dark, with portions seeming more solid than others.  Rippling over the terrain, its exact motion indiscernible, the animated slush unerringly finds its prey, yet it displays no sensory glands of any type.</pre>"
+      "An animated slush could easily be mistaken for a huge pile of snow that has partially melted then refrozen. It presents a squat, icy white cone ten feet wide at the base but only rising five feet high. The edges are slightly transparent and tinged a light blue, while the interior is dark, with portions seeming more solid than others. Rippling over the terrain, its exact motion indiscernible, the animated slush unerringly finds its prey, yet it displays no sensory glands of any type."
     ],
     arrival: [],
     flee: [],

@@ -83,7 +83,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Huge, massive and dangerous, the Troll towers above even a tall Giantman. Grey skin so thick that it serves quite well as armor covers most of the monster with here and there tufts of thick hair sprouting like weeds between cracked paving stones. A hideous grin splits its face displaying for you fangs crusted with dried blood and less guessable matter. No light of intellect glows in its piggish, narrow eyes. Lust of slaughter and a thirst for blood and mortal flesh are all that animate this hulkish beast.</pre>"
+      "Huge, massive and dangerous, the Troll towers above even a tall Giantman. Grey skin so thick that it serves quite well as armor covers most of the monster with here and there tufts of thick hair sprouting like weeds between cracked paving stones. A hideous grin splits its face displaying for you fangs crusted with dried blood and less guessable matter. No light of intellect glows in its piggish, narrow eyes. Lust of slaughter and a thirst for blood and mortal flesh are all that animate this hulkish beast."
     ],
     arrival: [],
     flee: [],

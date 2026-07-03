@@ -128,7 +128,7 @@
     bone_shatter: "A stunted halfling bloodspeaker concentrates intently on you, and a pulse of pearlescent energy ripples toward you!",
     wither: "The force of a stunted halfling bloodspeaker's power warps the air as it surges toward you!",
 
-    general_advice: "* Warding casters will have more success against this creature with a high [[TD]] if they cast dispelling magic upon it first.\n* [[Standard_maneuver_roll|SMR]]-based attacks like [[Condemn (309)]], [[Earthen Fury (917)]], and [[Spike Thorn (616)]] frequently tear through bloodspeakers. [[Animal Companion (630)|Animal companions]] can also do significant damage.\n* [[Silenced|Silencing]] tactics like [[Cutthroat]] and [[Sucker Punch]], or the similar [[Corrupt Essence (703)]], will halt their threatening [[Wither (1115)]] spell. ([[Silence (210)]] itself is unlikely to hit barring an unusual build heavily focused on [[Major Spiritual]] ranks.)",
+    general_advice: "* Warding casters will have more success against this creature with a high TD if they cast dispelling magic upon it first.\n* SMR-based attacks like Condemn (309), Earthen Fury (917), and Spike Thorn (616) frequently tear through bloodspeakers. Animal companions can also do significant damage.\n* Silencing tactics like Cutthroat and Sucker Punch, or the similar Corrupt Essence (703), will halt their threatening Wither (1115) spell. (Silence (210) itself is unlikely to hit barring an unusual build heavily focused on Major Spiritual ranks.)",
   }
 }
 

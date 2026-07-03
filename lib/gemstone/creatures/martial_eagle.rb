@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Larger than a typical halfling, this powerfully built raptor has glossy brown feathers over its wings, which extend for at least four feet to either side of its stocky body.  Its head and upper chest are the same dark brown, making its golden eyes all the more dramatic.  Its underparts are pale, streaked with black, matching its flight feathers.  The majestic bird's powerful talons are well equipped to trap and maul prey.</pre>"
+      "Larger than a typical halfling, this powerfully built raptor has glossy brown feathers over its wings, which extend for at least four feet to either side of its stocky body. Its head and upper chest are the same dark brown, making its golden eyes all the more dramatic. Its underparts are pale, streaked with black, matching its flight feathers. The majestic bird's powerful talons are well equipped to trap and maul prey."
     ],
     arrival: [],
     flee: [],

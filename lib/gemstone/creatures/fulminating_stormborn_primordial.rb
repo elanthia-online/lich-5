@@ -109,7 +109,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The stormborn primordial takes the shape of a living tempest, its form a shifting torrent of roiling clouds and arcs of searing lightning.  Shrouded by the perpetual swirl of vertiginous mist, a roughly humanoid form hovers within the eye of the storm.  Seething fissures of electric blue energy streak across the nearly corporeal shape, which is mostly featureless save for malevolent eyes of white light blazing from the shadows of the primordial's face.\n</pre>"
+      "The stormborn primordial takes the shape of a living tempest, its form a shifting torrent of roiling clouds and arcs of searing lightning. Shrouded by the perpetual swirl of vertiginous mist, a roughly humanoid form hovers within the eye of the storm. Seething fissures of electric blue energy streak across the nearly corporeal shape, which is mostly featureless save for malevolent eyes of white light blazing from the shadows of the primordial's face."
     ],
     arrival: [],
     flee: [],

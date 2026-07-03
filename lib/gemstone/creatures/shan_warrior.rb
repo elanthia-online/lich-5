@@ -53,7 +53,7 @@
     special_notes: []
   },
   defense_attributes: {
-    asg: "<!-- Insert asg # and template will automatically convert to include type of armor -->see other info",
+    asg: "see other info",
     immunities: [],
     melee: 216,
     ranged: nil,
@@ -85,11 +85,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Tiny golden seed]]"
+    other: "Tiny golden seed"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The shan warrior stands in a half-crouch, her long, knotty legs giving her that lanky, dangerous look of a wolf.  Walking upright, the body covered with mottled grey fur and her long arms conclude in large, clawed hands with semi-opposable thumbs.  The shan warrior's dog-like visage is fierce, with slavering jaws and eyes that glow like something out of a bad dream.</pre>"
+      "The shan warrior stands in a half-crouch, her long, knotty legs giving her that lanky, dangerous look of a wolf. Walking upright, the body covered with mottled grey fur and her long arms conclude in large, clawed hands with semi-opposable thumbs. The shan warrior's dog-like visage is fierce, with slavering jaws and eyes that glow like something out of a bad dream."
     ],
     arrival: [],
     flee: [],

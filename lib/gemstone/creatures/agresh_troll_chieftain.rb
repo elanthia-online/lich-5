@@ -39,7 +39,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "+40 [[AS]] boost"
+        name: "+40 AS boost"
       }
     ],
     special_notes: []
@@ -79,11 +79,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]<br>[[Glimmering blue mote of essence]]"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The troll chieftain splatters its surroundings with flecks of spittle as it lifts its head and snarls.  Crudely drawn symbols painted with ash on its face do little to improve its gruesome visage as it scrunches its face into an expression of rage.  Tufts of golden hair on its otherwise barren body make it look that much more ugly.</pre>"
+      "The troll chieftain splatters its surroundings with flecks of spittle as it lifts its head and snarls. Crudely drawn symbols painted with ash on its face do little to improve its gruesome visage as it scrunches its face into an expression of rage. Tufts of golden hair on its otherwise barren body make it look that much more ugly."
     ],
     arrival: [],
     flee: [],

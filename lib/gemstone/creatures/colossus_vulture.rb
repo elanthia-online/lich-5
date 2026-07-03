@@ -93,7 +93,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The colossus vulture is a large, distinctly marked bird, with a wingspan twice the height of a giantman.  Glossy black feathers and white markings on its broad wings and rounded tail give the vulture an ominous appearance, and feathers cover its legs to its feet.  A dark ruff borders the colossus vulture's bald red head and neck.  Its hooked bill and powerful talons are well suited for hunting.</pre>"
+      "The colossus vulture is a large, distinctly marked bird, with a wingspan twice the height of a giantman. Glossy black feathers and white markings on its broad wings and rounded tail give the vulture an ominous appearance, and feathers cover its legs to its feet. A dark ruff borders the colossus vulture's bald red head and neck. Its hooked bill and powerful talons are well suited for hunting."
     ],
     arrival: [],
     flee: [],

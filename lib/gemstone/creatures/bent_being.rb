@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The bent being is a twisted amalgamation of flesh and other, less mentionable things.  Stark white hair grows in random patches from the being's sickly green skin, especially around its face.  The bent being has over-sized ears that look comical on an otherwise intimidating foe.  Thick legs sprout from the being's midsection like tree trunks, ending in gigantic feet that could fit in no boot made for civilized creatures.</pre>"
+      "The bent being is a twisted amalgamation of flesh and other, less mentionable things. Stark white hair grows in random patches from the being's sickly green skin, especially around its face. The bent being has over-sized ears that look comical on an otherwise intimidating foe. Thick legs sprout from the being's midsection like tree trunks, ending in gigantic feet that could fit in no boot made for civilized creatures."
     ],
     arrival: [],
     flee: [],

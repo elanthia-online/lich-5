@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "A towering, animated, glass-like creature, the huge mein golem is comprised entirely of mein.  Taller than a giantman by half again and nearly as wide as tall, the mein golem displays a barrel chest, massive legs and arms, and a flattened, cylindrical head with almost no neck apparent.  Animated by someone with a unique sense of humor, the huge mein golem contains many surprises for the unwary adventurer."
+      "A towering, animated, glass-like creature, the huge mein golem is comprised entirely of mein. Taller than a giantman by half again and nearly as wide as tall, the mein golem displays a barrel chest, massive legs and arms, and a flattened, cylindrical head with almost no neck apparent. Animated by someone with a unique sense of humor, the huge mein golem contains many surprises for the unwary adventurer."
     ],
     arrival: [],
     flee: [],

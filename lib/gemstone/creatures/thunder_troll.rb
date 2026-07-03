@@ -62,7 +62,7 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Gas cloud]]"
+        name: "Gas cloud"
       }
     ],
     special_notes: []
@@ -95,7 +95,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "Shake off [[Stun|stuns]]"
+      "Shake off stuns"
     ]
   },
   special_other: nil,
@@ -112,7 +112,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Tall but sleek, the size of the thunder troll belies its quickness.  The thunder troll moves about surrounded by a raging tempest.  An upturned lip, protruding jaw and sunken, orange eyes impart an air of arrogance to this foul, rubbery creature.  Given to sudden fits of uncontrollable rage, a thunder troll has been known to spring from the forest and tear a seasoned warrior in half before the warrior can even cry out, then, surprisingly, turn and dart away, distracted, leaving small children unharmed.</pre>"
+      "Tall but sleek, the size of the thunder troll belies its quickness. The thunder troll moves about surrounded by a raging tempest. An upturned lip, protruding jaw and sunken, orange eyes impart an air of arrogance to this foul, rubbery creature. Given to sudden fits of uncontrollable rage, a thunder troll has been known to spring from the forest and tear a seasoned warrior in half before the warrior can even cry out, then, surprisingly, turn and dart away, distracted, leaving small children unharmed."
     ],
     arrival: [],
     flee: [],

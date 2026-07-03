@@ -107,7 +107,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Standing more than twice as tall as the tallest giantman, the frost giant trails frost and snow in his wake.  Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the frost giant's dull white frost-covered skin.</pre>"
+      "Standing more than twice as tall as the tallest giantman, the frost giant trails frost and snow in his wake. Seemingly carved from living ice and snow, icy blue eyes set beneath a heavily furrowed brow and a tangled mop of icy blue hair provide a splash of color against the frost giant's dull white frost-covered skin."
     ],
     arrival: [],
     flee: [],

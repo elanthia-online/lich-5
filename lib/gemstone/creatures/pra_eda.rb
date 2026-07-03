@@ -82,11 +82,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The pra'eda before you stands on two legs, but the golden eyes that glare from either side of its fanged, canine snout and its coat of grizzled fur make it difficult to determine whether it is more human or wolf in nature.  A stench of blood and rotting flesh emanates from its fanged jaws, and its rough, tattered clothing is stained with dirt and gore.</pre>"
+      "The pra'eda before you stands on two legs, but the golden eyes that glare from either side of its fanged, canine snout and its coat of grizzled fur make it difficult to determine whether it is more human or wolf in nature. A stench of blood and rotting flesh emanates from its fanged jaws, and its rough, tattered clothing is stained with dirt and gore."
     ],
     arrival: [],
     flee: [],

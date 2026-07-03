@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Dotting the pale-skinned arachnid are numerous tiny luminescent diamond-shaped markings. The markings glow with a bluish-green tint.</pre>"
+      "Dotting the pale-skinned arachnid are numerous tiny luminescent diamond-shaped markings. The markings glow with a bluish-green tint."
     ],
     arrival: [],
     flee: [],

@@ -102,7 +102,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Arachne acolyte's head is clean shaven and bald.  Where hair once grew, ornate tattoos of deep red hue decorate every visible bare body part. The Arachne acolytes are muscular but lean.  Long years of study and training has produced fanatical allegiance to Arachne.  Any semblance of humanity has long since been exorcised through torture and meditation.  Only the zealous duty of Arachne now compels their existence.</pre>"
+      "The Arachne acolyte's head is clean shaven and bald. Where hair once grew, ornate tattoos of deep red hue decorate every visible bare body part. The Arachne acolytes are muscular but lean. Long years of study and training has produced fanatical allegiance to Arachne. Any semblance of humanity has long since been exorcised through torture and meditation. Only the zealous duty of Arachne now compels their existence."
     ],
     arrival: [],
     flee: [],

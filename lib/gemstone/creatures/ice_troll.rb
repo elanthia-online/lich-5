@@ -96,7 +96,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Glistening in the light, the troll's ice white skin is covered in slush and snow.  Seemingly carved from living ice, the ice troll is a stark, imposing creature.  Instead of hair, the ice troll has a field of icicles growing from its head and face.</pre>"
+      "Glistening in the light, the troll's ice white skin is covered in slush and snow. Seemingly carved from living ice, the ice troll is a stark, imposing creature. Instead of hair, the ice troll has a field of icicles growing from its head and face."
     ],
     arrival: [],
     flee: [],

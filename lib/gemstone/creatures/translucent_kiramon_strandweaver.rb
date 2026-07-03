@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Glistening as if moist, the carapace of the kiramon strandweaver is ghost-pale and translucent in places, revealing pulsating organs and fluid-filled sacs quivering beneath.  The strandweaver is around the size of a halfling, her undersized body supported by six segmented legs. Her abdomen tapers toward a pair of spinnerets aglisten with prismatic threads of spent webbing.</pre>"
+      "Glistening as if moist, the carapace of the kiramon strandweaver is ghost-pale and translucent in places, revealing pulsating organs and fluid-filled sacs quivering beneath. The strandweaver is around the size of a halfling, her undersized body supported by six segmented legs. Her abdomen tapers toward a pair of spinnerets aglisten with prismatic threads of spent webbing."
     ],
     arrival: [],
     flee: [],

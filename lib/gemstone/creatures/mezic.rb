@@ -102,11 +102,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence shard]]"
+    other: "Glimmering blue essence shard"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Hunched shoulders and a stooping posture, the mezic is humanoid in appearance, her clothes ill-fitting and made of simple cloth.  Dark, beady eyes stare at you from beneath a mass of tangled grey hair as the mezic shuffles her hunched form back and forth.  Its long, gnarled fingers contort in magical configurations as it glances maliciously about the area.</pre>"
+      "Hunched shoulders and a stooping posture, the mezic is humanoid in appearance, her clothes ill-fitting and made of simple cloth. Dark, beady eyes stare at you from beneath a mass of tangled grey hair as the mezic shuffles her hunched form back and forth. Its long, gnarled fingers contort in magical configurations as it glances maliciously about the area."
     ],
     arrival: [],
     flee: [],

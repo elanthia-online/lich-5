@@ -104,11 +104,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glowing violet essence shard]]<br>[[Pristine sprite's hair]]"
+    other: "Glowing violet essence shardPristine sprite's hair"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Appearing more like an animated stick figure than a fleshy humanoid, the slender brown form of the wood sprite stands just under three feet.  Her eyes, two sparkling almond-shapes in her wood-like visage, belie a fervent sort of insanity as a frantic, incomprehensible whispering issues from her small mouth.</pre>"
+      "Appearing more like an animated stick figure than a fleshy humanoid, the slender brown form of the wood sprite stands just under three feet. Her eyes, two sparkling almond-shapes in her wood-like visage, belie a fervent sort of insanity as a frantic, incomprehensible whispering issues from her small mouth."
     ],
     arrival: [],
     flee: [],

@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fire ant looks like a giant armored version of a common ordinary ant except for the faint wisps of smoke floating off its feelers.  Its faceted eyes stare back at you with apparent disinterest.</pre>"
+      "The fire ant looks like a giant armored version of a common ordinary ant except for the faint wisps of smoke floating off its feelers. Its faceted eyes stare back at you with apparent disinterest."
     ],
     arrival: [],
     flee: [],

@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The black forest viper is a shadowy charcoal grey, complemented by its paler grey underbelly.  Small horned protrusions rise above each of the viper's eyes, giving the creature a devilish appearance.  Much larger than a typical snake, the viper is nearly ten feet long, and it is quite capable of slaying foes as large as a human.  The snake's lazy movement belies its ability to strike rapidly when threatened.</pre>"
+      "The black forest viper is a shadowy charcoal grey, complemented by its paler grey underbelly. Small horned protrusions rise above each of the viper's eyes, giving the creature a devilish appearance. Much larger than a typical snake, the viper is nearly ten feet long, and it is quite capable of slaying foes as large as a human. The snake's lazy movement belies its ability to strike rapidly when threatened."
     ],
     arrival: [],
     flee: [],

@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The shelfae soldier is the vanguard of the shelfae reptilian forces.  Bipedal, it stands approximately five feet tall with orange-tinged scales and clawed hands and feet.  The shelfae soldier does not range very far from its commanding officer, and usually can be found guarding strategic points in the defensive system.  It views the world through cold reptilian eyes and shows little mercy when confronting an enemy to its lands.</pre>"
+      "The shelfae soldier is the vanguard of the shelfae reptilian forces. Bipedal, it stands approximately five feet tall with orange-tinged scales and clawed hands and feet. The shelfae soldier does not range very far from its commanding officer, and usually can be found guarding strategic points in the defensive system. It views the world through cold reptilian eyes and shows little mercy when confronting an enemy to its lands."
     ],
     arrival: [],
     flee: [],

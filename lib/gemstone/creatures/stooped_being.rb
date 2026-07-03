@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The stooped being is a twisted amalgamation of flesh and other, less mentionable things.  Skin that is sickly green gives way to an odd, jelly-like substance that covers most of the being's torso.  A few extra, stunted arms and short, deformed tentacles protrude from the shoulders and back of the stooped being.  The most terrifying part of this abomination's anatomy is the second head that sits in its chest, complete with a mouth, nose, and several dozen eyes.</pre>"
+      "The stooped being is a twisted amalgamation of flesh and other, less mentionable things. Skin that is sickly green gives way to an odd, jelly-like substance that covers most of the being's torso. A few extra, stunted arms and short, deformed tentacles protrude from the shoulders and back of the stooped being. The most terrifying part of this abomination's anatomy is the second head that sits in its chest, complete with a mouth, nose, and several dozen eyes."
     ],
     arrival: [],
     flee: [],

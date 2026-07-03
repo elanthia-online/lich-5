@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>A smaller relative of the basilisk, the plumed cockatrice has a snake-like body, plumes of feathers spearing up from its head, dapple grey wings, and short, stout legs.  Its cold, penetrating gaze is not nearly as deadly as that of its larger cousin but the plumed cockatrice should not be treated lightly.  Its vicious use of its sharp beak and raking claws make it a fierce opponent even in the best of situations.</pre>"
+      "A smaller relative of the basilisk, the plumed cockatrice has a snake-like body, plumes of feathers spearing up from its head, dapple grey wings, and short, stout legs. Its cold, penetrating gaze is not nearly as deadly as that of its larger cousin but the plumed cockatrice should not be treated lightly. Its vicious use of its sharp beak and raking claws make it a fierce opponent even in the best of situations."
     ],
     arrival: [],
     flee: [],

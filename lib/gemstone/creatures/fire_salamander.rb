@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The fire salamander is pale white, with bright red eyes, sharp claws, feathery gill slits and a flickering tongue.</pre>"
+      "The fire salamander is pale white, with bright red eyes, sharp claws, feathery gill slits and a flickering tongue."
     ],
     arrival: [],
     flee: [],

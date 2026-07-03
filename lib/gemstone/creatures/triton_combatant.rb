@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "The triton combatant stands hunched, her head thrust forward, and neck enveloped by heavy, muscled shoulders.  Tiny alien eyes stare from a prominently bony brow, regarding the world with stubborn truculence.  A mottled brown ridge rises from the amphibian's forehead and sweeps up and back, hugging her skull.  This heavy protuberance, covered with damp, leathery skin, provides her with formidable head and neck protection."
+      "The triton combatant stands hunched, her head thrust forward, and neck enveloped by heavy, muscled shoulders. Tiny alien eyes stare from a prominently bony brow, regarding the world with stubborn truculence. A mottled brown ridge rises from the amphibian's forehead and sweeps up and back, hugging her skull. This heavy protuberance, covered with damp, leathery skin, provides her with formidable head and neck protection."
     ],
     arrival: [],
     flee: [],

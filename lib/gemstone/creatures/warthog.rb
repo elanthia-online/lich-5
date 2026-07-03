@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The warthog stands level-backed on short, thick legs.  His large, angular head is balanced on each side by curved tusks.  Used for goring or gashing his enemies, the tusks provide the warthog's primary means of defense.  The warthog's bright, attentive eyes are set back and up on his head.  Around the edges of the eyes are rows of warts that give this creature his name.  Mainly found living in woods or underground burrows, the warthog prefers dark and damp areas to hide in and to provide him concealment until he rushes out after his prey.</pre>"
+      "The warthog stands level-backed on short, thick legs. His large, angular head is balanced on each side by curved tusks. Used for goring or gashing his enemies, the tusks provide the warthog's primary means of defense. The warthog's bright, attentive eyes are set back and up on his head. Around the edges of the eyes are rows of warts that give this creature his name. Mainly found living in woods or underground burrows, the warthog prefers dark and damp areas to hide in and to provide him concealment until he rushes out after his prey."
     ],
     arrival: [],
     flee: [],

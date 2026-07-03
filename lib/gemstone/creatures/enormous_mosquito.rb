@@ -79,7 +79,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Supported in the back by a pair of middle and hind legs, the mosquito lightly rests its weight upon multi-jointed forelegs.  Feather-like antennae twitch back and forth from their perch around its palps, while its long proboscis exudes a needle-sharp quality that is clearly visible from any angle.  Compound eyes, black and seemingly lifeless, take over most of its head.  Shorter than its abdominal segments, its translucent, cross-veined wings are joined to its body at the hip.</pre>"
+      "Supported in the back by a pair of middle and hind legs, the mosquito lightly rests its weight upon multi-jointed forelegs. Feather-like antennae twitch back and forth from their perch around its palps, while its long proboscis exudes a needle-sharp quality that is clearly visible from any angle. Compound eyes, black and seemingly lifeless, take over most of its head. Shorter than its abdominal segments, its translucent, cross-veined wings are joined to its body at the hip."
     ],
     arrival: [],
     flee: [],

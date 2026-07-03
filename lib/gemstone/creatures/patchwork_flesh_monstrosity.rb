@@ -29,11 +29,11 @@
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Ensnare (attack){{!}}Ensnare",
+        name: "Ensnare (attack)Ensnare",
         as: 450
       },
       {
-        name: "Stomp (attack){{!}}Stomp",
+        name: "Stomp (attack)Stomp",
         as: (430..448)
       }
     ],
@@ -50,7 +50,7 @@
     ],
     special_abilities: [
       {
-        name: "[[Tremors]]"
+        name: "Tremors"
       }
     ],
     special_notes: []
@@ -92,7 +92,7 @@
   },
   messaging: {
     description: [
-      "A patchwork flesh monstrosity is near as tall as a giant and twice as broad, a lumbering monstrosity cobbled together from spare parts in tactless parody of a human form.  Red-tinged serum leaks constantly from the straining stitches that maintain the monster's integrity.  Only the barest glimmer of intelligence lurks in the monstrosity's eyes, and that, perhaps, is a blessing: anything with even half of a brain would be horrified to be such an abominable figure.  From the looks of it, the monstrosity's has barely a quarter of one."
+      "A patchwork flesh monstrosity is near as tall as a giant and twice as broad, a lumbering monstrosity cobbled together from spare parts in tactless parody of a human form. Red-tinged serum leaks constantly from the straining stitches that maintain the monster's integrity. Only the barest glimmer of intelligence lurks in the monstrosity's eyes, and that, perhaps, is a blessing: anything with even half of a brain would be horrified to be such an abominable figure. From the looks of it, the monstrosity's has barely a quarter of one."
     ],
     arrival: [],
     flee: [],

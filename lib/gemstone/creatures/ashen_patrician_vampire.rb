@@ -51,10 +51,10 @@
     ],
     special_abilities: [
       {
-        name: "[[Mstrike]]"
+        name: "Mstrike"
       },
       {
-        name: "[[Cripple]]"
+        name: "Cripple"
       }
     ],
     special_notes: []
@@ -84,7 +84,7 @@
     ],
     defensive_abilities: [],
     special_defenses: [
-      "[[Health]] regeneration"
+      "Health regeneration"
     ]
   },
   special_other: nil,

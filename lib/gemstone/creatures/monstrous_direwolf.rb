@@ -43,10 +43,10 @@
     maneuvers: [],
     special_abilities: [
       {
-        name: "[[Pounce (attack)|Pounce]]"
+        name: "Pounce"
       },
       {
-        name: "[[Lunge (attack)|Lunge]]"
+        name: "Lunge"
       }
     ],
     special_notes: []
@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The monstrous direwolf is a huge powerful beast with baleful red eyes that seem to bore through to the very soul. Impressively large bone deposits protrude across the breadth of the beast's back and neck. Large teeth that seem too big even for the massive maw can easily be seen even when the powerful jaws are closed. Mist, or perhaps tendrils of smoke, occasionally drift up from the flaring nostrils. Sharp eyes, and a sense of smell to match, and a cunning said to rival demons make a direwolf something to avoid.</pre>\n</pre>"
+      "The monstrous direwolf is a huge powerful beast with baleful red eyes that seem to bore through to the very soul. Impressively large bone deposits protrude across the breadth of the beast's back and neck. Large teeth that seem too big even for the massive maw can easily be seen even when the powerful jaws are closed. Mist, or perhaps tendrils of smoke, occasionally drift up from the flaring nostrils. Sharp eyes, and a sense of smell to match, and a cunning said to rival demons make a direwolf something to avoid."
     ],
     arrival: [],
     flee: [],

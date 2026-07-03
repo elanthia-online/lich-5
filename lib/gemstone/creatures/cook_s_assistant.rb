@@ -105,7 +105,7 @@
   },
   messaging: {
     description: [
-      "Sheer culinary danger is embodied in this human's form.  His bulbous face is flushed and grime-stained, perhaps from long hours slaving over a hot stove.  Bloodshot, tired eyes flick back and forth nervously as the cook's assistant sizes up the intruders before him.  His hands clench and unclench, causing the muscles in his hirsute arms to ripple powerfully.  The liberal amount of blood, both fresh and dried, covering his yellowed apron indicates that this man is no stranger to hacking and dismembering."
+      "Sheer culinary danger is embodied in this human's form. His bulbous face is flushed and grime-stained, perhaps from long hours slaving over a hot stove. Bloodshot, tired eyes flick back and forth nervously as the cook's assistant sizes up the intruders before him. His hands clench and unclench, causing the muscles in his hirsute arms to ripple powerfully. The liberal amount of blood, both fresh and dried, covering his yellowed apron indicates that this man is no stranger to hacking and dismembering."
     ],
     arrival: [],
     flee: [],

@@ -77,11 +77,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Glimmering blue essence dust]]"
+    other: "Glimmering blue essence dust"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Stumbling, staggering, cartwheeling wildly, the rotting corpse moves like a large marionette controlled by a drunken hand.  Bits of flesh, sinew and disintegrating rags hang from its bony humanoid skeleton.  The corpse hunts the living relentlessly, driven by an envy of the living world apparent in her hate-filled eyes.</pre>"
+      "Stumbling, staggering, cartwheeling wildly, the rotting corpse moves like a large marionette controlled by a drunken hand. Bits of flesh, sinew and disintegrating rags hang from its bony humanoid skeleton. The corpse hunts the living relentlessly, driven by an envy of the living world apparent in her hate-filled eyes."
     ],
     arrival: [],
     flee: [],

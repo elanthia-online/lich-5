@@ -73,11 +73,11 @@
     gems: true,
     boxes: true,
     skin: "a silverback orc knuckle",
-    other: "[[Alchemy]] common"
+    other: "Alchemy common"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Silver-flecked eyes match the garish silver stripe down the silverback orc's back.  It stands a hearty six feet tall, with pale white skin.  Were it not for the flecks of blood and bits of tattered flesh sticking to its skin, it mayhaps be attractive.  Or perhaps not.</pre>"
+      "Silver-flecked eyes match the garish silver stripe down the silverback orc's back. It stands a hearty six feet tall, with pale white skin. Were it not for the flecks of blood and bits of tattered flesh sticking to its skin, it mayhaps be attractive. Or perhaps not."
     ],
     arrival: [],
     flee: [],

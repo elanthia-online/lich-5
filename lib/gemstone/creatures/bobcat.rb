@@ -85,7 +85,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Twice the size of a domestic cat, the bobcat is covered in dense, thick fur varying from soft greys to light reddish brown.  The fur along the middle back is darker, while her underparts are snowy white.  Deep brown spots mark the bobcat's pelt but a predominent white spot on the back of her dark triangular ears make her easily recognizable when gathered with other wild cats.  Whisking back and forth with her short banded tail, the bobcat seems anxious to pounce on her next prey.</pre>"
+      "Twice the size of a domestic cat, the bobcat is covered in dense, thick fur varying from soft greys to light reddish brown. The fur along the middle back is darker, while her underparts are snowy white. Deep brown spots mark the bobcat's pelt but a predominent white spot on the back of her dark triangular ears make her easily recognizable when gathered with other wild cats. Whisking back and forth with her short banded tail, the bobcat seems anxious to pounce on her next prey."
     ],
     arrival: [],
     flee: [],

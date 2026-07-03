@@ -67,7 +67,7 @@
   },
   messaging: {
     description: [
-      "This mottled thrak looks unnatural, as though some wizard had been meddling with its shape.  It looks like a large, 4-foot-long lizard, with a variegated pattern of brown patches covering its body.  Its vicious look is only enhanced by the uncomfortably large variety of teeth in its long snout."
+      "This mottled thrak looks unnatural, as though some wizard had been meddling with its shape. It looks like a large, 4-foot-long lizard, with a variegated pattern of brown patches covering its body. Its vicious look is only enhanced by the uncomfortably large variety of teeth in its long snout."
     ],
     arrival: [],
     flee: [],

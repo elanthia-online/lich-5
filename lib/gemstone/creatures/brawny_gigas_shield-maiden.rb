@@ -124,9 +124,9 @@
     shield_trample: "A brawny gigas shield-maiden raises her golden targe and charges headlong towards you!",
     spear: "In a display of martial precision, a brawny gigas shield-maiden thrusts with a gold-tipped heavy spear at you!",
 
-    general_advice: "* Shield-maidens are [[square]] creatures, so players of [[semi]]s and [[pure]]s can take advantage of their low [[TD]] by casting [[CS]]-based offensive spells.\n* Shield-maidens have a pretty high rate of blocking physical attacks with their shields when unhindered, so setup abilities like [[Sunder Shield]], [[Aura of the Arkati (1614)]], anything that inflicts [[Blinded]], anything that knocks prone, and so forth are recommended for primarily physical combatants. Alternatively, [[Brawling|unarmed combat]] can't be blocked.",
-    bards: "* [[Vibration Chant (1002)]] works twice and will often leave them helpless or dead.",
-    wizards: "* Shield-maidens can be targeted with [[Mana Leech (516)]].",
+    general_advice: "* Shield-maidens are square creatures, so players of semis and pures can take advantage of their low TD by casting CS-based offensive spells.\n* Shield-maidens have a pretty high rate of blocking physical attacks with their shields when unhindered, so setup abilities like Sunder Shield, Aura of the Arkati (1614), anything that inflicts Blinded, anything that knocks prone, and so forth are recommended for primarily physical combatants. Alternatively, unarmed combat can't be blocked.",
+    bards: "* Vibration Chant (1002) works twice and will often leave them helpless or dead.",
+    wizards: "* Shield-maidens can be targeted with Mana Leech (516).",
 
   }
 }

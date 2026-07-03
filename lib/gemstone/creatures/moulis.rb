@@ -100,7 +100,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Waving its myriad of oddly flexible, root-like appendages, the moulis scuttles about its home area.  It is not known what the moulis searches for, as observations have usually yielded a quick death for the observer, yet it is known that the moulis is an intelligent, lethal foe capable of commanding the forces of magic as well as a powerful physical attack.  It appears to be nothing more than a writhing mass of tubers, roots and thin hair strands in various shades of brown--until a vicious attack springs from the center of the creature.</pre>"
+      "Waving its myriad of oddly flexible, root-like appendages, the moulis scuttles about its home area. It is not known what the moulis searches for, as observations have usually yielded a quick death for the observer, yet it is known that the moulis is an intelligent, lethal foe capable of commanding the forces of magic as well as a powerful physical attack. It appears to be nothing more than a writhing mass of tubers, roots and thin hair strands in various shades of brown--until a vicious attack springs from the center of the creature."
     ],
     arrival: [],
     flee: [],

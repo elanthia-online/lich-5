@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Very little of the dark shambler is not thickly muscled.  This squat humanoid lumbers through the countryside, surveying the world through glistening black eyes.  Were it not for the eyes, the dark shambler could almost be taken for a shadow from a distance, for its skin is also entirely black.  The eyes glisten eerily, though, while the rest of the dark shambler is a flat shade of charcoal that appears to absorb the light more than reflect it.</pre>"
+      "Very little of the dark shambler is not thickly muscled. This squat humanoid lumbers through the countryside, surveying the world through glistening black eyes. Were it not for the eyes, the dark shambler could almost be taken for a shadow from a distance, for its skin is also entirely black. The eyes glisten eerily, though, while the rest of the dark shambler is a flat shade of charcoal that appears to absorb the light more than reflect it."
     ],
     arrival: [],
     flee: [],

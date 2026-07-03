@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Judging from her height, the death knight is a mummified remnant of a powerful warrior, though the flesh has mostly come free from her animated bones.  Now, her heavy armor is all that holds her skeletal form together.  Her neck ends in a jagged ruin, but over the shattered fragments of her spine hovers a bleached skull that is wreathed in azure flames.  Fires burn malevolently in the skull's empty sockets.</pre>\n\nAppraisal:\n<pre{{log2}}>The death knight is medium in size and about seven feet high in her current state.\n</pre>"
+      "Judging from her height, the death knight is a mummified remnant of a powerful warrior, though the flesh has mostly come free from her animated bones. Now, her heavy armor is all that holds her skeletal form together. Her neck ends in a jagged ruin, but over the shattered fragments of her spine hovers a bleached skull that is wreathed in azure flames. Fires burn malevolently in the skull's empty sockets.\n\nAppraisal:\nThe death knight is medium in size and about seven feet high in her current state."
     ],
     arrival: [],
     flee: [],

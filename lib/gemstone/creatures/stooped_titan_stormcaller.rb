@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The power of the storm cannot be contained in the titan stormcaller's body.  Jagged bolts of electricity arc up from under her skin and crackle down her limbs, seemingly causing her no pain during their passage.  Despite her towering height, the stormcaller's stooped shoulders and spindly limbs make her look less imposing.  Her features are plain and unlovely.</pre>\n\n;Assess\n<pre{{log2|margin-right=26em}}>The titan stormcaller is huge in size and about twelve feet high in his current state.</pre>"
+      "The power of the storm cannot be contained in the titan stormcaller's body. Jagged bolts of electricity arc up from under her skin and crackle down her limbs, seemingly causing her no pain during their passage. Despite her towering height, the stormcaller's stooped shoulders and spindly limbs make her look less imposing. Her features are plain and unlovely.\n\n;Assess\nThe titan stormcaller is huge in size and about twelve feet high in his current state."
     ],
     arrival: [],
     flee: [],

@@ -80,11 +80,11 @@
     gems: true,
     boxes: true,
     skin: "a troll tongue",
-    other: "a [[small troll tooth]]"
+    other: "a small troll tooth"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Though lankier than most of its brethren, the hunter troll still towers over the tallest of giantmen.  Its skin is slightly paler than most trolls, but the intelligence which smolders in its dark eyes forces you to dismiss any thought of this being a weak or inferior breed.</pre>"
+      "Though lankier than most of its brethren, the hunter troll still towers over the tallest of giantmen. Its skin is slightly paler than most trolls, but the intelligence which smolders in its dark eyes forces you to dismiss any thought of this being a weak or inferior breed."
     ],
     arrival: [],
     flee: [],

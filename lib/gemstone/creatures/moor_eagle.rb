@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "Wide, snow white wings spread ten feet across as the moor eagle soars in flight.  Pale yellow feet extend below the bird's light grey, feathered body, the feet displaying razor-sharp talons that look long and strong enough to powerfully grasp most anything the eagle might encounter.  A large, hooked beak protrudes from the moor eagle's head.  In contrast to the muted colors on the rest of the moor eagle, the eagle's eyes are a striking sky blue."
+      "Wide, snow white wings spread ten feet across as the moor eagle soars in flight. Pale yellow feet extend below the bird's light grey, feathered body, the feet displaying razor-sharp talons that look long and strong enough to powerfully grasp most anything the eagle might encounter. A large, hooked beak protrudes from the moor eagle's head. In contrast to the muted colors on the rest of the moor eagle, the eagle's eyes are a striking sky blue."
     ],
     arrival: [],
     flee: [],

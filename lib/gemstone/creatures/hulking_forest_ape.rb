@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<!--<pre{{log2|margin-right=26em}}>Put creature description here</pre> -->"
+      ""
     ],
     arrival: [],
     flee: [],

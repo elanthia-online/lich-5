@@ -81,7 +81,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The red bear weighs around 600 pounds and is about seven feet long.  This bear is a dark reddish-brown color and has a characteristic muscle hump over the shoulders, and has long vicious looking claws on his front paws.K</pre>"
+      "The red bear weighs around 600 pounds and is about seven feet long. This bear is a dark reddish-brown color and has a characteristic muscle hump over the shoulders, and has long vicious looking claws on his front paws.K"
     ],
     arrival: [],
     flee: [],

@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "Very few creatures stand in the path of a wooly mammoth for long.  This huge mammal is covered with long, thick, dark brown hair that protects him against freezing conditions.  His flexible trunk is flanked by two heavy ivory tusks that curl up and back toward his wide, flapping ears.  An angered wooly mammoth has been known to pick up a reckless adventurer and throw the hapless person out of sight."
+      "Very few creatures stand in the path of a wooly mammoth for long. This huge mammal is covered with long, thick, dark brown hair that protects him against freezing conditions. His flexible trunk is flanked by two heavy ivory tusks that curl up and back toward his wide, flapping ears. An angered wooly mammoth has been known to pick up a reckless adventurer and throw the hapless person out of sight."
     ],
     arrival: [],
     flee: [],

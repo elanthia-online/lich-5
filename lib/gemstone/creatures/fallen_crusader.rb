@@ -77,11 +77,11 @@
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "[[Inky necrotic core]]"
+    other: "Inky necrotic core"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Roiling wisps of ethereal green mist fill in the form of a muscled warrior.  Fleshy tones, segments of armor, and humanoid features flicker across her visage, as if the mist was remembering bits and pieces of the paladin's former body, if for only moments at a time.  Unable to hold corporeal form, the only meaningful remnants of the crusader's prior existence are her stark conviction, held now in eyes which are no more than swirling grey voids, and her martial prowess.</pre>"
+      "Roiling wisps of ethereal green mist fill in the form of a muscled warrior. Fleshy tones, segments of armor, and humanoid features flicker across her visage, as if the mist was remembering bits and pieces of the paladin's former body, if for only moments at a time. Unable to hold corporeal form, the only meaningful remnants of the crusader's prior existence are her stark conviction, held now in eyes which are no more than swirling grey voids, and her martial prowess."
     ],
     arrival: [],
     flee: [],

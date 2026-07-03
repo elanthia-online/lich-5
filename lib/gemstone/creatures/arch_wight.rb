@@ -111,7 +111,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The arch wight moves along ponderously, its gaunt humanoid frame often bent nearly double as it walks through the corridors of the deceased.  Massive upper arms contrast with a thin torso and narrow hips.  Its liquid golden eyes seem to be filled with tiny red sparks, and the lack of flesh on its face causes the arch wight to sport a horrific toothy grin.  Very proficient in the ways of magic, the arch wight feasts upon the flesh of the deceased, but often cooks the living to death before indulging in its grisly meal.</pre>"
+      "The arch wight moves along ponderously, its gaunt humanoid frame often bent nearly double as it walks through the corridors of the deceased. Massive upper arms contrast with a thin torso and narrow hips. Its liquid golden eyes seem to be filled with tiny red sparks, and the lack of flesh on its face causes the arch wight to sport a horrific toothy grin. Very proficient in the ways of magic, the arch wight feasts upon the flesh of the deceased, but often cooks the living to death before indulging in its grisly meal."
     ],
     arrival: [],
     flee: [],

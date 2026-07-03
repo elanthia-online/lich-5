@@ -90,7 +90,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Defender of a battleground long lost in the terrain, the death dirge still maintains its post relentlessly, battling all that would attempt to invade its position.  All that seems to remain in its consciousness are the orders to repel all who enter, a task it executes with single-minded fury.</pre>"
+      "Defender of a battleground long lost in the terrain, the death dirge still maintains its post relentlessly, battling all that would attempt to invade its position. All that seems to remain in its consciousness are the orders to repel all who enter, a task it executes with single-minded fury."
     ],
     arrival: [],
     flee: [],

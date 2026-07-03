@@ -107,7 +107,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}><!-- Creature description text from in-game verb DESCRIBE goes here.-->Note: Creature description did not display</pre>"
+      "Note: Creature description did not display"
     ],
     arrival: [],
     flee: [],

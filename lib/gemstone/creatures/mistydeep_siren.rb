@@ -82,11 +82,11 @@
     gems: true,
     boxes: true,
     skin: nil,
-    other: "[[Pristine nymph's hair]]"
+    other: "Pristine nymph's hair"
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>The Mistydeep siren's pale eyes are initially glazed like two frosted, opaque panes of glass but they slowly melt to a warm blue as she transfixes her gaze onto her victims.  She uses her melodious voice to allure, along with innocent blue eyes, whispering soft promises of pleasure to entice victims into her control.  From a distance away, the Mistydeep siren looks like beautiful maiden with softly draping robes walking aimlessly along the shorelines but without the influence of  glamor, it becomes obvious this is no helpless maiden.  Her bluish corpselike skin and milky eyes is a dead give away of her true nature to any wary adventurer.</pre>"
+      "The Mistydeep siren's pale eyes are initially glazed like two frosted, opaque panes of glass but they slowly melt to a warm blue as she transfixes her gaze onto her victims. She uses her melodious voice to allure, along with innocent blue eyes, whispering soft promises of pleasure to entice victims into her control. From a distance away, the Mistydeep siren looks like beautiful maiden with softly draping robes walking aimlessly along the shorelines but without the influence of glamor, it becomes obvious this is no helpless maiden. Her bluish corpselike skin and milky eyes is a dead give away of her true nature to any wary adventurer."
     ],
     arrival: [],
     flee: [],

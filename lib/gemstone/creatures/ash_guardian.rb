@@ -88,7 +88,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Distinct features are difficult to determine as clouds of ash obscure the form of the ash guardian.  What is visible is a towering humanoid shadow that drifts through the ash clouds.</pre>"
+      "Distinct features are difficult to determine as clouds of ash obscure the form of the ash guardian. What is visible is a towering humanoid shadow that drifts through the ash clouds."
     ],
     arrival: [],
     flee: [],

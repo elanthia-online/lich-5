@@ -89,7 +89,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Despite its lumbering appearance, this heavily plated creature can show surprising bursts of speed.  Each of the three toes on the tegu's forelegs are incredibly sharp, capable of slicing through the toughest hide.  The armored tail of this male tegu is tipped with pointy spikes.</pre>"
+      "Despite its lumbering appearance, this heavily plated creature can show surprising bursts of speed. Each of the three toes on the tegu's forelegs are incredibly sharp, capable of slicing through the toughest hide. The armored tail of this male tegu is tipped with pointy spikes."
     ],
     arrival: [],
     flee: [],

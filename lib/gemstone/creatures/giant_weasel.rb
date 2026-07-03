@@ -87,7 +87,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>Darting with amazing speed, the giant weasel often pounces upon its prey before the startled victim can react. Nearly six feet from the tip of its wiggling nose to the end of its furred tail, its short legs propel it rapidly, albeit with an amusingly wavy motion.  The body is covered with long, chocolate brown fur, darker on top than underneath.  Yellow eyes peer out from its head, glancing about the area with a devious  intelligence as the giant weasel sniffs the air, searching for its next meal.</pre>"
+      "Darting with amazing speed, the giant weasel often pounces upon its prey before the startled victim can react. Nearly six feet from the tip of its wiggling nose to the end of its furred tail, its short legs propel it rapidly, albeit with an amusingly wavy motion. The body is covered with long, chocolate brown fur, darker on top than underneath. Yellow eyes peer out from its head, glancing about the area with a devious intelligence as the giant weasel sniffs the air, searching for its next meal."
     ],
     arrival: [],
     flee: [],

@@ -98,7 +98,7 @@
   },
   messaging: {
     description: [
-      "<pre{{log2|margin-right=26em}}>\nThe subtle hourglass figure of this tiny offshoot of an elven female is all you can see due to a strange silvery aura covering her.  Her face is the exception, for it shows through as a near picture perfect model of beauty.  The only spoiler in the package is the strange look of madness in her shimmering silver eyes.\n</pre>"
+      "The subtle hourglass figure of this tiny offshoot of an elven female is all you can see due to a strange silvery aura covering her. Her face is the exception, for it shows through as a near picture perfect model of beauty. The only spoiler in the package is the strange look of madness in her shimmering silver eyes."
     ],
     arrival: [],
     flee: [],

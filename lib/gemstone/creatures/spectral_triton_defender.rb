@@ -72,7 +72,7 @@
   },
   messaging: {
     description: [
-      "The triton defender forges ahead on powerful legs, as if unaware of their lack of substance, while thick and ropey muscles bunch powerfully along her oddly translucent arms.  The skin covering her squat ethereal frame is the color of bleached, dirty leather and seems to retain the clammy wetness of living amphibians.  Sweeping behind her muscled limbs, a long tail floats after the creature like a recently abandoned child."
+      "The triton defender forges ahead on powerful legs, as if unaware of their lack of substance, while thick and ropey muscles bunch powerfully along her oddly translucent arms. The skin covering her squat ethereal frame is the color of bleached, dirty leather and seems to retain the clammy wetness of living amphibians. Sweeping behind her muscled limbs, a long tail floats after the creature like a recently abandoned child."
     ],
     arrival: [],
     flee: [],

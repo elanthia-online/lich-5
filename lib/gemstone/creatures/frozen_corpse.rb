@@ -82,7 +82,7 @@
   },
   messaging: {
     description: [
-      "Unearthed from his place of resting by the avalanches, the frozen corpse stiffly roams the ice fields looking for rest again.  Ranging from dwarf to giantman in size, the frozen corpse attacks ruthlessly any living thing in his path, perhaps blaming the living for his current predicament.  His features are taut and drawn, but most of the flesh is still intact, preserved by the subzero cold.  His movements are punctuated by the loud screeching of ice against ice in his joints and a continual crackling as his frozen appendages fracture."
+      "Unearthed from his place of resting by the avalanches, the frozen corpse stiffly roams the ice fields looking for rest again. Ranging from dwarf to giantman in size, the frozen corpse attacks ruthlessly any living thing in his path, perhaps blaming the living for his current predicament. His features are taut and drawn, but most of the flesh is still intact, preserved by the subzero cold. His movements are punctuated by the loud screeching of ice against ice in his joints and a continual crackling as his frozen appendages fracture."
     ],
     arrival: [],
     flee: [],

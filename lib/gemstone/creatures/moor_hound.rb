@@ -86,7 +86,7 @@
   },
   messaging: {
     description: [
-      "The moor hound stands nearly as tall as a halfling, her broad shoulders easily support the weight of her frame.  The jet-black fur is matted and frizzled, giving the hound an unkept appearance.  Tiny droplets of perspiration drip from her blood-red eyes as misty vapor wafts out of the nostrils.  A curl in her upper lip forms, revealing a massive canine tooth as she hungrily looks upon her pray."
+      "The moor hound stands nearly as tall as a halfling, her broad shoulders easily support the weight of her frame. The jet-black fur is matted and frizzled, giving the hound an unkept appearance. Tiny droplets of perspiration drip from her blood-red eyes as misty vapor wafts out of the nostrils. A curl in her upper lip forms, revealing a massive canine tooth as she hungrily looks upon her pray."
     ],
     arrival: [],
     flee: [],

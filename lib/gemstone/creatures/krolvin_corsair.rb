@@ -77,7 +77,7 @@
   },
   messaging: {
     description: [
-      "More muscular and agile than the average krolvin, the corsair's distinctive rolling gait is evidence of a life spent seafaring.  His sturdy musculature is apparent beneath the grey-blue skin.  Thick, coarse, white hair covers his head and spreads across his shoulders and down his back."
+      "More muscular and agile than the average krolvin, the corsair's distinctive rolling gait is evidence of a life spent seafaring. His sturdy musculature is apparent beneath the grey-blue skin. Thick, coarse, white hair covers his head and spreads across his shoulders and down his back."
     ],
     arrival: [],
     flee: [],
