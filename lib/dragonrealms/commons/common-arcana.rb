@@ -315,7 +315,7 @@ module Lich
                    .each { |khri| return true if !DRSpells.active_spells.key?("Khri #{khri}") }
         else
           # for MUs check list of required buffs against list of active spells and their durations/recast
-          buff_list.each do |spell,data|
+          buff_list.each do |spell, data|
             # ignore spells which don't recast (ignite, etf, etc.)
             next if data['recast'] < 0
             # if any buff is not in the active spells, or whose duration is less than recast, need to buff
