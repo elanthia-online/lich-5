@@ -1,0 +1,113 @@
+{
+  schema_version: 3,
+  name: "striped relnak",
+  noun: "",
+  url: "https://gswiki.play.net/striped_relnak",
+  picture: "",
+  level: 3,
+  family: "Reptilian",
+  type: "Quadruped",
+  undead: false,
+  has_blood: nil,
+  has_bones: nil,
+  muggable: nil,
+  boss: false,
+  otherclass: [
+    "Living"
+  ],
+  bcs: true,
+  max_hp: 42,
+  speed: nil,
+  height: nil,
+  size: "",
+  areas: [
+    {
+      name: "Rambling Meadows",
+      rooms: []
+    }
+  ],
+  attack_attributes: {
+    physical_attacks: [
+      {
+        name: "Bite",
+        as: 61
+      },
+      {
+        name: "Charge (attack)",
+        as: 71
+      },
+      {
+        name: "Stomp",
+        as: 61
+      }
+    ],
+    bolt_spells: [],
+    warding_spells: [],
+    offensive_spells: [],
+    maneuvers: [],
+    special_abilities: [],
+    special_notes: []
+  },
+  defense_attributes: {
+    asg: "1N",
+    immunities: [],
+    melee: (27..41),
+    ranged: 37,
+    bolt: 34,
+    udf: 51,
+    bar_td: 9,
+    cle_td: nil,
+    emp_td: 9,
+    pal_td: nil,
+    ran_td: 9,
+    sor_td: 9,
+    wiz_td: 9,
+    mje_td: 9,
+    mne_td: 9,
+    mjs_td: 9,
+    mns_td: 9,
+    mnm_td: nil,
+    defensive_spells: [],
+    defensive_abilities: [],
+    special_defenses: []
+  },
+  special_other: nil,
+  abilities: [],
+  alchemy: [],
+  abilities_misc: [],
+  treasure: {
+    coins: false,
+    magic_items: false,
+    gems: false,
+    boxes: false,
+    skin: "a striped relnak sail",
+    other: nil
+  },
+  messaging: {
+    description: [
+      "<pre{{log2|margin-right=26em}}>The striped relnak is a low-slung, wide-bodied reptile of the chameleon family.  Only a few feet long, it is deceptively fast despite its girth.  Its skin is scaly and rough with alternating strips of red and charcoal grey, except for the flaring, spiny sail that stands erect on its back which is solid grey.  Extending from its thick neck to nearly the tip of its flicking tail, the sail's charcoal grey is punctuated by evenly spaced iridescent blue spines which glow brightly when the relnak is agitated.</pre>"
+    ],
+    arrival: [],
+    flee: [],
+    death: [],
+    decay: [],
+    search: [],
+    spell_prep: [],
+    info: {
+      general: [],
+      class_tips: {
+        cleric: [],
+        paladin: [],
+        ranger: [],
+        bard: [],
+        wizard: [],
+        empath: [],
+        rogue: [],
+        warrior: [],
+        sorcerer: []
+      },
+      miscellany: []
+    },
+    triggers: {}
+  }
+}
