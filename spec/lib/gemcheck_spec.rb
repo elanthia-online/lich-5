@@ -147,6 +147,64 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe '.configure_gemfile!' do
+    around do |example|
+      original = ENV.fetch('BUNDLE_GEMFILE', nil)
+      example.run
+    ensure
+      if original.nil?
+        ENV.delete('BUNDLE_GEMFILE')
+      else
+        ENV['BUNDLE_GEMFILE'] = original
+      end
+    end
+
+    it 'points Bundler at the Lich Gemfile when launched from another directory' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        gemfile = File.join(dir, 'Gemfile')
+        File.write(gemfile, "source 'https://rubygems.org'\n")
+        stub_const('LICH_DIR', dir)
+        ENV.delete('BUNDLE_GEMFILE')
+
+        described_class.configure_gemfile!
+
+        expect(ENV.fetch('BUNDLE_GEMFILE')).to eq(gemfile)
+      end
+    end
+
+    it 'preserves an existing BUNDLE_GEMFILE override' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        File.write(File.join(dir, 'Gemfile'), "source 'https://rubygems.org'\n")
+        stub_const('LICH_DIR', dir)
+        ENV['BUNDLE_GEMFILE'] = '/custom/Gemfile'
+
+        described_class.configure_gemfile!
+
+        expect(ENV.fetch('BUNDLE_GEMFILE')).to eq('/custom/Gemfile')
+      end
+    end
+
+    it 'leaves BUNDLE_GEMFILE unset when LICH_DIR is undefined' do
+      hide_const('LICH_DIR')
+      ENV.delete('BUNDLE_GEMFILE')
+
+      described_class.configure_gemfile!
+
+      expect(ENV['BUNDLE_GEMFILE']).to be_nil
+    end
+
+    it 'leaves BUNDLE_GEMFILE unset when the Lich Gemfile does not exist' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        stub_const('LICH_DIR', dir)
+        ENV.delete('BUNDLE_GEMFILE')
+
+        described_class.configure_gemfile!
+
+        expect(ENV['BUNDLE_GEMFILE']).to be_nil
+      end
+    end
+  end
+
   describe '.missing_gems' do
     let(:default_present) do
       double('dep', name: 'sqlite3', requirement: Gem::Requirement.default, groups: [:default])

@@ -25,6 +25,7 @@ module Lich
     # @return [void]
     def verify!(*groups)
       groups = [:default] if groups.empty?
+      configure_gemfile!
 
       missing = missing_gems(groups)
       unless missing.empty?
@@ -49,6 +50,17 @@ module Lich
           exit 1
         end
       end
+    end
+
+    # Ensures Bundler resolves Lich's Gemfile even when the app is launched
+    # from another working directory, such as macOS app launch from /.
+    # @return [void]
+    def configure_gemfile!
+      return if ENV['BUNDLE_GEMFILE'] && !ENV['BUNDLE_GEMFILE'].empty?
+      return unless defined?(LICH_DIR)
+
+      gemfile = File.join(LICH_DIR, 'Gemfile')
+      ENV['BUNDLE_GEMFILE'] = gemfile if File.file?(gemfile)
     end
 
     # Names of gems declared in the Gemfile that are not installed at any
