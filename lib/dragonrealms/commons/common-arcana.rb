@@ -293,13 +293,13 @@ module Lich
       end
 
       def need_buffs?(buff_list)
+        # no need to iterate if list of buffs is already empty
+        return false if buff_list.nil? || buff_list.size == 0
+
         # commoner's don't really have a way to check buffs so assume always yes
         return true if DRStats.guild == "Commoner"
 
-        # no need to interate if list of buffs is already empty
-        return false if buff_list.nil? || buff_list.size == 0
-
-        # no need to interate if no buffs active and buff_list is not empty
+        # no need to iterate if no buffs active and buff_list is not empty
         return true if DRSpells.active_spells.empty?
 
         case DRStats.guild
