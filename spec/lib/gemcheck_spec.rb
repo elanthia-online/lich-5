@@ -122,17 +122,17 @@ RSpec.describe Lich::GemCheck do
         expect { described_class.verify! }.not_to raise_error
       end
 
-      it 'routes the tolerated error through warn_stale_lock' do
+      it 'routes the tolerated error and requested groups through warn_stale_lock' do
         error = Bundler::GemNotFound.new('unresolvable lockfile')
         allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:warn_stale_lock).with(error)
+        expect(described_class).to receive(:warn_stale_lock).with(error, [:default])
         described_class.verify!
       end
 
       it 'tolerates other BundlerError subclasses the same way' do
         error = Bundler::PathError.new('bundler path error')
         allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:warn_stale_lock).with(error)
+        expect(described_class).to receive(:warn_stale_lock).with(error, [:default])
         expect { described_class.verify! }.not_to raise_error
       end
     end
@@ -169,9 +169,14 @@ RSpec.describe Lich::GemCheck do
       allow(described_class).to receive(:warn)
     end
 
-    it 'logs the tolerated error with an empty missing list' do
-      expect(described_class).to receive(:write_log).with(missing: [], error: error)
+    it 'logs the tolerated error with an empty missing list and default groups' do
+      expect(described_class).to receive(:write_log).with(missing: [], groups: [:default], error: error)
       described_class.warn_stale_lock(error)
+    end
+
+    it 'forwards the requested groups to the log for accurate diagnostics' do
+      expect(described_class).to receive(:write_log).with(missing: [], groups: [:default, :gtk], error: error)
+      described_class.warn_stale_lock(error, [:default, :gtk])
     end
 
     it 'echoes the remediation notice to stderr' do

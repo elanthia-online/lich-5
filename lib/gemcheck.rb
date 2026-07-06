@@ -61,7 +61,7 @@ module Lich
           # Every required gem is installed, so the resolution failure is a
           # lockfile artifact rather than a genuinely missing dependency.
           # Warn and continue instead of blocking the user from logging in.
-          warn_stale_lock(e)
+          warn_stale_lock(e, groups)
         else
           alert(missing: still_missing, groups: groups, error: e)
           exit 1
@@ -74,9 +74,11 @@ module Lich
     # it is visible in a terminal launch; boot is not interrupted.
     #
     # @param error [Bundler::BundlerError] the resolution failure being tolerated
+    # @param groups [Array<Symbol>] groups being verified, forwarded to the log
+    #   so its "Groups checked" diagnostic reflects the actual verify! call
     # @return [void]
-    def warn_stale_lock(error)
-      write_log(missing: [], error: error)
+    def warn_stale_lock(error, groups = [:default])
+      write_log(missing: [], groups: groups, error: error)
       warn STALE_LOCK_MESSAGE
     end
 
