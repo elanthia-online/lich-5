@@ -230,6 +230,24 @@ module Lich
       end
 
       # ---------------------------------------------------------------------------
+      # Creature (Gemstone crtrStatus) linkage
+      # ---------------------------------------------------------------------------
+
+      # Returns the +Lich::Gemstone::CreatureInstance+ that tracks this exist
+      # id, creating one lazily if it does not exist yet so callers can always
+      # do +obj.creature.crtr_status.hostile?+ without a nil check.
+      #
+      # Returns +nil+ in DragonRealms since Simu never emits <crtrStatus> there
+      # and the Creature module is Gemstone-scoped.
+      #
+      # @return [Lich::Gemstone::CreatureInstance, nil]
+      def creature
+        return nil unless defined?(Lich::Gemstone::Creature)
+        return nil if defined?(XMLData) && XMLData.respond_to?(:game) && XMLData.game !~ /^GS/
+        Lich::Gemstone::Creature.track(@id, @name, @noun)
+      end
+
+      # ---------------------------------------------------------------------------
       # Class-level factory methods
       # ---------------------------------------------------------------------------
 

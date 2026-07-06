@@ -166,6 +166,80 @@ module Lich
       end
     end
 
+    # Boolean flag snapshot parsed from the Gemstone <crtrStatus .../> XML tag.
+    #
+    # The Gemstone server only enumerates *currently active* status flags
+    # (value "1") on each <crtrStatus> emission. Flags that are no longer
+    # active are simply omitted from the tag, so on every #update we MUST
+    # clear all previously seen flags to false before applying the incoming
+    # attributes, otherwise we would leave stale flags stuck at true.
+    #
+    # The set of possible flags is intentionally NOT enumerated in code:
+    # Simu may add new ones at any time, and we should not have to patch
+    # this class every time that happens. Any XML attribute other than the
+    # ones listed in NON_FLAG_ATTRIBUTES is treated as a status flag, and
+    # the flag is considered active iff its value is exactly "1".
+    #
+    # This is a plain value object owned by a CreatureInstance and reached
+    # via CreatureInstance#crtr_status (or GameObj#creature.crtr_status).
+    # It intentionally does not use the existing @status array/has_status?
+    # machinery so the crtrStatus flag semantics stay independent of the
+    # message-based (breeze/web/stunned/...) status tracking, which has its
+    # own timing/expiry rules.
+    class CrtrStatus
+      # Attributes on <crtrStatus> that are metadata, not boolean flags.
+      # Everything else on the tag is treated as a status flag.
+      NON_FLAG_ATTRIBUTES = %w[exist].freeze
+
+      attr_reader :flags, :updated_at
+
+      def initialize
+        @flags      = {}
+        @updated_at = nil
+      end
+
+      # Apply an incoming <crtrStatus> attributes hash. All previously seen
+      # flags are reset to false before the incoming attributes are applied,
+      # so a subsequent tag that omits a flag correctly transitions it back
+      # to false.
+      def update(attributes)
+        @flags.each_key { |k| @flags[k] = false }
+        attributes.each do |key, value|
+          next if NON_FLAG_ATTRIBUTES.include?(key.to_s)
+          @flags[key.to_s] = (value.to_s == '1')
+        end
+        @updated_at = Time.now
+        self
+      end
+
+      # Generic lookup: crtr_status.flag?("hostile") or .flag?(:MiniBoss).
+      # Accepts a String or Symbol. Returns false for any flag we have never
+      # observed, which is the correct "not active" answer.
+      def flag?(name)
+        !!@flags[name.to_s]
+      end
+      alias is? flag?
+
+      # All flags currently set to true, as an array of the original XML
+      # attribute names (Strings).
+      def active_flags
+        @flags.select { |_k, v| v }.keys
+      end
+
+      # True if we have never received a <crtrStatus> for this creature.
+      def stale?
+        @updated_at.nil?
+      end
+
+      def to_h
+        { 'updated_at' => @updated_at }.merge(@flags)
+      end
+
+      def inspect
+        "#<Lich::Gemstone::CrtrStatus flags=#{active_flags.inspect} updated_at=#{@updated_at.inspect}>"
+      end
+    end
+
     # Individual creature instance (runtime tracking with ID)
     class CreatureInstance
       @@instances = {}
@@ -202,6 +276,12 @@ module Lich
         'poisoned'    => nil # Has removal messages
       }.freeze
 
+      # Boolean flag snapshot fed by the <crtrStatus .../> XML tag. Check
+      # flags via creature.crtr_status.is?('hostile') or .flag?(:prone).
+      # (Note: CreatureInstance#dead? is HP-based and unrelated to the
+      # crtrStatus "dead" flag which is exposed as crtr_status.is?('dead').)
+      attr_reader :crtr_status
+
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
@@ -217,6 +297,7 @@ module Lich
         @ucs_tierup = nil
         @ucs_smote = nil
         @ucs_updated = nil
+        @crtr_status = CrtrStatus.new
       end
 
       # Get the template for this creature
@@ -480,6 +561,34 @@ module Lich
           size >= @@max_size
         end
 
+        # Fetch-or-create a CreatureInstance by exist id, without going
+        # through the auto_register gate used by #register. Intended for the
+        # <crtrStatus> XML handler, which needs an instance for every id it
+        # sees regardless of whether the creature was ever a current target.
+        # Backfills name / noun on the existing instance if it was created
+        # earlier with nil values.
+        def track(id, name = nil, noun = nil)
+          int_id = id.to_i
+          if (existing = @@instances[int_id])
+            existing.name = name if existing.name.nil? && !name.nil?
+            existing.noun = noun if existing.noun.nil? && !noun.nil?
+            return existing
+          end
+
+          # Same age-based eviction ladder as #register.
+          if full?
+            [7200, 6300, 5400, 4500, 3600, 2700, 1800, 900].each do |age_threshold|
+              cleanup_old(age_threshold)
+              break unless full?
+            end
+            return nil if full?
+          end
+
+          instance = new(int_id, noun, name)
+          @@instances[int_id] = instance
+          instance
+        end
+
         # Register a new creature instance
         def register(name, id, noun = nil)
           return nil unless auto_register?
@@ -537,6 +646,13 @@ module Lich
       # Register a new creature
       def self.register(name, id, noun = nil)
         CreatureInstance.register(name, id, noun)
+      end
+
+      # Fetch-or-create the CreatureInstance for +id+ regardless of the
+      # auto_register setting. Used by the <crtrStatus> XML handler and by
+      # GameObj#creature so every known exist id has a place to hang state.
+      def self.track(id, name = nil, noun = nil)
+        CreatureInstance.track(id, name, noun)
       end
 
       # Configure the system

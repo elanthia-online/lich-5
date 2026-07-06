@@ -422,6 +422,17 @@ module Lich
             @room_climate = attributes['climate'].to_i if attributes['climate']
             @room_terrain = attributes['terrain'].to_i if attributes['terrain']
           end
+          # <crtrStatus exist="..." hostile="1" prone="1" .../> is Gemstone-only;
+          # Simu never emits this tag in DragonRealms. Only currently-active
+          # flags are enumerated on each update, so CrtrStatus#update is
+          # responsible for resetting previously seen flags to false before
+          # applying the incoming attributes.
+          if name == 'crtrStatus' && attributes['exist'] && XMLData.game =~ /^GS/
+            id  = attributes['exist']
+            obj = GameObj[id.to_s]
+            instance = Lich::Gemstone::Creature.track(id, obj&.name, obj&.noun)
+            instance&.crtr_status&.update(attributes)
+          end
           if name == 'pushStream'
             @in_stream = true
             @current_stream = attributes['id'].to_s
