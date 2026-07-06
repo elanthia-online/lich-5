@@ -8,6 +8,7 @@ RSpec.describe Lich::Common::SetupFiles do
   let(:tmpdir) { Dir.mktmpdir('setup-files-test') }
   let(:profiles_dir) { File.join(tmpdir, 'profiles') }
   let(:data_dir) { File.join(tmpdir, 'data') }
+  let(:custom_data_dir) { File.join(data_dir, 'custom') }
   let(:setup_files) { described_class.new }
 
   before do
@@ -87,6 +88,37 @@ RSpec.describe Lich::Common::SetupFiles do
     it 'loads data from the correct file' do
       result = setup_files.get_data('spells')
       expect(result.spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+    end
+
+    context 'with a custom data file' do
+      before { FileUtils.mkdir_p(custom_data_dir) }
+
+      it 'prefers scripts/data/custom over scripts/data' do
+        File.write(File.join(custom_data_dir, 'base-spells.yaml'), { spell_data: { 'Shield' => { 'mana' => 99 } } }.to_yaml)
+        result = setup_files.get_data('spells')
+        expect(result.spell_data).to eq({ 'Shield' => { 'mana' => 99 } })
+      end
+
+      it 'loads a custom-only data file with no base equivalent' do
+        File.write(File.join(custom_data_dir, 'base-custom.yaml'), { my_setting: 'mine' }.to_yaml)
+        result = setup_files.get_data('custom')
+        expect(result.my_setting).to eq('mine')
+      end
+
+      it 'falls back to scripts/data when no custom file exists' do
+        result = setup_files.get_data('spells')
+        expect(result.spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+      end
+
+      it 'falls back to scripts/data after a custom file is removed' do
+        custom_file = File.join(custom_data_dir, 'base-spells.yaml')
+        File.write(custom_file, { spell_data: { 'Shield' => { 'mana' => 99 } } }.to_yaml)
+        expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 99 } })
+
+        File.delete(custom_file)
+        setup_files.reload
+        expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+      end
     end
   end
 

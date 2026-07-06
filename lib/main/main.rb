@@ -146,6 +146,8 @@ reconnect_if_wanted = proc {
   if @argv_options[:sal]
     begin
       @launch_data = File.open(@argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
+      modifiers = ARGV.dup
+      Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
       Lich.log "info: launch_file: #{@argv_options[:sal]}"
