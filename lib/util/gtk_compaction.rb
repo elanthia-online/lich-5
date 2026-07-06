@@ -8,9 +8,16 @@ module Lich
     # actually running.
     #
     # ruby-gnome's native gems cache a Ruby Proc for each "boxed"/"object"
-    # GType conversion (Gdk::Event, Pango::Attribute, ...) inside a plain C
-    # struct that Ruby's GC can't see or update (BoxedInstance2RObjData /
-    # ObjectInstance2RObjData in gobject-introspection's rb-gi-loader.c).
+    # GType conversion inside a plain C struct that Ruby's GC can't see or
+    # update (BoxedInstance2RObjData / ObjectInstance2RObjData in
+    # gobject-introspection's rb-gi-loader.c). In the current stack this is
+    # only ever exercised through the *boxed* half in practice -- gdk3's
+    # Gdk::Event/Gdk::Rectangle and pango's Pango::Attribute are the real
+    # examples, and they're all boxed. Nothing calls
+    # register_object_class_converter today; that half is wrapped
+    # defensively, on the same reasoning, but has no real-gem example and
+    # is not independently exercised the way the boxed path has been
+    # (empirically, via forced compaction against Pango::Attribute).
     # GC.compact can relocate that Proc without anything updating this one
     # untracked reference to it, so the next GTK signal marshaled through it
     # dereferences a dangling pointer and crashes with SIGBUS/SIGSEGV.
@@ -43,11 +50,12 @@ module Lich
     # Timing is everything here: this only works if our wrapper is defined
     # before gdk3/pango/etc. ever call register_boxed_class_converter for
     # the first time -- i.e. before gobject-introspection is first
-    # required, transitively or otherwise. `gtk_compaction.rb` is required
-    # at the top of lich.rbw specifically so this file loads (and installs
-    # its wrapper) before lib/init.rb's `require 'gtk3'` runs. If something
-    # still manages to load gtk3 before we get a chance to install the
-    # wrapper (a custom boot path, a script requiring it unusually early),
+    # required, transitively or otherwise. lich.rbw requires this file and
+    # then explicitly calls install! immediately after, before lib/init.rb's
+    # `require 'gtk3'` runs. Requiring this file by itself does *not*
+    # install anything -- see install!'s own doc for why that's deliberate.
+    # If something still manages to load gtk3 before install! gets a chance
+    # to run (a custom boot path, a script requiring it unusually early),
     # we can't retroactively pin what's already registered -- in that edge
     # case we fall back to checking whether the *installed gem itself*
     # happens to carry the equivalent native patch (see
@@ -82,10 +90,20 @@ module Lich
         # Installs the pinning wrapper around
         # GObjectIntrospection::Loader's converter-registration methods.
         # Safe to call more than once (no-ops after the first successful
-        # install). Called eagerly at the bottom of this file -- not
-        # lazily from safe_compact! -- because by the time MemoryReleaser
-        # or AsyncProcessor first calls safe_compact!, gtk3 has almost
-        # always already been loaded and it would be too late.
+        # install). Called explicitly from lich.rbw, immediately after
+        # requiring this file -- not automatically as a side effect of the
+        # require itself, and not lazily from safe_compact! either.
+        #
+        # Deliberately *not* auto-called at the bottom of this file: this
+        # module needs to be `require`-able (in specs, tools, a script) as
+        # a plain library, without side-loading gobject-introspection just
+        # because someone loaded the file. Requiring gtk_compaction.rb must
+        # stay inert; install! is the only thing that acts.
+        #
+        # This has to run before lib/init.rb's `require 'gtk3'` -- by the
+        # time MemoryReleaser or AsyncProcessor first calls safe_compact!,
+        # gtk3 has almost always already been loaded and it would be too
+        # late.
         #
         # @return [void]
         def install!
@@ -118,18 +136,23 @@ module Lich
               Fiddle::TYPE_VOID
             )
 
+            # Both converter kinds get the identical treatment. In the
+            # current ruby-gnome stack only the boxed variant is actually
+            # exercised by real gems (gdk3's Gdk::Event/Gdk::Rectangle,
+            # pango's Pango::Attribute are all boxed); nothing calls
+            # register_object_class_converter today. It's wrapped anyway,
+            # on the same reasoning, but that half is defensive -- it has
+            # not been independently exercised against a real converter the
+            # way the boxed path has (empirically, via forced compaction
+            # against Pango::Attribute).
             loader_singleton = GObjectIntrospection::Loader.singleton_class
-            loader_singleton.send(:alias_method, :__gtk_compaction_unpinned_register_boxed_class_converter, :register_boxed_class_converter)
-            loader_singleton.send(:alias_method, :__gtk_compaction_unpinned_register_object_class_converter, :register_object_class_converter)
-
-            loader_singleton.send(:define_method, :register_boxed_class_converter) do |gtype, &block|
-              register_mark_object.call(Fiddle.dlwrap(block))
-              __gtk_compaction_unpinned_register_boxed_class_converter(gtype, &block)
-            end
-
-            loader_singleton.send(:define_method, :register_object_class_converter) do |gtype, &block|
-              register_mark_object.call(Fiddle.dlwrap(block))
-              __gtk_compaction_unpinned_register_object_class_converter(gtype, &block)
+            %i[register_boxed_class_converter register_object_class_converter].each do |method_name|
+              unpinned_name = :"__gtk_compaction_unpinned_#{method_name}"
+              loader_singleton.send(:alias_method, unpinned_name, method_name)
+              loader_singleton.send(:define_method, method_name) do |gtype, &block|
+                register_mark_object.call(Fiddle.dlwrap(block))
+                send(unpinned_name, gtype, &block)
+              end
             end
 
             @pinning_active = true
@@ -138,9 +161,9 @@ module Lich
             # doesn't export this libruby symbol the same way (JRuby,
             # TruffleRuby), a future gobject-introspection release renaming
             # these methods, whatever -- must not take the rest of Lich
-            # down with it. install! runs unconditionally, eagerly, at
-            # file-require time for every boot; a raised exception here
-            # propagates straight out of that require and crashes startup
+            # down with it. install! runs unconditionally near the very
+            # start of lich.rbw's boot sequence; a raised exception here
+            # propagates straight out of that call and crashes startup
             # entirely, which is a strictly worse failure mode than the
             # thing this module exists to prevent. Fail into the same
             # conservative fallback as any other "can't pin" case.
@@ -158,6 +181,14 @@ module Lich
           return @native_gem_patched if defined?(@native_gem_patched)
 
           @native_gem_patched = begin
+            # Reads the .c source on disk, not the already-loaded compiled
+            # bundle/so -- a last-resort heuristic, not a certainty. Source
+            # and binary can disagree (source patched after the extension
+            # was already compiled and loaded this process; or vice versa,
+            # a stale checked-out source tree next to a binary built from a
+            # different version). Good enough for "does this install look
+            # like someone ran the patch script," not a guarantee about
+            # what's actually running in memory right now.
             loaded = $LOADED_FEATURES.find { |f| f =~ /gobject_introspection\.(bundle|so)\z/ }
             gem_dir = loaded && File.expand_path(File.join(File.dirname(loaded), '..'))
             src = gem_dir && File.join(gem_dir, 'ext', 'gobject-introspection', 'rb-gi-loader.c')
@@ -182,10 +213,27 @@ module Lich
           return GC.compact unless gtk_loaded?
           return GC.compact if @pinning_active
           return GC.compact if native_gem_patched?
+
+          warn_compaction_disabled_once!
+          nil
+        end
+
+        private
+
+        # Contrast the hourly path in Combat::AsyncProcessor, which logs its
+        # happy case -- this is the one branch where GC.compact silently
+        # stops running for the rest of the process, with nothing in the
+        # logs pointing back at why. One line, once, so a future "why did
+        # memory usage climb all session" investigation has somewhere to
+        # start.
+        def warn_compaction_disabled_once!
+          return if defined?(@compaction_disabled_warned)
+          @compaction_disabled_warned = true
+          warn '[Lich::Util::GtkCompaction] GC.compact disabled for the rest of this process: ' \
+               'gtk3 loaded before install! could pin its converters, and the installed ' \
+               'gobject-introspection gem is not natively patched. See lib/util/gtk_compaction.rb.'
         end
       end
     end
   end
 end
-
-Lich::Util::GtkCompaction.install!

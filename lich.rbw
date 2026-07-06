@@ -36,11 +36,13 @@ require File.join(LIB_DIR, 'version.rb')
 require File.join(LIB_DIR, 'gemcheck.rb')
 Lich::GemCheck.verify!
 
-# Must load before lib/init.rb's `require 'gtk3'` -- it installs a wrapper
-# around gobject-introspection's converter registration that has to be in
-# place before gdk3/pango's own loaders run, or it can't do its job. See
-# lib/util/gtk_compaction.rb for why.
+# Must run before lib/init.rb's `require 'gtk3'` -- install! sets up a
+# wrapper around gobject-introspection's converter registration that has to
+# be in place before gdk3/pango's own loaders run, or it can't do its job.
+# Requiring the file alone does not install anything (deliberately -- see
+# lib/util/gtk_compaction.rb); install! has to be called explicitly.
 require File.join(LIB_DIR, 'util', 'gtk_compaction.rb')
+Lich::Util::GtkCompaction.install!
 
 # TODO: Move all local requires to top of file
 require 'base64'

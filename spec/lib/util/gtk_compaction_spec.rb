@@ -5,20 +5,24 @@ require_relative '../../../lib/util/gtk_compaction'
 require 'tmpdir'
 require 'fileutils'
 
-# This module runs eagerly, once, at real Lich boot (lich.rbw requires it
-# before lib/init.rb's `require 'gtk3'`), and its correctness is the entire
+# Requiring this file is inert -- it does not call install! (deliberately;
+# see install!'s own doc). Only lich.rbw calling install! explicitly, right
+# after requiring this file and before lib/init.rb's `require 'gtk3'`, ever
+# activates the pinning wrapper for real. That correctness is the entire
 # difference between "GC.compact runs safely" and "GC.compact occasionally
 # crashes the process." Its state (@installed, @pinning_active,
-# @native_gem_patched) is process-global and was already set for real by
-# the time this spec file loads (either at real Lich boot, or -- in a plain
-# rspec run -- whenever some other spec first required gtk3/gdk3/glib2).
-# Every example below explicitly resets that state before exercising the
-# method under test and restores whatever was there before, via the `around`
-# hook, so this file can neither depend on nor pollute ambient process state
-# or the rest of the 4473-example suite.
+# @native_gem_patched, @compaction_disabled_warned) is process-global,
+# though, so a plain rspec run can still have it set by the time this file
+# loads -- if some other spec earlier in the run called install! itself, or
+# (before this file's own fixes) merely required gtk3/gdk3/glib2 in a way
+# that used to trigger it as a side effect. Every example below explicitly
+# resets that state before exercising the method under test and restores
+# whatever was there before, via the `around` hook, so this file can
+# neither depend on nor pollute ambient process state or the rest of the
+# suite.
 RSpec.describe Lich::Util::GtkCompaction do
   def memoized_ivars
-    %i[@installed @pinning_active @native_gem_patched]
+    %i[@installed @pinning_active @native_gem_patched @compaction_disabled_warned]
   end
 
   def clear_memoized_state!
@@ -78,6 +82,18 @@ RSpec.describe Lich::Util::GtkCompaction do
   describe '.native_gem_patched?' do
     around do |example|
       original_loaded_features = $LOADED_FEATURES.dup
+      # Strip any real gobject_introspection entry before each example, not
+      # just whatever the fake-path tests happen to append. native_gem_patched?
+      # does $LOADED_FEATURES.find { ... } -- first match wins -- so on any
+      # machine that actually has the real gem installed and loaded (which
+      # is most dev boxes, just not CI, which runs with BUNDLE_WITHOUT: gtk),
+      # a real, stock, unpatched entry earlier in the array would win over
+      # the fake one these tests append, silently testing the wrong thing.
+      # This is a defense-in-depth guarantee -- install! no longer runs as a
+      # require-time side effect (see install!'s own doc), so in practice
+      # nothing should inject a real entry here anymore, but this describe
+      # block shouldn't depend on that alone to stay correct.
+      $LOADED_FEATURES.reject! { |f| f =~ /gobject_introspection\.(bundle|so)\z/ }
       example.run
       $LOADED_FEATURES.replace(original_loaded_features)
     end
@@ -415,6 +431,35 @@ RSpec.describe Lich::Util::GtkCompaction do
       described_class.safe_compact!
 
       expect(GC).not_to have_received(:compact)
+    end
+
+    it 'warns once when compaction is disabled for the rest of the process' do
+      clear_memoized_state!
+      stub_compact_supported(true)
+      allow(described_class).to receive(:gtk_loaded?).and_return(true)
+      allow(described_class).to receive(:native_gem_patched?).and_return(false)
+      allow(described_class).to receive(:warn)
+
+      described_class.safe_compact!
+      described_class.safe_compact!
+      described_class.safe_compact!
+
+      expect(described_class).to have_received(:warn).once
+    end
+
+    it 'does not warn on any branch that actually compacts' do
+      clear_memoized_state!
+      stub_compact_supported(true)
+      allow(described_class).to receive(:warn)
+
+      allow(described_class).to receive(:gtk_loaded?).and_return(false)
+      described_class.safe_compact!
+
+      described_class.instance_variable_set(:@pinning_active, true)
+      allow(described_class).to receive(:gtk_loaded?).and_return(true)
+      described_class.safe_compact!
+
+      expect(described_class).not_to have_received(:warn)
     end
 
     it 'treats pinning_active as false when never set (fresh/uninstalled state), not as an error' do
