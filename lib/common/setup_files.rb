@@ -133,6 +133,13 @@ module Lich
         @scripts_data_path ||= File.join(SCRIPT_DIR, 'data')
       end
 
+      # Lazy memoized path -- user-supplied data files that take precedence
+      # over the shipped base data files, mirroring how scripts/custom takes
+      # precedence over scripts/ when loading scripts.
+      def scripts_data_custom_path
+        @scripts_data_custom_path ||= File.join(scripts_data_path, 'custom')
+      end
+
       # Returns the character name for filename construction.
       # Prefers Account.character (available from authentication, before XML stream)
       # with fallback to checkname (XMLData.name, available after XML stream starts).
@@ -172,7 +179,10 @@ module Lich
       end
 
       def get_data_glob_patterns(filenames = [])
-        get_glob_patterns(scripts_data_path, filenames)
+        # Scan scripts/data/custom before scripts/data so a user's custom data
+        # file wins by basename in load_files (first match wins via ||=).
+        get_glob_patterns(scripts_data_custom_path, filenames) +
+          get_glob_patterns(scripts_data_path, filenames)
       end
 
       def get_glob_patterns(basepath = '.', filenames = [])
