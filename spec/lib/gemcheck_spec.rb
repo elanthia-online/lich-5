@@ -104,22 +104,36 @@ RSpec.describe Lich::GemCheck do
       end
     end
 
-    context 'when Bundler.setup raises another BundlerError subclass' do
+    context 'when Bundler.setup fails but every required gem is installed' do
       before do
         allow(described_class).to receive(:missing_gems)
           .with([:default]).and_return([])
         allow(described_class).to receive(:bundler_error_out_of_scope?)
           .and_return(false)
+        allow(described_class).to receive(:warn_stale_lock)
       end
 
-      it 'alerts and exits 1 (rescue covers all Bundler setup failures)' do
+      it 'tolerates a stale-lock GemNotFound without alerting or exiting' do
+        error = Bundler::GemNotFound.new(
+          "Could not find gems matching 'ffi' valid for all resolution platforms"
+        )
+        allow(Bundler).to receive(:setup).and_raise(error)
+        expect(described_class).not_to receive(:alert)
+        expect { described_class.verify! }.not_to raise_error
+      end
+
+      it 'routes the tolerated error through warn_stale_lock' do
+        error = Bundler::GemNotFound.new('unresolvable lockfile')
+        allow(Bundler).to receive(:setup).and_raise(error)
+        expect(described_class).to receive(:warn_stale_lock).with(error)
+        described_class.verify!
+      end
+
+      it 'tolerates other BundlerError subclasses the same way' do
         error = Bundler::PathError.new('bundler path error')
         allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:alert)
-          .with(missing: [], groups: [:default], error: error)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
+        expect(described_class).to receive(:warn_stale_lock).with(error)
+        expect { described_class.verify! }.not_to raise_error
       end
     end
 
@@ -144,6 +158,25 @@ RSpec.describe Lich::GemCheck do
         expect(described_class).not_to receive(:write_log)
         described_class.verify!
       end
+    end
+  end
+
+  describe '.warn_stale_lock' do
+    let(:error) { Bundler::GemNotFound.new('unresolvable lockfile') }
+
+    before do
+      allow(described_class).to receive(:write_log)
+      allow(described_class).to receive(:warn)
+    end
+
+    it 'logs the tolerated error with an empty missing list' do
+      expect(described_class).to receive(:write_log).with(missing: [], error: error)
+      described_class.warn_stale_lock(error)
+    end
+
+    it 'echoes the remediation notice to stderr' do
+      expect(described_class).to receive(:warn).with(described_class::STALE_LOCK_MESSAGE)
+      described_class.warn_stale_lock(error)
     end
   end
 

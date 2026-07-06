@@ -14,13 +14,25 @@ module Lich
     TITLE           = 'Lich5: Missing Ruby Gems'
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
+    STALE_LOCK_MESSAGE = 'Lich: Gemfile.lock could not be resolved, but every required gem ' \
+                         'is installed; continuing boot. Run \'bundle install\' from your ' \
+                         'Lich5 folder to refresh the lockfile.'
 
     module_function
 
     # Runs Bundler.setup for the given groups; on failure, alerts the
-    # user and exits. If Bundler complains about a gem outside the
-    # requested groups (which some Bundler versions do despite `without`
-    # settings), the complaint is silently ignored and boot continues.
+    # user and exits. Two classes of Bundler failure are tolerated instead of
+    # being fatal, because in both the gems Lich actually needs are present:
+    #
+    # 1. Bundler complains about a gem outside the requested groups (which some
+    #    Bundler versions do despite `without` settings).
+    # 2. Bundler cannot resolve the lockfile, yet our platform-aware detector
+    #    confirms every required gem is installed -- typically a stale,
+    #    multi-platform Gemfile.lock re-resolved offline after a self-update
+    #    replaced Gemfile but not Gemfile.lock. Boot proceeds on plain RubyGems
+    #    activation (how Lich loaded before GemCheck adopted Bundler.setup),
+    #    with a non-fatal notice pointing at `bundle install`.
+    #
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
@@ -45,11 +57,27 @@ module Lich
           # Our detector already confirmed the requested groups are satisfied,
           # so this is a scope-semantics disagreement, not a real failure.
           # Continue boot silently.
+        elsif (still_missing = missing_gems(groups)).empty?
+          # Every required gem is installed, so the resolution failure is a
+          # lockfile artifact rather than a genuinely missing dependency.
+          # Warn and continue instead of blocking the user from logging in.
+          warn_stale_lock(e)
         else
-          alert(missing: missing_gems(groups), groups: groups, error: e)
+          alert(missing: still_missing, groups: groups, error: e)
           exit 1
         end
       end
+    end
+
+    # Records a tolerated lockfile-resolution failure and surfaces a non-fatal
+    # notice. The failure is logged for later inspection and echoed to stderr so
+    # it is visible in a terminal launch; boot is not interrupted.
+    #
+    # @param error [Bundler::BundlerError] the resolution failure being tolerated
+    # @return [void]
+    def warn_stale_lock(error)
+      write_log(missing: [], error: error)
+      warn STALE_LOCK_MESSAGE
     end
 
     # Ensures Bundler resolves Lich's Gemfile even when the app is launched

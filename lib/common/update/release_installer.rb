@@ -12,9 +12,23 @@ module Lich
   module Util
     module Update
       class ReleaseInstaller
-        # Top-level files (besides lib/ and lich.rbw) to copy from release archive.
-        # lich.rbw is handled separately due to its dynamic target name.
-        TOP_LEVEL_FILES = %w[Gemfile LICENSE].freeze
+        # Top-level files (besides lib/ and lich.rbw) copied verbatim from the
+        # release/branch archive into LICH_DIR during a self-update. lich.rbw is
+        # handled separately due to its dynamic target name.
+        #
+        # Gemfile.lock travels alongside Gemfile so the resolved dependency set
+        # stays consistent with the Gemfile after an update. When only Gemfile is
+        # replaced, the leftover lock is stale relative to the new Gemfile, which
+        # forces Bundler to re-resolve at boot; against a multi-platform lock that
+        # re-resolution can fail even though every required gem is installed.
+        # Entries absent from the archive are skipped (see #copy_top_level_files).
+        TOP_LEVEL_FILES = %w[Gemfile Gemfile.lock LICENSE].freeze
+
+        # Archive entries that must exist for an extracted download to count as a
+        # structurally valid Lich installation. Deliberately distinct from
+        # TOP_LEVEL_FILES so that optional payload (e.g. Gemfile.lock, which older
+        # release tarballs may omit) never gates an update.
+        REQUIRED_ARCHIVE_ITEMS = %w[lib lich.rbw Gemfile LICENSE].freeze
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -255,14 +269,7 @@ module Lich
           respond "All Lich lib files have been updated."
           respond
 
-          # Copy top-level release files to LICH_DIR
-          TOP_LEVEL_FILES.each do |filename|
-            src = File.join(source_dir, filename)
-            if File.exist?(src)
-              FileUtils.cp(src, File.join(LICH_DIR, filename))
-              respond "Updated #{filename}."
-            end
-          end
+          copy_top_level_files(source_dir)
 
           file_updater = FileUpdater.new(@client, @resolver)
           file_updater.update_core_data_and_scripts(version)
@@ -273,13 +280,30 @@ module Lich
           true
         end
 
-        # Validates extracted directory contains required Lich files.
+        # Copies each top-level file present in the extracted archive into
+        # LICH_DIR. Files missing from the archive are skipped rather than
+        # treated as errors, so a partial archive (e.g. one without Gemfile.lock)
+        # updates cleanly instead of aborting.
+        #
+        # @param source_dir [String] extracted tarball directory
+        # @return [void]
+        def copy_top_level_files(source_dir)
+          TOP_LEVEL_FILES.each do |filename|
+            src = File.join(source_dir, filename)
+            next unless File.exist?(src)
+
+            FileUtils.cp(src, File.join(LICH_DIR, filename))
+            respond "Updated #{filename}."
+          end
+        end
+
+        # Validates the extracted directory contains every archive entry Lich
+        # requires to install safely.
         #
         # @param dir [String] directory to check
-        # @return [Boolean] true if valid
+        # @return [Boolean] true if all required entries are present
         def validate_lich_structure(dir)
-          required_items = ['lib', 'lich.rbw'] + TOP_LEVEL_FILES
-          required_items.all? { |item| File.exist?(File.join(dir, item)) }
+          REQUIRED_ARCHIVE_ITEMS.all? { |item| File.exist?(File.join(dir, item)) }
         end
 
         # Checks if current Ruby meets minimum version requirement.
