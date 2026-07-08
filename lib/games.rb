@@ -35,6 +35,14 @@ module Lich
     #
     # The mono wrapper only escapes nothing and merely brackets the line, so a
     # mono line can still contain live <d> links (the two toggles are orthogonal).
+    #
+    # Escaping: unlike respond (which HTML-escapes &, <, > for the classic
+    # roomnumbers.lic path), neither the mono wrapper nor the plain-text entries
+    # escape anything. This is deliberate - the links path emits live <d> markup
+    # that must survive verbatim, and both paths are kept consistent so a toggle
+    # never silently changes escaping. Exit commands and room titles come from the
+    # mapdb and contain no markup in practice; if untrusted text is ever fed here
+    # the caller must escape it first.
     module RoomFormatter
       # Obvious compass / up / down / out exits (usually rendered by the game
       # itself), excluded from the "Room Exits:" line. Hoisted here so the GS and
