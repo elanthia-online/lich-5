@@ -952,7 +952,8 @@ module Lich
 
   # Sets and persists the room-exit link toggle.
   # @param val [Boolean, String] truthy values are any of on/true/yes
-  # @return [Boolean] the stored boolean
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
   def Lich.display_room_links=(val)
     @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
@@ -987,7 +988,8 @@ module Lich
 
   # Sets and persists the room-line mono-font toggle.
   # @param val [Boolean, String] truthy values are any of on/true/yes
-  # @return [Boolean] the stored boolean
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
   def Lich.display_room_mono=(val)
     @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
