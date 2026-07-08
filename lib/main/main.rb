@@ -735,7 +735,9 @@ reconnect_if_wanted = proc {
             connected: false
           )
 
-          Lich.log "info: detachable client server listening on #{server.local_address.ip_address}:#{server.local_address.ip_port}"
+          listen_address = "#{server.local_address.ip_address}:#{server.local_address.ip_port}"
+          Lich.log "info: detachable client server listening on #{listen_address}"
+          $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
 
           accepted_socket, = server.accept
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
