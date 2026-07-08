@@ -300,7 +300,16 @@ end
 # Unit coverage for the shared formatting mixin, exercised on a throwaway host
 # class so the helpers are tested in isolation from the game instances.
 RSpec.describe Lich::GameBase::RoomFormatter do
-  let(:formatter) { Class.new { include Lich::GameBase::RoomFormatter }.new }
+  # The formatting helpers are private (they add no public surface to the game
+  # instances). Re-publicize them on this throwaway host class so the unit
+  # examples can drive each one directly instead of reaching through .send.
+  let(:formatter) do
+    Class.new do
+      include Lich::GameBase::RoomFormatter
+      public :room_mono?, :room_links?, :room_styled,
+             :room_stringproc_entries, :room_exit_entries, :prepend_room_lines
+    end.new
+  end
 
   before do
     XMLData.reset

@@ -46,6 +46,13 @@ module Lich
       # the pre-existing literals it replaces.
       ROOM_WINDOW_FRONTENDS = %w[wrayth stormfront].freeze
 
+      # Everything below is internal formatting detail, marked +private+ so the
+      # mixin adds no new public surface to the game instances that include it.
+      # The game #process_room_display methods reach these via implicit self
+      # (which is legal for private methods); the unit specs exercise them
+      # through a throwaway host class that re-publicizes them.
+      private
+
       # Whether the injected room lines should render in the fixed-width mono
       # style. Gated on the frontend actually supporting mono so non-mono clients
       # never receive stray <output> tags (mirrors respond's own guard).
