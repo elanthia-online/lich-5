@@ -397,6 +397,17 @@ RSpec.describe Lich::GameBase::RoomFormatter do
 
       expect(formatter.room_exit_entries).to eq([])
     end
+
+    it 'coerces a non-String wayto value via to_s instead of raising on #dump' do
+      # An Integer responds to #to_s but not #dump; the defensive to_s keeps the
+      # downstream hook from crashing if a non-String value ever reaches here.
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 5 => 123 }, timeto: {}, id: 100))
+      Lich.display_exits = true
+      Lich.display_room_links = false
+
+      expect { formatter.room_exit_entries }.not_to raise_error
+      expect(formatter.room_exit_entries).to eq(['123'])
+    end
   end
 
   describe '#room_stringproc_entries' do

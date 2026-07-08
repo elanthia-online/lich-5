@@ -127,7 +127,12 @@ module Lich
           next if value.to_s =~ OBVIOUS_EXIT_PATTERN
           next if value.is_a?(StringProc)
 
-          cmd = value.dump[1..-2]
+          # Derive the command via to_s (as the OBVIOUS_EXIT_PATTERN check above
+          # already does) before #dump, so a non-String wayto value is coerced
+          # rather than raising NoMethodError inside the downstream hook. For the
+          # String values the mapdb actually stores, value.to_s is the same object
+          # so this is byte-identical to the previous value.dump.
+          cmd = value.to_s.dump[1..-2]
           entries << (room_links? ? "<d cmd='#{cmd}'>#{cmd}</d>" : cmd)
         end
         entries
