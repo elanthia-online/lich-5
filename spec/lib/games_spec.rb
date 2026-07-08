@@ -536,8 +536,22 @@ RSpec.describe 'process_room_display GS/DR parity' do
     Lich.display_room_mono = nil
   end
 
-  it 'produces identical shared exit/StringProc output for GS and DR' do
-    expect(gs.process_room_display(+'PROMPT')).to eq(dr.process_room_display(+'PROMPT'))
+  it 'renders a byte-identical shared exit/StringProc block in both games even when the game tails differ' do
+    Lich.display_lichid = true # DR now appends a "Room Number:" tail; GS still has none
+
+    # lichid=true also appends the dest id to the StringProc label - identically
+    # in both games, since both build it through the shared mixin.
+    shared = "Room Exits: <d cmd='go door'>go door</d>\r\n" \
+             "StringProcs: <d cmd=';go2 42'>Dest Room(99)</d>\r\n"
+    gs_out = gs.process_room_display(+'PROMPT')
+    dr_out = dr.process_room_display(+'PROMPT')
+
+    expect(gs_out).to include(shared)
+    expect(dr_out).to include(shared)
+    # The tails genuinely diverge (DR carries the room-number line), so matching
+    # the shared block is a real invariant - not the tautology of comparing two
+    # outputs whose game-specific tails have both been suppressed.
+    expect(gs_out).not_to eq(dr_out)
   end
 
   it 'DR adds a Room Number line but GS does not' do
