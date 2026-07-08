@@ -90,9 +90,10 @@ module Lich
           next unless timeto.is_a?(Numeric) || (timeto.is_a?(StringProc) && timeto.call.is_a?(Numeric))
           # Guard against a dangling wayto reference (destination room missing
           # from the mapdb) rather than crashing the whole downstream hook.
-          next if Map[key].nil?
+          dest = Map[key]
+          next if dest.nil?
 
-          label = "#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? "(#{Map[key].id})" : ''}"
+          label = "#{dest.title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? "(#{dest.id})" : ''}"
           entries << (room_links? ? "<d cmd=';go2 #{key}'>#{label}</d>" : label)
         end
         entries
@@ -120,17 +121,17 @@ module Lich
       # Prepends the shared "StringProcs:" and "Room Exits:" lines (in that
       # order, so exits end up above StringProcs and any later room-number line
       # ends up above both) to alt_string, each only when it has entries. This is
-      # the composition both games share.
+      # the composition both games share. Entries are passed in (built once by the
+      # caller) so a game that also reuses them - e.g. the GemStone room-window
+      # mirror - does not iterate Map.current.wayto twice.
       # @param alt_string [String] the server string being rewritten
+      # @param stringproc_entries [Array<String>] pre-built StringProc entries
+      # @param exit_entries [Array<String>] pre-built obvious-exit entries
       # @return [String] alt_string with the room lines prepended
       # @api private
-      def prepend_room_exit_lines(alt_string)
-        stringprocs = room_stringproc_entries
-        alt_string = "#{room_styled("StringProcs: #{stringprocs.join(', ')}")}\r\n#{alt_string}" unless stringprocs.empty?
-
-        exits = room_exit_entries
-        alt_string = "#{room_styled("Room Exits: #{exits.join(', ')}")}\r\n#{alt_string}" unless exits.empty?
-
+      def prepend_room_lines(alt_string, stringproc_entries, exit_entries)
+        alt_string = "#{room_styled("StringProcs: #{stringproc_entries.join(', ')}")}\r\n#{alt_string}" unless stringproc_entries.empty?
+        alt_string = "#{room_styled("Room Exits: #{exit_entries.join(', ')}")}\r\n#{alt_string}" unless exit_entries.empty?
         alt_string
       end
     end
@@ -1129,9 +1130,9 @@ module Lich
       # @param alt_string [String] the server string being rewritten
       # @return [String] the rewritten server string
       def process_room_display(alt_string)
-        alt_string = prepend_room_exit_lines(alt_string)
-
         exits = room_exit_entries
+        alt_string = prepend_room_lines(alt_string, room_stringproc_entries, exits)
+
         if !exits.empty? && ROOM_WINDOW_FRONTENDS.include?(Frontend.client) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
           alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{exits.join(', ')}\r\n<popStream/>\r\n"
           Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
@@ -1252,7 +1253,7 @@ module Lich
       # @param alt_string [String] the server string being rewritten
       # @return [String] the rewritten server string
       def process_room_display(alt_string)
-        alt_string = prepend_room_exit_lines(alt_string)
+        alt_string = prepend_room_lines(alt_string, room_stringproc_entries, room_exit_entries)
 
         # DR-specific room number display
         room_number = ""

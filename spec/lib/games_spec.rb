@@ -462,7 +462,7 @@ RSpec.describe Lich::GameBase::RoomFormatter do
     end
   end
 
-  describe '#prepend_room_exit_lines' do
+  describe '#prepend_room_lines' do
     let(:stringproc) { StringProc.new('nil') }
 
     before do
@@ -470,26 +470,22 @@ RSpec.describe Lich::GameBase::RoomFormatter do
       allow(Map).to receive(:[]).with(42).and_return(double('dest', title: ['[Dest Room]'], id: 99))
     end
 
-    it 'leaves alt_string untouched when both toggles are off' do
-      expect(formatter.prepend_room_exit_lines(+'PROMPT')).to eq('PROMPT')
+    it 'leaves alt_string untouched when there are no entries' do
+      expect(formatter.prepend_room_lines(+'PROMPT', [], [])).to eq('PROMPT')
     end
 
     it 'prepends exits above stringprocs, both above the original string' do
-      Lich.display_exits = true
-      Lich.display_stringprocs = true
-      Lich.display_room_links = false
+      Lich.display_room_mono = false
 
-      expect(formatter.prepend_room_exit_lines(+'PROMPT'))
-        .to eq("Room Exits: go door\r\nStringProcs: Dest Room\r\nPROMPT")
+      result = formatter.prepend_room_lines(+'PROMPT', ['Dest Room'], ['go door'])
+      expect(result).to eq("Room Exits: go door\r\nStringProcs: Dest Room\r\nPROMPT")
     end
 
     it 'keeps live <d> links inside a mono-wrapped line (toggles are independent)' do
-      Lich.display_exits = true
-      Lich.display_room_links = true
       Lich.display_room_mono = true
       allow(Frontend).to receive(:supports_mono?).and_return(true)
 
-      result = formatter.prepend_room_exit_lines(+'PROMPT')
+      result = formatter.prepend_room_lines(+'PROMPT', [], ["<d cmd='go door'>go door</d>"])
       expect(result).to include('<output class="mono"/>Room Exits: ')
       expect(result).to include("<d cmd='go door'>go door</d>")
     end
