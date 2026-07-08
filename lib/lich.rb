@@ -935,7 +935,9 @@ module Lich
   # game-aware: DragonRealms defaults to off (plain text, matching the retired
   # roomnumbers.lic look) while GemStone and any other game default to on
   # (clickable links, the pre-existing core behavior).
-  # @return [Boolean] true when exits should be clickable links
+  # @return [Boolean, nil] true when exits should be clickable links; nil until
+  #   the game is identified (XMLData.game still blank), matching the pre-existing
+  #   display_* getters. Callers treat nil as falsy.
   def Lich.display_room_links
     if @@display_room_links.nil?
       begin
@@ -971,7 +973,9 @@ module Lich
   # retired roomnumbers.lic look) while GemStone and any other game default to
   # off (the proportional game font, the pre-existing core behavior). The mono
   # wrapper is only emitted on mono-capable frontends (see Frontend.supports_mono?).
-  # @return [Boolean] true when the lines should render in the mono style
+  # @return [Boolean, nil] true when the lines should render in the mono style;
+  #   nil until the game is identified (XMLData.game still blank), matching the
+  #   pre-existing display_* getters. Callers treat nil as falsy.
   def Lich.display_room_mono
     if @@display_room_mono.nil?
       begin
