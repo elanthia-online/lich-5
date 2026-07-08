@@ -192,6 +192,13 @@ module Lich
                 $stdout.puts "warning: #{resolution.warning}"
                 Lich.log "warning: #{resolution.warning}"
               end
+            else
+              # Port-only form inherits --bind-address; warn just like an explicit host would.
+              warning = Lich::Common::BindHostResolver.warning_for_explicit(argv_options[:detachable_client_host])
+              if warning
+                $stdout.puts "warning: #{warning}"
+                Lich.log "warning: #{warning}"
+              end
             end
             argv_options[:detachable_client_port] = target.port
           rescue DetachableClientTarget::ParseError, Lich::Common::BindHostResolver::Error => e

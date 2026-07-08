@@ -735,7 +735,9 @@ reconnect_if_wanted = proc {
             connected: false
           )
 
-          listen_address = "#{server.local_address.ip_address}:#{server.local_address.ip_port}"
+          listen_ip = server.local_address.ip_address
+          listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
+          listen_address = "#{listen_ip}:#{server.local_address.ip_port}"
           Lich.log "info: detachable client server listening on #{listen_address}"
           $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
 

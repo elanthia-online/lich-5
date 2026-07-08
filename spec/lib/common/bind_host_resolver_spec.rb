@@ -130,6 +130,18 @@ RSpec.describe Lich::Common::BindHostResolver do
       expect(described_class.resolve('::', address_list: [], route_probe: no_route).warning).to match(/every network/)
     end
 
+    it 'passes IPv6 loopback and link-local addresses through without warning' do
+      expect(described_class.resolve('::1', address_list: [], route_probe: no_route).warning).to be_nil
+      expect(described_class.resolve('fe80::1', address_list: [], route_probe: no_route).warning).to be_nil
+    end
+
+    it 'warns on public IPv6 addresses' do
+      resolution = described_class.resolve('2001:db8::1', address_list: [], route_probe: no_route)
+
+      expect(resolution.host).to eq('2001:db8::1')
+      expect(resolution.warning).to match(/not a private address/)
+    end
+
     it 'passes hostnames through without warning' do
       resolution = described_class.resolve('mypc.tailnet.ts.net', address_list: [], route_probe: no_route)
 

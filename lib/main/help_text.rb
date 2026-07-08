@@ -219,7 +219,8 @@ module Lich
             --bind-address=IP sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1. Use 0.0.0.0 to accept connections from other hosts.
-            HOST in --headless/--detachable-client may be an IP, a hostname, or a keyword:
+            HOST in --headless/--detachable-client may be an IP, a hostname, a bracketed
+            IPv6 literal (e.g. [::1]:PORT), or a keyword:
             tailscale (this machine's Tailscale address), lan (its private LAN address),
             or any (0.0.0.0). The detachable port is unauthenticated - anyone who can
             reach it controls the session, so prefer tailscale over lan or any.
