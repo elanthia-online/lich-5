@@ -76,6 +76,18 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed).to eq([['sqlite3.gem', gem_home, artifact_body]])
   end
 
+  it 'creates a recovery plan before downloading or installing artifacts' do
+    unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
+    subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body })
+
+    plan = subject.recovery_plan(['sqlite3'])
+
+    expect(plan).to be_success
+    expect(plan.units).to eq([unit])
+    expect(installed).to be_empty
+  end
+
   it 'rejects a corrupted artifact before invoking the installer' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
@@ -160,6 +172,37 @@ RSpec.describe Lich::DependencyRecovery do
         expect { subject.send(:parse_https_uri!, value, 'artifact URL') }
           .to raise_error(described_class::Error)
       end
+    end
+  end
+
+  describe '#unsafe_archive_entry?' do
+    let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
+
+    it 'rejects empty, absolute, and parent-traversal archive entries' do
+      ['', '/absolute.gem', '\\absolute.gem', 'C:\\absolute.gem', '../escape.gem', 'gems/../escape.gem'].each do |entry|
+        expect(subject.send(:unsafe_archive_entry?, entry)).to be(true)
+      end
+    end
+
+    it 'accepts safe relative archive filenames and subpaths' do
+      %w[sqlite3.gem gems/sqlite3.gem gems/native/sqlite3.gem].each do |entry|
+        expect(subject.send(:unsafe_archive_entry?, entry)).to be(false)
+      end
+    end
+  end
+
+  describe '#require_filename!' do
+    let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
+
+    it 'rejects dot-only filenames' do
+      %w[. .. ...].each do |filename|
+        expect { subject.send(:require_filename!, filename, 'artifact') }
+          .to raise_error(described_class::Error, /filename is unsafe/)
+      end
+    end
+
+    it 'accepts ordinary filenames' do
+      expect { subject.send(:require_filename!, 'sqlite3.gem', 'artifact') }.not_to raise_error
     end
   end
 end

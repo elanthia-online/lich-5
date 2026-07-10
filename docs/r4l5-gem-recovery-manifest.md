@@ -10,6 +10,14 @@ gem must be mapped to a specific package or ordered bundle unit. Lich accepts
 only the exact Ruby ABI and platform of the running runtime, HTTPS URLs, and
 lowercase SHA-256 digests in `sha256:<hex>` form.
 
+When a required gem is missing, Lich fetches and validates this manifest before
+showing one native consent dialog for each affected recovery unit. It does not
+download a gem artifact or write to the runtime until every required unit is
+approved. A declined prompt, or the absence of a native confirmation UI, fails
+closed: Lich records the reason (including `user consent not available`) in
+`temp/lich5-missing-gems.log` and exits. GTK is required unless `--no-gui` or
+`--no-gtk` is present in `ARGV`.
+
 ```json
 {
   "schema": 1,

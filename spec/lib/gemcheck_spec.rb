@@ -20,7 +20,7 @@ RSpec.describe Lich::GemCheck do
 
     before do
       allow(described_class).to receive(:configure_gemfile!)
-      allow(described_class).to receive(:recover!).and_return(recovery_result)
+      allow(described_class).to receive(:recover_with_consent!).and_return(recovery_result)
     end
 
     context 'when nothing is missing' do
@@ -83,7 +83,8 @@ RSpec.describe Lich::GemCheck do
       end
 
       it 'rechecks the requested groups and continues without alerting' do
-        expect(described_class).to receive(:recover!).with(['ox']).and_return(recovery_result)
+        expect(described_class).to receive(:recover_with_consent!)
+          .with(['ox'], groups: [:default]).and_return(recovery_result)
         expect(described_class).not_to receive(:alert)
 
         expect { described_class.verify! }.not_to raise_error
@@ -110,6 +111,41 @@ RSpec.describe Lich::GemCheck do
           expect(error.status).to eq(1)
         end
       end
+    end
+
+    context 'when user consent is declined or unavailable' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:recover_with_consent!).and_return(nil)
+      end
+
+      it 'exits without a second generic missing-gem dialog' do
+        expect(described_class).not_to receive(:alert)
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+  end
+
+  describe '.recovery_units_approved?' do
+    let(:unit) { { 'id' => 'sqlite3', 'members' => ['sqlite3'] } }
+
+    it 'logs and warns when native consent UI is unavailable' do
+      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:unavailable)
+      expect(described_class).to receive(:report_consent_failure)
+        .with(unit, [:default], 'user consent not available')
+
+      expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
+    end
+
+    it 'requires each unit to be approved before downloading any artifact' do
+      second = { 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3] }
+      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:approved)
+      allow(described_class).to receive(:confirm_recovery_unit).with(second).and_return(:approved)
+
+      expect(described_class.recovery_units_approved?([unit, second], [:default])).to be(true)
     end
   end
 

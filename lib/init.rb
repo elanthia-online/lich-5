@@ -473,8 +473,10 @@ rescue LoadError
   # sqlite3 is a required dependency. It is restored only from an approved,
   # hash-verified Ruby4Lich5 manifest unit; this never falls back to `gem
   # install` or a user GEM_HOME.
-  result = Lich::GemCheck.recover!(['sqlite3'], force: true)
-  if result.success?
+  result = Lich::GemCheck.recover_with_consent!(['sqlite3'], force: true, groups: [:default])
+  if result.nil?
+    exit 1
+  elsif result.success?
     begin
       require 'sqlite3'
     rescue LoadError => e
@@ -489,41 +491,34 @@ rescue LoadError
   end
 end
 
-unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk')))
-  gtk_load_failure = lambda do |error|
-    if ((ENV['RUN_BY_CRON'].nil? || ENV['RUN_BY_CRON'] == 'false') && ARGV.empty?) ||
-       ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } || !$stdout.isatty
-      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: error)
-      exit 1
-    else
-      # GTK is optional when command-line arguments were given or Lich was
-      # started from a terminal. Keep the diagnostic for the normal logger.
-      HAVE_GTK = false
-      @early_gtk_error = "warning: failed to load GTK\n\t#{error}\n\t#{Array(error.backtrace).join("\n\t")}"
-    end
-  end
-
+unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
   begin
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
     # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
     # native dependency therefore restores the complete, ordered closure.
-    result = Lich::GemCheck.recover!(['gtk3'], force: true)
-    if result.success?
+    result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
+    if result.nil?
+      exit 1
+    elsif result.success?
       begin
         require 'gtk3'
         HAVE_GTK = true
       rescue LoadError => recovered_error
-        gtk_load_failure.call(recovered_error)
+        Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: recovered_error)
+        exit 1
       end
     else
-      gtk_load_failure.call(Lich::DependencyRecovery::Error.new(result.error))
+      Lich::GemCheck.alert(
+        missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
+      )
+      exit 1
     end
   end
 else
   HAVE_GTK = false
-  @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
+  @early_gtk_error = 'info: GTK disabled by command-line option'
 end
 
 unless File.exist?(LICH_DIR)

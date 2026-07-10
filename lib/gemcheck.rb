@@ -16,6 +16,10 @@ module Lich
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
 
+    # Records why a recovery did not run without treating that decision as a
+    # manifest or Bundler failure.
+    class ConsentError < StandardError; end
+
     module_function
 
     # Verifies every gem required by the requested Bundler groups is installed,
@@ -32,7 +36,9 @@ module Lich
       missing = missing_gems(groups)
       return if missing.empty?
 
-      result = recover!(missing)
+      result = recover_with_consent!(missing, groups: groups)
+      exit 1 unless result
+
       if result.success?
         missing = missing_gems(groups)
         return if missing.empty?
@@ -56,15 +62,85 @@ module Lich
       ENV['BUNDLE_GEMFILE'] = gemfile if File.file?(gemfile)
     end
 
-    # Restores only gems explicitly approved by Ruby4Lich5's manifest.
-    # The recovery module downloads verified local packages and installs them
-    # into the runtime's Gem.dir; it never invokes a dependency resolver.
+    # Fetches and validates the manifest, requests consent for each affected
+    # recovery unit, then performs the download and installation only after all
+    # units were approved. Returns nil when consent was declined or unavailable;
+    # that case is already logged and presented to the user.
     #
     # @param gem_names [Array<String>] names to recover
     # @param force [Boolean] reinstall an already registered manifest package
-    # @return [DependencyRecovery::Result]
-    def recover!(gem_names, force: false)
-      DependencyRecovery.new.recover(gem_names, force: force)
+    # @param groups [Array<Symbol>] dependency groups being recovered
+    # @return [DependencyRecovery::Result, nil]
+    def recover_with_consent!(gem_names, force: false, groups: [:default])
+      recovery = DependencyRecovery.new
+      plan = recovery.recovery_plan(gem_names)
+      return DependencyRecovery::Result.new(installed_gems: [], error: plan.error) unless plan.success?
+      return nil unless recovery_units_approved?(plan.units, groups)
+
+      recovery.recover(gem_names, force: force, plan: plan)
+    end
+
+    # Requests consent for every affected unit before any artifact download or
+    # installation begins. This prevents a later declined bundle from leaving
+    # earlier approved units partially installed.
+    #
+    # @param units [Array<Hash>] validated manifest units
+    # @param groups [Array<Symbol>] dependency groups being recovered
+    # @return [Boolean]
+    def recovery_units_approved?(units, groups)
+      units.each do |unit|
+        decision = confirm_recovery_unit(unit)
+        next if decision == :approved
+
+        reason = decision == :unavailable ? 'user consent not available' : 'user declined installation'
+        report_consent_failure(unit, groups, reason)
+        return false
+      end
+      true
+    end
+
+    # @param unit [Hash] validated manifest recovery unit
+    # @return [Symbol] :approved, :declined, or :unavailable
+    def confirm_recovery_unit(unit)
+      body = build_recovery_prompt(unit)
+      case RUBY_PLATFORM
+      when /mswin|mingw|cygwin/ then confirm_windows(body)
+      when /darwin/             then confirm_macos(body)
+      else                           confirm_linux(body)
+      end
+    rescue StandardError
+      :unavailable
+    end
+
+    # @param unit [Hash] validated manifest recovery unit
+    # @return [String]
+    def build_recovery_prompt(unit)
+      label = recovery_unit_label(unit)
+      members = Array(unit['members'])
+      details = members.length > 1 ? "\n\nThis bundle contains: #{members.join(', ')}." : ''
+      "Required #{label} is not installed.\n\n" \
+        "Lich can download and install the approved, hash-verified package now.#{details}\n\n" \
+        'Install now?'
+    end
+
+    # @param unit [Hash] validated manifest recovery unit
+    # @return [String]
+    def recovery_unit_label(unit)
+      members = Array(unit['members'])
+      return "#{members.first} gem" if members.length == 1
+      return 'GTK3 runtime bundle' if unit['id'] == 'gtk3-runtime'
+
+      "#{unit.fetch('id').tr('-', ' ')} bundle"
+    end
+
+    # @param unit [Hash] recovery unit the user did not approve
+    # @param groups [Array<Symbol>] dependency groups being recovered
+    # @param reason [String] user-decision or UI-availability reason
+    # @return [void]
+    def report_consent_failure(unit, groups, reason)
+      error = ConsentError.new(reason)
+      write_log(missing: Array(unit['members']), groups: groups, error: error)
+      show_notice("Required #{recovery_unit_label(unit)} not installed. Exiting.")
     end
 
     # Names of gems declared in the Gemfile that are not installed at any
@@ -207,6 +283,74 @@ module Lich
       yield
     rescue StandardError => e
       "(unavailable: #{e.class}: #{e.message})"
+    end
+
+    # @param body [String]
+    # @return [Symbol] :approved or :declined
+    def confirm_windows(body)
+      require 'win32ole'
+      shell = WIN32OLE.new('WScript.Shell')
+      # Yes/No buttons + question icon. WScript returns 6 for Yes.
+      shell.Popup(body, 0, TITLE, 4 + 32) == 6 ? :approved : :declined
+    end
+
+    # @param body [String]
+    # @return [Symbol] :approved or :declined
+    def confirm_macos(body)
+      script = %(display dialog #{body.inspect} with title #{TITLE.inspect} ) +
+               %(buttons {"Install", "Cancel"} default button "Install" with icon caution)
+      output = IO.popen(['osascript', '-'], 'r+') do |io|
+        io.write(script)
+        io.close_write
+        io.read
+      end
+      output.include?('button returned:Install') ? :approved : :declined
+    end
+
+    # @param body [String]
+    # @return [Symbol] :approved, :declined, or :unavailable
+    def confirm_linux(body)
+      if cmd_available?('zenity')
+        system('zenity', '--question', '--title', TITLE, '--text', body) ? :approved : :declined
+      elsif cmd_available?('kdialog')
+        system('kdialog', '--title', TITLE, '--yesno', body) ? :approved : :declined
+      elsif cmd_available?('xmessage')
+        system('xmessage', '-center', '-buttons', 'Install:0,Cancel:1', body) ? :approved : :declined
+      else
+        :unavailable
+      end
+    end
+
+    # Shows an error without the normal missing-gem alert's release-page link.
+    # @param body [String]
+    # @return [void]
+    def show_notice(body)
+      case RUBY_PLATFORM
+      when /mswin|mingw|cygwin/ then notice_windows(body)
+      when /darwin/             then notice_macos(body)
+      else                           alert_linux(body)
+      end
+    rescue StandardError
+      warn "!!ALERT!! #{body}"
+    end
+
+    # @param body [String]
+    # @return [void]
+    def notice_windows(body)
+      require 'win32ole'
+      WIN32OLE.new('WScript.Shell').Popup(body, 0, TITLE, 64) # OK + information icon
+    end
+
+    # @param body [String]
+    # @return [void]
+    def notice_macos(body)
+      script = %(display dialog #{body.inspect} with title #{TITLE.inspect} ) +
+               %(buttons {"OK"} default button "OK" with icon caution)
+      IO.popen(['osascript', '-'], 'r+') do |io|
+        io.write(script)
+        io.close_write
+        io.read
+      end
     end
 
     # @param body [String]

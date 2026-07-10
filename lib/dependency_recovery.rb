@@ -22,12 +22,22 @@ module Lich
                            'R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-manifest.json'
     LOCK_FILENAME = '.lich-dependency-recovery.lock'
     SHA256_PATTERN = /\Asha256:[0-9a-f]{64}\z/
-    SAFE_FILENAME = /\A[^\\\/]+\z/
+    SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
 
     # @return [String] result of a successful or unsuccessful recovery attempt
     Result = Struct.new(:installed_gems, :error, keyword_init: true) do
       # @return [Boolean] whether recovery completed successfully
+      def success?
+        error.nil?
+      end
+    end
+
+    # A validated, manifest-derived set of units. Planning intentionally
+    # fetches no gem artifacts, so callers can obtain user consent before an
+    # installation changes the runtime.
+    Plan = Struct.new(:units, :error, keyword_init: true) do
+      # @return [Boolean] whether the requested units are approved and valid
       def success?
         error.nil?
       end
@@ -50,22 +60,37 @@ module Lich
       @extract_zip = extract_zip || method(:extract_zip_file)
     end
 
-    # Downloads, verifies, and installs the manifest units covering +gem_names+.
+    # Loads and validates the manifest units covering +gem_names+, without
+    # downloading gem artifacts. Callers use this to request consent first.
+    #
+    # @param gem_names [Array<String>] approved gem names to restore
+    # @return [Plan]
+    def recovery_plan(gem_names)
+      requested = Array(gem_names).map(&:to_s).reject(&:empty?).uniq
+      return Plan.new(units: []) if requested.empty?
+
+      Plan.new(units: units_for(load_manifest, requested))
+    rescue Error, JSON::ParserError, OpenURI::HTTPError, SocketError, SystemCallError => e
+      Plan.new(units: [], error: e.message)
+    rescue StandardError => e
+      Plan.new(units: [], error: "#{e.class}: #{e.message}")
+    end
+
+    # Downloads, verifies, and installs a previously approved manifest plan.
     # Installation always targets +Gem.dir+ (or the injected runtime directory),
     # never a user-controlled GEM_HOME.
     #
     # @param gem_names [Array<String>] approved gem names to restore
     # @param force [Boolean] reinstall even when the manifest version is present
+    # @param plan [Plan, nil] plan obtained before user consent
     # @return [Result]
-    def recover(gem_names, force: false)
-      requested = Array(gem_names).map(&:to_s).reject(&:empty?).uniq
-      return Result.new(installed_gems: []) if requested.empty?
+    def recover(gem_names, force: false, plan: nil)
+      planned = plan || recovery_plan(gem_names)
+      return Result.new(installed_gems: [], error: planned.error) unless planned.success?
 
-      manifest = load_manifest
-      units = units_for(manifest, requested)
       installed = with_install_lock do
         Dir.mktmpdir('lich-gem-recovery') do |work_dir|
-          units.flat_map { |unit| install_unit(unit, work_dir, force: force) }
+          planned.units.flat_map { |unit| install_unit(unit, work_dir, force: force) }
         end
       end
       refresh_rubygems!
@@ -283,7 +308,8 @@ module Lich
     # @param entry [String]
     # @return [Boolean]
     def unsafe_archive_entry?(entry)
-      entry.empty? || entry.start_with?('/', '\\') || entry.split(/[\\\/]/).include?('..')
+      entry.empty? || entry.start_with?('/', '\\') || entry.match?(/\A[A-Za-z]:[\\\/]/) ||
+        entry.split(/[\\\/]/).include?('..')
     end
 
     # @param path [String]
