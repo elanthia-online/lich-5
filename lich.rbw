@@ -34,7 +34,7 @@ else
 end
 require File.join(LIB_DIR, 'version.rb')
 require File.join(LIB_DIR, 'gemcheck.rb')
-Lich::GemCheck.verify!
+Lich::GemCheck.verify!(*Lich::GemCheck.startup_groups)
 
 # TODO: Move all local requires to top of file
 require 'base64'

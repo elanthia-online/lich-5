@@ -58,7 +58,7 @@ RSpec.describe Lich::DependencyRecovery do
     }
   end
 
-  def recovery(artifacts:, extract_zip: nil, install_gem: nil, powershell_runner: nil)
+  def recovery(artifacts:, extract_zip: nil, install_gem: nil, powershell_runner: nil, helper_launcher: nil)
     described_class.new(
       manifest_url: manifest_url,
       gem_home: gem_home,
@@ -66,7 +66,8 @@ RSpec.describe Lich::DependencyRecovery do
       http_get: ->(url) { artifacts.fetch(url) },
       install_gem: install_gem || ->(path, home) { installed << [File.basename(path), home, File.binread(path)] },
       extract_zip: extract_zip,
-      powershell_runner: powershell_runner
+      powershell_runner: powershell_runner,
+      helper_launcher: helper_launcher
     )
   end
 
@@ -209,6 +210,40 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed.map { |entry| entry[1] }.uniq).to eq([gem_home])
   end
 
+  it 'hands a complete native runtime unit to the hidden replacement helper' do
+    bundle_url = 'https://example.test/gtk3-runtime.zip'
+    bundle_body = 'verified zip payload'
+    packages = [
+      { 'name' => 'glib2', 'version' => '4.3.6', 'filename' => "glib2-4.3.6-#{platform}.gem", 'sha256' => sha256('glib') },
+      { 'name' => 'gtk3', 'version' => '4.3.6', 'filename' => "gtk3-4.3.6-#{platform}.gem", 'sha256' => sha256('gtk') }
+    ]
+    unit = {
+      'id'            => 'gtk3-runtime',
+      'members'       => %w[glib2 gtk3],
+      'artifact'      => { 'url' => bundle_url, 'filename' => 'gtk3-runtime.zip', 'sha256' => sha256(bundle_body), 'archive' => 'zip' },
+      'packages'      => packages,
+      'install_order' => %w[glib2 gtk3]
+    }
+    payloads = []
+    extractor = lambda do |_archive, destination|
+      File.binwrite(File.join(destination, packages[0]['filename']), 'glib')
+      File.binwrite(File.join(destination, packages[1]['filename']), 'gtk')
+    end
+    allow(Gem).to receive(:win_platform?).and_return(true)
+    subject = recovery(
+      artifacts: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), bundle_url => bundle_body },
+      extract_zip: extractor,
+      helper_launcher: ->(payload_path) { payloads << JSON.parse(File.read(payload_path)) }
+    )
+
+    result = subject.recover(['gtk3'], force: true)
+
+    expect(result).to be_success
+    expect(result.restart_required).to be(true)
+    expect(installed).to be_empty
+    expect(payloads.first.fetch('packages').map { |package| package.fetch('name') }).to eq(%w[glib2 gtk3])
+  end
+
   describe '#parse_https_uri!' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 
@@ -249,7 +284,7 @@ RSpec.describe Lich::DependencyRecovery do
 
     before { allow(Gem).to receive(:win_platform?).and_return(true) }
 
-    it 'uses a parameterized PowerShell script file instead of -Command arguments' do
+    it 'uses a hidden WScript launcher for parameterized PowerShell extraction' do
       command = nil
       success = double('status', success?: true)
       runner = lambda do |*args|
@@ -261,9 +296,10 @@ RSpec.describe Lich::DependencyRecovery do
 
       subject.send(:extract_zip_file, zip_path, destination)
 
-      script_path = command.fetch(command.index('-File') + 1)
-      expect(command).to include('-File', script_path, '-Archive', zip_path, '-Destination', destination)
-      expect(command).not_to include('-Command')
+      launcher_path = command.last
+      script_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.ps1')
+      expect(command).to eq(['wscript.exe', '//nologo', launcher_path])
+      expect(File.read(launcher_path)).to include('shell.Run(command, 0, True)', '-Archive', '-Destination')
       expect(File.read(script_path)).to include('[string]$Archive', '[string]$Destination')
     end
 

@@ -15,6 +15,21 @@ end
 require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
+  describe '.startup_groups' do
+    it 'checks default and GTK dependencies for a graphical launch' do
+      expect(described_class.startup_groups([])).to eq(%i[default gtk])
+    end
+
+    it 'omits GTK only for an explicit no-GUI switch' do
+      expect(described_class.startup_groups(['--no-gui'])).to eq([:default])
+      expect(described_class.startup_groups(['--no-gtk'])).to eq([:default])
+    end
+
+    it 'does not treat unrelated arguments as a headless request' do
+      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq(%i[default gtk])
+    end
+  end
+
   describe '.verify!' do
     let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: []) }
 
@@ -108,6 +123,20 @@ RSpec.describe Lich::GemCheck do
       end
     end
 
+    context 'when native runtime replacement is scheduled' do
+      let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true) }
+
+      before do
+        allow(described_class).to receive(:missing_gems).with([:default]).and_return(['ox'])
+      end
+
+      it 'exits cleanly so the hidden helper can replace files and relaunch Lich' do
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(0)
+        end
+      end
+    end
+
     context 'when manifest recovery cannot restore a detected gem' do
       let(:recovery_result) do
         Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'manifest unavailable')
@@ -150,25 +179,24 @@ RSpec.describe Lich::GemCheck do
     let(:unit) { { 'id' => 'sqlite3', 'members' => ['sqlite3'] } }
 
     it 'logs and warns when native consent UI is unavailable' do
-      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:unavailable)
+      allow(described_class).to receive(:confirm_recovery_units).with([unit]).and_return(:unavailable)
       expect(described_class).to receive(:report_consent_failure)
-        .with(unit, [:default], 'user consent not available')
+        .with([unit], [:default], 'user consent not available')
 
       expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
     end
 
-    it 'requires each unit to be approved before downloading any artifact' do
+    it 'requires one approval covering every planned unit before downloading any artifact' do
       second = { 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3] }
-      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:approved)
-      allow(described_class).to receive(:confirm_recovery_unit).with(second).and_return(:approved)
+      expect(described_class).to receive(:confirm_recovery_units).with([unit, second]).and_return(:approved)
 
       expect(described_class.recovery_units_approved?([unit, second], [:default])).to be(true)
     end
 
     it 'logs a timeout distinctly from a declined or unavailable prompt' do
-      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:timed_out)
+      allow(described_class).to receive(:confirm_recovery_units).with([unit]).and_return(:timed_out)
       expect(described_class).to receive(:report_consent_failure)
-        .with(unit, [:default], 'user consent timed out')
+        .with([unit], [:default], 'user consent timed out')
 
       expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
     end

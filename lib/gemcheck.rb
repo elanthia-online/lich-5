@@ -44,6 +44,7 @@ module Lich
 
       result = recover_with_consent!(missing, groups: groups)
       exit 1 unless result
+      exit 0 if result.restart_required
 
       if result.success?
         missing = missing_gems(groups)
@@ -76,6 +77,18 @@ module Lich
       Gem.win_platform?
     end
 
+    # Chooses the dependency groups that must be present before normal startup.
+    # GTK is required for every graphical launch; the two explicit headless
+    # switches are the only supported way to omit it.
+    #
+    # @param argv [Array<String>] command-line arguments
+    # @return [Array<Symbol>]
+    def startup_groups(argv = ARGV)
+      groups = [:default]
+      groups << :gtk unless Array(argv).grep(/^--no-(?:gtk|gui)$/i).any?
+      groups
+    end
+
     # Fetches and validates the manifest, requests consent for each affected
     # recovery unit, then performs the download and installation only after all
     # units were approved. Returns nil when consent was declined or unavailable;
@@ -94,23 +107,20 @@ module Lich
       recovery.recover(gem_names, force: force, plan: plan)
     end
 
-    # Requests consent for every affected unit before any artifact download or
-    # installation begins. This prevents a later declined bundle from leaving
-    # earlier approved units partially installed.
+    # Requests one consent decision for every affected unit before any artifact
+    # download or installation begins. This prevents a declined bundle from
+    # leaving an earlier approved unit partially installed.
     #
     # @param units [Array<Hash>] validated manifest units
     # @param groups [Array<Symbol>] dependency groups being recovered
     # @return [Boolean]
     def recovery_units_approved?(units, groups)
-      units.each do |unit|
-        decision = confirm_recovery_unit(unit)
-        next if decision == :approved
+      decision = confirm_recovery_units(units)
+      return true if decision == :approved
 
-        reason = consent_failure_reason(decision)
-        report_consent_failure(unit, groups, reason)
-        return false
-      end
-      true
+      reason = consent_failure_reason(decision)
+      report_consent_failure(units, groups, reason)
+      false
     end
 
     # @param decision [Symbol] consent dialog outcome
@@ -122,10 +132,10 @@ module Lich
       'user declined installation'
     end
 
-    # @param unit [Hash] validated manifest recovery unit
+    # @param units [Array<Hash>] validated manifest recovery units
     # @return [Symbol] :approved, :declined, or :unavailable
-    def confirm_recovery_unit(unit)
-      body = build_recovery_prompt(unit)
+    def confirm_recovery_units(units)
+      body = build_recovery_prompt(units)
       case RUBY_PLATFORM
       when /mswin|mingw|cygwin/ then confirm_windows(body)
       when /darwin/             then confirm_macos(body)
@@ -135,14 +145,16 @@ module Lich
       :unavailable
     end
 
-    # @param unit [Hash] validated manifest recovery unit
+    # @param units [Array<Hash>] validated manifest recovery units
     # @return [String]
-    def build_recovery_prompt(unit)
-      label = recovery_unit_label(unit)
-      members = Array(unit['members'])
-      details = members.length > 1 ? "\n\nThis bundle contains: #{members.join(', ')}." : ''
-      "Required #{label} is not installed.\n\n" \
-        "Lich can download and install the approved, hash-verified package now.#{details}\n\n" \
+    def build_recovery_prompt(units)
+      listed_units = Array(units).map do |unit|
+        members = Array(unit['members'])
+        details = members.length > 1 ? ": #{members.join(', ')}" : ''
+        "  - #{recovery_unit_label(unit)}#{details}"
+      end
+      "Required Ruby gems are not installed:\n#{listed_units.join("\n")}\n\n" \
+        'Lich can download and install the approved, hash-verified packages now.\n\n' \
         'Install now?'
     end
 
@@ -156,14 +168,15 @@ module Lich
       "#{unit.fetch('id').tr('-', ' ')} bundle"
     end
 
-    # @param unit [Hash] recovery unit the user did not approve
+    # @param units [Array<Hash>] recovery units the user did not approve
     # @param groups [Array<Symbol>] dependency groups being recovered
     # @param reason [String] user-decision or UI-availability reason
     # @return [void]
-    def report_consent_failure(unit, groups, reason)
+    def report_consent_failure(units, groups, reason)
       error = ConsentError.new(reason)
-      write_log(missing: Array(unit['members']), groups: groups, error: error)
-      show_notice("Required #{recovery_unit_label(unit)} not installed. Exiting.")
+      missing = units.flat_map { |unit| Array(unit['members']) }.uniq
+      write_log(missing: missing, groups: groups, error: error)
+      show_notice("Required gem#{'s' if missing.length != 1} #{missing.join(', ')} not installed. Exiting.")
     end
 
     # Names of gems declared in the Gemfile that are not installed at any

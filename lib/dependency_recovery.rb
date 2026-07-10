@@ -4,6 +4,7 @@ require 'fileutils'
 require 'json'
 require 'open-uri'
 require 'open3'
+require 'rbconfig'
 require 'rubygems/installer'
 require 'tmpdir'
 require 'uri'
@@ -27,7 +28,7 @@ module Lich
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
 
     # @return [String] result of a successful or unsuccessful recovery attempt
-    Result = Struct.new(:installed_gems, :error, keyword_init: true) do
+    Result = Struct.new(:installed_gems, :error, :restart_required, keyword_init: true) do
       # @return [Boolean] whether recovery completed successfully
       def success?
         error.nil?
@@ -56,7 +57,8 @@ module Lich
     # @param powershell_runner [#call, nil] test seam for the Windows extractor
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
-                   http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil)
+                   http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil,
+                   helper_launcher: nil)
       @manifest_url = manifest_url
       @gem_home = gem_home
       @temp_dir = temp_dir
@@ -64,6 +66,7 @@ module Lich
       @install_gem = install_gem || method(:install_gem_file)
       @extract_zip = extract_zip || method(:extract_zip_file)
       @powershell_runner = powershell_runner || Open3.method(:capture3)
+      @helper_launcher = helper_launcher || method(:launch_windows_helper)
     end
 
     # Loads and validates the manifest units covering +gem_names+, without
@@ -94,19 +97,68 @@ module Lich
       planned = plan || recovery_plan(gem_names)
       return Result.new(installed_gems: [], error: planned.error) unless planned.success?
 
-      installed = with_install_lock do
+      result = with_install_lock do
         with_recovery_workspace do |work_dir|
-          planned.units.flat_map { |unit| install_unit(unit, work_dir, force: force) }
+          staged_units = planned.units.map { |unit| stage_unit(unit, work_dir) }
+          replacement, direct = staged_units.partition { |staged| native_runtime_unit?(staged.fetch(:unit)) }
+          installed = direct.flat_map { |staged| install_staged_unit(staged, force: force) }
+
+          if replacement.empty?
+            Result.new(installed_gems: installed)
+          elsif replacement.length == 1
+            schedule_runtime_replacement(replacement.first, work_dir)
+            Result.new(installed_gems: installed, restart_required: true)
+          else
+            raise Error, 'multiple native runtime replacement units are not supported in one recovery'
+          end
         end
       end
-      refresh_rubygems!
-      Result.new(installed_gems: installed)
+      refresh_rubygems! unless result.restart_required
+      result
     rescue Error, JSON::ParserError, OpenURI::HTTPError, SocketError, SystemCallError => e
       Result.new(installed_gems: [], error: e.message)
     rescue StandardError => e
       # Recovery runs during boot. Keep an unexpected implementation failure
       # from turning into an unhelpful backtrace before GemCheck can report it.
       Result.new(installed_gems: [], error: "#{e.class}: #{e.message}")
+    end
+
+    # Runs in a detached Ruby process after the original Lich process exits.
+    # The payload contains only already-hash-verified package paths and the
+    # original Lich invocation; artifacts are re-verified before replacement.
+    #
+    # @param payload_path [String] JSON transaction description
+    # @return [Boolean] whether the replacement and restart succeeded
+    def self.run_windows_replacement(payload_path)
+      payload = JSON.parse(File.read(payload_path))
+      recovery = new(gem_home: payload.fetch('gem_home'), temp_dir: payload.fetch('temp_dir'))
+      recovery.send(:run_windows_replacement!, payload)
+      true
+    rescue StandardError => e
+      log_helper_failure(payload_path, e)
+      false
+    end
+
+    # @param payload_path [String]
+    # @param error [Exception]
+    # @return [void]
+    def self.log_helper_failure(payload_path, error)
+      payload = JSON.parse(File.read(payload_path)) rescue {}
+      log_path = File.join(payload.fetch('temp_dir', Dir.tmpdir), 'lich5-missing-gems.log')
+      File.open(log_path, 'a') do |file|
+        file.puts "[#{Time.now}] Lich5 native gem replacement failure"
+        file.puts "  #{error.class}: #{error.message}"
+        file.puts
+      end
+      return unless Gem.win_platform?
+
+      require 'win32ole'
+      WIN32OLE.new('WScript.Shell').Popup(
+        "Lich could not update the GTK runtime. See #{log_path} for details.",
+        0, 'Lich5: Ruby Gem Recovery', 16
+      )
+    rescue StandardError
+      nil
     end
 
     private
@@ -196,15 +248,12 @@ module Lich
       require_sha256!(package['sha256'], "unit #{unit_id} package")
     end
 
+    # Downloads and verifies an entire unit before any runtime package is
+    # changed. Native units are later handed to a detached replacement helper.
     # @param unit [Hash]
     # @param work_dir [String]
-    # @param force [Boolean]
-    # @return [Array<String>] installed package names
-    def install_unit(unit, work_dir, force:)
-      packages = unit.fetch('packages')
-      pending = force ? packages : packages.reject { |package| package_installed?(package) }
-      return [] if pending.empty?
-
+    # @return [Hash]
+    def stage_unit(unit, work_dir)
       artifact = unit.fetch('artifact')
       artifact_path = File.join(work_dir, artifact.fetch('filename'))
       download_to(artifact.fetch('url'), artifact_path)
@@ -217,16 +266,90 @@ module Lich
         @extract_zip.call(artifact_path, package_dir)
       end
 
+      package_paths = unit.fetch('packages').to_h do |package|
+        path = artifact.fetch('archive') == 'gem' ? artifact_path : File.join(package_dir, package.fetch('filename'))
+        verify_file!(path, package.fetch('sha256'), "#{package.fetch('name')} gem")
+        [package.fetch('name'), path]
+      end
+      { unit: unit, package_paths: package_paths }
+    end
+
+    # @param staged [Hash]
+    # @param force [Boolean]
+    # @return [Array<String>] installed package names
+    def install_staged_unit(staged, force:)
+      unit = staged.fetch(:unit)
+      packages = unit.fetch('packages')
+      pending = force ? packages : packages.reject { |package| package_installed?(package) }
+      return [] if pending.empty?
+
       packages_by_name = packages.to_h { |package| [package.fetch('name'), package] }
       unit.fetch('install_order').filter_map do |name|
         package = packages_by_name.fetch(name)
-        next unless force || pending.include?(package)
+        next unless pending.include?(package)
 
-        gem_path = artifact.fetch('archive') == 'gem' ? artifact_path : File.join(package_dir, package.fetch('filename'))
-        verify_file!(gem_path, package.fetch('sha256'), "#{name} gem")
-        @install_gem.call(gem_path, @gem_home)
+        @install_gem.call(staged.fetch(:package_paths).fetch(name), @gem_home)
         name
       end
+    end
+
+    # A ZIP unit containing native gems cannot safely be overwritten while the
+    # Lich Ruby process is alive. It is replaced as one coherent suite after
+    # this process exits, rather than mixing old and new native components.
+    # @param unit [Hash]
+    # @return [Boolean]
+    def native_runtime_unit?(unit)
+      Gem.win_platform? && unit.fetch('packages').any? do |package|
+        package.fetch('filename').end_with?("-#{Gem::Platform.local}.gem")
+      end
+    end
+
+    # @param staged [Hash]
+    # @param work_dir [String]
+    # @return [void]
+    def schedule_runtime_replacement(staged, work_dir)
+      payload_path = File.join(work_dir, 'native-runtime-replacement.json')
+      payload = {
+        'schema'     => 1,
+        'parent_pid' => Process.pid,
+        'gem_home'   => @gem_home,
+        'temp_dir'   => @temp_dir,
+        'work_dir'   => work_dir,
+        'packages'   => staged.fetch(:unit).fetch('packages').map do |package|
+          package.merge('path' => staged.fetch(:package_paths).fetch(package.fetch('name')))
+        end,
+        'restart'    => {
+          'program' => File.expand_path($PROGRAM_NAME),
+          'argv'    => ARGV,
+          'chdir'   => Dir.pwd
+        }
+      }
+      File.write(payload_path, JSON.generate(payload))
+      @helper_launcher.call(payload_path)
+    rescue SystemCallError => e
+      raise Error, "Could not start the hidden native gem replacement helper: #{e.message}"
+    end
+
+    # @param payload_path [String]
+    # @return [Integer] helper process id
+    def launch_windows_helper(payload_path)
+      raise Error, 'native runtime replacement is only supported on Windows' unless Gem.win_platform?
+
+      helper_path = File.join(File.dirname(payload_path), 'run-native-runtime-replacement.rb')
+      File.write(helper_path, <<~RUBY)
+        require #{File.expand_path(__FILE__).inspect}
+        exit(Lich::DependencyRecovery.run_windows_replacement(ARGV.fetch(0)) ? 0 : 1)
+      RUBY
+      Process.spawn(
+        rubyw_binary, helper_path, payload_path,
+        chdir: Dir.pwd, out: File::NULL, err: File::NULL
+      )
+    end
+
+    # @return [String] no-console Ruby executable on Windows
+    def rubyw_binary
+      candidate = RbConfig.ruby.sub(/ruby(?:\.exe)?\z/i, 'rubyw.exe')
+      File.file?(candidate) ? candidate : RbConfig.ruby
     end
 
     # @param package [Hash]
@@ -234,6 +357,141 @@ module Lich
     def package_installed?(package)
       requirement = Gem::Requirement.new("= #{package.fetch('version')}")
       Gem::Specification.find_all_by_name(package.fetch('name'), requirement).any?
+    end
+
+    # Performs the destructive portion only after the original Ruby process is
+    # gone. Every old package is moved, not deleted, until the complete new suite
+    # is installed and its exact manifest versions are registered.
+    # @param payload [Hash]
+    # @return [void]
+    def run_windows_replacement!(payload)
+      validate_replacement_payload!(payload)
+      wait_for_parent_exit(payload.fetch('parent_pid'))
+      with_install_lock do
+        rollback_dir = File.join(payload.fetch('work_dir'), 'previous-runtime')
+        moved = []
+        begin
+          moved = backup_existing_packages(payload.fetch('packages'), rollback_dir)
+          refresh_rubygems!
+          payload.fetch('packages').each do |package|
+            verify_file!(package.fetch('path'), package.fetch('sha256'), "#{package.fetch('name')} gem")
+            @install_gem.call(package.fetch('path'), @gem_home)
+          end
+          verify_replacement!(payload.fetch('packages'))
+          FileUtils.remove_entry(rollback_dir) if Dir.exist?(rollback_dir)
+        rescue StandardError
+          remove_replacement_packages(payload.fetch('packages'))
+          restore_backup(moved)
+          raise
+        end
+      end
+      restart_lich(payload.fetch('restart'))
+    end
+
+    # @param payload [Hash]
+    # @return [void]
+    def validate_replacement_payload!(payload)
+      raise Error, 'invalid native runtime replacement payload' unless payload.is_a?(Hash) && payload['schema'] == 1
+      %w[parent_pid gem_home temp_dir work_dir packages restart].each do |key|
+        raise Error, "native runtime replacement payload is missing #{key}" unless payload.key?(key)
+      end
+      raise Error, 'native runtime replacement packages must be an array' unless payload['packages'].is_a?(Array) && !payload['packages'].empty?
+      raise Error, 'native runtime replacement restart data must be an object' unless payload['restart'].is_a?(Hash)
+      raise Error, 'native runtime replacement restart arguments must be an array' unless payload['restart']['argv'].is_a?(Array)
+      raise Error, 'native runtime replacement program is invalid' unless File.file?(payload['restart']['program'])
+      raise Error, 'native runtime replacement working directory is invalid' unless Dir.exist?(payload['restart']['chdir'])
+      payload['packages'].each { |package| validate_package!(package, 'native runtime replacement') }
+      unless payload['packages'].all? { |package| File.file?(package['path']) && path_within?(package['path'], payload['work_dir']) }
+        raise Error, 'native runtime replacement package path is unsafe'
+      end
+    end
+
+    # @param pid [Integer]
+    # @return [void]
+    def wait_for_parent_exit(pid)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 120
+      loop do
+        Process.kill(0, Integer(pid))
+        raise Error, 'timed out waiting for Lich to exit before native gem replacement' if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.1
+      rescue Errno::ESRCH
+        return
+      end
+    end
+
+    # @param packages [Array<Hash>]
+    # @param rollback_dir [String]
+    # @return [Array<Array<String>>] original and temporary paths
+    def backup_existing_packages(packages, rollback_dir)
+      names = packages.map { |package| package.fetch('name') }.uniq
+      specs = names.flat_map { |name| Gem::Specification.find_all_by_name(name) }.uniq(&:loaded_from)
+      specs.flat_map do |spec|
+        [spec.full_gem_path, spec.loaded_from, spec.extension_dir].filter_map do |path|
+          next unless File.exist?(path)
+          raise Error, "installed gem path is outside Ruby runtime: #{path}" unless path_within?(path, @gem_home)
+
+          destination = File.join(rollback_dir, path.delete_prefix(File.expand_path(@gem_home)).sub(%r{\A[\\/]}, ''))
+          FileUtils.mkdir_p(File.dirname(destination))
+          FileUtils.mv(path, destination)
+          [path, destination]
+        end
+      end
+    end
+
+    # @param moved [Array<Array<String>>]
+    # @return [void]
+    def restore_backup(moved)
+      moved.reverse_each do |original, temporary|
+        next unless File.exist?(temporary)
+
+        FileUtils.mkdir_p(File.dirname(original))
+        FileUtils.mv(temporary, original)
+      end
+      refresh_rubygems!
+    end
+
+    # @param packages [Array<Hash>]
+    # @return [void]
+    def remove_replacement_packages(packages)
+      names = packages.map { |package| package.fetch('name') }.uniq
+      names.flat_map { |name| Gem::Specification.find_all_by_name(name) }.uniq(&:loaded_from).each do |spec|
+        [spec.full_gem_path, spec.loaded_from, spec.extension_dir].each do |path|
+          FileUtils.remove_entry(path) if File.exist?(path) && path_within?(path, @gem_home)
+        end
+      end
+      refresh_rubygems!
+    end
+
+    # @param packages [Array<Hash>]
+    # @return [void]
+    def verify_replacement!(packages)
+      refresh_rubygems!
+      packages.each do |package|
+        requirement = Gem::Requirement.new("= #{package.fetch('version')}")
+        installed = Gem::Specification.find_all_by_name(package.fetch('name'), requirement)
+        raise Error, "#{package.fetch('name')} was not installed during native runtime replacement" if installed.empty?
+      end
+    end
+
+    # @param restart [Hash]
+    # @return [Integer]
+    def restart_lich(restart)
+      Process.spawn(
+        rubyw_binary, restart.fetch('program'), *restart.fetch('argv'),
+        chdir: restart.fetch('chdir'), out: File::NULL, err: File::NULL
+      )
+    rescue SystemCallError => e
+      raise Error, "Could not restart Lich after native gem replacement: #{e.message}"
+    end
+
+    # @param path [String]
+    # @param root [String]
+    # @return [Boolean]
+    def path_within?(path, root)
+      expanded_path = File.expand_path(path)
+      expanded_root = File.expand_path(root)
+      expanded_path == expanded_root || expanded_path.start_with?("#{expanded_root}#{File::SEPARATOR}")
     end
 
     # @param url [String]
@@ -290,13 +548,14 @@ module Lich
       FileUtils.mkdir_p(destination)
       if Gem.win_platform?
         script_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.ps1')
+        error_path = File.join(File.dirname(destination), 'extract-r4l5-bundle-error.txt')
+        launcher_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.vbs')
         File.write(script_path, windows_extraction_script)
-        stdout, stderr, status = @powershell_runner.call(
-          'powershell.exe', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
-          '-File', script_path, '-Archive', zip_path, '-Destination', destination
-        )
+        File.write(launcher_path, windows_hidden_launcher(script_path, zip_path, destination, error_path))
+        stdout, stderr, status = @powershell_runner.call('wscript.exe', '//nologo', launcher_path)
         unless status.success?
-          details = [stderr, stdout].reject { |text| text.to_s.strip.empty? }.join("\n").strip
+          details = [(File.read(error_path) if File.file?(error_path)), stderr, stdout]
+                    .compact.reject { |text| text.to_s.strip.empty? }.join("\n").strip
           details = 'no diagnostic output' if details.empty?
           raise Error, "Could not extract #{File.basename(zip_path)} into #{destination} " \
                        "(PowerShell exit #{status.exitstatus}): #{details}"
@@ -314,31 +573,54 @@ module Lich
 
     # Uses named script parameters rather than appending values after
     # PowerShell's -Command argument, where they would be parsed as command
-    # text instead of reliably reaching $args.
+    # text instead of reliably reaching $args. A hidden WScript launcher starts
+    # PowerShell without the console flash produced by powershell.exe itself.
     # @return [String] PowerShell extraction script
     def windows_extraction_script
       <<~POWERSHELL
         param(
           [Parameter(Mandatory = $true)][string]$Archive,
-          [Parameter(Mandatory = $true)][string]$Destination
+          [Parameter(Mandatory = $true)][string]$Destination,
+          [Parameter(Mandatory = $true)][string]$ErrorPath
         )
 
-        $ErrorActionPreference = 'Stop'
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        $archivePath = [IO.Path]::GetFullPath($Archive)
-        $destinationPath = [IO.Path]::GetFullPath($Destination)
-        $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
         try {
-          foreach ($entry in $zip.Entries) {
-            if ([IO.Path]::IsPathRooted($entry.FullName) -or $entry.FullName -match '(^|[\\/])\\.\\.([\\/]|$)') {
-              throw "unsafe archive entry: $($entry.FullName)"
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archivePath = [IO.Path]::GetFullPath($Archive)
+          $destinationPath = [IO.Path]::GetFullPath($Destination)
+          $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
+          try {
+            foreach ($entry in $zip.Entries) {
+              if ([IO.Path]::IsPathRooted($entry.FullName) -or $entry.FullName -match '(^|[\\/])\\.\\.([\\/]|$)') {
+                throw "unsafe archive entry: $($entry.FullName)"
+              }
             }
+          } finally {
+            $zip.Dispose()
           }
-        } finally {
-          $zip.Dispose()
+          [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $destinationPath)
+        } catch {
+          $_ | Out-String | Set-Content -LiteralPath $ErrorPath
+          exit 1
         }
-        [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $destinationPath)
       POWERSHELL
+    end
+
+    # @param script_path [String]
+    # @param zip_path [String]
+    # @param destination [String]
+    # @param error_path [String]
+    # @return [String]
+    def windows_hidden_launcher(script_path, zip_path, destination, error_path)
+      <<~VBSCRIPT
+        Function Quote(value)
+          Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
+        End Function
+        Set shell = CreateObject("WScript.Shell")
+        command = Quote("powershell.exe") & " -NoProfile -NonInteractive -WindowStyle Hidden -File " & Quote(#{script_path.inspect}) & " -Archive " & Quote(#{zip_path.inspect}) & " -Destination " & Quote(#{destination.inspect}) & " -ErrorPath " & Quote(#{error_path.inspect})
+        WScript.Quit shell.Run(command, 0, True)
+      VBSCRIPT
     end
 
     # @param entry [String]

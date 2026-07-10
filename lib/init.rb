@@ -481,6 +481,8 @@ rescue LoadError
   result = Lich::GemCheck.recover_with_consent!(['sqlite3'], force: true, groups: [:default])
   if result.nil?
     exit 1
+  elsif result.restart_required
+    exit 0
   elsif result.success?
     begin
       require 'sqlite3'
@@ -511,6 +513,8 @@ unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
     result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
     if result.nil?
       exit 1
+    elsif result.restart_required
+      exit 0
     elsif result.success?
       begin
         require 'gtk3'

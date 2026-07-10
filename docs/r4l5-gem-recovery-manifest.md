@@ -11,12 +11,12 @@ only the exact Ruby ABI and platform of the running runtime, HTTPS URLs, and
 lowercase SHA-256 digests in `sha256:<hex>` form.
 
 When a required gem is missing, Lich fetches and validates this manifest before
-showing one native consent dialog for each affected recovery unit. It does not
-download a gem artifact or write to the runtime until every required unit is
-approved. A declined prompt, or the absence of a native confirmation UI, fails
-closed: Lich records the reason (including `user consent not available`) in
-`temp/lich5-missing-gems.log` and exits. GTK is required unless `--no-gui` or
-`--no-gtk` is present in `ARGV`.
+showing one native consent dialog listing every affected recovery unit. It does
+not download a gem artifact or write to the runtime until the combined request
+is approved. A declined prompt, or the absence of a native confirmation UI,
+fails closed: Lich records the reason (including `user consent not available`)
+in `temp/lich5-missing-gems.log` and exits. GTK is required unless `--no-gui`
+or `--no-gtk` is present in `ARGV`.
 
 On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
@@ -25,6 +25,15 @@ After consent, Lich downloads and expands recovery artifacts only in its own
 `lich-5/temp` directory. During the current Windows extraction investigation,
 the per-recovery workspace is retained there for inspection; restore normal
 cleanup once the investigation is complete.
+
+Native ZIP units are replaced as a complete suite. Lich first hashes every
+package, then starts a hidden `rubyw.exe` helper and exits. Once the original
+process has released native files, the helper moves prior variants to a
+temporary rollback directory, installs and validates the complete manifest
+unit in the normal Ruby4Lich5 gem tree, deletes the rollback copy, and restarts
+the original Lich command with its original arguments. It never uses a user
+`GEM_HOME` or retains a second permanent GTK tree. Failure restores the moved
+packages and records the error in the same early-startup log.
 
 
 This recovery path is currently Windows-only. On macOS and Linux, Lich does
