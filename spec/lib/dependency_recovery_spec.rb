@@ -284,6 +284,30 @@ RSpec.describe Lich::DependencyRecovery do
     expect(payloads.first.fetch('packages').map { |package| package.fetch('name') }).to eq(%w[glib2 gtk3])
   end
 
+  it 'installs a native single-gem artifact in process rather than scheduling a replacement' do
+    body = 'native gem payload'
+    unit = {
+      'id'            => 'ox',
+      'members'       => ['ox'],
+      'artifact'      => { 'url' => artifact_url, 'filename' => "ox-1.2.3-#{platform}.gem", 'sha256' => sha256(body), 'archive' => 'gem' },
+      'packages'      => [{ 'name' => 'ox', 'version' => '1.2.3', 'filename' => "ox-1.2.3-#{platform}.gem", 'sha256' => sha256(body) }],
+      'install_order' => ['ox']
+    }
+    allow(Gem).to receive(:win_platform?).and_return(true)
+    launcher = spy('replacement helper')
+    subject = recovery(
+      artifacts: { manifest_url => manifest_for([unit], ruby_abi: ruby_abi, platform: platform), artifact_url => body },
+      helper_launcher: launcher
+    )
+
+    result = subject.recover(['ox'])
+
+    expect(result).to be_success
+    expect(result.restart_required).to be_nil
+    expect(launcher).not_to have_received(:call)
+    expect(installed.map(&:first)).to eq(["ox-1.2.3-#{platform}.gem"])
+  end
+
   describe '#parse_https_uri!' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 

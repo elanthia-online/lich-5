@@ -321,7 +321,7 @@ module Lich
     # @param unit [Hash]
     # @return [Boolean]
     def native_runtime_unit?(unit)
-      Gem.win_platform? && unit.fetch('packages').any? do |package|
+      Gem.win_platform? && unit.fetch('artifact').fetch('archive') == 'zip' && unit.fetch('packages').any? do |package|
         package.fetch('filename').end_with?("-#{Gem::Platform.local}.gem")
       end
     end
