@@ -22,8 +22,10 @@ On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
 
 After consent, Lich downloads and expands recovery artifacts only in its own
-`lich-5/temp` directory. The per-recovery workspace and all downloaded or
-generated package files are removed after success or failure.
+`lich-5/temp` directory. During the current Windows extraction investigation,
+the per-recovery workspace is retained there for inspection; restore normal
+cleanup once the investigation is complete.
+
 
 This recovery path is currently Windows-only. On macOS and Linux, Lich does
 not fetch this manifest or attempt self-healing; it retains the ordinary

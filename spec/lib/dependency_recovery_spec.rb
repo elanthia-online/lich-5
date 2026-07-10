@@ -58,14 +58,15 @@ RSpec.describe Lich::DependencyRecovery do
     }
   end
 
-  def recovery(artifacts:, extract_zip: nil, install_gem: nil)
+  def recovery(artifacts:, extract_zip: nil, install_gem: nil, powershell_runner: nil)
     described_class.new(
       manifest_url: manifest_url,
       gem_home: gem_home,
       temp_dir: recovery_temp_dir,
       http_get: ->(url) { artifacts.fetch(url) },
       install_gem: install_gem || ->(path, home) { installed << [File.basename(path), home, File.binread(path)] },
-      extract_zip: extract_zip
+      extract_zip: extract_zip,
+      powershell_runner: powershell_runner
     )
   end
 
@@ -81,7 +82,7 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed).to eq([['sqlite3.gem', gem_home, artifact_body]])
   end
 
-  it 'uses and cleans a workspace beneath Lich TEMP_DIR' do
+  it 'uses a retained workspace beneath Lich TEMP_DIR during extraction diagnosis' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
     workspaces = []
@@ -93,7 +94,7 @@ RSpec.describe Lich::DependencyRecovery do
 
     expect(subject.recover(['sqlite3'])).to be_success
     expect(workspaces.first).to start_with(recovery_temp_dir)
-    expect(Dir.exist?(workspaces.first)).to be(false)
+    expect(Dir.exist?(workspaces.first)).to be(true)
   end
 
   it 'does not recreate an existing Lich TEMP_DIR' do
@@ -103,6 +104,20 @@ RSpec.describe Lich::DependencyRecovery do
 
     expect(FileUtils).not_to receive(:mkdir_p).with(recovery_temp_dir)
     expect(subject.recover(['sqlite3'])).to be_success
+  end
+
+  it 'retains the workspace while Windows extraction is being diagnosed' do
+    unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
+    workspaces = []
+    installer = lambda do |path, home|
+      workspaces << File.dirname(path)
+      installed << [File.basename(path), home, File.binread(path)]
+    end
+    subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body }, install_gem: installer)
+
+    expect(subject.recover(['sqlite3'])).to be_success
+    expect(Dir.exist?(workspaces.first)).to be(true)
   end
 
   it 'reports the runtime destination when gem installation is denied' do
@@ -225,6 +240,41 @@ RSpec.describe Lich::DependencyRecovery do
       %w[sqlite3.gem gems/sqlite3.gem gems/native/sqlite3.gem].each do |entry|
         expect(subject.send(:unsafe_archive_entry?, entry)).to be(false)
       end
+    end
+  end
+
+  describe 'Windows ZIP extraction' do
+    let(:zip_path) { File.join(recovery_temp_dir, 'bundle.zip') }
+    let(:destination) { File.join(recovery_temp_dir, 'packages') }
+
+    before { allow(Gem).to receive(:win_platform?).and_return(true) }
+
+    it 'uses a parameterized PowerShell script file instead of -Command arguments' do
+      command = nil
+      success = double('status', success?: true)
+      runner = lambda do |*args|
+        command = args
+        ['', '', success]
+      end
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir,
+                                    powershell_runner: runner)
+
+      subject.send(:extract_zip_file, zip_path, destination)
+
+      script_path = command.fetch(command.index('-File') + 1)
+      expect(command).to include('-File', script_path, '-Archive', zip_path, '-Destination', destination)
+      expect(command).not_to include('-Command')
+      expect(File.read(script_path)).to include('[string]$Archive', '[string]$Destination')
+    end
+
+    it 'includes captured PowerShell diagnostics when extraction fails' do
+      failure = double('status', success?: false, exitstatus: 1)
+      runner = ->(*) { ['standard output', 'access denied', failure] }
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir,
+                                    powershell_runner: runner)
+
+      expect { subject.send(:extract_zip_file, zip_path, destination) }
+        .to raise_error(described_class::Error, /PowerShell exit 1.*access denied/)
     end
   end
 

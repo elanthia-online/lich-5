@@ -3,6 +3,7 @@ require 'digest'
 require 'fileutils'
 require 'json'
 require 'open-uri'
+require 'open3'
 require 'rubygems/installer'
 require 'tmpdir'
 require 'uri'
@@ -52,15 +53,17 @@ module Lich
     # @param http_get [#call, nil] test seam returning binary response content
     # @param install_gem [#call, nil] test seam for local gem installation
     # @param extract_zip [#call, nil] test seam for zip extraction
+    # @param powershell_runner [#call, nil] test seam for the Windows extractor
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
                    gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
-                   http_get: nil, install_gem: nil, extract_zip: nil)
+                   http_get: nil, install_gem: nil, extract_zip: nil, powershell_runner: nil)
       @manifest_url = manifest_url
       @gem_home = gem_home
       @temp_dir = temp_dir
       @http_get = http_get
       @install_gem = install_gem || method(:install_gem_file)
       @extract_zip = extract_zip || method(:extract_zip_file)
+      @powershell_runner = powershell_runner || Open3.method(:capture3)
     end
 
     # Loads and validates the manifest units covering +gem_names+, without
@@ -286,32 +289,56 @@ module Lich
     def extract_zip_file(zip_path, destination)
       FileUtils.mkdir_p(destination)
       if Gem.win_platform?
-        script = <<~POWERSHELL
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $archive = $args[0]
-          $destination = [IO.Path]::GetFullPath($args[1])
-          $zip = [IO.Compression.ZipFile]::OpenRead($archive)
-          try {
-            foreach ($entry in $zip.Entries) {
-              if ([IO.Path]::IsPathRooted($entry.FullName) -or $entry.FullName -match '(^|[\\/])\\.\\.([\\/]|$)') {
-                throw "unsafe archive entry: $($entry.FullName)"
-              }
-            }
-          } finally {
-            $zip.Dispose()
-          }
-          [IO.Compression.ZipFile]::ExtractToDirectory($archive, $destination)
-        POWERSHELL
-        success = system('powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script, zip_path, destination)
+        script_path = File.join(File.dirname(destination), 'extract-r4l5-bundle.ps1')
+        File.write(script_path, windows_extraction_script)
+        stdout, stderr, status = @powershell_runner.call(
+          'powershell.exe', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden',
+          '-File', script_path, '-Archive', zip_path, '-Destination', destination
+        )
+        unless status.success?
+          details = [stderr, stdout].reject { |text| text.to_s.strip.empty? }.join("\n").strip
+          details = 'no diagnostic output' if details.empty?
+          raise Error, "Could not extract #{File.basename(zip_path)} into #{destination} " \
+                       "(PowerShell exit #{status.exitstatus}): #{details}"
+        end
       else
         entries = IO.popen(['unzip', '-Z1', zip_path], &:read).lines.map(&:strip)
         raise Error, 'archive contains an unsafe entry' if entries.any? { |entry| unsafe_archive_entry?(entry) }
 
         success = system('unzip', '-q', zip_path, '-d', destination)
+        raise Error, "could not extract #{File.basename(zip_path)} into #{destination}" unless success
       end
-      raise Error, "could not extract #{File.basename(zip_path)}" unless success
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
+    end
+
+    # Uses named script parameters rather than appending values after
+    # PowerShell's -Command argument, where they would be parsed as command
+    # text instead of reliably reaching $args.
+    # @return [String] PowerShell extraction script
+    def windows_extraction_script
+      <<~POWERSHELL
+        param(
+          [Parameter(Mandatory = $true)][string]$Archive,
+          [Parameter(Mandatory = $true)][string]$Destination
+        )
+
+        $ErrorActionPreference = 'Stop'
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archivePath = [IO.Path]::GetFullPath($Archive)
+        $destinationPath = [IO.Path]::GetFullPath($Destination)
+        $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
+        try {
+          foreach ($entry in $zip.Entries) {
+            if ([IO.Path]::IsPathRooted($entry.FullName) -or $entry.FullName -match '(^|[\\/])\\.\\.([\\/]|$)') {
+              throw "unsafe archive entry: $($entry.FullName)"
+            }
+          }
+        } finally {
+          $zip.Dispose()
+        }
+        [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $destinationPath)
+      POWERSHELL
     end
 
     # @param entry [String]
@@ -382,8 +409,8 @@ module Lich
     end
 
     # Uses Lich's own temp directory rather than the platform AppData/system
-    # temp area. Dir.mktmpdir's block form removes the download, ZIP expansion,
-    # and local .gem files after either success or failure.
+    # temp area. Cleanup is intentionally disabled while the Windows extractor
+    # is being diagnosed; restore block-form Dir.mktmpdir cleanup afterward.
     # @yieldparam work_dir [String] per-recovery temporary workspace
     # @return [Object]
     def with_recovery_workspace
@@ -392,7 +419,9 @@ module Lich
       else
         FileUtils.mkdir_p(@temp_dir)
       end
-      Dir.mktmpdir('lich-gem-recovery-', @temp_dir) { |work_dir| yield work_dir }
+      work_dir = Dir.mktmpdir('lich-gem-recovery-', @temp_dir)
+      warn "Lich dependency recovery workspace retained at #{work_dir}"
+      yield work_dir
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot create recovery workspace in #{@temp_dir}: #{e.message}"
     end
