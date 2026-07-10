@@ -202,6 +202,15 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe '.build_recovery_prompt' do
+    it 'uses real line breaks between the explanatory sentence and the question' do
+      unit = { 'id' => 'ox', 'members' => ['ox'] }
+
+      expect(described_class.build_recovery_prompt([unit]))
+        .to include("packages now.\n\nInstall now?")
+    end
+  end
+
   describe '.confirm_windows' do
     it 'maps the bounded WScript timeout result to a fail-closed outcome' do
       expect(described_class).to receive(:windows_popup)
@@ -514,6 +523,17 @@ RSpec.describe Lich::GemCheck do
     it 'appends across multiple calls rather than overwriting' do
       2.times { described_class.write_log }
       expect(File.read(log_path).scan('Lich5 GemCheck failure').size).to eq(2)
+    end
+
+    it 'records approved recovery units without labelling the entry a failure' do
+      units = [{ 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3] }]
+      described_class.write_recovery_log(missing: ['gtk3'], groups: [:gtk], units: units)
+
+      contents = File.read(log_path)
+      expect(contents).to include('Lich5 GemCheck recovery')
+      expect(contents).to include('Approved manifest recovery units:')
+      expect(contents).to include('GTK3 runtime bundle: glib2, gtk3')
+      expect(contents).not_to include('Lich5 GemCheck failure')
     end
 
     it 'swallows filesystem errors silently' do

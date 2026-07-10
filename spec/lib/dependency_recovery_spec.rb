@@ -83,7 +83,7 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed).to eq([['sqlite3.gem', gem_home, artifact_body]])
   end
 
-  it 'uses a retained workspace beneath Lich TEMP_DIR during extraction diagnosis' do
+  it 'uses a workspace beneath Lich TEMP_DIR and cleans it after direct recovery' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
     workspaces = []
@@ -95,7 +95,7 @@ RSpec.describe Lich::DependencyRecovery do
 
     expect(subject.recover(['sqlite3'])).to be_success
     expect(workspaces.first).to start_with(recovery_temp_dir)
-    expect(Dir.exist?(workspaces.first)).to be(true)
+    expect(Dir.exist?(workspaces.first)).to be(false)
   end
 
   it 'does not recreate an existing Lich TEMP_DIR' do
@@ -108,7 +108,7 @@ RSpec.describe Lich::DependencyRecovery do
     expect(subject.recover(['sqlite3'])).to be_success
   end
 
-  it 'retains the workspace while Windows extraction is being diagnosed' do
+  it 'cleans the workspace after a direct recovery succeeds' do
     unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
     workspaces = []
@@ -117,6 +117,25 @@ RSpec.describe Lich::DependencyRecovery do
       installed << [File.basename(path), home, File.binread(path)]
     end
     subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body }, install_gem: installer)
+
+    expect(subject.recover(['sqlite3'])).to be_success
+    expect(Dir.exist?(workspaces.first)).to be(false)
+  end
+
+  it 'does not turn a successful recovery into a failure when workspace cleanup is denied' do
+    unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
+    workspaces = []
+    installer = lambda do |path, home|
+      workspaces << File.dirname(File.dirname(File.dirname(path)))
+      installed << [File.basename(path), home, File.binread(path)]
+    end
+    subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body }, install_gem: installer)
+    allow(FileUtils).to receive(:remove_entry).and_wrap_original do |original, path|
+      raise Errno::EACCES, 'permission denied' if workspaces.include?(path)
+
+      original.call(path)
+    end
 
     expect(subject.recover(['sqlite3'])).to be_success
     expect(Dir.exist?(workspaces.first)).to be(true)

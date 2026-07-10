@@ -22,9 +22,9 @@ On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
 
 After consent, Lich downloads and expands recovery artifacts only in its own
-`lich-5/temp` directory. During the current Windows extraction investigation,
-the per-recovery workspace is retained there for inspection; restore normal
-cleanup once the investigation is complete.
+`lich-5/temp` directory. It removes the per-recovery workspace after direct
+recovery completes. A native-suite helper retains it only until replacement and
+validation complete, then removes it before relaunching Lich.
 
 Native ZIP units are replaced as a complete suite. Lich first hashes every
 package, then starts a hidden `rubyw.exe` helper and exits. Once the original

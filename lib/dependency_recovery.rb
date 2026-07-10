@@ -407,6 +407,7 @@ module Lich
           raise
         end
       end
+      cleanup_workspace(payload.fetch('work_dir'))
       restart_lich(payload.fetch('restart'))
     end
 
@@ -505,6 +506,16 @@ module Lich
       )
     rescue SystemCallError => e
       raise Error, "Could not restart Lich after native gem replacement: #{e.message}"
+    end
+
+    # @param path [String]
+    # @return [void]
+    def cleanup_workspace(path)
+      FileUtils.remove_entry(path) if Dir.exist?(path)
+    rescue SystemCallError
+      # Successful recovery must not be turned into a failed relaunch merely
+      # because a temporary file is being released late by Windows.
+      nil
     end
 
     # @param path [String]
@@ -724,10 +735,18 @@ module Lich
         FileUtils.mkdir_p(@temp_dir)
       end
       work_dir = Dir.mktmpdir('lich-gem-recovery-', @temp_dir)
-      warn "Lich dependency recovery workspace retained at #{work_dir}"
-      yield work_dir
+      result = yield work_dir
+      result
     rescue Errno::EACCES, Errno::EROFS => e
       raise Error, "Cannot create recovery workspace in #{@temp_dir}: #{e.message}"
+    ensure
+      # A detached native-suite helper still needs its verified packages after
+      # this process exits. Every other recovery, including failures, removes
+      # its workspace before returning to the user.
+      if defined?(work_dir) && work_dir && Dir.exist?(work_dir) &&
+         !(defined?(result) && result.respond_to?(:restart_required) && result.restart_required)
+        cleanup_workspace(work_dir)
+      end
     end
 
     # Makes a successful local installation visible to Bundler and RubyGems in

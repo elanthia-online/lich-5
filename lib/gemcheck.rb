@@ -104,6 +104,7 @@ module Lich
       return DependencyRecovery::Result.new(installed_gems: [], error: plan.error) unless plan.success?
       return nil unless recovery_units_approved?(plan.units, groups)
 
+      write_recovery_log(missing: gem_names, groups: groups, units: plan.units)
       recovery.recover(gem_names, force: force, plan: plan)
     end
 
@@ -154,7 +155,7 @@ module Lich
         "  - #{recovery_unit_label(unit)}#{details}"
       end
       "Required Ruby gems are not installed:\n#{listed_units.join("\n")}\n\n" \
-        'Lich can download and install the approved, hash-verified packages now.\n\n' \
+        "Lich can download and install the approved, hash-verified packages now.\n\n" \
         'Install now?'
     end
 
@@ -241,19 +242,39 @@ module Lich
       parts.join("\n\n")
     end
 
+    # Records a successful user-approved recovery attempt so self-healing is
+    # observable even when Lich subsequently starts without an error dialog.
+    # @param missing [Array<String>]
+    # @param groups [Array<Symbol>]
+    # @param units [Array<Hash>]
+    # @return [void]
+    def write_recovery_log(missing:, groups:, units:)
+      write_log(missing: missing, groups: groups, event: 'recovery', recovery_units: units)
+    end
+
     # @param missing [Array<String>]
     # @param groups [Array<Symbol>]
     # @param error [Exception, nil]
+    # @param event [String] log event name
+    # @param recovery_units [Array<Hash>, nil] approved manifest units
     # @return [void]
-    def write_log(missing: [], groups: [:default], error: nil)
+    def write_log(missing: [], groups: [:default], error: nil, event: 'failure', recovery_units: nil)
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
       # verify! can run before init.rb creates TEMP_DIR (fresh install), so
       # ensure the directory exists or the alert would cite a log we never wrote.
       Dir.mkdir(TEMP_DIR) unless File.exist?(TEMP_DIR)
       File.open(log_path, 'a') do |f|
-        f.puts "[#{Time.now}] Lich5 GemCheck failure"
-        f.puts message.gsub(/^/, '  ')
+        f.puts "[#{Time.now}] Lich5 GemCheck #{event}"
+        f.puts message.gsub(/^/, '  ') if event == 'failure'
         f.puts
+
+        if recovery_units
+          f.puts '  Approved manifest recovery units:'
+          recovery_units.each do |unit|
+            f.puts "    - #{recovery_unit_label(unit)}: #{Array(unit['members']).join(', ')}"
+          end
+          f.puts
+        end
 
         f.puts '  Diagnostics:'
         f.puts "    Ruby:            #{RUBY_DESCRIPTION}"
@@ -286,7 +307,7 @@ module Lich
         end
         f.puts
 
-        f.puts "  Download: #{RELEASE_URL}" if RUBY_PLATFORM =~ /mswin|mingw|cygwin/
+        f.puts "  Download: #{RELEASE_URL}" if event == 'failure' && RUBY_PLATFORM =~ /mswin|mingw|cygwin/
         f.puts
       end
     rescue StandardError
