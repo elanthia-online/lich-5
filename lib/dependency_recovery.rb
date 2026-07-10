@@ -23,6 +23,8 @@ module Lich
     DEFAULT_MANIFEST_URL = 'https://github.com/Lich5/Ruby4Lich5/releases/download/' \
                            'R4L5-gem-bundle-x64-mingw-ucrt/R4L5-gem-manifest.json'
     LOCK_FILENAME = '.lich-dependency-recovery.lock'
+    HTTP_OPEN_TIMEOUT_SECONDS = 10
+    HTTP_READ_TIMEOUT_SECONDS = 60
     SHA256_PATTERN = /\Asha256:[0-9a-f]{64}\z/
     SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
@@ -537,7 +539,7 @@ module Lich
         return
       end
 
-      uri.open('User-Agent' => 'Lich5 dependency recovery') do |remote|
+      uri.open(http_open_options) do |remote|
         final_uri = remote.base_uri
         parse_https_uri!(final_uri.to_s, 'redirected artifact URL') if final_uri
         File.open(destination, 'wb') { |file| IO.copy_stream(remote, file) }
@@ -552,7 +554,7 @@ module Lich
       uri = parse_https_uri!(url, 'manifest URL')
       return @http_get.call(url) if @http_get
 
-      uri.open('User-Agent' => 'Lich5 dependency recovery') do |remote|
+      uri.open(http_open_options) do |remote|
         final_uri = remote.base_uri
         parse_https_uri!(final_uri.to_s, 'redirected manifest URL') if final_uri
         remote.read
@@ -651,9 +653,15 @@ module Lich
           Quote = Chr(34) & Replace(value, Chr(34), Chr(34) & Chr(34)) & Chr(34)
         End Function
         Set shell = CreateObject("WScript.Shell")
-        command = Quote("powershell.exe") & " -NoProfile -NonInteractive -WindowStyle Hidden -File " & Quote(#{script_path.inspect}) & " -Archive " & Quote(#{zip_path.inspect}) & " -Destination " & Quote(#{destination.inspect}) & " -ErrorPath " & Quote(#{error_path.inspect})
+        command = Quote("powershell.exe") & " -NoProfile -NonInteractive -WindowStyle Hidden -File " & Quote(#{vbscript_literal(script_path)}) & " -Archive " & Quote(#{vbscript_literal(zip_path)}) & " -Destination " & Quote(#{vbscript_literal(destination)}) & " -ErrorPath " & Quote(#{vbscript_literal(error_path)})
         WScript.Quit shell.Run(command, 0, True)
       VBSCRIPT
+    end
+
+    # @param value [String]
+    # @return [String] a VBScript string literal
+    def vbscript_literal(value)
+      %("#{value.to_s.gsub('"', '""')}")
     end
 
     # @param entry [String]
@@ -702,6 +710,15 @@ module Lich
       raise Error, "#{label} must be a valid HTTPS URL"
     end
 
+    # @return [Hash] OpenURI options for bounded recovery transfers
+    def http_open_options
+      {
+        'User-Agent' => 'Lich5 dependency recovery',
+        open_timeout: HTTP_OPEN_TIMEOUT_SECONDS,
+        read_timeout: HTTP_READ_TIMEOUT_SECONDS
+      }
+    end
+
     # @return [String] running Ruby major.minor version
     def ruby_abi
       RUBY_VERSION.split('.').first(2).join('.')
@@ -724,8 +741,8 @@ module Lich
     end
 
     # Uses Lich's own temp directory rather than the platform AppData/system
-    # temp area. Cleanup is intentionally disabled while the Windows extractor
-    # is being diagnosed; restore block-form Dir.mktmpdir cleanup afterward.
+    # temp area. Normal recoveries and failures clean up their workspace; a
+    # restart-required native suite retains it only until its helper completes.
     # @yieldparam work_dir [String] per-recovery temporary workspace
     # @return [Object]
     def with_recovery_workspace

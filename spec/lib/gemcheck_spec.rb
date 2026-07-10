@@ -228,6 +228,38 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe 'Windows notices' do
+    let(:shell) { double('WScript.Shell') }
+
+    before do
+      stub_const('WIN32OLE', Class.new)
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      allow(WIN32OLE).to receive(:new).with('WScript.Shell').and_return(shell)
+    end
+
+    it 'bounds informational notices' do
+      expect(shell).to receive(:Popup)
+        .with('notice', described_class::CONSENT_TIMEOUT_SECONDS, described_class::TITLE, 64)
+
+      described_class.notice_windows('notice')
+    end
+
+    it 'bounds release-page alerts and does not open a URL after timeout' do
+      expect(shell).to receive(:Popup)
+        .with("alert\n\nClick OK to open the download page.", described_class::CONSENT_TIMEOUT_SECONDS,
+              described_class::TITLE, 1 + 64).and_return(-1)
+      expect(shell).not_to receive(:Run)
+
+      described_class.alert_windows('alert')
+    end
+  end
+
+  describe '.macos_dialog_body' do
+    it 'preserves multiline body content as AppleScript return expressions' do
+      expect(described_class.macos_dialog_body("first\nsecond")).to eq('"first" & return & "second"')
+    end
+  end
+
   describe '.configure_gemfile!' do
     around do |example|
       original = ENV.fetch('BUNDLE_GEMFILE', nil)

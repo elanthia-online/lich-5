@@ -2,6 +2,7 @@
 require 'digest'
 require 'fileutils'
 require 'json'
+require 'stringio'
 require 'tmpdir'
 
 require_relative '../../lib/dependency_recovery'
@@ -345,6 +346,39 @@ RSpec.describe Lich::DependencyRecovery do
     end
   end
 
+  describe 'bounded HTTPS transfers' do
+    let(:subject) { described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir) }
+    let(:uri) { double('HTTPS URI') }
+    let(:options) do
+      {
+        'User-Agent' => 'Lich5 dependency recovery',
+        open_timeout: described_class::HTTP_OPEN_TIMEOUT_SECONDS,
+        read_timeout: described_class::HTTP_READ_TIMEOUT_SECONDS
+      }
+    end
+
+    it 'uses explicit connection and read timeouts when downloading an artifact' do
+      remote = StringIO.new('artifact')
+      allow(remote).to receive(:base_uri).and_return(nil)
+      allow(subject).to receive(:parse_https_uri!).and_return(uri)
+      expect(uri).to receive(:open).with(options).and_yield(remote)
+      destination = File.join(recovery_temp_dir, 'artifact.gem')
+
+      subject.send(:download_to, 'https://example.test/artifact.gem', destination)
+
+      expect(File.binread(destination)).to eq('artifact')
+    end
+
+    it 'uses the same timeouts when fetching the manifest' do
+      remote = StringIO.new('{"schema":1}')
+      allow(remote).to receive(:base_uri).and_return(nil)
+      allow(subject).to receive(:parse_https_uri!).and_return(uri)
+      expect(uri).to receive(:open).with(options).and_yield(remote)
+
+      expect(subject.send(:fetch, 'https://example.test/manifest.json')).to eq('{"schema":1}')
+    end
+  end
+
   describe '#unsafe_archive_entry?' do
     let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
 
@@ -394,6 +428,13 @@ RSpec.describe Lich::DependencyRecovery do
 
       expect { subject.send(:extract_zip_file, zip_path, destination) }
         .to raise_error(described_class::Error, /PowerShell exit 1.*access denied/)
+    end
+
+    it 'renders Windows paths as VBScript literals without Ruby backslash escapes' do
+      subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir)
+
+      expect(subject.send(:vbscript_literal, 'C:\\Ruby4Lich5\\temp')).to eq('"C:\\Ruby4Lich5\\temp"')
+      expect(subject.send(:vbscript_literal, 'a"b')).to eq('"a""b"')
     end
   end
 

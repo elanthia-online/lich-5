@@ -364,7 +364,7 @@ module Lich
     # @param body [String]
     # @return [Symbol] :approved or :declined
     def confirm_macos(body)
-      script = %(display dialog #{body.inspect} with title #{TITLE.inspect} ) +
+      script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
                %(buttons {"Install", "Cancel"} default button "Install" with icon caution)
       output = IO.popen(['osascript', '-'], 'r+') do |io|
         io.write(script)
@@ -405,13 +405,13 @@ module Lich
     # @return [void]
     def notice_windows(body)
       require 'win32ole'
-      WIN32OLE.new('WScript.Shell').Popup(body, 0, TITLE, 64) # OK + information icon
+      WIN32OLE.new('WScript.Shell').Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, 64) # OK + information icon
     end
 
     # @param body [String]
     # @return [void]
     def notice_macos(body)
-      script = %(display dialog #{body.inspect} with title #{TITLE.inspect} ) +
+      script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
                %(buttons {"OK"} default button "OK" with icon caution)
       IO.popen(['osascript', '-'], 'r+') do |io|
         io.write(script)
@@ -426,15 +426,14 @@ module Lich
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
       result = shell.Popup("#{body}\n\nClick OK to open the download page.",
-                           0, TITLE, 1 + 64) # OK/Cancel + Information icon
+                           CONSENT_TIMEOUT_SECONDS, TITLE, 1 + 64) # OK/Cancel + Information icon
       shell.Run(RELEASE_URL) if result == 1
     end
 
     # @param body [String]
     # @return [void]
     def alert_macos(body)
-      as_body = body.split("\n").map(&:inspect).join(' & return & ')
-      script = %(display dialog #{as_body} ) +
+      script = %(display dialog #{macos_dialog_body(body)} ) +
                %(with title #{TITLE.inspect} ) +
                %(buttons {"OK"} default button "OK" with icon caution)
       IO.popen(['osascript', '-'], 'r+') do |io|
@@ -442,6 +441,12 @@ module Lich
         io.close_write
         io.read
       end
+    end
+
+    # @param body [String]
+    # @return [String] AppleScript expression retaining each line break
+    def macos_dialog_body(body)
+      body.split("\n").map(&:inspect).join(' & return & ')
     end
 
     # @param body [String]
