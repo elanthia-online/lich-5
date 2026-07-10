@@ -82,7 +82,6 @@ module Lich
 
     # @return [Hash] validated manifest document
     def load_manifest
-      require_https_url!(@manifest_url, 'manifest URL')
       document = JSON.parse(fetch(@manifest_url))
       raise Error, 'manifest must be a JSON object' unless document.is_a?(Hash)
       raise Error, "unsupported manifest schema #{document['schema'].inspect}" unless document['schema'] == 1
@@ -131,7 +130,7 @@ module Lich
 
       artifact = unit['artifact']
       raise Error, "unit #{unit['id']} has no artifact object" unless artifact.is_a?(Hash)
-      require_https_url!(artifact['url'], "unit #{unit['id']} artifact URL")
+      parse_https_uri!(artifact['url'], "unit #{unit['id']} artifact URL")
       require_sha256!(artifact['sha256'], "unit #{unit['id']} artifact")
       require_filename!(artifact['filename'], "unit #{unit['id']} artifact")
       raise Error, "unit #{unit['id']} has unsupported archive type" unless %w[gem zip].include?(artifact['archive'])
@@ -210,33 +209,30 @@ module Lich
     # @param destination [String]
     # @return [void]
     def download_to(url, destination)
-      require_https_url!(url, 'artifact URL')
+      uri = parse_https_uri!(url, 'artifact URL')
       if @http_get
         File.binwrite(destination, @http_get.call(url))
         return
       end
 
-      # rubocop:disable Security/Open -- HTTPS is enforced before and after redirects.
-      URI.open(url, 'User-Agent' => 'Lich5 dependency recovery') do |remote|
+      uri.open('User-Agent' => 'Lich5 dependency recovery') do |remote|
         final_uri = remote.base_uri
-        require_https_url!(final_uri.to_s, 'redirected artifact URL') if final_uri
+        parse_https_uri!(final_uri.to_s, 'redirected artifact URL') if final_uri
         File.open(destination, 'wb') { |file| IO.copy_stream(remote, file) }
       end
-      # rubocop:enable Security/Open
     end
 
     # @param url [String]
     # @return [String]
     def fetch(url)
+      uri = parse_https_uri!(url, 'manifest URL')
       return @http_get.call(url) if @http_get
 
-      # rubocop:disable Security/Open -- HTTPS is enforced before and after redirects.
-      URI.open(url, 'User-Agent' => 'Lich5 dependency recovery') do |remote|
+      uri.open('User-Agent' => 'Lich5 dependency recovery') do |remote|
         final_uri = remote.base_uri
-        require_https_url!(final_uri.to_s, 'redirected manifest URL') if final_uri
+        parse_https_uri!(final_uri.to_s, 'redirected manifest URL') if final_uri
         remote.read
       end
-      # rubocop:enable Security/Open
     end
 
     # Installs from a verified local file. No resolver is invoked here: all
@@ -319,10 +315,12 @@ module Lich
 
     # @param value [Object]
     # @param label [String]
-    # @return [void]
-    def require_https_url!(value, label)
+    # @return [URI::HTTPS] parsed, absolute HTTPS URI
+    def parse_https_uri!(value, label)
       uri = URI.parse(value.to_s)
       raise Error, "#{label} must use HTTPS" unless uri.is_a?(URI::HTTPS) && uri.host && !uri.host.empty?
+
+      uri
     rescue URI::InvalidURIError
       raise Error, "#{label} must be a valid HTTPS URL"
     end

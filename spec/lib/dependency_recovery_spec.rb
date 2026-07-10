@@ -144,4 +144,22 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed.map(&:first)).to eq(%w[glib2.gem gtk3.gem])
     expect(installed.map { |entry| entry[1] }.uniq).to eq([gem_home])
   end
+
+  describe '#parse_https_uri!' do
+    let(:subject) { described_class.new(manifest_url: manifest_url, gem_home: gem_home) }
+
+    it 'returns an HTTPS URI object rather than opening a string through URI.open' do
+      uri = subject.send(:parse_https_uri!, 'https://example.test/gem.gem', 'artifact URL')
+
+      expect(uri).to be_a(URI::HTTPS)
+      expect(uri).to respond_to(:open)
+    end
+
+    it 'rejects non-HTTPS and command-like values' do
+      %w[http://example.test/gem.gem |not-a-command].each do |value|
+        expect { subject.send(:parse_https_uri!, value, 'artifact URL') }
+          .to raise_error(described_class::Error)
+      end
+    end
+  end
 end
