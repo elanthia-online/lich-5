@@ -21,6 +21,10 @@ closed: Lich records the reason (including `user consent not available`) in
 On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
 
+After consent, Lich downloads and expands recovery artifacts only in its own
+`lich-5/temp` directory. The per-recovery workspace and all downloaded or
+generated package files are removed after success or failure.
+
 This recovery path is currently Windows-only. On macOS and Linux, Lich does
 not fetch this manifest or attempt self-healing; it retains the ordinary
 missing-gem warning and exit behavior.

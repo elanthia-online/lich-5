@@ -48,13 +48,16 @@ module Lich
 
     # @param manifest_url [String] HTTPS manifest location
     # @param gem_home [String] runtime-owned installation directory
+    # @param temp_dir [String] Lich-owned directory for transient recovery files
     # @param http_get [#call, nil] test seam returning binary response content
     # @param install_gem [#call, nil] test seam for local gem installation
     # @param extract_zip [#call, nil] test seam for zip extraction
     def initialize(manifest_url: ENV.fetch('LICH_GEM_MANIFEST_URL', DEFAULT_MANIFEST_URL),
-                   gem_home: Gem.dir, http_get: nil, install_gem: nil, extract_zip: nil)
+                   gem_home: Gem.dir, temp_dir: (defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir),
+                   http_get: nil, install_gem: nil, extract_zip: nil)
       @manifest_url = manifest_url
       @gem_home = gem_home
+      @temp_dir = temp_dir
       @http_get = http_get
       @install_gem = install_gem || method(:install_gem_file)
       @extract_zip = extract_zip || method(:extract_zip_file)
@@ -89,7 +92,7 @@ module Lich
       return Result.new(installed_gems: [], error: planned.error) unless planned.success?
 
       installed = with_install_lock do
-        Dir.mktmpdir('lich-gem-recovery') do |work_dir|
+        with_recovery_workspace do |work_dir|
           planned.units.flat_map { |unit| install_unit(unit, work_dir, force: force) }
         end
       end
@@ -245,6 +248,8 @@ module Lich
         parse_https_uri!(final_uri.to_s, 'redirected artifact URL') if final_uri
         File.open(destination, 'wb') { |file| IO.copy_stream(remote, file) }
       end
+    rescue Errno::EACCES, Errno::EROFS => e
+      raise Error, "Cannot write downloaded artifact to #{destination}: #{e.message}"
     end
 
     # @param url [String]
@@ -268,6 +273,8 @@ module Lich
     def install_gem_file(gem_path, gem_home)
       Gem::Installer.at(gem_path, install_dir: gem_home, ignore_dependencies: true,
                         wrappers: false, force: true).install
+    rescue Errno::EACCES, Errno::EROFS => e
+      raise Error, "Cannot install #{File.basename(gem_path)} into #{gem_home}: #{e.message}"
     end
 
     # Extracts a ZIP after the outer archive was hashed. The bundle producer
@@ -303,6 +310,8 @@ module Lich
         success = system('unzip', '-q', zip_path, '-d', destination)
       end
       raise Error, "could not extract #{File.basename(zip_path)}" unless success
+    rescue Errno::EACCES, Errno::EROFS => e
+      raise Error, "Cannot extract #{File.basename(zip_path)} into #{destination}: #{e.message}"
     end
 
     # @param entry [String]
@@ -368,6 +377,24 @@ module Lich
       ensure
         lock.flock(File::LOCK_UN) if lock
       end
+    rescue Errno::EACCES, Errno::EROFS => e
+      raise Error, "Cannot write Ruby runtime gem directory #{@gem_home}: #{e.message}"
+    end
+
+    # Uses Lich's own temp directory rather than the platform AppData/system
+    # temp area. Dir.mktmpdir's block form removes the download, ZIP expansion,
+    # and local .gem files after either success or failure.
+    # @yieldparam work_dir [String] per-recovery temporary workspace
+    # @return [Object]
+    def with_recovery_workspace
+      if File.exist?(@temp_dir)
+        raise Error, "Recovery workspace path is not a directory: #{@temp_dir}" unless Dir.exist?(@temp_dir)
+      else
+        FileUtils.mkdir_p(@temp_dir)
+      end
+      Dir.mktmpdir('lich-gem-recovery-', @temp_dir) { |work_dir| yield work_dir }
+    rescue Errno::EACCES, Errno::EROFS => e
+      raise Error, "Cannot create recovery workspace in #{@temp_dir}: #{e.message}"
     end
 
     # Makes a successful local installation visible to Bundler and RubyGems in

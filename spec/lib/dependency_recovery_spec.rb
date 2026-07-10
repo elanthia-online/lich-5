@@ -12,10 +12,14 @@ RSpec.describe Lich::DependencyRecovery do
   let(:artifact_url) { 'https://example.test/sqlite3.gem' }
   let(:artifact_body) { 'verified gem payload' }
   let(:installed) { [] }
+  let(:recovery_temp_dir) { Dir.mktmpdir('lich-recovery-temp') }
   let(:platform) { Gem::Platform.local.to_s }
   let(:ruby_abi) { RUBY_VERSION.split('.').first(2).join('.') }
 
-  after { FileUtils.remove_entry(gem_home) if Dir.exist?(gem_home) }
+  after do
+    FileUtils.remove_entry(gem_home) if Dir.exist?(gem_home)
+    FileUtils.remove_entry(recovery_temp_dir) if Dir.exist?(recovery_temp_dir)
+  end
 
   before do
     allow(Gem::Specification).to receive(:find_all_by_name).and_return([])
@@ -54,12 +58,13 @@ RSpec.describe Lich::DependencyRecovery do
     }
   end
 
-  def recovery(artifacts:, extract_zip: nil)
+  def recovery(artifacts:, extract_zip: nil, install_gem: nil)
     described_class.new(
       manifest_url: manifest_url,
       gem_home: gem_home,
+      temp_dir: recovery_temp_dir,
       http_get: ->(url) { artifacts.fetch(url) },
-      install_gem: ->(path, home) { installed << [File.basename(path), home, File.binread(path)] },
+      install_gem: install_gem || ->(path, home) { installed << [File.basename(path), home, File.binread(path)] },
       extract_zip: extract_zip
     )
   end
@@ -74,6 +79,38 @@ RSpec.describe Lich::DependencyRecovery do
     expect(result).to be_success
     expect(result.installed_gems).to eq(['sqlite3'])
     expect(installed).to eq([['sqlite3.gem', gem_home, artifact_body]])
+  end
+
+  it 'uses and cleans a workspace beneath Lich TEMP_DIR' do
+    unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
+    workspaces = []
+    installer = lambda do |path, home|
+      workspaces << File.dirname(path)
+      installed << [File.basename(path), home, File.binread(path)]
+    end
+    subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body }, install_gem: installer)
+
+    expect(subject.recover(['sqlite3'])).to be_success
+    expect(workspaces.first).to start_with(recovery_temp_dir)
+    expect(Dir.exist?(workspaces.first)).to be(false)
+  end
+
+  it 'does not recreate an existing Lich TEMP_DIR' do
+    unit = gem_unit(name: 'sqlite3', artifact_url: artifact_url, body: artifact_body)
+    manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
+    subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body })
+
+    expect(FileUtils).not_to receive(:mkdir_p).with(recovery_temp_dir)
+    expect(subject.recover(['sqlite3'])).to be_success
+  end
+
+  it 'reports the runtime destination when gem installation is denied' do
+    subject = described_class.new(gem_home: gem_home, temp_dir: recovery_temp_dir)
+    allow(Gem::Installer).to receive(:at).and_raise(Errno::EACCES, 'permission denied')
+
+    expect { subject.send(:install_gem_file, 'sqlite3.gem', gem_home) }
+      .to raise_error(described_class::Error, /#{Regexp.escape(gem_home)}/)
   end
 
   it 'creates a recovery plan before downloading or installing artifacts' do
