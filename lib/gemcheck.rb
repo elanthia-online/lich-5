@@ -1,5 +1,6 @@
 # lib/gemcheck.rb
 require 'bundler'
+require_relative 'dependency_recovery'
 
 module Lich
   # Verifies bundled gems are installed at Lich startup and alerts the
@@ -19,11 +20,9 @@ module Lich
 
     # Verifies every gem required by the requested Bundler groups is installed,
     # alerting the user (native OS dialog, with a log-file fallback) and exiting
-    # when any are missing. This is a presence check only -- it does not call
-    # Bundler.setup, so it never locks the load path. Boot then proceeds on
-    # plain RubyGems activation, which leaves scripts free to require gems they
-    # install at runtime (gems outside Lich's Gemfile, e.g. discordrb).
-    #
+    # when any remain missing after one manifest-backed recovery attempt. This
+    # remains a presence check only: it does not call Bundler.setup or lock the
+    # load path, leaving scripts free to require gems they install at runtime.
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
@@ -33,7 +32,16 @@ module Lich
       missing = missing_gems(groups)
       return if missing.empty?
 
-      alert(missing: missing, groups: groups)
+      result = recover!(missing)
+      if result.success?
+        missing = missing_gems(groups)
+        return if missing.empty?
+
+        alert(missing: missing, groups: groups)
+      else
+        alert(missing: missing, groups: groups,
+              error: DependencyRecovery::Error.new(result.error))
+      end
       exit 1
     end
 
@@ -46,6 +54,17 @@ module Lich
 
       gemfile = File.join(LICH_DIR, 'Gemfile')
       ENV['BUNDLE_GEMFILE'] = gemfile if File.file?(gemfile)
+    end
+
+    # Restores only gems explicitly approved by Ruby4Lich5's manifest.
+    # The recovery module downloads verified local packages and installs them
+    # into the runtime's Gem.dir; it never invokes a dependency resolver.
+    #
+    # @param gem_names [Array<String>] names to recover
+    # @param force [Boolean] reinstall an already registered manifest package
+    # @return [DependencyRecovery::Result]
+    def recover!(gem_names, force: false)
+      DependencyRecovery.new.recover(gem_names, force: force)
     end
 
     # Names of gems declared in the Gemfile that are not installed at any

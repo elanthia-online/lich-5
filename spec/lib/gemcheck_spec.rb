@@ -16,7 +16,12 @@ require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
   describe '.verify!' do
-    before { allow(described_class).to receive(:configure_gemfile!) }
+    let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: []) }
+
+    before do
+      allow(described_class).to receive(:configure_gemfile!)
+      allow(described_class).to receive(:recover!).and_return(recovery_result)
+    end
 
     context 'when nothing is missing' do
       before { allow(described_class).to receive(:missing_gems).and_return([]) }
@@ -68,6 +73,42 @@ RSpec.describe Lich::GemCheck do
         allow(described_class).to receive(:alert)
         expect(Bundler).not_to receive(:setup)
         expect { described_class.verify! }.to raise_error(SystemExit)
+      end
+    end
+
+    context 'when manifest recovery restores the missing gems' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'], [])
+      end
+
+      it 'rechecks the requested groups and continues without alerting' do
+        expect(described_class).to receive(:recover!).with(['ox']).and_return(recovery_result)
+        expect(described_class).not_to receive(:alert)
+
+        expect { described_class.verify! }.not_to raise_error
+      end
+    end
+
+    context 'when manifest recovery cannot restore a detected gem' do
+      let(:recovery_result) do
+        Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'manifest unavailable')
+      end
+
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+      end
+
+      it 'logs the recovery reason and exits' do
+        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
+          expect(missing).to eq(['ox'])
+          expect(groups).to eq([:default])
+          expect(error.message).to eq('manifest unavailable')
+        end
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
       end
     end
   end

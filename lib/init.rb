@@ -470,115 +470,55 @@ end
 begin
   require 'sqlite3'
 rescue LoadError
-  if defined?(Win32)
-    r = Win32.MessageBox(:lpText => "Lich needs sqlite3 to save settings and data, but it is not installed.\n\nWould you like to install sqlite3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-    if r == Win32::IDIYES
-      r = Win32.GetModuleFileName
-      if r[:return] > 0
-        ruby_bin_dir = File.dirname(r[:lpFilename])
-        if File.exist?("#{ruby_bin_dir}\\gem.bat")
-          verb = (Win32.isXP? ? 'open' : 'runas')
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
-          if r[:return] > 0
-            pid = r[:hProcess]
-            sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-            r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-          else
-            # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
-            if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --no-ri --no-rdoc'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-              exit
-            end
-            r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-          end
-          if r == Win32::IDIOK
-            if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
-              Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
-            else
-              Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-            end
-          else
-            # user doesn't want to restart Lich
-          end
-        else
-          Win32.MessageBox(:lpText => "error: Could not find gem.cmd or gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-        end
-      else
-        Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-      end
-    else
-      # user doesn't want to install sqlite3 gem
+  # sqlite3 is a required dependency. It is restored only from an approved,
+  # hash-verified Ruby4Lich5 manifest unit; this never falls back to `gem
+  # install` or a user GEM_HOME.
+  result = Lich::GemCheck.recover!(['sqlite3'], force: true)
+  if result.success?
+    begin
+      require 'sqlite3'
+    rescue LoadError => e
+      Lich::GemCheck.alert(missing: ['sqlite3'], groups: [:default], error: e)
+      exit 1
     end
   else
-    # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: gem install sqlite3"
+    Lich::GemCheck.alert(
+      missing: ['sqlite3'], groups: [:default], error: Lich::DependencyRecovery::Error.new(result.error)
+    )
+    exit 1
   end
-  exit
 end
 
 unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk')))
+  gtk_load_failure = lambda do |error|
+    if ((ENV['RUN_BY_CRON'].nil? || ENV['RUN_BY_CRON'] == 'false') && ARGV.empty?) ||
+       ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } || !$stdout.isatty
+      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: error)
+      exit 1
+    else
+      # GTK is optional when command-line arguments were given or Lich was
+      # started from a terminal. Keep the diagnostic for the normal logger.
+      HAVE_GTK = false
+      @early_gtk_error = "warning: failed to load GTK\n\t#{error}\n\t#{Array(error.backtrace).join("\n\t")}"
+    end
+  end
+
   begin
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } or not $stdout.isatty
-      if defined?(Win32)
-        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk3 for a point and click interface.\n\nWould you like to install gtk3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-        if r == Win32::IDIYES
-          r = Win32.GetModuleFileName
-          if r[:return] > 0
-            ruby_bin_dir = File.dirname(r[:lpFilename])
-            if File.exist?("#{ruby_bin_dir}\\gem.cmd")
-              gem_file = 'gem.cmd'
-            elsif File.exist?("#{ruby_bin_dir}\\gem.bat")
-              gem_file = 'gem.bat'
-            else
-              gem_file = nil
-            end
-            if gem_file
-              verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
-              if r[:return] > 0
-                pid = r[:hProcess]
-                sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-                r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              else
-                # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
-                if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install gtk3 --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                  exit
-                end
-                r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              end
-              if r == Win32::IDIOK
-                if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
-                  Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
-                else
-                  Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                end
-              else
-                # user doesn't want to restart Lich
-              end
-            else
-              Win32.MessageBox(:lpText => "error: Could not find gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-            end
-          else
-            Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-          end
-        else
-          # user doesn't want to install gtk3 gem
-        end
-      else
-        # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: gem install gtk3"
+    # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
+    # native dependency therefore restores the complete, ordered closure.
+    result = Lich::GemCheck.recover!(['gtk3'], force: true)
+    if result.success?
+      begin
+        require 'gtk3'
+        HAVE_GTK = true
+      rescue LoadError => recovered_error
+        gtk_load_failure.call(recovered_error)
       end
-      exit
     else
-      # gtk is optional if command line arguments are given or started in a terminal
-      HAVE_GTK = false
-      @early_gtk_error = "warning: failed to load GTK\n\t#{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      gtk_load_failure.call(Lich::DependencyRecovery::Error.new(result.error))
     end
   end
 else
