@@ -20,6 +20,7 @@ RSpec.describe Lich::GemCheck do
 
     before do
       allow(described_class).to receive(:configure_gemfile!)
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
       allow(described_class).to receive(:recover_with_consent!).and_return(recovery_result)
     end
 
@@ -73,6 +74,22 @@ RSpec.describe Lich::GemCheck do
         allow(described_class).to receive(:alert)
         expect(Bundler).not_to receive(:setup)
         expect { described_class.verify! }.to raise_error(SystemExit)
+      end
+    end
+
+    context 'when self-healing is unsupported on the running platform' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      end
+
+      it 'uses the ordinary missing-gem alert without fetching a manifest' do
+        expect(described_class).not_to receive(:recover_with_consent!)
+        expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default])
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
       end
     end
 
@@ -204,6 +221,16 @@ RSpec.describe Lich::GemCheck do
 
         expect(ENV['BUNDLE_GEMFILE']).to be_nil
       end
+    end
+  end
+
+  describe '.self_healing_supported?' do
+    it 'follows RubyGems Windows platform detection without loading the os gem' do
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      expect(described_class.self_healing_supported?).to be(true)
+
+      allow(Gem).to receive(:win_platform?).and_return(false)
+      expect(described_class.self_healing_supported?).to be(false)
     end
   end
 

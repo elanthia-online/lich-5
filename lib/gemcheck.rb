@@ -36,6 +36,11 @@ module Lich
       missing = missing_gems(groups)
       return if missing.empty?
 
+      unless self_healing_supported?
+        alert(missing: missing, groups: groups)
+        exit 1
+      end
+
       result = recover_with_consent!(missing, groups: groups)
       exit 1 unless result
 
@@ -60,6 +65,14 @@ module Lich
 
       gemfile = File.join(LICH_DIR, 'Gemfile')
       ENV['BUNDLE_GEMFILE'] = gemfile if File.file?(gemfile)
+    end
+
+    # Ruby4Lich5 currently publishes and validates recovery artifacts only for
+    # the Windows runtime. Other platforms retain the ordinary missing-gem
+    # warning and never fetch the recovery manifest.
+    # @return [Boolean]
+    def self_healing_supported?
+      Gem.win_platform?
     end
 
     # Fetches and validates the manifest, requests consent for each affected
