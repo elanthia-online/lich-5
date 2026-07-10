@@ -18,6 +18,9 @@ closed: Lich records the reason (including `user consent not available`) in
 `temp/lich5-missing-gems.log` and exits. GTK is required unless `--no-gui` or
 `--no-gtk` is present in `ARGV`.
 
+On Windows, the consent dialog expires after two minutes. An unattended launch
+fails closed with `user consent timed out` in the same early-startup log.
+
 This recovery path is currently Windows-only. On macOS and Linux, Lich does
 not fetch this manifest or attempt self-healing; it retains the ordinary
 missing-gem warning and exit behavior.

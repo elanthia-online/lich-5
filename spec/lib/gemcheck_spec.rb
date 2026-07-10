@@ -164,6 +164,31 @@ RSpec.describe Lich::GemCheck do
 
       expect(described_class.recovery_units_approved?([unit, second], [:default])).to be(true)
     end
+
+    it 'logs a timeout distinctly from a declined or unavailable prompt' do
+      allow(described_class).to receive(:confirm_recovery_unit).with(unit).and_return(:timed_out)
+      expect(described_class).to receive(:report_consent_failure)
+        .with(unit, [:default], 'user consent timed out')
+
+      expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
+    end
+  end
+
+  describe '.confirm_windows' do
+    it 'maps the bounded WScript timeout result to a fail-closed outcome' do
+      expect(described_class).to receive(:windows_popup)
+        .with('consent', 4 + 32).and_return(-1)
+
+      expect(described_class.confirm_windows('consent')).to eq(:timed_out)
+    end
+
+    it 'maps Yes and No result codes to approval and decline' do
+      allow(described_class).to receive(:windows_popup).with('consent', 4 + 32).and_return(6)
+      expect(described_class.confirm_windows('consent')).to eq(:approved)
+
+      allow(described_class).to receive(:windows_popup).with('consent', 4 + 32).and_return(7)
+      expect(described_class.confirm_windows('consent')).to eq(:declined)
+    end
   end
 
   describe '.configure_gemfile!' do

@@ -15,6 +15,7 @@ module Lich
     TITLE           = 'Lich5: Missing Ruby Gems'
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
+    CONSENT_TIMEOUT_SECONDS = 120
 
     # Records why a recovery did not run without treating that decision as a
     # manifest or Bundler failure.
@@ -105,11 +106,20 @@ module Lich
         decision = confirm_recovery_unit(unit)
         next if decision == :approved
 
-        reason = decision == :unavailable ? 'user consent not available' : 'user declined installation'
+        reason = consent_failure_reason(decision)
         report_consent_failure(unit, groups, reason)
         return false
       end
       true
+    end
+
+    # @param decision [Symbol] consent dialog outcome
+    # @return [String] loggable reason for not installing
+    def consent_failure_reason(decision)
+      return 'user consent not available' if decision == :unavailable
+      return 'user consent timed out' if decision == :timed_out
+
+      'user declined installation'
     end
 
     # @param unit [Hash] validated manifest recovery unit
@@ -299,12 +309,22 @@ module Lich
     end
 
     # @param body [String]
-    # @return [Symbol] :approved or :declined
+    # @return [Symbol] :approved, :declined, or :timed_out
     def confirm_windows(body)
+      result = windows_popup(body, 4 + 32) # Yes/No buttons + question icon
+      return :approved if result == 6 # Yes
+      return :timed_out if result == -1 # WScript Popup timeout
+
+      :declined
+    end
+
+    # @param body [String]
+    # @param flags [Integer] WScript Popup button and icon flags
+    # @return [Integer] WScript Popup result code
+    def windows_popup(body, flags)
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
-      # Yes/No buttons + question icon. WScript returns 6 for Yes.
-      shell.Popup(body, 0, TITLE, 4 + 32) == 6 ? :approved : :declined
+      shell.Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, flags)
     end
 
     # @param body [String]
