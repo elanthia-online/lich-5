@@ -103,6 +103,7 @@ RSpec.describe Lich::DependencyRecovery do
     manifest = manifest_for([unit], ruby_abi: ruby_abi, platform: platform)
     subject = recovery(artifacts: { manifest_url => manifest, artifact_url => artifact_body })
 
+    allow(FileUtils).to receive(:mkdir_p).and_call_original
     expect(FileUtils).not_to receive(:mkdir_p).with(recovery_temp_dir)
     expect(subject.recover(['sqlite3'])).to be_success
   end
@@ -208,6 +209,45 @@ RSpec.describe Lich::DependencyRecovery do
     expect(result.installed_gems).to eq(%w[glib2 gtk3])
     expect(installed.map(&:first)).to eq(%w[glib2.gem gtk3.gem])
     expect(installed.map { |entry| entry[1] }.uniq).to eq([gem_home])
+  end
+
+  it 'downloads and extracts a shared bundle artifact only once per recovery' do
+    bundle_url = 'https://example.test/runtime-bundle.zip'
+    bundle_body = 'verified zip payload'
+    first = {
+      'id'            => 'first',
+      'members'       => ['first'],
+      'artifact'      => { 'url' => bundle_url, 'filename' => 'runtime-bundle.zip', 'sha256' => sha256(bundle_body), 'archive' => 'zip' },
+      'packages'      => [{ 'name' => 'first', 'version' => '1.2.3', 'filename' => 'first.gem', 'sha256' => sha256('first') }],
+      'install_order' => ['first']
+    }
+    second = {
+      'id'            => 'second',
+      'members'       => ['second'],
+      'artifact'      => first.fetch('artifact'),
+      'packages'      => [{ 'name' => 'second', 'version' => '1.2.3', 'filename' => 'second.gem', 'sha256' => sha256('second') }],
+      'install_order' => ['second']
+    }
+    downloads = []
+    extractions = []
+    extractor = lambda do |_archive, destination|
+      extractions << destination
+      File.binwrite(File.join(destination, 'first.gem'), 'first')
+      File.binwrite(File.join(destination, 'second.gem'), 'second')
+    end
+    subject = described_class.new(
+      manifest_url: manifest_url, gem_home: gem_home, temp_dir: recovery_temp_dir,
+      http_get: ->(url) { downloads << url; url == manifest_url ? manifest_for([first, second], ruby_abi: ruby_abi, platform: platform) : bundle_body },
+      extract_zip: extractor,
+      install_gem: ->(path, home) { installed << [File.basename(path), home] }
+    )
+
+    result = subject.recover(%w[first second])
+
+    expect(result).to be_success
+    expect(downloads.count(bundle_url)).to eq(1)
+    expect(extractions).to have_attributes(length: 1)
+    expect(installed).to eq([['first.gem', gem_home], ['second.gem', gem_home]])
   end
 
   it 'hands a complete native runtime unit to the hidden replacement helper' do

@@ -99,7 +99,8 @@ module Lich
 
       result = with_install_lock do
         with_recovery_workspace do |work_dir|
-          staged_units = planned.units.map { |unit| stage_unit(unit, work_dir) }
+          artifact_cache = {}
+          staged_units = planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) }
           replacement, direct = staged_units.partition { |staged| native_runtime_unit?(staged.fetch(:unit)) }
           installed = direct.flat_map { |staged| install_staged_unit(staged, force: force) }
 
@@ -252,19 +253,13 @@ module Lich
     # changed. Native units are later handed to a detached replacement helper.
     # @param unit [Hash]
     # @param work_dir [String]
+    # @param artifact_cache [Hash] verified artifacts indexed by immutable identity
     # @return [Hash]
-    def stage_unit(unit, work_dir)
+    def stage_unit(unit, work_dir, artifact_cache)
       artifact = unit.fetch('artifact')
-      artifact_path = File.join(work_dir, artifact.fetch('filename'))
-      download_to(artifact.fetch('url'), artifact_path)
-      verify_file!(artifact_path, artifact.fetch('sha256'), "unit #{unit.fetch('id')} artifact")
-
-      package_dir = artifact_path
-      if artifact.fetch('archive') == 'zip'
-        package_dir = File.join(work_dir, "#{unit.fetch('id')}-packages")
-        FileUtils.mkdir_p(package_dir)
-        @extract_zip.call(artifact_path, package_dir)
-      end
+      staged_artifact = stage_artifact(artifact, work_dir, artifact_cache)
+      artifact_path = staged_artifact.fetch(:path)
+      package_dir = staged_artifact.fetch(:package_dir)
 
       package_paths = unit.fetch('packages').to_h do |package|
         path = artifact.fetch('archive') == 'gem' ? artifact_path : File.join(package_dir, package.fetch('filename'))
@@ -272,6 +267,33 @@ module Lich
         [package.fetch('name'), path]
       end
       { unit: unit, package_paths: package_paths }
+    end
+
+    # Downloads and, for ZIPs, extracts an artifact only once per recovery
+    # workspace. URL, digest, filename, and archive type together make the
+    # cache key immutable and prevent one manifest entry from reusing a merely
+    # similarly named artifact from another entry.
+    # @param artifact [Hash]
+    # @param work_dir [String]
+    # @param artifact_cache [Hash]
+    # @return [Hash]
+    def stage_artifact(artifact, work_dir, artifact_cache)
+      identity = [artifact.fetch('url'), artifact.fetch('sha256'), artifact.fetch('filename'), artifact.fetch('archive')]
+      return artifact_cache.fetch(identity) if artifact_cache.key?(identity)
+
+      cache_dir = File.join(work_dir, 'artifacts', Digest::SHA256.hexdigest(identity.join("\0")))
+      artifact_path = File.join(cache_dir, artifact.fetch('filename'))
+      FileUtils.mkdir_p(cache_dir)
+      download_to(artifact.fetch('url'), artifact_path)
+      verify_file!(artifact_path, artifact.fetch('sha256'), 'recovery artifact')
+
+      package_dir = artifact_path
+      if artifact.fetch('archive') == 'zip'
+        package_dir = File.join(cache_dir, 'packages')
+        FileUtils.mkdir_p(package_dir)
+        @extract_zip.call(artifact_path, package_dir)
+      end
+      artifact_cache[identity] = { path: artifact_path, package_dir: package_dir }
     end
 
     # @param staged [Hash]
