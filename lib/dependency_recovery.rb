@@ -99,10 +99,13 @@ module Lich
       planned = plan || recovery_plan(gem_names)
       return Result.new(installed_gems: [], error: planned.error) unless planned.success?
 
-      result = with_install_lock do
-        with_recovery_workspace do |work_dir|
-          artifact_cache = {}
-          staged_units = planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) }
+      result = with_recovery_workspace do |work_dir|
+        artifact_cache = {}
+        # No runtime lock or Gem.dir write occurs until every requested unit is
+        # downloaded, extracted, and hash-verified. An unreachable release
+        # endpoint therefore fails closed without changing the runtime.
+        staged_units = planned.units.map { |unit| stage_unit(unit, work_dir, artifact_cache) }
+        with_install_lock do
           replacement, direct = staged_units.partition { |staged| native_runtime_unit?(staged.fetch(:unit)) }
           installed = direct.flat_map { |staged| install_staged_unit(staged, force: force) }
 
@@ -269,6 +272,8 @@ module Lich
         [package.fetch('name'), path]
       end
       { unit: unit, package_paths: package_paths }
+    rescue Error, OpenURI::HTTPError, SocketError, SystemCallError, Timeout::Error => e
+      raise Error, "Could not stage recovery unit #{unit.fetch('id')}: #{e.message}"
     end
 
     # Downloads and, for ZIPs, extracts an artifact only once per recovery

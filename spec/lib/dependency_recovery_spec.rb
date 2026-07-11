@@ -174,6 +174,34 @@ RSpec.describe Lich::DependencyRecovery do
     expect(installed).to be_empty
   end
 
+  it 'does not lock or install anything when a later unit artifact is unreachable' do
+    first_url = 'https://example.test/first.gem'
+    second_url = 'https://example.test/second.gem'
+    first = gem_unit(name: 'first', artifact_url: first_url, body: 'first payload')
+    second = gem_unit(name: 'second', artifact_url: second_url, body: 'second payload')
+    manifest = manifest_for([first, second], ruby_abi: ruby_abi, platform: platform)
+    subject = described_class.new(
+      manifest_url: manifest_url,
+      gem_home: gem_home,
+      temp_dir: recovery_temp_dir,
+      http_get: lambda do |url|
+        case url
+        when manifest_url then manifest
+        when first_url    then 'first payload'
+        when second_url   then raise SocketError, 'release endpoint unavailable'
+        end
+      end,
+      install_gem: ->(path, home) { installed << [File.basename(path), home, File.binread(path)] }
+    )
+    expect(subject).not_to receive(:with_install_lock)
+
+    result = subject.recover(%w[first second])
+
+    expect(result).not_to be_success
+    expect(result.error).to include('Could not stage recovery unit second', 'release endpoint unavailable')
+    expect(installed).to be_empty
+  end
+
   it 'fails closed when the manifest has no unit for the requested gem' do
     manifest = manifest_for([], ruby_abi: ruby_abi, platform: platform)
     subject = recovery(artifacts: { manifest_url => manifest })
