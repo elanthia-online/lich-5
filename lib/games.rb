@@ -49,11 +49,6 @@ module Lich
       # DR paths share a single, identical definition.
       OBVIOUS_EXIT_PATTERN = /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/.freeze
 
-      # Frontends that host a dedicated room window and understand the room-window
-      # stream/subtitle tags. Compared against Frontend.client verbatim, matching
-      # the pre-existing literals it replaces.
-      ROOM_WINDOW_FRONTENDS = %w[wrayth stormfront].freeze
-
       # Everything below is internal formatting detail, marked +private+ so the
       # mixin adds no new public surface to the game instances that include it.
       # The game #process_room_display methods reach these via implicit self
@@ -1153,7 +1148,7 @@ module Lich
         exits = room_exit_entries
         alt_string = prepend_room_lines(alt_string, room_stringproc_entries, exits)
 
-        if !exits.empty? && ROOM_WINDOW_FRONTENDS.include?(Frontend.client) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+        if !exits.empty? && Frontend.supports_room_window? && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
           alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{exits.join(', ')}\r\n<popStream/>\r\n"
           Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
         end
@@ -1283,7 +1278,7 @@ module Lich
 
         unless room_number.empty?
           alt_string = "#{room_styled("Room Number: #{room_number}")}\r\n#{alt_string}"
-          if ROOM_WINDOW_FRONTENDS.include?(Frontend.client)
+          if Frontend.supports_room_window?
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
           end

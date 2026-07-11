@@ -1667,6 +1667,10 @@ module Frontend
       false
     end
 
+    def supports_room_window?(_fe = nil)
+      %w[wrayth stormfront].include?(client)
+    end
+
     def client
       'profanity'
     end
