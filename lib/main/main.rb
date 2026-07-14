@@ -227,7 +227,7 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = ARGV.include?('--saga') ? 'saga' : 'unknown'
+      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -289,6 +289,8 @@ reconnect_if_wanted = proc {
         Frontend.client = 'stormfront'
       elsif game =~ /AVALON/i
         Frontend.client = 'avalon'
+      elsif game =~ /SAGA/i
+        Frontend.client = 'saga'
       else
         Frontend.client = 'unknown'
       end
@@ -775,7 +777,7 @@ reconnect_if_wanted = proc {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            unless ARGV.include?('--genie') || ARGV.include?('--saga')
+            unless ARGV.any? { |a| a =~ /^--(genie|saga)$/i }
               Frontend.client = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
