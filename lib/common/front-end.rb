@@ -39,6 +39,7 @@ module Lich
       @tmp_session_dir = File.join Dir.tmpdir, "simutronics", "sessions"
       @frontend_pid = nil
       @pid_mutex = Mutex.new
+      ORIGIN_SENTINEL = "\x1f"
 
       # --- Frontend Registry -------------------------------------
       # Each registered frontend has:
@@ -116,6 +117,9 @@ module Lich
       register(:avalon,
                capabilities: %i[gsl])
 
+      register(:saga,
+               capabilities: %i[xml streams mono room_window sentinel])
+
       # --- Client String -----------------------------------------
       # Default client string (Wrayth identity) sent during handshake
       CLIENT_STRING = "/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML"
@@ -123,10 +127,11 @@ module Lich
       # --- Backward-Compatible Constants -------------------------
       # These arrays are derived from the registry for backward compatibility.
       # External code may still reference these constants directly.
-      XML_FRONTENDS    = frontends_with_capability(:xml).freeze
-      GSL_FRONTENDS    = frontends_with_capability(:gsl).freeze
-      STREAM_FRONTENDS = frontends_with_capability(:streams).freeze
-      MONO_FRONTENDS   = frontends_with_capability(:mono).freeze
+      XML_FRONTENDS      = frontends_with_capability(:xml).freeze
+      GSL_FRONTENDS      = frontends_with_capability(:gsl).freeze
+      STREAM_FRONTENDS   = frontends_with_capability(:streams).freeze
+      MONO_FRONTENDS     = frontends_with_capability(:mono).freeze
+      SENTINEL_FRONTENDS = frontends_with_capability(:sentinel).freeze
 
       # --- Predicate Methods -------------------------------------
       # These now delegate to has_capability? for consistency.
@@ -149,6 +154,10 @@ module Lich
 
       def self.supports_room_window?(fe = $frontend)
         has_capability?(fe, :room_window)
+      end
+
+      def self.supports_sentinel?(fe = $frontend)
+        has_capability?(fe, :sentinel)
       end
 
       # Accessor for the current frontend identity ($frontend global)
