@@ -59,6 +59,7 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('COMMON_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::COMMON_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('RACIAL_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::RACIAL_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('FLAVOR_TEXT_PATTERN is frozen') { expect(described_class::FLAVOR_TEXT_PATTERN).to be_frozen }
+    it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
 
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
       match = "...wait 3".match(described_class::WAIT_RESPONSE_PATTERN)
@@ -572,6 +573,45 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:bput).and_return('You stand')
       described_class.fix_standing
       expect(described_class).to have_received(:bput).at_least(:once)
+    end
+
+    # Issue #3668: these states are in the STAND match list but never make
+    # standing? true, so the pre-fix loop spammed STAND forever. Each helper
+    # here raises on a second STAND, turning an infinite loop into a failure
+    # instead of a hang.
+    shared_examples 'a non-recoverable posture' do |message|
+      it "issues STAND exactly once then stops when the game says #{message.inspect}" do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_attempts = 0
+        allow(described_class).to receive(:bput) do |*_args|
+          stand_attempts += 1
+          raise "fix_standing looped: STAND spammed on #{message.inspect}" if stand_attempts > 1
+          message
+        end
+        described_class.fix_standing
+        expect(stand_attempts).to eq(1)
+      end
+    end
+
+    include_examples 'a non-recoverable posture', "You're unconscious"
+    include_examples 'a non-recoverable posture', "You're plummeting to your death"
+    include_examples 'a non-recoverable posture', 'prevents you from standing'
+    include_examples 'a non-recoverable posture', "You don't seem to be able to move to do that"
+    include_examples 'a non-recoverable posture', 'You are overburdened and cannot'
+    include_examples 'a non-recoverable posture', 'weight of all your possessions'
+    include_examples 'a non-recoverable posture', "There's no room to do much of anything here"
+
+    it 'keeps retrying on a recoverable state (unbalanced) until standing succeeds' do
+      standing_checks = [false, false, true]
+      allow(described_class).to receive(:standing?) { standing_checks.shift }
+      stand_results = ['You are so unbalanced', 'You stand']
+      allow(described_class).to receive(:bput) { stand_results.shift }
+      described_class.fix_standing
+      expect(described_class).to have_received(:bput).twice
+    end
+
+    it 'does not treat a plain "You stand" success as a non-recoverable state' do
+      expect('You stand').not_to match(described_class::CANNOT_STAND_PATTERN)
     end
   end
 
