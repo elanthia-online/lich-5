@@ -1666,6 +1666,10 @@ module Frontend
     def client
       'profanity'
     end
+
+    def supports_room_window?
+      false
+    end
   end
 end unless defined?(Frontend)
 
