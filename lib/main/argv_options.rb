@@ -108,7 +108,6 @@ module Lich
               handle_dark_mode($1)
             when /^--saga$/i
               $frontend = 'saga'
-              Lich::Common::Frontend.client = 'saga'
             else
               bad_args.push(arg)
             end
@@ -267,7 +266,7 @@ module Lich
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = 10124
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
@@ -278,7 +277,7 @@ module Lich
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
             end
           end
         end
@@ -292,7 +291,7 @@ module Lich
           else
             processed_options[:game_host] = 'storm.gs4.game.play.net'
             processed_options[:game_port] = 10324
-            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
           end
         end
 
@@ -309,7 +308,7 @@ module Lich
           else
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
-            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
           end
         end
 
@@ -327,7 +326,7 @@ module Lich
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
@@ -342,7 +341,7 @@ module Lich
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : ARGV.any? { |a| a == '--saga' } ? 'saga' : 'wizard'
             end
           end
         end
@@ -356,6 +355,8 @@ module Lich
             'avalon'
           elsif ARGV.any? { |a| a == '--frostbite' }
             'frostbite'
+          elsif ARGV.any? { |a| a == '--saga' }
+            'saga'
           else
             'unknown'
           end
