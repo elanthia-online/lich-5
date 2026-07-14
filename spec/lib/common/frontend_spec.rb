@@ -174,6 +174,24 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe 'SENTINEL_FRONTENDS' do
+    it 'is frozen' do
+      expect(FE::SENTINEL_FRONTENDS).to be_frozen
+    end
+
+    it 'includes saga' do
+      expect(FE::SENTINEL_FRONTENDS).to include('saga')
+    end
+
+    it 'does not include non-sentinel based frontends' do
+      expect(FE::SENTINEL_FRONTENDS).not_to include('wizard')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('avalon')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('genie')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('wrayth')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('stormfront')
+    end
+  end
+
   describe 'GSL_FRONTENDS and XML_FRONTENDS are mutually exclusive' do
     it 'have no overlap' do
       overlap = FE::GSL_FRONTENDS & FE::XML_FRONTENDS
