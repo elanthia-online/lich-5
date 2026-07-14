@@ -12,10 +12,15 @@ module Lich
       PARENTHETICAL = / \(.+\)/.freeze
       # Pattern to extract player name (word characters at end)
       PLAYER_NAME = /\w+$/.freeze
-      # Pattern for lying down players
-      LYING_DOWN = /who is lying down/i.freeze
-      # Pattern for sitting players
-      SITTING = /who is sitting/i.freeze
+      # Pattern for lying down / prone players. Matches the default
+      # "who is lying down" long form and the "(prone)" short form shown when
+      # the HidePostStrings option is on (issue #4529). PARENTHETICAL still
+      # strips the "(prone)" suffix before the name is extracted.
+      LYING_DOWN = /who is lying down|\(prone\)/i.freeze
+      # Pattern for sitting players. Matches the default "who is sitting" long
+      # form and the "(sitting)" short form shown when the HidePostStrings
+      # option is on (issue #4529).
+      SITTING = /who is sitting|\(sitting\)/i.freeze
       # Pattern for "You also see" prefix
       YOU_ALSO_SEE = /You also see/.freeze
       # Pattern for mount descriptions
