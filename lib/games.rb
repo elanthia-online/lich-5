@@ -1040,7 +1040,7 @@ module Lich
 
           unless room_exits.empty?
             alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-            if Frontend.supports_room_window?(Frontend.client) && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+            if Frontend.supports_room_window? && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
               alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
               Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
             end
@@ -1192,7 +1192,7 @@ module Lich
 
         unless room_number.empty?
           alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
-          if Frontend.supports_room_window?(Frontend.client)
+          if Frontend.supports_room_window?
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
           end
