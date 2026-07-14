@@ -106,6 +106,9 @@ module Lich
               bad_args.clear
             when /^--dark-mode=(true|false|on|off)$/i
               handle_dark_mode($1)
+            when /^--saga$/i
+              $frontend = 'saga'
+              Lich::Common::Frontend.client = 'saga'
             else
               bad_args.push(arg)
             end
