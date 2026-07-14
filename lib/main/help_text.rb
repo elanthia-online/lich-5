@@ -113,6 +113,7 @@ module Lich
             --avalon
             --frostbite
             --genie
+            --saga
 
           Advanced launch:
             --custom-launch=NAME
