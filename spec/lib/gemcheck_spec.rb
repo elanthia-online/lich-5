@@ -16,17 +16,26 @@ require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
   describe '.startup_groups' do
-    it 'checks default and GTK dependencies for a graphical launch' do
+    it 'checks default and GTK dependencies for a Windows graphical launch' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
       expect(described_class.startup_groups([])).to eq(%i[default gtk])
     end
 
-    it 'omits GTK only for an explicit no-GUI switch' do
+    it 'omits GTK for an explicit no-GUI switch on Windows' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
       expect(described_class.startup_groups(['--no-gui'])).to eq([:default])
       expect(described_class.startup_groups(['--no-gtk'])).to eq([:default])
     end
 
-    it 'does not treat unrelated arguments as a headless request' do
+    it 'does not treat unrelated arguments as a headless request on Windows' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
       expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq(%i[default gtk])
+    end
+
+    it 'leaves GTK to init.rb on non-Windows platforms' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      expect(described_class.startup_groups([])).to eq([:default])
+      expect(described_class.startup_groups(['--gtk'])).to eq([:default])
     end
   end
 
@@ -228,6 +237,15 @@ RSpec.describe Lich::GemCheck do
     end
   end
 
+  describe '.confirm_recovery_units' do
+    it 'does not offer recovery consent on unsupported platforms' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      expect(described_class).not_to receive(:confirm_windows)
+
+      expect(described_class.confirm_recovery_units([])).to eq(:unavailable)
+    end
+  end
+
   describe 'Windows notices' do
     let(:shell) { double('WScript.Shell') }
 
@@ -244,10 +262,16 @@ RSpec.describe Lich::GemCheck do
       described_class.notice_windows('notice')
     end
 
-    it 'bounds release-page alerts and does not open a URL after timeout' do
+    it 'waits for the release-page alert and opens the URL only after OK' do
       expect(shell).to receive(:Popup)
-        .with("alert\n\nClick OK to open the download page.", described_class::CONSENT_TIMEOUT_SECONDS,
-              described_class::TITLE, 1 + 64).and_return(-1)
+        .with("alert\nClick OK to open the download page.", 0, described_class::TITLE, 1 + 64).and_return(1)
+      expect(shell).to receive(:Run).with(described_class::RELEASE_URL)
+
+      described_class.alert_windows('alert')
+    end
+
+    it 'does not open the release page when Cancel is selected' do
+      allow(shell).to receive(:Popup).and_return(2)
       expect(shell).not_to receive(:Run)
 
       described_class.alert_windows('alert')

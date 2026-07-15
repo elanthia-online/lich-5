@@ -498,41 +498,52 @@ rescue LoadError
   end
 end
 
-unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
+unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any? ||
+       (!Lich::GemCheck.self_healing_supported? && ENV['DISPLAY'].nil? && !ARGV.include?('--gtk'))
   begin
     require 'gtk3'
     HAVE_GTK = true
   rescue LoadError
     # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
     # native dependency therefore restores the complete, ordered closure.
-    unless Lich::GemCheck.self_healing_supported?
-      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk])
-      exit 1
-    end
-
-    result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
-    if result.nil?
-      exit 1
-    elsif result.restart_required
-      exit 0
-    elsif result.success?
-      begin
-        require 'gtk3'
-        HAVE_GTK = true
-      rescue LoadError => recovered_error
-        Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: recovered_error)
+    if Lich::GemCheck.self_healing_supported?
+      result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
+      if result.nil?
+        exit 1
+      elsif result.restart_required
+        exit 0
+      elsif result.success?
+        begin
+          require 'gtk3'
+          HAVE_GTK = true
+        rescue LoadError => recovered_error
+          Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: recovered_error)
+          exit 1
+        end
+      else
+        Lich::GemCheck.alert(
+          missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
+        )
         exit 1
       end
     else
-      Lich::GemCheck.alert(
-        missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
-      )
-      exit 1
+      if (ENV['RUN_BY_CRON'].nil? || ENV['RUN_BY_CRON'] == 'false') && ARGV.empty? ||
+         ARGV.any? { |arg| arg =~ /^--gui$/ } || !($stdout.isatty)
+        Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk])
+        exit 1
+      end
+
+      HAVE_GTK = false
+      @early_gtk_error = "warning: failed to load GTK\n\t#{$!}\n\t#{$!.backtrace.join("\n\t")}"
     end
   end
 else
   HAVE_GTK = false
-  @early_gtk_error = 'info: GTK disabled by command-line option'
+  @early_gtk_error = if ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
+                       'info: GTK disabled by command-line option'
+                     else
+                       'info: DISPLAY environment variable is not set; not trying gtk'
+                     end
 end
 
 unless File.exist?(LICH_DIR)

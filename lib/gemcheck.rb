@@ -78,14 +78,15 @@ module Lich
     end
 
     # Chooses the dependency groups that must be present before normal startup.
-    # GTK is required for every graphical launch; the two explicit headless
-    # switches are the only supported way to omit it.
+    # Only Windows verifies GTK here, because Ruby4Lich5 publishes a Windows
+    # recovery unit for it. Non-Windows GTK startup remains governed by
+    # init.rb's existing DISPLAY and terminal behavior.
     #
     # @param argv [Array<String>] command-line arguments
     # @return [Array<Symbol>]
     def startup_groups(argv = ARGV)
       groups = [:default]
-      groups << :gtk unless Array(argv).grep(/^--no-(?:gtk|gui)$/i).any?
+      groups << :gtk if self_healing_supported? && !Array(argv).grep(/^--no-(?:gtk|gui)$/i).any?
       groups
     end
 
@@ -136,12 +137,10 @@ module Lich
     # @param units [Array<Hash>] validated manifest recovery units
     # @return [Symbol] :approved, :declined, or :unavailable
     def confirm_recovery_units(units)
+      return :unavailable unless self_healing_supported?
+
       body = build_recovery_prompt(units)
-      case RUBY_PLATFORM
-      when /mswin|mingw|cygwin/ then confirm_windows(body)
-      when /darwin/             then confirm_macos(body)
-      else                           confirm_linux(body)
-      end
+      confirm_windows(body)
     rescue StandardError
       :unavailable
     end
@@ -361,40 +360,12 @@ module Lich
       shell.Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, flags)
     end
 
-    # @param body [String]
-    # @return [Symbol] :approved or :declined
-    def confirm_macos(body)
-      script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
-               %(buttons {"Install", "Cancel"} default button "Install" with icon caution)
-      output = IO.popen(['osascript', '-'], 'r+') do |io|
-        io.write(script)
-        io.close_write
-        io.read
-      end
-      output.include?('button returned:Install') ? :approved : :declined
-    end
-
-    # @param body [String]
-    # @return [Symbol] :approved, :declined, or :unavailable
-    def confirm_linux(body)
-      if cmd_available?('zenity')
-        system('zenity', '--question', '--title', TITLE, '--text', body) ? :approved : :declined
-      elsif cmd_available?('kdialog')
-        system('kdialog', '--title', TITLE, '--yesno', body) ? :approved : :declined
-      elsif cmd_available?('xmessage')
-        system('xmessage', '-center', '-buttons', 'Install:0,Cancel:1', body) ? :approved : :declined
-      else
-        :unavailable
-      end
-    end
-
     # Shows an error without the normal missing-gem alert's release-page link.
     # @param body [String]
     # @return [void]
     def show_notice(body)
       case RUBY_PLATFORM
       when /mswin|mingw|cygwin/ then notice_windows(body)
-      when /darwin/             then notice_macos(body)
       else                           alert_linux(body)
       end
     rescue StandardError
@@ -410,23 +381,11 @@ module Lich
 
     # @param body [String]
     # @return [void]
-    def notice_macos(body)
-      script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
-               %(buttons {"OK"} default button "OK" with icon caution)
-      IO.popen(['osascript', '-'], 'r+') do |io|
-        io.write(script)
-        io.close_write
-        io.read
-      end
-    end
-
-    # @param body [String]
-    # @return [void]
     def alert_windows(body)
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
-      result = shell.Popup("#{body}\n\nClick OK to open the download page.",
-                           CONSENT_TIMEOUT_SECONDS, TITLE, 1 + 64) # OK/Cancel + Information icon
+      result = shell.Popup("#{body}\nClick OK to open the download page.",
+                           0, TITLE, 1 + 64) # OK/Cancel + Information icon
       shell.Run(RELEASE_URL) if result == 1
     end
 

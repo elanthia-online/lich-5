@@ -29,7 +29,7 @@ module Lich
     SAFE_FILENAME = /\A(?!\.+\z)[^\\\/]+\z/
     SAFE_NAME = /\A[a-zA-Z0-9_.-]+\z/
 
-    # @return [String] result of a successful or unsuccessful recovery attempt
+    # Result of a successful or unsuccessful recovery attempt.
     Result = Struct.new(:installed_gems, :error, :restart_required, keyword_init: true) do
       # @return [Boolean] whether recovery completed successfully
       def success?
