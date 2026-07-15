@@ -21,6 +21,136 @@ module Lich
   end
 
   module GameBase
+    # Game-agnostic formatting for the Lich-injected room annotations
+    # (room number, obvious exits, and StringProc exits). Both the GemStone
+    # and DragonRealms game instances mix this in so the font and clickable-link
+    # toggles behave identically regardless of game: the module decides *how* an
+    # annotation looks, while each game instance decides *which* lines/streams to
+    # emit. Extracting it removes the near-duplicate exit/StringProc rendering
+    # that previously lived in both #process_room_display implementations.
+    #
+    # Two independent settings drive it:
+    # - Lich.display_room_links - clickable <d> command links vs plain text
+    # - Lich.display_room_mono  - fixed-width mono style vs the proportional game font
+    #
+    # The mono wrapper only escapes nothing and merely brackets the line, so a
+    # mono line can still contain live <d> links (the two toggles are orthogonal).
+    #
+    # Escaping: unlike respond (which HTML-escapes &, <, > for the classic
+    # roomnumbers.lic path), neither the mono wrapper nor the plain-text entries
+    # escape anything. This is deliberate - the links path emits live <d> markup
+    # that must survive verbatim, and both paths are kept consistent so a toggle
+    # never silently changes escaping. Exit commands and room titles come from the
+    # mapdb and contain no markup in practice; if untrusted text is ever fed here
+    # the caller must escape it first.
+    module RoomFormatter
+      # Obvious compass / up / down / out exits (usually rendered by the game
+      # itself), excluded from the "Room Exits:" line. Hoisted here so the GS and
+      # DR paths share a single, identical definition.
+      OBVIOUS_EXIT_PATTERN = /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/.freeze
+
+      # Everything below is internal formatting detail, marked +private+ so the
+      # mixin adds no new public surface to the game instances that include it.
+      # The game #process_room_display methods reach these via implicit self
+      # (which is legal for private methods); the unit specs exercise them
+      # through a throwaway host class that re-publicizes them.
+      private
+
+      # Whether the injected room lines should render in the fixed-width mono
+      # style. Gated on the frontend actually supporting mono so non-mono clients
+      # never receive stray <output> tags (mirrors respond's own guard).
+      # @return [Boolean]
+      # @api private
+      def room_mono?
+        Lich.display_room_mono && Frontend.supports_mono?
+      end
+
+      # Whether room exits should render as clickable <d> command links.
+      # @return [Boolean]
+      # @api private
+      def room_links?
+        Lich.display_room_links
+      end
+
+      # Wraps a completed line body in the classic mono style when enabled, else
+      # returns it unchanged. Never escapes, so any <d> links in body survive.
+      # @param body [String] the fully built line (label plus entries)
+      # @return [String] the styled (or unchanged) line
+      # @api private
+      def room_styled(body)
+        room_mono? ? "<output class=\"mono\"/>#{body}<output class=\"\"/>" : body
+      end
+
+      # Builds the StringProc-exit entries for the current room, honoring the
+      # links toggle. Returns [] when the feature is off so callers add no line
+      # and Map is not touched.
+      # NOTE: StringProc overrides #class and #kind_of? (both report Proc), so
+      # detection MUST use #is_a?, which reflects the real class - see
+      # lib/common/class_exts/stringproc.rb.
+      # @return [Array<String>] formatted entries (links or plain labels)
+      # @api private
+      def room_stringproc_entries
+        return [] unless Lich.display_stringprocs
+
+        entries = []
+        Map.current.wayto.each do |key, value|
+          next unless value.is_a?(StringProc)
+          # Only routable StringProcs (a numeric travel time) are useful to show.
+          timeto = Map.current.timeto[key]
+          next unless timeto.is_a?(Numeric) || (timeto.is_a?(StringProc) && timeto.call.is_a?(Numeric))
+          # Guard against a dangling wayto reference (destination room missing
+          # from the mapdb) rather than crashing the whole downstream hook.
+          dest = Map[key]
+          next if dest.nil?
+
+          label = "#{dest.title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? "(#{dest.id})" : ''}"
+          entries << (room_links? ? "<d cmd=';go2 #{key}'>#{label}</d>" : label)
+        end
+        entries
+      end
+
+      # Builds the obvious-exit entries (non-compass go/climb style exits) for the
+      # current room, honoring the links toggle. Returns [] when the feature is
+      # off so callers add no line and Map is not touched.
+      # @return [Array<String>] formatted entries (links or plain commands)
+      # @api private
+      def room_exit_entries
+        return [] unless Lich.display_exits
+
+        entries = []
+        Map.current.wayto.each_value do |value|
+          next if value.to_s =~ OBVIOUS_EXIT_PATTERN
+          next if value.is_a?(StringProc)
+
+          # Derive the command via to_s (as the OBVIOUS_EXIT_PATTERN check above
+          # already does) before #dump, so a non-String wayto value is coerced
+          # rather than raising NoMethodError inside the downstream hook. For the
+          # String values the mapdb actually stores, value.to_s is the same object
+          # so this is byte-identical to the previous value.dump.
+          cmd = value.to_s.dump[1..-2]
+          entries << (room_links? ? "<d cmd='#{cmd}'>#{cmd}</d>" : cmd)
+        end
+        entries
+      end
+
+      # Prepends the shared "StringProcs:" and "Room Exits:" lines (in that
+      # order, so exits end up above StringProcs and any later room-number line
+      # ends up above both) to alt_string, each only when it has entries. This is
+      # the composition both games share. Entries are passed in (built once by the
+      # caller) so a game that also reuses them - e.g. the GemStone room-window
+      # mirror - does not iterate Map.current.wayto twice.
+      # @param alt_string [String] the server string being rewritten
+      # @param stringproc_entries [Array<String>] pre-built StringProc entries
+      # @param exit_entries [Array<String>] pre-built obvious-exit entries
+      # @return [String] alt_string with the room lines prepended
+      # @api private
+      def prepend_room_lines(alt_string, stringproc_entries, exit_entries)
+        alt_string = "#{room_styled("StringProcs: #{stringproc_entries.join(', ')}")}\r\n#{alt_string}" unless stringproc_entries.empty?
+        alt_string = "#{room_styled("Room Exits: #{exit_entries.join(', ')}")}\r\n#{alt_string}" unless exit_entries.empty?
+        alt_string
+      end
+    end
+
     # Factory for creating game-specific objects
     module GameInstanceFactory
       def self.create(game_type)
@@ -40,6 +170,8 @@ module Lich
     module GameInstance
       # Base instance class that defines the interface
       class Base
+        include RoomFormatter
+
         def initialize
           @atmospherics = false
           @combat_count = 0
@@ -1014,37 +1146,17 @@ module Lich
         alt_string
       end
 
+      # Prepends the shared exit / StringProc lines, and mirrors the exits into
+      # the GemStone room window on frontends that host one (once per new room).
+      # @param alt_string [String] the server string being rewritten
+      # @return [String] the rewritten server string
       def process_room_display(alt_string)
-        if Lich.display_stringprocs == true
-          room_exits = []
-          Map.current.wayto.each do |key, value|
-            # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.is_a?(StringProc)
-              if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
-                room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
-              end
-            end
-          end
-          alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-        end
+        exits = room_exit_entries
+        alt_string = prepend_room_lines(alt_string, room_stringproc_entries, exits)
 
-        if Lich.display_exits == true
-          room_exits = []
-          Map.current.wayto.each do |_key, value|
-            # Don't include cardinals / up/down/out (usually just climb/go)
-            next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            unless value.is_a?(StringProc)
-              room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
-            end
-          end
-
-          unless room_exits.empty?
-            alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-            if Frontend.supports_room_window? && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
-              alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{room_exits.join(', ')}\r\n<popStream/>\r\n"
-              Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
-            end
-          end
+        if !exits.empty? && Frontend.supports_room_window? && Map.current.id != Game.instance_variable_get(:@last_id_shown_room_window)
+          alt_string = "#{alt_string}<pushStream id='room' ifClosedStyle='watching'/>Room Exits: #{exits.join(', ')}\r\n<popStream/>\r\n"
+          Game.instance_variable_set(:@last_id_shown_room_window, Map.current.id)
         end
 
         alt_string
@@ -1155,34 +1267,14 @@ module Lich
         alt_string
       end
 
+      # Prepends the shared exit / StringProc lines plus the DragonRealms
+      # "Room Number:" line, and updates the room-window subtitle on frontends
+      # that host one. The visible room-number line honors the mono toggle; the
+      # streamWindow subtitle tags are title-bar metadata and are left as-is.
+      # @param alt_string [String] the server string being rewritten
+      # @return [String] the rewritten server string
       def process_room_display(alt_string)
-        if Lich.display_stringprocs == true
-          room_exits = []
-          Map.current.wayto.each do |key, value|
-            # Don't include cardinals / up/down/out (usually just climb/go)
-            if value.is_a?(StringProc)
-              if Map.current.timeto[key].is_a?(Numeric) || (Map.current.timeto[key].is_a?(StringProc) && Map.current.timeto[key].call.is_a?(Numeric))
-                room_exits << "<d cmd=';go2 #{key}'>#{Map[key].title.first.gsub(/\[|\]/, '')}#{Lich.display_lichid ? ('(' + Map[key].id.to_s + ')') : ''}</d>"
-              end
-            end
-          end
-          alt_string = "StringProcs: #{room_exits.join(', ')}\r\n#{alt_string}" unless room_exits.empty?
-        end
-
-        if Lich.display_exits == true
-          room_exits = []
-          Map.current.wayto.each do |_key, value|
-            # Don't include cardinals / up/down/out (usually just climb/go)
-            next if value.to_s =~ /^(?:o|d|u|n|ne|e|se|s|sw|w|nw|out|down|up|north|northeast|east|southeast|south|southwest|west|northwest)$/
-            unless value.is_a?(StringProc)
-              room_exits << "<d cmd='#{value.dump[1..-2]}'>#{value.dump[1..-2]}</d>"
-            end
-          end
-
-          unless room_exits.empty?
-            alt_string = "Room Exits: #{room_exits.join(', ')}\r\n#{alt_string}"
-          end
-        end
+        alt_string = prepend_room_lines(alt_string, room_stringproc_entries, room_exit_entries)
 
         # DR-specific room number display
         room_number = ""
@@ -1191,7 +1283,7 @@ module Lich
         room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
 
         unless room_number.empty?
-          alt_string = "Room Number: #{room_number}\r\n#{alt_string}"
+          alt_string = "#{room_styled("Room Number: #{room_number}")}\r\n#{alt_string}"
           if Frontend.supports_room_window?
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"

@@ -186,17 +186,19 @@ RSpec.describe Lich::Util::MemoryReleaser do
       expect(manager).not_to have_received(:print_memory_stats)
     end
 
-    it 'run_gc calls full mark + immediate sweep and compacts when supported' do
+    it 'run_gc calls full mark + immediate sweep and delegates compaction to GtkCompaction' do
+      # Whether GC.compact actually runs is now Lich::Util::GtkCompaction's
+      # own conditional logic (gtk_loaded?, native_gem_patched?, etc, see
+      # lib/util/gtk_compaction.rb and its own spec) -- run_gc's job is
+      # just to delegate to it, not to decide when compaction is safe.
       manager = manager_class.new
       allow(GC).to receive(:start)
-      allow(GC).to receive(:compact)
-      allow(GC).to receive(:respond_to?).and_call_original
-      allow(GC).to receive(:respond_to?).with(:compact).and_return(true)
+      allow(Lich::Util::GtkCompaction).to receive(:safe_compact!)
 
       manager.send(:run_gc)
 
       expect(GC).to have_received(:start).with(full_mark: true, immediate_sweep: true)
-      expect(GC).to have_received(:compact)
+      expect(Lich::Util::GtkCompaction).to have_received(:safe_compact!)
     end
 
     it 'release_to_os dispatches linux path' do
