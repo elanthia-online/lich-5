@@ -311,7 +311,7 @@ module Lich
             timeto: @timeto&.sort_by { |k, _v| k.to_i }&.to_h,
             image: @image,
             image_coords: @image_coords,
-            tags: @tags&.sort_by(&:downcase),
+            tags: @tags&.sort_by { |tag| [tag.downcase, tag] },
             check_location: @check_location,
             unique_loot: @unique_loot,
             uid: @uid

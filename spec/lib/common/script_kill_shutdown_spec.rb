@@ -114,6 +114,46 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
 
       expect(script_class.list).to be_empty
     end
+
+    it 'propagates the shutdown context to die_with dependents so they too run inline' do
+      parent = build_script(name: 'parent', die_with: ['dependent'])
+      dependent = build_script(name: 'dependent')
+      script_class.class_variable_set(:@@running, [parent, dependent])
+      # The die_with dependent must also be torn down inline: without context
+      # propagation it would route through Script.kill's default :runtime path
+      # and spawn the very cleanup thread inline shutdown teardown removes.
+      expect(Thread).not_to receive(:new)
+
+      parent.kill(context: :shutdown)
+
+      expect(script_class.list).to be_empty
+    end
+  end
+
+  describe 'Script.kill context forwarding' do
+    it 'forwards the default :runtime context to the matched instance' do
+      script = build_script(name: 'target')
+      script_class.class_variable_set(:@@running, [script])
+      expect(script).to receive(:kill).with(context: :runtime).and_return('target')
+
+      expect(script_class.kill('target')).to be(true)
+    end
+
+    it 'forwards an explicit :shutdown context to the matched instance' do
+      script = build_script(name: 'target')
+      script_class.class_variable_set(:@@running, [script])
+      expect(script).to receive(:kill).with(context: :shutdown).and_return('target')
+
+      script_class.kill('target', context: :shutdown)
+    end
+
+    it 'returns false without raising when no running script matches' do
+      expect(script_class.kill('absent', context: :shutdown)).to be(false)
+    end
+
+    it 'rejects invalid kill contexts before matching scripts' do
+      expect { script_class.kill('target', context: :shudown) }.to raise_error(ArgumentError, /invalid script kill context/)
+    end
   end
 
   describe 'runtime kill regression' do
@@ -125,6 +165,14 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
       expect(script.kill).to eq('async-target')
 
       expect(script_class.list).to be_empty
+    end
+
+    it 'rejects invalid instance kill contexts' do
+      script = build_script(name: 'bad-context')
+      script_class.class_variable_set(:@@running, [script])
+
+      expect { script.kill(context: :later) }.to raise_error(ArgumentError, /invalid script kill context/)
+      expect(script_class.list).to eq([script])
     end
   end
 
