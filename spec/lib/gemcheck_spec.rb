@@ -16,133 +16,116 @@ require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
   describe '.verify!' do
-    let(:settings) { double('settings') }
+    before { allow(described_class).to receive(:configure_gemfile!) }
 
-    before do
-      allow(Bundler).to receive(:settings).and_return(settings)
-      allow(settings).to receive(:temporary).and_yield
-      allow(Bundler).to receive(:definition).with(true)
-      allow(described_class).to receive(:all_groups)
-        .and_return([:default, :development, :gtk])
-    end
-
-    context 'when nothing is missing and Bundler.setup succeeds' do
-      before do
-        allow(described_class).to receive(:missing_gems).and_return([])
-        allow(Bundler).to receive(:setup)
-      end
+    context 'when nothing is missing' do
+      before { allow(described_class).to receive(:missing_gems).and_return([]) }
 
       it 'does not alert' do
         expect(described_class).not_to receive(:alert)
         described_class.verify!
       end
 
-      it 'passes :default when no groups are given' do
-        expect(Bundler).to receive(:setup).with(:default)
-        described_class.verify!
-      end
-
-      it 'forwards custom groups to Bundler.setup' do
-        expect(Bundler).to receive(:setup).with(:default, :gtk)
-        described_class.verify!(:default, :gtk)
-      end
-
-      it 'excludes non-requested groups via Bundler.settings.temporary' do
-        expect(settings).to receive(:temporary)
-          .with(without: %w[development gtk]).and_yield
-        described_class.verify!(:default)
-      end
-
-      it 'forces definition rebuild under the temporary settings' do
-        expect(Bundler).to receive(:definition).with(true)
-        described_class.verify!(:default)
-      end
-    end
-
-    context 'when our detector finds missing gems in scope' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return(['ox'])
-      end
-
-      it 'alerts with the detected list and exits 1 before calling Bundler.setup' do
-        expect(described_class).to receive(:alert)
-          .with(missing: ['ox'], groups: [:default])
-        expect(Bundler).not_to receive(:setup)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when Bundler.setup raises for an in-scope gem' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return([], ['transitive-gem'])
-        allow(described_class).to receive(:bundler_error_out_of_scope?)
-          .and_return(false)
-      end
-
-      it 'alerts and exits 1 on GemNotFound' do
-        error = Bundler::GemNotFound.new("Could not find gem 'transitive-gem'")
-        allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:alert)
-          .with(missing: ['transitive-gem'], groups: [:default], error: error)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
-      end
-
-      it 'alerts and exits 1 on GitError' do
-        error = Bundler::GitError.new('git clone failed')
-        allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:alert)
-          .with(missing: ['transitive-gem'], groups: [:default], error: error)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when Bundler.setup raises another BundlerError subclass' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return([])
-        allow(described_class).to receive(:bundler_error_out_of_scope?)
-          .and_return(false)
-      end
-
-      it 'alerts and exits 1 (rescue covers all Bundler setup failures)' do
-        error = Bundler::PathError.new('bundler path error')
-        allow(Bundler).to receive(:setup).and_raise(error)
-        expect(described_class).to receive(:alert)
-          .with(missing: [], groups: [:default], error: error)
-        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
-          expect(e.status).to eq(1)
-        end
-      end
-    end
-
-    context 'when Bundler.setup raises for an out-of-scope gem' do
-      before do
-        allow(described_class).to receive(:missing_gems)
-          .with([:default]).and_return([])
-        allow(described_class).to receive(:bundler_error_out_of_scope?)
-          .and_return(true)
-      end
-
-      it 'silently continues without alerting or exiting' do
-        allow(Bundler).to receive(:setup)
-          .and_raise(Bundler::GemNotFound.new("Could not find gem 'rspec'"))
-        expect(described_class).not_to receive(:alert)
+      it 'returns without exiting' do
         expect { described_class.verify! }.not_to raise_error
       end
 
-      it 'does not write to the log' do
-        allow(Bundler).to receive(:setup)
-          .and_raise(Bundler::GemNotFound.new("Could not find gem 'rspec'"))
-        expect(described_class).not_to receive(:write_log)
+      it 'never locks the load path via Bundler.setup' do
+        expect(Bundler).not_to receive(:setup)
         described_class.verify!
+      end
+
+      it 'configures the Gemfile path before checking' do
+        expect(described_class).to receive(:configure_gemfile!)
+        described_class.verify!
+      end
+
+      it 'defaults to the :default group when none is given' do
+        expect(described_class).to receive(:missing_gems).with([:default]).and_return([])
+        described_class.verify!
+      end
+
+      it 'forwards custom groups to the detector' do
+        expect(described_class).to receive(:missing_gems).with([:default, :gtk]).and_return([])
+        described_class.verify!(:default, :gtk)
+      end
+    end
+
+    context 'when required gems are missing' do
+      before do
+        allow(described_class).to receive(:missing_gems).with([:default]).and_return(['ox'])
+      end
+
+      it 'alerts with the detected list and exits 1' do
+        expect(described_class).to receive(:alert)
+          .with(missing: ['ox'], groups: [:default])
+        expect { described_class.verify! }.to raise_error(SystemExit) do |e|
+          expect(e.status).to eq(1)
+        end
+      end
+
+      it 'does not lock the load path via Bundler.setup' do
+        allow(described_class).to receive(:alert)
+        expect(Bundler).not_to receive(:setup)
+        expect { described_class.verify! }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe '.configure_gemfile!' do
+    around do |example|
+      original = ENV.fetch('BUNDLE_GEMFILE', nil)
+      example.run
+    ensure
+      if original.nil?
+        ENV.delete('BUNDLE_GEMFILE')
+      else
+        ENV['BUNDLE_GEMFILE'] = original
+      end
+    end
+
+    it 'points Bundler at the Lich Gemfile when launched from another directory' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        gemfile = File.join(dir, 'Gemfile')
+        File.write(gemfile, "source 'https://rubygems.org'\n")
+        stub_const('LICH_DIR', dir)
+        ENV.delete('BUNDLE_GEMFILE')
+
+        described_class.configure_gemfile!
+
+        expect(ENV.fetch('BUNDLE_GEMFILE')).to eq(gemfile)
+      end
+    end
+
+    it 'preserves an existing BUNDLE_GEMFILE override' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        File.write(File.join(dir, 'Gemfile'), "source 'https://rubygems.org'\n")
+        stub_const('LICH_DIR', dir)
+        ENV['BUNDLE_GEMFILE'] = '/custom/Gemfile'
+
+        described_class.configure_gemfile!
+
+        expect(ENV.fetch('BUNDLE_GEMFILE')).to eq('/custom/Gemfile')
+      end
+    end
+
+    it 'leaves BUNDLE_GEMFILE unset when LICH_DIR is undefined' do
+      hide_const('LICH_DIR')
+      ENV.delete('BUNDLE_GEMFILE')
+
+      described_class.configure_gemfile!
+
+      expect(ENV['BUNDLE_GEMFILE']).to be_nil
+    end
+
+    it 'leaves BUNDLE_GEMFILE unset when the Lich Gemfile does not exist' do
+      Dir.mktmpdir('lich-gemcheck-home') do |dir|
+        stub_const('LICH_DIR', dir)
+        ENV.delete('BUNDLE_GEMFILE')
+
+        described_class.configure_gemfile!
+
+        expect(ENV['BUNDLE_GEMFILE']).to be_nil
       end
     end
   end
@@ -214,55 +197,6 @@ RSpec.describe Lich::GemCheck do
     it 'returns [:default] when Bundler.definition raises' do
       allow(Bundler).to receive(:definition).and_raise(StandardError)
       expect(described_class.all_groups).to eq([:default])
-    end
-  end
-
-  describe '.bundler_error_out_of_scope?' do
-    let(:dev_dep) { double('dep', name: 'rspec', groups: [:development]) }
-    let(:default_dep) { double('dep', name: 'ox', groups: [:default]) }
-    let(:definition) { double('definition', current_dependencies: [dev_dep, default_dep]) }
-
-    before { allow(Bundler).to receive(:definition).and_return(definition) }
-
-    it 'returns true when the errored gem is in a non-requested group' do
-      error = double('error', message: "Could not find gem 'rspec' in locally installed gems.")
-      expect(described_class.bundler_error_out_of_scope?(error, [:default])).to be(true)
-    end
-
-    it 'returns false when the errored gem is in a requested group' do
-      error = double('error', message: "Could not find gem 'ox' in locally installed gems.")
-      expect(described_class.bundler_error_out_of_scope?(error, [:default])).to be(false)
-    end
-
-    it 'returns false when the errored gem is unknown to the Gemfile' do
-      error = double('error', message: "Could not find gem 'not-in-gemfile' in locally installed gems.")
-      expect(described_class.bundler_error_out_of_scope?(error, [:default])).to be(false)
-    end
-
-    it 'returns false when the gem name cannot be extracted' do
-      error = double('error', message: 'some unexpected error format')
-      expect(described_class.bundler_error_out_of_scope?(error, [:default])).to be(false)
-    end
-  end
-
-  describe '.extract_gem_name' do
-    it 'extracts from the standard "Could not find gem" message' do
-      msg = "Could not find gem 'rspec' in locally installed gems."
-      expect(described_class.extract_gem_name(msg)).to eq('rspec')
-    end
-
-    it 'extracts from the variant without the word "gem"' do
-      msg = "Could not find 'rspec' in any of the sources"
-      expect(described_class.extract_gem_name(msg)).to eq('rspec')
-    end
-
-    it 'extracts from double-quoted variants' do
-      msg = 'Could not find gem "rspec" in locally installed gems.'
-      expect(described_class.extract_gem_name(msg)).to eq('rspec')
-    end
-
-    it 'returns nil when no gem name is present' do
-      expect(described_class.extract_gem_name('some other error')).to be_nil
     end
   end
 

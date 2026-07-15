@@ -684,7 +684,7 @@ module Lich
 
   class << self
     # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
-    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
+    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
     attr_accessor :display_expgains
 
     def db
@@ -1664,6 +1664,14 @@ module Frontend
 
     def supports_gsl?
       false
+    end
+
+    def supports_mono?(_fe = nil)
+      false
+    end
+
+    def supports_room_window?(_fe = nil)
+      %w[wrayth stormfront].include?(client)
     end
 
     def client

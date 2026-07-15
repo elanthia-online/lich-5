@@ -17,38 +17,35 @@ module Lich
 
     module_function
 
-    # Runs Bundler.setup for the given groups; on failure, alerts the
-    # user and exits. If Bundler complains about a gem outside the
-    # requested groups (which some Bundler versions do despite `without`
-    # settings), the complaint is silently ignored and boot continues.
+    # Verifies every gem required by the requested Bundler groups is installed,
+    # alerting the user (native OS dialog, with a log-file fallback) and exiting
+    # when any are missing. This is a presence check only -- it does not call
+    # Bundler.setup, so it never locks the load path. Boot then proceeds on
+    # plain RubyGems activation, which leaves scripts free to require gems they
+    # install at runtime (gems outside Lich's Gemfile, e.g. discordrb).
+    #
     # @param groups [Array<Symbol>] Bundler groups to verify
     # @return [void]
     def verify!(*groups)
       groups = [:default] if groups.empty?
+      configure_gemfile!
 
       missing = missing_gems(groups)
-      unless missing.empty?
-        alert(missing: missing, groups: groups)
-        exit 1
-      end
+      return if missing.empty?
 
-      excluded = (all_groups - groups).map(&:to_s)
-      begin
-        Bundler.settings.temporary(without: excluded) do
-          Bundler.definition(true)
-          Bundler.setup(*groups)
-        end
-      rescue Bundler::BundlerError => e
-        if bundler_error_out_of_scope?(e, groups)
-          # Bundler is complaining about a gem outside the requested groups.
-          # Our detector already confirmed the requested groups are satisfied,
-          # so this is a scope-semantics disagreement, not a real failure.
-          # Continue boot silently.
-        else
-          alert(missing: missing_gems(groups), groups: groups, error: e)
-          exit 1
-        end
-      end
+      alert(missing: missing, groups: groups)
+      exit 1
+    end
+
+    # Ensures Bundler resolves Lich's Gemfile even when the app is launched
+    # from another working directory, such as macOS app launch from /.
+    # @return [void]
+    def configure_gemfile!
+      return if ENV['BUNDLE_GEMFILE'] && !ENV['BUNDLE_GEMFILE'].empty?
+      return unless defined?(LICH_DIR)
+
+      gemfile = File.join(LICH_DIR, 'Gemfile')
+      ENV['BUNDLE_GEMFILE'] = gemfile if File.file?(gemfile)
     end
 
     # Names of gems declared in the Gemfile that are not installed at any
@@ -72,29 +69,6 @@ module Lich
       Bundler.definition.groups
     rescue StandardError
       [:default]
-    end
-
-    # @param error [Exception]
-    # @param groups [Array<Symbol>]
-    # @return [Boolean] true if the error concerns a gem outside the requested groups
-    def bundler_error_out_of_scope?(error, groups)
-      name = extract_gem_name(error.message)
-      return false unless name
-
-      dep = safe_call { Bundler.definition.current_dependencies.find { |d| d.name == name } }
-      return false unless dep.respond_to?(:groups)
-
-      (dep.groups & groups).empty?
-    end
-
-    # Extracts a gem name from a Bundler error message. Matches:
-    #   "Could not find gem 'foo' in ..."
-    #   "Could not find 'foo' in ..."
-    # @param msg [String]
-    # @return [String, nil]
-    def extract_gem_name(msg)
-      match = msg.match(/Could not find (?:gem )?['"]([^'"]+)['"]/)
-      match && match[1]
     end
 
     # @param missing [Array<String>] gem names identified by our detector
