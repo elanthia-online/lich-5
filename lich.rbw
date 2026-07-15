@@ -144,6 +144,11 @@ require File.join(LIB_DIR, 'common', 'uservars.rb')
 if defined?(Gtk)
   Thread.current.priority = -10
   Gtk.main
+  # Terminal teardown backstop: Gtk.main has returned, so we are on the GTK
+  # thread with the loop unwound. Sweep any widgets a route that bypassed the
+  # orchestrated exits left alive, before the interpreter finalizer disposes
+  # them in an unsafe order and segfaults. Idempotent after a clean shutdown.
+  Lich::Common.shutdown_gtk_before_exit(direct: true)
 else
   @main_thread.join
 end

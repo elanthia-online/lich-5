@@ -25,6 +25,8 @@ module Lich
     TRUSTED_SCRIPT_BINDING = proc { _script }
 
     class Script
+      VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
+
       @@elevated_script_start = proc { |args|
         if args.empty?
           # fixme: error
@@ -593,11 +595,26 @@ module Lich
         end
       end
 
-      def Script.kill(name)
+      # Stops a running script by name.
+      #
+      # Used for ordinary runtime stops and, with +context: :shutdown+, by
+      # shutdown teardown and +die_with+ propagation. The context is forwarded to
+      # {Script#kill} so shutdown kills stay inline (avoiding a cleanup thread per
+      # script) rather than reintroducing the thread burst inline teardown removes.
+      #
+      # @param name [String] script name (exact match, then case-insensitive)
+      # @param context [Symbol] kill context forwarded to {Script#kill}
+      #   (:runtime or :shutdown)
+      # @return [Boolean] true when a matching running script was found and stopped
+      def Script.kill(name, context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
           s.killed_externally = true
           s.kill_source = caller[0..2]
-          s.kill
+          s.kill(context: context)
           true
         else
           false
@@ -971,6 +988,10 @@ module Lich
       #   when the owning Lich process is closing
       # @return [String] script name
       def kill(context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         source = @kill_source || caller[0..2]
 
         if context == :shutdown
@@ -1028,7 +1049,11 @@ module Lich
                 end
               }
               @thread_group.add(Thread.current)
-              @die_with.each { |script_name| Script.kill(script_name) }
+              # Forward the kill context so die_with dependents torn down during
+              # shutdown also run inline -- otherwise they route back through the
+              # default :runtime path and re-spawn the thread-per-kill burst that
+              # inline shutdown teardown exists to avoid.
+              @die_with.each { |script_name| Script.kill(script_name, context: context) }
               @paused = false
               @at_exit_procs.each { |p| report_errors { p.call } }
               # Let each per-script-state subsystem (the hook registries, etc.)
