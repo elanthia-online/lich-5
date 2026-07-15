@@ -1668,15 +1668,11 @@ module Frontend
     end
 
     def supports_room_window?(_fe = nil)
-      %w[wrayth stormfront].include?(client)
+      %w[wrayth stormfront saga].include?(client)
     end
 
     def client
       'profanity'
-    end
-
-    def supports_room_window?
-      false
     end
   end
 end unless defined?(Frontend)
