@@ -297,6 +297,295 @@ RSpec.describe Lich::DragonRealms::GameInstance do
   end
 end
 
+# Unit coverage for the shared formatting mixin, exercised on a throwaway host
+# class so the helpers are tested in isolation from the game instances.
+RSpec.describe Lich::GameBase::RoomFormatter do
+  # The formatting helpers are private (they add no public surface to the game
+  # instances). Re-publicize them on this throwaway host class so the unit
+  # examples can drive each one directly instead of reaching through .send.
+  let(:formatter) do
+    Class.new do
+      include Lich::GameBase::RoomFormatter
+      public :room_mono?, :room_links?, :room_styled,
+             :room_stringproc_entries, :room_exit_entries, :prepend_room_lines
+    end.new
+  end
+
+  before do
+    XMLData.reset
+    XMLData.game = 'DR'
+    Lich.display_lichid = false
+    Lich.display_uid = false
+    Lich.display_exits = false
+    Lich.display_stringprocs = false
+    Lich.display_room_links = false
+    Lich.display_room_mono = false
+    allow(Frontend).to receive(:supports_mono?).and_return(false)
+  end
+
+  # Reset the shared mock accessors so per-example toggles do not leak into other
+  # describe blocks (the suite runs in random order).
+  after do
+    Lich.display_lichid = nil
+    Lich.display_uid = nil
+    Lich.display_exits = nil
+    Lich.display_stringprocs = nil
+    Lich.display_room_links = nil
+    Lich.display_room_mono = nil
+  end
+
+  describe '#room_styled' do
+    it 'wraps the body in mono tags when mono is on and the frontend supports it' do
+      Lich.display_room_mono = true
+      allow(Frontend).to receive(:supports_mono?).and_return(true)
+
+      expect(formatter.room_styled('Room Exits: go door'))
+        .to eq('<output class="mono"/>Room Exits: go door<output class=""/>')
+    end
+
+    it 'returns the body unchanged when mono is off' do
+      Lich.display_room_mono = false
+
+      expect(formatter.room_styled('Room Exits: go door')).to eq('Room Exits: go door')
+    end
+
+    it 'returns the body unchanged when mono is on but the frontend lacks mono support' do
+      Lich.display_room_mono = true
+      allow(Frontend).to receive(:supports_mono?).and_return(false)
+
+      expect(formatter.room_styled('Room Exits: go door')).to eq('Room Exits: go door')
+    end
+  end
+
+  describe '#room_exit_entries' do
+    before do
+      map = double('map', wayto: { 1 => 'north', 2 => 'go arched door' }, timeto: {}, id: 100)
+      allow(Map).to receive(:current).and_return(map)
+    end
+
+    it 'returns an empty array when the exits toggle is off' do
+      Lich.display_exits = false
+
+      expect(formatter.room_exit_entries).to eq([])
+    end
+
+    it 'renders clickable command links when links are on' do
+      Lich.display_exits = true
+      Lich.display_room_links = true
+
+      expect(formatter.room_exit_entries).to eq(["<d cmd='go arched door'>go arched door</d>"])
+    end
+
+    it 'renders plain text and no <d> tags when links are off' do
+      Lich.display_exits = true
+      Lich.display_room_links = false
+
+      expect(formatter.room_exit_entries).to eq(['go arched door'])
+    end
+
+    it 'filters out obvious compass/up/down/out exits' do
+      Lich.display_exits = true
+      Lich.display_room_links = false
+
+      expect(formatter.room_exit_entries).not_to include('north')
+    end
+
+    it 'excludes StringProc exits (those are handled separately)' do
+      sp = StringProc.new('nil')
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 3 => sp }, timeto: { 3 => 5 }, id: 100))
+      Lich.display_exits = true
+
+      expect(formatter.room_exit_entries).to eq([])
+    end
+
+    it 'coerces a non-String wayto value via to_s instead of raising on #dump' do
+      # An Integer responds to #to_s but not #dump; the defensive to_s keeps the
+      # downstream hook from crashing if a non-String value ever reaches here.
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 5 => 123 }, timeto: {}, id: 100))
+      Lich.display_exits = true
+      Lich.display_room_links = false
+
+      expect { formatter.room_exit_entries }.not_to raise_error
+      expect(formatter.room_exit_entries).to eq(['123'])
+    end
+  end
+
+  describe '#room_stringproc_entries' do
+    let(:stringproc) { StringProc.new('nil') }
+
+    before do
+      allow(Map).to receive(:[]).with(42).and_return(double('dest', title: ['[Dest Room]'], id: 99))
+    end
+
+    it 'returns an empty array when the stringprocs toggle is off' do
+      Lich.display_stringprocs = false
+
+      expect(formatter.room_stringproc_entries).to eq([])
+    end
+
+    it 'includes routable StringProcs (numeric timeto) as go2 links when links are on' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      Lich.display_stringprocs = true
+      Lich.display_room_links = true
+
+      expect(formatter.room_stringproc_entries).to eq(["<d cmd=';go2 42'>Dest Room</d>"])
+    end
+
+    it 'shows the destination title (not raw source) as plain text when links are off' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      Lich.display_stringprocs = true
+      Lich.display_room_links = false
+
+      expect(formatter.room_stringproc_entries).to eq(['Dest Room'])
+    end
+
+    it 'appends the lich id when display_lichid is on' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      Lich.display_stringprocs = true
+      Lich.display_room_links = false
+      Lich.display_lichid = true
+
+      expect(formatter.room_stringproc_entries).to eq(['Dest Room(99)'])
+    end
+
+    it 'includes a StringProc whose timeto StringProc returns a numeric' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => StringProc.new('5') }, id: 100))
+      Lich.display_stringprocs = true
+      Lich.display_room_links = false
+
+      expect(formatter.room_stringproc_entries).to eq(['Dest Room'])
+    end
+
+    it 'filters out StringProcs whose timeto is not numeric (not routable)' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => nil }, id: 100))
+      Lich.display_stringprocs = true
+
+      expect(formatter.room_stringproc_entries).to eq([])
+    end
+
+    it 'skips a dangling wayto reference (destination missing from the mapdb) without raising' do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      allow(Map).to receive(:[]).with(42).and_return(nil)
+      Lich.display_stringprocs = true
+
+      expect { formatter.room_stringproc_entries }.not_to raise_error
+      expect(formatter.room_stringproc_entries).to eq([])
+    end
+
+    it 'detects StringProcs via is_a? even though StringProc reports Proc for class/kind_of?' do
+      # Guards the core StringProc quirk: it overrides #class and #kind_of? but not #is_a?.
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      Lich.display_stringprocs = true
+      Lich.display_room_links = false
+
+      expect(formatter.room_stringproc_entries).to eq(['Dest Room'])
+    end
+  end
+
+  describe '#prepend_room_lines' do
+    let(:stringproc) { StringProc.new('nil') }
+
+    before do
+      allow(Map).to receive(:current).and_return(double('map', wayto: { 2 => 'go door', 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+      allow(Map).to receive(:[]).with(42).and_return(double('dest', title: ['[Dest Room]'], id: 99))
+    end
+
+    it 'leaves alt_string untouched when there are no entries' do
+      expect(formatter.prepend_room_lines(+'PROMPT', [], [])).to eq('PROMPT')
+    end
+
+    it 'prepends exits above stringprocs, both above the original string' do
+      Lich.display_room_mono = false
+
+      result = formatter.prepend_room_lines(+'PROMPT', ['Dest Room'], ['go door'])
+      expect(result).to eq("Room Exits: go door\r\nStringProcs: Dest Room\r\nPROMPT")
+    end
+
+    it 'keeps live <d> links inside a mono-wrapped line (toggles are independent)' do
+      Lich.display_room_mono = true
+      allow(Frontend).to receive(:supports_mono?).and_return(true)
+
+      result = formatter.prepend_room_lines(+'PROMPT', [], ["<d cmd='go door'>go door</d>"])
+      expect(result).to include('<output class="mono"/>Room Exits: ')
+      expect(result).to include("<d cmd='go door'>go door</d>")
+    end
+  end
+end
+
+# GS/DR parity: the shared exit/StringProc rendering must be byte-identical
+# across games; only the game-specific tails (GS room-window echo, DR room
+# number) differ.
+RSpec.describe 'process_room_display GS/DR parity' do
+  let(:gs) { Lich::Gemstone::GameInstance.new }
+  let(:dr) { Lich::DragonRealms::GameInstance.new }
+  let(:stringproc) { StringProc.new('nil') }
+
+  before do
+    XMLData.reset
+    XMLData.room_id = 789
+    XMLData.room_title = '[Test Room]'
+    Lich.display_lichid = false # no DR room-number line
+    Lich.display_uid = false
+    Lich.display_exits = true
+    Lich.display_stringprocs = true
+    Lich.display_room_links = true
+    Lich.display_room_mono = false
+    allow(Frontend).to receive(:supports_mono?).and_return(false)
+    allow(Frontend).to receive(:client).and_return('profanity') # not a room-window frontend
+    allow(Map).to receive(:current).and_return(double('map', wayto: { 2 => 'go door', 42 => stringproc }, timeto: { 42 => 5 }, id: 100))
+    allow(Map).to receive(:[]).with(42).and_return(double('dest', title: ['[Dest Room]'], id: 99))
+  end
+
+  # Reset the shared mock accessors so per-example toggles do not leak into other
+  # describe blocks (the suite runs in random order).
+  after do
+    Lich.display_lichid = nil
+    Lich.display_uid = nil
+    Lich.display_exits = nil
+    Lich.display_stringprocs = nil
+    Lich.display_room_links = nil
+    Lich.display_room_mono = nil
+  end
+
+  it 'renders a byte-identical shared exit/StringProc block in both games even when the game tails differ' do
+    Lich.display_lichid = true # DR now appends a "Room Number:" tail; GS still has none
+
+    # lichid=true also appends the dest id to the StringProc label - identically
+    # in both games, since both build it through the shared mixin.
+    shared = "Room Exits: <d cmd='go door'>go door</d>\r\n" \
+             "StringProcs: <d cmd=';go2 42'>Dest Room(99)</d>\r\n"
+    gs_out = gs.process_room_display(+'PROMPT')
+    dr_out = dr.process_room_display(+'PROMPT')
+
+    expect(gs_out).to include(shared)
+    expect(dr_out).to include(shared)
+    # The tails genuinely diverge (DR carries the room-number line), so matching
+    # the shared block is a real invariant - not the tautology of comparing two
+    # outputs whose game-specific tails have both been suppressed.
+    expect(gs_out).not_to eq(dr_out)
+  end
+
+  it 'DR adds a Room Number line but GS does not' do
+    Lich.display_lichid = true
+
+    expect(dr.process_room_display(+'PROMPT')).to include('Room Number:')
+    expect(gs.process_room_display(+'PROMPT')).not_to include('Room Number:')
+  end
+
+  it 'GS mirrors exits into the room window on a room-window frontend, DR does not' do
+    allow(Frontend).to receive(:client).and_return('stormfront')
+
+    expect(gs.process_room_display(+'PROMPT')).to include("<pushStream id='room'")
+    expect(dr.process_room_display(+'PROMPT')).not_to include("<pushStream id='room'")
+  end
+
+  it 'GS does not mirror exits on a non-room-window frontend' do
+    allow(Frontend).to receive(:client).and_return('profanity')
+
+    expect(gs.process_room_display(+'PROMPT')).not_to include("<pushStream id='room'")
+  end
+end
+
 RSpec.describe Lich::GameBase::GameInstanceFactory do
   it 'creates a game type GS' do
     discovered_game = Lich::GameBase::GameInstanceFactory.create('GS')
