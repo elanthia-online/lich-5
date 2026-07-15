@@ -25,6 +25,8 @@ module Lich
     TRUSTED_SCRIPT_BINDING = proc { _script }
 
     class Script
+      VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
+
       @@elevated_script_start = proc { |args|
         if args.empty?
           # fixme: error
@@ -64,26 +66,10 @@ module Lich
         end
 
         # fixme: look in wizard script directory
-        # Build file list: custom/ root, then custom/ subdirectories, then SCRIPT_DIR root
-        custom_base = File.join(SCRIPT_DIR, "custom")
-        custom_dirs = []
-        if File.directory?(custom_base)
-          custom_dirs << custom_base
-          # Dir.glob with trailing '/' matches directories only via libc readdir d_type,
-          # avoiding a File.directory? stat() per file. Critical on slower filesystems
-          # where each stat() costs ~5-10ms.
-          custom_dirs.concat(Dir.glob(File.join(custom_base, "*/")).map { |p| p.chomp("/") }.sort)
-        end
-        file_list = custom_dirs.flat_map { |dir|
-          prefix = dir.sub(SCRIPT_DIR, '')
-          Dir.children(dir)
-             .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
-             .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
-             .map { |s| "#{prefix}/#{s}" }
-        } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
-          script_name = file_name.sub(/\..{1,3}$/, '')
-        end
+        # Resolve via the shared resolver so script discovery stays identical
+        # everywhere (custom/ root, custom/<subdir>/, then SCRIPT_DIR root).
+        file_name = __find_script_file(script_name)
+        script_name = file_name.sub(/\..{1,3}$/, '') if file_name
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
           next nil
@@ -320,21 +306,59 @@ module Lich
       JUMP = JumpError.exception('JUMP')
       JUMP_ERROR = JumpError.exception('JUMP_ERROR')
 
-      def Script.version(script_name, script_version_required = nil)
-        script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
-        file_list = Dir.children(File.join(SCRIPT_DIR, "custom")).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }.map { |s| s.prepend("/custom/") } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
-        if (file_name = (file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ || val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } || file_list.find { |val| val =~ /^(?:\/custom\/)?#{Regexp.escape(script_name)}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }))
-          script_name = file_name.sub(/\..{1,3}$/, '')
+      # Resolves a script name to the on-disk filename that backs it.
+      #
+      # This is the single resolver shared by {Script.start}, {Script.version},
+      # and {Script.required_lich_version} so they can never diverge in which
+      # files they can see. It searches the +custom/+ root, then each
+      # +custom/<subdir>/+, then +SCRIPT_DIR+, matching (in order of
+      # preference) an exact name match, a case-sensitive prefix match, then a
+      # case-insensitive prefix match. Any supported extension (lic/rb/cmd/wiz),
+      # optionally gzip/compress suffixed, is accepted. A leading
+      # +/custom/...+ marker is retained on the returned value to signal where
+      # the file lives relative to +SCRIPT_DIR+.
+      #
+      # The script name is matched literally; callers that want extensionless
+      # matching (e.g. {Script.version}) strip the extension before calling.
+      #
+      # @param script_name [String] the script name to resolve
+      # @return [String, nil] the resolved filename (possibly +/custom/<subdir>/+-prefixed), or nil when no file matches
+      def Script.__find_script_file(script_name)
+        escaped = Regexp.escape(script_name)
+        custom_base = File.join(SCRIPT_DIR, "custom")
+        custom_dirs = []
+        if File.directory?(custom_base)
+          custom_dirs << custom_base
+          # Dir.glob with a trailing '/' matches directories only (via readdir
+          # d_type), avoiding a File.directory? stat() per entry. Critical on
+          # slower filesystems where each stat() costs ~5-10ms.
+          custom_dirs.concat(Dir.glob(File.join(custom_base, "*/")).map { |p| p.chomp("/") }.sort)
         end
-        if file_name.nil?
-          respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
-          return nil
-        end
+        file_list = custom_dirs.flat_map { |dir|
+          prefix = dir.sub(SCRIPT_DIR, '')
+          Dir.children(dir)
+             .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
+             .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
+             .map { |s| "#{prefix}/#{s}" }
+        } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
+        file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } ||
+          file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } ||
+          file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }
+      end
+      private_class_method :__find_script_file
 
-        script_version = '0.0.0'
-        script_data = File.open("#{SCRIPT_DIR}/#{file_name}", 'r').read
+      # Extracts the leading header-comment lines from raw script source.
+      #
+      # A +=begin+/+=end+ block is preferred; absent that, the run of leading
+      # +#+ comment lines (up to the first non-blank, non-comment line) is used.
+      # This is the single source of truth for "the script's header" relied on
+      # by {Script.version} and {Script.required_lich_version}.
+      #
+      # @param script_data [String] the full text of a script file
+      # @return [Array<String>] the header comment lines (empty when none)
+      def Script.__extract_header_comments(script_data)
         if script_data =~ /^=begin\r?\n?(.+?)^=end/m
-          comments = $1.split("\n")
+          $1.split("\n")
         else
           comments = []
           script_data.split("\n").each { |line|
@@ -344,8 +368,67 @@ module Lich
               break
             end
           }
+          comments
         end
-        for line in comments
+      end
+      private_class_method :__extract_header_comments
+
+      # Reads a script file and returns its header comment lines, failing soft.
+      #
+      # Gzip-compressed scripts (.gz) are decompressed first, mirroring how
+      # Script#initialize loads them; reading their bytes as text would
+      # otherwise raise on the binary content. Header parsing must never raise
+      # out of a startup version check, so a missing, unreadable, corrupt, or
+      # non-text file is treated as "no header" (an empty list) rather than
+      # propagating the error.
+      #
+      # @param file_path [String] absolute path to the script file
+      # @return [Array<String>] the header comment lines, or [] when the file cannot be read or parsed
+      def Script.__read_header_comments(file_path)
+        data =
+          if file_path =~ /\.gz$/i
+            Zlib::GzipReader.open(file_path) { |f| f.read }
+          else
+            File.read(file_path)
+          end
+        __extract_header_comments(data)
+      rescue SystemCallError, IOError, Zlib::Error, ArgumentError
+        []
+      end
+      private_class_method :__read_header_comments
+
+      # Resolves a script name to its header comment lines, or nil when not found.
+      #
+      # Centralizes the name -> file -> read sequence shared by {Script.version}
+      # and {Script.required_lich_version}. Reading is fail-soft via
+      # {Script.__read_header_comments}; a name that resolves to no file returns
+      # nil, distinct from a found-but-headerless script, which returns [].
+      #
+      # @param script_name [String] the script name (with or without extension)
+      # @return [Array<String>, nil] the header comment lines, or nil when no file matches
+      def Script.__header_lines_for(script_name)
+        file_name = __find_script_file(script_name.sub(/[.](lic|rb|cmd|wiz)$/, ''))
+        file_name && __read_header_comments("#{SCRIPT_DIR}/#{file_name}")
+      end
+      private_class_method :__header_lines_for
+
+      # Reads a script's declared +version:+ header.
+      #
+      # @param script_name [String] the script name (with or without extension)
+      # @param script_version_required [String, nil] when given, a version to compare against
+      # @return [Boolean] when +script_version_required+ is given, true if the script's version is *older* than required
+      # @return [Gem::Version] when no required version is given, the script's parsed version (defaults to 0.0.0)
+      # @return [nil] when the script file cannot be found
+      def Script.version(script_name, script_version_required = nil)
+        script_name = script_name.sub(/[.](lic|rb|cmd|wiz)$/, '')
+        lines = __header_lines_for(script_name)
+        if lines.nil?
+          respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR}"
+          return nil
+        end
+
+        script_version = '0.0.0'
+        lines.each do |line|
           if line =~ /^[\s\t#]*version:[\s\t]*([\w,\s\.\d]+)/i
             script_version = $1.sub(/\s\(.*?\)/, '').strip
           end
@@ -356,6 +439,111 @@ module Lich
           Gem::Version.new(script_version)
         end
       end
+
+      # Reads the minimum Lich version a script declares it needs.
+      #
+      # Scripts advertise their floor with a +required: Lich <op> X.Y.Z+ line in
+      # their header comments. All three operator forms found in the wild are
+      # treated as the same "minimum version" floor:
+      #
+      #   required: Lich >= 5.15.0   # explicit minimum
+      #   required: Lich > 5.0.1     # bare '>' (treated as a minimum, not strict)
+      #   required: Lich 4.3.12      # no operator (older style)
+      #
+      # Only the dotted-numeric run is captured, so a stray suffix (e.g.
+      # +5.0x+) yields +5.0+ rather than an unparseable string. This is the
+      # single, canonical reader for the declaration, replacing the ad-hoc
+      # +Script.list.find { ... }.inspect[...]+ idiom scripts have copy-pasted
+      # (which only ever recognized the +>=+ form).
+      #
+      # When inspecting the calling script (the +script_name+ default), the
+      # header is read straight from the running script's own +file_name+. This
+      # avoids a lossy name->file round-trip: a running script stores only its
+      # basename in +@name+, so a +custom/<subdir>/+ script could not otherwise
+      # locate its own header - which would make the version guard fail open.
+      #
+      # @param script_name [String, nil] the script to inspect; when nil (the default), the currently running script is read directly
+      # @return [String, nil] the declared minimum version (e.g. "5.15.0"), or nil when the script declares none or cannot be found
+      def Script.required_lich_version(script_name = nil)
+        lines =
+          if script_name
+            __header_lines_for(script_name)
+          elsif (file_path = Script.current&.file_name)
+            __read_header_comments(file_path)
+          end
+        return nil if lines.nil?
+
+        required = nil
+        lines.each do |line|
+          required = $1.strip if line =~ /^[\s\t#]*required:[\s\t]*Lich[\s\t]*(?:>=?[\s\t]*)?([\d.]+)/i
+        end
+        required
+      end
+
+      # Safely parses a version string into a Gem::Version.
+      #
+      # Header data is author-supplied and may be malformed; a bad value must
+      # never raise out of a version check and crash a script at startup.
+      #
+      # @param value [String, nil] the version string to parse
+      # @return [Gem::Version, nil] the parsed version, or nil when the value is blank or unparseable
+      def Script.__to_gem_version(value)
+        value = value.to_s.strip
+        return nil if value.empty?
+        Gem::Version.new(value)
+      rescue ArgumentError
+        nil
+      end
+      private_class_method :__to_gem_version
+
+      # Tests whether the running Lich satisfies a minimum version.
+      #
+      # A missing, blank, or unparseable minimum is treated as "no requirement"
+      # and passes, so a malformed +required:+ header can never block a script.
+      #
+      # @param minimum [String, nil] the minimum version to require; defaults to the calling script's declared +required:+ floor
+      # @return [Boolean] true if +LICH_VERSION+ is at least +minimum+, or if no usable minimum is declared/given
+      def Script.lich_version_satisfied?(minimum = required_lich_version)
+        required = __to_gem_version(minimum)
+        return true if required.nil?
+        Gem::Version.new(LICH_VERSION) >= required
+      end
+
+      # Enforces a script's minimum Lich version, terminating it if unmet.
+      #
+      # When the running Lich is too old, emits a frontend-aware notice (via
+      # {Lich::Messaging}, which routes correctly for xml/gsl/plain clients) and
+      # then stops the calling script. Intended as the one-liner scripts call at
+      # startup: +Script.require_lich_version!+.
+      #
+      # @param minimum [String, nil] the minimum version to require; defaults to the calling script's declared +required:+ floor
+      # @return [Boolean] true when the version is satisfied; otherwise false (after the script has been told to exit)
+      def Script.require_lich_version!(minimum = required_lich_version)
+        return true if lich_version_satisfied?(minimum)
+        current = Script.current
+        __warn_lich_too_old(current&.name || 'script', minimum)
+        current&.exit
+        false
+      end
+
+      # Emits the standard "your Lich is too old" notice.
+      #
+      # Output is routed through {Lich::Messaging} so it renders correctly on
+      # every frontend (it resolves xml/gsl/plain via Frontend's capability
+      # checks rather than poking +$frontend+ directly).
+      #
+      # @param script_name [String] the script reporting the requirement
+      # @param minimum [String] the minimum Lich version the script needs
+      # @return [void]
+      def Script.__warn_lich_too_old(script_name, minimum)
+        Lich::Messaging.msg('bold', '########################################')
+        Lich::Messaging.msg('warn', "Script: #{script_name} now requires a newer version of Lich (#{minimum}+) to run.")
+        Lich::Messaging.msg('warn', 'Please update to a newer version.')
+        Lich::Messaging.msg('warn', "Currently running Lich version: #{LICH_VERSION}")
+        Lich::Messaging.msg('warn', 'For help updating visit: https://gswiki.play.net/Lich_(software)/Installation')
+        Lich::Messaging.msg('bold', '########################################')
+      end
+      private_class_method :__warn_lich_too_old
 
       def Script.list
         @@running.dup
@@ -407,11 +595,26 @@ module Lich
         end
       end
 
-      def Script.kill(name)
+      # Stops a running script by name.
+      #
+      # Used for ordinary runtime stops and, with +context: :shutdown+, by
+      # shutdown teardown and +die_with+ propagation. The context is forwarded to
+      # {Script#kill} so shutdown kills stay inline (avoiding a cleanup thread per
+      # script) rather than reintroducing the thread burst inline teardown removes.
+      #
+      # @param name [String] script name (exact match, then case-insensitive)
+      # @param context [Symbol] kill context forwarded to {Script#kill}
+      #   (:runtime or :shutdown)
+      # @return [Boolean] true when a matching running script was found and stopped
+      def Script.kill(name, context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
           s.killed_externally = true
           s.kill_source = caller[0..2]
-          s.kill
+          s.kill(context: context)
           true
         else
           false
@@ -785,6 +988,10 @@ module Lich
       #   when the owning Lich process is closing
       # @return [String] script name
       def kill(context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
         source = @kill_source || caller[0..2]
 
         if context == :shutdown
@@ -842,7 +1049,11 @@ module Lich
                 end
               }
               @thread_group.add(Thread.current)
-              @die_with.each { |script_name| Script.kill(script_name) }
+              # Forward the kill context so die_with dependents torn down during
+              # shutdown also run inline -- otherwise they route back through the
+              # default :runtime path and re-spawn the thread-per-kill burst that
+              # inline shutdown teardown exists to avoid.
+              @die_with.each { |script_name| Script.kill(script_name, context: context) }
               @paused = false
               @at_exit_procs.each { |p| report_errors { p.call } }
               # Let each per-script-state subsystem (the hook registries, etc.)

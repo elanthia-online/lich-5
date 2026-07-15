@@ -146,6 +146,8 @@ reconnect_if_wanted = proc {
   if @argv_options[:sal]
     begin
       @launch_data = File.open(@argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
+      modifiers = ARGV.dup
+      Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
       Lich.log "info: launch_file: #{@argv_options[:sal]}"
@@ -357,7 +359,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Lich::Common.quit_gtk_main_loop } if defined?(Gtk)
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
       #      if defined?(Win32)
@@ -384,7 +386,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Lich::Common.quit_gtk_main_loop } if defined?(Gtk)
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
     end
@@ -1023,7 +1025,7 @@ reconnect_if_wanted = proc {
       Lich::Common::ShutdownLog.flush_user_exit_summary!
     end
     Lich::Common::ShutdownLog.info('exiting...')
-    Gtk.queue { Lich::Common.quit_gtk_main_loop } if defined?(Gtk)
+    Lich::Common.shutdown_gtk_before_exit
     exit
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).

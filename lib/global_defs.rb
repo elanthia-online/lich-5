@@ -131,8 +131,12 @@ def stop_script(*target_names)
   end
 end
 
-def running?(*snames)
-  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+def running?(*snames, exact_match: false)
+  if exact_match
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i }) }
+  else
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+  end
   true
 end
 
@@ -2504,6 +2508,26 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
+    elsif cmd =~ /^display roomlinks?(?: (true|false))?/i
+      new_value = !(Lich.display_room_links)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room exits as clickable command links to #{new_value}"
+      Lich.display_room_links = new_value
+    elsif cmd =~ /^display roommono(?: (true|false))?/i
+      new_value = !(Lich.display_room_mono)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room information in monospace font to #{new_value}"
+      Lich.display_room_mono = new_value
     elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
       if running?('exp-monitor')
         respond "Error: exp-monitor.lic script is currently running"
@@ -2654,6 +2678,8 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
+      respond "   #{$clean_lich_char}display roomlinks         toggle rendering of room exits as clickable command links vs plain text"
+      respond "   #{$clean_lich_char}display roommono          toggle rendering of Lich room information in monospace font vs game font"
       if XMLData.game =~ /^DR/
         respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
         respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"

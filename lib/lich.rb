@@ -142,6 +142,8 @@ module Lich
   @@display_uid          = nil # boolean
   @@display_exits        = nil # boolean
   @@display_stringprocs  = nil # boolean
+  @@display_room_links   = nil # boolean
+  @@display_room_mono    = nil # boolean
   @@display_expgains     = nil # boolean (DragonRealms only)
   @@hide_uid_flag        = nil # boolean
   @@track_autosort_state = nil # boolean
@@ -921,6 +923,81 @@ module Lich
     @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether room exits are rendered as clickable command links (a <d> tag) or as
+  # plain text in room-display output. Persisted in the lich_settings table and
+  # shared across characters. When no value has been saved yet, the default is
+  # game-aware: DragonRealms defaults to off (plain text, matching the retired
+  # roomnumbers.lic look) while GemStone and any other game default to on
+  # (clickable links, the pre-existing core behavior).
+  # @return [Boolean, nil] true when exits should be clickable links; nil until
+  #   the game is identified (XMLData.game still blank), matching the pre-existing
+  #   display_* getters. Callers treat nil as falsy.
+  def Lich.display_room_links
+    if @@display_room_links.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_links';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = (XMLData.game =~ /^DR/ ? false : true) if val.nil? and XMLData.game != ""; # default: DR off, others on
+      @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_room_links
+  end
+
+  # Sets and persists the room-exit link toggle.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
+  def Lich.display_room_links=(val)
+    @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_links',?);", [@@display_room_links.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether the Lich-injected room lines (Room Number, Room Exits, StringProcs)
+  # are wrapped in the fixed-width mono style. Persisted in the lich_settings
+  # table and shared across characters. When no value has been saved yet, the
+  # default is game-aware: DragonRealms defaults to on (mono, matching the
+  # retired roomnumbers.lic look) while GemStone and any other game default to
+  # off (the proportional game font, the pre-existing core behavior). The mono
+  # wrapper is only emitted on mono-capable frontends (see Frontend.supports_mono?).
+  # @return [Boolean, nil] true when the lines should render in the mono style;
+  #   nil until the game is identified (XMLData.game still blank), matching the
+  #   pre-existing display_* getters. Callers treat nil as falsy.
+  def Lich.display_room_mono
+    if @@display_room_mono.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_mono';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = (XMLData.game =~ /^DR/ ? true : false) if val.nil? and XMLData.game != ""; # default: DR on, others off
+      @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_room_mono
+  end
+
+  # Sets and persists the room-line mono-font toggle.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
+  def Lich.display_room_mono=(val)
+    @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_mono',?);", [@@display_room_mono.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
