@@ -1,5 +1,6 @@
 # lib/gemcheck.rb
 require 'bundler'
+require_relative 'bundler_recovery'
 require_relative 'dependency_recovery'
 
 module Lich
@@ -16,6 +17,7 @@ module Lich
     RELEASE_URL     = 'https://github.com/elanthia-online/lich-5/releases/latest'
     LOG_FILENAME    = 'lich5-missing-gems.log'
     CONSENT_TIMEOUT_SECONDS = 120
+    BUNDLER_RECOVERY_TIMEOUT_SECONDS = 120
 
     # Records why a recovery did not run without treating that decision as a
     # manifest or Bundler failure.
@@ -33,29 +35,49 @@ module Lich
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
+      activate_bundler_recovery!
 
       missing = missing_gems(groups)
       return if missing.empty?
 
-      unless self_healing_supported?
-        alert(missing: missing, groups: groups)
+      if self_healing_supported?
+        result = recover_with_consent!(missing, groups: groups)
+        exit 1 unless result
+        exit 0 if result.restart_required
+
+        if result.success?
+          missing = missing_gems(groups)
+          return if missing.empty?
+
+          alert(missing: missing, groups: groups)
+        else
+          alert(missing: missing, groups: groups,
+                error: DependencyRecovery::Error.new(result.error))
+        end
         exit 1
       end
 
-      result = recover_with_consent!(missing, groups: groups)
-      exit 1 unless result
-      exit 0 if result.restart_required
+      if bundler_recovery_supported?(groups)
+        result = recover_with_bundler_consent!(missing, groups: groups)
+        exit 1 unless result
 
-      if result.success?
-        missing = missing_gems(groups)
-        return if missing.empty?
+        if result.success?
+          write_bundler_recovery_log(missing: missing, groups: groups, result: result)
+          begin
+            relaunch_after_bundler_recovery!
+          rescue SystemCallError => e
+            alert(missing: missing, groups: groups, error: e)
+            exit 1
+          end
+          exit 0
+        end
 
-        alert(missing: missing, groups: groups)
+        alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
+        exit 1
       else
-        alert(missing: missing, groups: groups,
-              error: DependencyRecovery::Error.new(result.error))
+        alert(missing: missing, groups: groups)
+        exit 1
       end
-      exit 1
     end
 
     # Ensures Bundler resolves Lich's Gemfile even when the app is launched
@@ -75,6 +97,23 @@ module Lich
     # @return [Boolean]
     def self_healing_supported?
       Gem.win_platform?
+    end
+
+    # The initial non-Windows recovery is deliberately macOS-only and only
+    # covers default runtime gems. GTK remains outside this Bundler path.
+    # @param groups [Array<Symbol>]
+    # @return [Boolean]
+    def bundler_recovery_supported?(groups)
+      BundlerRecovery.supported? && Array(groups).map(&:to_sym) == [:default]
+    end
+
+    # Adds a prior atomically promoted macOS bundle to RubyGems before Bundler
+    # inspects installed specifications. No Bundler.setup call is made.
+    # @return [Boolean]
+    def activate_bundler_recovery!
+      return false unless defined?(LICH_DIR) && BundlerRecovery.supported?
+
+      BundlerRecovery.activate!(lich_dir: LICH_DIR)
     end
 
     # Chooses the dependency groups that must be present before normal startup.
@@ -107,6 +146,27 @@ module Lich
 
       write_recovery_log(missing: gem_names, groups: groups, units: plan.units)
       recovery.recover(gem_names, force: force, plan: plan)
+    end
+
+    # Runs a consented, frozen Bundler repair for the default non-GTK runtime
+    # gems on macOS. The recovery object stages its full bundle before making
+    # the new private RubyGems home active.
+    # @param gem_names [Array<String>]
+    # @param groups [Array<Symbol>]
+    # @return [BundlerRecovery::Result, nil]
+    def recover_with_bundler_consent!(gem_names, groups: [:default])
+      recovery = BundlerRecovery.new(lich_dir: LICH_DIR)
+      if (reason = recovery.preflight(gem_names))
+        return BundlerRecovery::Result.new(error: reason)
+      end
+
+      decision = confirm_bundler_recovery(gem_names)
+      unless decision == :approved
+        report_bundler_consent_failure(gem_names, groups, consent_failure_reason(decision))
+        return nil
+      end
+
+      recovery.recover(gem_names)
     end
 
     # Requests one consent decision for every affected unit before any artifact
@@ -145,6 +205,30 @@ module Lich
       :unavailable
     end
 
+    # @param gem_names [Array<String>]
+    # @return [Symbol] :approved, :declined, :timed_out, or :unavailable
+    def confirm_bundler_recovery(gem_names)
+      return :unavailable unless BundlerRecovery.supported?
+
+      body = "Required Ruby gems are not installed:\n#{Array(gem_names).map { |name| "  - #{name}" }.join("\n")}\n\n" \
+             "Lich can install the locked non-GTK runtime bundle to its private directory now.\n" \
+             "Gemfile.lock will not be changed.\n\nInstall now?"
+      script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
+               %(buttons {"Install", "Cancel"} default button "Install" with icon caution ) +
+               "giving up after #{BUNDLER_RECOVERY_TIMEOUT_SECONDS}"
+      output = IO.popen(['osascript', '-'], 'r+') do |io|
+        io.write(script)
+        io.close_write
+        io.read
+      end
+      return :timed_out if output.include?('gave up:true')
+      return :approved if output.include?('button returned:Install')
+
+      :declined
+    rescue StandardError
+      :unavailable
+    end
+
     # @param units [Array<Hash>] validated manifest recovery units
     # @return [String]
     def build_recovery_prompt(units)
@@ -176,6 +260,15 @@ module Lich
       error = ConsentError.new(reason)
       missing = units.flat_map { |unit| Array(unit['members']) }.uniq
       write_log(missing: missing, groups: groups, error: error)
+      show_notice("Required gem#{'s' if missing.length != 1} #{missing.join(', ')} not installed. Exiting.")
+    end
+
+    # @param missing [Array<String>]
+    # @param groups [Array<Symbol>]
+    # @param reason [String]
+    # @return [void]
+    def report_bundler_consent_failure(missing, groups, reason)
+      write_log(missing: missing, groups: groups, error: ConsentError.new(reason))
       show_notice("Required gem#{'s' if missing.length != 1} #{missing.join(', ')} not installed. Exiting.")
     end
 
@@ -253,11 +346,21 @@ module Lich
 
     # @param missing [Array<String>]
     # @param groups [Array<Symbol>]
+    # @param result [BundlerRecovery::Result]
+    # @return [void]
+    def write_bundler_recovery_log(missing:, groups:, result:)
+      write_log(missing: missing, groups: groups, event: 'Bundler recovery',
+                recovery_note: "Private non-GTK bundle staged and activated. Details: #{result.log_path}")
+    end
+
+    # @param missing [Array<String>]
+    # @param groups [Array<Symbol>]
     # @param error [Exception, nil]
     # @param event [String] log event name
     # @param recovery_units [Array<Hash>, nil] approved manifest units
+    # @param recovery_note [String, nil] additional approved recovery detail
     # @return [void]
-    def write_log(missing: [], groups: [:default], error: nil, event: 'failure', recovery_units: nil)
+    def write_log(missing: [], groups: [:default], error: nil, event: 'failure', recovery_units: nil, recovery_note: nil)
       log_path = File.join(TEMP_DIR, LOG_FILENAME)
       # verify! can run before init.rb creates TEMP_DIR (fresh install), so
       # ensure the directory exists or the alert would cite a log we never wrote.
@@ -272,6 +375,11 @@ module Lich
           recovery_units.each do |unit|
             f.puts "    - #{recovery_unit_label(unit)}: #{Array(unit['members']).join(', ')}"
           end
+          f.puts
+        end
+
+        if recovery_note
+          f.puts "  Recovery: #{recovery_note}"
           f.puts
         end
 
@@ -366,6 +474,7 @@ module Lich
     def show_notice(body)
       case RUBY_PLATFORM
       when /mswin|mingw|cygwin/ then notice_windows(body)
+      when /darwin/             then alert_macos(body)
       else                           alert_linux(body)
       end
     rescue StandardError
@@ -377,6 +486,16 @@ module Lich
     def notice_windows(body)
       require 'win32ole'
       WIN32OLE.new('WScript.Shell').Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, 64) # OK + information icon
+    end
+
+    # Relaunches using the known Lich Ruby entrypoint after a private macOS
+    # bundle was atomically activated. exec keeps the original command-line
+    # arguments while ensuring RubyGems rebuilds its specification state.
+    # @return [void]
+    def relaunch_after_bundler_recovery!
+      entrypoint = File.join(LICH_DIR, 'lich.rbw')
+      entrypoint = File.expand_path($PROGRAM_NAME) unless File.file?(entrypoint)
+      exec(Gem.ruby, entrypoint, *ARGV)
     end
 
     # @param body [String]
