@@ -816,6 +816,28 @@ reconnect_if_wanted = proc {
                 nil
               }
             end
+            # Saga's cloud profile sync keys each character on its <playerID>,
+            # which Lich consumed from the game during its own login handshake
+            # before this detachable client attached - so Saga never sees it and
+            # a Via-Lich character silently never syncs (a Direct login does,
+            # because it sees the tag). Re-emit it here, unprefixed, exactly as a
+            # Direct login delivers it. This runs on every attach (the outer loop
+            # re-enters this block), so a Saga client that re-attaches mid-session
+            # (a restart against a surviving Lich) also relearns the id. Deferred
+            # to a thread with a bounded wait because a client can attach before
+            # login has populated player_id; _respond routes to the detachable
+            # client, gates on XMLData.safe_to_respond?, and re-checks it is alive.
+            if ARGV.any? { |a| a =~ /^--saga$/i }
+              Thread.new {
+                tag = nil
+                100.times do
+                  break if (tag = Frontend.player_id_tag(XMLData.player_id))
+                  sleep 0.1
+                end
+                _respond(tag) if tag
+                nil
+              }
+            end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
               # Profanity handshake:  SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
