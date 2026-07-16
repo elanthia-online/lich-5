@@ -17,12 +17,12 @@ RSpec.describe Lich::BundlerRecovery do
     end
   end
 
-  def recovery(&launcher)
+  def recovery(installer: nil, &launcher)
     helper = lambda do |path|
       launcher.call(path)
       FileUtils.rm_rf(File.dirname(path)) # Mirrors detached helper cleanup in unit tests.
     end
-    described_class.new(lich_dir: @lich_dir, gem_home: @gem_home, helper_launcher: helper)
+    described_class.new(lich_dir: @lich_dir, gem_home: @gem_home, helper_launcher: helper, installer: installer)
   end
 
   before { allow(described_class).to receive(:supported?).and_return(true) }
@@ -48,7 +48,7 @@ RSpec.describe Lich::BundlerRecovery do
     before do
       allow_any_instance_of(described_class).to receive(:preflight).and_return(nil)
       allow_any_instance_of(described_class).to receive(:promotion_packages)
-        .and_return([{ 'name' => 'ox', 'version' => '2.14.28', 'path' => '/verified/ox.gem' }])
+        .and_return([{ 'name' => 'ox', 'version' => '2.14.28', 'full_name' => 'ox-2.14.28', 'path' => '/verified/ox.gem' }])
       allow(Open3).to receive(:capture3).and_return(['installed', '', status])
     end
 
@@ -61,7 +61,7 @@ RSpec.describe Lich::BundlerRecovery do
       expect(result).to be_success
       expect(result.restart_required).to be(true)
       expect(payload).to include('gem_home' => @gem_home, 'lich_dir' => @lich_dir)
-      expect(payload.fetch('packages')).to eq([{ 'name' => 'ox', 'version' => '2.14.28', 'path' => '/verified/ox.gem' }])
+      expect(payload.fetch('packages')).to eq([{ 'name' => 'ox', 'version' => '2.14.28', 'full_name' => 'ox-2.14.28', 'path' => '/verified/ox.gem' }])
       expect(File.directory?(payload.fetch('work_dir'))).to be(false)
       expect(File).not_to exist(File.join(@lich_dir, '.lich-bundler-gems'))
     end
@@ -119,6 +119,88 @@ RSpec.describe Lich::BundlerRecovery do
       packages = recovery { |_| }.send(:promotion_packages, ['ox'], staging)
 
       expect(packages.map { |package| package.fetch('name') }).to contain_exactly('ox', 'lich-recovery-support')
+    end
+  end
+
+  describe 'detached promotion transaction' do
+    def write_installed_spec(name, version, marker:)
+      spec = Gem::Specification.new do |entry|
+        entry.name = name
+        entry.version = version
+        entry.summary = 'test'
+        entry.authors = ['Lich']
+      end
+      FileUtils.mkdir_p([File.join(@gem_home, 'specifications'), File.join(@gem_home, 'gems', spec.full_name)])
+      File.write(File.join(@gem_home, 'specifications', "#{spec.full_name}.gemspec"), spec.to_ruby)
+      File.write(File.join(@gem_home, 'gems', spec.full_name, 'marker'), marker)
+      spec
+    end
+
+    def payload_for(work_dir, spec)
+      archive = File.join(work_dir, "#{spec.full_name}.gem")
+      File.write(archive, 'verified test archive')
+      path = File.join(work_dir, 'macos-gem-promotion.json')
+      payload = {
+        'schema' => 1, 'parent_pid' => Process.pid, 'lich_dir' => @lich_dir,
+        'gem_home' => @gem_home, 'temp_dir' => File.dirname(work_dir), 'work_dir' => work_dir,
+        'packages' => [{ 'name' => spec.name, 'version' => spec.version.to_s, 'full_name' => spec.full_name, 'path' => archive }],
+        'restart' => { 'program' => File.join(@lich_dir, 'lich.rbw'), 'argv' => [], 'chdir' => @lich_dir }
+      }
+      File.write(path, JSON.generate(payload))
+      [payload, path]
+    end
+
+    def install_spec(spec, marker:)
+      FileUtils.mkdir_p([File.join(@gem_home, 'specifications'), File.join(@gem_home, 'gems', spec.full_name)])
+      File.write(File.join(@gem_home, 'specifications', "#{spec.full_name}.gemspec"), spec.to_ruby)
+      File.write(File.join(@gem_home, 'gems', spec.full_name, 'marker'), marker)
+    end
+
+    it 'promotes the exact package, preserves another version, validates, and restarts' do
+      original = write_installed_spec('recovery-target', '1.0.0', marker: 'preserve')
+      replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'old')
+      work_dir = Dir.mktmpdir('promotion-', @lich_dir)
+      payload, path = payload_for(work_dir, replacement)
+      subject = recovery(installer: ->(_) { install_spec(replacement, marker: 'new') }) { |_| }
+      allow(subject).to receive(:wait_for_parent_exit)
+      expect(subject).to receive(:restart_lich).with(payload.fetch('restart'))
+
+      subject.send(:run_macos_replacement!, payload, payload_path: path)
+
+      expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
+      expect(File.read(File.join(@gem_home, 'gems', original.full_name, 'marker'))).to eq('preserve')
+      expect(File).not_to exist(work_dir)
+    end
+
+    it 'restores the exact backed-up package and does not restart when installation fails' do
+      replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'old')
+      work_dir = Dir.mktmpdir('promotion-', @lich_dir)
+      payload, path = payload_for(work_dir, replacement)
+      subject = recovery(installer: lambda { |_|
+        install_spec(replacement, marker: 'new')
+        raise 'install failed'
+      }) { |_| }
+      allow(subject).to receive(:wait_for_parent_exit)
+      expect(subject).not_to receive(:restart_lich)
+
+      expect { subject.send(:run_macos_replacement!, payload, payload_path: path) }.to raise_error('install failed')
+      expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('old')
+      expect(File).to exist(File.join(@gem_home, 'specifications', "#{replacement.full_name}.gemspec"))
+      expect(File).not_to exist(work_dir)
+    end
+
+    it 'does not clean a payload-supplied workspace unless it matches the payload directory' do
+      replacement = Gem::Specification.new { |entry| entry.name = 'recovery-target'; entry.version = '2.0.0'; entry.summary = 'test'; entry.authors = ['Lich'] }
+      work_dir = Dir.mktmpdir('promotion-', @lich_dir)
+      payload, path = payload_for(work_dir, replacement)
+      protected_dir = Dir.mktmpdir('protected-', @lich_dir)
+      payload['work_dir'] = protected_dir
+      File.write(path, JSON.generate(payload))
+      subject = recovery { |_| }
+
+      expect { subject.send(:run_macos_replacement!, payload, payload_path: path) }.to raise_error('invalid macOS gem promotion workspace')
+      expect(File).to exist(protected_dir)
+      FileUtils.rm_rf([work_dir, protected_dir])
     end
   end
 end

@@ -33,9 +33,10 @@ module Lich
       # Runs after the Lich process exits. The helper owns promotion, rollback,
       # cleanup, and restart so the running Ruby never changes its own gems.
       def run_macos_replacement(payload_path)
+        payload = nil
         payload = JSON.parse(File.read(payload_path))
         new(lich_dir: payload.fetch('lich_dir'), gem_home: payload.fetch('gem_home'))
-          .send(:run_macos_replacement!, payload)
+          .send(:run_macos_replacement!, payload, payload_path: payload_path)
         true
       rescue StandardError => e
         log_helper_failure(payload || payload_path, e)
@@ -161,7 +162,7 @@ module Lich
         archive = File.join(home, 'cache', spec.file_name)
         raise "Bundler did not cache #{spec.full_name}" unless File.file?(archive)
 
-        { 'name' => spec.name, 'version' => spec.version.to_s, 'path' => archive }
+        { 'name' => spec.name, 'version' => spec.version.to_s, 'full_name' => spec.full_name, 'path' => archive }
       end
     end
 
@@ -200,35 +201,38 @@ module Lich
       Process.spawn(Gem.ruby, helper_path, payload_path, chdir: @lich_dir, out: File::NULL, err: File::NULL)
     end
 
-    def run_macos_replacement!(payload)
-      validate_payload!(payload)
+    def run_macos_replacement!(payload, payload_path:)
+      cleanup_target = validate_payload!(payload, payload_path)
       wait_for_parent_exit(payload.fetch('parent_pid'))
       with_install_lock do
-        rollback = File.join(payload.fetch('work_dir'), 'rollback')
-        names = payload.fetch('packages').map { |package| package.fetch('name') }.uniq
-        backup_existing_packages(names, rollback)
+        rollback = File.join(cleanup_target, 'rollback')
+        backup_existing_packages(payload.fetch('packages'), rollback)
         begin
           payload.fetch('packages').each { |package| @installer.call(package.fetch('path')) }
           verify_packages!(payload.fetch('packages'))
         rescue StandardError
-          remove_packages(names)
+          remove_packages(payload.fetch('packages'))
           restore_backup(rollback)
           raise
         end
       end
       restart_lich(payload.fetch('restart'))
     ensure
-      FileUtils.rm_rf(payload.fetch('work_dir')) if payload.is_a?(Hash) && payload['work_dir']
+      FileUtils.rm_rf(cleanup_target) if defined?(cleanup_target) && cleanup_target
     end
 
-    def validate_payload!(payload)
+    def validate_payload!(payload, payload_path)
       required = %w[parent_pid lich_dir gem_home temp_dir work_dir packages restart]
       raise 'invalid macOS gem promotion payload' unless payload.is_a?(Hash) && payload['schema'] == 1 && required.all? { |key| payload.key?(key) }
       raise 'invalid macOS gem promotion package list' unless payload['packages'].is_a?(Array) && !payload['packages'].empty?
+      workspace = File.dirname(File.expand_path(payload_path))
+      raise 'invalid macOS gem promotion workspace' unless File.expand_path(payload.fetch('work_dir')) == workspace
       payload['packages'].each do |package|
-        path = package.fetch('path')
-        raise 'unsafe staged gem package' unless File.file?(path) && path.start_with?("#{payload.fetch('work_dir')}/")
+        %w[name version full_name path].each { |key| package.fetch(key) }
+        path = File.expand_path(package.fetch('path'))
+        raise 'unsafe staged gem package' unless File.file?(path) && path.start_with?("#{workspace}/")
       end
+      workspace
     end
 
     def wait_for_parent_exit(pid)
@@ -252,8 +256,8 @@ module Lich
       Gem::Installer.at(path, install_dir: @gem_home, ignore_dependencies: true, wrappers: false).install
     end
 
-    def backup_existing_packages(names, rollback)
-      names.flat_map { |name| canonical_specs(name) }.uniq(&:loaded_from).each do |spec|
+    def backup_existing_packages(packages, rollback)
+      exact_specs(packages).each do |spec|
         package_paths(spec).each { |path| move_to_backup(path, rollback) }
       end
     end
@@ -270,8 +274,8 @@ module Lich
       FileUtils.mv(path, destination)
     end
 
-    def remove_packages(names)
-      names.flat_map { |name| canonical_specs(name) }.uniq(&:loaded_from).each do |spec|
+    def remove_packages(packages)
+      exact_specs(packages).each do |spec|
         package_paths(spec).each { |path| FileUtils.rm_rf(path) }
       end
     end
@@ -293,9 +297,16 @@ module Lich
       packages.each do |package|
         requirement = Gem::Requirement.new("= #{package.fetch('version')}")
         installed = canonical_specs(package.fetch('name'))
-        raise "#{package.fetch('name')} was not installed" unless installed.any? { |spec| requirement.satisfied_by?(spec.version) }
+        exact = installed.find { |spec| spec.full_name == package.fetch('full_name') && requirement.satisfied_by?(spec.version) }
+        raise "#{package.fetch('full_name')} was not installed" unless exact
       end
       packages.select { |package| NATIVE_DEFAULT_GEMS.include?(package.fetch('name')) }.each { |package| require package.fetch('name') }
+    end
+
+    def exact_specs(packages)
+      packages.flat_map do |package|
+        canonical_specs(package.fetch('name')).select { |spec| spec.full_name == package.fetch('full_name') }
+      end.uniq(&:loaded_from)
     end
 
     def restart_lich(restart)
