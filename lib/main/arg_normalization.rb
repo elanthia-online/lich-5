@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'detachable_client_target'
+
 module Lich
   module Main
     # Normalizes user-facing CLI aliases into the existing lower-level argument
@@ -13,6 +15,8 @@ module Lich
       # Current rules:
       # - `--headless PORT` => `--without-frontend --detachable-client=PORT`
       # - `--headless auto` => `--without-frontend --detachable-client=0`
+      # - `--headless HOST:PORT` => `--without-frontend --detachable-client=HOST:PORT`
+      #   (HOST may be tailscale, lan, any, an IP address, or a hostname)
       #
       # Bare `--headless` is rejected because an unattached fully headless login
       # is not a supported public workflow.
@@ -46,24 +50,27 @@ module Lich
         end
 
         argv[headless_index] = '--without-frontend'
-        argv.insert(headless_index + 1, "#{DETACHABLE_CLIENT_PREFIX}#{normalize_headless_port(port_token)}")
+        argv.insert(headless_index + 1, "#{DETACHABLE_CLIENT_PREFIX}#{normalize_headless_target(port_token)}")
         argv
       end
 
-      # Resolves the detachable port token accepted by `--headless`.
+      # Resolves the target token accepted by `--headless` to the canonical
+      # form consumed by `--detachable-client`.
       #
       # @param token [String] user-provided token after `--headless`
-      # @return [Integer] detachable listener port, or `0` for OS-assigned auto
-      # @raise [ArgumentError] when the token is not a valid port or `auto`
-      def self.normalize_headless_port(token)
-        return 0 if token.to_s.casecmp('auto').zero?
+      # @return [String] canonical `PORT` or `HOST:PORT` (port `0` means
+      #   OS-assigned auto)
+      # @raise [ArgumentError] when the token is not a valid port, `auto`, or
+      #   HOST:PORT form
+      def self.normalize_headless_target(token)
+        target = DetachableClientTarget.parse(token)
+        return target.port.to_s if target.host.nil?
 
-        port = Integer(token, 10)
-        return port if port.positive? && port <= 65_535
-
-        raise ArgumentError, '--headless requires a port number between 1 and 65535, or auto'
-      rescue ArgumentError
-        raise ArgumentError, '--headless requires a port number between 1 and 65535, or auto'
+        host = target.host.include?(':') ? "[#{target.host}]" : target.host
+        "#{host}:#{target.port}"
+      rescue DetachableClientTarget::ParseError
+        raise ArgumentError, '--headless requires a port number between 1 and 65535, auto, ' \
+                             'or HOST:PORT (HOST may be tailscale, lan, any, an IP address, or a hostname)'
       end
     end
   end

@@ -94,6 +94,7 @@ module Lich
             --login CHARACTER       Login using a saved entry
             --headless PORT         Run without a frontend and expose a detachable client on PORT
             --headless auto         Run without a frontend and let the OS assign a detachable port
+            --headless HOST:PORT    Bind the detachable client to HOST (tailscale, lan, any, IP, or hostname)
             --start-scripts=LIST    Start scripts after login (comma-separated)
             --save                  Save successful CLI login details to entry.yaml
             --reconnect             Reconnect automatically if the session drops
@@ -117,7 +118,7 @@ module Lich
 
           Advanced launch:
             --custom-launch=NAME
-            --detachable-client=PORT
+            --detachable-client=PORT|auto|HOST:PORT
             --dark-mode=true|false
             --game=HOST:PORT
 
@@ -127,6 +128,7 @@ module Lich
             lich --login Mychar --frostbite
             lich --login Mychar --headless 8001
             lich --login Mychar --headless auto
+            lich --login Mychar --headless tailscale:8001
             lich --login Mychar --start-scripts=repository,go2
         TEXT
       end
@@ -205,7 +207,7 @@ module Lich
             --gui
             --no-gui, --no-gtk  Run without the GTK GUI (aliases)
             --without-frontend
-            --detachable-client=PORT
+            --detachable-client=PORT|auto|HOST:PORT
             --pipe
             --frontend=NAME
             --frontend-command=CMD
@@ -220,6 +222,11 @@ module Lich
             --bind-address=IP sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1. Use 0.0.0.0 to accept connections from other hosts.
+            HOST in --headless/--detachable-client may be an IP, a hostname, a bracketed
+            IPv6 literal (e.g. [::1]:PORT), or a keyword:
+            tailscale (this machine's Tailscale address), lan (its private LAN address),
+            or any (0.0.0.0). The detachable port is unauthenticated - anyone who can
+            reach it controls the session, so prefer tailscale over lan or any.
             Compatibility flags remain supported but are intentionally omitted from the default help screen.
         TEXT
       end
