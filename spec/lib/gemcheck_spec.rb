@@ -70,13 +70,6 @@ RSpec.describe Lich::GemCheck do
         described_class.verify!
       end
 
-      it 'initializes Bundler before activating a promoted private bundle' do
-        expect(Bundler).to receive(:definition).ordered.and_call_original
-        expect(described_class).to receive(:activate_bundler_recovery!).ordered
-
-        described_class.verify!
-      end
-
       it 'defaults to the :default group when none is given' do
         expect(described_class).to receive(:missing_gems).with([:default]).and_return([])
         described_class.verify!
@@ -126,24 +119,21 @@ RSpec.describe Lich::GemCheck do
     end
 
     context 'when macOS atomic Bundler recovery is available for default gems' do
-      let(:bundler_result) { Lich::BundlerRecovery::Result.new(log_path: '/tmp/bundler-recovery.log') }
+      let(:bundler_result) { Lich::BundlerRecovery::Result.new(log_path: '/tmp/bundler-recovery.log', restart_required: true) }
 
       before do
         allow(described_class).to receive(:missing_gems)
           .with([:default]).and_return(['ox'])
         allow(described_class).to receive(:self_healing_supported?).and_return(false)
         allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(true)
-        allow(described_class).to receive(:activate_bundler_recovery!)
         allow(described_class).to receive(:recover_with_bundler_consent!)
           .with(['ox'], groups: [:default])
           .and_return(bundler_result)
       end
 
-      it 'logs the approved recovery and relaunches instead of continuing in the stale process' do
+      it 'logs the approved recovery and exits so the detached helper can promote and relaunch' do
         expect(described_class).to receive(:write_bundler_recovery_log)
           .with(missing: ['ox'], groups: [:default], result: bundler_result)
-        expect(described_class).to receive(:relaunch_after_bundler_recovery!)
-
         expect { described_class.verify! }.to raise_error(SystemExit) do |error|
           expect(error.status).to eq(0)
         end
@@ -152,7 +142,6 @@ RSpec.describe Lich::GemCheck do
       it 'reports a failed staged recovery without attempting a relaunch' do
         failed_result = Lich::BundlerRecovery::Result.new(error: 'compiler unavailable')
         allow(described_class).to receive(:recover_with_bundler_consent!).and_return(failed_result)
-        expect(described_class).not_to receive(:relaunch_after_bundler_recovery!)
         expect(described_class).to receive(:alert) do |missing:, groups:, error:|
           expect(missing).to eq(['ox'])
           expect(groups).to eq([:default])

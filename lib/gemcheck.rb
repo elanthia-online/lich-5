@@ -35,11 +35,7 @@ module Lich
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
-      # Bundler rebuilds RubyGems' paths while it first reads the Gemfile.
-      # Do that before adding a promoted private macOS bundle, or its path is
-      # discarded and the next check incorrectly requests another recovery.
       Bundler.definition
-      activate_bundler_recovery!
 
       missing = missing_gems(groups)
       return if missing.empty?
@@ -67,13 +63,7 @@ module Lich
 
         if result.success?
           write_bundler_recovery_log(missing: missing, groups: groups, result: result)
-          begin
-            relaunch_after_bundler_recovery!
-          rescue SystemCallError => e
-            alert(missing: missing, groups: groups, error: e)
-            exit 1
-          end
-          exit 0
+          exit(result.restart_required ? 0 : 1)
         end
 
         alert(missing: missing, groups: groups, error: DependencyRecovery::Error.new(result.error))
@@ -109,15 +99,6 @@ module Lich
     # @return [Boolean]
     def bundler_recovery_supported?(groups)
       BundlerRecovery.supported? && Array(groups).map(&:to_sym) == [:default]
-    end
-
-    # Adds a prior atomically promoted macOS bundle to RubyGems before Bundler
-    # inspects installed specifications. No Bundler.setup call is made.
-    # @return [Boolean]
-    def activate_bundler_recovery!
-      return false unless defined?(LICH_DIR) && BundlerRecovery.supported?
-
-      BundlerRecovery.activate!(lich_dir: LICH_DIR)
     end
 
     # Chooses the dependency groups that must be present before normal startup.
@@ -491,16 +472,6 @@ module Lich
     def notice_windows(body)
       require 'win32ole'
       WIN32OLE.new('WScript.Shell').Popup(body, CONSENT_TIMEOUT_SECONDS, TITLE, 64) # OK + information icon
-    end
-
-    # Relaunches using the known Lich Ruby entrypoint after a private macOS
-    # bundle was atomically activated. exec keeps the original command-line
-    # arguments while ensuring RubyGems rebuilds its specification state.
-    # @return [void]
-    def relaunch_after_bundler_recovery!
-      entrypoint = File.join(LICH_DIR, 'lich.rbw')
-      entrypoint = File.expand_path($PROGRAM_NAME) unless File.file?(entrypoint)
-      exec(Gem.ruby, entrypoint, *ARGV)
     end
 
     # @param body [String]

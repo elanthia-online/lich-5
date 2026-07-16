@@ -8,133 +8,117 @@ require_relative '../../lib/bundler_recovery'
 RSpec.describe Lich::BundlerRecovery do
   let(:status) { instance_double(Process::Status, success?: true) }
 
-  before do
-    allow(described_class).to receive(:supported?).and_return(true)
-  end
-
   around do |example|
     Dir.mktmpdir('lich-bundler-recovery-spec') do |dir|
       @lich_dir = dir
+      @gem_home = File.join(dir, 'runtime-gems')
       File.write(File.join(dir, 'Gemfile'), "source 'https://rubygems.org'\n")
-      File.write(File.join(dir, 'Gemfile.lock'), "GEM\n  specs:\n")
       example.run
     end
   end
 
-  subject(:recovery) { described_class.new(lich_dir: @lich_dir) }
+  def recovery(&launcher)
+    helper = lambda do |path|
+      launcher.call(path)
+      FileUtils.rm_rf(File.dirname(path)) # Mirrors detached helper cleanup in unit tests.
+    end
+    described_class.new(lich_dir: @lich_dir, gem_home: @gem_home, helper_launcher: helper)
+  end
+
+  before { allow(described_class).to receive(:supported?).and_return(true) }
 
   describe '#preflight' do
-    it 'requires the macOS native build tools when Ox is missing' do
-      allow(recovery).to receive(:command_available?).and_return(true)
-      allow(recovery).to receive(:ruby_headers).and_return('/missing/ruby/headers')
+    it 'requires native build tools when Ox is missing' do
+      subject = recovery { |_| }
+      allow(subject).to receive(:command_available?).and_return(true)
+      allow(subject).to receive(:ruby_headers).and_return('/missing/ruby/headers')
 
-      expect(recovery.preflight(['ox'])).to include('Ruby development headers')
+      expect(subject.preflight(['ox'])).to include('Ruby development headers')
     end
 
-    it 'does not require a compiler for a pure Ruby missing gem' do
-      allow(recovery).to receive(:command_available?).and_return(true)
+    it 'does not require a lockfile for a pure Ruby missing gem' do
+      subject = recovery { |_| }
+      allow(subject).to receive(:command_available?).and_return(true)
 
-      expect(recovery.preflight(['ascii_charts'])).to be_nil
-    end
-
-    it 'does not require a shipped lockfile' do
-      FileUtils.rm_f(File.join(@lich_dir, 'Gemfile.lock'))
-      allow(recovery).to receive(:command_available?).and_return(true)
-
-      expect(recovery.preflight(['ascii_charts'])).to be_nil
+      expect(subject.preflight(['ascii_charts'])).to be_nil
     end
   end
 
   describe '#recover' do
     before do
-      allow(recovery).to receive(:preflight).and_return(nil)
-      allow(Open3).to receive(:capture3) do |*arguments, **_options|
-        environment = arguments.first
-        if environment.is_a?(Hash)
-          @install_environment = environment
-          bundle_path = environment.fetch('BUNDLE_PATH')
-          FileUtils.mkdir_p(File.join(bundle_path, 'ruby', RbConfig::CONFIG.fetch('ruby_version')))
-          File.write(File.join(bundle_path, 'Gemfile.lock'), "GEM\n  specs:\n")
-          ['installed', '', status]
-        else
-          ['Bundler 4', '', status]
-        end
+      allow_any_instance_of(described_class).to receive(:preflight).and_return(nil)
+      allow_any_instance_of(described_class).to receive(:promotion_packages)
+        .and_return([{ 'name' => 'ox', 'version' => '2.14.28', 'path' => '/verified/ox.gem' }])
+      allow(Open3).to receive(:capture3).and_return(['installed', '', status])
+    end
+
+    it 'stages Bundler work in temp, then schedules an exit-time canonical promotion' do
+      payload = nil
+      subject = recovery { |path| payload = JSON.parse(File.read(path)) }
+
+      result = subject.recover(['ox'])
+
+      expect(result).to be_success
+      expect(result.restart_required).to be(true)
+      expect(payload).to include('gem_home' => @gem_home, 'lich_dir' => @lich_dir)
+      expect(payload.fetch('packages')).to eq([{ 'name' => 'ox', 'version' => '2.14.28', 'path' => '/verified/ox.gem' }])
+      expect(File.directory?(payload.fetch('work_dir'))).to be(false)
+      expect(File).not_to exist(File.join(@lich_dir, '.lich-bundler-gems'))
+    end
+
+    it 'uses a staged lockfile in frozen mode when one was shipped' do
+      File.write(File.join(@lich_dir, 'Gemfile.lock'), "GEM\n")
+      environment = nil
+      allow(Open3).to receive(:capture3) do |env, *_args, **_options|
+        environment = env
+        ['installed', '', status]
       end
+      subject = recovery { |_| }
+
+      subject.recover(['ox'])
+
+      expect(environment.fetch('BUNDLE_FROZEN')).to eq('true')
+      expect(environment.fetch('BUNDLE_WITHOUT').split(':')).to include('gtk', 'development', 'vscode', 'profanity')
     end
 
-    it 'stages the non-GTK bundle before atomically activating it' do
-      result = recovery.recover(['ox'])
-      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
-      record = JSON.parse(File.read(File.join(store, described_class::ACTIVE_FILENAME)))
-
-      expect(result).to be_success
-      expect(record).to include('schema' => 1, 'ruby_api' => RbConfig::CONFIG.fetch('ruby_version'))
-      expect(File.directory?(File.join(store, record.fetch('bundle_id'), 'ruby', record.fetch('ruby_api')))).to be(true)
-      expect(Dir.children(store)).not_to include(a_string_starting_with('.staging-'))
-    end
-
-    it 'excludes GTK and non-runtime groups from the Bundler child environment' do
-      recovery.recover(['ox'])
-
-      expect(@install_environment.fetch('BUNDLE_FROZEN')).to eq('true')
-      expect(@install_environment.fetch('BUNDLE_WITHOUT').split(':'))
-        .to include('gtk', 'development', 'vscode', 'profanity')
-    end
-
-    it 'resolves only in staging when the release package has no lockfile' do
-      FileUtils.rm_f(File.join(@lich_dir, 'Gemfile.lock'))
-
-      result = recovery.recover(['ox'])
-      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
-      record = JSON.parse(File.read(File.join(store, described_class::ACTIVE_FILENAME)))
-      promoted_lockfile = File.join(store, record.fetch('bundle_id'), 'Gemfile.lock')
-
-      expect(result).to be_success
-      expect(@install_environment.fetch('BUNDLE_FROZEN')).to eq('false')
-      expect(File).not_to exist(File.join(@lich_dir, 'Gemfile.lock'))
-      expect(File).to exist(promoted_lockfile)
-    end
-
-    it 'does not activate or retain a staged bundle when Bundler fails' do
+    it 'cleans staging when Bundler fails before a helper is scheduled' do
       allow(status).to receive(:success?).and_return(false)
+      called = false
+      subject = recovery { |_| called = true }
 
-      result = recovery.recover(['ox'])
-      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
+      result = subject.recover(['ox'])
 
       expect(result).not_to be_success
-      expect(File).not_to exist(File.join(store, described_class::ACTIVE_FILENAME))
-      expect(Dir.children(store)).not_to include(a_string_starting_with('.staging-'))
+      expect(called).to be(false)
+      expect(Dir.glob(File.join(subject.send(:temp_dir), 'lich-bundler-recovery-*'))).to be_empty
     end
   end
 
-  describe '#activate!' do
-    it 'adds only a compatible promoted bundle to RubyGems' do
-      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
-      bundle_id = 'bundle-test'
-      home = File.join(store, bundle_id, 'ruby', RbConfig::CONFIG.fetch('ruby_version'))
-      FileUtils.mkdir_p(home)
-      active_record = {
-        'schema'      => 1,
-        'bundle_id'   => bundle_id,
-        'ruby_api'    => RbConfig::CONFIG.fetch('ruby_version'),
-        'ruby_engine' => RUBY_ENGINE,
-        'platform'    => RUBY_PLATFORM
-      }
-      File.write(File.join(store, described_class::ACTIVE_FILENAME), JSON.generate(active_record))
+  describe 'staged package selection' do
+    it 'selects only missing gems and unavailable runtime dependencies' do
+      staging = File.join(@lich_dir, 'staging')
+      home = File.join(staging, 'ruby', RbConfig::CONFIG.fetch('ruby_version'))
+      specs = File.join(home, 'specifications')
+      cache = File.join(home, 'cache')
+      FileUtils.mkdir_p([specs, cache])
 
-      expect(Gem).to receive(:use_paths).with(Gem.dir, array_including(home))
-      expect(Gem::Specification).to receive(:reset)
+      ox = Gem::Specification.new do |spec|
+        spec.name = 'ox'
+        spec.version = '2.14.28'
+        spec.summary = 'test'
+        spec.authors = ['Lich']
+        spec.add_runtime_dependency 'lich-recovery-support', '>= 4.0'
+      end
+      support = Gem::Specification.new { |spec| spec.name = 'lich-recovery-support'; spec.version = '4.1.2'; spec.summary = 'test'; spec.authors = ['Lich'] }
+      unrelated = Gem::Specification.new { |spec| spec.name = 'redis'; spec.version = '5.4.1'; spec.summary = 'test'; spec.authors = ['Lich'] }
+      [ox, support, unrelated].each do |spec|
+        File.write(File.join(specs, "#{spec.full_name}.gemspec"), spec.to_ruby)
+        File.write(File.join(cache, spec.file_name), '')
+      end
 
-      expect(recovery.activate!).to be(true)
-    end
+      packages = recovery { |_| }.send(:promotion_packages, ['ox'], staging)
 
-    it 'ignores a malformed active record without changing RubyGems paths' do
-      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
-      FileUtils.mkdir_p(store)
-      File.write(File.join(store, described_class::ACTIVE_FILENAME), '{not-json')
-
-      expect(Gem).not_to receive(:use_paths)
-      expect(recovery.activate!).to be(false)
+      expect(packages.map { |package| package.fetch('name') }).to contain_exactly('ox', 'lich-recovery-support')
     end
   end
 end
