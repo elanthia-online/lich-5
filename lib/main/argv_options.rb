@@ -79,7 +79,7 @@ module Lich
               @argv_options[:bind_address] = $1
             when /^--hosts-file=(.+)$/i
               @argv_options[:hosts_file] = $1
-            when /^--no-gui$/i
+            when /^--no-(?:gui|gtk)$/i
               @argv_options[:gui] = false
             when /^--gui$/i
               @argv_options[:gui] = true
