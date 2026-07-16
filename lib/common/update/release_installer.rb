@@ -28,6 +28,8 @@ module Lich
         # TOP_LEVEL_FILES so that optional payload (e.g. Gemfile.lock, which older
         # release tarballs may omit) never gates an update.
         REQUIRED_ARCHIVE_ITEMS = %w[lib lich.rbw Gemfile LICENSE].freeze
+        REQUIRED_RUBY_PATTERN = /REQUIRED_RUBY\s*=\s*["']([^"']+)["']/.freeze
+        GEMSTONE_INSTALL_URL = 'https://gswiki.play.net/Lich:Software/Installation'
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -41,6 +43,8 @@ module Lich
           @holder = nil
           @new_features = nil
           @zipfile = nil
+          @release_tag = nil
+          @required_ruby = nil
         end
 
         # Displays announcement if new version available.
@@ -59,7 +63,13 @@ module Lich
                 respond @new_features
                 respond ''
                 respond ''
-                respond "If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."
+                if ruby_upgrade_required?
+                  respond "Lich version #{@update_to} requires Ruby #{@required_ruby} or higher."
+                  respond "Your current Ruby version is #{RUBY_VERSION}."
+                  respond "Upgrade Ruby before updating Lich: #{GEMSTONE_INSTALL_URL}"
+                else
+                  respond "If you are interested in updating, run '#{$clean_lich_char}lich5-update --update' now."
+                end
                 respond ''
               end
             else
@@ -95,9 +105,28 @@ module Lich
             respond "Update notice: no release tarball found in assets (prep_update)."
             return
           end
-          @update_to = latest['tag_name'].to_s.sub('v', '')
+          @release_tag = latest['tag_name'].to_s
+          @update_to = @release_tag.sub(/^v/, '')
           @new_features = latest['body'].to_s.gsub(/\#\# What's Changed.+$/m, '').gsub(/<!--[\s\S]*?-->/, '')
           @zipfile = release_asset.fetch('browser_download_url')
+        end
+
+        # Reads the target release's Ruby floor without downloading its archive.
+        # A failed metadata read must not suppress an otherwise valid update notice.
+        #
+        # @return [Boolean] true when the running Ruby is too old for the release
+        def ruby_upgrade_required?
+          return false if @release_tag.nil? || @release_tag.empty?
+
+          version_url = "https://raw.githubusercontent.com/#{GITHUB_REPO}/#{@release_tag}/lib/version.rb"
+          version_content = @client.http_get(version_url, auth: false)
+          match = version_content&.match(REQUIRED_RUBY_PATTERN)
+          return false unless match
+
+          @required_ruby = match[1]
+          Gem::Version.new(RUBY_VERSION) < Gem::Version.new(@required_ruby)
+        rescue ArgumentError
+          false
         end
 
         # Handles beta update requests (full install or individual file).
@@ -314,7 +343,7 @@ module Lich
           version_file_path = File.join(source_dir, "lib", "version.rb")
           if File.exist?(version_file_path)
             version_file_content = File.read(version_file_path)
-            if (match = version_file_content.match(/REQUIRED_RUBY\s*=\s*["']([^"']+)["']/))
+            if (match = version_file_content.match(REQUIRED_RUBY_PATTERN))
               required_ruby_version = match[1]
               current_ruby_version = RUBY_VERSION
               if Gem::Version.new(current_ruby_version) < Gem::Version.new(required_ruby_version)
@@ -327,7 +356,7 @@ module Lich
                 respond "Please update your Ruby installation before updating Lich."
                 respond
                 respond "DragonRealms - https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich"
-                respond "Gemstone IV  - https://gswiki.play.net/Lich:Software/Installation"
+                respond "Gemstone IV  - #{GEMSTONE_INSTALL_URL}"
                 respond
                 return false
               end
