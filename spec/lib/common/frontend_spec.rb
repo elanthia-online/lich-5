@@ -440,6 +440,44 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.player_id_tag' do
+    it 'is defined as a module method' do
+      expect(frontend).to respond_to(:player_id_tag)
+    end
+
+    it 'builds the tag from a bare numeric id' do
+      expect(frontend.player_id_tag('12345')).to eq("<playerID id='12345'/>")
+    end
+
+    it 'accepts an integer id and stringifies it' do
+      expect(frontend.player_id_tag(12345)).to eq("<playerID id='12345'/>")
+    end
+
+    it 'reproduces the id verbatim (no zero-stripping)' do
+      expect(frontend.player_id_tag('007')).to eq("<playerID id='007'/>")
+    end
+
+    it 'returns nil for an empty id (login not yet populated)' do
+      expect(frontend.player_id_tag('')).to be_nil
+    end
+
+    it 'returns nil for a nil id' do
+      expect(frontend.player_id_tag(nil)).to be_nil
+    end
+
+    it 'returns nil for a non-numeric id' do
+      expect(frontend.player_id_tag('abc')).to be_nil
+    end
+
+    it 'returns nil when the id has non-numeric characters mixed in' do
+      expect(frontend.player_id_tag('12a45')).to be_nil
+    end
+
+    it 'returns nil when the id has surrounding whitespace' do
+      expect(frontend.player_id_tag(' 12345 ')).to be_nil
+    end
+  end
+
   # --- Behavioral Consistency --------------------------------
 
   describe 'predicate consistency across all known frontends' do
