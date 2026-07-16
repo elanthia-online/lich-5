@@ -15,8 +15,8 @@ runtime gems such as `ox`; it is not a macOS GTK installer.
 ## Recovery flow
 
 1. Lich detects a missing default runtime gem.
-2. It performs local preflight checks: Gemfile, Bundler availability, and—for
-   native defaults such as Ox—Ruby headers, Xcode Command Line Tools, and
+2. It performs local preflight checks: Gemfile, Bundler availability, and -- for
+   native defaults such as Ox -- Ruby headers, Xcode Command Line Tools, and
    `make`.
 3. A native macOS dialog lists the missing gems and asks for approval. No gem
    download or install happens until approval.

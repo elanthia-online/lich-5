@@ -44,6 +44,19 @@ RSpec.describe Lich::BundlerRecovery do
     end
   end
 
+  describe '.run_macos_replacement' do
+    it 'logs malformed helper payloads in the Lich temp directory inferred from the payload path' do
+      temp = File.join(@lich_dir, 'temp')
+      FileUtils.mkdir_p(temp)
+      workspace = Dir.mktmpdir('promotion-', temp)
+      payload_path = File.join(workspace, 'macos-gem-promotion.json')
+      File.write(payload_path, '{invalid-json')
+
+      expect(described_class.run_macos_replacement(payload_path)).to be(false)
+      expect(File.read(File.join(temp, described_class::LOG_FILENAME))).to include('macOS gem promotion failed')
+    end
+  end
+
   describe '#recover' do
     before do
       allow_any_instance_of(described_class).to receive(:preflight).and_return(nil)
@@ -170,6 +183,15 @@ RSpec.describe Lich::BundlerRecovery do
       expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('new')
       expect(File.read(File.join(@gem_home, 'gems', original.full_name, 'marker'))).to eq('preserve')
       expect(File).not_to exist(work_dir)
+    end
+
+    it 'keeps Ruby default gems available while verifying the promoted package' do
+      replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'new')
+      subject = recovery { |_| }
+      package = { 'name' => replacement.name, 'version' => replacement.version.to_s, 'full_name' => replacement.full_name }
+
+      expect(Gem).to receive(:use_paths).with(@gem_home, [@gem_home, Gem.default_dir].uniq)
+      subject.send(:verify_packages!, [package])
     end
 
     it 'restores the exact backed-up package and does not restart when installation fails' do

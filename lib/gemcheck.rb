@@ -35,7 +35,6 @@ module Lich
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
-      Bundler.definition
 
       missing = missing_gems(groups)
       return if missing.empty?

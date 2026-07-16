@@ -5,7 +5,6 @@ require 'json'
 require 'open3'
 require 'rbconfig'
 require 'rubygems/installer'
-require 'securerandom'
 require 'tmpdir'
 
 module Lich
@@ -44,11 +43,29 @@ module Lich
       end
 
       def log_helper_failure(payload_or_path, error)
-        payload = payload_or_path.is_a?(Hash) ? payload_or_path : JSON.parse(File.read(payload_or_path)) rescue {}
-        path = File.join(payload.fetch('temp_dir', Dir.tmpdir), LOG_FILENAME)
+        payload = helper_payload(payload_or_path)
+        path = File.join(payload.fetch('temp_dir', helper_temp_dir(payload_or_path)), LOG_FILENAME)
         File.open(path, 'a') { |file| file.puts("[#{Time.now}] macOS gem promotion failed\n  #{error.class}: #{error.message}\n") }
       rescue StandardError
         nil
+      end
+
+      private
+
+      def helper_payload(payload_or_path)
+        return payload_or_path if payload_or_path.is_a?(Hash)
+
+        JSON.parse(File.read(payload_or_path))
+      rescue StandardError
+        {}
+      end
+
+      def helper_temp_dir(payload_or_path)
+        return Dir.tmpdir unless payload_or_path.is_a?(String)
+
+        File.dirname(File.dirname(File.expand_path(payload_or_path)))
+      rescue StandardError
+        Dir.tmpdir
       end
     end
 
@@ -198,7 +215,9 @@ module Lich
     def launch_macos_helper(payload_path)
       helper_path = File.join(File.dirname(payload_path), 'run-macos-gem-promotion.rb')
       File.write(helper_path, "require #{File.expand_path(__FILE__).inspect}\nexit(Lich::BundlerRecovery.run_macos_replacement(ARGV.fetch(0)) ? 0 : 1)\n")
-      Process.spawn(Gem.ruby, helper_path, payload_path, chdir: @lich_dir, out: File::NULL, err: File::NULL)
+      File.open(log_path, 'a') do |log|
+        Process.spawn(Gem.ruby, helper_path, payload_path, chdir: @lich_dir, out: File::NULL, err: log)
+      end
     end
 
     def run_macos_replacement!(payload, payload_path:)
@@ -293,7 +312,7 @@ module Lich
 
     def verify_packages!(packages)
       Gem::Specification.reset
-      Gem.use_paths(@gem_home, [@gem_home])
+      Gem.use_paths(@gem_home, [@gem_home, Gem.default_dir].uniq)
       packages.each do |package|
         requirement = Gem::Requirement.new("= #{package.fetch('version')}")
         installed = canonical_specs(package.fetch('name'))
