@@ -29,6 +29,14 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--active-sessions')
       expect(output).to include('--session-info NAME')
     end
+
+    it 'requires an explicit flag to suppress the default GTK GUI' do
+      output = described_class.render('advanced')
+
+      expect(output).to include('--no-gui, --no-gtk  Run without the GTK GUI (aliases)')
+      expect(output).to include('The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,')
+      expect(output).to include('including when using --headless.')
+    end
   end
 
   describe '.topic_from_argv' do
