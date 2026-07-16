@@ -498,7 +498,7 @@ rescue LoadError
   end
 end
 
-unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
+unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
   begin
     require 'gtk3'
     HAVE_GTK = true

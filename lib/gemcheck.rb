@@ -86,7 +86,7 @@ module Lich
     # @return [Array<Symbol>]
     def startup_groups(argv = ARGV)
       groups = [:default]
-      groups << :gtk if self_healing_supported? && !Array(argv).grep(/^--no-(?:gtk|gui)$/i).any?
+      groups << :gtk if self_healing_supported? && !Array(argv).any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
       groups
     end
 
