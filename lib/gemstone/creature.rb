@@ -7,7 +7,6 @@ module Lich
     class CreatureTemplate
       @@templates = {}
       @@loaded = false
-      @@max_templates = 500 # Prevent unbounded template cache growth
 
       attr_reader :name, :url, :picture, :level, :family, :type,
                   :undead, :otherclass, :areas, :bcs, :max_hp,
@@ -28,7 +27,7 @@ module Lich
         @name = data[:name]
         @url = data[:url]
         @picture = data[:picture]
-        @level = data[:level].to_i
+        @level = data[:level]&.to_i
         @family = data[:family]
         @type = data[:type]
         @undead = data[:undead]
@@ -63,24 +62,26 @@ module Lich
       end
 
       # Load all templates from files
-      def self.load_all
+      # dir defaults to the real templates directory; overridable so tests
+      # can load an isolated fixture directory instead.
+      def self.load_all(dir = File.join(File.dirname(__FILE__), 'creatures'))
         return if @@loaded
-
-        templates_dir = File.join(File.dirname(__FILE__), 'creatures')
-        return unless File.directory?(templates_dir)
+        return unless File.directory?(dir)
 
         template_count = 0
-        Dir[File.join(templates_dir, '*.rb')].each do |path|
+        Dir[File.join(dir, '*.rb')].each do |path|
           next if File.basename(path) == '_creature_template.rb'
 
-          # Check template limit
-          if template_count >= @@max_templates
-            respond "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
-            break
-          end
-
-          template_name = File.basename(path, '.rb').tr('_', ' ')
-          normalized_name = fix_template_name(template_name)
+          # Filename-derived name, used only as a fallback for files that
+          # don't set their own :name - the file's own value takes priority
+          # so a name with characters the filename can't represent (a
+          # hyphen, an apostrophe) still round-trips correctly. Both the
+          # display name and the lookup key come from the same source now;
+          # previously both were overwritten from the filename regardless of
+          # what the file itself said, silently breaking lookup for any
+          # creature whose real name a slugified filename can't represent
+          # exactly (e.g. "shield-maiden" -> "shield_maiden" -> "shield maiden").
+          fallback_name = File.basename(path, '.rb').tr('_', ' ')
 
           begin
             # Safer loading with validation
@@ -88,12 +89,19 @@ module Lich
             data = load_template_data(file_content, path)
             next unless data.is_a?(Hash)
 
-            data[:name] = template_name
+            data[:name] = fallback_name if data[:name].to_s.strip.empty?
+            normalized_name = fix_template_name(data[:name])
+            if @@templates.key?(normalized_name) && $creature_debug
+              respond "--- warning: '#{fallback_name}' collides with an already-loaded template on lookup key '#{normalized_name}' - one will silently overwrite the other"
+            end
             template = new(data)
             @@templates[normalized_name] = template
             template_count += 1
-          rescue => e
-            respond "--- error loading template #{template_name}: #{e.message}" if $creature_debug
+          rescue StandardError, ScriptError => e
+            # ScriptError (SyntaxError's parent) isn't a StandardError, so a
+            # single template file with malformed Ruby would otherwise abort
+            # load_all entirely instead of just being skipped.
+            respond "--- error loading template #{fallback_name}: #{e.message}" if $creature_debug
           end
         end
 
