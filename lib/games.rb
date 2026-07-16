@@ -385,6 +385,10 @@ module Lich
           @@autostarted
         end
 
+        def prefix_origin_sentinel(string)
+          string.gsub(/^.+$/) { |line| "#{Frontend::ORIGIN_SENTINEL}#{line}" }
+        end
+
         def settings_init_needed?
           @@settings_init_needed
         end
@@ -896,6 +900,8 @@ module Lich
             if Frontend.supports_gsl?
               alt_string = sf_to_wiz(alt_string)
             end
+            # Handle prefix origin sentinel if FE supports it
+            alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
 
             # Send to client
             send_to_client(alt_string)
