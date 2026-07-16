@@ -34,7 +34,7 @@ else
 end
 require File.join(LIB_DIR, 'version.rb')
 require File.join(LIB_DIR, 'gemcheck.rb')
-Lich::GemCheck.verify!
+Lich::GemCheck.verify!(*Lich::GemCheck.startup_groups)
 
 # Must run before lib/init.rb's `require 'gtk3'` -- install! sets up a
 # wrapper around gobject-introspection's converter registration that has to
