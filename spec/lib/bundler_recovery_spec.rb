@@ -36,6 +36,13 @@ RSpec.describe Lich::BundlerRecovery do
 
       expect(recovery.preflight(['ascii_charts'])).to be_nil
     end
+
+    it 'does not require a shipped lockfile' do
+      FileUtils.rm_f(File.join(@lich_dir, 'Gemfile.lock'))
+      allow(recovery).to receive(:command_available?).and_return(true)
+
+      expect(recovery.preflight(['ascii_charts'])).to be_nil
+    end
   end
 
   describe '#recover' do
@@ -47,6 +54,7 @@ RSpec.describe Lich::BundlerRecovery do
           @install_environment = environment
           bundle_path = environment.fetch('BUNDLE_PATH')
           FileUtils.mkdir_p(File.join(bundle_path, 'ruby', RbConfig::CONFIG.fetch('ruby_version')))
+          File.write(File.join(bundle_path, 'Gemfile.lock'), "GEM\n  specs:\n")
           ['installed', '', status]
         else
           ['Bundler 4', '', status]
@@ -54,7 +62,7 @@ RSpec.describe Lich::BundlerRecovery do
       end
     end
 
-    it 'stages the frozen non-GTK bundle before atomically activating it' do
+    it 'stages the non-GTK bundle before atomically activating it' do
       result = recovery.recover(['ox'])
       store = File.join(@lich_dir, described_class::STORE_DIRNAME)
       record = JSON.parse(File.read(File.join(store, described_class::ACTIVE_FILENAME)))
@@ -71,6 +79,20 @@ RSpec.describe Lich::BundlerRecovery do
       expect(@install_environment.fetch('BUNDLE_FROZEN')).to eq('true')
       expect(@install_environment.fetch('BUNDLE_WITHOUT').split(':'))
         .to include('gtk', 'development', 'vscode', 'profanity')
+    end
+
+    it 'resolves only in staging when the release package has no lockfile' do
+      FileUtils.rm_f(File.join(@lich_dir, 'Gemfile.lock'))
+
+      result = recovery.recover(['ox'])
+      store = File.join(@lich_dir, described_class::STORE_DIRNAME)
+      record = JSON.parse(File.read(File.join(store, described_class::ACTIVE_FILENAME)))
+      promoted_lockfile = File.join(store, record.fetch('bundle_id'), 'Gemfile.lock')
+
+      expect(result).to be_success
+      expect(@install_environment.fetch('BUNDLE_FROZEN')).to eq('false')
+      expect(File).not_to exist(File.join(@lich_dir, 'Gemfile.lock'))
+      expect(File).to exist(promoted_lockfile)
     end
 
     it 'does not activate or retain a staged bundle when Bundler fails' do

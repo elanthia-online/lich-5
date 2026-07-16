@@ -35,6 +35,10 @@ module Lich
     def verify!(*groups)
       groups = [:default] if groups.empty?
       configure_gemfile!
+      # Bundler rebuilds RubyGems' paths while it first reads the Gemfile.
+      # Do that before adding a promoted private macOS bundle, or its path is
+      # discarded and the next check incorrectly requests another recovery.
+      Bundler.definition
       activate_bundler_recovery!
 
       missing = missing_gems(groups)
@@ -148,9 +152,10 @@ module Lich
       recovery.recover(gem_names, force: force, plan: plan)
     end
 
-    # Runs a consented, frozen Bundler repair for the default non-GTK runtime
-    # gems on macOS. The recovery object stages its full bundle before making
-    # the new private RubyGems home active.
+    # Runs a consented Bundler repair for the default non-GTK runtime gems on
+    # macOS. The recovery object uses a shipped lockfile when present, or
+    # resolves only within staging before making the private RubyGems home
+    # active.
     # @param gem_names [Array<String>]
     # @param groups [Array<Symbol>]
     # @return [BundlerRecovery::Result, nil]
@@ -211,8 +216,8 @@ module Lich
       return :unavailable unless BundlerRecovery.supported?
 
       body = "Required Ruby gems are not installed:\n#{Array(gem_names).map { |name| "  - #{name}" }.join("\n")}\n\n" \
-             "Lich can install the locked non-GTK runtime bundle to its private directory now.\n" \
-             "Gemfile.lock will not be changed.\n\nInstall now?"
+             "Lich can install the non-GTK runtime bundle to its private directory now.\n" \
+             "Your Gemfile and Gemfile.lock will not be changed.\n\nInstall now?"
       script = %(display dialog #{macos_dialog_body(body)} with title #{TITLE.inspect} ) +
                %(buttons {"Install", "Cancel"} default button "Install" with icon caution ) +
                "giving up after #{BUNDLER_RECOVERY_TIMEOUT_SECONDS}"

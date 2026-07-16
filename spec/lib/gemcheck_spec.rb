@@ -70,6 +70,13 @@ RSpec.describe Lich::GemCheck do
         described_class.verify!
       end
 
+      it 'initializes Bundler before activating a promoted private bundle' do
+        expect(Bundler).to receive(:definition).ordered.and_call_original
+        expect(described_class).to receive(:activate_bundler_recovery!).ordered
+
+        described_class.verify!
+      end
+
       it 'defaults to the :default group when none is given' do
         expect(described_class).to receive(:missing_gems).with([:default]).and_return([])
         described_class.verify!

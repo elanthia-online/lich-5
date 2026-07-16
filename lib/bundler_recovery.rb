@@ -8,9 +8,11 @@ require 'rbconfig'
 require 'securerandom'
 
 module Lich
-  # Stages a frozen, non-GTK Bundler install on macOS and activates it only
-  # after the complete bundle was installed successfully. The active bundle is
-  # stored below Lich's own directory, never in the system or user GEM_HOME.
+  # Stages a non-GTK Bundler install on macOS and activates it only after the
+  # complete bundle was installed successfully. An existing lockfile is used
+  # in frozen mode; otherwise Bundler resolves solely within staging. The
+  # active bundle is stored below Lich's own directory, never in the system or
+  # user GEM_HOME.
   class BundlerRecovery
     STORE_DIRNAME = '.lich-bundler-gems'
     ACTIVE_FILENAME = 'active.json'
@@ -49,13 +51,12 @@ module Lich
       @lich_dir = File.expand_path(lich_dir)
     end
 
-    # Performs non-mutating checks required to build a frozen bundle.
+    # Performs non-mutating checks required to build a staged bundle.
     # @param missing [Array<String>]
     # @return [String, nil] a user-actionable failure reason, if any
     def preflight(missing)
       return 'macOS Bundler recovery is not supported by this Ruby runtime' unless self.class.supported?
       return "Gemfile not found at #{gemfile}" unless File.file?(gemfile)
-      return "Gemfile.lock not found at #{lockfile}" unless File.file?(lockfile)
       return "Ruby executable is not available at #{Gem.ruby}" unless File.executable?(Gem.ruby)
       return 'Bundler is not available from this Ruby runtime' unless command_available?(Gem.ruby, '-S', 'bundle', '--version')
       return nil unless native_default_gem_missing?(missing)
@@ -67,9 +68,11 @@ module Lich
       nil
     end
 
-    # Installs every non-excluded locked dependency into a private staging
-    # bundle, then atomically promotes that bundle and activation record.
-    # A failed download or native build never changes the active RubyGems path.
+    # Installs every non-excluded dependency into a private staging bundle,
+    # then atomically promotes that bundle and activation record. A shipped
+    # lockfile is copied into staging and used frozen; an absent lockfile is
+    # resolved and created only in staging. A failed download or native build
+    # never changes the active RubyGems path or Lich's Gemfile files.
     # @param missing [Array<String>]
     # @return [Result]
     def recover(missing)
@@ -79,9 +82,8 @@ module Lich
 
       FileUtils.mkdir_p(store_root)
       staging_path = File.join(store_root, ".staging-#{Process.pid}-#{SecureRandom.hex(8)}")
-      target_id = bundle_id
-      target_path = File.join(store_root, target_id)
-      environment = bundler_environment(staging_path)
+      staged_gemfile, frozen = stage_gemfile_files(staging_path)
+      environment = bundler_environment(staging_path, staged_gemfile, frozen: frozen)
 
       stdout, stderr, status = Open3.capture3(
         environment, Gem.ruby, '-S', 'bundle', 'install', chdir: @lich_dir
@@ -91,7 +93,10 @@ module Lich
 
       return failure("Bundler install failed (see #{log_path})") unless status.success?
       return failure("Bundler did not create its staged gem home (see #{log_path})") unless File.directory?(gem_home(staging_path))
+      return failure("Bundler did not create a staged lockfile (see #{log_path})") unless File.file?(staged_lockfile(staging_path))
 
+      target_id = bundle_id(staged_lockfile(staging_path))
+      target_path = File.join(store_root, target_id)
       File.rename(staging_path, target_path)
       write_active_record(target_id)
       Result.new(log_path: log_path)
@@ -159,10 +164,11 @@ module Lich
       File.join(bundle_path, 'ruby', ruby_api)
     end
 
+    # @param resolved_lockfile [String]
     # @return [String]
-    def bundle_id
+    def bundle_id(resolved_lockfile)
       runtime = "#{RUBY_ENGINE}-#{ruby_api}-#{RUBY_PLATFORM}".gsub(/[^A-Za-z0-9._-]/, '_')
-      digest = Digest::SHA256.file(lockfile).hexdigest[0, 16]
+      digest = Digest::SHA256.file(resolved_lockfile).hexdigest[0, 16]
       "#{runtime}-#{digest}-#{SecureRandom.hex(4)}"
     end
 
@@ -187,17 +193,39 @@ module Lich
       false
     end
 
+    # Copies the release Gemfile and, when available, its lockfile into the
+    # staging directory. Bundler can therefore resolve a missing lockfile
+    # without changing any file in the live Lich installation.
     # @param staging_path [String]
-    # @return [Hash<String, String, nil>]
-    def bundler_environment(staging_path)
+    # @return [Array(String, Boolean)] staged Gemfile path and frozen-mode flag
+    def stage_gemfile_files(staging_path)
+      FileUtils.mkdir_p(staging_path)
+      staged_gemfile = File.join(staging_path, 'Gemfile')
+      FileUtils.cp(gemfile, staged_gemfile)
+      frozen = File.file?(lockfile)
+      FileUtils.cp(lockfile, staged_lockfile(staging_path)) if frozen
+      [staged_gemfile, frozen]
+    end
+
+    # @param staging_path [String]
+    # @return [String]
+    def staged_lockfile(staging_path)
+      File.join(staging_path, 'Gemfile.lock')
+    end
+
+    # @param staging_path [String]
+    # @param staged_gemfile [String]
+    # @param frozen [Boolean]
+    # @return [Hash<String, String>]
+    def bundler_environment(staging_path, staged_gemfile, frozen:)
       existing_without = ENV.fetch('BUNDLE_WITHOUT', '').split(/[:\s]+/)
       {
-        'BUNDLE_FROZEN'     => 'true',
-        'BUNDLE_GEMFILE'    => gemfile,
+        'BUNDLE_FROZEN'     => frozen ? 'true' : 'false',
+        'BUNDLE_GEMFILE'    => staged_gemfile,
         'BUNDLE_PATH'       => staging_path,
         'BUNDLE_WITH'       => nil,
         'BUNDLE_WITHOUT'    => (existing_without + EXCLUDED_GROUPS).reject(&:empty?).uniq.join(':'),
-        'BUNDLE_DEPLOYMENT' => nil
+        'BUNDLE_DEPLOYMENT' => 'false'
       }
     end
 
@@ -246,7 +274,7 @@ module Lich
       File.open(log_path, 'a') do |file|
         file.puts "[#{Time.now}] macOS Bundler recovery #{success ? 'succeeded' : 'failed'}"
         file.puts "  Gemfile: #{gemfile}"
-        file.puts "  Lockfile: #{lockfile}"
+        file.puts "  Lockfile: #{File.file?(lockfile) ? 'staged from release' : 'resolved in staging'}"
         file.puts "  Excluded groups: #{EXCLUDED_GROUPS.join(', ')}"
         file.puts transcript
         file.puts
