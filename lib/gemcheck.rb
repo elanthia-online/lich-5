@@ -79,8 +79,8 @@ module Lich
 
     # Chooses the dependency groups that must be present before normal startup.
     # Only Windows verifies GTK here, because Ruby4Lich5 publishes a Windows
-    # recovery unit for it. Non-Windows GTK startup remains governed by
-    # init.rb's existing DISPLAY and terminal behavior.
+    # recovery unit for it. On every platform, init.rb treats GTK as required
+    # unless the user explicitly passes --no-gtk or --no-gui.
     #
     # @param argv [Array<String>] command-line arguments
     # @return [Array<Symbol>]

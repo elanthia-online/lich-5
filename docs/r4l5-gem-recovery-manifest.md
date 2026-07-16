@@ -15,9 +15,8 @@ showing one native consent dialog listing every affected recovery unit. It does
 not download a gem artifact or write to the runtime until the combined request
 is approved. A declined prompt, or the absence of a native confirmation UI,
 fails closed: Lich records the reason (including `user consent not available`)
-in `temp/lich5-missing-gems.log` and exits. GTK is verified and recovered at
-Windows graphical startup; macOS and Linux retain their existing `DISPLAY` and
-terminal startup behavior.
+in `temp/lich5-missing-gems.log` and exits. GTK is verified and recovered on
+Windows unless the user explicitly passes `--no-gtk` or `--no-gui`.
 
 On Windows, the consent dialog expires after two minutes. An unattended launch
 fails closed with `user consent timed out` in the same early-startup log.
@@ -38,9 +37,9 @@ packages and records the error in the same early-startup log.
 
 
 This recovery path is currently Windows-only. On macOS and Linux, Lich does
-not fetch this manifest or attempt self-healing. Their existing GTK behavior
-is retained: startup skips GTK when `DISPLAY` is unset (unless `--gtk` is
-given), and terminal/command-line launches can continue without GTK. Required
+not fetch this manifest or attempt self-healing. GTK remains required unless
+the user explicitly passes `--no-gtk` or `--no-gui`; `DISPLAY`, terminal, and
+cron environment state never implicitly select a headless launch. Required
 default dependencies such as `sqlite3` continue to show the ordinary
 missing-gem warning and exit.
 

@@ -498,8 +498,7 @@ rescue LoadError
   end
 end
 
-unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any? ||
-       (!Lich::GemCheck.self_healing_supported? && ENV['DISPLAY'].nil? && !ARGV.include?('--gtk'))
+unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
   begin
     require 'gtk3'
     HAVE_GTK = true
@@ -527,23 +526,15 @@ unless ARGV.grep(/^--no-(?:gtk|gui)$/i).any? ||
         exit 1
       end
     else
-      if (ENV['RUN_BY_CRON'].nil? || ENV['RUN_BY_CRON'] == 'false') && ARGV.empty? ||
-         ARGV.any? { |arg| arg =~ /^--gui$/ } || !($stdout.isatty)
-        Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk])
-        exit 1
-      end
-
-      HAVE_GTK = false
-      @early_gtk_error = "warning: failed to load GTK\n\t#{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      # GTK is required unless the user explicitly selected a headless launch.
+      # Do not infer that choice from DISPLAY, TTY, or cron environment state.
+      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk])
+      exit 1
     end
   end
 else
   HAVE_GTK = false
-  @early_gtk_error = if ARGV.grep(/^--no-(?:gtk|gui)$/i).any?
-                       'info: GTK disabled by command-line option'
-                     else
-                       'info: DISPLAY environment variable is not set; not trying gtk'
-                     end
+  @early_gtk_error = 'info: GTK disabled by command-line option'
 end
 
 unless File.exist?(LICH_DIR)
