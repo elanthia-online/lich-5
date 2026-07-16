@@ -29,7 +29,7 @@ module Lich
         # release tarballs may omit) never gates an update.
         REQUIRED_ARCHIVE_ITEMS = %w[lib lich.rbw Gemfile LICENSE].freeze
         REQUIRED_RUBY_PATTERN = /REQUIRED_RUBY\s*=\s*["']([^"']+)["']/.freeze
-        GEMSTONE_INSTALL_URL = 'https://gswiki.play.net/Lich:Software/Installation'
+        GEMSTONE_INSTALL_URL = 'https://gswiki.play.net/Lich:Software/Installation'.freeze
 
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
@@ -52,6 +52,8 @@ module Lich
         # @return [void]
         def announce
           prep_update
+          return unless @update_to
+
           if "#{LICH_VERSION}".chr == '5'
             if Gem::Version.new(@current) < Gem::Version.new(@update_to)
               unless @new_features.empty?

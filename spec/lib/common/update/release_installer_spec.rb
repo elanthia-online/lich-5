@@ -33,6 +33,12 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
   end
 
   describe '#announce' do
+    it 'returns when release preparation does not identify an update version' do
+      allow(client).to receive(:fetch_github_json).and_return(nil)
+
+      expect { installer.announce }.not_to raise_error
+    end
+
     it 'warns about the target Ruby floor and does not invite an incompatible update' do
       allow(client).to receive(:http_get).and_return("REQUIRED_RUBY = '4.0'\n")
 
