@@ -202,7 +202,7 @@ module Lich
 
           Compatibility / advanced options:
             --gui
-            --no-gui
+            --no-gui, --no-gtk  Run without the GTK GUI (aliases)
             --without-frontend
             --detachable-client=PORT
             --pipe
@@ -212,6 +212,8 @@ module Lich
             --bind-address=IP
 
           Notes:
+            The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
+            including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
             --bind-address=IP sets the local address Lich binds its listen sockets to

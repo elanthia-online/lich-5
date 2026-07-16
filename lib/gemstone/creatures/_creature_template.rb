@@ -10,6 +10,9 @@
   family: "",                   # e.g., "canine", "gigas"
   type: "",                     # e.g., "biped", "quadruped", "avian", "ooze"
   undead: "",                   # boolean
+  has_blood: nil,               # true/false/nil if unknown - corporeal, flesh & blood
+  has_bones: nil,               # true/false/nil if unknown - has a skeletal structure
+  muggable: nil,                # true/false/nil if unknown - typically humanoid + carries coin
   boss: false,                  # special encounter flag (optional)
   otherclass: [],               # any extra tags you keep (optional)
   bcs: nil,                     # true/false/nil if unknown
