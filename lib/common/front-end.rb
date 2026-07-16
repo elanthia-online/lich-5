@@ -160,6 +160,23 @@ module Lich
         has_capability?(fe, :sentinel)
       end
 
+      # Build the <playerID> re-emit tag for a detachable client (e.g. Saga).
+      #
+      # Lich consumes the game's one-time <playerID> during its own login
+      # handshake, before a detachable client attaches, so the client never
+      # sees it. XMLData.player_id stores the id verbatim, so re-emitting
+      # reproduces exactly what a Direct login delivers.
+      #
+      # Returns the tag string only when player_id is a bare numeric id (the
+      # form the game sends). Returns nil otherwise, so callers skip emitting
+      # an empty or malformed tag before login has populated the id.
+      def self.player_id_tag(player_id)
+        id = player_id.to_s
+        return nil unless id =~ /\A\d+\z/
+
+        "<playerID id='#{id}'/>"
+      end
+
       # Accessor for the current frontend identity ($frontend global)
       def self.client
         $frontend
