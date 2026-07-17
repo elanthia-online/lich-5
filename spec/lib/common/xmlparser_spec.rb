@@ -162,7 +162,7 @@ RSpec.describe Lich::Common::XMLParser do
   describe 'mindState progressBar experience fields' do
     # Verbatim bar as emitted while the ascension bonuses are active.
     let(:active_bar) do
-      "<progressBar id='mindState' value='100' text='must rest' top='45' left='3' field_exp='1077' max_field_exp='1077' ascension_exp='5438' fashlonae='1' lumnis='3' rpa='1.5' exp='53915957' until_next='1543' align='n' width='160' height='15'/>"
+      "<progressBar id='mindState' value='100' text='must rest' top='45' left='3' field_exp='1077' max_field_exp='1077' ascension_exp='5438' fashlonae='1' lumnis='3' rpa='2' exp='53915957' until_next='1543' align='n' width='160' height='15'/>"
     end
 
     # Same bar with the active-only bonuses dropped (the game omits them when
@@ -190,7 +190,14 @@ RSpec.describe Lich::Common::XMLParser do
       feed(parser, active_bar)
       expect(parser.fashlonae).to eq(1)
       expect(parser.lumnis).to eq(3)
+      expect(parser.rpa).to eq(2.0)
+      expect(parser.rpa).to be_a(Float)
+    end
+
+    it 'preserves a fractional rpa value without truncating it' do
+      feed(parser, "<progressBar id='mindState' value='100' text='must rest' field_exp='1077' max_field_exp='1077' ascension_exp='5438' lumnis='3' rpa='1.5' exp='53915957' until_next='1543'/>")
       expect(parser.rpa).to eq(1.5)
+      expect(parser.rpa).to be_a(Float)
     end
 
     it 'leaves active-only bonus fields nil when the bar omits them' do
@@ -205,7 +212,7 @@ RSpec.describe Lich::Common::XMLParser do
 
     it 'clears previously-set bonus fields back to nil on a fresh bar without them' do
       feed(parser, active_bar)
-      expect([parser.fashlonae, parser.lumnis, parser.rpa]).to eq([1, 3, 1.5])
+      expect([parser.fashlonae, parser.lumnis, parser.rpa]).to eq([1, 3, 2.0])
 
       feed(parser, inactive_bar)
       expect(parser.fashlonae).to be_nil
