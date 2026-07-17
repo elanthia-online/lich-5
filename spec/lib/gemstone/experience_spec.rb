@@ -146,10 +146,10 @@ RSpec.describe Lich::Gemstone::Experience do
     end
   end
 
-  describe 'freshness helpers (keyed off the fame timestamp)' do
-    context 'with a recent fame timestamp' do
+  describe 'freshness helpers (keyed off the total_experience timestamp)' do
+    context 'with a recent total_experience timestamp' do
       before do
-        allow(infomon).to receive(:get_updated_at).with('experience.fame').and_return(Time.now.to_i)
+        allow(infomon).to receive(:get_updated_at).with('experience.total_experience').and_return(Time.now.to_i)
       end
 
       it 'returns a Time from updated_at' do
@@ -165,9 +165,9 @@ RSpec.describe Lich::Gemstone::Experience do
       end
     end
 
-    context 'with an old fame timestamp' do
+    context 'with an old total_experience timestamp' do
       before do
-        allow(infomon).to receive(:get_updated_at).with('experience.fame').and_return((Time.now - (26 * 60 * 60)).to_i)
+        allow(infomon).to receive(:get_updated_at).with('experience.total_experience').and_return((Time.now - (26 * 60 * 60)).to_i)
       end
 
       it 'is stale' do
@@ -179,9 +179,9 @@ RSpec.describe Lich::Gemstone::Experience do
       end
     end
 
-    context 'when fame has never been recorded' do
+    context 'when total_experience has never been recorded' do
       before do
-        allow(infomon).to receive(:get_updated_at).with('experience.fame').and_return(nil)
+        allow(infomon).to receive(:get_updated_at).with('experience.total_experience').and_return(nil)
       end
 
       it 'has a nil updated_at' do
