@@ -106,11 +106,48 @@ RSpec.describe Lich::GemCheck do
         allow(described_class).to receive(:missing_gems)
           .with([:default]).and_return(['ox'])
         allow(described_class).to receive(:self_healing_supported?).and_return(false)
+        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(false)
       end
 
       it 'uses the ordinary missing-gem alert without fetching a manifest' do
         expect(described_class).not_to receive(:recover_with_consent!)
         expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default])
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+
+    context 'when macOS atomic Bundler recovery is available for default gems' do
+      let(:bundler_result) { Lich::BundlerRecovery::Result.new(log_path: '/tmp/bundler-recovery.log', restart_required: true) }
+
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:self_healing_supported?).and_return(false)
+        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(true)
+        allow(described_class).to receive(:recover_with_bundler_consent!)
+          .with(['ox'], groups: [:default])
+          .and_return(bundler_result)
+      end
+
+      it 'logs the approved recovery and exits so the detached helper can promote and relaunch' do
+        expect(described_class).to receive(:write_bundler_recovery_log)
+          .with(missing: ['ox'], groups: [:default], result: bundler_result)
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(0)
+        end
+      end
+
+      it 'reports a failed staged recovery without attempting a relaunch' do
+        failed_result = Lich::BundlerRecovery::Result.new(error: 'compiler unavailable')
+        allow(described_class).to receive(:recover_with_bundler_consent!).and_return(failed_result)
+        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
+          expect(missing).to eq(['ox'])
+          expect(groups).to eq([:default])
+          expect(error.message).to eq('compiler unavailable')
+        end
+
         expect { described_class.verify! }.to raise_error(SystemExit) do |error|
           expect(error.status).to eq(1)
         end
@@ -349,6 +386,16 @@ RSpec.describe Lich::GemCheck do
 
       allow(Gem).to receive(:win_platform?).and_return(false)
       expect(described_class.self_healing_supported?).to be(false)
+    end
+  end
+
+  describe '.bundler_recovery_supported?' do
+    before { allow(Lich::BundlerRecovery).to receive(:supported?).and_return(true) }
+
+    it 'is limited to the default runtime group so GTK cannot enter this path' do
+      expect(described_class.bundler_recovery_supported?([:default])).to be(true)
+      expect(described_class.bundler_recovery_supported?([:default, :gtk])).to be(false)
+      expect(described_class.bundler_recovery_supported?([:gtk])).to be(false)
     end
   end
 
