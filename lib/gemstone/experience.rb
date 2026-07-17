@@ -78,8 +78,16 @@ module Lich
         XMLData.lumnis
       end
 
+      # fashlonae has three states on the mindState bar: absent (no orb redeemed),
+      # 1 (redeemed but not active), and 2 (redeemed and active). fashlonae?
+      # reports whether the bonus is active; fashlonae_redeemed? reports whether an
+      # orb has been redeemed at all.
       def self.fashlonae?
-        !XMLData.fashlonae.nil?
+        XMLData.fashlonae.eql?(2)
+      end
+
+      def self.fashlonae_redeemed?
+         !XMLData.fashlonae.nil?
       end
 
       def self.updated_at
