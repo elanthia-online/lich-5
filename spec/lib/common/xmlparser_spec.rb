@@ -154,4 +154,67 @@ RSpec.describe Lich::Common::XMLParser do
       expect(parser.assess).to be_empty
     end
   end
+
+  # The mindState progressBar carries the experience fields shown in the game's
+  # exp bar. field_exp/max_field_exp/ascension_exp/exp/until_next are always
+  # present; fashlonae/lumnis/rpa are only emitted while those bonuses are
+  # active and must fall back to nil when a fresh bar omits them.
+  describe 'mindState progressBar experience fields' do
+    # Verbatim bar as emitted while the ascension bonuses are active.
+    let(:active_bar) do
+      "<progressBar id='mindState' value='100' text='must rest' top='45' left='3' field_exp='1077' max_field_exp='1077' ascension_exp='5438' fashlonae='1' lumnis='3' rpa='1' exp='53915957' until_next='1543' align='n' width='160' height='15'/>"
+    end
+
+    # Same bar with the active-only bonuses dropped (the game omits them when
+    # they are not active).
+    let(:inactive_bar) do
+      "<progressBar id='mindState' value='34' text='clear as a bell' top='45' left='3' field_exp='500' max_field_exp='1010' ascension_exp='6000' exp='53920000' until_next='999' align='n' width='160' height='15'/>"
+    end
+
+    def feed(parser, fragment)
+      REXML::Document.parse_stream("<root>#{fragment}</root>", parser)
+    end
+
+    it 'absorbs every always-present experience field' do
+      feed(parser, active_bar)
+      expect(parser.mind_text).to eq('must rest')
+      expect(parser.mind_value).to eq(100)
+      expect(parser.field_exp).to eq(1077)
+      expect(parser.max_field_exp).to eq(1077)
+      expect(parser.ascension_exp).to eq(5438)
+      expect(parser.exp).to eq(53_915_957)
+      expect(parser.until_next).to eq(1543)
+    end
+
+    it 'absorbs the active-only bonus fields when present' do
+      feed(parser, active_bar)
+      expect(parser.fashlonae).to eq(1)
+      expect(parser.lumnis).to eq(3)
+      expect(parser.rpa).to eq(1)
+    end
+
+    it 'leaves active-only bonus fields nil when the bar omits them' do
+      feed(parser, inactive_bar)
+      expect(parser.fashlonae).to be_nil
+      expect(parser.lumnis).to be_nil
+      expect(parser.rpa).to be_nil
+      # always-present fields still populate from the omitting bar
+      expect(parser.ascension_exp).to eq(6000)
+      expect(parser.until_next).to eq(999)
+    end
+
+    it 'clears previously-set bonus fields back to nil on a fresh bar without them' do
+      feed(parser, active_bar)
+      expect([parser.fashlonae, parser.lumnis, parser.rpa]).to eq([1, 3, 1])
+
+      feed(parser, inactive_bar)
+      expect(parser.fashlonae).to be_nil
+      expect(parser.lumnis).to be_nil
+      expect(parser.rpa).to be_nil
+      # and the always-present fields reflect the newer bar
+      expect(parser.field_exp).to eq(500)
+      expect(parser.max_field_exp).to eq(1010)
+      expect(parser.exp).to eq(53_920_000)
+    end
+  end
 end
