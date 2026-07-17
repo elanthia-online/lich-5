@@ -19,6 +19,7 @@ module Lich
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
+                  :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
                   :room_climate, :room_terrain, :assess
       attr_accessor :send_fake_tags
 
@@ -106,6 +107,12 @@ module Lich
         @mind_value = 0
         @field_exp = 0
         @max_field_exp = 0
+        @ascension_exp = 0
+        @exp = 0
+        @until_next = 0
+        @fashlonae = nil
+        @lumnis = nil
+        @rpa = nil
         @prepared_spell = 'None'
         @encumbrance_text = String.new
         @encumbrance_full_text = String.new
@@ -579,6 +586,14 @@ module Lich
               @mind_value = attributes['value'].to_i
               @field_exp = attributes['field_exp'].to_i if attributes['field_exp']
               @max_field_exp = attributes['max_field_exp'].to_i if attributes['max_field_exp']
+              @ascension_exp = attributes['ascension_exp'].to_i if attributes['ascension_exp']
+              @exp = attributes['exp'].to_i if attributes['exp']
+              @until_next = attributes['until_next'].to_i if attributes['until_next']
+              # fashlonae, lumnis, and rpa are only sent while active; clear them
+              # back to nil whenever a fresh mindState progressBar omits them.
+              @fashlonae = attributes['fashlonae'] ? attributes['fashlonae'].to_i : nil
+              @lumnis = attributes['lumnis'] ? attributes['lumnis'].to_i : nil
+              @rpa = attributes['rpa'] ? attributes['rpa'].to_i : nil
               $_CLIENT_.puts "\034GSr#{MINDMAP[@mind_text]}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'health'
               @health, @max_health = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
