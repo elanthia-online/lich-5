@@ -139,15 +139,23 @@ RSpec.describe Lich::Gemstone::Experience do
     end
   end
 
-  describe 'fashlonae bonus (boolean, no value accessor)' do
-    it 'is active when the bar reports it' do
-      allow(XMLData).to receive(:fashlonae).and_return(1)
+  describe 'fashlonae bonus (absent / redeemed / active states)' do
+    it 'is active and redeemed when the bar reports it as active (2)' do
+      allow(XMLData).to receive(:fashlonae).and_return(2)
       expect(described_class.fashlonae?).to be(true)
+      expect(described_class.fashlonae_redeemed?).to be(true)
     end
 
-    it 'is inactive when the bar omits it' do
+    it 'is redeemed but not active when reported as inactive (1)' do
+      allow(XMLData).to receive(:fashlonae).and_return(1)
+      expect(described_class.fashlonae?).to be(false)
+      expect(described_class.fashlonae_redeemed?).to be(true)
+    end
+
+    it 'is neither active nor redeemed when the bar omits it' do
       allow(XMLData).to receive(:fashlonae).and_return(nil)
       expect(described_class.fashlonae?).to be(false)
+      expect(described_class.fashlonae_redeemed?).to be(false)
     end
   end
 
