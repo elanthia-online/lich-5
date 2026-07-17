@@ -195,6 +195,7 @@ RSpec.describe Lich::BundlerRecovery do
     end
 
     it 'restores the exact backed-up package and does not restart when installation fails' do
+      original = write_installed_spec('recovery-target', '1.0.0', marker: 'preserve')
       replacement = write_installed_spec('recovery-target', '2.0.0', marker: 'old')
       work_dir = Dir.mktmpdir('promotion-', @lich_dir)
       payload, path = payload_for(work_dir, replacement)
@@ -208,6 +209,8 @@ RSpec.describe Lich::BundlerRecovery do
       expect { subject.send(:run_macos_replacement!, payload, payload_path: path) }.to raise_error('install failed')
       expect(File.read(File.join(@gem_home, 'gems', replacement.full_name, 'marker'))).to eq('old')
       expect(File).to exist(File.join(@gem_home, 'specifications', "#{replacement.full_name}.gemspec"))
+      expect(File.read(File.join(@gem_home, 'gems', original.full_name, 'marker'))).to eq('preserve')
+      expect(File).to exist(File.join(@gem_home, 'specifications', "#{original.full_name}.gemspec"))
       expect(File).not_to exist(work_dir)
     end
 

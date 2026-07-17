@@ -225,7 +225,16 @@ module Lich
       wait_for_parent_exit(payload.fetch('parent_pid'))
       with_install_lock do
         rollback = File.join(cleanup_target, 'rollback')
-        backup_existing_packages(payload.fetch('packages'), rollback)
+        begin
+          backup_existing_packages(payload.fetch('packages'), rollback)
+        rescue StandardError
+          begin
+            restore_backup(rollback)
+          rescue StandardError
+            # Preserve the backup failure as the actionable recovery error.
+          end
+          raise
+        end
         begin
           payload.fetch('packages').each { |package| @installer.call(package.fetch('path')) }
           verify_packages!(payload.fetch('packages'))
