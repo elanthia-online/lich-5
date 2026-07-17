@@ -435,7 +435,7 @@ module Lich
             SocketConfigurator.configure(@socket,
                                          keepalive: {
                                            enable: true,
-                                           idle: 120,      # 2 minutes before first keepalive
+                                           idle: 30,       # 30s idle before first keepalive; defensive against L3/L4 idle reapers (best-effort, see SocketConfigurator)
                                            interval: 30    # 30 seconds between keepalive probes
                                          },
                                          linger: {
