@@ -205,7 +205,7 @@ RSpec.describe Lich::Common::XMLParser do
 
     it 'clears previously-set bonus fields back to nil on a fresh bar without them' do
       feed(parser, active_bar)
-      expect([parser.fashlonae, parser.lumnis, parser.rpa]).to eq([1, 3, 1])
+      expect([parser.fashlonae, parser.lumnis, parser.rpa]).to eq([1, 3, 1.5])
 
       feed(parser, inactive_bar)
       expect(parser.fashlonae).to be_nil
