@@ -27,6 +27,17 @@ module Lich
         XMLData.exp + XMLData.ascension_exp
       end
 
+      def self.until_next
+        XMLData.until_next
+      end
+
+      # Ascension experience remaining until the next ascension training point.
+      # One ATP is earned per 50,000 ascension experience, so at an exact
+      # multiple this reports a full 50,000 interval to the next point.
+      def self.next_atp
+        50_000 - (axp % 50_000)
+      end
+
       def self.percent_fxp
         (fxp_current.to_f / fxp_max.to_f) * 100
       end
