@@ -46,6 +46,33 @@ RSpec.describe Lich::Gemstone::Experience do
     it 'derives total experience as normal + ascension' do
       expect(described_class.txp).to eq(53_915_957 + 5_438)
     end
+
+    it 'exposes experience until the next level (under lvl 100) or next TP (lvl 100)' do
+      allow(XMLData).to receive(:until_next).and_return(1_543)
+      expect(described_class.until_next).to eq(1_543)
+    end
+  end
+
+  describe 'ascension training points (next_atp)' do
+    it 'reports the ascension experience remaining until the next ATP' do
+      allow(XMLData).to receive(:ascension_exp).and_return(5_438)
+      expect(described_class.next_atp).to eq(44_562)
+    end
+
+    it 'requires a full 50k interval from zero ascension experience' do
+      allow(XMLData).to receive(:ascension_exp).and_return(0)
+      expect(described_class.next_atp).to eq(50_000)
+    end
+
+    it 'accounts for partial progress past already-earned points' do
+      allow(XMLData).to receive(:ascension_exp).and_return(120_000)
+      expect(described_class.next_atp).to eq(30_000)
+    end
+
+    it 'reports a full interval immediately after crossing a threshold' do
+      allow(XMLData).to receive(:ascension_exp).and_return(100_000)
+      expect(described_class.next_atp).to eq(50_000)
+    end
   end
 
   describe 'field experience' do
