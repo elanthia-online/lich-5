@@ -16,15 +16,15 @@ module Lich
       end
 
       def self.exp
-        Stats.exp
+        XMLData.exp
       end
 
       def self.axp
-        Infomon.get("experience.ascension_experience")
+        XMLData.ascension_exp
       end
 
       def self.txp
-        Infomon.get("experience.total_experience")
+        XMLData.exp + XMLData.ascension_exp
       end
 
       def self.percent_fxp
@@ -51,8 +51,28 @@ module Lich
         Infomon.get("experience.deaths_sting")
       end
 
+      def self.rpa?
+        !XMLData.rpa.nil?
+      end
+
+      def self.rpa
+        XMLData.rpa
+      end
+
+      def self.lumnis?
+        !XMLData.lumnis.nil?
+      end
+
+      def self.lumnis
+        XMLData.lumnis
+      end
+
+      def self.fashlonae?
+        !XMLData.fashlonae.nil?
+      end
+
       def self.updated_at
-        timestamp = Infomon.get_updated_at("experience.total_experience")
+        timestamp = Infomon.get_updated_at("experience.fame")
         timestamp ? Time.at(timestamp) : nil
       end
 
