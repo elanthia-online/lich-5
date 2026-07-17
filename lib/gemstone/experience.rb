@@ -87,7 +87,7 @@ module Lich
       end
 
       def self.fashlonae_redeemed?
-         !XMLData.fashlonae.nil?
+        !XMLData.fashlonae.nil?
       end
 
       def self.updated_at
