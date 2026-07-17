@@ -593,7 +593,7 @@ module Lich
               # back to nil whenever a fresh mindState progressBar omits them.
               @fashlonae = attributes['fashlonae'] ? attributes['fashlonae'].to_i : nil
               @lumnis = attributes['lumnis'] ? attributes['lumnis'].to_i : nil
-              @rpa = attributes['rpa'] ? attributes['rpa'].to_i : nil
+              @rpa = attributes['rpa'] ? attributes['rpa'].to_f : nil
               $_CLIENT_.puts "\034GSr#{MINDMAP[@mind_text]}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'health'
               @health, @max_health = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
