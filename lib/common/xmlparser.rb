@@ -591,6 +591,7 @@ module Lich
               @until_next = attributes['until_next'].to_i if attributes['until_next']
               # fashlonae, lumnis, and rpa are only sent while active; clear them
               # back to nil whenever a fresh mindState progressBar omits them.
+              # rpa can be fractional (e.g. 1.5), so it is parsed as a float.
               @fashlonae = attributes['fashlonae'] ? attributes['fashlonae'].to_i : nil
               @lumnis = attributes['lumnis'] ? attributes['lumnis'].to_i : nil
               @rpa = attributes['rpa'] ? attributes['rpa'].to_f : nil
