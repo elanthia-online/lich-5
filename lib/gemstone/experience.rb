@@ -72,7 +72,7 @@ module Lich
       end
 
       def self.updated_at
-        timestamp = Infomon.get_updated_at("experience.fame")
+        timestamp = Infomon.get_updated_at("experience.total_experience")
         timestamp ? Time.at(timestamp) : nil
       end
 
