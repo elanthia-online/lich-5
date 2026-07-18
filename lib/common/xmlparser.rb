@@ -20,7 +20,8 @@ module Lich
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
                   :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
-                  :room_climate, :room_terrain, :assess
+                  :room_climate, :room_terrain, :room_weather, :room_bonfire,
+                  :room_inside, :room_water, :room_sanctuary, :room_realm, :assess
       attr_accessor :send_fake_tags
 
       @@warned_deprecated_spellfront = 0
@@ -73,6 +74,12 @@ module Lich
         @room_exits_string = String.new
         @room_climate = 0
         @room_terrain = 0
+        @room_weather = 0
+        @room_bonfire = 0
+        @room_inside = 0
+        @room_water = 0
+        @room_sanctuary = 0
+        @room_realm = 0
 
         @familiar_room_title = String.new
         @familiar_room_description = String.new
@@ -458,6 +465,12 @@ module Lich
             nil
           end
           if name == 'roommeta'
+            @room_weather = attributes['weather'].to_i if attributes['weather']
+            @room_bonfire = attributes['bonfire'].to_i if attributes['bonfire']
+            @room_inside = attributes['inside'].to_i if attributes['inside']
+            @room_water = attributes['water'].to_i if attributes['water']
+            @room_sanctuary = attributes['sanctuary'].to_i if attributes['sanctuary']
+            @room_realm = attributes['realm'].to_i if attributes['realm']
             @room_climate = attributes['climate'].to_i if attributes['climate']
             @room_terrain = attributes['terrain'].to_i if attributes['terrain']
           end
