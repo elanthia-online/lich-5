@@ -224,4 +224,35 @@ RSpec.describe Lich::Common::XMLParser do
       expect(parser.exp).to eq(53_920_000)
     end
   end
+
+  # The roommeta tag carries integer room-metadata fields. climate/terrain were
+  # already ingested; weather/bonfire/inside/water/sanctuary/realm mirror them.
+  describe 'roommeta room-metadata fields' do
+    def feed(parser, fragment)
+      REXML::Document.parse_stream("<root>#{fragment}</root>", parser)
+    end
+
+    it 'defaults every field to 0 before any roommeta is seen' do
+      expect(parser.room_climate).to eq(0)
+      expect(parser.room_terrain).to eq(0)
+      expect(parser.room_weather).to eq(0)
+      expect(parser.room_bonfire).to eq(0)
+      expect(parser.room_inside).to eq(0)
+      expect(parser.room_water).to eq(0)
+      expect(parser.room_sanctuary).to eq(0)
+      expect(parser.room_realm).to eq(0)
+    end
+
+    it 'absorbs every field from the roommeta tag' do
+      feed(parser, %(<roommeta weather="0" bonfire="0" inside="1" water="0" sanctuary="0" realm="57" climate="12" terrain="1"/>))
+      expect(parser.room_climate).to eq(12)
+      expect(parser.room_terrain).to eq(1)
+      expect(parser.room_weather).to eq(0)
+      expect(parser.room_bonfire).to eq(0)
+      expect(parser.room_inside).to eq(1)
+      expect(parser.room_water).to eq(0)
+      expect(parser.room_sanctuary).to eq(0)
+      expect(parser.room_realm).to eq(57)
+    end
+  end
 end
