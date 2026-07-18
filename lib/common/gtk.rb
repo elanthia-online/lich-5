@@ -83,7 +83,13 @@ module Lich
 
       clear_gtk_retention_registries
 
-      Gtk.lich_main_quit if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit)
+      # Only quit when a loop is actually nested. The terminal lich.rbw backstop
+      # runs after Gtk.main returns (main_level == 0); calling gtk_main_quit then
+      # trips Gtk-CRITICAL "main_loops != NULL" — common for headless /
+      # --without-frontend exits where Genie (or another FE) disconnects.
+      if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit) && gtk_main_loop_running?
+        Gtk.lich_main_quit
+      end
     end
 
     # Temporarily allows a core-owned Gtk.main_quit call to bypass script guards.
@@ -360,9 +366,16 @@ module Lich
 
           # Explicit escape hatch for core-owned shutdown paths.
           #
+          # No-ops when no GTK main loop is nested — gtk_main_quit asserts
+          # main_loops != NULL and emits Gtk-CRITICAL otherwise.
+          #
           # @param args [Array] arguments forwarded to GTK
-          # @return [Object] GTK return value
+          # @return [Object, nil] GTK return value, or nil when no loop is running
           def lich_main_quit(*args)
+            if respond_to?(:main_level) && main_level.to_i <= 0
+              return nil
+            end
+
             Lich::Common.allow_gtk_main_quit { main_quit(*args) }
           end
         end
