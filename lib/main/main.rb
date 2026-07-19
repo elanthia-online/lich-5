@@ -63,6 +63,7 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_intent.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_log.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
 
   run_orderly_user_shutdown = proc {
     Lich::Common::OrderlyShutdown.request_user_exit(
@@ -991,6 +992,14 @@ reconnect_if_wanted = proc {
     # Lich continues script before_dying hooks, Vars.save, socket closeout, and
     # database closeout.  Lifecycle.stop remains later in shutdown and is the
     # point where this process is removed from the ActiveSessions registry.
+    # Guard the teardown steps below: several (inline before_dying/at_exit
+    # script hooks, Vars.save, Game.close linger, database close, lifecycle
+    # unregister IO) have no individual timeout and can hang, leaving the
+    # process alive and holding its sockets. The watchdog dumps thread
+    # backtraces and forces exit if teardown stalls; it is disarmed once the
+    # unbounded steps complete, before the deliberate reconnect/exec path.
+    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
+
     Lich::Common::ShutdownLog.info('marking session disconnected...')
     shutdown_step.call('ActiveSessions connection update') do
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
@@ -1038,6 +1047,9 @@ reconnect_if_wanted = proc {
     shutdown_step.call('SessionLifecycle stop') do
       Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     end
+    # Unbounded teardown is complete; stand down before the deliberate
+    # reconnect sleep/exec and process exit so neither is force-killed.
+    Lich::Common::ShutdownWatchdog.disarm if defined?(Lich::Common::ShutdownWatchdog)
     flush_shutdown_trace.call
     shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # keep after closeout; may launch a replacement session
     clean_user_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit? &&
