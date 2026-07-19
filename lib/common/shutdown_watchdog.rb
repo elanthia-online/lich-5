@@ -59,16 +59,22 @@ module Lich
             return false if @armed
 
             @armed = true
-          end
 
-          @thread = Thread.new do
-            expired = @mutex.synchronize do
-              @condition.wait(@mutex, timeout) if @armed
-              @armed
-            end
-            if expired
-              dump_diagnostics(timeout)
-              on_expire.call
+            # Create the thread and record @thread while still holding the lock
+            # so the thread can identify itself. An arm/disarm/arm sequence can
+            # leave an earlier thread parked in the wait; gating on
+            # @thread == Thread.current ensures only the currently armed
+            # watchdog can expire, so a superseded thread never forces an exit.
+            @thread = Thread.new do
+              expired = @mutex.synchronize do
+                current = -> { @armed && @thread == Thread.current }
+                @condition.wait(@mutex, timeout) if current.call
+                current.call
+              end
+              if expired
+                dump_diagnostics(timeout)
+                on_expire.call
+              end
             end
           end
           true

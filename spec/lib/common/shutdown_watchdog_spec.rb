@@ -68,6 +68,21 @@ RSpec.describe Lich::Common::ShutdownWatchdog do
 
       expect(described_class.arm(timeout: 5, on_expire: -> {})).to be(true)
     end
+
+    it 'does not let a disarmed thread fire after a subsequent re-arm' do
+      # Regression: an arm/disarm/arm sequence must not let the first (canceled)
+      # thread observe the second arming's @armed flag and force an exit.
+      first = Queue.new
+      described_class.arm(timeout: 0.05, on_expire: -> { first << :first })
+      described_class.disarm
+      first_thread = described_class.instance_variable_get(:@thread)
+
+      described_class.arm(timeout: 5, on_expire: -> {})
+      first_thread&.join(1)
+      sleep 0.15 # well past the first arming's 0.05s deadline
+
+      expect(first).to be_empty
+    end
   end
 
   describe '.disarm' do
