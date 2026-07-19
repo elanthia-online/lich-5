@@ -572,6 +572,65 @@ RSpec.describe Lich::Common::GameObj do
       expect(described_class.merge_data(a, b)).to be_a(Regexp)
       expect(described_class.merge_data(nil, b)).to eq(b)
     end
+
+    describe 'full_name classification (matches composed before_name + name + after_name)' do
+      it 'classifies a type via full_name when the bare name does not match' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="magic"><full_name>glowing wand</full_name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          # full_name "wand" does not match the pattern; "glowing wand" does
+          expect(described_class.new('701', 'wand', 'wand').type).to be_nil
+          expect(described_class.new('702', 'wand', 'wand', 'glowing').type).to include('magic')
+        end
+      end
+
+      it 'classifies a sellable via full_name using before_name and after_name text' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          xml = '<data><sellable name="charged"><full_name>enruned .* of power</full_name></sellable></data>'
+          File.write(file, xml)
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          expect(described_class.new('703', 'rod', 'rod').sellable).to be_nil
+          expect(described_class.new('704', 'rod', 'rod', 'enruned', 'of power').sellable).to include('charged')
+        end
+      end
+
+      it 'leaves name/noun matching unchanged when no full_name pattern is present' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="weapon"><name>sword</name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          expect(described_class.new('705', 'sword', 'a sword').type).to include('weapon')
+          expect(described_class.new('706', 'gem', 'a gem').type).to be_nil
+        end
+      end
+
+      it 'caches type by full_name so same-name objects do not collide' do
+        # Regression guard for the cache-key change: the type cache is keyed by
+        # full_name, not name. Two objects sharing name "wand" but differing in
+        # before_name must not share a cache entry, or the second (queried after
+        # the first populates the cache) would inherit the first's classification.
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="magic"><full_name>glowing wand</full_name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          plain   = described_class.new('707', 'wand', 'wand')            # full_name "wand"
+          glowing = described_class.new('708', 'wand', 'wand', 'glowing') # full_name "glowing wand"
+
+          expect(plain.type).to be_nil             # populates cache under "wand"
+          expect(glowing.type).to include('magic') # distinct full_name key -> no collision
+        end
+      end
+    end
   end
 
   describe 'GameObj instance' do
