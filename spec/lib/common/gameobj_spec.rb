@@ -528,7 +528,7 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
-    it 'caches type results by object name in type_cache' do
+    it 'caches type results under a composite noun|name|full_name key' do
       Dir.mktmpdir do |dir|
         base_file = File.join(dir, 'base.xml')
         File.write(base_file, base_xml)
@@ -538,7 +538,8 @@ RSpec.describe Lich::Common::GameObj do
         obj = described_class.new('506', 'sword', 'a steel sword')
 
         expect(obj.type).to eq('weapon')
-        expect(described_class.type_cache['a steel sword']).to eq('weapon')
+        # noun "sword", name "a steel sword", full_name "a steel sword" (no before/after)
+        expect(described_class.type_cache['sword|a steel sword|a steel sword']).to eq('weapon')
       end
     end
 
@@ -612,11 +613,12 @@ RSpec.describe Lich::Common::GameObj do
         end
       end
 
-      it 'caches type by full_name so same-name objects do not collide' do
-        # Regression guard for the cache-key change: the type cache is keyed by
-        # full_name, not name. Two objects sharing name "wand" but differing in
-        # before_name must not share a cache entry, or the second (queried after
-        # the first populates the cache) would inherit the first's classification.
+      it 'does not let same-name objects with different before_name collide' do
+        # Regression guard for the cache-key change: the type cache is keyed by a
+        # composite of noun|name|full_name, not name alone. Two objects sharing
+        # name "wand" but differing in before_name must not share a cache entry,
+        # or the second (queried after the first populates the cache) would
+        # inherit the first's classification.
         Dir.mktmpdir do |dir|
           file = File.join(dir, 'gameobj-data.xml')
           File.write(file, '<data><type name="magic"><full_name>glowing wand</full_name></type></data>')
@@ -626,8 +628,26 @@ RSpec.describe Lich::Common::GameObj do
           plain   = described_class.new('707', 'wand', 'wand')            # full_name "wand"
           glowing = described_class.new('708', 'wand', 'wand', 'glowing') # full_name "glowing wand"
 
-          expect(plain.type).to be_nil             # populates cache under "wand"
-          expect(glowing.type).to include('magic') # distinct full_name key -> no collision
+          expect(plain.type).to be_nil             # populates cache under plain's key
+          expect(glowing.type).to include('magic') # distinct composite key -> no collision
+        end
+      end
+
+      it 'does not let same-full_name objects with different noun collide' do
+        # The matcher also reads noun, so the composite cache key includes it:
+        # two objects with an identical full_name but different noun classify
+        # independently even though the type entry matches on noun only.
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="blade"><noun>sword</noun></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          match_noun = described_class.new('709', 'sword',  'a gleaming blade') # full_name "a gleaming blade"
+          other_noun = described_class.new('710', 'dagger', 'a gleaming blade') # same full_name, noun differs
+
+          expect(match_noun.type).to include('blade') # populates cache under its key
+          expect(other_noun.type).to be_nil           # different noun -> distinct key, no collision
         end
       end
     end
