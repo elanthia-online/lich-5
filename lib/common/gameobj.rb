@@ -174,15 +174,20 @@ module Lich
       # Returns a comma-separated string of matching type tags for this object,
       # or +nil+ if no types match.
       #
-      # Results are memoized in +@@type_cache+ by name.
+      # Results are memoized in +@@type_cache+ keyed by {#full_name}, so two
+      # objects that share a +name+ but differ in +before_name+/+after_name+
+      # (and can therefore match different +:full_name+ patterns) are cached
+      # independently. When +before_name+ and +after_name+ are both absent this
+      # key equals +name+, preserving the prior cache identity.
       #
       # @return [String, nil]
       def type
         GameObj.load_data if @@type_data.empty?
-        return @@type_cache[@name] if @@type_cache.key?(@name)
+        cache_key = full_name
+        return @@type_cache[cache_key] if @@type_cache.key?(cache_key)
 
         matches = matching_data_keys(@@type_data)
-        @@type_cache[@name] = matches.empty? ? nil : matches.join(',')
+        @@type_cache[cache_key] = matches.empty? ? nil : matches.join(',')
       end
 
       # Returns whether this object matches the given type tag.
@@ -921,15 +926,21 @@ module Lich
         end
       end
 
-      # Returns the keys from +data_hash+ whose +:name+ or +:noun+ patterns match
-      # this object, subject to optional +:exclude+ filtering.
+      # Returns the keys from +data_hash+ whose +:name+, +:noun+, or +:full_name+
+      # patterns match this object, subject to optional +:exclude+ filtering.
+      #
+      # +:name+ and +:exclude+ are matched against +name+, +:noun+ against +noun+,
+      # and +:full_name+ against {#full_name} (the composed +before_name+ +
+      # +name+ + +after_name+). Any absent pattern is +nil+ and matches nothing,
+      # so an entry that omits +:full_name+ behaves exactly as before.
       #
       # @param data_hash [Hash]
       # @return [Array<String>]
       def matching_data_keys(data_hash)
+        obj_full_name = full_name
         data_hash.keys.select do |t|
           entry = data_hash[t]
-          matches = (@name =~ entry[:name] || @noun =~ entry[:noun])
+          matches = (@name =~ entry[:name] || @noun =~ entry[:noun] || obj_full_name =~ entry[:full_name])
           excluded = entry[:exclude] && @name =~ entry[:exclude]
           matches && !excluded
         end
@@ -1169,7 +1180,7 @@ module Lich
         # When +merge: true+, existing patterns are merged via +Regexp.union+.
         #
         # Uses Ox in generic mode. skip: :skip_none keeps the regex text in
-        # +<name>/<noun>/<exclude>+ verbatim. Unlike the permissive SAX parser,
+        # +<name>/<noun>/<full_name>/<exclude>+ verbatim. Unlike the permissive SAX parser,
         # Ox.load is strict and raises Ox::ParseError on malformed XML, so the
         # caller's rescue still treats a corrupt data file as a load failure.
         #
@@ -1198,7 +1209,7 @@ module Lich
             next unless key
 
             target[key] ||= {}
-            %i[name noun exclude].each do |field|
+            %i[name noun full_name exclude].each do |field|
               text = e.locate(field.to_s).first&.text
               next if text.nil? || text.empty?
 
