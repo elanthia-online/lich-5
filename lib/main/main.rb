@@ -66,6 +66,11 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
 
   run_orderly_user_shutdown = proc {
+    # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
+    # their before_dying hooks inline (any of which can hang) before the main
+    # teardown/watchdog below is reached, so arm here as well. arm is
+    # idempotent, so the later arm during teardown is a no-op.
+    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
     Lich::Common::OrderlyShutdown.request_user_exit(
       source: :primary_frontend,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))

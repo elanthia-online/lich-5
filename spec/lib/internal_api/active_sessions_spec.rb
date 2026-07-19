@@ -352,4 +352,56 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.query_snapshot[:error]).to eq('active sessions service unavailable')
     end
   end
+
+  describe 'ownership lock is close-on-exec' do
+    it 'holds the lock file close-on-exec so a reconnect exec cannot inherit it' do
+      allow(Lich::InternalAPI::ActiveSessions::Client)
+        .to receive(:new).and_return(instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false))
+      allow(Lich::InternalAPI::ActiveSessions::Server)
+        .to receive(:new).and_return(server_double(auth_token: 'owner-token', port: 40_000))
+
+      expect(described_class.ensure_service!).to be(true)
+
+      lock_file = described_class.instance_variable_get(:@lock_file)
+      expect(lock_file).not_to be_nil
+      expect(lock_file.close_on_exec?).to be(true)
+    end
+  end
+
+  # Exercises the crash-safety guarantee the whole design rests on: the kernel
+  # releases an advisory lock when its holder dies, so a successor can take over
+  # a lock a departed owner never got to release. This needs a real second
+  # process, so it is skipped where process spawning/signals are unavailable.
+  describe 'cross-process ownership handoff (integration)' do
+    it 'grants the lock to a successor after the holder is killed' do
+      skip 'requires process spawn + signals' unless Process.respond_to?(:kill)
+
+      lock = File.join(temp_dir, 'lich-active-sessions.lock')
+      reader, writer = IO.pipe
+      holder = spawn(
+        RbConfig.ruby, '-e',
+        "f = File.open(#{lock.inspect}, File::RDWR | File::CREAT, 0o600); " \
+        "f.flock(File::LOCK_EX); $stdout.puts('locked'); $stdout.flush; sleep 30",
+        out: writer
+      )
+      writer.close
+      expect(reader.gets).to eq("locked\n")
+
+      # Denied while the external holder is alive.
+      expect(described_class.send(:acquire_ownership_lock)).to be(false)
+
+      Process.kill('KILL', holder)
+      Process.wait(holder)
+      holder = nil
+
+      # Granted once the kernel releases the dead holder's lock.
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+    ensure
+      reader&.close
+      if holder
+        Process.kill('KILL', holder) rescue nil
+        Process.wait(holder) rescue nil
+      end
+    end
+  end
 end

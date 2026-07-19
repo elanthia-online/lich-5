@@ -409,12 +409,20 @@ module Lich
       end
       private_class_method :release_ownership_lock
 
+      # Returns the base directory shared by local coordination files
+      # (the discovery record and the ownership lock).
+      #
+      # @return [String]
+      def self.coordination_dir
+        defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir
+      end
+      private_class_method :coordination_dir
+
       # Returns the on-disk ownership lock path shared by local sessions.
       #
       # @return [String]
       def self.lock_path
-        base_dir = defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir
-        File.join(base_dir, LOCK_FILENAME)
+        File.join(coordination_dir, LOCK_FILENAME)
       end
       private_class_method :lock_path
 
@@ -422,8 +430,7 @@ module Lich
       #
       # @return [String]
       def self.discovery_path
-        base_dir = defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir
-        File.join(base_dir, DISCOVERY_FILENAME)
+        File.join(coordination_dir, DISCOVERY_FILENAME)
       end
       private_class_method :discovery_path
 
