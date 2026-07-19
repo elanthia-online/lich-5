@@ -174,16 +174,18 @@ module Lich
       # Returns a comma-separated string of matching type tags for this object,
       # or +nil+ if no types match.
       #
-      # Results are memoized in +@@type_cache+ keyed by {#full_name}, so two
-      # objects that share a +name+ but differ in +before_name+/+after_name+
-      # (and can therefore match different +:full_name+ patterns) are cached
-      # independently. When +before_name+ and +after_name+ are both absent this
-      # key equals +name+, preserving the prior cache identity.
+      # Results are memoized in +@@type_cache+ under a composite key combining
+      # +noun+, +name+, and {#full_name} - i.e. every value {#matching_data_keys}
+      # inspects. Two objects that differ in any matcher input (for example a
+      # shared +full_name+ but a different +noun+, or differing
+      # +before_name+/+after_name+) are therefore cached independently rather
+      # than sharing an entry. The +"|"+-delimited form mirrors the composite
+      # keys used by +@@index+.
       #
       # @return [String, nil]
       def type
         GameObj.load_data if @@type_data.empty?
-        cache_key = full_name
+        cache_key = "#{@noun}|#{@name}|#{full_name}"
         return @@type_cache[cache_key] if @@type_cache.key?(cache_key)
 
         matches = matching_data_keys(@@type_data)
