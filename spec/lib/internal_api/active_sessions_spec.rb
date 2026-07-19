@@ -15,6 +15,10 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     described_class.instance_variable_set(:@server, nil)
     described_class.instance_variable_set(:@mutex, Mutex.new)
     allow(described_class).to receive(:enabled?).and_return(true)
+    # The election path re-probes a discovered owner with a short backoff
+    # before taking over. Neutralize the real delay so the suite stays fast
+    # while still exercising the retry logic.
+    allow(described_class).to receive(:sleep)
   end
 
   after do
@@ -238,13 +242,14 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     end
 
     context 'when discovery points to a dead owner process' do
-      it 'deletes the stale discovery file and bootstraps a new server' do
+      it 'binds a replacement and overwrites the stale pointer' do
+        # The former owner exited, so the port is free and the bind succeeds,
+        # replacing the stale pointer with this process.
         stub_no_external_service
         File.write(
           File.join(temp_dir, 'lich-active-sessions.json'),
           JSON.dump(owner_pid: 99_999_999, auth_token: 'dead-owner-token', updated_at: Time.now.to_i)
         )
-        allow(Process).to receive(:kill).with(0, 99_999_999).and_raise(Errno::ESRCH)
 
         fresh_server = instance_double(
           Lich::InternalAPI::ActiveSessions::Server,
@@ -265,18 +270,76 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       end
     end
 
-    context 'when discovery points to an alive but unresponsive owner' do
-      it 'deletes the stale discovery file and returns false without attempting to bind' do
+    context 'when discovery points to an owner that still holds the port' do
+      it 'backs off without deleting the healthy owner\'s discovery pointer' do
+        # A single probe fails transiently, but the owner is real and still
+        # holds the port, so the replacement bind fails with EADDRINUSE.
+        # Regression guard: earlier builds deleted the pointer here, knocking a
+        # healthy owner offline for every peer under churn.
         stub_no_external_service
+        discovery_file = File.join(temp_dir, 'lich-active-sessions.json')
+        File.write(
+          discovery_file,
+          JSON.dump(owner_pid: 99_999_998, auth_token: 'live-owner-token', updated_at: Time.now.to_i)
+        )
+
+        contended_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: false,
+          stop: nil,
+          auth_token: 'would-be-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(contended_server)
+
+        expect(described_class.ensure_service!).to be(false)
+
+        discovery = JSON.parse(File.read(discovery_file), symbolize_names: true)
+        expect(discovery[:owner_pid]).to eq(99_999_998)
+        expect(discovery[:auth_token]).to eq('live-owner-token')
+      end
+    end
+
+    context 'when discovery names an owner whose pid was recycled and the port is free' do
+      it 'takes over via a successful bind and overwrites the stale pointer' do
+        # The recorded pid appears alive (recycled by an unrelated process),
+        # but nobody holds the service port, so the bind succeeds. The bind --
+        # not the bare liveness of a recycled pid -- decides ownership.
+        stub_no_external_service
+        discovery_file = File.join(temp_dir, 'lich-active-sessions.json')
+        File.write(
+          discovery_file,
+          JSON.dump(owner_pid: 99_999_998, auth_token: 'recycled-pid-token', updated_at: Time.now.to_i)
+        )
+
+        fresh_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: true,
+          stop: nil,
+          auth_token: 'takeover-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(fresh_server)
+
+        expect(described_class.ensure_service!).to be(true)
+
+        discovery = JSON.parse(File.read(discovery_file), symbolize_names: true)
+        expect(discovery[:owner_pid]).to eq(Process.pid)
+        expect(discovery[:auth_token]).to eq('takeover-token')
+      end
+    end
+
+    context 'when a discovered owner answers on a retry after a transient miss' do
+      it 'reuses the owner and never elects a replacement' do
+        # First probe misses (churn-induced timeout), second probe succeeds.
+        flaky_client = instance_double(Lich::InternalAPI::ActiveSessions::Client)
+        allow(flaky_client).to receive(:ping).and_return(false, true)
+        allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(flaky_client)
         File.write(
           File.join(temp_dir, 'lich-active-sessions.json'),
-          JSON.dump(owner_pid: 99_999_998, auth_token: 'zombie-owner-token', updated_at: Time.now.to_i)
+          JSON.dump(owner_pid: 4242, auth_token: 'flaky-owner-token', updated_at: Time.now.to_i)
         )
-        allow(Process).to receive(:kill).with(0, 99_999_998).and_return(nil)
 
         expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
-        expect(described_class.ensure_service!).to be(false)
-        expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.json'))).to be(false)
+        expect(described_class.ensure_service!).to be(true)
       end
     end
 
@@ -339,17 +402,30 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     end
 
     context 'peer behavior while owner is recovering' do
-      it 'does not attempt to bind on the first tick when zombie owner is alive' do
+      it 'leaves the recovering owner\'s discovery pointer intact when the bind is contended' do
+        # While an owner recovers its own accept thread it still holds the port,
+        # so a peer's takeover bind fails. The peer must back off without
+        # deleting the pointer, letting the owner re-assert itself.
         stub_no_external_service
-
+        discovery_file = File.join(temp_dir, 'lich-active-sessions.json')
         File.write(
-          File.join(temp_dir, 'lich-active-sessions.json'),
-          JSON.dump(owner_pid: 99_999_997, auth_token: 'zombie-token', updated_at: Time.now.to_i)
+          discovery_file,
+          JSON.dump(owner_pid: 99_999_997, auth_token: 'recovering-owner-token', updated_at: Time.now.to_i)
         )
-        allow(Process).to receive(:kill).with(0, 99_999_997).and_return(nil)
 
-        expect(Lich::InternalAPI::ActiveSessions::Server).not_to receive(:new)
+        contended_server = instance_double(
+          Lich::InternalAPI::ActiveSessions::Server,
+          start: false,
+          stop: nil,
+          auth_token: 'would-be-token'
+        )
+        allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(contended_server)
+
         expect(described_class.ensure_service!).to be(false)
+
+        discovery = JSON.parse(File.read(discovery_file), symbolize_names: true)
+        expect(discovery[:owner_pid]).to eq(99_999_997)
+        expect(discovery[:auth_token]).to eq('recovering-owner-token')
       end
 
       it 'fails gracefully on subsequent ticks after discovery is cleared' do
@@ -368,6 +444,73 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
         expect(results).to all(be(false))
         expect(described_class.instance_variable_get(:@server)).to be_nil
       end
+    end
+  end
+
+  describe 'owner discovery self-heal' do
+    # Installs a running-owner server double for this process so the owner
+    # fast path in ensure_service_internal! is exercised.
+    #
+    # @param auth_token [String] token the owned server advertises
+    # @return [RSpec::Mocks::InstanceVerifyingDouble] the installed server double
+    def install_running_owner(auth_token:)
+      server = instance_double(
+        Lich::InternalAPI::ActiveSessions::Server,
+        running?: true,
+        auth_token: auth_token,
+        stop: nil
+      )
+      described_class.instance_variable_set(:@server, server)
+      server
+    end
+
+    it 'recreates a discovery pointer that a peer deleted, within one tick' do
+      install_running_owner(auth_token: 'owner-token')
+      # Regression guard for the churn incident: a peer cleared the pointer,
+      # so nothing is on disk when this owner's heartbeat runs.
+      expect(described_class.ensure_service!).to be(true)
+
+      discovery = JSON.parse(
+        File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+        symbolize_names: true
+      )
+      expect(discovery[:owner_pid]).to eq(Process.pid)
+      expect(discovery[:auth_token]).to eq('owner-token')
+    end
+
+    it 'overwrites a discovery pointer that a peer redirected to another owner' do
+      install_running_owner(auth_token: 'owner-token')
+      File.write(
+        File.join(temp_dir, 'lich-active-sessions.json'),
+        JSON.dump(owner_pid: 777, auth_token: 'usurper-token', updated_at: Time.now.to_i)
+      )
+
+      expect(described_class.ensure_service!).to be(true)
+
+      discovery = JSON.parse(
+        File.read(File.join(temp_dir, 'lich-active-sessions.json')),
+        symbolize_names: true
+      )
+      expect(discovery[:owner_pid]).to eq(Process.pid)
+      expect(discovery[:auth_token]).to eq('owner-token')
+    end
+
+    it 'does not rewrite discovery when the pointer already matches this owner' do
+      install_running_owner(auth_token: 'owner-token')
+      File.write(
+        File.join(temp_dir, 'lich-active-sessions.json'),
+        JSON.dump(owner_pid: Process.pid, auth_token: 'owner-token', updated_at: 1_700_000_000)
+      )
+
+      expect(described_class).not_to receive(:write_discovery)
+      expect(described_class.ensure_service!).to be(true)
+    end
+
+    it 'reuses the owned server without probing an external service' do
+      install_running_owner(auth_token: 'owner-token')
+
+      expect(described_class).not_to receive(:service_available?)
+      expect(described_class.ensure_service!).to be(true)
     end
   end
 

@@ -45,6 +45,22 @@ module Lich
       # @return [String]
       DISCOVERY_FILENAME = 'lich-active-sessions.json'
 
+      # Number of times a discovered owner is probed before it is treated as
+      # unreachable during an election decision.
+      #
+      # A single probe can time out transiently while the host is saturated by
+      # bulk session churn (mass login/logout), even against a perfectly healthy
+      # owner. Re-probing before electing a replacement prevents a disruptive,
+      # unnecessary takeover.
+      #
+      # @return [Integer]
+      OWNER_PROBE_ATTEMPTS = 3
+
+      # Delay, in seconds, between owner responsiveness probes.
+      #
+      # @return [Float]
+      OWNER_PROBE_BACKOFF_SECONDS = 0.1
+
       @registry = nil
       @server = nil
       @service_client = nil
@@ -89,6 +105,12 @@ module Lich
       # @param allow_bootstrap [Boolean] when false, never start a new server
       # @return [Boolean]
       def self.ensure_service_internal!(allow_bootstrap:)
+        # This process already owns a healthy server: keep the shared discovery
+        # pointer authoritative and reuse it. This self-heals a pointer that was
+        # cleared or overwritten by a peer, without a disruptive re-election.
+        return true if serving_owner_reasserted?
+
+        # A healthy peer owner is already reachable on the fast path.
         return true if service_available?
         return false unless allow_bootstrap
 
@@ -97,65 +119,133 @@ module Lich
         # while still preventing creation of a brand-new owner after disable.
         return false unless enabled?
 
+        # A single probe can time out transiently under heavy churn. Re-probe
+        # with a short backoff before electing ourselves so we do not take over
+        # from a briefly-overloaded but healthy owner. Performed outside the
+        # bootstrap lock so it never stalls peer threads in this process.
+        return true if service_responsive?
+
         @mutex.synchronize do
+          # Another thread or process may have won election while we waited for
+          # the lock.
           return true if service_available?
 
-          # If this process previously owned a server whose accept thread
-          # died, the TCPServer socket is still bound but unserviceable.
-          # Stop it to release the port before attempting a fresh start.
-          if @server && !@server.running?
-            Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- releasing socket") if Lich.respond_to?(:log)
-            @server.stop
-            @server = nil
-          end
-
-          # Detect cross-process zombie: discovery points to another process
-          # whose service is unresponsive (dead accept thread holding the port).
-          discovery = load_discovery
-          if discovery[:owner_pid] && discovery[:owner_pid] != Process.pid
-            return true if service_available?
-
-            owner_alive = begin
-              Process.kill(0, discovery[:owner_pid])
-              true
-            rescue Errno::ESRCH
-              false
-            rescue Errno::EPERM
-              true
-            end
-
-            if owner_alive
-              Lich.log(
-                "warning: ActiveSessions cross-process zombie: " \
-                "owner pid=#{discovery[:owner_pid]} alive but unresponsive, clearing stale discovery"
-              ) if Lich.respond_to?(:log)
-              delete_discovery_if_owner(discovery[:owner_pid], discovery[:auth_token])
-              return false
-            end
-
-            delete_discovery_if_owner(discovery[:owner_pid])
-          end
-
-          @registry ||= Registry.new
-          @server ||= Server.new(
-            host: DEFAULT_HOST,
-            port: DEFAULT_PORT,
-            registry: @registry,
-            auth_token: SecureRandom.hex(32)
-          )
-          unless @server.start
-            @server = nil
-            return false
-          end
-
-          write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
-          true
+          release_in_process_zombie!
+          bootstrap_owner!
         end
       rescue StandardError => e
         Lich.log("warning: ActiveSessions service unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
         false
       end
       private_class_method :ensure_service_internal!
+
+      # Ensures the shared discovery pointer advertises this process whenever it
+      # owns a running server, rewriting the pointer only when it is missing or
+      # stale.
+      #
+      # Because only one process can hold the service port at a time, a running
+      # in-process server is proof that this process is the true owner; any
+      # discovery record naming a different owner is therefore stale. Re-writing
+      # it here lets an owner recover a pointer that a peer deleted or clobbered
+      # after a transient false positive, within a single heartbeat, instead of
+      # the pointer staying lost until this process exits.
+      #
+      # @return [Boolean] true when this process owns a healthy server
+      def self.serving_owner_reasserted?
+        @mutex.synchronize do
+          return false unless owns_running_server?
+
+          reassert_discovery_unlocked!
+          true
+        end
+      end
+      private_class_method :serving_owner_reasserted?
+
+      # Returns whether this process holds a server with a live accept loop.
+      #
+      # @return [Boolean]
+      def self.owns_running_server?
+        !@server.nil? && @server.running?
+      end
+      private_class_method :owns_running_server?
+
+      # Rewrites the discovery pointer to this process when it is absent or does
+      # not already match this owner's pid and token.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [void]
+      def self.reassert_discovery_unlocked!
+        discovery = load_discovery
+        return if discovery[:owner_pid] == Process.pid && discovery[:auth_token] == @server.auth_token
+
+        write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
+      end
+      private_class_method :reassert_discovery_unlocked!
+
+      # Probes the discovered service repeatedly with a short backoff so a
+      # transient timeout under load does not read as an unreachable owner.
+      #
+      # @param attempts [Integer] number of probe attempts
+      # @param backoff [Float] delay in seconds between attempts
+      # @return [Boolean] true when any probe succeeds
+      def self.service_responsive?(attempts: OWNER_PROBE_ATTEMPTS, backoff: OWNER_PROBE_BACKOFF_SECONDS)
+        attempts.times do |attempt|
+          return true if service_available?
+
+          sleep(backoff) unless attempt == attempts - 1
+        end
+        false
+      end
+      private_class_method :service_responsive?
+
+      # Stops and clears an in-process server whose accept loop has died, so its
+      # still-bound socket is released before a fresh bind is attempted.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [void]
+      def self.release_in_process_zombie!
+        return unless @server && !@server.running?
+
+        Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- releasing socket") if Lich.respond_to?(:log)
+        @server.stop
+        @server = nil
+      end
+      private_class_method :release_in_process_zombie!
+
+      # Binds a fresh owner server for this process and publishes discovery.
+      #
+      # The bind itself is the authority on whether another owner still holds
+      # the port, which avoids trusting the bare liveness of a possibly-recycled
+      # pid:
+      #
+      # * A successful bind means no live owner held the port (it exited, or its
+      #   pid was recycled by an unrelated process), so we become the owner and
+      #   overwrite any stale discovery pointer.
+      # * A failed bind means a real owner still holds the port, so we leave its
+      #   discovery pointer untouched and back off until a later tick. We never
+      #   delete a peer's pointer, so a healthy owner is never knocked offline by
+      #   a transient probe failure.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [Boolean] true when this process became the owner
+      def self.bootstrap_owner!
+        @registry ||= Registry.new
+        @server ||= Server.new(
+          host: DEFAULT_HOST,
+          port: DEFAULT_PORT,
+          registry: @registry,
+          auth_token: SecureRandom.hex(32)
+        )
+
+        unless @server.start
+          @server = nil
+          return false
+        end
+
+        write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token)
+        true
+      end
+      private_class_method :bootstrap_owner!
 
       # Registers or updates a session record in the local service.
       #
