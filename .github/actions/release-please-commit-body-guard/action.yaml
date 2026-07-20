@@ -1,0 +1,101 @@
+name: Release Please commit-body guard
+description: Fails release preparation when a releasable merge commit contains multiline inline code that Release Please cannot parse.
+
+inputs:
+  commit-range:
+    description: Git revision range to inspect (for example, v5.19.0..HEAD).
+    required: true
+  subject-pattern:
+    description: Bash regular expression identifying releaseable commit subjects.
+    required: false
+    default: '^(feat|fix)\((all|dr|gs)\):'
+
+outputs:
+  validated-commit-count:
+    description: Number of releaseable commit messages inspected.
+    value: ${{ steps.validate.outputs.validated-commit-count }}
+
+runs:
+  using: composite
+  steps:
+    - id: validate
+      shell: bash
+      env:
+        RELEASE_COMMIT_RANGE: ${{ inputs.commit-range }}
+        RELEASE_SUBJECT_PATTERN: ${{ inputs.subject-pattern }}
+      run: |
+        set -euo pipefail
+
+        range="$RELEASE_COMMIT_RANGE"
+        subject_pattern="$RELEASE_SUBJECT_PATTERN"
+        validated=0
+        violations=0
+
+        # Release Please parses the complete squash-merge commit message, not
+        # just its Conventional Commit subject. Its parser rejects inline code
+        # spans that cross a newline (for example, `call( on one line and )`
+        # on the next), then silently omits that otherwise releaseable commit.
+        # Fenced code blocks remain valid for multiline snippets.
+        multiline_inline_code_line() {
+          git show -s --format=%B "$1" | awk '
+            function tick_count(text, count, position) {
+              count = 0
+              while ((position = index(text, "`")) > 0) {
+                count++
+                text = substr(text, position + 1)
+              }
+              return count
+            }
+
+            /^[[:space:]]*(```|~~~)/ {
+              marker = substr($0, RSTART, 3)
+              if (fence == "") {
+                fence = marker
+              } else if (fence == marker) {
+                fence = ""
+              }
+              next
+            }
+
+            fence == "" {
+              if (inline_open_line != 0) {
+                print inline_open_line
+                reported = 1
+                exit
+              }
+
+              if (tick_count($0) % 2 == 1) {
+                inline_open_line = NR
+              }
+            }
+
+            END {
+              if (!reported && inline_open_line != 0) {
+                print inline_open_line
+              }
+              if (reported || inline_open_line != 0) {
+                exit 1
+              }
+            }
+          '
+        }
+
+        while IFS= read -r sha; do
+          subject="$(git show -s --format=%s "$sha")"
+          if [[ ! "$subject" =~ $subject_pattern ]]; then
+            continue
+          fi
+
+          validated=$((validated + 1))
+          if line="$(multiline_inline_code_line "$sha")"; then
+            continue
+          fi
+
+          echo "::error::Release Please cannot parse releaseable commit ${sha} (${subject}): multiline inline code starts at body line ${line}. Keep inline code on one line or use a fenced code block."
+          violations=$((violations + 1))
+        done < <(git rev-list --reverse "$range")
+
+        echo "validated-commit-count=$validated" >> "$GITHUB_OUTPUT"
+        if [ "$violations" -ne 0 ]; then
+          exit 1
+        fi

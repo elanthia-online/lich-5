@@ -32,3 +32,40 @@ jobs:
             [A-Z]+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reject Release Please-unsafe multiline inline code
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const releaseableTitle = /^(?:feat|fix)\((?:all|dr|gs)\):/;
+            if (!pr || !releaseableTitle.test(pr.title || '')) return;
+
+            const lines = (pr.body || '').split(/\r?\n/);
+            let fence = null;
+            let inlineOpenLine = null;
+
+            for (const [index, line] of lines.entries()) {
+              const fenceMatch = line.match(/^\s*(```|~~~)/);
+              if (fenceMatch) {
+                fence = fence === fenceMatch[1] ? null : (fence || fenceMatch[1]);
+                continue;
+              }
+              if (fence) continue;
+
+              if (inlineOpenLine !== null) {
+                core.setFailed(
+                  `Release Please cannot parse multiline inline code in a releaseable PR body (opened at line ${inlineOpenLine}). Keep inline code on one line or use a fenced code block.`
+                );
+                return;
+              }
+
+              const backticks = [...line].filter(character => character === '`').length;
+              if (backticks % 2 === 1) inlineOpenLine = index + 1;
+            }
+
+            if (inlineOpenLine !== null) {
+              core.setFailed(
+                `Release Please cannot parse multiline inline code in a releaseable PR body (opened at line ${inlineOpenLine}). Keep inline code on one line or use a fenced code block.`
+              );
+            }
