@@ -194,7 +194,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       described_class.instance_variable_set(:@server, nil)
     end
 
-    it 'surfaces false when stopping a dead in-process server raises' do
+    it 'clears the dead server and recovers on retry when stopping it raises' do
       dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
       zombie = instance_double(
@@ -206,9 +206,35 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       allow(zombie).to receive(:stop).and_raise(Errno::EBADF, 'bad fd during stop')
       described_class.instance_variable_set(:@server, zombie)
 
+      # The attempt that trips over the raising stop surfaces false...
       expect(described_class.ensure_service!).to be(false)
+      # ...but the dead reference must be cleared, or every future attempt would
+      # re-enter the same raising stop and the process could never rebind.
+      expect(described_class.instance_variable_get(:@server)).to be_nil
 
-      described_class.instance_variable_set(:@server, nil)
+      # A subsequent attempt binds a fresh listener instead of reusing the corpse.
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new)
+        .and_return(server_double(auth_token: 'rebound-token', port: 42_000))
+      expect(described_class.ensure_service!).to be(true)
+      expect(read_discovery[:port]).to eq(42_000)
+    end
+
+    it 'closes the opened lock file (no fd leak) when flock raises' do
+      # File.open succeeds but flock blows up (e.g. a filesystem without record
+      # locking). The handle must be closed since it was never recorded as the
+      # owning lock.
+      leaked = instance_double(File, closed?: false)
+      allow(leaked).to receive(:flock).and_raise(Errno::ENOLCK, 'no locks available')
+      allow(leaked).to receive(:close)
+      allow(File).to receive(:open).and_call_original
+      allow(File).to receive(:open)
+        .with(File.join(temp_dir, 'lich-active-sessions.lock'), anything, anything)
+        .and_return(leaked)
+      allow(Lich).to receive(:log)
+
+      expect(described_class.send(:acquire_ownership_lock)).to be(false)
+      expect(leaked).to have_received(:close)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
     end
   end
 
@@ -405,7 +431,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
         out: writer
       )
       writer.close
-      expect(reader.gets).to eq("locked\n")
+      # Normalize the line ending: a child on a CRLF platform emits "locked\r\n".
+      expect(reader.gets.to_s.chomp).to eq('locked')
 
       # Denied while the external holder is alive.
       expect(described_class.send(:acquire_ownership_lock)).to be(false)

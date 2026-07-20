@@ -328,8 +328,16 @@ module Lich
         return unless @server && !@server.running?
 
         Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- rebinding") if Lich.respond_to?(:log)
-        @server.stop
-        @server = nil
+        # Clear the reference in an ensure so a raising stop still drops the dead
+        # server. Otherwise a failed stop would leave @server pointing at the
+        # corpse, and every later retry would re-enter this method, call the same
+        # raising stop, and never rebind. The failure still propagates so the
+        # current attempt reports unavailable; the next attempt starts clean.
+        begin
+          @server.stop
+        ensure
+          @server = nil
+        end
       end
       private_class_method :release_in_process_zombie!
 
@@ -404,6 +412,11 @@ module Lich
         end
       rescue StandardError => e
         Lich.log("warning: ActiveSessions ownership lock unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        # If File.open succeeded but flock raised, the handle is open and was
+        # never recorded as the owning lock. Close it here so repeated failures
+        # (e.g. Errno::ENOLCK on a filesystem without locking) cannot leak file
+        # descriptors. Skip when ownership was recorded (flock returned true).
+        file.close if file && !file.closed? && !@lock_file.equal?(file)
         false
       end
       private_class_method :acquire_ownership_lock
