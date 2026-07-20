@@ -368,16 +368,15 @@ module Lich
         end
 
         def self.determine_frontend
-          case ARGV.map(&:downcase)
-          when '-s', '--stormfront'
+          if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
             'stormfront'
-          when '-w', '--wizard'
+          elsif ARGV.any? { |a| a == '-w' || a == '--wizard' }
             'wizard'
-          when '--avalon'
+          elsif ARGV.any? { |a| a == '--avalon' }
             'avalon'
-          when '--frostbite'
+          elsif ARGV.any? { |a| a == '--frostbite' }
             'frostbite'
-          when '--saga'
+          elsif ARGV.any? { |a| a == '--saga' }
             'saga'
           else
             'unknown'
