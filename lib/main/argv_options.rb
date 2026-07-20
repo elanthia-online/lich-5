@@ -249,11 +249,11 @@ module Lich
       # Handle game connection configuration
       module GameConnection
         def self.execute(processed_options)
-          if (arg = ARGV.map(&:downcase).find { |a| a == '-g' || a == '--game' })
+          if (arg = ARGV.find { |a| a == '-g' || a == '--game' })
             handle_explicit_game_connection(arg, processed_options)
-          elsif ARGV.map(&:downcase).include?('--shattered')
+          elsif ARGV.include?('--shattered')
             handle_shattered_connection(processed_options)
-          elsif ARGV.map(&:downcase).include?('--fallen')
+          elsif ARGV.include?('--fallen')
             handle_fallen_connection(processed_options)
           elsif Lich::Common::Authentication::LoginHelpers.gemstone_flag?(ARGV)
             handle_gemstone_connection(processed_options)
@@ -280,45 +280,45 @@ module Lich
         def self.handle_gemstone_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
-            if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = 10124
               $frontend = 'stormfront'
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = 10124
-              $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
-            if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
               $frontend = 'stormfront'
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
-              $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           end
         end
 
         def self.handle_shattered_connection(processed_options)
           $platinum = false
-          if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+          if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
             processed_options[:game_host] = 'storm.gs4.game.play.net'
             processed_options[:game_port] = 10324
             $frontend = 'stormfront'
           else
             processed_options[:game_host] = 'storm.gs4.game.play.net'
             processed_options[:game_port] = 10324
-            $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+            $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
           end
         end
 
         def self.handle_fallen_connection(processed_options)
           $platinum = false
-          if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+          if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
             $frontend = 'stormfront'
@@ -329,14 +329,14 @@ module Lich
           else
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
-            $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+            $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
           end
         end
 
         def self.handle_dragonrealms_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
-            if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
               $frontend = 'stormfront'
@@ -347,11 +347,11 @@ module Lich
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
-              $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
-            if ARGV.map(&:downcase).any? { |a| a == "-s" || a == "--stormfront" }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = 'stormfront'
@@ -362,7 +362,7 @@ module Lich
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
-              $frontend = ARGV.map(&:downcase).any? { |a| a == "--avalon" } ? 'avalon' : ARGV.any? { |a| a == "--frostbite" } ? 'frostbite' : ARGV.any? { |a| a == "--saga" } ? 'saga' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           end
         end
