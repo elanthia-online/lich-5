@@ -1,38 +1,53 @@
+# --- Generated / runtime directories ---
 backup/
-data/
 data44/
 dist/
 logs/
 maps/
-scripts/
-!.github/scripts/
 temp/
+
+# --- Runtime data / scripts (root only; symlink-safe on *nix) ---
+# On *nix these are symlinks (files, not dirs). A single root-anchored, slash-less
+# rule ignores each whether it resolves to a directory or a symlinked file, and
+# (being anchored) never matches nested dirs such as .github/scripts.
+/data
+/scripts
+
+# --- Local tooling / config ---
 jinxp
 .pre-commit-config.yaml
 .rubocop.yml
 .rubocop/
+
+# --- Editors / IDEs ---
 *.swp
-logo.png
-fly64.png
-fly64.ico
-.DS_Store
-# handle symlinks since these are files on *nix
-data
-scripts
 .vscode
 .idea
 .claude
+
+# --- OS files ---
+.DS_Store
+
+# --- Project images ---
+logo.png
+fly64.png
+fly64.ico
+
+# --- Docs / Markdown ---
+# Ignore markdown everywhere, then re-include the docs we track.
 doc/yard/
 *.md
 !docs/*.md
 !spec/README.md
 !spec/fixtures/README.md
 !bench/README.md
-# Test database artifacts
+
+# --- Test database artifacts ---
 spec/*.db
 spec/*.db3
-!spec/fixtures/*.db3
-# Test artifacts
+
+# --- Test artifacts ---
 spec/.rspec_status
-# Debug logs
+
+# --- Debug logs ---
 debug-*.log
