@@ -17,7 +17,21 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     allow(Lich).to receive(:log)
   end
 
+  def eventually(timeout: 1)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        return yield
+      rescue RSpec::Expectations::ExpectationNotMetError
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.005
+      end
+    end
+  end
+
   after do
+    socket.close rescue nil
     Lich::Common::ShutdownCoordinator.reset!
   end
 
@@ -46,12 +60,14 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     it 'returns false after a fatal write error' do
       allow(delegate).to receive(:write).and_raise(Errno::ECONNRESET)
       socket.write('test')
-      expect(socket.alive?).to be false
+      eventually { expect(socket.alive?).to be false }
     end
 
     it 'cannot be revived once dead' do
       allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
       socket.write('die')
+
+      eventually { expect(socket.alive?).to be false }
 
       allow(delegate).to receive(:closed?).and_return(false)
       expect(socket.alive?).to be false
@@ -77,32 +93,32 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     it 'closes the delegate when a write fails fatally' do
       allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
       socket.write('data')
-      expect(delegate).to have_received(:close)
+      eventually { expect(delegate).to have_received(:close) }
     end
 
     it 'closes the delegate when puts fails fatally' do
       allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
       socket.puts('data')
-      expect(delegate).to have_received(:close)
+      eventually { expect(delegate).to have_received(:close) }
     end
 
     it 'closes the delegate when puts_if fails fatally' do
       allow(delegate).to receive(:puts).and_raise(Errno::ECONNABORTED)
       socket.puts_if('data') { true }
-      expect(delegate).to have_received(:close)
+      eventually { expect(delegate).to have_received(:close) }
     end
 
     it 'survives delegate.close raising during failure cleanup' do
       allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
       allow(delegate).to receive(:close).and_raise(IOError, 'already closed')
       expect { socket.write('data') }.not_to raise_error
-      expect(socket.alive?).to be false
+      eventually { expect(socket.alive?).to be false }
     end
 
     it 'logs exactly once even when multiple writes fail' do
       allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
       3.times { socket.puts('retry') }
-      expect(Lich).to have_received(:log).with(/client socket write failed/).once
+      eventually { expect(Lich).to have_received(:log).with(/client socket write failed/).once }
     end
 
     it 'records client disconnect when a fatal write fails before shutdown starts' do
@@ -110,7 +126,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       socket.puts('data')
 
-      expect(Lich::Common::ShutdownCoordinator.reason).to eq(:client_disconnect)
+      eventually { expect(Lich::Common::ShutdownCoordinator.reason).to eq(:client_disconnect) }
       expect(Lich::Common::ShutdownCoordinator.current.source).to eq('client_socket_write')
       expect(Lich::Common::ShutdownCoordinator).to be_client_socket_write_failed
     end
@@ -121,26 +137,36 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       socket.write('data')
 
+      eventually { expect(Lich::Common::ShutdownCoordinator).to be_client_socket_write_failed }
       expect(Lich::Common::ShutdownCoordinator.reason).to eq(:user_exit)
       expect(Lich::Common::ShutdownCoordinator.current.source).to eq('primary_frontend')
       expect(Lich::Common::ShutdownCoordinator).to be_client_socket_write_failed
     end
 
     it 'flushes buffered user-exit context before logging a write failure' do
+      messages = []
+      allow(Lich).to receive(:log) { |message| messages << message }
       Lich::Common::ShutdownLog.begin_user_exit_summary!
       Lich::Common::ShutdownLog.info('shutdown requested reason=user_exit source=primary_frontend')
       allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
 
       socket.write('data')
 
-      expect(Lich).to have_received(:log).with('info: shutdown requested reason=user_exit source=primary_frontend').ordered
-      expect(Lich).to have_received(:log).with(/error: client socket write failed: Errno::EPIPE/).ordered
+      info_index = nil
+      error_index = nil
+      eventually do
+        info_index = messages.index('info: shutdown requested reason=user_exit source=primary_frontend')
+        error_index = messages.index { |message| message.match?(/error: client socket write failed: Errno::EPIPE/) }
+        expect(info_index).not_to be_nil
+        expect(error_index).not_to be_nil
+      end
+      expect(info_index).to be < error_index
     end
 
     it 'closes the delegate exactly once under repeated failures' do
       allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
       3.times { socket.write('retry') }
-      expect(delegate).to have_received(:close).once
+      eventually { expect(delegate).to have_received(:close).once }
     end
   end
 
@@ -212,7 +238,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     it 'delegates to the underlying socket' do
       allow(delegate).to receive(:puts).with('hello').and_return(nil)
       socket.puts('hello')
-      expect(delegate).to have_received(:puts).with('hello')
+      eventually { expect(delegate).to have_received(:puts).with('hello') }
     end
 
     described_class::FATAL_WRITE_ERRORS.each do |error_class|
@@ -225,7 +251,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
         it 'marks the socket as dead and closes the delegate' do
           socket.puts('test')
-          expect(socket.alive?).to be false
+          eventually { expect(socket.alive?).to be false }
           expect(delegate).to have_received(:close)
         end
       end
@@ -234,8 +260,9 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     context 'when delegate raises a non-fatal error' do
       before { allow(delegate).to receive(:puts).and_raise(ArgumentError, 'bad args') }
 
-      it 'lets the error propagate' do
-        expect { socket.puts('test') }.to raise_error(ArgumentError, 'bad args')
+      it 'logs the writer error without propagating it to the producer' do
+        expect { socket.puts('test') }.not_to raise_error
+        eventually { expect(Lich).to have_received(:log).with(/client socket writer failed: ArgumentError/) }
       end
 
       it 'does not mark the socket as dead' do
@@ -253,6 +280,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       before do
         allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
         socket.puts('first call dies')
+        eventually { expect(socket.alive?).to be false }
       end
 
       it 'returns nil without touching the delegate again' do
@@ -265,13 +293,13 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     it 'handles being called with no arguments' do
       allow(delegate).to receive(:puts).with(no_args)
       socket.puts
-      expect(delegate).to have_received(:puts).with(no_args)
+      eventually { expect(delegate).to have_received(:puts).with(no_args) }
     end
 
     it 'forwards multiple arguments' do
       allow(delegate).to receive(:puts).with('a', 'b', 'c')
       socket.puts('a', 'b', 'c')
-      expect(delegate).to have_received(:puts).with('a', 'b', 'c')
+      eventually { expect(delegate).to have_received(:puts).with('a', 'b', 'c') }
     end
   end
 
@@ -279,9 +307,10 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   # write -- write-side resilience
   # ===========================================================================
   describe '#write' do
-    it 'delegates and returns the byte count from the delegate' do
+    it 'queues the write and returns nil' do
       allow(delegate).to receive(:write).with('data').and_return(4)
-      expect(socket.write('data')).to eq(4)
+      expect(socket.write('data')).to be_nil
+      eventually { expect(delegate).to have_received(:write).with('data') }
     end
 
     context 'when delegate raises Errno::ECONNRESET' do
@@ -293,7 +322,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       it 'marks the socket as dead and closes the delegate' do
         socket.write('test')
-        expect(socket.alive?).to be false
+        eventually { expect(socket.alive?).to be false }
         expect(delegate).to have_received(:close)
       end
     end
@@ -302,6 +331,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       before do
         allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
         socket.write('die')
+        eventually { expect(socket.alive?).to be false }
       end
 
       it 'returns nil without touching the delegate again' do
@@ -316,39 +346,46 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   # puts_if -- conditional write resilience
   # ===========================================================================
   describe '#puts_if' do
-    it 'writes when block returns true and returns true' do
+    it 'accepts and writes output when no frontend stream is open' do
       allow(delegate).to receive(:puts).with('data')
-      result = socket.puts_if('data') { true }
-      expect(result).to be true
-      expect(delegate).to have_received(:puts).with('data')
+      expect(socket.puts_if('data') { true }).to be true
+      eventually { expect(delegate).to have_received(:puts).with('data') }
     end
 
-    it 'skips the write when block returns false and returns false' do
-      allow(delegate).to receive(:puts)
-      result = socket.puts_if('data') { false }
-      expect(result).to be false
-      expect(delegate).not_to have_received(:puts)
+    it 'defers output until a queued frontend stream closes' do
+      writes = []
+      allow(delegate).to receive(:write) { |data| writes << data }
+      allow(delegate).to receive(:puts) { |data| writes << data }
+
+      socket.write('<pushStream id="room">room text')
+      expect(socket.puts_if('script output') { false }).to be true
+      socket.write('</pushStream><popStream id="room"/>')
+
+      eventually { expect(writes).to eq(['<pushStream id="room">room text', '</pushStream><popStream id="room"/>', 'script output']) }
     end
 
-    context 'when the yield block itself raises' do
-      it 'lets the block error propagate without marking socket dead' do
-        expect {
-          socket.puts_if('data') { raise RuntimeError, 'block exploded' }
-        }.to raise_error(RuntimeError, 'block exploded')
-        expect(socket.alive?).to be true
-      end
+    it 'preserves FIFO order across mixed puts and writes' do
+      writes = []
+      allow(delegate).to receive(:write) { |data| writes << [:write, data] }
+      allow(delegate).to receive(:puts) { |data| writes << [:puts, data] }
+
+      socket.write('one')
+      socket.puts('two')
+      socket.write('three')
+
+      eventually { expect(writes).to eq([[:write, 'one'], [:puts, 'two'], [:write, 'three']]) }
     end
 
     context 'when delegate raises a fatal error during write' do
       before { allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET) }
 
-      it 'returns false instead of raising' do
-        expect(socket.puts_if('test') { true }).to be false
+      it 'accepts the asynchronous write without raising' do
+        expect(socket.puts_if('test') { true }).to be true
       end
 
       it 'marks the socket as dead and closes the delegate' do
         socket.puts_if('test') { true }
-        expect(socket.alive?).to be false
+        eventually { expect(socket.alive?).to be false }
         expect(delegate).to have_received(:close)
       end
     end
@@ -357,6 +394,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       before do
         allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
         socket.puts_if('die') { true }
+        eventually { expect(socket.alive?).to be false }
       end
 
       it 'returns false without evaluating the block' do
@@ -427,7 +465,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       end
       threads.each(&:join)
 
-      expect(call_count).to eq(10)
+      eventually { expect(call_count).to eq(10) }
     end
 
     it 'stops delegating once one write kills the socket mid-burst' do
@@ -444,7 +482,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       end
       threads.each(&:join)
 
-      expect(socket.alive?).to be false
+      eventually { expect(socket.alive?).to be false }
       expect(call_count).to be >= 3
       expect(call_count).to be <= 10
     end
@@ -454,7 +492,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       threads = 2.times.map { Thread.new { socket.write('boom') } }
       threads.each(&:join)
 
-      expect(socket.alive?).to be false
+      eventually { expect(socket.alive?).to be false }
       expect(Lich).to have_received(:log).with(/client socket write failed/).at_most(:twice)
       expect(delegate).to have_received(:close).at_most(:twice)
     end
@@ -469,6 +507,8 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       allow(delegate).to receive(:write).and_raise(Errno::ECONNRESET)
 
       socket.puts('initial write')
+
+      eventually { expect(socket.alive?).to be false }
 
       100.times { socket.puts('error handler retry') }
       100.times { socket.write('error handler retry') }
@@ -489,21 +529,21 @@ RSpec.describe Lich::Common::SynchronizedSocket do
         it "absorbs on puts, closes delegate, marks dead" do
           allow(delegate).to receive(:puts).and_raise(error_class.new('test'))
           expect { socket.puts('x') }.not_to raise_error
-          expect(socket.alive?).to be false
+          eventually { expect(socket.alive?).to be false }
           expect(delegate).to have_received(:close)
         end
 
         it "absorbs on write, closes delegate, marks dead" do
           allow(delegate).to receive(:write).and_raise(error_class.new('test'))
           expect { socket.write('x') }.not_to raise_error
-          expect(socket.alive?).to be false
+          eventually { expect(socket.alive?).to be false }
           expect(delegate).to have_received(:close)
         end
 
         it "absorbs on puts_if, closes delegate, marks dead" do
           allow(delegate).to receive(:puts).and_raise(error_class.new('test'))
           expect { socket.puts_if('x') { true } }.not_to raise_error
-          expect(socket.alive?).to be false
+          eventually { expect(socket.alive?).to be false }
           expect(delegate).to have_received(:close)
         end
       end

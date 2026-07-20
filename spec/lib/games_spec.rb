@@ -1041,6 +1041,19 @@ RSpec.describe Lich::GameBase::Game do
   end
 
   describe '.send_to_client' do
+    def eventually(timeout: 1)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        begin
+          return yield
+        rescue RSpec::Expectations::ExpectationNotMetError
+          raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.005
+        end
+      end
+    end
+
     before do
       allow(Lich).to receive(:log)
     end
@@ -1050,23 +1063,27 @@ RSpec.describe Lich::GameBase::Game do
       let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket) }
 
       before do
+        allow(raw_socket).to receive(:close)
         $_DETACHABLE_CLIENT_ = mock_detachable
       end
 
       after do
+        mock_detachable.close rescue nil
         $_DETACHABLE_CLIENT_ = nil
       end
 
       it 'writes to the detachable client' do
         allow(raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
-        expect(raw_socket).to have_received(:write).with('test data')
+        eventually { expect(raw_socket).to have_received(:write).with('test data') }
       end
 
       it 'nils the global and closes delegate when write fails' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
+        eventually { expect(mock_detachable.alive?).to be false }
+        described_class.send(:send_to_client, 'next data')
         expect($_DETACHABLE_CLIENT_).to be_nil
         expect(raw_socket).to have_received(:close)
       end
@@ -1077,28 +1094,34 @@ RSpec.describe Lich::GameBase::Game do
       let(:mock_client) { Lich::Common::SynchronizedSocket.new(raw_socket) }
 
       before do
+        allow(raw_socket).to receive(:close)
         $_DETACHABLE_CLIENT_ = nil
         $_CLIENT_ = mock_client
+      end
+
+      after do
+        mock_client.close rescue nil
+        $_CLIENT_ = nil
       end
 
       it 'writes to the client' do
         allow(raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
-        expect(raw_socket).to have_received(:write).with('test data')
+        eventually { expect(raw_socket).to have_received(:write).with('test data') }
       end
 
       it 'absorbs Errno::EPIPE without raising' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
-        expect(Lich).to have_received(:log).with(/client socket write failed.*EPIPE/)
+        eventually { expect(Lich).to have_received(:log).with(/client socket write failed.*EPIPE/) }
       end
 
       it 'absorbs IOError without raising' do
         allow(raw_socket).to receive(:write).and_raise(IOError, 'closed stream')
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
-        expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/)
+        eventually { expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/) }
       end
     end
   end
