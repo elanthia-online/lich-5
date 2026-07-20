@@ -19,7 +19,9 @@ module Lich
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
                   :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
-                  :room_climate, :room_terrain, :assess
+                  :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
+                  :room_climate, :room_terrain, :room_weather, :room_bonfire,
+                  :room_inside, :room_water, :room_sanctuary, :room_realm, :assess
       attr_accessor :send_fake_tags
 
       @@warned_deprecated_spellfront = 0
@@ -72,6 +74,12 @@ module Lich
         @room_exits_string = String.new
         @room_climate = 0
         @room_terrain = 0
+        @room_weather = 0
+        @room_bonfire = 0
+        @room_inside = 0
+        @room_water = 0
+        @room_sanctuary = 0
+        @room_realm = 0
 
         @familiar_room_title = String.new
         @familiar_room_description = String.new
@@ -106,6 +114,12 @@ module Lich
         @mind_value = 0
         @field_exp = 0
         @max_field_exp = 0
+        @ascension_exp = 0
+        @exp = 0
+        @until_next = 0
+        @fashlonae = nil
+        @lumnis = nil
+        @rpa = nil
         @prepared_spell = 'None'
         @encumbrance_text = String.new
         @encumbrance_full_text = String.new
@@ -451,6 +465,12 @@ module Lich
             nil
           end
           if name == 'roommeta'
+            @room_weather = attributes['weather'].to_i if attributes['weather']
+            @room_bonfire = attributes['bonfire'].to_i if attributes['bonfire']
+            @room_inside = attributes['inside'].to_i if attributes['inside']
+            @room_water = attributes['water'].to_i if attributes['water']
+            @room_sanctuary = attributes['sanctuary'].to_i if attributes['sanctuary']
+            @room_realm = attributes['realm'].to_i if attributes['realm']
             @room_climate = attributes['climate'].to_i if attributes['climate']
             @room_terrain = attributes['terrain'].to_i if attributes['terrain']
           end
@@ -579,6 +599,17 @@ module Lich
               @mind_value = attributes['value'].to_i
               @field_exp = attributes['field_exp'].to_i if attributes['field_exp']
               @max_field_exp = attributes['max_field_exp'].to_i if attributes['max_field_exp']
+              @ascension_exp = attributes['ascension_exp'].to_i if attributes['ascension_exp']
+              @exp = attributes['exp'].to_i if attributes['exp']
+              @until_next = attributes['until_next'].to_i if attributes['until_next']
+              # lumnis and rpa are only sent while active; fashlonae is sent
+              # whenever an orb is redeemed (1 = redeemed/inactive, 2 = active).
+              # All three are cleared back to nil whenever a fresh mindState
+              # progressBar omits them. rpa can be fractional (e.g. 1.5), so it
+              # is parsed as a float.
+              @fashlonae = attributes['fashlonae'] ? attributes['fashlonae'].to_i : nil
+              @lumnis = attributes['lumnis'] ? attributes['lumnis'].to_i : nil
+              @rpa = attributes['rpa'] ? attributes['rpa'].to_f : nil
               $_CLIENT_.puts "\034GSr#{MINDMAP[@mind_text]}\r\n" if @send_fake_tags
             elsif attributes['id'] == 'health'
               @health, @max_health = attributes['text'].scan(/-?\d+/).collect { |num| num.to_i }
