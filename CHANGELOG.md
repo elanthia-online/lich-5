@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.19.1](https://github.com/elanthia-online/lich-5/compare/v5.19.0...v5.19.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* **all:** Quit Gtk.main cleanly ([#1455](https://github.com/elanthia-online/lich-5/issues/1455)) ([d25e152](https://github.com/elanthia-online/lich-5/commit/d25e152c3ec737b3ed7d35cb11dc05aa9334563f))
+* **all:** Refactor regex to string comparisons for ARGV options ([#1456](https://github.com/elanthia-online/lich-5/issues/1456)) ([cec0f60](https://github.com/elanthia-online/lich-5/commit/cec0f60e6489a2c1ffa259975b3d4b159de30dc9))
+* **all:** resilient ActiveSessions ownership + shutdown watchdog ([#1452](https://github.com/elanthia-online/lich-5/issues/1452)) ([1eaa043](https://github.com/elanthia-online/lich-5/commit/1eaa043f19a13d61ea963336edd6388d2957c223))
+* **gs:** ingest newly-exposed mindState experience and roommeta room fields ([#1450](https://github.com/elanthia-online/lich-5/issues/1450)) ([3339e7d](https://github.com/elanthia-online/lich-5/commit/3339e7d5aebded21685b50121cec37f6d08fba5d))
+
 ## [5.19.0](https://github.com/elanthia-online/lich-5/compare/v5.18.0...v5.19.0) (2026-07-17)
 
 
