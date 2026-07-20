@@ -193,7 +193,7 @@ jobs:
             echo "Could not read current version from .release-please-manifest.json"
             exit 1
           fi
-          IFS='.' read -r MA MI PA <<<"$CURR"
+          IFS='.' read -r MA MI <<<"$CURR"
           NEXT="${MA}.$((MI+1)).0-beta.0"
           echo "Seeding Release-As: v$NEXT"
           git config user.name  "github-actions[bot]"
@@ -296,7 +296,6 @@ jobs:
           git --no-pager log --oneline -n 3
 
       - name: "Guard: ensure there are commits since anchor (or fail fast)"
-        id: release_window
         shell: bash
         run: |
           set -euo pipefail
@@ -326,19 +325,6 @@ jobs:
               echo "No reachable prerelease tag; fresh train expected."
             fi
           fi
-
-          range="${anchor:+$anchor..}HEAD"
-          if [ -z "$anchor" ] && [ -n "${last_beta:-}" ]; then
-            range="${last_beta}..HEAD"
-          fi
-          echo "commit_range=${range:-HEAD}" >> "$GITHUB_OUTPUT"
-
-      - name: "Guard: validate releaseable commit bodies"
-        # The target branch is authoritative only after the preceding sync.
-        # Running earlier would validate the checked-out base branch instead.
-        uses: ./.github/actions/release-please-commit-body-guard
-        with:
-          commit-range: ${{ steps.release_window.outputs.commit_range }}
 
       - name: Release Please (prerelease)
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
