@@ -162,6 +162,12 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Gtk.main_quit_calls).to eq(1)
   end
 
+  it 'quits the GTK main loop when no retained GTK cleanup remains' do
+    expect(Lich::Common.cleanup_gtk!).to be(false)
+    expect(Lich::Common.shutdown_gtk!).to eq(:main_quit_called)
+    expect(Gtk.main_quit_calls).to eq(1)
+  end
+
   describe 'shutdown_gtk_before_exit' do
     context 'while the GTK main loop is running' do
       # The launcher and the main game loop call this from a thread other than
@@ -245,6 +251,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
         expect(widget.destroyed?).to be true
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+        expect(Gtk.main_quit_calls).to eq(0)
       end
 
       it 'clears retained Ruby references without direct widget teardown for non-terminal callers' do
@@ -262,23 +269,12 @@ RSpec.describe 'Lich::Common GTK hardening' do
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
       end
 
-      it 'clears registries when direct teardown fails' do
-        Gtk.main_quit_failure = true
-        widget = Gtk::Widget.new
-        widget.signal_connect('clicked') { :clicked }
-        allow(Lich::Common).to receive(:clear_gtk_retention_registries).and_call_original
-
-        expect { Lich::Common.shutdown_gtk_before_exit(direct: true) }.not_to raise_error
-
-        expect(Lich).to have_received(:log).with(/Failed to run direct GTK shutdown before exit/)
-        expect(Lich::Common).to have_received(:clear_gtk_retention_registries).at_least(:once)
-      end
-
       it 'is a clean no-op when nothing remains to tear down' do
         expect(Gtk).not_to receive(:queue)
 
         expect { Lich::Common.shutdown_gtk_before_exit(direct: true) }.not_to raise_error
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
+        expect(Gtk.main_quit_calls).to eq(0)
       end
     end
 
