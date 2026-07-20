@@ -59,16 +59,20 @@ module Lich
       end
     end
 
-    # Performs explicit GTK teardown before Ruby process exit.
+    # Destroys retained GTK receivers and releases retained Ruby callbacks.
     #
     # ruby-gnome will otherwise release surviving widget wrappers during Ruby
     # finalization, which can dispose native GTK objects in an unsafe order.
-    # Core-owned shutdown paths should call this helper on the GTK thread so
-    # widgets are destroyed deterministically before interpreter cleanup.
+    # This may run after Gtk.main has returned, so it must not stop the GTK
+    # main loop itself.
     #
-    # @return [Object, nil] GTK main quit result when available
-    def self.shutdown_gtk!
+    # @return [Boolean] true when cleanup work was performed
+    def self.cleanup_gtk!
       retained_receivers = with_gtk_registry_lock { gtk_signal_handlers.keys.dup }
+      callbacks_retained = with_gtk_registry_lock do
+        gtk_timeout_callbacks.any? || gtk_idle_callbacks.any?
+      end
+      return false if retained_receivers.empty? && !callbacks_retained
 
       retained_receivers.each do |receiver|
         next unless receiver.respond_to?(:destroy)
@@ -82,7 +86,14 @@ module Lich
       end
 
       clear_gtk_retention_registries
+      true
+    end
 
+    # Performs core-owned GTK shutdown before Ruby process exit.
+    #
+    # @return [Object, nil] GTK main quit result when available
+    def self.shutdown_gtk!
+      cleanup_gtk!
       # Only quit when a loop is actually nested. The terminal lich.rbw backstop
       # runs after Gtk.main returns (main_level == 0); calling gtk_main_quit then
       # trips Gtk-CRITICAL "main_loops != NULL" — common for headless /
@@ -140,7 +151,8 @@ module Lich
     # * **Loop not running**: a queued block would never be serviced. Ordinary
     #   callers clear retained Ruby references only. The terminal `lich.rbw`
     #   backstop passes +direct: true+ after `Gtk.main` returns on the GTK thread;
-    #   only that path destroys surviving widgets directly in place.
+    #   only that path destroys surviving widgets directly in place. Gtk.main
+    #   has already returned there, so it must not call Gtk.main_quit.
     #
     # If GTK is unavailable, the queue cannot be serviced, the work cannot be
     # queued, or it does not finish within +timeout+, the retention registries are
@@ -157,7 +169,7 @@ module Lich
       unless gtk_main_loop_running?
         if direct
           begin
-            shutdown_gtk!
+            cleanup_gtk!
           rescue StandardError => e
             Lich.log "warning: Failed to run direct GTK shutdown before exit: #{e.class}: #{e.message}"
             clear_gtk_retention_registries

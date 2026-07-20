@@ -67,6 +67,6 @@
     blunt_required: false
   },
   messaging: {
-    general_advice: "* Undansormrs have great amounts of health, pretty high [[DS]], exceptional [[TD]], decent [[Standard maneuver roll|maneuver]] defense by virtue of their high level if nothing else, immunity to being knocked prone, and no limbs to get rid of to make them less effective. However, [[Brawling|unarmed combat]] can kill undansormrs reasonably effectively with focused mstrikes, [[Fury]], or stray tiered-up shots to the head (one of the only body parts this worm-like creature does have). Even a [[pure]] (with trained Brawling and [[Combat Maneuvers]]) can make unarmed combat work against them with minor setup of stunning the undansormr first to increase MM and more than overcome the UAF vs. UDF gap."
+    general_advice: "* Undansormrs have great amounts of health, pretty high DS, exceptional TD, decent maneuver defense by virtue of their high level if nothing else, immunity to being knocked prone, and no limbs to get rid of to make them less effective. However, unarmed combat can kill undansormrs reasonably effectively with focused mstrikes, Fury, or stray tiered-up shots to the head (one of the only body parts this worm-like creature does have). Even a pure (with trained Brawling and Combat Maneuvers) can make unarmed combat work against them with minor setup of stunning the undansormr first to increase MM and more than overcome the UAF vs. UDF gap."
   }
 }

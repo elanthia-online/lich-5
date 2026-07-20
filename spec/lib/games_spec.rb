@@ -827,6 +827,13 @@ RSpec.describe Lich::GameBase::Game do
         # stub_const ensures the module and method exist for the stub.
         sync_stub = Module.new { def self.sync_all_repos; end }
         stub_const('Lich::Util::Update', sync_stub)
+        # stub_const alone doesn't stop the leak: handle_autostart spawns a
+        # real Thread, which can still be mid-flight (or not yet scheduled)
+        # when this example ends and stub_const reverts the constant. That
+        # thread then resolves Lich::Util::Update for real and throws a mock
+        # error into whatever unrelated spec happens to be running by then.
+        # Run the block inline so no thread survives past this example.
+        allow(Thread).to receive(:new) { |&block| block.call; nil }
 
         described_class.send(:handle_autostart)
         expect(described_class.autostarted?).to be true

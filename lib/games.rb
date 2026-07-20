@@ -385,6 +385,10 @@ module Lich
           @@autostarted
         end
 
+        def prefix_origin_sentinel(string)
+          string.gsub(/^.+$/) { |line| "#{Frontend::ORIGIN_SENTINEL}#{line}" }
+        end
+
         def settings_init_needed?
           @@settings_init_needed
         end
@@ -431,7 +435,7 @@ module Lich
             SocketConfigurator.configure(@socket,
                                          keepalive: {
                                            enable: true,
-                                           idle: 120,      # 2 minutes before first keepalive
+                                           idle: 30,       # 30s idle before first keepalive; defensive against L3/L4 idle reapers (best-effort, see SocketConfigurator)
                                            interval: 30    # 30 seconds between keepalive probes
                                          },
                                          linger: {
@@ -896,6 +900,8 @@ module Lich
             if Frontend.supports_gsl?
               alt_string = sf_to_wiz(alt_string)
             end
+            # Handle prefix origin sentinel if FE supports it
+            alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
 
             # Send to client
             send_to_client(alt_string)

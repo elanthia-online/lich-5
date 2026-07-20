@@ -227,7 +227,7 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = 'unknown'
+      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -289,6 +289,8 @@ reconnect_if_wanted = proc {
         Frontend.client = 'stormfront'
       elsif game =~ /AVALON/i
         Frontend.client = 'avalon'
+      elsif game =~ /SAGA/i
+        Frontend.client = 'saga'
       else
         Frontend.client = 'unknown'
       end
@@ -735,7 +737,11 @@ reconnect_if_wanted = proc {
             connected: false
           )
 
-          Lich.log "info: detachable client server listening on #{server.local_address.ip_address}:#{server.local_address.ip_port}"
+          listen_ip = server.local_address.ip_address
+          listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
+          listen_address = "#{listen_ip}:#{server.local_address.ip_port}"
+          Lich.log "info: detachable client server listening on #{listen_address}"
+          $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
 
           accepted_socket, = server.accept
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
@@ -775,7 +781,7 @@ reconnect_if_wanted = proc {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            unless ARGV.include?('--genie')
+            unless ARGV.any? { |a| a =~ /^--(genie|saga)$/i }
               Frontend.client = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
@@ -811,6 +817,28 @@ reconnect_if_wanted = proc {
                 end
                 init_str.concat '</compass>'
                 $_DETACHABLE_CLIENT_.puts init_str
+                nil
+              }
+            end
+            # Saga's cloud profile sync keys each character on its <playerID>,
+            # which Lich consumed from the game during its own login handshake
+            # before this detachable client attached - so Saga never sees it and
+            # a Via-Lich character silently never syncs (a Direct login does,
+            # because it sees the tag). Re-emit it here, unprefixed, exactly as a
+            # Direct login delivers it. This runs on every attach (the outer loop
+            # re-enters this block), so a Saga client that re-attaches mid-session
+            # (a restart against a surviving Lich) also relearns the id. Deferred
+            # to a thread with a bounded wait because a client can attach before
+            # login has populated player_id; _respond routes to the detachable
+            # client, gates on XMLData.safe_to_respond?, and re-checks it is alive.
+            if ARGV.any? { |a| a =~ /^--saga$/i }
+              Thread.new {
+                tag = nil
+                100.times do
+                  break if (tag = Frontend.player_id_tag(XMLData.player_id))
+                  sleep 0.1
+                end
+                _respond(tag) if tag
                 nil
               }
             end

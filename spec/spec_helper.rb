@@ -505,6 +505,7 @@ module XMLData
   @game = "rspec"
   @name = "testing"
   @server_time = Time.at(1234567890)
+  @current_target_ids = []
 
   @room_title = ''
   @room_description = ''
@@ -518,6 +519,7 @@ module XMLData
   class << self
     attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
+    attr_accessor :current_target_ids
 
     def indicator
       { 'IconSTUNNED' => 'n', 'IconDEAD' => 'n', 'IconWEBBED' => false }
@@ -559,6 +561,7 @@ module XMLData
       @dr_active_spells = {}
       @dr_active_spells_slivers = 0
       @dr_active_spells_stellar_percentage = 0
+      @current_target_ids = []
       # Clear any dynamically added attributes (e.g., prepared_spell from arcana specs)
       @prepared_spell = nil if instance_variable_defined?(:@prepared_spell)
     end
@@ -1668,7 +1671,7 @@ module Frontend
     end
 
     def supports_room_window?(_fe = nil)
-      %w[wrayth stormfront].include?(client)
+      %w[wrayth stormfront saga].include?(client)
     end
 
     def client

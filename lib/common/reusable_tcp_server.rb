@@ -21,17 +21,18 @@ module Lich
     module ReusableTCPServer
       # Creates a TCP server socket with SO_REUSEADDR enabled before binding.
       #
-      # @param host [String] the address to bind to
+      # @param host [String] the address to bind to (IPv4, IPv6, or hostname)
       # @param port [Integer] the port to listen on
       # @param backlog [Integer] the listen queue depth (default: 1)
       # @return [Socket] a bound, listening socket ready for +accept+
       # @raise [Errno::EADDRINUSE] if the port is unavailable even with SO_REUSEADDR
       # @raise [SocketError] if the address is invalid
       def self.create(host, port, backlog: 1)
-        server = Socket.new(:INET, :STREAM)
+        address = Addrinfo.tcp(host, port)
+        server = Socket.new(address.afamily, :STREAM)
         begin
           server.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, 1)
-          server.bind(Addrinfo.tcp(host, port))
+          server.bind(address)
           server.listen(backlog)
           server
         rescue

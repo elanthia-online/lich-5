@@ -15,8 +15,38 @@ end
 require_relative '../../lib/gemcheck'
 
 RSpec.describe Lich::GemCheck do
+  describe '.startup_groups' do
+    it 'checks default and GTK dependencies for a Windows graphical launch' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
+      expect(described_class.startup_groups([])).to eq(%i[default gtk])
+    end
+
+    it 'omits GTK for an explicit no-GUI switch on Windows' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
+      expect(described_class.startup_groups(['--no-gui'])).to eq([:default])
+      expect(described_class.startup_groups(['--no-gtk'])).to eq([:default])
+    end
+
+    it 'does not treat unrelated arguments as a headless request on Windows' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
+      expect(described_class.startup_groups(['--home=C:/Lich5'])).to eq(%i[default gtk])
+    end
+
+    it 'leaves GTK to init.rb on non-Windows platforms' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      expect(described_class.startup_groups([])).to eq([:default])
+      expect(described_class.startup_groups(['--gtk'])).to eq([:default])
+    end
+  end
+
   describe '.verify!' do
-    before { allow(described_class).to receive(:configure_gemfile!) }
+    let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: []) }
+
+    before do
+      allow(described_class).to receive(:configure_gemfile!)
+      allow(described_class).to receive(:self_healing_supported?).and_return(true)
+      allow(described_class).to receive(:recover_with_consent!).and_return(recovery_result)
+    end
 
     context 'when nothing is missing' do
       before { allow(described_class).to receive(:missing_gems).and_return([]) }
@@ -69,6 +99,225 @@ RSpec.describe Lich::GemCheck do
         expect(Bundler).not_to receive(:setup)
         expect { described_class.verify! }.to raise_error(SystemExit)
       end
+    end
+
+    context 'when self-healing is unsupported on the running platform' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:self_healing_supported?).and_return(false)
+        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(false)
+      end
+
+      it 'uses the ordinary missing-gem alert without fetching a manifest' do
+        expect(described_class).not_to receive(:recover_with_consent!)
+        expect(described_class).to receive(:alert).with(missing: ['ox'], groups: [:default])
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+
+    context 'when macOS atomic Bundler recovery is available for default gems' do
+      let(:bundler_result) { Lich::BundlerRecovery::Result.new(log_path: '/tmp/bundler-recovery.log', restart_required: true) }
+
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:self_healing_supported?).and_return(false)
+        allow(described_class).to receive(:bundler_recovery_supported?).with([:default]).and_return(true)
+        allow(described_class).to receive(:recover_with_bundler_consent!)
+          .with(['ox'], groups: [:default])
+          .and_return(bundler_result)
+      end
+
+      it 'logs the approved recovery and exits so the detached helper can promote and relaunch' do
+        expect(described_class).to receive(:write_bundler_recovery_log)
+          .with(missing: ['ox'], groups: [:default], result: bundler_result)
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(0)
+        end
+      end
+
+      it 'reports a failed staged recovery without attempting a relaunch' do
+        failed_result = Lich::BundlerRecovery::Result.new(error: 'compiler unavailable')
+        allow(described_class).to receive(:recover_with_bundler_consent!).and_return(failed_result)
+        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
+          expect(missing).to eq(['ox'])
+          expect(groups).to eq([:default])
+          expect(error.message).to eq('compiler unavailable')
+        end
+
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+
+    context 'when manifest recovery restores the missing gems' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'], [])
+      end
+
+      it 'rechecks the requested groups and continues without alerting' do
+        expect(described_class).to receive(:recover_with_consent!)
+          .with(['ox'], groups: [:default]).and_return(recovery_result)
+        expect(described_class).not_to receive(:alert)
+
+        expect { described_class.verify! }.not_to raise_error
+      end
+    end
+
+    context 'when native runtime replacement is scheduled' do
+      let(:recovery_result) { Lich::DependencyRecovery::Result.new(installed_gems: [], restart_required: true) }
+
+      before do
+        allow(described_class).to receive(:missing_gems).with([:default]).and_return(['ox'])
+      end
+
+      it 'exits cleanly so the hidden helper can replace files and relaunch Lich' do
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(0)
+        end
+      end
+    end
+
+    context 'when manifest recovery cannot restore a detected gem' do
+      let(:recovery_result) do
+        Lich::DependencyRecovery::Result.new(installed_gems: [], error: 'manifest unavailable')
+      end
+
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+      end
+
+      it 'logs the recovery reason and exits' do
+        expect(described_class).to receive(:alert) do |missing:, groups:, error:|
+          expect(missing).to eq(['ox'])
+          expect(groups).to eq([:default])
+          expect(error.message).to eq('manifest unavailable')
+        end
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+
+    context 'when user consent is declined or unavailable' do
+      before do
+        allow(described_class).to receive(:missing_gems)
+          .with([:default]).and_return(['ox'])
+        allow(described_class).to receive(:recover_with_consent!).and_return(nil)
+      end
+
+      it 'exits without a second generic missing-gem dialog' do
+        expect(described_class).not_to receive(:alert)
+        expect { described_class.verify! }.to raise_error(SystemExit) do |error|
+          expect(error.status).to eq(1)
+        end
+      end
+    end
+  end
+
+  describe '.recovery_units_approved?' do
+    let(:unit) { { 'id' => 'sqlite3', 'members' => ['sqlite3'] } }
+
+    it 'logs and warns when native consent UI is unavailable' do
+      allow(described_class).to receive(:confirm_recovery_units).with([unit]).and_return(:unavailable)
+      expect(described_class).to receive(:report_consent_failure)
+        .with([unit], [:default], 'user consent not available')
+
+      expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
+    end
+
+    it 'requires one approval covering every planned unit before downloading any artifact' do
+      second = { 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3] }
+      expect(described_class).to receive(:confirm_recovery_units).with([unit, second]).and_return(:approved)
+
+      expect(described_class.recovery_units_approved?([unit, second], [:default])).to be(true)
+    end
+
+    it 'logs a timeout distinctly from a declined or unavailable prompt' do
+      allow(described_class).to receive(:confirm_recovery_units).with([unit]).and_return(:timed_out)
+      expect(described_class).to receive(:report_consent_failure)
+        .with([unit], [:default], 'user consent timed out')
+
+      expect(described_class.recovery_units_approved?([unit], [:default])).to be(false)
+    end
+  end
+
+  describe '.build_recovery_prompt' do
+    it 'uses real line breaks between the explanatory sentence and the question' do
+      unit = { 'id' => 'ox', 'members' => ['ox'] }
+
+      expect(described_class.build_recovery_prompt([unit]))
+        .to include("packages now.\n\nInstall now?")
+    end
+  end
+
+  describe '.confirm_windows' do
+    it 'maps the bounded WScript timeout result to a fail-closed outcome' do
+      expect(described_class).to receive(:windows_popup)
+        .with('consent', 4 + 32).and_return(-1)
+
+      expect(described_class.confirm_windows('consent')).to eq(:timed_out)
+    end
+
+    it 'maps Yes and No result codes to approval and decline' do
+      allow(described_class).to receive(:windows_popup).with('consent', 4 + 32).and_return(6)
+      expect(described_class.confirm_windows('consent')).to eq(:approved)
+
+      allow(described_class).to receive(:windows_popup).with('consent', 4 + 32).and_return(7)
+      expect(described_class.confirm_windows('consent')).to eq(:declined)
+    end
+  end
+
+  describe '.confirm_recovery_units' do
+    it 'does not offer recovery consent on unsupported platforms' do
+      allow(described_class).to receive(:self_healing_supported?).and_return(false)
+      expect(described_class).not_to receive(:confirm_windows)
+
+      expect(described_class.confirm_recovery_units([])).to eq(:unavailable)
+    end
+  end
+
+  describe 'Windows notices' do
+    let(:shell) { double('WScript.Shell') }
+
+    before do
+      stub_const('WIN32OLE', Class.new)
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      allow(WIN32OLE).to receive(:new).with('WScript.Shell').and_return(shell)
+    end
+
+    it 'bounds informational notices' do
+      expect(shell).to receive(:Popup)
+        .with('notice', described_class::CONSENT_TIMEOUT_SECONDS, described_class::TITLE, 64)
+
+      described_class.notice_windows('notice')
+    end
+
+    it 'waits for the release-page alert and opens the URL only after OK' do
+      expect(shell).to receive(:Popup)
+        .with("alert\nClick OK to open the download page.", 0, described_class::TITLE, 1 + 64).and_return(1)
+      expect(shell).to receive(:Run).with(described_class::RELEASE_URL)
+
+      described_class.alert_windows('alert')
+    end
+
+    it 'does not open the release page when Cancel is selected' do
+      allow(shell).to receive(:Popup).and_return(2)
+      expect(shell).not_to receive(:Run)
+
+      described_class.alert_windows('alert')
+    end
+  end
+
+  describe '.macos_dialog_body' do
+    it 'preserves multiline body content as AppleScript return expressions' do
+      expect(described_class.macos_dialog_body("first\nsecond")).to eq('"first" & return & "second"')
     end
   end
 
@@ -127,6 +376,26 @@ RSpec.describe Lich::GemCheck do
 
         expect(ENV['BUNDLE_GEMFILE']).to be_nil
       end
+    end
+  end
+
+  describe '.self_healing_supported?' do
+    it 'follows RubyGems Windows platform detection without loading the os gem' do
+      allow(Gem).to receive(:win_platform?).and_return(true)
+      expect(described_class.self_healing_supported?).to be(true)
+
+      allow(Gem).to receive(:win_platform?).and_return(false)
+      expect(described_class.self_healing_supported?).to be(false)
+    end
+  end
+
+  describe '.bundler_recovery_supported?' do
+    before { allow(Lich::BundlerRecovery).to receive(:supported?).and_return(true) }
+
+    it 'is limited to the default runtime group so GTK cannot enter this path' do
+      expect(described_class.bundler_recovery_supported?([:default])).to be(true)
+      expect(described_class.bundler_recovery_supported?([:default, :gtk])).to be(false)
+      expect(described_class.bundler_recovery_supported?([:gtk])).to be(false)
     end
   end
 
@@ -357,6 +626,17 @@ RSpec.describe Lich::GemCheck do
     it 'appends across multiple calls rather than overwriting' do
       2.times { described_class.write_log }
       expect(File.read(log_path).scan('Lich5 GemCheck failure').size).to eq(2)
+    end
+
+    it 'records approved recovery units without labelling the entry a failure' do
+      units = [{ 'id' => 'gtk3-runtime', 'members' => %w[glib2 gtk3] }]
+      described_class.write_recovery_log(missing: ['gtk3'], groups: [:gtk], units: units)
+
+      contents = File.read(log_path)
+      expect(contents).to include('Lich5 GemCheck recovery')
+      expect(contents).to include('Approved manifest recovery units:')
+      expect(contents).to include('GTK3 runtime bundle: glib2, gtk3')
+      expect(contents).not_to include('Lich5 GemCheck failure')
     end
 
     it 'swallows filesystem errors silently' do
