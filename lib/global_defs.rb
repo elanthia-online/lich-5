@@ -1833,15 +1833,7 @@ def respond(first = "", *messages)
         sleep 0.01 unless str_sent
       end
     end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_DETACHABLE_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
+    detachable_clients_respond(str)
   rescue => e
     Lich.log "error: respond: #{e}\n\t#{e.backtrace.first}"
   end
@@ -1867,15 +1859,7 @@ def _respond(first = "", *messages)
         sleep 0.01 unless str_sent
       end
     end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_DETACHABLE_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
+    detachable_clients_respond(str)
   rescue => e
     Lich.log "error: _respond: #{e}\n\t#{e.backtrace.first}"
   end
@@ -2264,6 +2248,189 @@ def monsterbold_end
   else
     ''
   end
+end
+
+# Multiple frontends may attach to one persistent detachable listener. The
+# legacy globals remain synchronized for scripts that inspect the primary or
+# the current client list directly.
+$_DETACHABLE_CLIENT_REGISTRY_ ||= Lich::Common::DetachableClientRegistry.new
+$_DETACHABLE_CLIENTS_ ||= []
+$_DETACHABLE_CLIENT_ ||= nil
+$_DETACHABLE_CLIENT_INPUT_MUTEX_ ||= Mutex.new
+
+def sync_detachable_client_globals
+  $_DETACHABLE_CLIENTS_ = $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+  $_DETACHABLE_CLIENT_ = $_DETACHABLE_CLIENT_REGISTRY_.primary
+end
+
+def detachable_clients_snapshot
+  $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+end
+
+def detachable_client_count
+  $_DETACHABLE_CLIENT_REGISTRY_.count
+end
+
+def detachable_client_primary?(client)
+  $_DETACHABLE_CLIENT_REGISTRY_.primary?(client)
+end
+
+def detachable_listener_connected(connected)
+  return unless $_DETACHABLE_LISTENER_
+
+  Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+    host: $_DETACHABLE_LISTENER_[:host],
+    port: $_DETACHABLE_LISTENER_[:port],
+    connected: connected
+  )
+rescue StandardError => e
+  Lich.log "warning: detachable update_listener(#{connected}): #{e}"
+end
+
+def detachable_client_register(client)
+  became_nonempty = $_DETACHABLE_CLIENT_REGISTRY_.register(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(true) if became_nonempty
+  client
+end
+
+def detachable_client_unregister(client)
+  removed, became_empty = $_DETACHABLE_CLIENT_REGISTRY_.unregister(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(false) if removed && became_empty
+  removed
+end
+
+def detachable_clients_write(string)
+  detachable_clients_snapshot.each do |client|
+    unless client.alive?
+      detachable_client_unregister(client)
+      next
+    end
+
+    client.write(string)
+    detachable_client_unregister(client) unless client.alive?
+  end
+end
+
+def detachable_clients_respond(string)
+  detachable_clients_snapshot.each do |client|
+    unless client.alive?
+      detachable_client_unregister(client)
+      next
+    end
+
+    wait_while { !XMLData.safe_to_respond? }
+    client.puts_if(string) { XMLData.safe_to_respond? }
+    detachable_client_unregister(client) unless client.alive?
+  end
+end
+
+def detachable_clients_close
+  clients = $_DETACHABLE_CLIENT_REGISTRY_.remove_all
+  sync_detachable_client_globals
+  clients.each { |client| client.close rescue nil }
+  detachable_listener_connected(false) unless clients.empty?
+  clients.length
+end
+
+# Send one newly attached frontend the game state it missed before attaching.
+def detachable_client_send_init(client)
+  100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+  init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
+  init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
+  init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
+  init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
+  init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+  %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
+    init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
+  end
+  if XMLData.game.to_s.match?(/GS/)
+    init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
+    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
+    init_str.concat "<right>#{GameObj.right_hand.name}</right>"
+    init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+    %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
+      if Wounds.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+      elsif Scars.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+      end
+    end
+  end
+  init_str.concat '<compass>'
+  short_dirs = {
+    'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
+    'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
+    'up' => 'up', 'down' => 'down', 'out' => 'out'
+  }
+  XMLData.room_exits.each do |direction|
+    init_str.concat "<dir value='#{short_dirs[direction]}'/>" if short_dirs.key?(direction)
+  end
+  init_str.concat '</compass>'
+  client.puts(init_str)
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_init: #{e}\n\t#{e.backtrace.first}"
+end
+
+def detachable_client_send_player_id(client)
+  tag = nil
+  100.times do
+    break if (tag = Frontend.player_id_tag(XMLData.player_id))
+
+    sleep 0.1
+  end
+  client.puts_if(tag) { XMLData.safe_to_respond? } if tag && client.alive?
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_player_id: #{e}\n\t#{e.backtrace.first}"
+end
+
+def handle_detachable_client(client)
+  unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
+    Frontend.client = 'profanity'
+    Thread.new { detachable_client_send_init(client) }
+  end
+  Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
+
+  while (client_string = client.gets)
+    if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
+      Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
+      next
+    end
+
+    client_string = "#{$cmd_prefix}#{client_string}"
+    if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+      # Detachable exits run script shutdown inline, so arm the same watchdog
+      # used by primary-frontend exits before entering that potentially
+      # blocking path.
+      Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
+      Lich::Common::OrderlyShutdown.request_user_exit(
+        source: :detachable_frontend,
+        active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+      )
+      break
+    end
+
+    begin
+      $_DETACHABLE_CLIENT_INPUT_MUTEX_.synchronize do
+        $_IDLETIMESTAMP_ = Time.now
+        do_client(client_string)
+      end
+    rescue StandardError => e
+      respond "--- Lich: error: client_thread: #{e}"
+      respond e.backtrace.first
+      Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
+    end
+  end
+  Lich::Common::ShutdownLog.info('detachable client disconnected')
+rescue StandardError => e
+  _respond "--- Lich: error: detachable client: #{e}"
+  Lich.log "error: detachable_client_handler: #{e}\n\t#{e.backtrace.join("\n\t")}"
+ensure
+  client.close rescue nil
+  detachable_client_unregister(client)
+  Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
 end
 
 def do_client(client_string)

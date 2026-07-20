@@ -7,6 +7,7 @@ require 'timeout'
 # Load production code
 require "ox"
 require "common/class_exts/synchronizedsocket"
+require "common/detachable_client_registry"
 require "common/sharedbuffer"
 require "common/shutdown_coordinator"
 require "common/xmlparser"
@@ -1058,34 +1059,43 @@ RSpec.describe Lich::GameBase::Game do
       allow(Lich).to receive(:log)
     end
 
-    context 'when using detachable client' do
+    context 'when using detachable clients' do
       let(:raw_socket) { double('raw_detachable_socket', closed?: false) }
+      let(:second_raw_socket) { double('second_raw_detachable_socket', closed?: false) }
       let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket) }
+      let(:second_detachable) { Lich::Common::SynchronizedSocket.new(second_raw_socket) }
 
       before do
         allow(raw_socket).to receive(:close)
-        $_DETACHABLE_CLIENT_ = mock_detachable
+        allow(second_raw_socket).to receive(:close)
+        $_DETACHABLE_CLIENT_REGISTRY_ = Lich::Common::DetachableClientRegistry.new
+        $_DETACHABLE_CLIENT_REGISTRY_.register(mock_detachable)
+        $_DETACHABLE_CLIENT_REGISTRY_.register(second_detachable)
+        $_DETACHABLE_CLIENT_ = nil
       end
 
       after do
         mock_detachable.close rescue nil
+        second_detachable.close rescue nil
+        $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
       end
 
-      it 'writes to the detachable client' do
+      it 'fans output out to every detachable client' do
         allow(raw_socket).to receive(:write)
+        allow(second_raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
         eventually { expect(raw_socket).to have_received(:write).with('test data') }
+        eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
       end
 
-      it 'nils the global and closes delegate when write fails' do
+      it 'continues writing to another client when one write fails' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
-        allow(raw_socket).to receive(:close)
+        allow(second_raw_socket).to receive(:write)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         eventually { expect(mock_detachable.alive?).to be false }
-        described_class.send(:send_to_client, 'next data')
-        expect($_DETACHABLE_CLIENT_).to be_nil
         expect(raw_socket).to have_received(:close)
+        eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
       end
     end
 
@@ -1095,6 +1105,7 @@ RSpec.describe Lich::GameBase::Game do
 
       before do
         allow(raw_socket).to receive(:close)
+        $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
         $_CLIENT_ = mock_client
       end

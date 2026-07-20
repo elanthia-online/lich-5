@@ -1097,9 +1097,10 @@ module Lich
         end
 
         def send_to_client(alt_string)
-          if $_DETACHABLE_CLIENT_
-            $_DETACHABLE_CLIENT_.write(alt_string)
-            $_DETACHABLE_CLIENT_ = nil unless $_DETACHABLE_CLIENT_&.alive?
+          detachable_clients = $_DETACHABLE_CLIENT_REGISTRY_&.snapshot || []
+          detachable_clients = [$_DETACHABLE_CLIENT_] if detachable_clients.empty? && $_DETACHABLE_CLIENT_
+          if !detachable_clients.empty?
+            detachable_clients.each { |client| client.write(alt_string) if client.alive? }
           elsif $_CLIENT_
             $_CLIENT_.write(alt_string)
           end
