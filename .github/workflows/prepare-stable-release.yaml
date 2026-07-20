@@ -109,9 +109,9 @@ jobs:
           echo "commit_range=$range" >> "$GITHUB_OUTPUT"
           echo "Last stable tag: ${last:-<none>}"
           if [ -n "$last" ]; then
-            rel="$(git log --pretty=%s "$range" | grep -E '^(feat|fix)\((all|dr|gs)\):' || true)"
+            rel="$(git log --pretty=%s "$range" | grep -E '^(feat|fix)\((all|dr|gs)\)!?:' || true)"
           else
-            rel="$(git log --pretty=%s | grep -E '^(feat|fix)\((all|dr|gs)\):' || true)"
+            rel="$(git log --pretty=%s | grep -E '^(feat|fix)\((all|dr|gs)\)!?:' || true)"
           fi
           if [ -z "$rel" ]; then
             echo "has_releasables=false" >> "$GITHUB_OUTPUT"

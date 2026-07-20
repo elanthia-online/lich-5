@@ -38,7 +38,7 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const releaseableTitle = /^(?:feat|fix)\((?:all|dr|gs)\):/;
+            const releaseableTitle = /^(?:feat|fix)\((?:all|dr|gs)\)!?:/;
             if (!pr || !releaseableTitle.test(pr.title || '')) return;
 
             const lines = (pr.body || '').split(/\r?\n/);

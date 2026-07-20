@@ -8,7 +8,7 @@ inputs:
   subject-pattern:
     description: Bash regular expression identifying releaseable commit subjects.
     required: false
-    default: '^(feat|fix)\((all|dr|gs)\):'
+    default: '^(feat|fix)\((all|dr|gs)\)!?:'
 
 outputs:
   validated-commit-count:
@@ -31,6 +31,21 @@ runs:
         validated=0
         violations=0
 
+        if [[ -z "${range//[[:space:]]/}" ]]; then
+          echo "::error::Release Please commit-body guard requires a non-empty commit range."
+          exit 1
+        fi
+
+        if ! commits="$(git rev-list --reverse "$range")"; then
+          echo "::error::Unable to resolve Release Please commit range: ${range}"
+          exit 1
+        fi
+
+        if [[ -z "$commits" ]]; then
+          echo "::error::Release Please commit range contains no commits: ${range}"
+          exit 1
+        fi
+
         # Release Please parses the complete squash-merge commit message, not
         # just its Conventional Commit subject. Its parser rejects inline code
         # spans that cross a newline (for example, `call( on one line and )`
@@ -47,14 +62,16 @@ runs:
               return count
             }
 
-            /^[[:space:]]*(```|~~~)/ {
-              marker = substr($0, RSTART, 3)
-              if (fence == "") {
-                fence = marker
-              } else if (fence == marker) {
-                fence = ""
+            {
+              if (match($0, /^[[:space:]]*(```|~~~)/)) {
+                marker = substr($0, RSTART + RLENGTH - 3, 3)
+                if (fence == "") {
+                  fence = marker
+                } else if (fence == marker) {
+                  fence = ""
+                }
+                next
               }
-              next
             }
 
             fence == "" {
@@ -93,7 +110,7 @@ runs:
 
           echo "::error::Release Please cannot parse releaseable commit ${sha} (${subject}): multiline inline code starts at body line ${line}. Keep inline code on one line or use a fenced code block."
           violations=$((violations + 1))
-        done < <(git rev-list --reverse "$range")
+        done <<< "$commits"
 
         echo "validated-commit-count=$validated" >> "$GITHUB_OUTPUT"
         if [ "$violations" -ne 0 ]; then

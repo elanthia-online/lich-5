@@ -334,6 +334,8 @@ jobs:
           echo "commit_range=${range:-HEAD}" >> "$GITHUB_OUTPUT"
 
       - name: "Guard: validate releaseable commit bodies"
+        # The target branch is authoritative only after the preceding sync.
+        # Running earlier would validate the checked-out base branch instead.
         uses: ./.github/actions/release-please-commit-body-guard
         with:
           commit-range: ${{ steps.release_window.outputs.commit_range }}
