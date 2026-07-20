@@ -83,6 +83,65 @@ RSpec.describe Lich::Common::ShutdownWatchdog do
 
       expect(first).to be_empty
     end
+
+    it 'uses an un-trappable Process.exit! as the default on_expire' do
+      # Regression for the shipped defect: the default lambda was a bare
+      # exit!(1), which resolved against the module and raised NoMethodError --
+      # neutering the force-exit guarantee. The default must call a real method.
+      exited = Queue.new
+      allow(Process).to receive(:exit!) { |code| exited << code }
+
+      described_class.arm(timeout: 0.02) # no on_expire -> exercise the real default
+
+      expect(Timeout.timeout(2) { exited.pop }).to eq(1)
+    end
+
+    it 'ignores a spurious condition-variable wakeup and fires only after the real deadline' do
+      # Regression: ConditionVariable#wait can return before its timeout on a
+      # spurious wakeup. The watchdog must re-wait against a monotonic deadline
+      # rather than treat any wakeup while armed as expiry.
+      fired = Queue.new
+      described_class.arm(timeout: 0.2, on_expire: -> { fired << :expired })
+
+      sleep 0.05 # let the watchdog thread park in the timed wait
+      mutex = described_class.instance_variable_get(:@mutex)
+      condition = described_class.instance_variable_get(:@condition)
+      mutex.synchronize { condition.signal } # spurious wakeup, still armed
+
+      sleep 0.02
+      expect(fired).to be_empty # the 0.2s deadline has not elapsed yet
+      expect(described_class.armed?).to be(true)
+
+      expect(Timeout.timeout(2) { fired.pop }).to eq(:expired) # still fires eventually
+    end
+
+    it 'still forces exit when diagnostics logging raises' do
+      allow(Lich::Common::ShutdownLog).to receive(:error).and_raise(StandardError, 'log sink down')
+      fired = Queue.new
+      described_class.arm(timeout: 0.02, on_expire: -> { fired << :expired })
+
+      expect(Timeout.timeout(2) { fired.pop }).to eq(:expired)
+    end
+
+    it 'treats a non-numeric timeout as disabled rather than arming' do
+      expect(described_class.arm(timeout: 'not-a-number', on_expire: -> { raise 'should not run' })).to be(false)
+      expect(described_class.armed?).to be(false)
+    end
+
+    it 'derives the deadline from configured_timeout when none is supplied' do
+      allow(described_class).to receive(:configured_timeout).and_return(0)
+      expect(described_class.arm(on_expire: -> { raise 'should not run' })).to be(false)
+    end
+
+    it 'admits only one winner when many threads race to arm' do
+      results = Queue.new
+      threads = Array.new(20) { Thread.new { results << described_class.arm(timeout: 5, on_expire: -> {}) } }
+      threads.each(&:join)
+
+      outcomes = Array.new(results.size) { results.pop }
+      expect(outcomes.count(true)).to eq(1)
+      expect(outcomes.count(false)).to eq(19)
+    end
   end
 
   describe '.disarm' do
@@ -115,6 +174,39 @@ RSpec.describe Lich::Common::ShutdownWatchdog do
       allow(Lich).to receive(:db).and_return(double(get_first_value: '0'))
 
       expect(described_class.configured_timeout).to eq(0)
+    end
+
+    it 'falls back to the default when the setting row is absent (nil)' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: nil))
+
+      expect(described_class.configured_timeout).to eq(described_class::DEFAULT_TIMEOUT_SECONDS)
+    end
+
+    it 'falls back to the default when the settings query raises' do
+      db = double
+      allow(db).to receive(:get_first_value).and_raise(StandardError, 'db locked')
+      allow(Lich).to receive(:db).and_return(db)
+
+      expect(described_class.configured_timeout).to eq(described_class::DEFAULT_TIMEOUT_SECONDS)
+    end
+
+    it 'parses a value with surrounding whitespace' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: '  90  '))
+
+      expect(described_class.configured_timeout).to eq(90)
+    end
+
+    it 'preserves an explicit negative value as an intentional disable' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: '-5'))
+
+      expect(described_class.configured_timeout).to eq(-5)
+    end
+
+    it 'rejects a non-integer numeric string and never silently disables' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: '90.5'))
+      allow(Lich).to receive(:log)
+
+      expect(described_class.configured_timeout).to eq(described_class::DEFAULT_TIMEOUT_SECONDS)
     end
   end
 end

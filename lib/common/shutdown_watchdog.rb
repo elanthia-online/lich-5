@@ -19,7 +19,7 @@ module Lich
     # process to exit, letting the OS reclaim all resources.
     #
     # It is intentionally dependency-light and cross-platform: plain Ruby
-    # threads, a condition variable for prompt disarm, and +exit!+.
+    # threads, a condition variable for prompt disarm, and +Process.exit!+.
     module ShutdownWatchdog
       # Default deadline, in seconds, before a stuck shutdown is forced.
       #
@@ -61,9 +61,12 @@ module Lich
         #
         # @param timeout [Numeric] deadline in seconds; +<= 0+ disables (no-op)
         # @param on_expire [#call] action taken when the deadline elapses;
-        #   defaults to an immediate, un-trappable process exit
+        #   defaults to an immediate, un-trappable process exit. Must be a real,
+        #   resolvable call: +Process.exit!+ is used (not a bare +exit!+, which
+        #   resolves against this module and raises +NoMethodError+, silently
+        #   defeating the force-exit guarantee).
         # @return [Boolean] true when a watchdog thread was started
-        def arm(timeout: configured_timeout, on_expire: -> { exit!(1) })
+        def arm(timeout: configured_timeout, on_expire: -> { Process.exit!(1) })
           return false if timeout.to_f <= 0
 
           @mutex.synchronize do
@@ -77,10 +80,22 @@ module Lich
             # @thread == Thread.current ensures only the currently armed
             # watchdog can expire, so a superseded thread never forces an exit.
             @thread = Thread.new do
+              # Anchor the deadline to the monotonic clock and re-wait on every
+              # wakeup. ConditionVariable#wait can return early on a spurious
+              # wakeup, and disarm/broadcast also wakes it; only a wakeup at or
+              # after the genuine deadline counts as expiry. Without this loop a
+              # spurious wakeup while still armed would force an exit before the
+              # configured timeout.
+              deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout.to_f
               expired = @mutex.synchronize do
-                current = -> { @armed && @thread == Thread.current }
-                @condition.wait(@mutex, timeout) if current.call
-                current.call
+                loop do
+                  break false unless @armed && @thread == Thread.current
+
+                  remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  break true if remaining <= 0
+
+                  @condition.wait(@mutex, remaining)
+                end
               end
               if expired
                 dump_diagnostics(timeout)

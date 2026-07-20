@@ -65,14 +65,16 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
 
-  run_orderly_user_shutdown = proc {
+  run_orderly_user_shutdown = proc { |source: :primary_frontend|
     # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
     # their before_dying hooks inline (any of which can hang) before the main
     # teardown/watchdog below is reached, so arm here as well. arm is
-    # idempotent, so the later arm during teardown is a no-op.
+    # idempotent, so the later arm during teardown is a no-op. Both the primary
+    # and detachable frontend exit paths route through here so neither can run
+    # the hang-prone inline drain without the watchdog armed.
     Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
     Lich::Common::OrderlyShutdown.request_user_exit(
-      source: :primary_frontend,
+      source: source,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
     )
   }
@@ -856,10 +858,11 @@ reconnect_if_wanted = proc {
               end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-                Lich::Common::OrderlyShutdown.request_user_exit(
-                  source: :detachable_frontend,
-                  active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
-                )
+                # Route through the guarded proc so the watchdog is armed before
+                # the inline before_dying drain, exactly as the primary frontend
+                # path does. A bare request_user_exit here would run the same
+                # hang-prone drain unprotected.
+                run_orderly_user_shutdown.call(source: :detachable_frontend)
                 break
               end
               begin
