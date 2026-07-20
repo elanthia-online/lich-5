@@ -30,7 +30,18 @@ module Lich
       DEFAULT_TIMEOUT_SECONDS = 60
 
       # Name of the +lich_settings+ row that overrides {DEFAULT_TIMEOUT_SECONDS}.
-      # A value of +0+ (or negative) disables the watchdog.
+      #
+      # Operator reference:
+      # * The value is a whole number of seconds.
+      # * A positive value sets the force-exit deadline.
+      # * An explicit +0+ or negative value disables the watchdog.
+      # * A missing or non-numeric value falls back to {DEFAULT_TIMEOUT_SECONDS};
+      #   a malformed value is logged and never silently disables the watchdog.
+      #
+      # @example Set the deadline to 90 seconds from an in-game console
+      #   ;e Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) VALUES('shutdown_watchdog_timeout','90')")
+      # @example Disable the watchdog
+      #   ;e Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) VALUES('shutdown_watchdog_timeout','0')")
       #
       # @return [String]
       SETTING_NAME = 'shutdown_watchdog_timeout'
@@ -99,15 +110,27 @@ module Lich
           @mutex.synchronize { @armed }
         end
 
-        # Resolves the configured deadline from +lich_settings+, falling back to
-        # {DEFAULT_TIMEOUT_SECONDS} when unset or unreadable.
+        # Resolves the configured deadline from +lich_settings+.
+        #
+        # Falls back to {DEFAULT_TIMEOUT_SECONDS} when the setting is unset,
+        # unreadable, or non-numeric. A malformed value is logged and treated as
+        # the default rather than being coerced to +0+, so a typo cannot silently
+        # disable the watchdog; only an explicit numeric value of +0+ or less
+        # disables it.
         #
         # @return [Integer]
         def configured_timeout
           return DEFAULT_TIMEOUT_SECONDS unless defined?(Lich) && Lich.respond_to?(:db) && Lich.db
 
-          value = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='#{SETTING_NAME}';")
-          value.nil? ? DEFAULT_TIMEOUT_SECONDS : value.to_i
+          raw = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='#{SETTING_NAME}';")
+          return DEFAULT_TIMEOUT_SECONDS if raw.nil?
+
+          parsed = Integer(raw.to_s.strip, exception: false)
+          if parsed.nil?
+            log_line("invalid #{SETTING_NAME}=#{raw.inspect}; falling back to #{DEFAULT_TIMEOUT_SECONDS}s")
+            return DEFAULT_TIMEOUT_SECONDS
+          end
+          parsed
         rescue StandardError
           DEFAULT_TIMEOUT_SECONDS
         end

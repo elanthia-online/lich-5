@@ -136,7 +136,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(read_discovery[:port]).to eq(56_000)
     end
 
-    it 'returns false and clears @server when the bind fails' do
+    it 'rolls back the lock and clears @server when the bind fails, so a successor can take over' do
       dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
       allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new)
@@ -145,6 +145,26 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.ensure_service!).to be(false)
       expect(described_class.instance_variable_get(:@server)).to be_nil
       expect(File.exist?(discovery_file)).to be(false)
+      # Regression: a failed bind must release the ownership lock so a peer
+      # (or this process on a later tick) can win it -- not strand it.
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+    end
+
+    it 'rolls back the server and lock when discovery publication fails' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      doomed = server_double(auth_token: 'started-token', port: 45_000, start: true)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
+      # Simulate a discovery write failure (e.g. File.rename over an existing
+      # file failing on Windows) after the server has already started.
+      allow(described_class).to receive(:write_discovery).and_raise(Errno::EACCES, 'rename failed')
+
+      expect(described_class.ensure_service!).to be(false)
+      expect(doomed).to have_received(:stop)
+      expect(described_class.instance_variable_get(:@server)).to be_nil
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
     end
   end
 

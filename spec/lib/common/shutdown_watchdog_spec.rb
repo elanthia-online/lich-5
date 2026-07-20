@@ -97,5 +97,24 @@ RSpec.describe Lich::Common::ShutdownWatchdog do
       hide_const('Lich')
       expect(described_class.configured_timeout).to eq(described_class::DEFAULT_TIMEOUT_SECONDS)
     end
+
+    it 'falls back to the default (never silently disables) on a malformed value' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: 'abc'))
+      allow(Lich).to receive(:log)
+
+      expect(described_class.configured_timeout).to eq(described_class::DEFAULT_TIMEOUT_SECONDS)
+    end
+
+    it 'honors an explicit positive override' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: '90'))
+
+      expect(described_class.configured_timeout).to eq(90)
+    end
+
+    it 'treats an explicit non-positive value as an intentional disable' do
+      allow(Lich).to receive(:db).and_return(double(get_first_value: '0'))
+
+      expect(described_class.configured_timeout).to eq(0)
+    end
   end
 end

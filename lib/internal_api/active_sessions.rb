@@ -352,12 +352,27 @@ module Lich
           registry: @registry,
           auth_token: SecureRandom.hex(32)
         )
+
+        # Once the lock is held, any failure before discovery is published must
+        # roll the lock (and a started server) back. Otherwise this process
+        # holds the ownership lock without a reachable, discoverable service --
+        # locking every peer out while being unable to serve itself.
         unless @server.start
           @server = nil
+          release_ownership_lock
           return false
         end
 
-        write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token, port: @server.port)
+        begin
+          write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token, port: @server.port)
+        rescue StandardError => e
+          Lich.log("warning: ActiveSessions discovery publish failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          @server.stop
+          @server = nil
+          release_ownership_lock
+          return false
+        end
+
         true
       end
       private_class_method :claim_ownership_and_start!
