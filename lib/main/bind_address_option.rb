@@ -10,7 +10,7 @@ module Lich
     #
     # Resolution happens once at startup, so every listener Lich opens (the
     # frontend socket, the +--game+ proxy, and a detachable client that
-    # inherits the bind address) binds the same concrete address — and a
+    # inherits the bind address) binds the same concrete address -- and a
     # keyword failure (say, Tailscale not running) is reported before any
     # socket work begins.
     #
@@ -19,7 +19,7 @@ module Lich
       # The outcome of applying the option: +host+ is the concrete address to
       # store back (nil when no --bind-address was given), +warning+ is
       # advisory text to surface once, +error+ is fatal text (unresolvable
-      # keyword) — the caller decides how to exit.
+      # keyword) -- the caller decides how to exit.
       Result = Struct.new(:host, :warning, :error, keyword_init: true)
 
       # Resolves the raw --bind-address token.

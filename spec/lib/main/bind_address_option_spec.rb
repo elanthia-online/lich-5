@@ -5,11 +5,13 @@ require 'rspec'
 require_relative '../../../lib/main/bind_address_option'
 
 RSpec.describe Lich::Main::BindAddressOption do
-  Resolution = Lich::Common::BindHostResolver::Resolution
+  def resolution(host:, warning: nil)
+    Lich::Common::BindHostResolver::Resolution.new(host: host, warning: warning)
+  end
 
   def resolver_returning(host:, warning: nil)
     resolver = double('BindHostResolver')
-    allow(resolver).to receive(:resolve).and_return(Resolution.new(host: host, warning: warning))
+    allow(resolver).to receive(:resolve).and_return(resolution(host: host, warning: warning))
     resolver
   end
 

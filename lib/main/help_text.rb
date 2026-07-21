@@ -222,7 +222,7 @@ module Lich
             --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1.
-            HOST — in --bind-address, --headless, and --detachable-client alike — may
+            HOST -- in --bind-address, --headless, and --detachable-client alike -- may
             be an IP, a hostname, a keyword, or (with a port) a bracketed IPv6 literal
             such as [::1]:PORT. Keywords: tailscale (this machine's Tailscale address),
             lan (its private LAN address), or any (0.0.0.0). Lich's listen sockets are

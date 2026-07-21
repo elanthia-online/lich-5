@@ -168,7 +168,7 @@ module Lich
         # --bind-address shares the keyword vocabulary of --detachable-client
         # hosts (tailscale/lan/any). Resolve it once, up front, so the
         # frontend listener, the --game proxy, and a detachable client that
-        # inherits it all bind the same concrete address — and so the
+        # inherits it all bind the same concrete address -- and so the
         # exposure warning appears exactly once.
         def self.handle_bind_address(argv_options)
           result = BindAddressOption.apply(argv_options[:bind_address])

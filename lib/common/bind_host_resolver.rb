@@ -11,7 +11,7 @@ module Lich
     # warning when they look reachable from untrusted networks.
     #
     # This is the single bind-token vocabulary for every listener Lich
-    # opens — the frontend socket, the +--game+ proxy, and the detachable
+    # opens -- the frontend socket, the +--game+ proxy, and the detachable
     # client all route their +--bind-address+ / host tokens through here.
     # Each of those is an unauthenticated plaintext socket that can drive
     # the game session, so every resolution away from loopback carries a
