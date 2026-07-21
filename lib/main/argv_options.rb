@@ -9,6 +9,7 @@
 require File.join(LIB_DIR, 'util', 'opts.rb')
 require File.join(LIB_DIR, 'common', 'cli', 'cli_orchestration.rb')
 require File.join(LIB_DIR, 'common', 'bind_host_resolver.rb')
+require File.join(LIB_DIR, 'main', 'bind_address_option.rb')
 require File.join(LIB_DIR, 'main', 'arg_normalization.rb')
 require File.join(LIB_DIR, 'main', 'detachable_client_target.rb')
 require File.join(LIB_DIR, 'main', 'help_text.rb')
@@ -154,13 +155,35 @@ module Lich
         end
       end
 
-      # Apply side effects: dark mode, hosts-dir, detachable-client
+      # Apply side effects: dark mode, hosts-dir, bind-address, detachable-client
       module SideEffects
         def self.execute(argv_options)
           handle_hosts_dir(argv_options)
+          handle_bind_address(argv_options)
           handle_detachable_client(argv_options)
           handle_sal_launch(argv_options)
           argv_options
+        end
+
+        # --bind-address shares the keyword vocabulary of --detachable-client
+        # hosts (tailscale/lan/any). Resolve it once, up front, so the
+        # frontend listener, the --game proxy, and a detachable client that
+        # inherits it all bind the same concrete address — and so the
+        # exposure warning appears exactly once.
+        def self.handle_bind_address(argv_options)
+          result = BindAddressOption.apply(argv_options[:bind_address])
+          if result.error
+            $stdout.puts "error: #{result.error}"
+            Lich.log "error: #{result.error}"
+            exit 1
+          end
+          return unless result.host
+
+          argv_options[:bind_address] = result.host
+          return unless result.warning
+
+          $stdout.puts "warning: #{result.warning}"
+          Lich.log "warning: #{result.warning}"
         end
 
         def self.handle_hosts_dir(argv_options)
@@ -194,14 +217,10 @@ module Lich
                 $stdout.puts "warning: #{resolution.warning}"
                 Lich.log "warning: #{resolution.warning}"
               end
-            else
-              # Port-only form inherits --bind-address; warn just like an explicit host would.
-              warning = Lich::Common::BindHostResolver.warning_for_explicit(argv_options[:detachable_client_host])
-              if warning
-                $stdout.puts "warning: #{warning}"
-                Lich.log "warning: #{warning}"
-              end
             end
+            # (The port-only form inherits --bind-address, which
+            # handle_bind_address already resolved and warned about; the
+            # loopback default warrants no warning.)
             argv_options[:detachable_client_port] = target.port
           rescue DetachableClientTarget::ParseError, Lich::Common::BindHostResolver::Error => e
             $stdout.puts "error: #{e.message}"
