@@ -369,6 +369,8 @@ module Lich
 
     # Base Game class with common functionality
     class Game
+      class ServerQueueOverflow < StandardError; end
+
       # Seconds to wait for readable game socket data before one read timeout.
       READ_TIMEOUT_SECONDS = 100
 
@@ -377,6 +379,10 @@ module Lich
 
       # Sentinel returned when the game socket has no readable data before timeout.
       READ_TIMEOUT = Object.new.freeze
+
+      # A full queue means the parser cannot preserve the game stream. Dropping
+      # records or blocking the socket reader would both make recovery unsafe.
+      SERVER_QUEUE_CAPACITY = 4_096
 
       class << self
         attr_reader :thread, :reader_thread, :server_queue, :buffer, :_buffer, :game_instance
@@ -399,7 +405,7 @@ module Lich
           @last_recv = nil
           @thread = nil
           @reader_thread = nil
-          @server_queue = Queue.new
+          @server_queue = SizedQueue.new(SERVER_QUEUE_CAPACITY)
           reset_server_queue_stats!
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
@@ -651,7 +657,7 @@ module Lich
         end
 
         def start_main_thread
-          @server_queue = Queue.new
+          @server_queue = SizedQueue.new(SERVER_QUEUE_CAPACITY)
           reset_server_queue_stats!
           start_socket_reader_thread
           start_server_processor_thread
@@ -664,6 +670,13 @@ module Lich
           @server_queue_max_depth = depth if depth > @server_queue_max_depth.to_i
           @server_queue_last_enqueue_at = Time.now
           nil
+        end
+
+        def enqueue_server_string(server_string, enqueued_monotonic_at)
+          @server_queue.push([server_string, enqueued_monotonic_at], true)
+          record_server_queue_enqueue
+        rescue ThreadError
+          raise ServerQueueOverflow, "game parser queue exceeded #{SERVER_QUEUE_CAPACITY} records"
         end
 
         def record_server_reader_timing(hook_time:, enqueue_time:, process_time:)
@@ -747,8 +760,7 @@ module Lich
                   ) if defined?(Lich::Common::SocketReadHook)
                   hook_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                   enqueue_started = hook_finished
-                  @server_queue << [server_string, enqueue_started]
-                  record_server_queue_enqueue
+                  enqueue_server_string(server_string, enqueue_started)
                   enqueue_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                   record_server_reader_timing(
                     hook_time: hook_finished - hook_started,
@@ -801,7 +813,7 @@ module Lich
                 shutdown_log.info("server thread exiting due to #{reason}")
               end
             ensure
-              @server_queue << nil if @server_queue
+              @server_queue << nil if @server_queue && @thread&.alive?
             end
           end
           @reader_thread.name = 'game socket reader' if @reader_thread.respond_to?(:name=)
@@ -810,19 +822,21 @@ module Lich
 
         def start_server_processor_thread
           @thread = Thread.new do
-            loop do
-              item = @server_queue.pop
-              break if item.nil?
+            begin
+              loop do
+                item = @server_queue.pop
+                break if item.nil?
 
-              begin
                 server_string, enqueued_monotonic_at = unwrap_server_queue_item(item)
                 record_server_queue_dequeue(enqueued_monotonic_at)
                 parse_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                 process_server_string(server_string)
                 record_server_parser_timing(Process.clock_gettime(Process::CLOCK_MONOTONIC) - parse_started)
-              rescue StandardError => e
-                log_error("Error processing server string", e)
               end
+            rescue StandardError => e
+              log_error("Error processing server string", e)
+              record_shutdown_reason(:unrecoverable_game_thread_error, source: :game_parser, detail: e.class)
+              @socket.close rescue nil
             end
           end
           @thread.name = 'game parser' if @thread.respond_to?(:name=)
@@ -1111,7 +1125,7 @@ module Lich
             shutdown_log.info("server_thread: #{connection_disruption_log_message(error)}")
             shutdown_log.debug("server_thread backtrace: #{error.backtrace.join("\n\t")}") if error.backtrace
           else
-            shutdown_log.error("server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}")
+            shutdown_log.error("server_thread: #{error}\n\t#{Array(error.backtrace).join("\n\t")}")
           end
           sleep 0.2
 
@@ -1127,6 +1141,9 @@ module Lich
             return false
           when GameStreamDesyncError
             shutdown_log.info("game stream desync detected - will not retry")
+            return false
+          when ServerQueueOverflow
+            shutdown_log.info("game parser queue overflow - will not retry")
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
@@ -1155,6 +1172,8 @@ module Lich
             :connection_aborted
           when GameStreamDesyncError
             :game_stream_desync
+          when ServerQueueOverflow
+            :unrecoverable_game_thread_error
           else
             :unrecoverable_game_thread_error
           end

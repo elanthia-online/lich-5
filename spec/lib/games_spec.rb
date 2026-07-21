@@ -140,6 +140,49 @@ RSpec.describe Lich::GameBase do
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
       expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
+
+    describe 'bounded parser queue' do
+      before do
+        Lich::Common::ShutdownCoordinator.reset!
+        described_class.instance_variable_set(:@server_queue, SizedQueue.new(1))
+      end
+
+      after do
+        described_class.thread&.kill
+        described_class.instance_variable_set(:@socket, nil)
+        described_class.initialize_buffers
+        Lich::Common::ShutdownCoordinator.reset!
+      end
+
+      it 'raises instead of blocking or dropping input when full' do
+        described_class.enqueue_server_string('first', 1.0)
+
+        expect { described_class.enqueue_server_string('second', 2.0) }
+          .to raise_error(Lich::GameBase::Game::ServerQueueOverflow)
+      end
+
+      it 'maps queue overflow to an unrecoverable shutdown' do
+        error = Lich::GameBase::Game::ServerQueueOverflow.new('full')
+
+        expect(described_class.handle_thread_error(error)).to be false
+        expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:unrecoverable_game_thread_error)
+      end
+
+      it 'stops the session after an unexpected parser exception' do
+        socket = instance_double(TCPSocket, close: nil)
+        described_class.instance_variable_set(:@socket, socket)
+        allow(described_class).to receive(:process_server_string).and_raise(RuntimeError, 'broken parser state')
+
+        described_class.start_server_processor_thread
+        described_class.server_queue << ['bad input', Process.clock_gettime(Process::CLOCK_MONOTONIC)]
+        described_class.thread.join(1)
+
+        expect(described_class.thread).not_to be_alive
+        expect(socket).to have_received(:close)
+        expect(Lich::Common::ShutdownCoordinator.reason).to eq(:unrecoverable_game_thread_error)
+        expect(Lich::Common::ShutdownCoordinator.current.source).to eq('game_parser')
+      end
+    end
   end
 end
 
