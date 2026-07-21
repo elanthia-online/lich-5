@@ -38,8 +38,7 @@ default; changing `max_size` requires a positive integer.
 
 Socket-read hooks execute inline, in registration order, before a game line is
 enqueued for parsing. They must not block or mutate the supplied frozen input. A
-hook is removed after an exception or after an invocation exceeds the 50 ms
-execution budget.
+hook is removed if it raises an exception.
 
 The game reader and parser communicate through a bounded queue. Queue overflow or
 an unexpected parser exception ends the session because dropping or continuing

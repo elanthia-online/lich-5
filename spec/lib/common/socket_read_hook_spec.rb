@@ -48,13 +48,4 @@ RSpec.describe Lich::Common::SocketReadHook do
     expect(calls).to eq([:healthy])
     expect(Lich).to have_received(:log).with(/SocketReadHook broken: RuntimeError/)
   end
-
-  it 'removes a hook after it exceeds the inline execution budget' do
-    described_class.add('slow') { sleep(described_class::EXECUTION_BUDGET_SECONDS + 0.02) }
-
-    described_class.run('line')
-
-    expect(described_class.list).not_to include('slow')
-    expect(Lich).to have_received(:log).with(/SocketReadHook slow disabled: execution exceeded/)
-  end
 end

@@ -8,8 +8,6 @@ module Lich
     class SocketReadHook
       Event = Struct.new(:server_string, :received_at, :monotonic_received_at, keyword_init: true)
 
-      EXECUTION_BUDGET_SECONDS = 0.05
-
       @@hooks ||= {}
       @@hook_sources ||= {}
       @@mutex ||= Mutex.new
@@ -68,18 +66,7 @@ module Lich
         ).freeze
 
         entries.each do |name, action|
-          started_at = monotonic_now
           invoke(action, raw, event)
-          elapsed = monotonic_now - started_at
-          next unless elapsed > EXECUTION_BUDGET_SECONDS
-
-          remove(name)
-          Lich.log format(
-            'SocketReadHook %s disabled: execution exceeded %.3fs budget (%.3fs)',
-            name,
-            EXECUTION_BUDGET_SECONDS,
-            elapsed
-          )
         rescue StandardError => e
           remove(name)
           Lich.log "SocketReadHook #{name}: #{e.class}: #{e.message}\n\t#{e.backtrace&.first}"
