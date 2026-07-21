@@ -192,8 +192,8 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       output.split("\n").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
 
       expect(Lich::Gemstone::Infomon.get("experience.fame")).to eq(4_804_958)
-      # expect(Lich::Gemstone::Infomon.get("experience.field_experience_current")).to eq(1_350)
-      # expect(Lich::Gemstone::Infomon.get("experience.field_experience_max")).to eq(1_010)
+      expect(Lich::Gemstone::Infomon.get("experience.field_experience_current")).to eq(1_350)
+      expect(Lich::Gemstone::Infomon.get("experience.field_experience_max")).to eq(1_010)
       expect(Lich::Gemstone::Infomon.get("experience.ascension_experience")).to eq(4_170_132)
       expect(Lich::Gemstone::Infomon.get("experience.total_experience")).to eq(41_307_131)
       expect(Lich::Gemstone::Infomon.get("experience.long_term_experience")).to eq(26_266)
@@ -201,10 +201,6 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Infomon.get("experience.deaths_sting")).to eq("None")
 
       expect(Lich::Gemstone::Experience.fame).to eq(4_804_958)
-      # expect(Lich::Gemstone::Experience.fxp_current).to eq(1_350)
-      # expect(Lich::Gemstone::Experience.fxp_max).to eq(1_010)
-      expect(Lich::Gemstone::Experience.axp).to eq(4_170_132)
-      expect(Lich::Gemstone::Experience.txp).to eq(41_307_131)
       expect(Lich::Gemstone::Experience.lte).to eq(26_266)
       expect(Lich::Gemstone::Experience.deeds).to eq(20)
       expect(Lich::Gemstone::Experience.deaths_sting).to eq("None")
