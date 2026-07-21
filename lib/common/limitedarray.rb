@@ -5,7 +5,11 @@ module Lich
   module Common
     # Bounded script buffer with condition-variable-backed blocking reads.
     class LimitedArray < Array
-      attr_accessor :max_size
+      SYNCHRONIZED_ARRAY_MUTATORS = %i[
+        collect! compact! delete delete_at delete_if filter! keep_if map! pop
+        reject! reverse! rotate! select! shuffle! slice! sort! sort_by! uniq!
+      ].freeze
+      ENUMERATOR_MUTATORS = %i[collect! delete_if filter! keep_if map! reject! select! sort_by!].freeze
 
       RAW_PUSH    = Array.instance_method(:push)
       RAW_UNSHIFT = Array.instance_method(:unshift)
@@ -21,16 +25,34 @@ module Lich
       def initialize(size = 0, obj = nil)
         @max_size = 200
         super
+        trim_front_locked
       end
 
-      def push(line)
+      def max_size
+        synchronize { @max_size }
+      end
+
+      def max_size=(value)
+        unless value.is_a?(Integer) && value.positive?
+          raise ArgumentError, 'max_size must be a positive Integer'
+        end
+
         synchronize do
-          RAW_SHIFT.bind_call(self) while RAW_LENGTH.bind_call(self) >= @max_size
-          result = RAW_PUSH.bind_call(self, line)
-          condition.broadcast
+          @max_size = value
+          trim_front_locked
+        end
+      end
+
+      def push(*lines)
+        synchronize do
+          result = RAW_PUSH.bind_call(self, *lines)
+          trim_front_locked
+          condition.broadcast unless lines.empty?
           result
         end
       end
+      alias_method :<<, :push
+      alias_method :append, :push
 
       def unshift(*lines)
         synchronize do
@@ -39,6 +61,31 @@ module Lich
           condition.broadcast unless lines.empty?
           result
         end
+      end
+      alias_method :prepend, :unshift
+
+      def concat(other)
+        bounded_mutation(:concat, other)
+      end
+
+      def replace(other)
+        bounded_mutation(:replace, other)
+      end
+
+      def insert(index, *objects)
+        bounded_mutation(:insert, index, *objects)
+      end
+
+      def []=(*args)
+        bounded_mutation(:[]=, *args)
+      end
+
+      def fill(*args, &block)
+        bounded_mutation(:fill, *args, &block)
+      end
+
+      def flatten!(*args)
+        bounded_mutation(:flatten!, *args)
       end
 
       def shove(line)
@@ -95,6 +142,16 @@ module Lich
         end
       end
 
+      SYNCHRONIZED_ARRAY_MUTATORS.each do |method_name|
+        define_method(method_name) do |*args, &block|
+          return enum_for(method_name, *args) if block.nil? && ENUMERATOR_MUTATORS.include?(method_name)
+
+          synchronize do
+            Array.instance_method(method_name).bind_call(self, *args, &block)
+          end
+        end
+      end
+
       private
 
       def initialize_synchronization
@@ -118,6 +175,19 @@ module Lich
 
       def synchronize(&block)
         mutex.synchronize(&block)
+      end
+
+      def bounded_mutation(method_name, *args, &block)
+        synchronize do
+          result = Array.instance_method(method_name).bind_call(self, *args, &block)
+          trim_front_locked
+          condition.broadcast unless RAW_EMPTY.bind_call(self)
+          result
+        end
+      end
+
+      def trim_front_locked
+        RAW_SHIFT.bind_call(self) while RAW_LENGTH.bind_call(self) > @max_size
       end
 
       def monotonic_time

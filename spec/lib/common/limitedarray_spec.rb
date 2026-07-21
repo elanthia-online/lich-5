@@ -13,6 +13,56 @@ RSpec.describe Lich::Common::LimitedArray do
     expect(buffer).to eq([1, 2, 3])
   end
 
+  it 'rejects non-positive and non-integer bounds' do
+    expect { buffer.max_size = 0 }.to raise_error(ArgumentError, /positive Integer/)
+    expect { buffer.max_size = -1 }.to raise_error(ArgumentError, /positive Integer/)
+    expect { buffer.max_size = '3' }.to raise_error(ArgumentError, /positive Integer/)
+  end
+
+  it 'trims existing entries when max_size decreases' do
+    4.times { |value| buffer.push(value) }
+
+    buffer.max_size = 2
+
+    expect(buffer).to eq([2, 3])
+  end
+
+  it 'enforces the bound through append-style inherited APIs' do
+    buffer.max_size = 3
+
+    buffer << 0
+    buffer.append(1)
+    buffer.concat([2, 3])
+
+    expect(buffer).to eq([1, 2, 3])
+  end
+
+  it 'enforces the bound through arbitrary replacement APIs' do
+    buffer.max_size = 3
+    buffer.replace([0, 1, 2])
+    buffer.insert(3, 3)
+    buffer[3, 0] = [4]
+
+    expect(buffer).to eq([2, 3, 4])
+  end
+
+  it 'enforces the bound when flattening expands nested entries' do
+    buffer.max_size = 3
+    buffer.replace([[0, 1], 2, 3])
+
+    buffer.flatten!
+
+    expect(buffer).to eq([1, 2, 3])
+  end
+
+  it 'overrides every mutator defined directly by Array' do
+    array_mutators = Array.instance_methods(false).select do |method_name|
+      method_name.to_s.end_with?('!') || %i[<< []= append clear concat delete delete_at delete_if fill insert keep_if pop prepend push replace shift unshift].include?(method_name)
+    end
+
+    expect(array_mutators).to all(satisfy { |method_name| described_class.instance_method(method_name).owner == described_class })
+  end
+
   it 'preserves a restored front item when unshift exceeds max_size' do
     buffer.max_size = 3
     buffer.push('one')

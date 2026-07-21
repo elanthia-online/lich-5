@@ -586,8 +586,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
   put_dir = proc {
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     waitrt?
@@ -629,14 +628,12 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return false
     elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
@@ -679,8 +676,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't drag/
       if tried_fix_drag
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
         tried_fix_drag = true
@@ -701,8 +697,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /(?:appears|seems) to be closed\.$|^You cannot quite manage to squeeze between the stone doors\.$/
       if tried_open
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       else
         tried_open = true
@@ -771,22 +766,19 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     end
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     if Time.now.to_i >= giveup_time
       echo "move: no recognized response in #{giveup_seconds} seconds.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
     if line_count >= giveup_lines
       echo "move: no recognized response after #{line_count} lines.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
   }
