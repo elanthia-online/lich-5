@@ -397,6 +397,22 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       eventually { expect(writes.last(2)).to eq(['<popStream id="room"/>', 'main output']) }
     end
 
+    it 'waits for a known main-stream boundary after attaching midstream' do
+      writes = []
+      detachable = described_class.new(delegate, role: :detachable)
+      allow(delegate).to receive(:write) { |data| writes << data }
+      allow(delegate).to receive(:puts) { |data| writes << data }
+
+      detachable.puts_main_stream('attached output')
+      sleep 0.02
+      expect(writes).to be_empty
+
+      detachable.write('<popStream id="room"/>')
+      eventually { expect(writes).to eq(['<popStream id="room"/>', 'attached output']) }
+    ensure
+      detachable&.close rescue nil
+    end
+
     it 'retains puts_if as a compatibility alias' do
       allow(delegate).to receive(:puts).with('legacy')
 

@@ -36,6 +36,7 @@ module Lich
       WRITER_INIT_MUTEX = Mutex.new
       DEFAULT_WRITE_QUEUE_CAPACITY = 2_048
       ROLES = %i[primary detachable].freeze
+      ATTACHMENT_STREAM_SENTINEL = Object.new.freeze
 
       # @param delegate [#puts, #write, #gets, #close] the underlying socket
       # @param role [Symbol] whether failure should end the session or only the
@@ -142,7 +143,7 @@ module Lich
         WRITER_INIT_MUTEX.synchronize do
           @write_queue = SizedQueue.new(@write_queue_capacity) unless @write_queue.is_a?(SizedQueue)
           @stream_mutex ||= Mutex.new
-          @stream_stack ||= []
+          @stream_stack ||= (@role == :detachable ? [ATTACHMENT_STREAM_SENTINEL] : [])
           @deferred_main_stream ||= []
         end
       end

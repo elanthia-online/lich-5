@@ -2331,7 +2331,7 @@ def detachable_client_send_init(client)
     init_str.concat "<dir value='#{short_dirs[direction]}'/>" if short_dirs.key?(direction)
   end
   init_str.concat '</compass>'
-  client.puts(init_str)
+  client.puts_main_stream(init_str)
 rescue StandardError => e
   Lich.log "error: detachable_client_send_init: #{e}\n\t#{e.backtrace.first}"
 end
