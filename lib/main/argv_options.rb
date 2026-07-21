@@ -165,6 +165,18 @@ module Lich
           argv_options
         end
 
+        # Surface a message on both channels every bind handler uses.
+        def self.announce(level, message)
+          $stdout.puts "#{level}: #{message}"
+          Lich.log "#{level}: #{message}"
+        end
+
+        # Fatal argv problem: tell the user everywhere, then stop.
+        def self.die(message)
+          announce('error', message)
+          exit 1
+        end
+
         # --bind-address shares the keyword vocabulary of --detachable-client
         # hosts (tailscale/lan/any). Resolve it once, up front, so the
         # frontend listener, the --game proxy, and a detachable client that
@@ -172,18 +184,11 @@ module Lich
         # exposure warning appears exactly once.
         def self.handle_bind_address(argv_options)
           result = BindAddressOption.apply(argv_options[:bind_address])
-          if result.error
-            $stdout.puts "error: #{result.error}"
-            Lich.log "error: #{result.error}"
-            exit 1
-          end
+          die(result.error) if result.error
           return unless result.host
 
           argv_options[:bind_address] = result.host
-          return unless result.warning
-
-          $stdout.puts "warning: #{result.warning}"
-          Lich.log "warning: #{result.warning}"
+          announce('warning', result.warning) if result.warning
         end
 
         def self.handle_hosts_dir(argv_options)
@@ -213,19 +218,14 @@ module Lich
             if target.host
               resolution = Lich::Common::BindHostResolver.resolve(target.host)
               argv_options[:detachable_client_host] = resolution.host
-              if resolution.warning
-                $stdout.puts "warning: #{resolution.warning}"
-                Lich.log "warning: #{resolution.warning}"
-              end
+              announce('warning', resolution.warning) if resolution.warning
             end
             # (The port-only form inherits --bind-address, which
             # handle_bind_address already resolved and warned about; the
             # loopback default warrants no warning.)
             argv_options[:detachable_client_port] = target.port
           rescue DetachableClientTarget::ParseError, Lich::Common::BindHostResolver::Error => e
-            $stdout.puts "error: #{e.message}"
-            Lich.log "error: #{e.message}"
-            exit 1
+            die(e.message)
           end
         end
 
