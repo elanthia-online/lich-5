@@ -753,7 +753,7 @@ reconnect_if_wanted = proc {
             end
 
             accepted_socket, = server.accept
-            client = SynchronizedSocket.new(accepted_socket)
+            client = SynchronizedSocket.new(accepted_socket, role: :detachable)
             client.sync = true
             detachable_client_register(client)
             Lich.log "info: detachable client connected (#{detachable_client_count} attached)"

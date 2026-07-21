@@ -42,6 +42,11 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     it 'starts alive with an open delegate' do
       expect(socket.alive?).to be true
     end
+
+    it 'rejects invalid roles and queue capacities' do
+      expect { described_class.new(delegate, role: :unknown) }.to raise_error(ArgumentError, /role/)
+      expect { described_class.new(delegate, write_queue_capacity: 0) }.to raise_error(ArgumentError, /capacity/)
+    end
   end
 
   # ===========================================================================
@@ -129,6 +134,18 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       eventually { expect(Lich::Common::ShutdownCoordinator.reason).to eq(:client_disconnect) }
       expect(Lich::Common::ShutdownCoordinator.current.source).to eq('client_socket_write')
       expect(Lich::Common::ShutdownCoordinator).to be_client_socket_write_failed
+    end
+
+    it 'isolates a detachable-client write failure from process shutdown' do
+      detachable = described_class.new(delegate, role: :detachable)
+      allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
+
+      detachable.puts('data')
+
+      eventually { expect(detachable.alive?).to be false }
+      expect(Lich::Common::ShutdownCoordinator.current).to be_nil
+    ensure
+      detachable&.close rescue nil
     end
 
     it 'preserves an existing user-exit reason while recording the write failure' do
@@ -343,12 +360,12 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
-  # puts_if -- conditional write resilience
+  # puts_main_stream -- main-stream write resilience
   # ===========================================================================
-  describe '#puts_if' do
+  describe '#puts_main_stream' do
     it 'accepts and writes output when no frontend stream is open' do
       allow(delegate).to receive(:puts).with('data')
-      expect(socket.puts_if('data') { true }).to be true
+      expect(socket.puts_main_stream('data')).to be true
       eventually { expect(delegate).to have_received(:puts).with('data') }
     end
 
@@ -358,10 +375,33 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       allow(delegate).to receive(:puts) { |data| writes << data }
 
       socket.write('<pushStream id="room">room text')
-      expect(socket.puts_if('script output') { false }).to be true
+      expect(socket.puts_main_stream('script output')).to be true
       socket.write('</pushStream><popStream id="room"/>')
 
       eventually { expect(writes).to eq(['<pushStream id="room">room text', '</pushStream><popStream id="room"/>', 'script output']) }
+    end
+
+    it 'waits until nested streams have all closed' do
+      writes = []
+      allow(delegate).to receive(:write) { |data| writes << data }
+      allow(delegate).to receive(:puts) { |data| writes << data }
+
+      socket.write('<pushStream id="room">')
+      socket.write('<pushStream id="inventory">')
+      socket.puts_main_stream('main output')
+      socket.write('<popStream id="inventory"/>')
+
+      eventually { expect(writes).to eq(['<pushStream id="room">', '<pushStream id="inventory">', '<popStream id="inventory"/>']) }
+
+      socket.write('<popStream id="room"/>')
+      eventually { expect(writes.last(2)).to eq(['<popStream id="room"/>', 'main output']) }
+    end
+
+    it 'retains puts_if as a compatibility alias' do
+      allow(delegate).to receive(:puts).with('legacy')
+
+      expect(socket.puts_if('legacy') { raise 'ignored' }).to be true
+      eventually { expect(delegate).to have_received(:puts).with('legacy') }
     end
 
     it 'preserves FIFO order across mixed puts and writes' do
@@ -380,11 +420,11 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       before { allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET) }
 
       it 'accepts the asynchronous write without raising' do
-        expect(socket.puts_if('test') { true }).to be true
+        expect(socket.puts_main_stream('test')).to be true
       end
 
       it 'marks the socket as dead and closes the delegate' do
-        socket.puts_if('test') { true }
+        socket.puts_main_stream('test')
         eventually { expect(socket.alive?).to be false }
         expect(delegate).to have_received(:close)
       end
@@ -393,16 +433,58 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     context 'when already dead' do
       before do
         allow(delegate).to receive(:puts).and_raise(Errno::ECONNRESET)
-        socket.puts_if('die') { true }
+        socket.puts_main_stream('die')
         eventually { expect(socket.alive?).to be false }
       end
 
-      it 'returns false without evaluating the block' do
-        block_called = false
-        result = socket.puts_if('nope') { block_called = true }
-        expect(result).to be false
-        expect(block_called).to be false
+      it 'returns false' do
+        expect(socket.puts_main_stream('nope')).to be false
       end
+    end
+  end
+
+  describe 'bounded writer queue' do
+    it 'disconnects a slow detachable client without requesting process shutdown' do
+      write_started = Queue.new
+      release_write = Queue.new
+      bounded = described_class.new(delegate, role: :detachable, write_queue_capacity: 1)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+
+      bounded.write('blocked')
+      write_started.pop
+      bounded.write('queued')
+      bounded.write('overflow')
+
+      expect(bounded.alive?).to be false
+      expect(Lich::Common::ShutdownCoordinator.current).to be_nil
+      expect(delegate).to have_received(:close).once
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
+    end
+
+    it 'requests shutdown when the primary client queue overflows' do
+      write_started = Queue.new
+      release_write = Queue.new
+      bounded = described_class.new(delegate, write_queue_capacity: 1)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+
+      bounded.write('blocked')
+      write_started.pop
+      bounded.write('queued')
+      bounded.write('overflow')
+
+      expect(bounded.alive?).to be false
+      expect(Lich::Common::ShutdownCoordinator.reason).to eq(:client_disconnect)
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
     end
   end
 
@@ -512,7 +594,7 @@ RSpec.describe Lich::Common::SynchronizedSocket do
 
       100.times { socket.puts('error handler retry') }
       100.times { socket.write('error handler retry') }
-      100.times { socket.puts_if('error handler retry') { true } }
+      100.times { socket.puts_main_stream('error handler retry') }
 
       expect(socket.alive?).to be false
       expect(Lich).to have_received(:log).with(/client socket write failed/).once
@@ -540,9 +622,9 @@ RSpec.describe Lich::Common::SynchronizedSocket do
           expect(delegate).to have_received(:close)
         end
 
-        it "absorbs on puts_if, closes delegate, marks dead" do
+        it "absorbs on puts_main_stream, closes delegate, marks dead" do
           allow(delegate).to receive(:puts).and_raise(error_class.new('test'))
-          expect { socket.puts_if('x') { true } }.not_to raise_error
+          expect { socket.puts_main_stream('x') }.not_to raise_error
           eventually { expect(socket.alive?).to be false }
           expect(delegate).to have_received(:close)
         end

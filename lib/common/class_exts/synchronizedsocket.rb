@@ -18,10 +18,12 @@ module Lich
     # can detect the closed socket through normal +IOError+ propagation.
     #
     # Frontend writes are queued through one socket-local writer thread so a
-    # slow frontend cannot block the game parser. Conditional script output is
-    # deferred while a frontend stream is open and released after the matching
-    # popStream or prompt has entered the queue.
+    # slow frontend cannot block the game parser. Main-stream output is deferred
+    # while a frontend stream is open and released after the matching popStream
+    # or prompt has entered the queue.
     class SynchronizedSocket
+      class WriteQueueOverflow < StandardError; end
+
       # Errors that indicate a permanently broken write path.
       FATAL_WRITE_ERRORS = [
         Errno::ECONNRESET,
@@ -32,12 +34,25 @@ module Lich
       ].freeze
 
       WRITER_INIT_MUTEX = Mutex.new
+      DEFAULT_WRITE_QUEUE_CAPACITY = 2_048
+      ROLES = %i[primary detachable].freeze
 
       # @param delegate [#puts, #write, #gets, #close] the underlying socket
-      def initialize(delegate)
+      # @param role [Symbol] whether failure should end the session or only the
+      #   detachable connection
+      # @param write_queue_capacity [Integer] maximum pending writes
+      def initialize(delegate, role: :primary, write_queue_capacity: DEFAULT_WRITE_QUEUE_CAPACITY)
+        raise ArgumentError, "unknown socket role: #{role.inspect}" unless ROLES.include?(role)
+        unless write_queue_capacity.is_a?(Integer) && write_queue_capacity.positive?
+          raise ArgumentError, 'write_queue_capacity must be a positive Integer'
+        end
+
         @delegate = delegate
         @mutex = Mutex.new
+        @state_mutex = Mutex.new
         @alive = true
+        @role = role
+        @write_queue_capacity = write_queue_capacity
       end
 
       # Whether the socket is usable for I/O.
@@ -58,10 +73,10 @@ module Lich
         enqueue_write(:puts, args, block)
       end
 
-      # Queue a conditional write between frontend streams.
+      # Queue output for the next main-stream opportunity.
       #
       # @return [Boolean] +true+ if accepted, +false+ if the socket is dead
-      def puts_if(*args)
+      def puts_main_stream(*args)
         return false unless @alive
 
         ensure_writer!
@@ -70,13 +85,23 @@ module Lich
         @stream_mutex.synchronize do
           return false unless alive?
 
-          @deferred_puts_if << queued_args
-          flush_deferred_locked
+          if stream_open?
+            ensure_pending_capacity!
+            @deferred_main_stream << queued_args
+          else
+            queue_puts_locked(queued_args)
+          end
         end
         true
       rescue StandardError => e
-        log_writer_error('puts_if', e)
+        handle_enqueue_error('puts_main_stream', e)
         false
+      end
+
+      # Compatibility alias for scripts using the historical name. Blocks were
+      # never part of the asynchronous contract and are intentionally ignored.
+      def puts_if(*args)
+        puts_main_stream(*args)
       end
 
       # Queue a raw write for the writer thread.
@@ -90,7 +115,9 @@ module Lich
       def close(*args, &block)
         @alive = false
         @delegate.close(*args, &block) unless @delegate.closed?
-        @write_queue << [:stop, [], nil] if @write_queue.is_a?(Queue)
+        @write_queue.push([:stop, [], nil], true) if @write_queue.is_a?(Queue)
+      rescue ThreadError
+        nil
       end
 
       # Delegates all non-write methods to the underlying socket.
@@ -109,15 +136,14 @@ module Lich
       private
 
       def ensure_writer_state
-        return if @write_queue.is_a?(Queue) && @stream_mutex &&
-                  @deferred_puts_if.is_a?(Array) &&
-                  instance_variable_defined?(:@current_stream)
+        return if @write_queue.is_a?(SizedQueue) && @stream_mutex &&
+                  @deferred_main_stream.is_a?(Array) && @stream_stack.is_a?(Array)
 
         WRITER_INIT_MUTEX.synchronize do
-          @write_queue = Queue.new unless @write_queue.is_a?(Queue)
+          @write_queue = SizedQueue.new(@write_queue_capacity) unless @write_queue.is_a?(SizedQueue)
           @stream_mutex ||= Mutex.new
-          @current_stream = nil unless instance_variable_defined?(:@current_stream)
-          @deferred_puts_if ||= []
+          @stream_stack ||= []
+          @deferred_main_stream ||= []
         end
       end
 
@@ -170,9 +196,12 @@ module Lich
 
         @stream_mutex.synchronize do
           queued_args.each { |arg| note_stream_xml!(arg) }
-          @write_queue << [kind, queued_args, block]
+          enqueue_item_locked([kind, queued_args, block])
           flush_deferred_locked
         end
+        nil
+      rescue StandardError => e
+        handle_enqueue_error(kind, e)
         nil
       end
 
@@ -182,35 +211,65 @@ module Lich
 
       def queue_puts_locked(queued_args)
         queued_args.each { |arg| note_stream_xml!(arg) }
-        @write_queue << [:puts, queued_args, nil]
+        enqueue_item_locked([:puts, queued_args, nil])
       end
 
       def flush_deferred_locked
         return false if stream_open?
 
         flushed = false
-        while (queued_args = @deferred_puts_if.shift)
+        while (queued_args = @deferred_main_stream.shift)
           queue_puts_locked(queued_args)
           flushed = true
           break if stream_open?
         end
         flushed
+      rescue WriteQueueOverflow
+        raise
       rescue StandardError => e
-        log_writer_error('deferred puts_if', e)
+        log_writer_error('deferred main-stream output', e)
         false
       end
 
       def stream_open?
-        !@current_stream.nil?
+        !@stream_stack.empty?
       end
 
       def note_stream_xml!(payload)
         payload.to_s.scan(/<[^>]+>/) do |tag|
           if tag.match?(/\A<pushStream\b/i)
-            @current_stream = tag[/\bid=(["'])(.*?)\1/, 2] || true
-          elsif tag.match?(/\A<(?:popStream|prompt)\b/i)
-            @current_stream = nil
+            @stream_stack << (tag[/\bid=(["'])(.*?)\1/, 2] || true)
+          elsif tag.match?(/\A<popStream\b/i)
+            stream_id = tag[/\bid=(["'])(.*?)\1/, 2]
+            if stream_id && (index = @stream_stack.rindex(stream_id))
+              @stream_stack.delete_at(index)
+            else
+              @stream_stack.pop
+            end
+          elsif tag.match?(/\A<prompt\b/i)
+            @stream_stack.clear
           end
+        end
+      end
+
+      def ensure_pending_capacity!
+        return if @write_queue.length + @deferred_main_stream.length < @write_queue_capacity
+
+        raise WriteQueueOverflow, "pending frontend writes exceeded #{@write_queue_capacity}"
+      end
+
+      def enqueue_item_locked(item)
+        ensure_pending_capacity!
+        @write_queue.push(item, true)
+      rescue ThreadError
+        raise WriteQueueOverflow, "pending frontend writes exceeded #{@write_queue_capacity}"
+      end
+
+      def handle_enqueue_error(operation, error)
+        if error.is_a?(WriteQueueOverflow)
+          handle_write_failure(error)
+        else
+          log_writer_error(operation, error)
         end
       end
 
@@ -231,12 +290,19 @@ module Lich
       # @param error [Exception] the fatal write error that triggered death
       # @return [void]
       def handle_write_failure(error)
-        @alive = false
+        transitioned = @state_mutex.synchronize do
+          next false unless @alive
+
+          @alive = false
+          true
+        end
+        return unless transitioned
+
         @delegate.close rescue nil
-        if defined?(Lich::Common::ShutdownCoordinator) && Lich::Common::ShutdownCoordinator.respond_to?(:record_client_socket_write_failure)
+        if @role == :primary && defined?(Lich::Common::ShutdownCoordinator) && Lich::Common::ShutdownCoordinator.respond_to?(:record_client_socket_write_failure)
           Lich::Common::ShutdownCoordinator.record_client_socket_write_failure(error: error)
         end
-        message = "client socket write failed: #{error.class} - #{error.message}"
+        message = "client socket write failed: #{error.class} - #{error.message} (role=#{@role})"
         if defined?(Lich::Common::ShutdownLog) && Lich::Common::ShutdownLog.respond_to?(:error)
           Lich::Common::ShutdownLog.error(message)
         else
