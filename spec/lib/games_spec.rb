@@ -1105,8 +1105,8 @@ RSpec.describe Lich::GameBase::Game do
     context 'when using detachable clients' do
       let(:raw_socket) { double('raw_detachable_socket', closed?: false) }
       let(:second_raw_socket) { double('second_raw_detachable_socket', closed?: false) }
-      let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket) }
-      let(:second_detachable) { Lich::Common::SynchronizedSocket.new(second_raw_socket) }
+      let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket, role: :detachable) }
+      let(:second_detachable) { Lich::Common::SynchronizedSocket.new(second_raw_socket, role: :detachable) }
 
       before do
         allow(raw_socket).to receive(:close)
@@ -1115,6 +1115,7 @@ RSpec.describe Lich::GameBase::Game do
         $_DETACHABLE_CLIENT_REGISTRY_.register(mock_detachable)
         $_DETACHABLE_CLIENT_REGISTRY_.register(second_detachable)
         $_DETACHABLE_CLIENT_ = nil
+        Lich::Common::ShutdownCoordinator.reset!
       end
 
       after do
@@ -1122,6 +1123,7 @@ RSpec.describe Lich::GameBase::Game do
         second_detachable.close rescue nil
         $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
+        Lich::Common::ShutdownCoordinator.reset!
       end
 
       it 'fans output out to every detachable client' do
@@ -1139,6 +1141,7 @@ RSpec.describe Lich::GameBase::Game do
         eventually { expect(mock_detachable.alive?).to be false }
         expect(raw_socket).to have_received(:close)
         eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
+        expect(Lich::Common::ShutdownCoordinator.current).to be_nil
       end
     end
 

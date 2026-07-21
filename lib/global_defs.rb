@@ -2240,7 +2240,6 @@ end
 $_DETACHABLE_CLIENT_REGISTRY_ ||= Lich::Common::DetachableClientRegistry.new
 $_DETACHABLE_CLIENTS_ ||= []
 $_DETACHABLE_CLIENT_ ||= nil
-$_DETACHABLE_CLIENT_INPUT_MUTEX_ ||= Mutex.new
 
 def sync_detachable_client_globals
   $_DETACHABLE_CLIENTS_ = $_DETACHABLE_CLIENT_REGISTRY_.snapshot
@@ -2283,18 +2282,6 @@ def detachable_client_unregister(client)
   sync_detachable_client_globals
   detachable_listener_connected(false) if removed && became_empty
   removed
-end
-
-def detachable_clients_write(string)
-  detachable_clients_snapshot.each do |client|
-    unless client.alive?
-      detachable_client_unregister(client)
-      next
-    end
-
-    client.write(string)
-    detachable_client_unregister(client) unless client.alive?
-  end
 end
 
 def detachable_clients_respond(string)
@@ -2371,7 +2358,6 @@ end
 
 def handle_detachable_client(client)
   unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
-    Frontend.client = 'profanity'
     Thread.new { detachable_client_send_init(client) }
   end
   Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
@@ -2396,10 +2382,7 @@ def handle_detachable_client(client)
     end
 
     begin
-      $_DETACHABLE_CLIENT_INPUT_MUTEX_.synchronize do
-        $_IDLETIMESTAMP_ = Time.now
-        do_client(client_string)
-      end
+      dispatch_client_input(client_string)
     rescue StandardError => e
       respond "--- Lich: error: client_thread: #{e}"
       respond e.backtrace.first
@@ -2414,6 +2397,13 @@ ensure
   client.close rescue nil
   detachable_client_unregister(client)
   Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
+end
+
+def dispatch_client_input(client_string)
+  Lich::Common::ClientInputDispatcher.dispatch(client_string) do |serialized_string|
+    $_IDLETIMESTAMP_ = Time.now
+    do_client(serialized_string)
+  end
 end
 
 def do_client(client_string)

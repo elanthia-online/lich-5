@@ -235,7 +235,13 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
+      Frontend.client = if ARGV.any? { |a| a =~ /^--saga$/i }
+                          'saga'
+                        elsif @argv_options[:detachable_client_port] && !ARGV.any? { |a| a =~ /^--genie$/i }
+                          'profanity'
+                        else
+                          'unknown'
+                        end
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -686,8 +692,7 @@ reconnect_if_wanted = proc {
           end
           # Lich.log(client_string)
           begin
-            $_IDLETIMESTAMP_ = Time.now
-            do_client(client_string)
+            dispatch_client_input(client_string)
           rescue
             respond "--- Lich: error: client_thread: #{$!}"
             respond $!.backtrace.first
