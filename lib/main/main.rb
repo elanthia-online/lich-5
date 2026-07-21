@@ -64,19 +64,16 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_log.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
+  require File.join(LIB_DIR, 'main', 'user_exit_dispatch.rb')
 
+  # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
+  # kills scripts and runs their before_dying hooks inline (any of which can
+  # hang) before the main teardown/watchdog below is reached. arm is idempotent,
+  # so the later arm during teardown is a no-op. Both the primary and detachable
+  # frontend exit paths route through Lich::Main::UserExitDispatch so neither can
+  # run the hang-prone inline drain without the watchdog armed.
   run_orderly_user_shutdown = proc { |source: :primary_frontend|
-    # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
-    # their before_dying hooks inline (any of which can hang) before the main
-    # teardown/watchdog below is reached, so arm here as well. arm is
-    # idempotent, so the later arm during teardown is a no-op. Both the primary
-    # and detachable frontend exit paths route through here so neither can run
-    # the hang-prone inline drain without the watchdog armed.
-    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
-    Lich::Common::OrderlyShutdown.request_user_exit(
-      source: source,
-      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
-    )
+    Lich::Main::UserExitDispatch.run_orderly_user_shutdown(source: source)
   }
 
   run_best_effort_shutdown_cleanup = proc {
@@ -856,15 +853,15 @@ reconnect_if_wanted = proc {
                 Frontend.set_from_client($1.to_i) if defined?(Frontend)
                 next # swallow the control line; don't pass it to do_client
               end
-              client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
-              if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-                # Route through the guarded proc so the watchdog is armed before
-                # the inline before_dying drain, exactly as the primary frontend
-                # path does. A bare request_user_exit here would run the same
-                # hang-prone drain unprotected.
-                run_orderly_user_shutdown.call(source: :detachable_frontend)
+              # Route through the extracted dispatch so the watchdog is armed
+              # before the inline before_dying drain, exactly as the primary
+              # frontend path does. It applies the same $cmd_prefix prefixing
+              # before matching; a bare request_user_exit here would run the same
+              # hang-prone drain unprotected.
+              if Lich::Main::UserExitDispatch.dispatch_detachable_client(client_string, cmd_prefix: $cmd_prefix)
                 break
               end
+              client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
               begin
                 $_IDLETIMESTAMP_ = Time.now
                 do_client(client_string)
