@@ -36,6 +36,7 @@ require 'rspec'
 require 'date'
 require 'tmpdir'
 require 'ostruct'
+require 'fileutils'
 
 # =============================================================================
 # Path Constants
@@ -92,8 +93,8 @@ RSpec.configure do |config|
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
 
       # Staged registry refresh buffers (present once lib/common/gameobj.rb is
-      # loaded). nil when idle; reset to nil so a refresh left open by one
-      # example never leaks into the next.
+      # loaded). nil when idle; reset so a refresh left open by one example
+      # never leaks into the next.
       %i[@@staging_inv @@staging_reserve @@staging_loot @@staging_npcs
          @@staging_npc_status @@staging_pcs @@staging_pc_status @@staging_room_desc
          @@staging_fam_room_desc @@staging_fam_loot @@staging_fam_npcs
@@ -226,6 +227,7 @@ RSpec.shared_context 'DRParser stubs' do
     allow(drstats_class).to receive(:tdps=)
     allow(drstats_class).to receive(:favors=)
     allow(drstats_class).to receive(:balance=)
+    allow(drstats_class).to receive(:position=)
     allow(drstats_class).to receive(:strength=)
     allow(drstats_class).to receive(:agility=)
     allow(drstats_class).to receive(:discipline=)
@@ -284,6 +286,203 @@ RSpec.shared_context 'DRParser stubs' do
   end
 end
 
+RSpec.shared_context 'mock GTK hardening environment' do
+  before(:context) do
+    @tmpdir = Dir.mktmpdir(tmpdir_prefix)
+    @saved_consts = {}
+    @saved_gtk_hardening_consts = {}
+
+    %i[Gtk GLib GdkPixbuf LICH_DIR].each do |name|
+      next unless Object.const_defined?(name)
+
+      @saved_consts[name] = Object.const_get(name)
+      Object.send(:remove_const, name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      next unless Lich::Common.const_defined?(name, false)
+
+      @saved_gtk_hardening_consts[name] = Lich::Common.const_get(name, false)
+      Lich::Common.send(:remove_const, name)
+    end
+
+    glib_mod = Module.new
+    base_instantiatable = Module.new do
+      def signal_connect(signal, *_args, &block)
+        if signal.to_s != 'destroy' && @signal_connect_failures_remaining.to_i.positive?
+          @signal_connect_failures_remaining -= 1
+          raise 'signal registration failed'
+        end
+
+        if signal.to_s == 'destroy' && @destroy_connect_failures_remaining.to_i.positive?
+          @destroy_connect_failures_remaining -= 1
+          raise 'destroy hook failed'
+        end
+
+        @signals ||= Hash.new { |hash, key| hash[key] = [] }
+        @signals[signal.to_s] << block if block
+        @signals[signal.to_s].length
+      end
+
+      def fail_next_destroy_connection!
+        @destroy_connect_failures_remaining = @destroy_connect_failures_remaining.to_i + 1
+      end
+
+      def fail_next_signal_connection!
+        @signal_connect_failures_remaining = @signal_connect_failures_remaining.to_i + 1
+      end
+
+      def signal_blocks(signal)
+        @signals ||= {}
+        @signals[signal.to_s] || []
+      end
+
+      def emit(signal, *args)
+        @signals ||= {}
+        (@signals[signal.to_s] || []).map { |block| block.call(*args) }
+      end
+    end
+    instantiatable_mod = Module.new
+    instantiatable_mod.include(base_instantiatable)
+    glib_mod.const_set(:Instantiatable, instantiatable_mod)
+
+    timeout_mod = Module.new
+    timeout_mod.singleton_class.class_eval do
+      attr_accessor :blocks, :next_id
+
+      def add(*_args, &block)
+        self.blocks ||= {}
+        self.next_id ||= 0
+        self.next_id += 1
+        self.blocks[self.next_id] = block
+        self.next_id
+      end
+    end
+    glib_mod.const_set(:Timeout, timeout_mod)
+
+    idle_mod = Module.new
+    idle_mod.singleton_class.class_eval do
+      attr_accessor :blocks, :next_id
+
+      def add(*_args, &block)
+        self.blocks ||= {}
+        self.next_id ||= 0
+        self.next_id += 1
+        self.blocks[self.next_id] = block
+        self.next_id
+      end
+    end
+    glib_mod.const_set(:Idle, idle_mod)
+    Object.const_set(:GLib, glib_mod)
+
+    gtk_mod = Module.new
+    gtk_mod.singleton_class.class_eval do
+      attr_accessor :main_level, :main_calls, :main_quit_calls, :main_quit_failure
+
+      def main(*)
+        self.main_calls ||= 0
+        self.main_calls += 1
+        :main_called
+      end
+
+      def main_quit(*)
+        raise 'main_quit boom' if main_quit_failure
+
+        self.main_quit_calls ||= 0
+        self.main_quit_calls += 1
+        :main_quit_called
+      end
+    end
+
+    widget_class = Class.new do
+      include GLib::Instantiatable
+
+      def destroy
+        return self if destroyed?
+
+        @destroyed = true
+        emit('destroy')
+        self
+      end
+
+      def destroyed?
+        !!@destroyed
+      end
+    end
+    gtk_mod.const_set(:Widget, widget_class)
+    Object.const_set(:Gtk, gtk_mod)
+
+    pixbuf_mod = Module.new
+    pixbuf_class = Class.new do
+      def self.new(*)
+        Object.new
+      end
+    end
+    pixbuf_mod.const_set(:Pixbuf, pixbuf_class)
+    Object.const_set(:GdkPixbuf, pixbuf_mod)
+    Object.const_set(:LICH_DIR, @tmpdir)
+
+    @original_dir = Dir.pwd
+    Dir.chdir(@tmpdir)
+    load File.expand_path('../lib/common/gtk.rb', __dir__)
+  end
+
+  after(:context) do
+    Dir.chdir(@original_dir) if @original_dir
+
+    %i[Gtk GLib GdkPixbuf LICH_DIR].each do |name|
+      Object.send(:remove_const, name) if Object.const_defined?(name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      Lich::Common.send(:remove_const, name) if Lich::Common.const_defined?(name, false)
+    end
+
+    @saved_consts.each do |name, value|
+      Object.const_set(name, value)
+    end
+
+    @saved_gtk_hardening_consts.each do |name, value|
+      Lich::Common.const_set(name, value)
+    end
+
+    FileUtils.remove_entry(@tmpdir) if @tmpdir && File.exist?(@tmpdir)
+  end
+
+  before do
+    Gtk.main_level = 0
+    Gtk.main_calls = 0
+    Gtk.main_quit_calls = 0
+    Gtk.main_quit_failure = false if Gtk.respond_to?(:main_quit_failure=)
+    GLib::Timeout.blocks = {}
+    GLib::Timeout.next_id = 0
+    GLib::Idle.blocks = {}
+    GLib::Idle.next_id = 0
+    Lich::Common.with_gtk_registry_lock do
+      Lich::Common.gtk_signal_handlers.clear
+      Lich::Common.gtk_timeout_callbacks.clear
+      Lich::Common.gtk_idle_callbacks.clear
+    end
+    stub_const('Script', Class.new) unless defined?(Script)
+    allow(Script).to receive(:current).and_return(nil)
+    allow(Lich).to receive(:log)
+  end
+
+  def tmpdir_prefix
+    raise NotImplementedError, 'define tmpdir_prefix in the including spec'
+  end
+end
+
 # =============================================================================
 # Global Output Methods
 # =============================================================================
@@ -317,6 +516,7 @@ module XMLData
   @game = "rspec"
   @name = "testing"
   @server_time = Time.at(1234567890)
+  @current_target_ids = []
 
   @room_title = ''
   @room_description = ''
@@ -330,7 +530,7 @@ module XMLData
   class << self
     attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
-    attr_accessor :current_target_ids, :current_target_id
+    attr_accessor :current_target_ids
 
     def indicator
       { 'IconSTUNNED' => 'n', 'IconDEAD' => 'n', 'IconWEBBED' => false }
@@ -373,26 +573,11 @@ module XMLData
       @dr_active_spells_slivers = 0
       @dr_active_spells_stellar_percentage = 0
       @current_target_ids = []
-      @current_target_id = nil
       # Clear any dynamically added attributes (e.g., prepared_spell from arcana specs)
       @prepared_spell = nil if instance_variable_defined?(:@prepared_spell)
     end
   end
 end
-
-# =============================================================================
-# Creature Mock
-# =============================================================================
-# XMLParser registers bold room NPCs whose exist id is a current target via
-# Creature.register. The parser only needs this to be a no-op in tests.
-
-module Creature
-  class << self
-    def register(*_args)
-      nil
-    end
-  end
-end unless defined?(Creature)
 
 # =============================================================================
 # Script Mock
@@ -510,7 +695,7 @@ module Lich
 
   class << self
     # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
-    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
+    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
     attr_accessor :display_expgains
 
     def db
@@ -753,7 +938,27 @@ module DownstreamHook
   def self.run(data)
     data
   end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
 end unless defined?(DownstreamHook)
+
+# =============================================================================
+# UpstreamHook Mock
+# =============================================================================
+
+module UpstreamHook
+  def self.run(data)
+    data
+  end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
+end unless defined?(UpstreamHook)
 
 # =============================================================================
 # Char Mock
@@ -1470,6 +1675,14 @@ module Frontend
 
     def supports_gsl?
       false
+    end
+
+    def supports_mono?(_fe = nil)
+      false
+    end
+
+    def supports_room_window?(_fe = nil)
+      %w[wrayth stormfront saga].include?(client)
     end
 
     def client
