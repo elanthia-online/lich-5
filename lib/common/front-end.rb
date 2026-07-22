@@ -7,8 +7,10 @@ require 'fiddle'
 require 'fiddle/import'
 require 'open3'
 
-# Windows API modules for frontend PID detection and window focus
-# These need to be defined at the top level
+# Windows API modules for frontend PID detection and window focus.
+# Keep this narrower than Frontend.windows_platform?: these direct Fiddle
+# bindings are supported by native mingw/mswin Ruby, not every Windows-like
+# compatibility runtime recognized for executable discovery.
 if RUBY_PLATFORM =~ /mingw|mswin/
   unless defined?(::Win32Enum)
     module ::Win32Enum
@@ -159,6 +161,28 @@ module Lich
         end
       end
 
+      # Returns the canonical platform key used by frontend discovery and
+      # launch-plan metadata.
+      #
+      # @param platform [String] Ruby platform identifier
+      # @return [Symbol] :darwin, :windows, :linux, or :unsupported
+      def self.platform_key(platform = RUBY_PLATFORM)
+        value = platform.to_s
+        return :darwin if value.match?(/darwin/i)
+        return :windows if value.match?(/mingw|mswin|cygwin|win32/i)
+        return :linux if value.match?(/linux/i)
+
+        :unsupported
+      end
+
+      # Returns whether the supplied Ruby platform is native Windows.
+      #
+      # @param platform [String] Ruby platform identifier
+      # @return [Boolean]
+      def self.windows_platform?(platform = RUBY_PLATFORM)
+        platform_key(platform) == :windows
+      end
+
       # Returns the catalog display name, with a stable fallback for legacy
       # saved entries that predate the catalog.
       #
@@ -263,7 +287,7 @@ module Lich
                metadata: {
                  display_name: 'Saga',
                  gui_selectable: true,
-                 gui_platforms: %i[darwin windows],
+                 gui_platforms: %i[darwin windows linux],
                  launcher_adapter: :environment,
                  launcher_status: :temporary_pending_cli_login,
                  launch_notice: 'Temporary Saga launch bridge pending Saga CLI login support',
@@ -281,11 +305,18 @@ module Lich
                      command: :resolved_executable,
                      arguments: [],
                      environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                   },
+                   linux: {
+                     command: :resolved_executable,
+                     arguments: [],
+                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
                    }
                  },
                  discovery: {
                    executables: %w[Saga Saga.exe saga],
                    mac_bundle_ids: %w[com.auchand.saga],
+                   # Do not search PATH: `saga` also names the unrelated SAGA GIS
+                   # executable. Linux currently supports the packaged /opt layout.
                    path_lookup: false,
                    paths: {
                      windows: [
@@ -293,6 +324,9 @@ module Lich
                        '%LOCALAPPDATA%/Programs/saga/Saga.exe',
                        '%PROGRAMFILES%/Saga/Saga.exe',
                        '%PROGRAMFILES(X86)%/Saga/Saga.exe'
+                     ],
+                     linux: [
+                       '/opt/Saga/saga'
                      ]
                    }
                  }
@@ -426,7 +460,7 @@ module Lich
         Lich.log "Parent process PID: #{parent_pid}"
 
         # Let's see what process this actually is on Windows
-        if RUBY_PLATFORM =~ /mingw|mswin/
+        if windows_platform?
           begin
             require 'win32ole'
             wmi = WIN32OLE.connect('winmgmts://')
@@ -435,7 +469,7 @@ module Lich
             if row
               Lich.log "Parent process name: #{row.Name}"
             end
-          rescue => e
+          rescue StandardError, LoadError => e
             Lich.log "Could not get parent process name: #{e.message}"
           end
         end
@@ -514,12 +548,8 @@ module Lich
       # Detect the current platform
       # @return [Symbol] :windows, :macos, :linux, or :unsupported
       def self.detect_platform
-        case RUBY_PLATFORM
-        when /mingw|mswin/ then :windows
-        when /darwin/      then :macos
-        when /linux/       then :linux
-        else                    :unsupported
-        end
+        key = platform_key
+        key == :darwin ? :macos : key
       end
 
       # Resolve PID by walking up process tree to find window owner
@@ -706,11 +736,9 @@ module Lich
 
       # Ensure Windows modules are loaded (they're defined at top level)
       def self.ensure_windows_modules
-        # Check if modules exist - they should be defined at file load time
-        if RUBY_PLATFORM =~ /mingw|mswin/
-          return defined?(::Win32Enum) && defined?(::WinAPI)
-        end
-        false
+        return false unless windows_platform?
+
+        defined?(::Win32Enum) && defined?(::WinAPI)
       end
     end
   end

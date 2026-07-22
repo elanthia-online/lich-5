@@ -244,9 +244,7 @@ module Lich
         when /linux/, /darwin|mac os/
           `ps -o command= -p #{pid.to_i} 2>/dev/null`.to_s.strip
         when /mswin|mingw|cygwin/
-          script = "(Get-CimInstance Win32_Process -Filter \"ProcessId = #{pid.to_i}\").CommandLine"
-          output = `powershell.exe -WindowStyle Hidden -NoProfile -Command "#{script}" 2>NUL`.to_s.strip
-          output.empty? ? nil : output
+          windows_process_command_line(pid)
         else
           nil
         end
@@ -254,6 +252,26 @@ module Lich
         nil
       end
       private_class_method :process_command_line
+
+      # Queries WMI in-process so session reporting never opens cmd.exe or
+      # powershell.exe console windows.
+      #
+      # @param pid [Integer]
+      # @return [String, nil]
+      def self.windows_process_command_line(pid)
+        require 'win32ole'
+
+        wmi = WIN32OLE.connect('winmgmts://')
+        rows = wmi.ExecQuery("SELECT CommandLine FROM Win32_Process WHERE ProcessId = #{pid.to_i}")
+        row = rows.each.first
+        return nil unless row
+
+        command_line = row.CommandLine.to_s.strip
+        command_line.empty? ? nil : command_line
+      rescue LoadError
+        nil
+      end
+      private_class_method :windows_process_command_line
 
       # Opportunistically marks dead non-exited rows as cleanly exited so stale
       # false-active records do not linger in storage indefinitely.

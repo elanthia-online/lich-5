@@ -50,20 +50,32 @@ RSpec.describe Lich::Common::FrontendLauncher do
     expect(plan.environment['SAGA_LICH_KEY']).to eq('secret')
   end
 
-  it 'rejects Saga on a platform without a temporary adapter' do
-    expect {
-      described_class.spawn_plan(
-        'saga',
-        host: '127.0.0.1',
-        port: 12_345,
-        key: 'secret',
-        platform: 'x86_64-linux'
-      )
-    }
-      .to raise_error(
-        described_class::UnsupportedError,
-        'no linux launcher for saga'
-      )
+  it 'uses the resolved Saga executable for the temporary Linux handoff' do
+    resolution = Lich::Common::FrontendLocator::Resolution.new(
+      frontend_id: 'saga',
+      executable_path: '/opt/Saga/saga',
+      source: :conventional
+    )
+    allow(locator).to receive(:resolve).with('saga', refresh: false).and_return(resolution)
+
+    plan = described_class.spawn_plan(
+      'saga',
+      host: '127.0.0.1',
+      port: 12_345,
+      key: 'secret',
+      platform: 'x86_64-linux',
+      locator: locator,
+      refresh: false
+    )
+
+    expect(plan.argv).to eq(['/opt/Saga/saga'])
+    expect(locator).to have_received(:resolve).with('saga', refresh: false)
+    expect(plan.environment).to include(
+      'SAGA_LICH_MODE' => '1',
+      'SAGA_LICH_HOST' => '127.0.0.1',
+      'SAGA_LICH_PORT' => '12345',
+      'SAGA_LICH_KEY'  => 'secret'
+    )
   end
 
   it 'reports a missing Windows Saga executable' do

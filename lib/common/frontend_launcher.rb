@@ -64,10 +64,11 @@ module Lich
         # @param key [String] authenticated game connection key
         # @param platform [String] Ruby platform identifier
         # @param locator [FrontendLocator] injectable discovery API
+        # @param refresh [Boolean] refresh executable discovery before resolving
         # @return [SpawnPlan]
         # @raise [ArgumentError] for blank connection values
         # @raise [UnsupportedError] when no plan exists on the platform
-        def spawn_plan(frontend_id, host:, port:, key:, platform: RUBY_PLATFORM, locator: FrontendLocator)
+        def spawn_plan(frontend_id, host:, port:, key:, platform: RUBY_PLATFORM, locator: FrontendLocator, refresh: true)
           definition = Frontend.definition_for(frontend_id)
           unless definition.dig(:metadata, :launcher_adapter) == :environment
             raise UnsupportedError, "no environment launcher for #{definition[:id]}"
@@ -78,15 +79,16 @@ module Lich
             raise ArgumentError, "#{token.delete('%')} must not be empty" if value.to_s.empty?
           end
 
-          plan = definition.dig(:metadata, :launch_plans, platform_key(platform))
+          platform_key = Frontend.platform_key(platform)
+          plan = definition.dig(:metadata, :launch_plans, platform_key)
           unless plan
-            raise UnsupportedError, "no #{platform_key(platform)} launcher for #{definition[:id]}"
+            raise UnsupportedError, "no #{platform_key} launcher for #{definition[:id]}"
           end
 
           environment = plan.fetch(:environment).transform_values do |value|
             replacements.reduce(value.to_s) { |resolved, (token, replacement)| resolved.gsub(token, replacement.to_s) }
           end
-          command = resolve_plan_command(plan.fetch(:command), definition, locator)
+          command = resolve_plan_command(plan.fetch(:command), definition, locator, refresh: refresh)
           SpawnPlan.new(
             environment: environment,
             argv: [command, *plan.fetch(:arguments)]
@@ -95,10 +97,10 @@ module Lich
 
         private
 
-        def resolve_plan_command(command, definition, locator)
+        def resolve_plan_command(command, definition, locator, refresh:)
           return command unless command == :resolved_executable
 
-          resolution = locator.resolve(definition[:id], refresh: true)
+          resolution = locator.resolve(definition[:id], refresh: refresh)
           unless resolution
             raise UnavailableError, "#{Frontend.display_name(definition[:id])} was not found"
           end
@@ -107,8 +109,9 @@ module Lich
         end
 
         def avalon_command(definition, platform, locator)
-          unless platform_key(platform) == :darwin
-            raise UnsupportedError, "no #{platform_key(platform)} launcher for #{definition[:id]}"
+          platform_key = Frontend.platform_key(platform)
+          unless platform_key == :darwin
+            raise UnsupportedError, "no #{platform_key} launcher for #{definition[:id]}"
           end
 
           resolution = locator.resolve(definition[:id], refresh: true)
@@ -118,13 +121,6 @@ module Lich
           raise UnavailableError, 'Avalon executable is not inside an application bundle' unless bundle
 
           "/usr/bin/open -n -a #{Shellwords.escape(bundle)} \"%1\""
-        end
-
-        def platform_key(platform)
-          return :darwin if platform =~ /darwin/i
-          return :windows if platform =~ /mingw|mswin|cygwin|win32/i
-
-          :linux
         end
       end
     end

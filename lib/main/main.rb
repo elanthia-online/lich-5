@@ -2,6 +2,7 @@
 # this needs work to break up and improve 2024-06-13
 
 require 'shellwords'
+require_relative 'reconnect_command'
 
 reconnect_if_wanted = proc {
   explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
@@ -19,23 +20,22 @@ reconnect_if_wanted = proc {
     Lich.log "info: waiting #{reconnect_delay} seconds to reconnect..."
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
-    if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    if Lich::Common::Frontend.windows_platform?
       if Frontend.client.eql?('stormfront')
-        system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
+        system('taskkill', '/FI', "WINDOWTITLE eq [GSIV: #{Char.name}*") # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
-      args = ['start rubyw.exe']
-    else
-      args = ['ruby']
     end
-    args.push $PROGRAM_NAME.slice(/[^\\\/]+$/)
-    args.concat ARGV
-    args.push '--reconnected' unless args.include?('--reconnected')
-    if reconnect_step > 0
-      args.delete(reconnect_arg)
-      args.concat ["--reconnect-delay=#{reconnect_delay + reconnect_step}+#{reconnect_step}"]
-    end
-    Lich.log "exec args.join(' '): exec #{args.join(' ')}"
-    exec args.join(' ')
+    ruby_binary = Lich::Main::ReconnectCommand.ruby_executable
+    args = Lich::Main::ReconnectCommand.build(
+      argv: ARGV,
+      program: $PROGRAM_NAME,
+      ruby_executable: ruby_binary,
+      reconnect_arg: reconnect_arg,
+      reconnect_delay: reconnect_delay,
+      reconnect_step: reconnect_step
+    )
+    Lich.log "info: reconnect exec: #{args.join(' ')}"
+    exec(*args)
   end
 }
 
@@ -206,10 +206,10 @@ reconnect_if_wanted = proc {
     if (custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ })
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
-    elsif @launch_data.find { |opt| opt =~ /GAME=SAGA/i } && RUBY_PLATFORM =~ /darwin|mingw|mswin|cygwin|win32/i
+    elsif @launch_data.find { |opt| opt =~ /GAME=SAGA/i }
       native_saga_launch = true
       Lich.log "info: #{Lich::Common::Frontend.metadata_for('saga', :launch_notice)}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif Lich::Common::Frontend.windows_platform?
       Lich.log("info: Working against a Windows Platform for FE Executable")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
@@ -235,7 +235,7 @@ reconnect_if_wanted = proc {
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif Lich::Common::Frontend.windows_platform?
       Lich.log "info: Working against a Windows Platform for FE Location"
       if resolved_frontend
         custom_launch_dir = File.dirname(resolved_frontend.executable_path)
@@ -274,10 +274,6 @@ reconnect_if_wanted = proc {
           exit(1)
         end
       elsif game =~ /SAGA/i && native_saga_launch
-        unless Lich::Common::FrontendLocator.launchable?('saga', refresh: true)
-          raise Lich::Common::FrontendLauncher::UnavailableError,
-                'Saga is not available on this platform or was not found'
-        end
         unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
           $stdout.puts "error: launch_data contains no KEY info"
           Lich.log "error: launch_data contains no KEY info"
@@ -355,7 +351,8 @@ reconnect_if_wanted = proc {
             'saga',
             host: '127.0.0.1',
             port: localport,
-            key: game_key
+            key: game_key,
+            refresh: false
           )
         rescue Lich::Common::FrontendLauncher::Error => e
           listener.close
@@ -376,7 +373,7 @@ reconnect_if_wanted = proc {
         # to loopback for wildcard binds since a frontend cannot connect to 0.0.0.0/::.
         if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
           localhost = @argv_options[:bind_address]
-        elsif RUBY_PLATFORM =~ /darwin/i
+        elsif Lich::Common::Frontend.platform_key == :darwin
           localhost = "127.0.0.1"
         else
           localhost = "localhost"
@@ -388,7 +385,7 @@ reconnect_if_wanted = proc {
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
-        launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+        launcher_cmd = launcher_cmd.tr('/', "\\") if Lich::Common::Frontend.windows_platform?
       end
       accept_thread = Thread.new {
         accepted_socket, = listener.accept

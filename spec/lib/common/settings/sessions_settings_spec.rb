@@ -3,11 +3,10 @@
 require 'rspec'
 require 'ostruct'
 
-# Define DATA_DIR before loading settings.rb (it initializes settings adapters).
+# Define the default data directory used by the session adapter.
 DATA_DIR ||= File.expand_path('../../../../spec', __dir__)
 
 require_relative '../../../mock_database_adapter'
-require_relative '../../../../lib/common/settings'
 require_relative '../../../../lib/common/settings/sessions_settings'
 
 RSpec.describe Lich::Common::SessionsSettings do
@@ -38,6 +37,43 @@ RSpec.describe Lich::Common::SessionsSettings do
     it 'delegates to FeatureFlags for the session summary flag' do
       expect(described_class.enabled?).to be(true)
       expect(Lich::Common::FeatureFlags).to have_received(:enabled?).with(:session_summary_store_and_reporting)
+    end
+  end
+
+  describe '.process_command_line' do
+    before do
+      allow(RbConfig::CONFIG).to receive(:[]).and_call_original
+      allow(RbConfig::CONFIG).to receive(:[]).with('host_os').and_return('mingw32')
+    end
+
+    it 'queries Windows process command lines through in-process WMI' do
+      process = OpenStruct.new(CommandLine: 'rubyw.exe lich.rbw --login Tsetem')
+      wmi = instance_double('WMI', ExecQuery: [process])
+      stub_const('WIN32OLE', class_double('WIN32OLE', connect: wmi))
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+
+      expect(described_class.send(:process_command_line, 50_001))
+        .to eq('rubyw.exe lich.rbw --login Tsetem')
+      expect(WIN32OLE).to have_received(:connect).with('winmgmts://')
+      expect(wmi).to have_received(:ExecQuery).with(
+        'SELECT CommandLine FROM Win32_Process WHERE ProcessId = 50001'
+      )
+    end
+
+    it 'returns nil when WMI has no matching process or a blank command line' do
+      wmi = instance_double('WMI')
+      stub_const('WIN32OLE', class_double('WIN32OLE', connect: wmi))
+      allow(described_class).to receive(:require).with('win32ole').and_return(true)
+      allow(wmi).to receive(:ExecQuery).and_return([], [OpenStruct.new(CommandLine: '   ')])
+
+      expect(described_class.send(:process_command_line, 50_001)).to be_nil
+      expect(described_class.send(:process_command_line, 50_001)).to be_nil
+    end
+
+    it 'returns nil when win32ole is unavailable' do
+      allow(described_class).to receive(:require).with('win32ole').and_raise(LoadError, 'missing win32ole')
+
+      expect(described_class.send(:process_command_line, 50_001)).to be_nil
     end
   end
 
