@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
+require_relative 'frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'theme_utils'
 
@@ -162,7 +163,7 @@ module Lich
           liststore, @treeview, sw = create_character_list
 
           # Create frontend selection
-          frontend_box, _stormfront_option, wizard_option, avalon_option, suks_option = create_frontend_selection
+          frontend_box, frontend_selector = create_frontend_selection
 
           # Create custom launch options
           custom_launch_option = create_custom_launch_options
@@ -201,11 +202,11 @@ module Lich
 
           # Set up event handlers
           setup_custom_launch_handler(custom_launch_option)
-          setup_avalon_option_handler(avalon_option, custom_launch_option)
+          setup_native_launch_handler(frontend_selector, custom_launch_option)
           setup_connect_button_handler(connect_button, disconnect_button, user_id_entry, pass_entry, liststore)
           setup_treeview_handler(@treeview, play_button)
           setup_disconnect_button_handler(disconnect_button, play_button, connect_button, user_id_entry, pass_entry, liststore)
-          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
+          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
         end
 
@@ -283,22 +284,10 @@ module Lich
 
         # Creates frontend selection components
         #
-        # @return [Array] Array containing frontend_box and radio buttons
+        # @return [Array] Array containing frontend_box and shared selector
         def create_frontend_selection
-          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
-          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
-          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-          suks_option = Gtk::RadioButton.new(label: 'suks', member: stormfront_option)
-
-          frontend_box = Gtk::Box.new(:horizontal, 10)
-          frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
-          frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-          if RUBY_PLATFORM =~ /darwin/i
-            frontend_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
-          end
-          # frontend_box.pack_start(suks_option, false, false, 0)
-
-          [frontend_box, stormfront_option, wizard_option, avalon_option, suks_option]
+          selector = FrontendSelector.new
+          [selector.widget, selector]
         end
 
         # Creates custom launch options
@@ -349,20 +338,23 @@ module Lich
           }
         end
 
-        # Sets up avalon option toggle handler
+        # Disables Custom Launch for catalog entries with native-only launchers.
         #
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param frontend_selector [FrontendSelector]
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
-        def setup_avalon_option_handler(avalon_option, custom_launch_option)
-          avalon_option.signal_connect('toggled') {
-            if avalon_option.active?
+        def setup_native_launch_handler(frontend_selector, custom_launch_option)
+          update_custom_launch = lambda do |selector|
+            if selector.native_launch_only?
               custom_launch_option.active = false
               custom_launch_option.sensitive = false
             else
               custom_launch_option.sensitive = true
             end
-          }
+          end
+
+          frontend_selector.on_change { |selector| update_custom_launch.call(selector) }
+          update_custom_launch.call(frontend_selector)
         end
 
         # Sets up connect button click handler
@@ -465,12 +457,10 @@ module Lich
         # @param treeview [Gtk::TreeView] Tree view for character list
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
-        # @param wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
-        # @param suks_option [Gtk::RadioButton] Suks radio button
+        # @param frontend_selector [FrontendSelector] shared frontend selector
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
-        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
+        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           play_button.signal_connect('clicked') {
             play_button.sensitive = false
 
@@ -479,20 +469,24 @@ module Lich
             # Fixed assignment in condition
             selected_iter = selection.selected
             if selected_iter
-              # Determine frontend
-              if wizard_option.active?
-                frontend = 'wizard'
-              elsif avalon_option.active?
-                frontend = 'avalon'
-              elsif suks_option.active?
-                frontend = 'suks'
-              else
-                frontend = 'stormfront' # default frontend
+              frontend = frontend_selector.selected_id
+              unless frontend
+                @callbacks.on_error&.call('No supported frontend is available.')
+                play_button.sensitive = true
+                next
               end
 
               # Determine custom launch settings
-              custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
-              custom_launch_dir = custom_launch_option.active? ? @custom_launch_dir.child.text : nil
+              custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text.to_s.strip : nil
+              custom_launch = nil unless LoginTabUtils.custom_launch?(custom_launch)
+              custom_launch_dir = custom_launch ? @custom_launch_dir.child.text.to_s.strip : nil
+              custom_launch_dir = nil if custom_launch_dir == ''
+
+              if custom_launch.nil? && frontend_selector.resolve_selected(refresh: true).nil?
+                @callbacks.on_error&.call("#{Frontend.display_name(frontend)} is no longer available.")
+                play_button.sensitive = true
+                next
+              end
 
               # Normalize account name to UPCASE and character name to Title case
               normalized_account = user_id_entry.text.upcase

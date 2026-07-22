@@ -41,6 +41,29 @@ module Lich
       @pid_mutex = Mutex.new
       ORIGIN_SENTINEL = "\x1f"
 
+      def self.deep_copy(value)
+        case value
+        when Hash
+          value.each_with_object({}) { |(key, item), copy| copy[key] = deep_copy(item) }
+        when Array
+          value.map { |item| deep_copy(item) }
+        else
+          value.dup
+        end
+      end
+      private_class_method :deep_copy
+
+      def self.deep_freeze(value)
+        case value
+        when Hash
+          value.each { |key, item| deep_freeze(key); deep_freeze(item) }
+        when Array
+          value.each { |item| deep_freeze(item) }
+        end
+        value.freeze
+      end
+      private_class_method :deep_freeze
+
       # --- Frontend Registry -------------------------------------
       # Each registered frontend has:
       #   - capabilities: Set of symbols (e.g., :xml, :streams, :mono)
@@ -48,16 +71,33 @@ module Lich
       #
       # This registry-based approach allows adding new frontends via
       # configuration without modifying the controller code.
-      @registry = Hash.new { |h, k| h[k] = { capabilities: Set.new, metadata: {} } }
+      @registry = {}
+      @aliases = {}
+      @definitions = {}
 
       # Registers a frontend with its capabilities and metadata.
       # @param name [Symbol, String] The name of the frontend (e.g., :wrayth)
       # @param capabilities [Array<Symbol>] A list of capabilities (e.g., [:xml, :streams])
       # @param metadata [Hash] Additional data (e.g., { client_string: "..." })
       def self.register(name, capabilities: [], metadata: {})
-        entry = @registry[name.to_s.downcase]
+        key = name.to_s.downcase
+        raise ArgumentError, 'frontend name must not be empty' if key.empty?
+
+        entry = (@registry[key] ||= { capabilities: Set.new, metadata: {} })
         entry[:capabilities].merge(capabilities.map(&:to_sym))
-        entry[:metadata].merge!(metadata)
+        entry[:metadata].merge!(deep_copy(metadata))
+        Array(metadata[:aliases]).each { |alias_name| @aliases[alias_name.to_s.downcase] = key }
+        @definitions.delete(key)
+      end
+
+      # Returns the stable catalog identifier for a frontend or alias.
+      # Unknown values are normalized but are not registered.
+      #
+      # @param frontend_name [String, Symbol]
+      # @return [String]
+      def self.canonical_name(frontend_name)
+        key = frontend_name.to_s.downcase
+        @aliases.fetch(key, key)
       end
 
       # Checks if a frontend has a specific capability.
@@ -67,7 +107,8 @@ module Lich
       def self.has_capability?(frontend_name, capability)
         return false if frontend_name.nil?
 
-        @registry[frontend_name.to_s.downcase][:capabilities].include?(capability.to_sym)
+        entry = @registry[canonical_name(frontend_name)]
+        entry ? entry[:capabilities].include?(capability.to_sym) : false
       end
 
       # Retrieves a metadata value for a given frontend.
@@ -77,30 +118,93 @@ module Lich
       def self.metadata_for(frontend_name, key)
         return nil if frontend_name.nil?
 
-        @registry[frontend_name.to_s.downcase][:metadata][key]
+        entry = @registry[canonical_name(frontend_name)]
+        entry && entry[:metadata][key]
       end
 
-      # Returns all registered frontend names.
+      # Returns an immutable catalog definition for a registered frontend.
+      #
+      # Accepted inputs are a non-empty String or Symbol naming an existing
+      # registry entry. Invalid or unknown identifiers raise ArgumentError.
+      # This method performs no discovery and persists nothing.
+      #
+      # @param frontend_name [String, Symbol]
+      # @return [Hash]
+      # @raise [ArgumentError] if frontend_name is blank or unregistered
+      def self.definition_for(frontend_name)
+        key = canonical_name(frontend_name)
+        raise ArgumentError, 'frontend name must not be empty' if key.empty?
+        raise ArgumentError, "unknown frontend: #{frontend_name}" unless @registry.key?(key)
+
+        @definitions[key] ||= deep_freeze(
+          {
+            id: key,
+            capabilities: @registry.fetch(key)[:capabilities].to_a,
+            metadata: deep_copy(@registry.fetch(key)[:metadata])
+          }
+        )
+      end
+
+      # Returns immutable catalog definitions, optionally restricted to those
+      # intended for the graphical launcher.
+      #
+      # @param gui_selectable [Boolean, nil]
+      # @return [Array<Hash>]
+      def self.definitions(gui_selectable: nil)
+        definitions = @registry.keys.map { |name| definition_for(name) }
+        return definitions if gui_selectable.nil?
+
+        definitions.select do |definition|
+          definition.dig(:metadata, :gui_selectable) == gui_selectable
+        end
+      end
+
+      # Returns the catalog display name, with a stable fallback for legacy
+      # saved entries that predate the catalog.
+      #
+      # @param frontend_name [String, Symbol]
+      # @return [String]
+      def self.display_name(frontend_name)
+        definition_for(frontend_name).dig(:metadata, :display_name) || frontend_name.to_s.capitalize
+      rescue ArgumentError
+        frontend_name.to_s.capitalize
+      end
+
+      # Returns every recognized frontend name: canonical catalog identifiers
+      # followed by their accepted aliases.
       # @return [Array<String>]
       def self.registered_frontends
-        @registry.keys
+        @registry.keys + @aliases.keys
       end
 
       # Returns all frontends that have a specific capability.
       # @param capability [Symbol] The capability to filter by
       # @return [Array<String>]
       def self.frontends_with_capability(capability)
-        @registry.select { |_name, data| data[:capabilities].include?(capability.to_sym) }.keys
+        canonical = @registry.select { |_name, data| data[:capabilities].include?(capability.to_sym) }.keys
+        aliases = @aliases.filter_map do |alias_name, name|
+          alias_name if canonical.include?(name)
+        end
+        canonical + aliases
       end
 
       # --- Default Frontend Registrations ------------------------
-      # Ideally this would live in a separate config file loaded during init.
-
-      register(:wrayth,
-               capabilities: %i[xml streams mono room_window])
 
       register(:stormfront,
-               capabilities: %i[xml streams mono room_window])
+               capabilities: %i[xml streams mono room_window],
+               metadata: {
+                 display_name: 'Wrayth',
+                 aliases: %w[wrayth],
+                 gui_selectable: true,
+                 launcher_adapter: :simutronics,
+                 discovery: {
+                   executables: %w[Wrayth.exe StormFront.exe],
+                   registry_keys: [
+                     'SOFTWARE\\Simutronics\\STORM32',
+                     'SOFTWARE\\WOW6432Node\\Simutronics\\STORM32'
+                   ]
+                 }
+               })
 
       register(:profanity,
                capabilities: %i[xml streams])
@@ -111,14 +215,88 @@ module Lich
       register(:frostbite,
                capabilities: %i[xml])
 
+      # SUKS is handled inside the Lich process and requires no external
+      # executable, but remains hidden from the first-tier GUI selector.
+      register(:suks,
+               metadata: {
+                 launcher_adapter: :embedded
+               })
+
       register(:wizard,
-               capabilities: %i[gsl])
+               capabilities: %i[gsl],
+               metadata: {
+                 display_name: 'Wizard',
+                 gui_selectable: true,
+                 launcher_adapter: :simutronics,
+                 discovery: {
+                   executables: %w[Wizard.exe],
+                   registry_keys: [
+                     'SOFTWARE\\Simutronics\\WIZ32',
+                     'SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32'
+                   ]
+                 }
+               })
 
       register(:avalon,
-               capabilities: %i[gsl])
+               capabilities: %i[gsl],
+               metadata: {
+                 display_name: 'Avalon',
+                 gui_selectable: true,
+                 launcher_adapter: :avalon,
+                 native_launch_only: true,
+                 discovery: {
+                   executables: %w[Avalon avalon],
+                   mac_bundle_ids: %w[Avalon SimutronicsAvalon],
+                   path_lookup: false
+                 }
+               })
+
+      SAGA_TEMPORARY_LAUNCH_ENVIRONMENT = {
+        'SAGA_LICH_MODE' => '1',
+        'SAGA_LICH_HOST' => '%host%',
+        'SAGA_LICH_PORT' => '%port%',
+        'SAGA_LICH_KEY'  => '%key%'
+      }.freeze
 
       register(:saga,
-               capabilities: %i[xml streams mono room_window sentinel])
+               capabilities: %i[xml streams mono room_window sentinel],
+               metadata: {
+                 display_name: 'Saga',
+                 gui_selectable: true,
+                 gui_platforms: %i[darwin windows],
+                 launcher_adapter: :environment,
+                 launcher_status: :temporary_pending_cli_login,
+                 launch_notice: 'Temporary Saga launch bridge pending Saga CLI login support',
+                 native_launch_only: true,
+                 # Temporary cold-start bridges pending Saga's external CLI
+                 # login capability. Saga currently forwards only the mode flag
+                 # to an existing process, not this connection payload.
+                 launch_plans: {
+                   darwin: {
+                     command: '/usr/bin/open',
+                     arguments: %w[-n -b com.auchand.saga],
+                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                   },
+                   windows: {
+                     command: :resolved_executable,
+                     arguments: [],
+                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                   }
+                 },
+                 discovery: {
+                   executables: %w[Saga Saga.exe saga],
+                   mac_bundle_ids: %w[com.auchand.saga],
+                   path_lookup: false,
+                   paths: {
+                     windows: [
+                       '%LOCALAPPDATA%/Programs/Saga/Saga.exe',
+                       '%LOCALAPPDATA%/Programs/saga/Saga.exe',
+                       '%PROGRAMFILES%/Saga/Saga.exe',
+                       '%PROGRAMFILES(X86)%/Saga/Saga.exe'
+                     ]
+                   }
+                 }
+               })
 
       # --- Client String -----------------------------------------
       # Default client string (Wrayth identity) sent during handshake

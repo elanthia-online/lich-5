@@ -10,12 +10,16 @@ module Lich
         # Formats the authentication data for use with different frontends
         #
         # @param auth_data [Hash] Authentication data from the authenticate method
-        # @param frontend [String] Frontend type ('wizard', 'stormfront', 'avalon', 'suks')
+        # @param frontend [String] Frontend type ('wizard', 'stormfront', 'avalon', 'saga', 'suks')
         # @param custom_launch [String, nil] Custom launch command (optional)
         # @param custom_launch_dir [String, nil] Custom launch directory (optional)
         # @return [Array<String>] Launch data strings formatted for the selected frontend
         def self.prepare(auth_data, frontend, custom_launch = nil, custom_launch_dir = nil)
           launch_data = auth_data.map { |k, v| "#{k.upcase}=#{v}" }
+          custom_launch = custom_launch.to_s.strip
+          custom_launch = nil if custom_launch.empty?
+          custom_launch_dir = custom_launch_dir.to_s.strip if custom_launch
+          custom_launch_dir = nil if custom_launch_dir == ''
 
           # Modify launch data based on frontend
           case frontend.to_s.downcase
@@ -27,6 +31,8 @@ module Lich
             }
           when 'avalon'
             launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=AVALON') }
+          when 'saga'
+            launch_data.collect! { |line| line.sub(/GAME=.+/, 'GAME=SAGA') }
           when 'suks'
             launch_data.collect! { |line|
               line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE')

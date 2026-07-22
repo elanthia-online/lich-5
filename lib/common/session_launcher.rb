@@ -129,6 +129,7 @@ module Lich
           when 'STORM' then 'stormfront'
           when 'WIZ' then 'wizard'
           when 'AVALON' then 'avalon'
+          when 'SAGA' then 'saga'
           when 'SUKS' then 'suks'
           else nil
           end
