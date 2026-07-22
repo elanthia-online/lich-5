@@ -411,8 +411,6 @@ module Lich
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
               GameObj.begin_room_objs
-              GameObj.clear_loot
-              GameObj.clear_npcs
               Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
               @pending_crtr_status.clear
             elsif attributes['id'] == 'room players'
