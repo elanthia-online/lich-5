@@ -96,6 +96,8 @@ module Lich
         @application_roots = application_roots
         @wine = wine
         @cache = {}
+        # Always acquire the cache mutex before the application-index mutex
+        # when both are needed. resolve(refresh: true) relies on this order.
         @cache_mutex = Mutex.new
         @application_index = nil
         @application_index_mutex = Mutex.new
@@ -120,7 +122,7 @@ module Lich
       def available(gui_selectable: nil, refresh: false)
         refresh! if refresh
         definitions = Frontend.definitions(gui_selectable: gui_selectable)
-        definitions.select! { |definition| gui_platform_supported?(definition) } if gui_selectable
+        definitions = definitions.select { |definition| gui_platform_supported?(definition) } if gui_selectable
         definitions.filter_map do |definition|
           resolve(definition[:id])
         end
@@ -274,10 +276,7 @@ module Lich
       end
 
       def platform_key
-        return :darwin if @platform =~ /darwin/i
-        return :windows if windows?
-
-        :linux
+        Frontend.platform_key(@platform)
       end
 
       def gui_platform_supported?(definition)
@@ -302,7 +301,7 @@ module Lich
       end
 
       def windows?
-        @platform =~ /mingw|mswin|cygwin|win32/i
+        Frontend.windows_platform?(@platform)
       end
 
       def expand_path(path)

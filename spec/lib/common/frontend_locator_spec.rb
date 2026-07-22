@@ -99,6 +99,27 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
+  it 'makes the conventional Linux Saga installation selectable' do
+    saga = '/opt/Saga/saga'
+    locator = described_class.new(
+      platform: 'x86_64-linux',
+      environment: { 'PATH' => '' }
+    )
+    allow(File).to receive(:file?).with(saga).and_return(true)
+    allow(File).to receive(:executable?).with(saga).and_return(true)
+    allow(File).to receive(:realpath).with(saga).and_return(saga)
+
+    expect(locator.resolve('saga')).to eq(
+      described_class::Resolution.new(
+        frontend_id: 'saga',
+        executable_path: saga,
+        source: :conventional
+      )
+    )
+    expect(locator.selectable?('saga')).to be(true)
+    expect(locator.launchable?('saga')).to be(true)
+  end
+
   it 'separates native launch support from GUI presentation metadata' do
     Dir.mktmpdir do |directory|
       executable(File.join(directory, 'Wrayth.exe'))
@@ -177,6 +198,17 @@ RSpec.describe Lich::Common::FrontendLocator do
 
       expect(locator.available(gui_selectable: true).map(&:frontend_id)).to eq(['stormfront'])
     end
+  end
+
+  it 'does not mutate the frontend definition collection while filtering by platform' do
+    definitions = frontend.definitions(gui_selectable: true).freeze
+    locator = described_class.new(platform: 'x86_64-linux', environment: { 'PATH' => '' })
+    allow(frontend).to receive(:definitions).with(gui_selectable: true).and_return(definitions)
+    allow(locator).to receive(:resolve).and_return(nil)
+
+    expect { locator.available(gui_selectable: true) }.not_to raise_error
+    expect(definitions.map { |definition| definition[:id] })
+      .to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
   end
 
   it 'refreshes cached unavailable results' do

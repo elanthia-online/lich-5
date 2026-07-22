@@ -39,7 +39,7 @@ RSpec.describe Lich::Common::Frontend do
       expect(definition[:id]).to eq('saga')
       expect(definition.dig(:metadata, :display_name)).to eq('Saga')
       expect(definition.dig(:metadata, :gui_selectable)).to be(true)
-      expect(definition.dig(:metadata, :gui_platforms)).to eq(%i[darwin windows])
+      expect(definition.dig(:metadata, :gui_platforms)).to eq(%i[darwin windows linux])
       expect(definition.dig(:metadata, :launcher_status)).to eq(:temporary_pending_cli_login)
       expect(definition.dig(:metadata, :launch_notice)).to eq(
         'Temporary Saga launch bridge pending Saga CLI login support'
@@ -68,6 +68,20 @@ RSpec.describe Lich::Common::Frontend do
           }
         }
       )
+      expect(definition.dig(:metadata, :launch_plans, :linux)).to eq(
+        {
+          command: :resolved_executable,
+          arguments: [],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition.dig(:metadata, :discovery, :path_lookup)).to be(false)
+      expect(definition.dig(:metadata, :discovery, :paths, :linux)).to eq(['/opt/Saga/saga'])
       expect(definition).to be_frozen
       expect(definition[:metadata]).to be_frozen
       expect(definition.dig(:metadata, :launch_plans)).to be_frozen
@@ -92,6 +106,36 @@ RSpec.describe Lich::Common::Frontend do
       expect { frontend.definition_for('not-a-frontend') }
         .to raise_error(ArgumentError, 'unknown frontend: not-a-frontend')
       expect(frontend.registered_frontends).not_to include('not-a-frontend')
+    end
+  end
+
+  describe '.platform_key' do
+    it 'uses one canonical vocabulary across supported platforms' do
+      expect(frontend.platform_key('arm64-darwin')).to eq(:darwin)
+      expect(frontend.platform_key('x64-mingw32')).to eq(:windows)
+      expect(frontend.platform_key('x86_64-linux')).to eq(:linux)
+      expect(frontend.platform_key('powerpc-aix')).to eq(:unsupported)
+    end
+
+    it 'does not mistake darwin for Windows' do
+      expect(frontend.windows_platform?('arm64-darwin')).to be(false)
+      expect(frontend.windows_platform?('x64-mingw32')).to be(true)
+    end
+  end
+
+  describe '.ensure_windows_modules' do
+    it 'requires both native Windows API bindings on a Windows-classified runtime' do
+      allow(frontend).to receive(:windows_platform?).and_return(true)
+      stub_const('Win32Enum', Module.new)
+      stub_const('WinAPI', Module.new)
+
+      expect(frontend.ensure_windows_modules).to be_truthy
+    end
+
+    it 'does not expose native Windows API bindings on other platforms' do
+      allow(frontend).to receive(:windows_platform?).and_return(false)
+
+      expect(frontend.ensure_windows_modules).to be(false)
     end
   end
 
