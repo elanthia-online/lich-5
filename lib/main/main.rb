@@ -2,7 +2,10 @@
 # this needs work to break up and improve 2024-06-13
 
 reconnect_if_wanted = proc {
-  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not $_CLIENTBUFFER_.any? { |cmd| cmd =~ /^(?:\[.*?\])?(?:<c>)?(?:quit|exit)/i }
+  explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
+  explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| Lich::Common::ShutdownIntent.user_exit_command?(cmd) }
+
+  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not explicit_shutdown and not explicit_exit_buffered
     if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
       reconnect_arg =~ /^\-\-reconnect\-delay=([0-9]+)(\+[0-9]+)?/
       reconnect_delay = $1.to_i
@@ -46,10 +49,46 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  # PipeIO is only consumed here (--pipe mode client adapter), so it loads with
+  # main rather than from lich.rbw's top-level require chain -- that chain also
+  # runs during self-update against older lib snapshots where pipe_io.rb may not
+  # exist yet, and an unconditional require there would break the update path.
+  require File.join(LIB_DIR, 'common', 'pipe_io.rb')
   # Lifecycle tracker is loaded here because startup context (argv/account)
   # and shutdown sequencing both live in main runtime orchestration.
+  require File.join(LIB_DIR, 'common', 'best_effort_shutdown_cleanup.rb')
   require File.join(LIB_DIR, 'common', 'session_lifecycle.rb')
+  require File.join(LIB_DIR, 'common', 'orderly_shutdown.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_coordinator.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_intent.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_log.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
+  require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
+
+  run_orderly_user_shutdown = proc { |source: :primary_frontend|
+    # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
+    # their before_dying hooks inline (any of which can hang) before the main
+    # teardown/watchdog below is reached, so arm here as well. arm is
+    # idempotent, so the later arm during teardown is a no-op. Both the primary
+    # and detachable frontend exit paths route through here so neither can run
+    # the hang-prone inline drain without the watchdog armed.
+    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
+    Lich::Common::OrderlyShutdown.request_user_exit(
+      source: source,
+      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+    )
+  }
+
+  run_best_effort_shutdown_cleanup = proc {
+    Lich::Common::BestEffortShutdownCleanup.run(
+      coordinator: Lich::Common::ShutdownCoordinator,
+      initial_scripts: (Script.running + Script.hidden),
+      remaining_scripts: proc { Script.running + Script.hidden },
+      script_drain: Lich::Common::ShutdownScriptDrain,
+      vars: Vars,
+      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+    )
+  }
 
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
@@ -66,13 +105,23 @@ reconnect_if_wanted = proc {
     lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
 
     # Execute CLI login flow and get launch data
-    launch_data_array = Lich::Common::Authentication::CLI.execute(
-      requested_character,
-      game_code: requested_instance,
-      frontend: lookup_frontend,
-      custom_launch: requested_custom_launch,
-      data_dir: DATA_DIR
-    )
+    launch_data_array = if requested_character.match?(Lich::Common::Authentication::LoginHelpers::NEW_CHARACTER_LOGIN) && @argv_options[:account]
+                          Lich::Common::Authentication::CLI.execute_new_character(
+                            @argv_options[:account],
+                            game_code: requested_instance,
+                            frontend: requested_fe,
+                            custom_launch: requested_custom_launch,
+                            data_dir: DATA_DIR
+                          )
+                        else
+                          Lich::Common::Authentication::CLI.execute(
+                            requested_character,
+                            game_code: requested_instance,
+                            frontend: lookup_frontend,
+                            custom_launch: requested_custom_launch,
+                            data_dir: DATA_DIR
+                          )
+                        end
 
     if launch_data_array
       Lich.log "info: CLI login successful for #{requested_character}"
@@ -105,6 +154,8 @@ reconnect_if_wanted = proc {
   if @argv_options[:sal]
     begin
       @launch_data = File.open(@argv_options[:sal]) { |sal_file| sal_file.readlines }.collect { |line| line.chomp }
+      modifiers = ARGV.dup
+      Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
     rescue
       $stdout.puts "error: failed to read launch_file: #{$!}"
       Lich.log "info: launch_file: #{@argv_options[:sal]}"
@@ -184,7 +235,7 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = 'unknown'
+      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -228,6 +279,15 @@ reconnect_if_wanted = proc {
     Lich.log "info: game: #{game}"
     if ARGV.include?('--without-frontend')
       $_CLIENT_ = nil
+    elsif @argv_options[:pipe]
+      # Use stdin/stdout as the client transport instead of a front-end socket.
+      # Pair with -g HOST:PORT to connect directly to the game server (no SGE).
+      # stdin supplies what a front-end would send (including the initial login
+      # key); processed server output is written to stdout. EOF on stdin marks
+      # the client dead (PipeIO#closed?) and triggers the normal shutdown path.
+      Frontend.client = 'unknown'
+      $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+      Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     elsif Frontend.client.eql?('suks')
       nil
     else
@@ -237,11 +297,13 @@ reconnect_if_wanted = proc {
         Frontend.client = 'stormfront'
       elsif game =~ /AVALON/i
         Frontend.client = 'avalon'
+      elsif game =~ /SAGA/i
+        Frontend.client = 'saga'
       else
         Frontend.client = 'unknown'
       end
       begin
-        listener = TCPServer.new('127.0.0.1', nil)
+        listener = TCPServer.new(@argv_options[:bind_address] || '127.0.0.1', nil)
       rescue
         $stdout.puts "--- error: cannot bind listen socket to local port: #{$!}"
         Lich.log "error: cannot bind listen socket to local port: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
@@ -259,7 +321,12 @@ reconnect_if_wanted = proc {
         scrubbed_launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, '[scrubbed key]')
         Lich.log "info: launcher_cmd: #{scrubbed_launcher_cmd}"
       else
-        if RUBY_PLATFORM =~ /darwin/i
+        # GAMEHOST tells the spawned frontend where to connect. Mirror a specific
+        # --bind-address (the listener only binds that one address), but fall back
+        # to loopback for wildcard binds since a frontend cannot connect to 0.0.0.0/::.
+        if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
+          localhost = @argv_options[:bind_address]
+        elsif RUBY_PLATFORM =~ /darwin/i
           localhost = "127.0.0.1"
         else
           localhost = "localhost"
@@ -302,7 +369,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
       #      if defined?(Win32)
@@ -317,43 +384,66 @@ reconnect_if_wanted = proc {
     gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
-      connect_thread = Thread.new {
-        Game.open(gamehost, gameport)
-      }
-      300.times {
-        sleep 0.1
-        break unless connect_thread.status
-      }
-      if connect_thread.status
-        connect_thread.kill rescue nil
-        raise "error: timed out connecting to #{gamehost}:#{gameport}"
-      end
+      Game.open_with_timeout(gamehost, gameport)
     rescue
       Lich.log "error: #{$!}"
       gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
-        connect_thread = Thread.new {
-          Game.open(gamehost, gameport)
-        }
-        300.times {
-          sleep 0.1
-          break unless connect_thread.status
-        }
-        if connect_thread.status
-          connect_thread.kill rescue nil
-          raise "error: timed out connecting to #{gamehost}:#{gameport}"
-        end
+        Game.open_with_timeout(gamehost, gameport)
       rescue
         Lich.log "error: #{$!}"
         $_CLIENT_.close rescue nil
         reconnect_if_wanted.call
         Lich.log "info: exiting..."
-        Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
     end
     Lich.log 'info: connected'
+  elsif @argv_options[:pipe] and @argv_options[:game_host] and @argv_options[:game_port]
+    # --pipe with -g: no front-end socket and no hosts-file redirection.
+    # stdin/stdout act as the client transport; connect straight to the game
+    # server named by -g (SGE/eaccess login already bypassed by -g). stdin
+    # supplies the login key + version; processed server output goes to stdout.
+    Frontend.client = 'unknown'
+    $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
+    Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
+    @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])
+    # Bring a concrete Game class into scope so bare Game.* references (here and
+    # in the client thread / shutdown) resolve to one consistent class. Prefer an
+    # explicit --dragonrealms/--gemstone flag (useful when -g points at a loopback
+    # host that can't be sniffed); otherwise fall back to the host name. The
+    # actual game instance is still derived from the server's <settingsInfo>.
+    if Lich::Common::Authentication::LoginHelpers.dragonrealms_flag?(ARGV) || @argv_options[:game_host] =~ /dr/i
+      include Lich::DragonRealms
+    else
+      include Lich::Gemstone
+    end
+    Lich.log "info: connecting to game server (#{@argv_options[:game_host]}:#{@argv_options[:game_port]})"
+    begin
+      # Bounded connect so a stuck Game.open cannot hang pipe mode indefinitely on
+      # an unreachable host.
+      connect_thread = Thread.new {
+        # report_on_exception off: a failed Game.open is surfaced by the join below
+        # (which re-raises it), not by an auto-printed thread warning.
+        Thread.current.report_on_exception = false
+        Game.open(@argv_options[:game_host], @argv_options[:game_port])
+      }
+      # join(30) returns nil on timeout, the thread on success, and re-raises if
+      # Game.open errored (e.g. connection refused) -- so a failed connect reaches
+      # the rescue below instead of silently proceeding with a dead game socket.
+      if connect_thread.join(30).nil?
+        connect_thread.kill rescue nil
+        raise "timed out connecting to #{@argv_options[:game_host]}:#{@argv_options[:game_port]}"
+      end
+    rescue
+      Lich.log "error: #{$!}"
+      $stdout.puts "error: #{$!}"
+      $_CLIENT_.close rescue nil
+      exit
+    end
+    Lich.log 'info: connection with the game host is open'
   elsif @argv_options[:game_host] and @argv_options[:game_port]
     unless Lich.hosts_file
       Lich.log "error: cannot find hosts file"
@@ -363,7 +453,7 @@ reconnect_if_wanted = proc {
     IPSocket.getaddress(@argv_options[:game_host])
     error_count = 0
     begin
-      listener = Lich::Common::ReusableTCPServer.create('127.0.0.1', @argv_options[:game_port])
+      listener = Lich::Common::ReusableTCPServer.create(@argv_options[:bind_address] || '127.0.0.1', @argv_options[:game_port])
     rescue
       sleep 1
       if (error_count += 1) >= 30
@@ -460,20 +550,22 @@ reconnect_if_wanted = proc {
     }
   else
     #
-    # shutdown listening socket
+    # shutdown listening socket (pipe mode never opened one)
     #
-    error_count = 0
-    begin
-      # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
-      # listener.shutdown
-      listener.close unless listener.closed?
-    rescue
-      Lich.log "warning: failed to close listener socket: #{$!}"
-      if (error_count += 1) > 20
-        Lich.log 'warning: giving up...'
-      else
-        sleep 0.05
-        retry
+    unless @argv_options[:pipe]
+      error_count = 0
+      begin
+        # Somehow... for some ridiculous reason... Windows doesn't let us close the socket if we shut it down first...
+        # listener.shutdown
+        listener.close if listener && !listener.closed?
+      rescue
+        Lich.log "warning: failed to close listener socket: #{$!}"
+        if (error_count += 1) > 20
+          Lich.log 'warning: giving up...'
+        else
+          sleep 0.05
+          retry
+        end
       end
     end
 
@@ -544,14 +636,14 @@ reconnect_if_wanted = proc {
             server_string
           end
         }
-        DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+        DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
         inv_toggle_proc = proc { |client_string_inv_toggle|
           if client_string_inv_toggle =~ /^(?:<c>)?_flag Display Inventory Boxes ([01])/
             if $1 == '1'
               DownstreamHook.remove('inventory_boxes_off')
               Lich.set_inventory_boxes(XMLData.player_id, true)
             else
-              DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+              DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
               Lich.set_inventory_boxes(XMLData.player_id, false)
             end
             nil
@@ -561,7 +653,7 @@ reconnect_if_wanted = proc {
               respond 'You have enabled viewing of inventory and container windows.'
               Lich.set_inventory_boxes(XMLData.player_id, true)
             else
-              DownstreamHook.add('inventory_boxes_off', inv_off_proc)
+              DownstreamHook.add('inventory_boxes_off', inv_off_proc, persist: true) # engine display toggle
               respond 'You have disabled viewing of inventory and container windows.'
               Lich.set_inventory_boxes(XMLData.player_id, false)
             end
@@ -570,7 +662,7 @@ reconnect_if_wanted = proc {
             client_string_inv_toggle
           end
         }
-        UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc)
+        UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc, persist: true) # engine display toggle
 
         unless $offline_mode
           client_string = $_CLIENT_.gets
@@ -587,6 +679,10 @@ reconnect_if_wanted = proc {
             client_string = "#{$cmd_prefix}#{client_string}"
           elsif Frontend.client.eql?('frostbite')
             client_string = fb_to_sf(client_string)
+          end
+          if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+            run_orderly_user_shutdown.call
+            break
           end
           # Lich.log(client_string)
           begin
@@ -606,6 +702,7 @@ reconnect_if_wanted = proc {
       ensure
         Frontend.cleanup_session_file
       end
+      Lich::Common::ShutdownCoordinator.request(reason: :client_disconnect, source: :primary_frontend)
       Game.close
     }
   end
@@ -648,7 +745,11 @@ reconnect_if_wanted = proc {
             connected: false
           )
 
-          Lich.log "info: detachable client server listening on #{server.local_address.ip_address}:#{server.local_address.ip_port}"
+          listen_ip = server.local_address.ip_address
+          listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
+          listen_address = "#{listen_ip}:#{server.local_address.ip_port}"
+          Lich.log "info: detachable client server listening on #{listen_address}"
+          $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
 
           accepted_socket, = server.accept
           $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
@@ -673,7 +774,7 @@ reconnect_if_wanted = proc {
           begin
             Frontend.cleanup_session_file
           rescue => cleanup_error
-            Lich.log "warning: failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}"
+            Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
           end
 
           Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
@@ -688,7 +789,7 @@ reconnect_if_wanted = proc {
         end
         if $_DETACHABLE_CLIENT_
           begin
-            unless ARGV.include?('--genie')
+            unless ARGV.any? { |a| a =~ /^--(genie|saga)$/i }
               Frontend.client = 'profanity'
               Thread.new {
                 100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
@@ -727,6 +828,28 @@ reconnect_if_wanted = proc {
                 nil
               }
             end
+            # Saga's cloud profile sync keys each character on its <playerID>,
+            # which Lich consumed from the game during its own login handshake
+            # before this detachable client attached - so Saga never sees it and
+            # a Via-Lich character silently never syncs (a Direct login does,
+            # because it sees the tag). Re-emit it here, unprefixed, exactly as a
+            # Direct login delivers it. This runs on every attach (the outer loop
+            # re-enters this block), so a Saga client that re-attaches mid-session
+            # (a restart against a surviving Lich) also relearns the id. Deferred
+            # to a thread with a bounded wait because a client can attach before
+            # login has populated player_id; _respond routes to the detachable
+            # client, gates on XMLData.safe_to_respond?, and re-checks it is alive.
+            if ARGV.any? { |a| a =~ /^--saga$/i }
+              Thread.new {
+                tag = nil
+                100.times do
+                  break if (tag = Frontend.player_id_tag(XMLData.player_id))
+                  sleep 0.1
+                end
+                _respond(tag) if tag
+                nil
+              }
+            end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
               # Profanity handshake:  SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
@@ -734,6 +857,14 @@ reconnect_if_wanted = proc {
                 next # swallow the control line; don't pass it to do_client
               end
               client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
+              if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+                # Route through the guarded proc so the watchdog is armed before
+                # the inline before_dying drain, exactly as the primary frontend
+                # path does. A bare request_user_exit here would run the same
+                # hang-prone drain unprotected.
+                run_orderly_user_shutdown.call(source: :detachable_frontend)
+                break
+              end
               begin
                 $_IDLETIMESTAMP_ = Time.now
                 do_client(client_string)
@@ -743,7 +874,7 @@ reconnect_if_wanted = proc {
                 Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
               end
             end
-            Lich.log "info: detachable client disconnected"
+            Lich::Common::ShutdownLog.info('detachable client disconnected')
           rescue => e
             _respond "--- Lich: error: detachable client: #{e}"
             Lich.log "error: detachable_client_thread (communication): #{e}\n\t#{e.backtrace.join("\n\t")}"
@@ -754,12 +885,14 @@ reconnect_if_wanted = proc {
             begin
               Frontend.cleanup_session_file
             rescue => cleanup_error
-              Lich.log "warning: failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}"
+              Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
             end
 
-            Lich.log "info: detachable client cleaned up, ready for new connection"
+            Lich::Common::ShutdownLog.info('detachable client cleaned up, ready for new connection')
           end
         end
+        break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
+
         sleep 0.1
       }
     }
@@ -816,7 +949,7 @@ reconnect_if_wanted = proc {
         step_failed = true
         shutdown_trace_needed = true
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - step_started_at
-        Lich.log "warning: #{description} failed during shutdown after #{format('%.3f', elapsed)}s: #{e.class}: #{e.message}"
+        Lich::Common::ShutdownLog.warning("#{description} failed during shutdown after #{format('%.3f', elapsed)}s: #{e.class}: #{e.message}")
       ensure
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - step_started_at
         total = Process.clock_gettime(Process::CLOCK_MONOTONIC) - shutdown_started_at
@@ -833,18 +966,24 @@ reconnect_if_wanted = proc {
         end
 
         trace_details = detail_text.to_s.empty? ? '' : " #{detail_text}"
-        shutdown_trace_needed ||= elapsed >= threshold
-        shutdown_trace << "debug: shutdown[#{step_index}] #{description} #{step_failed ? 'failed' : 'finished'} elapsed=#{format('%.3f', elapsed)}s total=#{format('%.3f', total)}s#{trace_details}"
+        if !step_failed && elapsed >= threshold
+          shutdown_trace_needed = true
+          Lich::Common::ShutdownLog.warning("shutdown step #{description} exceeded #{format('%.3f', threshold)}s threshold elapsed=#{format('%.3f', elapsed)}s")
+        end
+        shutdown_trace << "shutdown[#{step_index}] #{description} #{step_failed ? 'failed' : 'finished'} elapsed=#{format('%.3f', elapsed)}s total=#{format('%.3f', total)}s#{trace_details}"
       end
     }
 
     flush_shutdown_trace = proc {
       total = Process.clock_gettime(Process::CLOCK_MONOTONIC) - shutdown_started_at
-      shutdown_trace_needed ||= total >= shutdown_total_trace_threshold
+      if total >= shutdown_total_trace_threshold
+        shutdown_trace_needed = true
+        Lich::Common::ShutdownLog.warning("shutdown exceeded #{format('%.3f', shutdown_total_trace_threshold)}s threshold total=#{format('%.3f', total)}s")
+      end
       next unless shutdown_trace_needed
 
-      Lich.log "debug: shutdown trace total=#{format('%.3f', total)}s"
-      shutdown_trace.each { |trace_line| Lich.log trace_line }
+      Lich::Common::ShutdownLog.debug("shutdown trace total=#{format('%.3f', total)}s")
+      shutdown_trace.each { |trace_line| Lich::Common::ShutdownLog.debug(trace_line) }
     }
 
     # ActiveSessions exposes two distinct signals:
@@ -861,48 +1000,85 @@ reconnect_if_wanted = proc {
     # Lich continues script before_dying hooks, Vars.save, socket closeout, and
     # database closeout.  Lifecycle.stop remains later in shutdown and is the
     # point where this process is removed from the ActiveSessions registry.
-    Lich.log 'info: marking session disconnected...'
+    # Guard the teardown steps below: several (inline before_dying/at_exit
+    # script hooks, Vars.save, Game.close linger, database close, lifecycle
+    # unregister IO) have no individual timeout and can hang, leaving the
+    # process alive and holding its sockets. The watchdog dumps thread
+    # backtraces and forces exit if teardown stalls; it is disarmed once the
+    # unbounded steps complete, before the deliberate reconnect/exec path.
+    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
+
+    Lich::Common::ShutdownLog.info('marking session disconnected...')
     shutdown_step.call('ActiveSessions connection update') do
       Lich::InternalAPI::ActiveSessions::Lifecycle.update_connected(false) if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
 
-    script_shutdown_result = nil
-    shutdown_step.call('script shutdown', details: proc { script_shutdown_result&.details }) do
-      Lich.log 'info: stopping scripts...'
-      # Shutdown context preserves before_dying/at_exit handlers while skipping
-      # MemoryReleaser work; process exit will reclaim memory.
-      # Individual script names are reported at 2x the step threshold so normal
-      # teardown stays quiet while slow exits remain visible.
-      script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
-      script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
-        initial_scripts: (Script.running + Script.hidden),
-        remaining_scripts: proc { Script.running + Script.hidden },
-        slow_threshold: script_shutdown_slow_threshold
-      )
+    if Lich::Common::ShutdownCoordinator.connection_loss? &&
+       !(Lich::Common::ShutdownCoordinator.scripts_drained? && Lich::Common::ShutdownCoordinator.vars_saved?)
+      run_best_effort_shutdown_cleanup.call
     end
-    Lich.log 'info: saving script settings...'
-    shutdown_step.call('Vars.save') { Vars.save }
-    Lich.log 'info: closing connections...'
+
+    if Lich::Common::ShutdownCoordinator.scripts_drained?
+      Lich::Common::ShutdownLog.info('script shutdown already completed before closing game connection...')
+    else
+      script_shutdown_result = nil
+      shutdown_step.call('script shutdown', details: proc { script_shutdown_result&.details }) do
+        Lich::Common::ShutdownLog.info('stopping scripts...')
+        # Shutdown context preserves before_dying/at_exit handlers while skipping
+        # MemoryReleaser work; process exit will reclaim memory.
+        # Individual script names are reported at 2x the step threshold so normal
+        # teardown stays quiet while slow exits remain visible.
+        script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
+        script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
+          initial_scripts: (Script.running + Script.hidden),
+          remaining_scripts: proc { Script.running + Script.hidden },
+          slow_threshold: script_shutdown_slow_threshold
+        )
+      end
+    end
+    if Lich::Common::ShutdownCoordinator.vars_saved?
+      Lich::Common::ShutdownLog.info('script settings already saved before closing game connection...')
+    else
+      Lich::Common::ShutdownLog.info('saving script settings...')
+      shutdown_step.call('Vars.save') { Vars.save }
+    end
+    Lich::Common::ShutdownLog.info('closing connections...')
     shutdown_step.call('Game.close') { Game.close }
     shutdown_step.call('client_thread.kill') { client_thread.kill }
     shutdown_step.call('detachable_client_thread.kill') { detachable_client_thread.kill if detachable_client_thread }
     shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
     shutdown_step.call('Lich.db.close') { Lich.db.close }
-    Lich.log 'info: unregistering session...'
+    Lich::Common::ShutdownLog.info('unregistering session...')
     shutdown_step.call('ActiveSessions lifecycle stop') do
       Lich::InternalAPI::ActiveSessions::Lifecycle.stop if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     end
     shutdown_step.call('SessionLifecycle stop') do
       Lich::Common::SessionLifecycle.stop if defined?(Lich::Common::SessionLifecycle)
     end
+    # Unbounded teardown is complete; stand down before the deliberate
+    # reconnect sleep/exec and process exit so neither is force-killed.
+    Lich::Common::ShutdownWatchdog.disarm if defined?(Lich::Common::ShutdownWatchdog)
     flush_shutdown_trace.call
     shutdown_step.call('reconnect hook') { reconnect_if_wanted.call } # keep after closeout; may launch a replacement session
-    Lich.log "info: exiting..."
-    Gtk.queue { Gtk.main_quit } if defined?(Gtk)
+    clean_user_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit? &&
+                          Lich::Common::ShutdownCoordinator.orderly_shutdown_completed? &&
+                          Lich::Common::ShutdownCoordinator.scripts_drained? &&
+                          Lich::Common::ShutdownCoordinator.vars_saved? &&
+                          Lich::Common::ShutdownCoordinator.best_effort_cleanup_result.nil? &&
+                          !Lich::Common::ShutdownCoordinator.client_socket_write_failed? &&
+                          !shutdown_trace_needed
+    if clean_user_shutdown
+      Lich::Common::ShutdownLog.complete_user_exit_summary('user-initiated shutdown completed cleanly')
+    else
+      Lich::Common::ShutdownLog.flush_user_exit_summary!
+    end
+    Lich::Common::ShutdownLog.info('exiting...')
+    Lich::Common.shutdown_gtk_before_exit
     exit
   ensure
     # Guarantee lifecycle stop even on abnormal exit (e.g. abort_on_exception).
     # Both .stop methods are idempotent -- safe to call if already stopped.
+    Lich::Common::ShutdownLog.flush_user_exit_summary! rescue nil
     Lich::InternalAPI::ActiveSessions::Lifecycle.stop rescue nil if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle)
     Lich::Common::SessionLifecycle.stop rescue nil if defined?(Lich::Common::SessionLifecycle)
   end

@@ -65,7 +65,7 @@ module Lich
           return true if (![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id) && GameObj.inv.to_a.map(&:id).include?(item.id))
           return true if item.name =~ /^ethereal \w+$/ && ![GameObj.right_hand, GameObj.left_hand].map(&:id).compact.include?(item.id)
           sleep 0.1
-        } unless result =~ /You can only wear two items in that location\./
+        } unless result.is_a?(String) && result =~ /You can only wear two items in that location\./
 
         return @worn_items[item.name] = false
       end

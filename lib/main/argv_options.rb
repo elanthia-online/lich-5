@@ -8,7 +8,9 @@
 
 require File.join(LIB_DIR, 'util', 'opts.rb')
 require File.join(LIB_DIR, 'common', 'cli', 'cli_orchestration.rb')
+require File.join(LIB_DIR, 'common', 'bind_host_resolver.rb')
 require File.join(LIB_DIR, 'main', 'arg_normalization.rb')
+require File.join(LIB_DIR, 'main', 'detachable_client_target.rb')
 require File.join(LIB_DIR, 'main', 'help_text.rb')
 
 module Lich
@@ -75,9 +77,11 @@ module Lich
               @argv_options[:reconnect_delay] = $1
             when /^--host=(.+):(.+)$/
               @argv_options[:host] = { domain: $1, port: $2.to_i }
+            when /^--bind-address=(.+)$/i
+              @argv_options[:bind_address] = $1
             when /^--hosts-file=(.+)$/i
               @argv_options[:hosts_file] = $1
-            when /^--no-gui$/i
+            when /^--no-(?:gui|gtk)$/i
               @argv_options[:gui] = false
             when /^--gui$/i
               @argv_options[:gui] = true
@@ -95,6 +99,8 @@ module Lich
               @argv_options[:frontend_command] = $1
             when /^--save$/i
               @argv_options[:save] = true
+            when /^--pipe$/i
+              @argv_options[:pipe] = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i
@@ -102,6 +108,8 @@ module Lich
               bad_args.clear
             when /^--dark-mode=(true|false|on|off)$/i
               handle_dark_mode($1)
+            when /^--saga$/i
+              $frontend = 'saga'
             else
               bad_args.push(arg)
             end
@@ -172,14 +180,33 @@ module Lich
         end
 
         def self.handle_detachable_client(argv_options)
-          argv_options[:detachable_client_host] = '127.0.0.1'
+          argv_options[:detachable_client_host] = argv_options[:bind_address] || '127.0.0.1'
           argv_options[:detachable_client_port] = nil
-          if (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=[0-9]+$/ })
-            argv_options[:detachable_client_port] = /^\-\-detachable\-client=([0-9]+)$/.match(arg).captures.first.to_i
-          elsif (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=auto$/i })
-            argv_options[:detachable_client_port] = 0
-          elsif (arg = ARGV.find { |a| a =~ /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/ })
-            argv_options[:detachable_client_host], argv_options[:detachable_client_port] = /^\-\-detachable\-client=((?:\d{1,3}\.){3}\d{1,3}):([0-9]{1,5})$/.match(arg).captures
+          arg = ARGV.find { |a| a.start_with?('--detachable-client=') }
+          return unless arg
+
+          begin
+            target = DetachableClientTarget.parse(arg.split('=', 2).last)
+            if target.host
+              resolution = Lich::Common::BindHostResolver.resolve(target.host)
+              argv_options[:detachable_client_host] = resolution.host
+              if resolution.warning
+                $stdout.puts "warning: #{resolution.warning}"
+                Lich.log "warning: #{resolution.warning}"
+              end
+            else
+              # Port-only form inherits --bind-address; warn just like an explicit host would.
+              warning = Lich::Common::BindHostResolver.warning_for_explicit(argv_options[:detachable_client_host])
+              if warning
+                $stdout.puts "warning: #{warning}"
+                Lich.log "warning: #{warning}"
+              end
+            end
+            argv_options[:detachable_client_port] = target.port
+          rescue DetachableClientTarget::ParseError, Lich::Common::BindHostResolver::Error => e
+            $stdout.puts "error: #{e.message}"
+            Lich.log "error: #{e.message}"
+            exit 1
           end
         end
 
@@ -245,7 +272,7 @@ module Lich
           processed_options[:game_port] = processed_options[:game_port].to_i
           $frontend = determine_frontend
           # Initialize frontend from parent process unless using detachable client
-          unless ARGV.any? { |a| a =~ /^--detachable-client/ }
+          unless ARGV.any? { |a| a =~ /^--detachable-client/i }
             Lich::Common::Frontend.init_from_parent(Process.ppid)
           end
         end
@@ -253,89 +280,89 @@ module Lich
         def self.handle_gemstone_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
-            if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = 10124
               $frontend = 'stormfront'
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = 10124
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
-            if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
               $frontend = 'stormfront'
             else
               processed_options[:game_host] = 'storm.gs4.game.play.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 10624 : 10024
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           end
         end
 
         def self.handle_shattered_connection(processed_options)
           $platinum = false
-          if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+          if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
             processed_options[:game_host] = 'storm.gs4.game.play.net'
             processed_options[:game_port] = 10324
             $frontend = 'stormfront'
           else
             processed_options[:game_host] = 'storm.gs4.game.play.net'
             processed_options[:game_port] = 10324
-            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : 'wizard'
+            $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
           end
         end
 
         def self.handle_fallen_connection(processed_options)
           $platinum = false
-          if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+          if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
             $frontend = 'stormfront'
-          elsif ARGV.grep(/--genie/).any?
+          elsif ARGV.grep(/--genie/i).any?
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
             $frontend = 'genie'
           else
             processed_options[:game_host] = 'dr.simutronics.net'
             processed_options[:game_port] = 11324
-            $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+            $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
           end
         end
 
         def self.handle_dragonrealms_connection(processed_options)
           if ARGV.include?('--platinum')
             $platinum = true
-            if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
               $frontend = 'stormfront'
-            elsif ARGV.grep(/--genie/).any?
+            elsif ARGV.grep(/--genie/i).any?
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
               $frontend = 'genie'
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = 11124
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           else
             $platinum = false
-            if ARGV.any? { |a| a == '-s' || a == '--stormfront' }
+            if ARGV.any? { |a| a =~ /^-s$/i || a =~ /^--stormfront$/i }
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = 'stormfront'
-            elsif ARGV.grep(/--genie/).any?
+            elsif ARGV.grep(/--genie/i).any?
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
               $frontend = 'genie'
             else
               processed_options[:game_host] = 'dr.simutronics.net'
               processed_options[:game_port] = ARGV.include?('--test') ? 11624 : 11024
-              $frontend = ARGV.any? { |a| a == '--avalon' } ? 'avalon' : ARGV.any? { |a| a == '--frostbite' } ? 'frostbite' : 'wizard'
+              $frontend = ARGV.any? { |a| a =~ /^--avalon$/i } ? 'avalon' : ARGV.any? { |a| a =~ /^--frostbite$/i } ? 'frostbite' : ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'wizard'
             end
           end
         end
@@ -349,6 +376,8 @@ module Lich
             'avalon'
           elsif ARGV.any? { |a| a == '--frostbite' }
             'frostbite'
+          elsif ARGV.any? { |a| a == '--saga' }
+            'saga'
           else
             'unknown'
           end

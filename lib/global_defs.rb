@@ -131,8 +131,12 @@ def stop_script(*target_names)
   end
 end
 
-def running?(*snames)
-  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+def running?(*snames, exact_match: false)
+  if exact_match
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i }) }
+  else
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+  end
   true
 end
 
@@ -712,7 +716,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.3
       end
       put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing/
+    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
       fput 'stand'
       waitrt?
       put_dir.call
@@ -1692,6 +1696,24 @@ def put(*messages)
   messages.each { |message| Game.puts(message) }
 end
 
+# Requests an orderly Lich shutdown from a running script.
+#
+# This follows the explicit user-exit shutdown path without sending an `exit`
+# command through game or frontend I/O. The calling script is excluded from the
+# script drain so it can finish the shutdown request.
+#
+# @return [Lich::Common::OrderlyShutdown::Result] shutdown result
+def lich_shutdown
+  current_script = Script.current
+  source = current_script ? "script:#{current_script.name}" : :script
+
+  Lich::Common::OrderlyShutdown.request_user_exit(
+    source: source,
+    current_script: current_script,
+    active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+  )
+end
+
 def quiet_exit
   script = Script.current
   script.quiet = !(script.quiet)
@@ -1898,6 +1920,7 @@ def unnoded_pulse
 end
 
 require_relative File.join(LIB_DIR, "stash.rb")
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
 
 def empty_hands
   waitrt?
@@ -2151,7 +2174,7 @@ def sf_to_wiz(line, bypass_multiline: false)
     line = line.gsub("</prompt>\r\n", "</prompt>")
     line = line.gsub("<pushBold/>", "\034GSL\r\n")
     line = line.gsub("<popBold/>", "\034GSM\r\n")
-    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
     line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
     line = line.gsub(/<[^>]+>/, '')
@@ -2170,31 +2193,58 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line, type: 'main')
-  return line if line == "\r\n"
-
-  if $strip_xml_multiline[type]
-    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
-    line = $strip_xml_multiline[type]
+# Strip game markup from a server-stream fragment.
+#
+# @param line [String] one server-stream fragment
+# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
+#   default) the fragment is stripped statelessly. When given, unfinished
+#   pushStream content is accumulated in a process-global, type-keyed buffer
+#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
+#   split across reads is reassembled before stripping. Pass it as a keyword
+#   (type: "main"); the keyword form is the supported call shape.
+# @return [String, nil]
+#   - the stripped text when printable content remains
+#   - nil when the line is entirely whitespace, when stripping leaves no
+#     printable text, or while a typed multiline fragment is still being
+#     accumulated
+# @note nil is a normal return, not an error. Callers commonly feed the result
+#   straight to String#split; that is safe because NilClass#split is patched to
+#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+def strip_xml(line, type: nil)
+  if type.nil?
+    strip_xml_simple(line)
+  else
+    strip_xml_multiline(line, type)
   end
-  if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline ||= {}
+end
+
+def strip_xml_simple(line)
+  return nil if line == "\r\n" # short-circuit empty links
+
+  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
+  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
+  line = line.gsub(/<[^>]+>/, '')
+  line = Lich::Common::XmlEntities.decode(line)
+
+  return nil if line.match?(/\A\s*\z/)
+
+  line
+end
+
+def strip_xml_multiline(line, type)
+  $strip_xml_multiline ||= {}
+  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
+  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
     $strip_xml_multiline[type] = line
     return nil
   end
   $strip_xml_multiline[type] = nil
-
-  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-  line = line.gsub(/<[^>]+>/, '')
-  line = line.gsub('&gt;', '>')
-  line = line.gsub('&lt;', '<')
-
-  return nil if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
-
-  return line
+  strip_xml_simple(line)
 end
+
+# Internal helpers for strip_xml; not part of the script-facing API.
+private :strip_xml_simple, :strip_xml_multiline
 
 def monsterbold_start
   if Frontend.supports_gsl?
@@ -2458,6 +2508,26 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
+    elsif cmd =~ /^display roomlinks?(?: (true|false))?/i
+      new_value = !(Lich.display_room_links)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room exits as clickable command links to #{new_value}"
+      Lich.display_room_links = new_value
+    elsif cmd =~ /^display roommono(?: (true|false))?/i
+      new_value = !(Lich.display_room_mono)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room information in monospace font to #{new_value}"
+      Lich.display_room_mono = new_value
     elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
       if running?('exp-monitor')
         respond "Error: exp-monitor.lic script is currently running"
@@ -2608,6 +2678,8 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
+      respond "   #{$clean_lich_char}display roomlinks         toggle rendering of room exits as clickable command links vs plain text"
+      respond "   #{$clean_lich_char}display roommono          toggle rendering of Lich room information in monospace font vs game font"
       if XMLData.game =~ /^DR/
         respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
         respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"

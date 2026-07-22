@@ -1,7 +1,394 @@
 module Lich
   module Common
+    @gtk_signal_handlers = {}.compare_by_identity
+    @gtk_timeout_callbacks = {}
+    @gtk_idle_callbacks = {}
+    @gtk_registries_mutex = Mutex.new
+
+    # Synchronizes access to GTK callback retention registries.
+    #
+    # @yield Performs registry reads or writes while holding the shared mutex
+    # @return [Object] the block result
+    def self.with_gtk_registry_lock
+      @gtk_registries_mutex.synchronize { yield }
+    end
+
+    # Returns the retained GTK signal handler registry.
+    #
+    # The hash compares keys by object identity so each widget wrapper keeps
+    # its own retained callback list even if different objects compare equal.
+    #
+    # @return [Hash] identity map of GTK receivers to retained signal metadata
+    def self.gtk_signal_handlers
+      @gtk_signal_handlers
+    end
+
+    # Returns the retained GLib timeout callback registry.
+    #
+    # @return [Hash{Integer => Proc}] map of timeout source IDs to retained callbacks
+    def self.gtk_timeout_callbacks
+      @gtk_timeout_callbacks
+    end
+
+    # Returns the retained GLib idle callback registry.
+    #
+    # @return [Hash{Integer => Proc}] map of idle source IDs to retained callbacks
+    def self.gtk_idle_callbacks
+      @gtk_idle_callbacks
+    end
+
+    # Releases retained signal handlers for a GTK receiver.
+    #
+    # @param receiver [Object] GTK receiver whose retained handlers should be cleared
+    # @return [Object, nil] removed retention entry, if any
+    def self.release_gtk_signal_handlers(receiver)
+      with_gtk_registry_lock { gtk_signal_handlers.delete(receiver) }
+    end
+
+    # Clears retained GTK callback registries.
+    #
+    # This is used by core shutdown paths to avoid leaving Ruby-side callback
+    # references alive until interpreter finalization.
+    #
+    # @return [void]
+    def self.clear_gtk_retention_registries
+      with_gtk_registry_lock do
+        gtk_signal_handlers.clear
+        gtk_timeout_callbacks.clear
+        gtk_idle_callbacks.clear
+      end
+    end
+
+    # Destroys retained GTK receivers and releases retained Ruby callbacks.
+    #
+    # ruby-gnome will otherwise release surviving widget wrappers during Ruby
+    # finalization, which can dispose native GTK objects in an unsafe order.
+    # This may run after Gtk.main has returned, so it must not stop the GTK
+    # main loop itself.
+    #
+    # @return [Boolean] true when cleanup work was performed
+    def self.cleanup_gtk!
+      retained_receivers = with_gtk_registry_lock { gtk_signal_handlers.keys.dup }
+      callbacks_retained = with_gtk_registry_lock do
+        gtk_timeout_callbacks.any? || gtk_idle_callbacks.any?
+      end
+      return false if retained_receivers.empty? && !callbacks_retained
+
+      retained_receivers.each do |receiver|
+        next unless receiver.respond_to?(:destroy)
+        next if receiver.respond_to?(:destroyed?) && receiver.destroyed?
+
+        begin
+          receiver.destroy
+        rescue StandardError => e
+          Lich.log "warning: Failed to destroy GTK receiver during shutdown: #{e.class}: #{e.message}"
+        end
+      end
+
+      clear_gtk_retention_registries
+      true
+    end
+
+    # Performs core-owned GTK shutdown before Ruby process exit.
+    #
+    # @return [Object, nil] GTK main quit result when available
+    def self.shutdown_gtk!
+      cleanup_gtk!
+      Gtk.lich_main_quit if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit)
+    end
+
+    # Temporarily allows a core-owned Gtk.main_quit call to bypass script guards.
+    #
+    # @yield Runs a core shutdown operation that must reach the underlying GTK API
+    # @return [Object] the block result
+    def self.allow_gtk_main_quit
+      previous = Thread.current[:lich_allow_gtk_main_quit]
+      Thread.current[:lich_allow_gtk_main_quit] = true
+      yield
+    ensure
+      Thread.current[:lich_allow_gtk_main_quit] = previous
+    end
+
+    # Requests a GTK main-loop shutdown through the guarded core escape hatch.
+    #
+    # @return [Object, nil] GTK shutdown result when GTK is available
+    def self.quit_gtk_main_loop
+      return unless defined?(Gtk)
+      return Gtk.lich_main_quit if Gtk.respond_to?(:lich_main_quit)
+      return Gtk.main_quit if Gtk.respond_to?(:main_quit)
+    end
+
+    # Returns true when the shared GTK main loop is currently running.
+    #
+    # Used to decide whether core teardown can be handed to the GTK thread via
+    # {#shutdown_gtk_before_exit}. A false return means the queue cannot be
+    # serviced; only the terminal `lich.rbw` backstop may run direct teardown.
+    #
+    # @return [Boolean]
+    def self.gtk_main_loop_running?
+      return false unless defined?(Gtk) && Gtk.respond_to?(:main_level)
+
+      Gtk.main_level.to_i > 0
+    end
+
+    # Runs core GTK teardown before process exit, so Ruby's finalizer is not left
+    # to dispose surviving widget wrappers in an unsafe order (which disposes
+    # native objects out of order and segfaults).
+    #
+    # Dispatch depends on the GTK main loop state and caller context:
+    #
+    # * **Loop running** (the launcher and the main game loop, which call this
+    #   from a thread other than the GTK thread): the teardown is queued onto the
+    #   GTK thread and this method blocks on a bounded barrier until it completes.
+    #   {#shutdown_gtk!} also quits the loop, so this both destroys the widgets
+    #   and unwinds `Gtk.main`.
+    # * **Loop not running**: a queued block would never be serviced. Ordinary
+    #   callers clear retained Ruby references only. The terminal `lich.rbw`
+    #   backstop passes +direct: true+ after `Gtk.main` returns on the GTK thread;
+    #   only that path destroys surviving widgets directly in place. Gtk.main
+    #   has already returned there, so it must not call Gtk.main_quit.
+    #
+    # If GTK is unavailable, the queue cannot be serviced, the work cannot be
+    # queued, or it does not finish within +timeout+, the retention registries are
+    # cleared directly so Ruby-side callback references are not left alive until
+    # interpreter finalization.
+    #
+    # @param timeout [Float] seconds to wait for the queued teardown to complete
+    # @param direct [Boolean] true only for the terminal GTK-thread backstop after
+    #   `Gtk.main` returns
+    # @return [void]
+    def self.shutdown_gtk_before_exit(timeout: 2.0, direct: false)
+      return clear_gtk_retention_registries unless defined?(Gtk)
+
+      unless gtk_main_loop_running?
+        if direct
+          begin
+            cleanup_gtk!
+          rescue StandardError => e
+            Lich.log "warning: Failed to run direct GTK shutdown before exit: #{e.class}: #{e.message}"
+            clear_gtk_retention_registries
+          end
+        else
+          clear_gtk_retention_registries
+        end
+        return
+      end
+
+      shutdown_complete = Queue.new
+      queued = begin
+        Gtk.queue do
+          begin
+            shutdown_gtk!
+          ensure
+            shutdown_complete << true
+          end
+        end
+      rescue StandardError => e
+        Lich.log "warning: Failed to queue GTK shutdown before exit: #{e.class}: #{e.message}"
+        nil
+      end
+
+      unless queued
+        clear_gtk_retention_registries
+        return
+      end
+
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        begin
+          shutdown_complete.pop(true)
+          return
+        rescue ThreadError
+          break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.01
+        end
+      end
+
+      Lich.log 'warning: GTK shutdown queue did not complete before exit'
+      clear_gtk_retention_registries
+    end
+
+    # Returns log context for GTK guard messages.
+    #
+    # Prefers the currently running script name when available so blocked GTK
+    # loop operations can be traced back to the offending script.
+    #
+    # @return [String] formatted logging context such as `script=map` or `context=unknown`
+    def self.gtk_guard_context
+      script_name = Script.current&.name if defined?(Script) && Script.respond_to?(:current)
+      script_name && !script_name.to_s.empty? ? "script=#{script_name}" : 'context=unknown'
+    rescue StandardError
+      'context=unknown'
+    end
+
     if defined?(Gtk)
+      unless defined?(Lich::Common::GtkSignalHandlerRetention)
+        # Retain both the receiver wrapper and its callback Procs on the Ruby side.
+        # ruby-gnome stores signal handlers in C-side closures that Ruby's GC cannot
+        # see, which can leave long-lived GTK callbacks eligible for collection.
+        module GtkSignalHandlerRetention
+          def signal_connect(signal, *args, &block)
+            return super(signal, *args, &block) unless block
+
+            receiver = self
+            entry = Lich::Common.with_gtk_registry_lock do
+              retained_entry = Lich::Common.gtk_signal_handlers[receiver] ||= {
+                receiver: self,
+                handlers: [],
+                cleanup_installed: false
+              }
+              retained_entry[:handlers] << block
+              retained_entry
+            end
+
+            cleanup = proc do
+              Lich::Common.release_gtk_signal_handlers(receiver)
+              false
+            end
+
+            install_cleanup = Lich::Common.with_gtk_registry_lock do
+              next false if entry[:cleanup_installed]
+
+              entry[:cleanup_installed] = true
+              entry[:handlers] << cleanup
+              true
+            end
+
+            if install_cleanup
+              begin
+                super('destroy', &cleanup)
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock do
+                  entry[:handlers].delete(cleanup)
+                  entry[:cleanup_installed] = false
+                end
+              end
+            end
+
+            begin
+              super(signal, *args, &block)
+            rescue StandardError
+              Lich::Common.with_gtk_registry_lock do
+                entry[:handlers].delete(cleanup)
+                entry[:handlers].delete(block)
+                entry[:cleanup_installed] = false unless entry[:handlers].include?(cleanup)
+                Lich::Common.gtk_signal_handlers.delete(receiver) if entry[:handlers].empty?
+              end
+              raise
+            end
+          end
+        end
+
+        GLib::Instantiatable.prepend(GtkSignalHandlerRetention) if defined?(GLib::Instantiatable)
+      end
+
+      unless defined?(Lich::Common::GtkTimeoutRetention)
+        # Keep timeout callbacks alive until they fire or stop repeating.
+        module GtkTimeoutRetention
+          def add(*args, &block)
+            return super(*args, &block) unless block
+
+            callback_id = nil
+            retained = proc do |*callback_args|
+              begin
+                ret = block.call(*callback_args)
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks.delete(callback_id) } unless ret
+                ret
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks.delete(callback_id) }
+                raise
+              end
+            end
+
+            callback_id = super(*args, &retained)
+            Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[callback_id] = retained } if callback_id
+            callback_id
+          end
+        end
+
+        GLib::Timeout.singleton_class.prepend(GtkTimeoutRetention) if defined?(GLib::Timeout)
+      end
+
+      unless defined?(Lich::Common::GtkIdleRetention)
+        # Keep idle callbacks alive until they stop repeating.
+        module GtkIdleRetention
+          def add(*args, &block)
+            return super(*args, &block) unless block
+
+            callback_id = nil
+            retained = proc do |*callback_args|
+              begin
+                ret = block.call(*callback_args)
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks.delete(callback_id) } unless ret
+                ret
+              rescue StandardError
+                Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks.delete(callback_id) }
+                raise
+              end
+            end
+
+            callback_id = super(*args, &retained)
+            Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[callback_id] = retained } if callback_id
+            callback_id
+          end
+        end
+
+        GLib::Idle.singleton_class.prepend(GtkIdleRetention) if defined?(GLib::Idle)
+      end
+
+      unless defined?(Lich::Common::GtkMainLoopGuards)
+        # Lich owns the shared GTK main loop. Scripts may create and show
+        # windows, but redundant Gtk.main / Gtk.main_quit calls can destabilize
+        # every GTK script in the process.
+        module GtkMainLoopGuards
+          # Starts the GTK main loop only when Lich has not already started it.
+          #
+          # @param args [Array] arguments forwarded to GTK
+          # @return [Object, nil] GTK return value, or nil when the call is ignored
+          def main(*args)
+            if respond_to?(:main_level) && main_level.to_i > 0
+              Lich.log "info: Ignoring redundant Gtk.main request while GTK main loop is already running (#{Lich::Common.gtk_guard_context})"
+              return nil
+            end
+
+            super(*args)
+          end
+
+          # Prevents scripts from stopping the shared GTK main loop.
+          #
+          # Core-owned shutdown paths must use {#lich_main_quit} instead.
+          #
+          # @return [Object, nil] GTK return value for core-owned shutdown, or nil when ignored
+          def main_quit(*)
+            return super if Thread.current[:lich_allow_gtk_main_quit]
+
+            if respond_to?(:main_level) && main_level.to_i > 0
+              Lich.log "info: Ignoring Gtk.main_quit request from shared GTK script context (#{Lich::Common.gtk_guard_context})"
+            end
+
+            nil
+          end
+
+          # Explicit escape hatch for core-owned shutdown paths.
+          #
+          # @param args [Array] arguments forwarded to GTK
+          # @return [Object] GTK return value
+          def lich_main_quit(*args)
+            Lich::Common.allow_gtk_main_quit { main_quit(*args) }
+          end
+        end
+
+        Gtk.singleton_class.prepend(GtkMainLoopGuards)
+      end
+
       # Calling Gtk API in a thread other than the main thread may cause random segfaults
+      #
+      # Schedules the block onto the GTK thread using a one-shot timeout so
+      # callers can safely request UI work from script threads.
+      #
+      # @yield Block to run on the GTK thread
+      # @return [Integer, nil] GLib timeout source ID, or nil if GTK rejects the call
       def Gtk.queue(&block)
         GLib::Timeout.add(1) {
           begin
@@ -147,9 +534,11 @@ module Lich
     begin
       Gtk.queue {
         @default_icon = GdkPixbuf::Pixbuf.new(:file => File.join(LICH_DIR, 'logo.png'))
-        # Add a function to call for when GTK is idle
+        # Keep an idle callback active so GTK continues pumping work while the
+        # launcher is open; this callback is intentionally perpetual.
         GLib::Idle.add do
           sleep 0.01
+          true
         end
         @theme_state = Lich.track_dark_mode
       }

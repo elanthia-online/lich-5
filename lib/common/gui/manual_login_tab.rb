@@ -171,7 +171,9 @@ module Lich
           @make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
 
           # Create favorites option
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           @make_favorite_option = Gtk::CheckButton.new('★ Mark as favorite')
+          # rubocop:enable Custom/AsciiOnlySource
           @make_favorite_option.set_tooltip_text('Mark this character as a favorite for quick access')
 
           # Create play button

@@ -174,6 +174,24 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe 'SENTINEL_FRONTENDS' do
+    it 'is frozen' do
+      expect(FE::SENTINEL_FRONTENDS).to be_frozen
+    end
+
+    it 'includes saga' do
+      expect(FE::SENTINEL_FRONTENDS).to include('saga')
+    end
+
+    it 'does not include non-sentinel based frontends' do
+      expect(FE::SENTINEL_FRONTENDS).not_to include('wizard')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('avalon')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('genie')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('wrayth')
+      expect(FE::SENTINEL_FRONTENDS).not_to include('stormfront')
+    end
+  end
+
   describe 'GSL_FRONTENDS and XML_FRONTENDS are mutually exclusive' do
     it 'have no overlap' do
       overlap = FE::GSL_FRONTENDS & FE::XML_FRONTENDS
@@ -419,6 +437,44 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'accepts one argument (version_string)' do
       expect(frontend.method(:send_handshake).arity).to eq(1)
+    end
+  end
+
+  describe '.player_id_tag' do
+    it 'is defined as a module method' do
+      expect(frontend).to respond_to(:player_id_tag)
+    end
+
+    it 'builds the tag from a bare numeric id' do
+      expect(frontend.player_id_tag('12345')).to eq("<playerID id='12345'/>")
+    end
+
+    it 'accepts an integer id and stringifies it' do
+      expect(frontend.player_id_tag(12345)).to eq("<playerID id='12345'/>")
+    end
+
+    it 'reproduces the id verbatim (no zero-stripping)' do
+      expect(frontend.player_id_tag('007')).to eq("<playerID id='007'/>")
+    end
+
+    it 'returns nil for an empty id (login not yet populated)' do
+      expect(frontend.player_id_tag('')).to be_nil
+    end
+
+    it 'returns nil for a nil id' do
+      expect(frontend.player_id_tag(nil)).to be_nil
+    end
+
+    it 'returns nil for a non-numeric id' do
+      expect(frontend.player_id_tag('abc')).to be_nil
+    end
+
+    it 'returns nil when the id has non-numeric characters mixed in' do
+      expect(frontend.player_id_tag('12a45')).to be_nil
+    end
+
+    it 'returns nil when the id has surrounding whitespace' do
+      expect(frontend.player_id_tag(' 12345 ')).to be_nil
     end
   end
 

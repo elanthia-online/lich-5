@@ -155,7 +155,9 @@ RSpec.describe Lich::Common::GUI::MasterPasswordPrompt do
       end
 
       it 'handles unicode characters' do
+        # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixture exercises prompt pass-through.
         password = 'Пароль密码🔐12345'
+        # rubocop:enable Custom/AsciiOnlySource
         allow(Lich::Common::GUI::MasterPasswordPromptUI).to receive(:show_dialog)
           .and_return(password)
 

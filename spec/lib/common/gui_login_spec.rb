@@ -19,6 +19,7 @@ RSpec.describe Lich::Common, "#gui_login" do
   let(:slider_box) { double("SliderBox", visible: nil) }
   let(:notebook) { double("Notebook", set_page: nil) }
   let(:tab_widget) { double("TabWidget") }
+  let(:window_allocation) { double("WindowAllocation", width: 900, height: 700) }
   let(:window) { double("Window", destroy: nil) }
   let(:account_manager_ui) { double("AccountManagerUI", create_accounts_tab: nil, create_add_character_tab: nil, create_add_account_tab: nil) }
   let(:saved_login_tab) { double("SavedLoginTab", ui_elements: saved_login_ui, tab_widget: tab_widget) }
@@ -96,8 +97,12 @@ RSpec.describe Lich::Common, "#gui_login" do
 
     # Mock Gtk as a module
     stub_const("Gtk", Module.new)
-    allow(Gtk).to receive(:queue) { |&block| block.call if block }
+    allow(Gtk).to receive(:queue) do |&block|
+      block.call if block
+      1
+    end
     allow(Gtk).to receive(:main_quit)
+    allow(Gtk).to receive(:lich_main_quit)
 
     # Mock Gtk classes
     stub_const("Gtk::Notebook", Class.new)
@@ -112,8 +117,10 @@ RSpec.describe Lich::Common, "#gui_login" do
     allow(window).to receive(:title=)
     allow(window).to receive(:border_width=)
     allow(window).to receive(:add)
-    allow(window).to receive(:signal_connect).and_yield
+    allow(window).to receive(:signal_connect)
     allow(window).to receive(:destroyed?).and_return(false)
+    allow(window).to receive(:allocation).and_return(window_allocation)
+    allow(window).to receive(:position).and_return([100, 100])
     allow(window).to receive(:default_width=)
     allow(window).to receive(:default_height=)
     allow(window).to receive(:override_background_color)
@@ -167,6 +174,11 @@ RSpec.describe Lich::Common, "#gui_login" do
     allow(Lich).to receive(:track_dark_mode).and_return(false)
     allow(Lich).to receive(:track_persistent_launcher_mode).and_return(false)
     allow(Lich).to receive(:log)
+    allow(Lich::Common).to receive(:shutdown_gtk!)
+    allow(Lich::Common).to receive(:clear_gtk_retention_registries)
+    # The launcher delegates pre-exit GTK teardown to this shared helper; its
+    # barrier/timeout behavior is covered in gtk_spec.
+    allow(Lich::Common).to receive(:shutdown_gtk_before_exit)
   end
 
   after do
@@ -250,12 +262,14 @@ RSpec.describe Lich::Common, "#gui_login" do
       expect(test_instance.gui_login).to eq(launch_data)
     end
 
-    it "exits when no launch data is available" do
+    it "runs shared GTK teardown then exits when no launch data is available" do
       # Set launch_data to nil
       test_instance.instance_variable_set(:@launch_data, nil)
 
-      # Test that the application exits when @launch_data is nil
+      # The exit path delegates pre-exit GTK teardown to the shared helper
+      # (barrier/timeout behavior is covered in gtk_spec) and then exits.
       expect { test_instance.gui_login }.to raise_error(SystemExit)
+      expect(Lich::Common).to have_received(:shutdown_gtk_before_exit)
     end
   end
 
@@ -293,7 +307,6 @@ RSpec.describe Lich::Common, "#gui_login" do
       captured_saved_callbacks.fetch(:on_play).call(launch_data)
 
       expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
-      expect(test_instance.instance_variable_get(:@done)).to be true
       expect(window).to have_received(:destroy)
     end
 
@@ -332,8 +345,40 @@ RSpec.describe Lich::Common, "#gui_login" do
 
       expect(Lich::Common::SessionLauncher).not_to have_received(:launch)
       expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
-      expect(test_instance.instance_variable_get(:@done)).to be true
       expect(window).to have_received(:destroy)
+    end
+  end
+
+  context "when handling launcher window shutdown callbacks" do
+    before do
+      test_instance.instance_variable_set(:@window, window)
+      test_instance.instance_variable_set(:@tab_communicator, double("TabCommunicator", clear_callbacks: nil))
+      allow(test_instance).to receive(:save_window_geometry)
+    end
+
+    it "allows GTK to perform the actual window destroy after delete_event work" do
+      expect(test_instance.send(:handle_window_delete_event)).to be false
+      expect(test_instance).to have_received(:save_window_geometry)
+      expect(window).not_to have_received(:destroy)
+    end
+
+    it "marks launcher shutdown complete from the destroy callback" do
+      test_instance.instance_variable_set(:@done, false)
+
+      test_instance.send(:handle_window_destroy)
+
+      expect(test_instance.instance_variable_get(:@done)).to be true
+    end
+
+    it "falls back to immediate launcher cleanup when GTK rejects queueing" do
+      test_instance.instance_variable_set(:@done, false)
+      allow(Gtk).to receive(:queue).and_return(nil)
+
+      test_instance.send(:close_launcher_window)
+
+      expect(test_instance).to have_received(:save_window_geometry)
+      expect(window).to have_received(:destroy)
+      expect(test_instance.instance_variable_get(:@done)).to be true
     end
   end
 end

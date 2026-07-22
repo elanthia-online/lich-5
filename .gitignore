@@ -10,22 +10,24 @@ temp/
 jinxp
 .pre-commit-config.yaml
 .rubocop.yml
+.rubocop/
 *.swp
 logo.png
 fly64.png
 fly64.ico
-R4LGTK3.iss
 .DS_Store
 # handle symlinks since these are files on *nix
 data
 scripts
 .vscode
+.idea
 .claude
 doc/yard/
 *.md
 !docs/*.md
 !spec/README.md
 !spec/fixtures/README.md
+!bench/README.md
 # Test database artifacts
 spec/*.db
 spec/*.db3

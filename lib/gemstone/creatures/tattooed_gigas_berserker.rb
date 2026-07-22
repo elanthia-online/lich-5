@@ -79,9 +79,9 @@
       "A tattooed gigas berserker's brow knits sneers as his eyes fruitlessly search the shadows."
     ],
 
-    general_advice: "* Berserkers are [[square]] creatures in fairly light armor, so players of [[semi]]s and [[pure]]s can take advantage of low [[TD]] and [[CvA]] by casting [[CS]]-based offensive spells.",
-    bards: "* By destroying berserkers' weapons, [[Vibration Chant (1002)]] stops many of the most threatening things they can do and sometimes kills them outright.",
-    wizards: "* Berserkers can be targeted with [[Mana Leech (516)]].",
+    general_advice: "* Berserkers are square creatures in fairly light armor, so players of semis and pures can take advantage of low TD and CvA by casting CS-based offensive spells.",
+    bards: "* By destroying berserkers' weapons, Vibration Chant (1002) stops many of the most threatening things they can do and sometimes kills them outright.",
+    wizards: "* Berserkers can be targeted with Mana Leech (516).",
 
     combat_messaging: "[SMR result: 93 (Open d100: 7)]\nStooping down from his vast height, a tattooed gigas berserker reaches toward you with a gigantic fist!  You scurry out of the way of the huge fingers, heart pounding in your chest!"
   }

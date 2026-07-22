@@ -89,7 +89,7 @@ jobs:
             printf 'base_safe=%s\n'   "$BASE"   >> "$GITHUB_OUTPUT"
 
       - name: Checkout base branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ steps.guard_validate.outputs.base_safe }}
           fetch-depth: 0
@@ -193,7 +193,7 @@ jobs:
             echo "Could not read current version from .release-please-manifest.json"
             exit 1
           fi
-          IFS='.' read -r MA MI PA <<<"$CURR"
+          IFS='.' read -r MA MI <<<"$CURR"
           NEXT="${MA}.$((MI+1)).0-beta.0"
           echo "Seeding Release-As: v$NEXT"
           git config user.name  "github-actions[bot]"
@@ -327,7 +327,7 @@ jobs:
           fi
 
       - name: Release Please (prerelease)
-        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: rp
         with:
           config-file: release-please-config.prerelease.json

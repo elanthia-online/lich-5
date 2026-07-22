@@ -55,7 +55,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ inputs.target_branch || github.ref_name || 'main' }}
           fetch-depth: 0
@@ -117,6 +117,14 @@ jobs:
             exit 0
           else
             echo "has_releasables=true" >> "$GITHUB_OUTPUT"
+            releaseable_shas="$(
+              if [ -n "$last" ]; then
+                git log --format='%H%x09%s' "$range"
+              else
+                git log --format='%H%x09%s'
+              fi | awk -F '\t' '$2 ~ /^(feat|fix)\((all|dr|gs)\):/ { print $1 }' | paste -sd, -
+            )"
+            echo "releaseable_shas=$releaseable_shas" >> "$GITHUB_OUTPUT"
           fi
 
       - name: "Checkpoint: tag + rotating backup/stable/*"
@@ -162,13 +170,71 @@ jobs:
 
       - name: Release Please (open/update Release PR)
         if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
-        # Pinned to SHA for supply-chain safety (release-please-action v4.4.1)
-        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        # Pinned to SHA for supply-chain safety
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: ${{ inputs.target_branch || github.ref_name || 'main' }}
           skip-github-release: true
+
+      - name: "Guard: candidate Release Please PR includes every releaseable commit"
+        if: ${{ steps.classify.outputs.skip != 'true' && steps.guard.outputs.has_releasables == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          RELEASEABLE_SHAS: ${{ steps.guard.outputs.releaseable_shas }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const expected = (process.env.RELEASEABLE_SHAS || '')
+              .split(',')
+              .map(sha => sha.trim())
+              .filter(Boolean);
+
+            if (expected.length === 0) {
+              core.setFailed('Release Please canary received no releaseable commit SHAs.');
+              return;
+            }
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
+            const candidate = pulls.find(pr =>
+              (pr.user?.login === 'release-please[bot]' || pr.user?.login === 'github-actions[bot]') &&
+              pr.labels?.some(label => label.name === 'autorelease: pending')
+            );
+
+            if (!candidate) {
+              core.setFailed('Release Please produced no open pending release PR for the detected releaseable commits.');
+              return;
+            }
+
+            const content = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: 'CHANGELOG.md',
+              ref: candidate.head.sha,
+            });
+            if (Array.isArray(content.data) || content.data.type !== 'file') {
+              core.setFailed(`Could not read CHANGELOG.md from candidate Release Please PR #${candidate.number}.`);
+              return;
+            }
+
+            const changelog = Buffer.from(content.data.content, 'base64').toString('utf8');
+            const missing = expected.filter(sha => !changelog.includes(`/commit/${sha}`));
+            if (missing.length > 0) {
+              core.setFailed(
+                `Candidate Release Please PR #${candidate.number} omits releaseable commit(s): ${missing.join(', ')}.`
+              );
+              return;
+            }
+
+            core.notice(`Candidate Release Please PR #${candidate.number} includes all ${expected.length} releaseable commit(s).`);
 
       # PR body and Release body formatting are handled by:
       #  - format-pr-body-stable.yml  (PR body)

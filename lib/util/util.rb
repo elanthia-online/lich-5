@@ -126,7 +126,7 @@ module Lich
             else
               line
             end
-          })
+          }, persist: false) # scoped to this command; removed in the ensure below
           use_fput ? fput(command) : put(command)
 
           until (line = get) =~ start_pattern; end
@@ -198,7 +198,7 @@ module Lich
           else
             line
           end
-        })
+        }, persist: false) # scoped to this command; removed in the ensure below
         # script thread
         fput 'info'
         loop {

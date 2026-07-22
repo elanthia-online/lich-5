@@ -411,6 +411,8 @@ module Lich
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
               GameObj.begin_room_objs
+              GameObj.clear_loot
+              GameObj.clear_npcs
               Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
               @pending_crtr_status.clear
             elsif attributes['id'] == 'room players'
@@ -939,6 +941,7 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   @last_npc = GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  GameObj.new_npc(@obj_exist, @obj_noun, text_string)
                   if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
                     creature = Creature.register(text_string, @obj_exist, @obj_noun)
                     if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))

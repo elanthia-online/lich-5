@@ -452,11 +452,15 @@ module Lich
       #   "You remain concealed by your surroundings, convinced that your unloading of the crossbow went unobserved."
       #
       # @see UNLOAD_WEAPON_FAILURE_PATTERNS
+      # The game may prepend an aim/firing timer tag to the unload line, e.g.
+      #   "<dialogData id='AimTimerDialog'><timer id='firingTimer' value='0' /> </dialogData>You unload the shortbow."
+      # The optional `(?:<dialogData.*?<\/dialogData>)?` prefix lets the patterns
+      # match whether or not the tag is present, without assuming its inner values.
       UNLOAD_WEAPON_SUCCESS_PATTERNS = [
-        /^You unload/,
+        /^(?:<dialogData.*?<\/dialogData>)?You unload/,
         /^Your .* fall.*to your feet\.$/,
         /As you release the string/,
-        /^You .* unloading/
+        /^(?:<dialogData.*?<\/dialogData>)?You .* unloading/
       ].freeze
 
       # Failure patterns for the UNLOAD verb.
