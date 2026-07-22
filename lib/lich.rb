@@ -184,12 +184,14 @@ module Lich
   end
 
   def Lich.seek(fe)
-    if fe =~ /wizard/
-      return $wiz_fe_loc
-    elsif fe =~ /stormfront/
-      return $sf_fe_loc
+    if defined?(Lich::Common::FrontendLocator)
+      return Lich::Common::FrontendLocator.compatibility_location(fe)
     end
-    pp "Landed in get_simu_launcher method"
+
+    return $wiz_fe_loc if fe =~ /wizard/
+    return $sf_fe_loc if fe =~ /stormfront/
+
+    nil
   end
 
   def Lich.db

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../front-end'
+
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Common::Authentication::LoginHelpers.method namespace.
 
@@ -20,9 +22,9 @@ module Lich
         NEW_CHARACTER_LOGIN = /\Anew\z/i
 
         # Valid frontend flags accepted by CLI login argument parsing.
-        # Note: only wizard/stormfront/avalon affect protocol path selection;
+        # Note: wizard/stormfront/avalon/saga affect protocol path selection;
         # other values are treated as frontend launch selectors/modifiers.
-        VALID_FRONTENDS = %w[avalon stormfront wizard genie frostbite wrayth].freeze
+        VALID_FRONTENDS = %w[avalon stormfront wizard genie frostbite wrayth saga].freeze
 
         # Valid realms for elogin support
         VALID_REALMS = %w[prime platinum shattered test].freeze
@@ -34,7 +36,7 @@ module Lich
         DRAGONREALMS_FLAGS = %w[--dragonrealms --dr].freeze
 
         # Frontend pattern for regex matching
-        FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth)$/i.freeze
+        FRONTEND_PATTERN = /^--(?:frontend=)?(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth|saga)$/i.freeze
         INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
         # Custom launch pattern for regex matching
@@ -43,7 +45,7 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend headless reconnect reconnected save
-          genie frostbite wrayth
+          genie frostbite wrayth saga
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
@@ -212,7 +214,7 @@ module Lich
             elsif frontend != :__unset && !frontend.nil?
               # For standard entries, ensure custom_launch is nil to avoid matching custom entries
               next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
-              next unless character[:frontend].to_s.casecmp?(frontend.to_s)
+              next unless Frontend.canonical_name(character[:frontend]) == Frontend.canonical_name(frontend)
             end
 
             build_character_result(account_name, account_data, character)
@@ -252,7 +254,7 @@ module Lich
             elsif frontend != :__unset && !frontend.nil?
               # For standard entries, ensure custom_launch is nil to avoid matching custom entries
               next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
-              next unless character[:frontend].to_s == frontend.to_s
+              next unless Frontend.canonical_name(character[:frontend]) == Frontend.canonical_name(frontend)
             end
 
             build_character_result(account_name, account_data, character)
@@ -387,7 +389,10 @@ module Lich
 
           matching_chars.each do |char|
             score = 0
-            score += 1 if requested_fe != :__unset && char[:frontend] == requested_fe
+            if requested_fe != :__unset &&
+               Frontend.canonical_name(char[:frontend]) == Frontend.canonical_name(requested_fe)
+              score += 1
+            end
 
             if score > highest_score
               best_match = char
@@ -512,7 +517,7 @@ module Lich
           argv.each do |arg|
             case arg
             when FRONTEND_PATTERN
-              frontend = Regexp.last_match[:fe].downcase
+              frontend = Frontend.canonical_name(Regexp.last_match[:fe])
             when CUSTOM_LAUNCH_PATTERN
               custom_launch = Regexp.last_match[:cl]
             end

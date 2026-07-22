@@ -68,6 +68,20 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'maps Saga launch data back to the Saga CLI selector' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'GAME=SAGA'])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--saga',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
   it 'returns structured error when character is missing' do
     result = described_class.launch(launch_data)
     expect(result[:ok]).to be false

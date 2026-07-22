@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../authentication/gui'
+require_relative '../front-end'
+require_relative '../frontend_locator'
 
 module Lich
   module Common
@@ -78,8 +80,25 @@ module Lich
         # @param callback [Proc] Callback to execute when play button is clicked
         # @return [void]
         def self.setup_play_button_handler(button, login_info, callback)
+          if launchable_frontend?(login_info)
+            button.tooltip_text = nil
+          else
+            frontend_name = Frontend.display_name(login_info[:frontend])
+            button.tooltip_text = "#{frontend_name} is not available on this computer"
+          end
+
           button.signal_connect('button-release-event') { |_owner, ev|
             if ev.event_type == Gdk::EventType::BUTTON_RELEASE && ev.button == 1
+              unless launchable_frontend?(login_info, refresh: true)
+                Lich.msgbox(
+                  message: "#{Frontend.display_name(login_info[:frontend])} is no longer available.",
+                  icon: :error
+                )
+                next true
+              end
+
+              button.tooltip_text = nil
+
               Lich::Common::Authentication::GUI.authenticate_and_launch(
                 button: button,
                 login_info: login_info,
@@ -89,6 +108,28 @@ module Lich
               pp "I would be adding to a team tab"
             end
           }
+        end
+
+        # Checks machine-local frontend availability without constraining saved
+        # entry storage or identity. Explicit Custom Launch entries remain valid.
+        #
+        # @param login_info [Hash]
+        # @param refresh [Boolean]
+        # @return [Boolean]
+        def self.launchable_frontend?(login_info, refresh: false)
+          return true if custom_launch?(login_info[:custom_launch])
+
+          FrontendLocator.launchable?(login_info[:frontend], refresh: refresh)
+        rescue ArgumentError
+          false
+        end
+
+        # Returns whether a value contains a usable Custom Launch command.
+        #
+        # @param value [Object]
+        # @return [Boolean]
+        def self.custom_launch?(value)
+          !value.to_s.strip.empty?
         end
 
         # Sets up the remove button handler

@@ -32,6 +32,99 @@ FE = Lich::Common::Frontend unless defined?(FE)
 RSpec.describe Lich::Common::Frontend do
   let(:frontend) { Lich::Common::Frontend }
 
+  describe '.definition_for' do
+    it 'returns immutable catalog metadata for Saga' do
+      definition = frontend.definition_for(:saga)
+
+      expect(definition[:id]).to eq('saga')
+      expect(definition.dig(:metadata, :display_name)).to eq('Saga')
+      expect(definition.dig(:metadata, :gui_selectable)).to be(true)
+      expect(definition.dig(:metadata, :gui_platforms)).to eq(%i[darwin windows])
+      expect(definition.dig(:metadata, :launcher_status)).to eq(:temporary_pending_cli_login)
+      expect(definition.dig(:metadata, :launch_notice)).to eq(
+        'Temporary Saga launch bridge pending Saga CLI login support'
+      )
+      expect(definition.dig(:metadata, :launch_plans, :darwin)).to eq(
+        {
+          command: '/usr/bin/open',
+          arguments: %w[-n -b com.auchand.saga],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition.dig(:metadata, :launch_plans, :windows)).to eq(
+        {
+          command: :resolved_executable,
+          arguments: [],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition).to be_frozen
+      expect(definition[:metadata]).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin, :arguments)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin, :environment)).to be_frozen
+      expect {
+        definition.dig(:metadata, :launch_plans, :darwin, :arguments) << '--override'
+      }.to raise_error(FrozenError)
+    end
+
+    it 'reuses the immutable catalog definition' do
+      expect(frontend.definition_for(:saga)).to equal(frontend.definition_for(:saga))
+    end
+
+    it 'raises for a blank frontend identifier' do
+      expect { frontend.definition_for(nil) }
+        .to raise_error(ArgumentError, 'frontend name must not be empty')
+    end
+
+    it 'raises for an unknown frontend identifier without registering it' do
+      expect { frontend.definition_for('not-a-frontend') }
+        .to raise_error(ArgumentError, 'unknown frontend: not-a-frontend')
+      expect(frontend.registered_frontends).not_to include('not-a-frontend')
+    end
+  end
+
+  describe '.definitions' do
+    it 'exposes the first-tier GUI frontend catalog from one registry' do
+      ids = frontend.definitions(gui_selectable: true).map { |definition| definition[:id] }
+
+      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
+    end
+  end
+
+  describe '.display_name' do
+    it 'uses the catalog label for a known frontend' do
+      expect(frontend.display_name('stormfront')).to eq('Wrayth')
+    end
+
+    it 'uses a stable fallback for a legacy frontend' do
+      expect(frontend.display_name('suks')).to eq('Suks')
+    end
+  end
+
+  describe '.canonical_name' do
+    it 'maps Wrayth to the stable StormFront identifier' do
+      expect(frontend.canonical_name('wrayth')).to eq('stormfront')
+      expect(frontend.definition_for('wrayth')[:id]).to eq('stormfront')
+    end
+
+    it 'does not register unknown values while normalizing them' do
+      expect(frontend.canonical_name('UNKNOWN-FE')).to eq('unknown-fe')
+      expect(frontend.registered_frontends).not_to include('unknown-fe')
+    end
+  end
+
   # --- Constants ---------------------------------------------
 
   describe 'CLIENT_STRING' do
@@ -564,6 +657,7 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'returns false for unknown frontends' do
       expect(frontend.has_capability?('unknown_frontend', :xml)).to be false
+      expect(frontend.registered_frontends).not_to include('unknown_frontend')
     end
 
     it 'returns false for nil frontend' do
@@ -611,7 +705,7 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'includes all known frontends' do
       result = frontend.registered_frontends
-      %w[wrayth stormfront profanity genie frostbite wizard avalon].each do |fe|
+      %w[wrayth stormfront profanity genie frostbite suks wizard avalon].each do |fe|
         expect(result).to include(fe)
       end
     end
