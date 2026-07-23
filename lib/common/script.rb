@@ -1072,11 +1072,11 @@ module Lich
               # Same reasoning for the stream buffers: Script.new_downstream,
               # new_downstream_xml and new_upstream run on the parser thread and
               # push to these without a nil guard, and can fire in the window
-              # before the @@running.delete below. Reset to fresh empty arrays
+              # before the @@running.delete below. Reset to fresh empty buffers
               # ("no pending lines") rather than nil so a concurrent push cannot
               # raise NoMethodError. Distinct arrays - never the same object.
-              @downstream_buffer = []
-              @upstream_buffer = []
+              @downstream_buffer = LimitedArray.new
+              @upstream_buffer = LimitedArray.new
               @die_with = @at_exit_procs = @match_stack_labels = @match_stack_strings = nil
               @@running.delete(self)
               unless @quiet
@@ -1199,20 +1199,17 @@ module Lich
       end
 
       def clear
-        to_return = @downstream_buffer.dup
-        @downstream_buffer.clear
-        to_return
+        @downstream_buffer.clear_snapshot
       end
 
       def to_s
         @name
       end
 
-      def gets
+      def gets(timeout = nil)
         # fixme: no xml gets
         if @want_downstream or @want_downstream_xml or @want_script_output
-          sleep 0.05 while @downstream_buffer.empty?
-          @downstream_buffer.shift
+          @downstream_buffer.wait_shift(timeout)
         else
           echo 'this script is set as unique but is waiting for game data...'
           sleep 2
@@ -1222,11 +1219,7 @@ module Lich
 
       def gets?
         if @want_downstream or @want_downstream_xml or @want_script_output
-          if @downstream_buffer.empty?
-            nil
-          else
-            @downstream_buffer.shift
-          end
+          @downstream_buffer.try_shift
         else
           echo 'this script is set as unique but is waiting for game data...'
           sleep 2

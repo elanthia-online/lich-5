@@ -369,6 +369,8 @@ module Lich
 
     # Base Game class with common functionality
     class Game
+      class ServerQueueOverflow < StandardError; end
+
       # Seconds to wait for readable game socket data before one read timeout.
       READ_TIMEOUT_SECONDS = 100
 
@@ -378,8 +380,12 @@ module Lich
       # Sentinel returned when the game socket has no readable data before timeout.
       READ_TIMEOUT = Object.new.freeze
 
+      # A full queue means the parser cannot preserve the game stream. Dropping
+      # records or blocking the socket reader would both make recovery unsafe.
+      SERVER_QUEUE_CAPACITY = 4_096
+
       class << self
-        attr_reader :thread, :buffer, :_buffer, :game_instance
+        attr_reader :thread, :reader_thread, :server_queue, :buffer, :_buffer, :game_instance
 
         def autostarted?
           @@autostarted
@@ -398,6 +404,9 @@ module Lich
           @mutex = Mutex.new
           @last_recv = nil
           @thread = nil
+          @reader_thread = nil
+          @server_queue = SizedQueue.new(SERVER_QUEUE_CAPACITY)
+          reset_server_queue_stats!
           @buffer = Lich::Common::SharedBuffer.new
           @_buffer = Lich::Common::SharedBuffer.new
           @_buffer.max_size = 1000
@@ -521,9 +530,87 @@ module Lich
           @socket.nil? || @socket.closed?
         end
 
+        def reset_server_queue_stats!
+          @server_queue_enqueued = 0
+          @server_queue_dequeued = 0
+          @server_queue_last_depth = @server_queue&.length.to_i
+          @server_queue_max_depth = @server_queue_last_depth
+          @server_queue_last_enqueue_at = nil
+          @server_queue_last_dequeue_at = nil
+          @server_queue_last_wait = nil
+          @server_queue_max_wait = 0.0
+          @server_queue_total_wait = 0.0
+          @server_reader_hook_last = nil
+          @server_reader_hook_max = 0.0
+          @server_reader_hook_total = 0.0
+          @server_reader_enqueue_last = nil
+          @server_reader_enqueue_max = 0.0
+          @server_reader_enqueue_total = 0.0
+          @server_reader_process_last = nil
+          @server_reader_process_max = 0.0
+          @server_reader_process_total = 0.0
+          @server_parser_last = nil
+          @server_parser_max = 0.0
+          @server_parser_total = 0.0
+          nil
+        end
+
+        def server_queue_stats(reset: false)
+          depth = @server_queue&.length.to_i
+          dequeued = @server_queue_dequeued.to_i
+          last_wait = @server_queue_last_wait
+          max_wait = @server_queue_max_wait.to_f
+          avg_wait = dequeued.positive? ? @server_queue_total_wait.to_f / dequeued : 0.0
+          enqueued = @server_queue_enqueued.to_i
+          hook_last = @server_reader_hook_last
+          hook_max = @server_reader_hook_max.to_f
+          hook_avg = enqueued.positive? ? @server_reader_hook_total.to_f / enqueued : 0.0
+          enqueue_last = @server_reader_enqueue_last
+          enqueue_max = @server_reader_enqueue_max.to_f
+          enqueue_avg = enqueued.positive? ? @server_reader_enqueue_total.to_f / enqueued : 0.0
+          process_last = @server_reader_process_last
+          process_max = @server_reader_process_max.to_f
+          process_avg = enqueued.positive? ? @server_reader_process_total.to_f / enqueued : 0.0
+          parser_last = @server_parser_last
+          parser_max = @server_parser_max.to_f
+          parser_avg = dequeued.positive? ? @server_parser_total.to_f / dequeued : 0.0
+          stats = {
+            depth: depth,
+            last_depth: @server_queue_last_depth.to_i,
+            max_depth: [@server_queue_max_depth.to_i, depth].max,
+            enqueued: enqueued,
+            dequeued: dequeued,
+            last_wait: last_wait,
+            max_wait: max_wait,
+            avg_wait: avg_wait,
+            last_wait_ms: last_wait ? (last_wait * 1000.0).round(3) : nil,
+            max_wait_ms: (max_wait * 1000.0).round(3),
+            avg_wait_ms: (avg_wait * 1000.0).round(3),
+            reader_hook_last_ms: hook_last ? (hook_last * 1000.0).round(3) : nil,
+            reader_hook_max_ms: (hook_max * 1000.0).round(3),
+            reader_hook_avg_ms: (hook_avg * 1000.0).round(3),
+            reader_enqueue_last_ms: enqueue_last ? (enqueue_last * 1000.0).round(3) : nil,
+            reader_enqueue_max_ms: (enqueue_max * 1000.0).round(3),
+            reader_enqueue_avg_ms: (enqueue_avg * 1000.0).round(3),
+            reader_process_last_ms: process_last ? (process_last * 1000.0).round(3) : nil,
+            reader_process_max_ms: (process_max * 1000.0).round(3),
+            reader_process_avg_ms: (process_avg * 1000.0).round(3),
+            parser_process_last_ms: parser_last ? (parser_last * 1000.0).round(3) : nil,
+            parser_process_max_ms: (parser_max * 1000.0).round(3),
+            parser_process_avg_ms: (parser_avg * 1000.0).round(3),
+            last_enqueue_at: @server_queue_last_enqueue_at,
+            last_dequeue_at: @server_queue_last_dequeue_at,
+            reader_status: @reader_thread&.status,
+            parser_status: @thread&.status
+          }
+          reset_server_queue_stats! if reset
+          stats
+        end
+
         def close
           if @socket
             @socket.close rescue nil
+            @reader_thread.kill rescue nil
             @thread.kill rescue nil
           end
         end
@@ -570,7 +657,76 @@ module Lich
         end
 
         def start_main_thread
-          @thread = Thread.new do
+          @server_queue = SizedQueue.new(SERVER_QUEUE_CAPACITY)
+          reset_server_queue_stats!
+          start_socket_reader_thread
+          start_server_processor_thread
+        end
+
+        def record_server_queue_enqueue
+          @server_queue_enqueued = @server_queue_enqueued.to_i + 1
+          depth = @server_queue&.length.to_i
+          @server_queue_last_depth = depth
+          @server_queue_max_depth = depth if depth > @server_queue_max_depth.to_i
+          @server_queue_last_enqueue_at = Time.now
+          nil
+        end
+
+        def enqueue_server_string(server_string, enqueued_monotonic_at)
+          @server_queue.push([server_string, enqueued_monotonic_at], true)
+          record_server_queue_enqueue
+        rescue ThreadError
+          raise ServerQueueOverflow, "game parser queue exceeded #{SERVER_QUEUE_CAPACITY} records"
+        end
+
+        def record_server_reader_timing(hook_time:, enqueue_time:, process_time:)
+          @server_reader_hook_last = hook_time
+          @server_reader_hook_total = @server_reader_hook_total.to_f + hook_time.to_f
+          @server_reader_hook_max = hook_time if hook_time.to_f > @server_reader_hook_max.to_f
+
+          @server_reader_enqueue_last = enqueue_time
+          @server_reader_enqueue_total = @server_reader_enqueue_total.to_f + enqueue_time.to_f
+          @server_reader_enqueue_max = enqueue_time if enqueue_time.to_f > @server_reader_enqueue_max.to_f
+
+          @server_reader_process_last = process_time
+          @server_reader_process_total = @server_reader_process_total.to_f + process_time.to_f
+          @server_reader_process_max = process_time if process_time.to_f > @server_reader_process_max.to_f
+          nil
+        end
+
+        def record_server_queue_dequeue(enqueued_monotonic_at = nil)
+          @server_queue_dequeued = @server_queue_dequeued.to_i + 1
+          depth = @server_queue&.length.to_i
+          @server_queue_last_depth = depth
+          @server_queue_last_dequeue_at = Time.now
+          if enqueued_monotonic_at
+            wait = Process.clock_gettime(Process::CLOCK_MONOTONIC) - enqueued_monotonic_at.to_f
+            if wait >= 0.0
+              @server_queue_last_wait = wait
+              @server_queue_total_wait = @server_queue_total_wait.to_f + wait
+              @server_queue_max_wait = wait if wait > @server_queue_max_wait.to_f
+            end
+          end
+          nil
+        end
+
+        def record_server_parser_timing(parse_time)
+          @server_parser_last = parse_time
+          @server_parser_total = @server_parser_total.to_f + parse_time.to_f
+          @server_parser_max = parse_time if parse_time.to_f > @server_parser_max.to_f
+          nil
+        end
+
+        def unwrap_server_queue_item(item)
+          if item.is_a?(Array) && item.length == 2 && item[1].is_a?(Numeric)
+            item
+          else
+            [item, nil]
+          end
+        end
+
+        def start_socket_reader_thread
+          @reader_thread = Thread.new do
             consecutive_timeouts = 0
             max_consecutive_timeouts = MAX_CONSECUTIVE_READ_TIMEOUTS
 
@@ -591,16 +747,26 @@ module Lich
                     break
                   end
 
-                  @last_recv = Time.now
+                  reader_process_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  received_at = Time.now
+                  monotonic_received_at = reader_process_started
+                  @last_recv = received_at
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
-
-                  begin
-                    process_server_string(server_string)
-                  rescue GameStreamDesyncError
-                    raise
-                  rescue StandardError => e
-                    log_error("Error processing server string", e)
-                  end
+                  hook_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  Lich::Common::SocketReadHook.run(
+                    server_string,
+                    received_at: received_at,
+                    monotonic_received_at: monotonic_received_at
+                  ) if defined?(Lich::Common::SocketReadHook)
+                  hook_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  enqueue_started = hook_finished
+                  enqueue_server_string(server_string, enqueue_started)
+                  enqueue_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                  record_server_reader_timing(
+                    hook_time: hook_finished - hook_started,
+                    enqueue_time: enqueue_finished - enqueue_started,
+                    process_time: enqueue_finished - reader_process_started
+                  )
                 rescue Errno::ETIMEDOUT, Errno::EWOULDBLOCK, IO::TimeoutError
                   consecutive_timeouts += 1
 
@@ -646,8 +812,34 @@ module Lich
                 record_shutdown_reason(reason, source: :game_reader, detail: e.class)
                 shutdown_log.info("server thread exiting due to #{reason}")
               end
+            ensure
+              @server_queue << nil if @server_queue && @thread&.alive?
             end
           end
+          @reader_thread.name = 'game socket reader' if @reader_thread.respond_to?(:name=)
+          @reader_thread.priority = 5
+        end
+
+        def start_server_processor_thread
+          @thread = Thread.new do
+            begin
+              loop do
+                item = @server_queue.pop
+                break if item.nil?
+
+                server_string, enqueued_monotonic_at = unwrap_server_queue_item(item)
+                record_server_queue_dequeue(enqueued_monotonic_at)
+                parse_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                process_server_string(server_string)
+                record_server_parser_timing(Process.clock_gettime(Process::CLOCK_MONOTONIC) - parse_started)
+              end
+            rescue StandardError => e
+              log_error("Error processing server string", e)
+              record_shutdown_reason(:unrecoverable_game_thread_error, source: :game_parser, detail: e.class)
+              @socket.close rescue nil
+            end
+          end
+          @thread.name = 'game parser' if @thread.respond_to?(:name=)
           @thread.priority = 4
         end
 
@@ -919,9 +1111,10 @@ module Lich
         end
 
         def send_to_client(alt_string)
-          if $_DETACHABLE_CLIENT_
-            $_DETACHABLE_CLIENT_.write(alt_string)
-            $_DETACHABLE_CLIENT_ = nil unless $_DETACHABLE_CLIENT_&.alive?
+          detachable_clients = $_DETACHABLE_CLIENT_REGISTRY_&.snapshot || []
+          detachable_clients = [$_DETACHABLE_CLIENT_] if detachable_clients.empty? && $_DETACHABLE_CLIENT_
+          if !detachable_clients.empty?
+            detachable_clients.each { |client| client.write(alt_string) if client.alive? }
           elsif $_CLIENT_
             $_CLIENT_.write(alt_string)
           end
@@ -932,7 +1125,7 @@ module Lich
             shutdown_log.info("server_thread: #{connection_disruption_log_message(error)}")
             shutdown_log.debug("server_thread backtrace: #{error.backtrace.join("\n\t")}") if error.backtrace
           else
-            shutdown_log.error("server_thread: #{error}\n\t#{error.backtrace.join("\n\t")}")
+            shutdown_log.error("server_thread: #{error}\n\t#{Array(error.backtrace).join("\n\t")}")
           end
           sleep 0.2
 
@@ -948,6 +1141,9 @@ module Lich
             return false
           when GameStreamDesyncError
             shutdown_log.info("game stream desync detected - will not retry")
+            return false
+          when ServerQueueOverflow
+            shutdown_log.info("game parser queue overflow - will not retry")
             return false
           else
             # Check if socket/client are closed or if it's a known fatal error
@@ -976,6 +1172,8 @@ module Lich
             :connection_aborted
           when GameStreamDesyncError
             :game_stream_desync
+          when ServerQueueOverflow
+            :unrecoverable_game_thread_error
           else
             :unrecoverable_game_thread_error
           end

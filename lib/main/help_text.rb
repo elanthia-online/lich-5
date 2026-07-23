@@ -228,6 +228,8 @@ module Lich
             lan (its private LAN address), or any (0.0.0.0). Lich's listen sockets are
             unauthenticated - anyone who can reach one controls the session - so
             prefer tailscale over lan or any.
+            Multiple frontends may attach to one detachable port. Each receives game
+            output, and commands from all attached frontends are processed serially.
             Compatibility flags remain supported but are intentionally omitted from the default help screen.
         TEXT
       end

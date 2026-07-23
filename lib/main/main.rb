@@ -235,7 +235,13 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
+      Frontend.client = if ARGV.any? { |a| a =~ /^--saga$/i }
+                          'saga'
+                        elsif @argv_options[:detachable_client_port] && !ARGV.any? { |a| a =~ /^--genie$/i }
+                          'profanity'
+                        else
+                          'unknown'
+                        end
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -686,8 +692,7 @@ reconnect_if_wanted = proc {
           end
           # Lich.log(client_string)
           begin
-            $_IDLETIMESTAMP_ = Time.now
-            do_client(client_string)
+            dispatch_client_input(client_string)
           rescue
             respond "--- Lich: error: client_thread: #{$!}"
             respond $!.backtrace.first
@@ -720,181 +725,65 @@ reconnect_if_wanted = proc {
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       server = nil
-      loop {
-        listener_connected = false
-        begin
-          # Close any existing server socket before creating a new one (credit: mrhoribu, PR #1157)
-          if server && !server.closed?
-            Lich.log "info: closing existing server socket before recreating"
-            server.close rescue nil
-          end
-          server = Lich::Common::ReusableTCPServer.create(@argv_options[:detachable_client_host], @argv_options[:detachable_client_port])
-          login_idx = ARGV.index('--login')
-          char_name = if !login_idx.nil? && ARGV[login_idx + 1]
-                        ARGV[login_idx + 1].capitalize
-                      end
-
+      begin
+        loop {
           begin
-            Frontend.create_session_file(char_name, server.local_address.ip_address, server.local_address.ip_port) if char_name
-          rescue => e
-            Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
-          end
-          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
-            host: server.local_address.ip_address,
-            port: server.local_address.ip_port,
-            connected: false
-          )
-
-          listen_ip = server.local_address.ip_address
-          listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
-          listen_address = "#{listen_ip}:#{server.local_address.ip_port}"
-          Lich.log "info: detachable client server listening on #{listen_address}"
-          $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
-
-          accepted_socket, = server.accept
-          $_DETACHABLE_CLIENT_ = SynchronizedSocket.new(accepted_socket)
-          $_DETACHABLE_CLIENT_.sync = true
-          Lich.log "info: detachable client connected"
-
-          # Close server socket after accepting - only one client connects at a time
-          Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
-            host: server.local_address.ip_address,
-            port: server.local_address.ip_port,
-            connected: true
-          )
-          listener_connected = true
-          server.close rescue nil
-          server = nil
-        rescue => e
-          Lich.log "error: detachable_client_thread (server setup): #{e}\n\t#{e.backtrace.join("\n\t")}"
-          server.close rescue nil
-          server = nil
-          $_DETACHABLE_CLIENT_.close rescue nil
-          $_DETACHABLE_CLIENT_ = nil
-          begin
-            Frontend.cleanup_session_file
-          rescue => cleanup_error
-            Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
-          end
-
-          Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
-          sleep 5
-          next
-        ensure
-          server.close rescue nil
-          unless listener_connected
-            Frontend.cleanup_session_file
-            Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
-          end
-        end
-        if $_DETACHABLE_CLIENT_
-          begin
-            unless ARGV.any? { |a| a =~ /^--(genie|saga)$/i }
-              Frontend.client = 'profanity'
-              Thread.new {
-                100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
-                init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
-                init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
-                init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
-                init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-                init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
-                for indicator in ['IconBLEEDING', 'IconPOISONED', 'IconDISEASED', 'IconSTANDING', 'IconKNEELING', 'IconSITTING', 'IconPRONE']
-                  init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
-                end
-                # These don't exist in DR.
-                if XMLData.game =~ /GS/
-                  init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-                  init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
-                  init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-                  init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-                  init_str.concat "<left>#{GameObj.left_hand.name}</left>"
-                  for area in ['back', 'leftHand', 'rightHand', 'head', 'rightArm', 'abdomen', 'leftEye', 'leftArm', 'chest', 'rightLeg', 'neck', 'leftLeg', 'nsys', 'rightEye']
-                    if Wounds.send(area) > 0
-                      init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
-                    elsif Scars.send(area) > 0
-                      init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
-                    end
-                  end
-                end
-                init_str.concat '<compass>'
-                shorten_dir = { 'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se', 'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw', 'up' => 'up', 'down' => 'down', 'out' => 'out' }
-                for dir in XMLData.room_exits
-                  if (short_dir = shorten_dir[dir])
-                    init_str.concat "<dir value='#{short_dir}'/>"
-                  end
-                end
-                init_str.concat '</compass>'
-                $_DETACHABLE_CLIENT_.puts init_str
-                nil
+            if server.nil? || server.closed?
+              server = Lich::Common::ReusableTCPServer.create(
+                @argv_options[:detachable_client_host],
+                @argv_options[:detachable_client_port],
+                backlog: 8
+              )
+              $_DETACHABLE_LISTENER_ = {
+                host: server.local_address.ip_address,
+                port: server.local_address.ip_port
               }
-            end
-            # Saga's cloud profile sync keys each character on its <playerID>,
-            # which Lich consumed from the game during its own login handshake
-            # before this detachable client attached - so Saga never sees it and
-            # a Via-Lich character silently never syncs (a Direct login does,
-            # because it sees the tag). Re-emit it here, unprefixed, exactly as a
-            # Direct login delivers it. This runs on every attach (the outer loop
-            # re-enters this block), so a Saga client that re-attaches mid-session
-            # (a restart against a surviving Lich) also relearns the id. Deferred
-            # to a thread with a bounded wait because a client can attach before
-            # login has populated player_id; _respond routes to the detachable
-            # client, gates on XMLData.safe_to_respond?, and re-checks it is alive.
-            if ARGV.any? { |a| a =~ /^--saga$/i }
-              Thread.new {
-                tag = nil
-                100.times do
-                  break if (tag = Frontend.player_id_tag(XMLData.player_id))
-                  sleep 0.1
-                end
-                _respond(tag) if tag
-                nil
-              }
-            end
-            while (client_string = $_DETACHABLE_CLIENT_.gets)
-              # Profanity handshake:  SET_FRONTEND_PID <pid>
-              if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
-                Frontend.set_from_client($1.to_i) if defined?(Frontend)
-                next # swallow the control line; don't pass it to do_client
-              end
-              client_string = "#{$cmd_prefix}#{client_string}" # if $frontend =~ /^(?:wizard|avalon)$/
-              if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-                # Route through the guarded proc so the watchdog is armed before
-                # the inline before_dying drain, exactly as the primary frontend
-                # path does. A bare request_user_exit here would run the same
-                # hang-prone drain unprotected.
-                run_orderly_user_shutdown.call(source: :detachable_frontend)
-                break
-              end
+              login_idx = ARGV.index('--login')
+              char_name = if !login_idx.nil? && ARGV[login_idx + 1]
+                            ARGV[login_idx + 1].capitalize
+                          end
+
               begin
-                $_IDLETIMESTAMP_ = Time.now
-                do_client(client_string)
+                Frontend.create_session_file(char_name, $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port]) if char_name
               rescue => e
-                respond "--- Lich: error: client_thread: #{e}"
-                respond e.backtrace.first
-                Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
               end
+              detachable_listener_connected(detachable_client_count.positive?)
+
+              listen_ip = $_DETACHABLE_LISTENER_[:host]
+              listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
+              listen_address = "#{listen_ip}:#{$_DETACHABLE_LISTENER_[:port]}"
+              Lich.log "info: detachable client server listening on #{listen_address}"
+              $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
             end
-            Lich::Common::ShutdownLog.info('detachable client disconnected')
+
+            accepted_socket, = server.accept
+            client = SynchronizedSocket.new(accepted_socket, role: :detachable)
+            client.sync = true
+            detachable_client_register(client)
+            Lich.log "info: detachable client connected (#{detachable_client_count} attached)"
+            Thread.new(client) { |attached_client| handle_detachable_client(attached_client) }
           rescue => e
-            _respond "--- Lich: error: detachable client: #{e}"
-            Lich.log "error: detachable_client_thread (communication): #{e}\n\t#{e.backtrace.join("\n\t")}"
-          ensure
-            $_DETACHABLE_CLIENT_.close rescue nil
-            $_DETACHABLE_CLIENT_ = nil
+            break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
 
-            begin
-              Frontend.cleanup_session_file
-            rescue => cleanup_error
-              Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
-            end
-
-            Lich::Common::ShutdownLog.info('detachable client cleaned up, ready for new connection')
+            Lich.log "error: detachable_client_thread (accept): #{e}\n\t#{e.backtrace.join("\n\t")}"
+            server.close rescue nil
+            server = nil
+            Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
+            sleep 5
           end
+          break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
+        }
+      ensure
+        server.close rescue nil
+        $_DETACHABLE_LISTENER_ = nil
+        Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
+        begin
+          Frontend.cleanup_session_file
+        rescue => cleanup_error
+          Lich::Common::ShutdownLog.warning("failed to cleanup session file: #{cleanup_error}\n\t#{cleanup_error.backtrace.join("\n\t")}")
         end
-        break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
-
-        sleep 0.1
-      }
+      end
     }
   else
     detachable_client_thread = nil
@@ -1045,7 +934,13 @@ reconnect_if_wanted = proc {
     Lich::Common::ShutdownLog.info('closing connections...')
     shutdown_step.call('Game.close') { Game.close }
     shutdown_step.call('client_thread.kill') { client_thread.kill }
-    shutdown_step.call('detachable_client_thread.kill') { detachable_client_thread.kill if detachable_client_thread }
+    shutdown_step.call('detachable_client_thread.kill') do
+      if detachable_client_thread
+        detachable_client_thread.kill
+        detachable_client_thread.join
+      end
+    end
+    shutdown_step.call('detachable clients close') { detachable_clients_close }
     shutdown_step.call('$_CLIENT_.close') { $_CLIENT_&.close }
     shutdown_step.call('Lich.db.close') { Lich.db.close }
     Lich::Common::ShutdownLog.info('unregistering session...')
