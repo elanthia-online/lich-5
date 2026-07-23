@@ -372,15 +372,14 @@ module Lich
 
           # Explicit escape hatch for core-owned shutdown paths.
           #
-          # No-ops when no GTK main loop is nested -- gtk_main_quit asserts
-          # main_loops != NULL and emits Gtk-CRITICAL otherwise.
+          # No-ops unless a GTK main loop is nested. Also fails closed when
+          # main_level is unavailable -- gtk_main_quit asserts main_loops != NULL
+          # and emits Gtk-CRITICAL otherwise.
           #
           # @param args [Array] arguments forwarded to GTK
-          # @return [Object, nil] GTK return value, or nil when no loop is running
+          # @return [Object, nil] GTK return value, or nil when quitting is unsafe
           def lich_main_quit(*args)
-            if respond_to?(:main_level) && main_level.to_i <= 0
-              return nil
-            end
+            return nil unless respond_to?(:main_level) && main_level.to_i > 0
 
             Lich::Common.allow_gtk_main_quit { main_quit(*args) }
           end

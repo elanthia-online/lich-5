@@ -52,6 +52,14 @@ RSpec.describe 'Lich::Common GTK hardening' do
     expect(Gtk.main_quit_calls).to eq(0)
   end
 
+  it 'no-ops Gtk.lich_main_quit when main_level is unavailable' do
+    allow(Gtk).to receive(:respond_to?).and_call_original
+    allow(Gtk).to receive(:respond_to?).with(:main_level).and_return(false)
+
+    expect(Gtk.lich_main_quit).to be_nil
+    expect(Gtk.main_quit_calls).to eq(0)
+  end
+
   it 'retains signal handlers until the widget emits destroy' do
     widget = Gtk::Widget.new
     handler = proc { :clicked }
