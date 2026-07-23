@@ -4,7 +4,8 @@ module Lich
   module Common
     # Read-only hooks that run immediately after a complete line is read from
     # the game socket, before XML parsing, RawHook, DownstreamHook, or frontend
-    # writes. Hooks run inline to preserve exact reader-before-parser ordering.
+    # writes. Hooks intentionally run inline, like the existing hook chains, to
+    # preserve exact reader-before-parser ordering.
     class SocketReadHook
       Event = Struct.new(:server_string, :received_at, :monotonic_received_at, keyword_init: true)
 
