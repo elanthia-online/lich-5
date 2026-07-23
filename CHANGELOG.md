@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.20.0](https://github.com/elanthia-online/lich-5/compare/v5.19.1...v5.20.0) (2026-07-23)
+
+
+### Features
+
+* **all:** add concurrent runtime I/O and multi-client detach support ([#1459](https://github.com/elanthia-online/lich-5/issues/1459)) ([44cb27e](https://github.com/elanthia-online/lich-5/commit/44cb27ed15f4aaa0135de0ce19c389e3ab996bf0))
+
 ## [5.19.1](https://github.com/elanthia-online/lich-5/compare/v5.19.0...v5.19.1) (2026-07-20)
 
 
