@@ -93,10 +93,12 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       expect(Lich::Common::DownstreamHook.list).to contain_exactly('keep')
       expect(Lich::Common::UpstreamHook.list).to be_empty
       expect(script.watchfor).to be_empty
-      # Stream buffers are reset to empty arrays (not nil) so a concurrent
+      # Stream buffers are reset to empty LimitedArrays (not nil) so a concurrent
       # new_downstream/new_upstream push cannot raise NoMethodError.
       expect(script.downstream_buffer).to eq([])
       expect(script.upstream_buffer).to eq([])
+      expect(script.downstream_buffer).to be_a(Lich::Common::LimitedArray)
+      expect(script.upstream_buffer).to be_a(Lich::Common::LimitedArray)
     end
 
     it 'falls back to inline cleanup when Ruby cannot allocate a cleanup thread' do

@@ -1,5 +1,4 @@
 require "ostruct"
-require "benchmark"
 require_relative 'disk'
 
 module Lich
