@@ -79,7 +79,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
-  it 'makes an installed Saga selectable on its preliminary macOS adapter' do
+  it 'makes an installed Saga selectable on its supported macOS cold-start adapter' do
     Dir.mktmpdir do |applications|
       mac_application(
         applications,

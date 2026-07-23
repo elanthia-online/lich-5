@@ -105,7 +105,7 @@ reconnect_if_wanted = proc {
 
     if requested_fe == 'saga' && requested_custom_launch == :__unset && !ARGV.include?('--without-frontend')
       unless Lich::Common::FrontendLocator.launchable?('saga', refresh: true)
-        message = 'Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or start the session from Saga with --without-frontend --saga.'
+        message = "Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or use Saga's Via Lich login."
         $stderr.puts "error: #{message}"
         Lich.log "error: #{message}"
         raise SystemExit.new(1)
