@@ -1,6 +1,9 @@
 # Carve out for later carving and refining - main_thread and reconnect
 # this needs work to break up and improve 2024-06-13
 
+require 'shellwords'
+require_relative 'reconnect_command'
+
 reconnect_if_wanted = proc {
   explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
   explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| Lich::Common::ShutdownIntent.user_exit_command?(cmd) }
@@ -17,23 +20,22 @@ reconnect_if_wanted = proc {
     Lich.log "info: waiting #{reconnect_delay} seconds to reconnect..."
     sleep reconnect_delay
     Lich.log 'info: reconnecting...'
-    if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    if Lich::Common::Frontend.windows_platform?
       if Frontend.client.eql?('stormfront')
-        system 'taskkill /FI "WINDOWTITLE eq [GSIV: ' + Char.name + '*"' # fixme: window title changing to Gemstone IV: Char.name # name optional
+        system('taskkill', '/FI', "WINDOWTITLE eq [GSIV: #{Char.name}*") # fixme: window title changing to Gemstone IV: Char.name # name optional
       end
-      args = ['start rubyw.exe']
-    else
-      args = ['ruby']
     end
-    args.push $PROGRAM_NAME.slice(/[^\\\/]+$/)
-    args.concat ARGV
-    args.push '--reconnected' unless args.include?('--reconnected')
-    if reconnect_step > 0
-      args.delete(reconnect_arg)
-      args.concat ["--reconnect-delay=#{reconnect_delay + reconnect_step}+#{reconnect_step}"]
-    end
-    Lich.log "exec args.join(' '): exec #{args.join(' ')}"
-    exec args.join(' ')
+    ruby_binary = Lich::Main::ReconnectCommand.ruby_executable
+    args = Lich::Main::ReconnectCommand.build(
+      argv: ARGV,
+      program: $PROGRAM_NAME,
+      ruby_executable: ruby_binary,
+      reconnect_arg: reconnect_arg,
+      reconnect_delay: reconnect_delay,
+      reconnect_step: reconnect_step
+    )
+    Lich.log "info: reconnect exec: #{args.join(' ')}"
+    exec(*args)
   end
 }
 
@@ -103,6 +105,15 @@ reconnect_if_wanted = proc {
     modifiers = ARGV.dup
     requested_instance, requested_fe, requested_custom_launch = Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
     lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
+
+    if requested_fe == 'saga' && requested_custom_launch == :__unset && !ARGV.include?('--without-frontend')
+      unless Lich::Common::FrontendLocator.launchable?('saga', refresh: true)
+        message = "Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or use Saga's Via Lich login."
+        $stderr.puts "error: #{message}"
+        Lich.log "error: #{message}"
+        raise SystemExit.new(1)
+      end
+    end
 
     # Execute CLI login flow and get launch data
     launch_data_array = if requested_character.match?(Lich::Common::Authentication::LoginHelpers::NEW_CHARACTER_LOGIN) && @argv_options[:account]
@@ -195,29 +206,40 @@ reconnect_if_wanted = proc {
     if (custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ })
       custom_launch.sub!(/^.*?\=/, '')
       Lich.log "info: using custom launch command: #{custom_launch}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif @launch_data.find { |opt| opt =~ /GAME=SAGA/i }
+      native_saga_launch = true
+      Lich.log "info: #{Lich::Common::Frontend.metadata_for('saga', :launch_notice)}"
+    elsif Lich::Common::Frontend.windows_platform?
       Lich.log("info: Working against a Windows Platform for FE Executable")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        resolved_frontend = Lich::Common::FrontendLocator.resolve('stormfront', refresh: true)
+        if resolved_frontend
+          frontend_executable = File.basename(resolved_frontend.executable_path)
+          custom_launch = "#{frontend_executable} /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%"
+        end
       end
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch = "#{Wine::BIN} Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
-        custom_launch = "#{Wine::BIN} Wrayth.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /Wrayth/
-        custom_launch = "#{Wine::BIN} Stormfront.exe /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%" if $sf_fe_loc =~ /STORM/
+        resolved_frontend = Lich::Common::FrontendLocator.resolve('stormfront', refresh: true)
+        if resolved_frontend
+          frontend_executable = Shellwords.escape(File.basename(resolved_frontend.executable_path))
+          custom_launch = "#{Wine::BIN} #{frontend_executable} /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%"
+        end
       end
     end
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
       custom_launch_dir.sub!(/^.*?\=/, '')
       Lich.log "info: using working directory for custom launch command: #{custom_launch_dir}"
-    elsif (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+    elsif Lich::Common::Frontend.windows_platform?
       Lich.log "info: Working against a Windows Platform for FE Location"
-      if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+      if resolved_frontend
+        custom_launch_dir = File.dirname(resolved_frontend.executable_path)
+      elsif @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch_dir = Lich.seek('wizard') # #HERE I AM
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         custom_launch_dir = Lich.seek('stormfront') # #HERE I AM
@@ -225,44 +247,57 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current Windows working directory is #{custom_launch_dir}"
     elsif defined?(Wine)
       Lich.log "Info: Working against a Linux | WINE Platform for FE location"
-      if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+      if resolved_frontend
+        custom_launch_dir = File.dirname(resolved_frontend.executable_path)
+      elsif @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
         custom_launch_dir_temp = Lich.seek('wizard') # #HERE I AM
-        custom_launch_dir = custom_launch_dir_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+        custom_launch_dir = custom_launch_dir_temp&.gsub('\\', '/')&.gsub('C:', Wine::PREFIX + '/drive_c')
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         custom_launch_dir_temp = Lich.seek('stormfront') # #HERE I AM
-        custom_launch_dir = custom_launch_dir_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c')
+        custom_launch_dir = custom_launch_dir_temp&.gsub('\\', '/')&.gsub('C:', Wine::PREFIX + '/drive_c')
       end
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
-    if ARGV.include?('--without-frontend')
-      Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
-      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-        $stdout.puts "error: launch_data contains no KEY info"
-        Lich.log "error: launch_data contains no KEY info"
-        exit(1)
+    begin
+      if ARGV.include?('--without-frontend')
+        Frontend.client = ARGV.any? { |a| a =~ /^--saga$/i } ? 'saga' : 'unknown'
+        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+          $stdout.puts "error: launch_data contains no KEY info"
+          Lich.log "error: launch_data contains no KEY info"
+          exit(1)
+        end
+      elsif game =~ /SUKS/i
+        Frontend.client = 'suks'
+        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+          $stdout.puts "error: launch_data contains no KEY info"
+          Lich.log "error: launch_data contains no KEY info"
+          exit(1)
+        end
+      elsif game =~ /SAGA/i && native_saga_launch
+        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+          $stdout.puts "error: launch_data contains no KEY info"
+          Lich.log "error: launch_data contains no KEY info"
+          exit(1)
+        end
+      elsif game =~ /SAGA/i
+        raise Lich::Common::FrontendLauncher::UnsupportedError,
+              'no native Saga launch adapter is available on this platform'
+      elsif game =~ /AVALON/i
+        launcher_cmd = Lich::Common::FrontendLauncher.command('avalon')
+      elsif custom_launch
+        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
+          $stdout.puts "error: launch_data contains no KEY info"
+          Lich.log "error: launch_data contains no KEY info"
+          exit(1)
+        end
+      else
+        frontend_id = game =~ /WIZ/i ? 'wizard' : 'stormfront'
+        launcher_cmd = Lich::Common::FrontendLauncher.command(frontend_id)
       end
-    elsif game =~ /SUKS/i
-      Frontend.client = 'suks'
-      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-        $stdout.puts "error: launch_data contains no KEY info"
-        Lich.log "error: launch_data contains no KEY info"
-        exit(1)
-      end
-    elsif game =~ /AVALON/i
-      # Simu strikes again
-      launcher_cmd = "open -n -b Avalon \"%1\""
-    elsif custom_launch
-      unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-        $stdout.puts "error: launch_data contains no KEY info"
-        Lich.log "error: launch_data contains no KEY info"
-        exit(1)
-      end
-    else
-      unless (launcher_cmd = Lich.get_simu_launcher)
-        $stdout.puts 'error: failed to find the Simutronics launcher'
-        Lich.log 'error: failed to find the Simutronics launcher'
-        exit(1)
-      end
+    rescue Lich::Common::FrontendLauncher::Error => e
+      $stdout.puts "error: #{e.message}"
+      Lich.log "error: #{e.message}"
+      exit(1)
     end
     gamecode.split('=').last
     gameport = gameport.split('=').last
@@ -309,13 +344,25 @@ reconnect_if_wanted = proc {
         Lich.log "error: cannot bind listen socket to local port: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
         exit(1)
       end
-      accept_thread = Thread.new {
-        accepted_socket, = listener.accept
-        $_CLIENT_ = SynchronizedSocket.new(accepted_socket)
-      }
       localport = listener.local_address.ip_port
-      Frontend.create_session_file(Lich::Common::Account.character, listener.local_address.ip_address, localport, display_session: false)
-      if custom_launch
+      if native_saga_launch
+        begin
+          saga_plan = Lich::Common::FrontendLauncher.spawn_plan(
+            'saga',
+            host: '127.0.0.1',
+            port: localport,
+            key: game_key,
+            refresh: false
+          )
+        rescue Lich::Common::FrontendLauncher::Error => e
+          listener.close
+          $stdout.puts "error: #{e.message}"
+          Lich.log "error: #{e.message}"
+          exit(1)
+        end
+        Lich.log "info: launching Saga environment handoff on 127.0.0.1:#{localport}"
+        sal_filename = nil
+      elsif custom_launch
         sal_filename = nil
         launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
         scrubbed_launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, '[scrubbed key]')
@@ -326,7 +373,7 @@ reconnect_if_wanted = proc {
         # to loopback for wildcard binds since a frontend cannot connect to 0.0.0.0/::.
         if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
           localhost = @argv_options[:bind_address]
-        elsif RUBY_PLATFORM =~ /darwin/i
+        elsif Lich::Common::Frontend.platform_key == :darwin
           localhost = "127.0.0.1"
         else
           localhost = "localhost"
@@ -338,14 +385,23 @@ reconnect_if_wanted = proc {
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
-        launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
+        launcher_cmd = launcher_cmd.tr('/', "\\") if Lich::Common::Frontend.windows_platform?
       end
+      accept_thread = Thread.new {
+        accepted_socket, = listener.accept
+        $_CLIENT_ = SynchronizedSocket.new(accepted_socket)
+      }
+      Frontend.create_session_file(Lich::Common::Account.character, listener.local_address.ip_address, localport, display_session: false)
       begin
         unless custom_launch_dir.nil? || custom_launch_dir.empty?
           Dir.chdir(custom_launch_dir)
         end
 
-        frontend_pid = spawn(launcher_cmd)
+        frontend_pid = if native_saga_launch
+                         spawn(saga_plan.environment, *saga_plan.argv)
+                       else
+                         spawn(launcher_cmd)
+                       end
         Lich::Common::Frontend.pid = frontend_pid if defined?(Lich::Common::Frontend)
       rescue
         Lich.log "error: #{$!.to_s.sub(game_key.to_s, '[scrubbed key]')}\n\t#{$!.backtrace.join("\n\t")}"
@@ -851,7 +907,7 @@ reconnect_if_wanted = proc {
               }
             end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
-              # Profanity handshake:  SET_FRONTEND_PID <pid>
+              # Detachable frontend handshake (including Saga): SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
                 Frontend.set_from_client($1.to_i) if defined?(Frontend)
                 next # swallow the control line; don't pass it to do_client

@@ -32,6 +32,185 @@ FE = Lich::Common::Frontend unless defined?(FE)
 RSpec.describe Lich::Common::Frontend do
   let(:frontend) { Lich::Common::Frontend }
 
+  describe '.definition_for' do
+    it 'returns immutable catalog metadata for Saga' do
+      definition = frontend.definition_for(:saga)
+
+      expect(definition[:id]).to eq('saga')
+      expect(definition.dig(:metadata, :display_name)).to eq('Saga')
+      expect(definition.dig(:metadata, :gui_selectable)).to be(true)
+      expect(definition.dig(:metadata, :gui_platforms)).to eq(%i[darwin windows linux])
+      expect(definition.dig(:metadata, :launcher_status)).to eq(:supported_cold_start_only)
+      expect(definition.dig(:metadata, :launch_notice)).to eq(
+        'Saga 0.8.5 environment handoff; cold start only'
+      )
+      expect(definition.dig(:metadata, :launch_plans, :darwin)).to eq(
+        {
+          command: '/usr/bin/open',
+          arguments: %w[-n -b com.auchand.saga],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition.dig(:metadata, :launch_plans, :windows)).to eq(
+        {
+          command: :resolved_executable,
+          arguments: [],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition.dig(:metadata, :launch_plans, :linux)).to eq(
+        {
+          command: :resolved_executable,
+          arguments: [],
+          environment: {
+            'SAGA_LICH_MODE' => '1',
+            'SAGA_LICH_HOST' => '%host%',
+            'SAGA_LICH_PORT' => '%port%',
+            'SAGA_LICH_KEY'  => '%key%'
+          }
+        }
+      )
+      expect(definition.dig(:metadata, :discovery, :path_lookup)).to be(false)
+      expect(definition.dig(:metadata, :discovery, :paths, :linux)).to eq(['/opt/Saga/saga'])
+      expect(definition).to be_frozen
+      expect(definition[:metadata]).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin, :arguments)).to be_frozen
+      expect(definition.dig(:metadata, :launch_plans, :darwin, :environment)).to be_frozen
+      expect {
+        definition.dig(:metadata, :launch_plans, :darwin, :arguments) << '--override'
+      }.to raise_error(FrozenError)
+    end
+
+    it 'reuses the immutable catalog definition' do
+      expect(frontend.definition_for(:saga)).to equal(frontend.definition_for(:saga))
+    end
+
+    it 'keeps embedded SUKS free of frontend protocol capabilities' do
+      expect(frontend.definition_for(:suks)[:capabilities]).to be_empty
+      expect(frontend.supports_xml?('suks')).to be(false)
+      expect(frontend.supports_gsl?('suks')).to be(false)
+    end
+
+    it 'raises for a blank frontend identifier' do
+      expect { frontend.definition_for(nil) }
+        .to raise_error(ArgumentError, 'frontend name must not be empty')
+    end
+
+    it 'raises for an unknown frontend identifier without registering it' do
+      expect { frontend.definition_for('not-a-frontend') }
+        .to raise_error(ArgumentError, 'unknown frontend: not-a-frontend')
+      expect(frontend.registered_frontends).not_to include('not-a-frontend')
+    end
+  end
+
+  describe '.platform_key' do
+    before do
+      allow(OS).to receive_messages(mac?: false, linux?: false, windows?: false)
+    end
+
+    it 'uses the OS gem to classify macOS' do
+      allow(OS).to receive(:mac?).and_return(true)
+
+      expect(frontend.platform_key).to eq(:darwin)
+    end
+
+    it 'prefers a Linux host classification over a leaked Windows environment signal' do
+      allow(OS).to receive_messages(linux?: true, windows?: true)
+
+      expect(frontend.platform_key).to eq(:linux)
+    end
+
+    it 'uses the OS gem to classify Windows' do
+      allow(OS).to receive(:windows?).and_return(true)
+
+      expect(frontend.platform_key).to eq(:windows)
+      expect(frontend.windows_platform?).to be(true)
+    end
+
+    it 'returns unsupported when the OS gem recognizes no supported host' do
+      expect(frontend.platform_key).to eq(:unsupported)
+    end
+
+    it 'rejects noncanonical injected platform keys' do
+      expect { frontend.validate_platform_key!(:msys) }
+        .to raise_error(ArgumentError, 'invalid platform key: :msys')
+    end
+  end
+
+  describe '.native_windows_runtime?' do
+    it 'accepts RubyInstaller MinGW/UCRT and mswin host ABIs' do
+      allow(OS).to receive(:host_os).and_return('mingw-ucrt')
+      expect(frontend.native_windows_runtime?).to be(true)
+
+      allow(OS).to receive(:host_os).and_return('mswin64')
+      expect(frontend.native_windows_runtime?).to be(true)
+    end
+
+    it 'does not treat an MSYS-native Ruby host as native for Fiddle bindings' do
+      allow(OS).to receive(:host_os).and_return('msys')
+
+      expect(frontend.native_windows_runtime?).to be(false)
+    end
+  end
+
+  describe '.ensure_windows_modules' do
+    it 'requires both native Windows API bindings on a compatible Ruby ABI' do
+      allow(frontend).to receive(:native_windows_runtime?).and_return(true)
+      stub_const('Win32Enum', Module.new)
+      stub_const('WinAPI', Module.new)
+
+      expect(frontend.ensure_windows_modules).to be_truthy
+    end
+
+    it 'does not expose native Windows API bindings on incompatible Ruby ABIs' do
+      allow(frontend).to receive(:native_windows_runtime?).and_return(false)
+
+      expect(frontend.ensure_windows_modules).to be(false)
+    end
+  end
+
+  describe '.definitions' do
+    it 'exposes the first-tier GUI frontend catalog from one registry' do
+      ids = frontend.definitions(gui_selectable: true).map { |definition| definition[:id] }
+
+      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
+    end
+  end
+
+  describe '.display_name' do
+    it 'uses the catalog label for a known frontend' do
+      expect(frontend.display_name('stormfront')).to eq('Wrayth')
+    end
+
+    it 'uses a stable fallback for a legacy frontend' do
+      expect(frontend.display_name('suks')).to eq('Suks')
+    end
+  end
+
+  describe '.canonical_name' do
+    it 'maps Wrayth to the stable StormFront identifier' do
+      expect(frontend.canonical_name('wrayth')).to eq('stormfront')
+      expect(frontend.definition_for('wrayth')[:id]).to eq('stormfront')
+    end
+
+    it 'does not register unknown values while normalizing them' do
+      expect(frontend.canonical_name('UNKNOWN-FE')).to eq('unknown-fe')
+      expect(frontend.registered_frontends).not_to include('unknown-fe')
+    end
+  end
+
   # --- Constants ---------------------------------------------
 
   describe 'CLIENT_STRING' do
@@ -428,6 +607,22 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.set_from_client' do
+    around do |example|
+      original = frontend.pid
+      example.run
+      frontend.pid = original
+    end
+
+    it 'records the process id supplied by a detachable Saga client' do
+      allow(Lich).to receive(:log)
+
+      expect(frontend.set_from_client(12_345)).to eq(12_345)
+      expect(frontend.pid).to eq(12_345)
+      expect(Lich).to have_received(:log).with('Frontend PID set from client: 12345')
+    end
+  end
+
   # --- send_handshake ----------------------------------------
 
   describe '.send_handshake' do
@@ -546,6 +741,21 @@ RSpec.describe Lich::Common::Frontend do
       expect(params).to include([:key, :capabilities])
       expect(params).to include([:key, :metadata])
     end
+
+    it 'rejects a blank frontend name' do
+      expect { frontend.register(nil) }
+        .to raise_error(ArgumentError, 'frontend name must not be empty')
+    end
+
+    it 'invalidates a cached definition after registration' do
+      cached = frontend.definition_for(:suks)
+
+      frontend.register(:suks, metadata: { launcher_adapter: :embedded })
+      refreshed = frontend.definition_for(:suks)
+
+      expect(refreshed).not_to equal(cached)
+      expect(refreshed).to eq(cached)
+    end
   end
 
   describe '.has_capability?' do
@@ -564,6 +774,7 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'returns false for unknown frontends' do
       expect(frontend.has_capability?('unknown_frontend', :xml)).to be false
+      expect(frontend.registered_frontends).not_to include('unknown_frontend')
     end
 
     it 'returns false for nil frontend' do
@@ -611,7 +822,7 @@ RSpec.describe Lich::Common::Frontend do
 
     it 'includes all known frontends' do
       result = frontend.registered_frontends
-      %w[wrayth stormfront profanity genie frostbite wizard avalon].each do |fe|
+      %w[wrayth stormfront profanity genie frostbite suks wizard avalon].each do |fe|
         expect(result).to include(fe)
       end
     end

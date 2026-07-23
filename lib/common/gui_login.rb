@@ -10,6 +10,7 @@ require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
+require_relative 'gui/frontend_selector'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
 require_relative 'gui/manual_login_tab'
@@ -327,6 +328,9 @@ module Lich
         },
         on_add_character: ->(character:, instance:, frontend:) {
           # Handle adding a character
+        },
+        on_error: ->(message) {
+          @msgbox.call(message)
         },
         on_theme_change: ->(state) {
           # Update theme state for all components

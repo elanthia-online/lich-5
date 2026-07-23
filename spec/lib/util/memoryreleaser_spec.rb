@@ -388,17 +388,51 @@ RSpec.describe Lich::Util::MemoryReleaser do
 
     it 'windows helper falls back psapi -> wmi -> powershell -> nil' do
       manager = manager_class.new
-      allow(manager).to receive(:get_memory_via_psapi).and_raise(StandardError, 'no psapi')
-      allow(manager).to receive(:get_memory_via_wmi).and_raise(StandardError, 'no wmi')
+      allow(manager).to receive(:get_memory_via_psapi).and_return(nil)
+      allow(manager).to receive(:get_memory_via_wmi).and_return(nil)
       allow(manager).to receive(:get_memory_via_powershell).and_return(77.7)
 
       expect(manager.send(:get_process_memory_windows)).to eq(77.7)
 
       allow(manager).to receive(:get_memory_via_psapi).and_raise(StandardError, 'no psapi')
-      allow(manager).to receive(:get_memory_via_wmi).and_raise(StandardError, 'no wmi')
+      allow(manager).to receive(:get_memory_via_wmi).and_raise(LoadError, 'no win32ole')
       allow(manager).to receive(:get_memory_via_powershell).and_raise(StandardError, 'no ps')
 
       expect(manager.send(:get_process_memory_windows)).to be_nil
+    end
+
+    it 'runs the PowerShell fallback directly without a cmd.exe shell' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: true)
+      allow(Open3).to receive(:capture3).and_return(["1048576\n", '', status])
+
+      expect(manager.send(:get_memory_via_powershell)).to eq(1.0)
+      expect(Open3).to have_received(:capture3).with(
+        'powershell.exe',
+        '-WindowStyle', 'Hidden',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command', "(Get-Process -Id #{Process.pid}).WorkingSet64"
+      )
+    end
+
+    it 'rejects blank or malformed PowerShell output' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: true)
+
+      ['   ', 'not-a-byte-count'].each do |output|
+        allow(Open3).to receive(:capture3).and_return([output, '', status])
+
+        expect(manager.send(:get_memory_via_powershell)).to be_nil
+      end
+    end
+
+    it 'rejects PowerShell output from a failed process' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: false)
+      allow(Open3).to receive(:capture3).and_return(["1048576\n", 'failure', status])
+
+      expect(manager.send(:get_memory_via_powershell)).to be_nil
     end
   end
 

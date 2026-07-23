@@ -379,6 +379,17 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(result[:frontend]).to eq('wizard')
     end
 
+    it 'uses canonical frontend aliases when ranking matches' do
+      result = described_class.select_best_fit(
+        char_data_sets: [char_data_sets[1], char_data_sets[0]],
+        requested_character: 'Testchar',
+        requested_instance: 'GS3',
+        requested_fe: 'wrayth'
+      )
+
+      expect(result[:frontend]).to eq('stormfront')
+    end
+
     it 'returns nil for invalid game instance' do
       result = described_class.select_best_fit(
         char_data_sets: char_data_sets,
@@ -478,6 +489,22 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       instance, frontend, custom_launch = described_class.resolve_login_args(['--GS3', '--frostbite'])
       expect(instance).to eq('GS3')
       expect(frontend).to eq('frostbite')
+      expect(custom_launch).to eq(:__unset)
+    end
+
+    it 'parses Saga as a frontend selector' do
+      instance, frontend, custom_launch = described_class.resolve_login_args(['--GS3', '--saga'])
+      expect(instance).to eq('GS3')
+      expect(frontend).to eq('saga')
+      expect(custom_launch).to eq(:__unset)
+    end
+
+    it 'parses the canonical long-form Saga frontend selector' do
+      instance, frontend, custom_launch = described_class.resolve_login_args(
+        ['--GS3', '--frontend=saga']
+      )
+      expect(instance).to eq('GS3')
+      expect(frontend).to eq('saga')
       expect(custom_launch).to eq(:__unset)
     end
   end

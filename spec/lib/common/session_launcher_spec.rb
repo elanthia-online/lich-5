@@ -68,6 +68,20 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'maps Saga launch data back to the Saga CLI selector' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'GAME=SAGA'])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--saga',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
   it 'returns structured error when character is missing' do
     result = described_class.launch(launch_data)
     expect(result[:ok]).to be false
@@ -84,6 +98,13 @@ RSpec.describe Lich::Common::SessionLauncher do
     allow(RbConfig).to receive(:ruby).and_return('C:/Ruby/bin/ruby.exe')
 
     expect(described_class.send(:ruby_binary)).to eq('C:/Ruby/bin/rubyw.exe')
+  end
+
+  it 'uses the shared OS-backed frontend classification' do
+    allow(described_class).to receive(:windows?).and_call_original
+    allow(Lich::Common::Frontend).to receive(:windows_platform?).and_return(true)
+
+    expect(described_class.send(:windows?)).to be(true)
   end
 
   it 'forwards optional dark mode and directory flags only when defined' do

@@ -129,6 +129,7 @@ module Lich
           when 'STORM' then 'stormfront'
           when 'WIZ' then 'wizard'
           when 'AVALON' then 'avalon'
+          when 'SAGA' then 'saga'
           when 'SUKS' then 'suks'
           else nil
           end
@@ -197,7 +198,7 @@ module Lich
         end
 
         def windows?
-          RUBY_PLATFORM =~ /mingw|mswin|cygwin/i
+          Lich::Common::Frontend.windows_platform?
         end
       end
     end
