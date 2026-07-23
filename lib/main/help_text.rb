@@ -212,21 +212,22 @@ module Lich
             --frontend=NAME
             --frontend-command=CMD
             --game=HOST:PORT
-            --bind-address=IP
+            --bind-address=HOST
 
           Notes:
             The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
-            --bind-address=IP sets the local address Lich binds its listen sockets to
+            --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
-            Defaults to 127.0.0.1. Use 0.0.0.0 to accept connections from other hosts.
-            HOST in --headless/--detachable-client may be an IP, a hostname, a bracketed
-            IPv6 literal (e.g. [::1]:PORT), or a keyword:
-            tailscale (this machine's Tailscale address), lan (its private LAN address),
-            or any (0.0.0.0). The detachable port is unauthenticated - anyone who can
-            reach it controls the session, so prefer tailscale over lan or any.
+            Defaults to 127.0.0.1.
+            HOST -- in --bind-address, --headless, and --detachable-client alike -- may
+            be an IP, a hostname, a keyword, or (with a port) a bracketed IPv6 literal
+            such as [::1]:PORT. Keywords: tailscale (this machine's Tailscale address),
+            lan (its private LAN address), or any (0.0.0.0). Lich's listen sockets are
+            unauthenticated - anyone who can reach one controls the session - so
+            prefer tailscale over lan or any.
             Multiple frontends may attach to one detachable port. Each receives game
             output, and commands from all attached frontends are processed serially.
             Compatibility flags remain supported but are intentionally omitted from the default help screen.

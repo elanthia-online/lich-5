@@ -10,9 +10,12 @@ module Lich
     # Non-keyword hosts pass through unchanged, gaining only an advisory
     # warning when they look reachable from untrusted networks.
     #
-    # The detachable-client port is an unauthenticated plaintext socket that
-    # can drive the game session, so every resolution away from loopback
-    # carries a warning for the caller to surface to the user.
+    # This is the single bind-token vocabulary for every listener Lich
+    # opens -- the frontend socket, the +--game+ proxy, and the detachable
+    # client all route their +--bind-address+ / host tokens through here.
+    # Each of those is an unauthenticated plaintext socket that can drive
+    # the game session, so every resolution away from loopback carries a
+    # warning for the caller to surface to the user.
     #
     # @example Resolve the machine's Tailscale address
     #   Lich::Common::BindHostResolver.resolve('tailscale').host #=> "100.101.102.103"
@@ -39,9 +42,9 @@ module Lich
         IPAddr.new('172.16.0.0/12').freeze
       ].freeze
 
-      ANY_WARNING = 'binding 0.0.0.0 exposes the unauthenticated detachable client ' \
-                    'port on every network this machine is connected to; anyone who ' \
-                    'can reach it can control the session'
+      ANY_WARNING = "binding 0.0.0.0 exposes Lich's unauthenticated listen sockets " \
+                    'on every network this machine is connected to; anyone who ' \
+                    'can reach them can control the session'
 
       # Resolves a bind host token to a concrete address.
       #
@@ -68,7 +71,7 @@ module Lich
         address = ipv4_addresses(address_list).find { |ip| TAILSCALE_RANGE.include?(ip) }
         unless address
           raise Error, "Tailscale doesn't appear to be running on this machine " \
-                       '(no 100.64.0.0/10 address found); start Tailscale or use lan:PORT instead'
+                       '(no 100.64.0.0/10 address found); start Tailscale or use the lan keyword instead'
         end
         Resolution.new(host: address, warning: nil)
       end
@@ -89,8 +92,8 @@ module Lich
 
         Resolution.new(
           host: address,
-          warning: 'the detachable client port is unauthenticated; anyone on your network ' \
-                   "can control this session via #{address}. Prefer tailscale:PORT if you use Tailscale"
+          warning: "Lich's listen sockets are unauthenticated; anyone on your network " \
+                   "can control this session via #{address}. Prefer the tailscale keyword if you use Tailscale"
         )
       end
 
@@ -117,8 +120,8 @@ module Lich
           return ANY_WARNING if ip == IPAddr.new('::')
           return nil if ip.loopback? || ip.private? || ip.link_local?
         end
-        "#{token} is not a private address; the unauthenticated detachable client " \
-          'port may be reachable from untrusted networks'
+        "#{token} is not a private address; Lich's unauthenticated listen sockets " \
+          'may be reachable from untrusted networks'
       rescue IPAddr::InvalidAddressError
         # A hostname - nothing to judge without resolving it here.
         nil
