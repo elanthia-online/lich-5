@@ -105,11 +105,27 @@ RSpec.describe Lich::Common::LimitedArray do
     expect(buffer.try_shift).to eq('line')
   end
 
+  it 'gives a duplicate independent synchronization state' do
+    buffer.max_size = 3
+    buffer.push('one')
+
+    duplicate = buffer.dup
+
+    expect(duplicate).to eq(['one'])
+    expect(duplicate.max_size).to eq(3)
+    expect(duplicate.instance_variable_get(:@mutex)).not_to equal(buffer.instance_variable_get(:@mutex))
+    expect(duplicate.instance_variable_get(:@condition)).not_to equal(buffer.instance_variable_get(:@condition))
+  end
+
   it 'returns and clears one atomic snapshot' do
     buffer.push('one')
     buffer.push('two')
 
-    expect(buffer.clear_snapshot).to eq(%w[one two])
+    snapshot = buffer.clear_snapshot
+
+    expect(snapshot).to eq(%w[one two])
     expect(buffer).to be_empty
+    expect(snapshot.instance_variable_get(:@mutex)).not_to equal(buffer.instance_variable_get(:@mutex))
+    expect(snapshot.instance_variable_get(:@condition)).not_to equal(buffer.instance_variable_get(:@condition))
   end
 end

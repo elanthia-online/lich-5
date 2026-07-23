@@ -154,6 +154,12 @@ module Lich
 
       private
 
+      def initialize_copy(original)
+        super
+        @mutex = Mutex.new
+        @condition = ConditionVariable.new
+      end
+
       def initialize_synchronization
         return if @mutex && @condition
 
