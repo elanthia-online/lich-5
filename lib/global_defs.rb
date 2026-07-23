@@ -586,8 +586,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
   put_dir = proc {
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     waitrt?
@@ -629,14 +628,12 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return false
     elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
@@ -679,8 +676,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't drag/
       if tried_fix_drag
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
         tried_fix_drag = true
@@ -701,8 +697,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /(?:appears|seems) to be closed\.$|^You cannot quite manage to squeeze between the stone doors\.$/
       if tried_open
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       else
         tried_open = true
@@ -771,22 +766,19 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     end
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     if Time.now.to_i >= giveup_time
       echo "move: no recognized response in #{giveup_seconds} seconds.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
     if line_count >= giveup_lines
       echo "move: no recognized response after #{line_count} lines.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
   }
@@ -1824,24 +1816,8 @@ def respond(first = "", *messages)
     elsif Frontend.client.eql?('profanity')
       str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
     end
-    if $_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_DETACHABLE_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
+    $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
+    detachable_clients_respond(str)
   rescue => e
     Lich.log "error: respond: #{e}\n\t#{e.backtrace.first}"
   end
@@ -1858,24 +1834,8 @@ def _respond(first = "", *messages)
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
-    if $_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        break unless $_DETACHABLE_CLIENT_.alive?
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        sleep 0.01 unless str_sent
-      end
-    end
+    $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
+    detachable_clients_respond(str)
   rescue => e
     Lich.log "error: _respond: #{e}\n\t#{e.backtrace.first}"
   end
@@ -2263,6 +2223,178 @@ def monsterbold_end
     '<popBold/>'
   else
     ''
+  end
+end
+
+# Multiple frontends may attach to one persistent detachable listener. The
+# legacy globals remain synchronized for scripts that inspect the primary or
+# the current client list directly.
+$_DETACHABLE_CLIENT_REGISTRY_ ||= Lich::Common::DetachableClientRegistry.new
+$_DETACHABLE_CLIENTS_ ||= []
+$_DETACHABLE_CLIENT_ ||= nil
+
+def sync_detachable_client_globals
+  $_DETACHABLE_CLIENTS_ = $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+  $_DETACHABLE_CLIENT_ = $_DETACHABLE_CLIENT_REGISTRY_.primary
+end
+
+def detachable_clients_snapshot
+  $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+end
+
+def detachable_client_count
+  $_DETACHABLE_CLIENT_REGISTRY_.count
+end
+
+def detachable_client_primary?(client)
+  $_DETACHABLE_CLIENT_REGISTRY_.primary?(client)
+end
+
+def detachable_listener_connected(connected)
+  return unless $_DETACHABLE_LISTENER_
+
+  Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+    host: $_DETACHABLE_LISTENER_[:host],
+    port: $_DETACHABLE_LISTENER_[:port],
+    connected: connected
+  )
+rescue StandardError => e
+  Lich.log "warning: detachable update_listener(#{connected}): #{e}"
+end
+
+def detachable_client_register(client)
+  became_nonempty = $_DETACHABLE_CLIENT_REGISTRY_.register(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(true) if became_nonempty
+  client
+end
+
+def detachable_client_unregister(client)
+  removed, became_empty = $_DETACHABLE_CLIENT_REGISTRY_.unregister(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(false) if removed && became_empty
+  removed
+end
+
+def detachable_clients_respond(string)
+  detachable_clients_snapshot.each do |client|
+    unless client.alive?
+      detachable_client_unregister(client)
+      next
+    end
+
+    client.puts_main_stream(string)
+    detachable_client_unregister(client) unless client.alive?
+  end
+end
+
+def detachable_clients_close
+  clients = $_DETACHABLE_CLIENT_REGISTRY_.remove_all
+  sync_detachable_client_globals
+  clients.each { |client| client.close rescue nil }
+  detachable_listener_connected(false) unless clients.empty?
+  clients.length
+end
+
+# Send one newly attached frontend the game state it missed before attaching.
+def detachable_client_send_init(client)
+  100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+  init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
+  init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
+  init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
+  init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
+  init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+  %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
+    init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
+  end
+  if XMLData.game.to_s.match?(/GS/)
+    init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
+    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
+    init_str.concat "<right>#{GameObj.right_hand.name}</right>"
+    init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+    %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
+      if Wounds.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+      elsif Scars.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+      end
+    end
+  end
+  init_str.concat '<compass>'
+  short_dirs = {
+    'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
+    'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
+    'up' => 'up', 'down' => 'down', 'out' => 'out'
+  }
+  XMLData.room_exits.each do |direction|
+    init_str.concat "<dir value='#{short_dirs[direction]}'/>" if short_dirs.key?(direction)
+  end
+  init_str.concat '</compass>'
+  client.puts_main_stream(init_str)
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_init: #{e}\n\t#{e.backtrace.first}"
+end
+
+def detachable_client_send_player_id(client)
+  tag = nil
+  100.times do
+    break if (tag = Frontend.player_id_tag(XMLData.player_id))
+
+    sleep 0.1
+  end
+  client.puts_main_stream(tag) if tag && client.alive?
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_player_id: #{e}\n\t#{e.backtrace.first}"
+end
+
+def handle_detachable_client(client)
+  unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
+    Thread.new { detachable_client_send_init(client) }
+  end
+  Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
+
+  while (client_string = client.gets)
+    if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
+      Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
+      next
+    end
+
+    client_string = "#{$cmd_prefix}#{client_string}"
+    if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
+      # Detachable exits run script shutdown inline, so arm the same watchdog
+      # used by primary-frontend exits before entering that potentially
+      # blocking path.
+      Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
+      Lich::Common::OrderlyShutdown.request_user_exit(
+        source: :detachable_frontend,
+        active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+      )
+      break
+    end
+
+    begin
+      dispatch_client_input(client_string)
+    rescue StandardError => e
+      respond "--- Lich: error: client_thread: #{e}"
+      respond e.backtrace.first
+      Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
+    end
+  end
+  Lich::Common::ShutdownLog.info('detachable client disconnected')
+rescue StandardError => e
+  _respond "--- Lich: error: detachable client: #{e}"
+  Lich.log "error: detachable_client_handler: #{e}\n\t#{e.backtrace.join("\n\t")}"
+ensure
+  client.close rescue nil
+  detachable_client_unregister(client)
+  Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
+end
+
+def dispatch_client_input(client_string)
+  Lich::Common::ClientInputDispatcher.dispatch(client_string) do |serialized_string|
+    $_IDLETIMESTAMP_ = Time.now
+    do_client(serialized_string)
   end
 end
 

@@ -16,15 +16,26 @@ module Lich
       end
 
       def self.exp
-        Stats.exp
+        XMLData.exp
       end
 
       def self.axp
-        Infomon.get("experience.ascension_experience")
+        XMLData.ascension_exp
       end
 
       def self.txp
-        Infomon.get("experience.total_experience")
+        XMLData.exp + XMLData.ascension_exp
+      end
+
+      def self.until_next
+        XMLData.until_next
+      end
+
+      # Ascension experience remaining until the next ascension training point.
+      # One ATP is earned per 50,000 ascension experience, so at an exact
+      # multiple this reports a full 50,000 interval to the next point.
+      def self.next_atp
+        50_000 - (axp % 50_000)
       end
 
       def self.percent_fxp
@@ -49,6 +60,34 @@ module Lich
 
       def self.deaths_sting
         Infomon.get("experience.deaths_sting")
+      end
+
+      def self.rpa?
+        !XMLData.rpa.nil?
+      end
+
+      def self.rpa
+        XMLData.rpa
+      end
+
+      def self.lumnis?
+        !XMLData.lumnis.nil?
+      end
+
+      def self.lumnis
+        XMLData.lumnis
+      end
+
+      # fashlonae has three states on the mindState bar: absent (no orb redeemed),
+      # 1 (redeemed but not active), and 2 (redeemed and active). fashlonae?
+      # reports whether the bonus is active; fashlonae_redeemed? reports whether an
+      # orb has been redeemed at all.
+      def self.fashlonae?
+        XMLData.fashlonae.eql?(2)
+      end
+
+      def self.fashlonae_redeemed?
+        !XMLData.fashlonae.nil?
       end
 
       def self.updated_at
