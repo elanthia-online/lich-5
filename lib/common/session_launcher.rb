@@ -198,7 +198,7 @@ module Lich
         end
 
         def windows?
-          RUBY_PLATFORM =~ /mingw|mswin|cygwin/i
+          Lich::Common::Frontend.windows_platform?
         end
       end
     end

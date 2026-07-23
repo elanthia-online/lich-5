@@ -97,6 +97,12 @@ RSpec.describe Lich::Common::Frontend do
       expect(frontend.definition_for(:saga)).to equal(frontend.definition_for(:saga))
     end
 
+    it 'keeps embedded SUKS free of frontend protocol capabilities' do
+      expect(frontend.definition_for(:suks)[:capabilities]).to be_empty
+      expect(frontend.supports_xml?('suks')).to be(false)
+      expect(frontend.supports_gsl?('suks')).to be(false)
+    end
+
     it 'raises for a blank frontend identifier' do
       expect { frontend.definition_for(nil) }
         .to raise_error(ArgumentError, 'frontend name must not be empty')
@@ -110,30 +116,66 @@ RSpec.describe Lich::Common::Frontend do
   end
 
   describe '.platform_key' do
-    it 'uses one canonical vocabulary across supported platforms' do
-      expect(frontend.platform_key('arm64-darwin')).to eq(:darwin)
-      expect(frontend.platform_key('x64-mingw32')).to eq(:windows)
-      expect(frontend.platform_key('x86_64-linux')).to eq(:linux)
-      expect(frontend.platform_key('powerpc-aix')).to eq(:unsupported)
+    before do
+      allow(OS).to receive_messages(mac?: false, linux?: false, windows?: false)
     end
 
-    it 'does not mistake darwin for Windows' do
-      expect(frontend.windows_platform?('arm64-darwin')).to be(false)
-      expect(frontend.windows_platform?('x64-mingw32')).to be(true)
+    it 'uses the OS gem to classify macOS' do
+      allow(OS).to receive(:mac?).and_return(true)
+
+      expect(frontend.platform_key).to eq(:darwin)
+    end
+
+    it 'prefers a Linux host classification over a leaked Windows environment signal' do
+      allow(OS).to receive_messages(linux?: true, windows?: true)
+
+      expect(frontend.platform_key).to eq(:linux)
+    end
+
+    it 'uses the OS gem to classify Windows' do
+      allow(OS).to receive(:windows?).and_return(true)
+
+      expect(frontend.platform_key).to eq(:windows)
+      expect(frontend.windows_platform?).to be(true)
+    end
+
+    it 'returns unsupported when the OS gem recognizes no supported host' do
+      expect(frontend.platform_key).to eq(:unsupported)
+    end
+
+    it 'rejects noncanonical injected platform keys' do
+      expect { frontend.validate_platform_key!(:msys) }
+        .to raise_error(ArgumentError, 'invalid platform key: :msys')
+    end
+  end
+
+  describe '.native_windows_runtime?' do
+    it 'accepts RubyInstaller MinGW/UCRT and mswin host ABIs' do
+      allow(OS).to receive(:host_os).and_return('mingw-ucrt')
+      expect(frontend.native_windows_runtime?).to be(true)
+
+      allow(OS).to receive(:host_os).and_return('mswin64')
+      expect(frontend.native_windows_runtime?).to be(true)
+    end
+
+    it 'does not treat an MSYS-native Ruby host as native for Fiddle bindings' do
+      allow(OS).to receive(:host_os).and_return('msys')
+
+      expect(frontend.native_windows_runtime?).to be(false)
     end
   end
 
   describe '.ensure_windows_modules' do
-    it 'requires both native Windows API bindings on a Windows-classified runtime' do
-      allow(frontend).to receive(:windows_platform?).and_return(true)
+    it 'requires both native Windows API bindings on a compatible Ruby ABI' do
+      allow(frontend).to receive(:native_windows_runtime?).and_return(true)
       stub_const('Win32Enum', Module.new)
       stub_const('WinAPI', Module.new)
 
       expect(frontend.ensure_windows_modules).to be_truthy
     end
 
-    it 'does not expose native Windows API bindings on other platforms' do
-      allow(frontend).to receive(:windows_platform?).and_return(false)
+    it 'does not expose native Windows API bindings on incompatible Ruby ABIs' do
+      allow(frontend).to receive(:native_windows_runtime?).and_return(false)
 
       expect(frontend.ensure_windows_modules).to be(false)
     end
@@ -682,6 +724,21 @@ RSpec.describe Lich::Common::Frontend do
       expect(params).to include([:req, :name])
       expect(params).to include([:key, :capabilities])
       expect(params).to include([:key, :metadata])
+    end
+
+    it 'rejects a blank frontend name' do
+      expect { frontend.register(nil) }
+        .to raise_error(ArgumentError, 'frontend name must not be empty')
+    end
+
+    it 'invalidates a cached definition after registration' do
+      cached = frontend.definition_for(:suks)
+
+      frontend.register(:suks, metadata: { launcher_adapter: :embedded })
+      refreshed = frontend.definition_for(:suks)
+
+      expect(refreshed).not_to equal(cached)
+      expect(refreshed).to eq(cached)
     end
   end
 

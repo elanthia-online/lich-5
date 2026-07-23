@@ -100,6 +100,13 @@ RSpec.describe Lich::Common::SessionLauncher do
     expect(described_class.send(:ruby_binary)).to eq('C:/Ruby/bin/rubyw.exe')
   end
 
+  it 'uses the shared OS-backed frontend classification' do
+    allow(described_class).to receive(:windows?).and_call_original
+    allow(Lich::Common::Frontend).to receive(:windows_platform?).and_return(true)
+
+    expect(described_class.send(:windows?)).to be(true)
+  end
+
   it 'forwards optional dark mode and directory flags only when defined' do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(true)

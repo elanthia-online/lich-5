@@ -14,7 +14,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
       host: '127.0.0.1',
       port: 12_345,
       key: 'secret',
-      platform: 'arm64-darwin'
+      platform_key: :darwin
     )
 
     expect(plan.argv).to eq(['/usr/bin/open', '-n', '-b', 'com.auchand.saga'])
@@ -42,7 +42,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
       host: '127.0.0.1',
       port: 12_345,
       key: 'secret',
-      platform: 'x64-mingw32',
+      platform_key: :windows,
       locator: locator
     )
 
@@ -63,7 +63,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
       host: '127.0.0.1',
       port: 12_345,
       key: 'secret',
-      platform: 'x86_64-linux',
+      platform_key: :linux,
       locator: locator,
       refresh: false
     )
@@ -87,16 +87,37 @@ RSpec.describe Lich::Common::FrontendLauncher do
         host: '127.0.0.1',
         port: 12_345,
         key: 'secret',
-        platform: 'x64-mingw32',
+        platform_key: :windows,
         locator: locator
       )
     }.to raise_error(described_class::UnavailableError, 'Saga was not found')
   end
 
   it 'rejects blank Saga connection inputs' do
-    expect {
-      described_class.spawn_plan('saga', host: '', port: 12_345, key: 'secret')
-    }.to raise_error(ArgumentError, 'host must not be empty')
+    {
+      host: ['', 12_345, 'secret'],
+      port: ['127.0.0.1', '', 'secret'],
+      key: ['127.0.0.1', 12_345, '']
+    }.each do |field, (host, port, key)|
+      expect {
+        described_class.spawn_plan('saga', host: host, port: port, key: key)
+      }.to raise_error(ArgumentError, "#{field} must not be empty")
+    end
+  end
+
+  it 'rejects environment adapters from the command-only entry point' do
+    expect { described_class.command('saga') }
+      .to raise_error(described_class::UnsupportedError, 'saga requires a structured spawn plan')
+  end
+
+  it 'reports frontends without a launcher adapter' do
+    expect { described_class.command('profanity') }
+      .to raise_error(described_class::UnsupportedError, 'no launcher adapter for profanity')
+  end
+
+  it 'rejects Avalon launch commands outside macOS' do
+    expect { described_class.command('avalon', platform_key: :linux) }
+      .to raise_error(described_class::UnsupportedError, 'no linux launcher for avalon')
   end
 
   it 'targets the discovered Avalon bundle rather than a hard-coded bundle id' do
@@ -108,7 +129,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     allow(locator).to receive(:resolve).with('avalon', refresh: true).and_return(resolution)
 
     expect(
-      described_class.command('avalon', platform: 'arm64-darwin', locator: locator)
+      described_class.command('avalon', platform_key: :darwin, locator: locator)
     ).to eq('/usr/bin/open -n -a /Applications/Avalon\\ 4.4.app "%1"')
   end
 
@@ -116,7 +137,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     allow(locator).to receive(:resolve).with('avalon', refresh: true).and_return(nil)
 
     expect {
-      described_class.command('avalon', platform: 'arm64-darwin', locator: locator)
+      described_class.command('avalon', platform_key: :darwin, locator: locator)
     }.to raise_error(described_class::UnavailableError, 'Avalon was not found')
   end
 
@@ -129,7 +150,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     allow(locator).to receive(:resolve).with('avalon', refresh: true).and_return(resolution)
 
     expect {
-      described_class.command('avalon', platform: 'arm64-darwin', locator: locator)
+      described_class.command('avalon', platform_key: :darwin, locator: locator)
     }.to raise_error(
       described_class::UnavailableError,
       'Avalon executable is not inside an application bundle'
@@ -139,7 +160,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
   it 'delegates legacy frontend commands to the Simutronics launcher' do
     command = described_class.command(
       'stormfront',
-      platform: 'x64-mingw32',
+      platform_key: :windows,
       simu_launcher: -> { 'launcher.exe "%1"' }
     )
 
