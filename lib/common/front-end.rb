@@ -289,7 +289,7 @@ module Lich
                  }
                })
 
-      SAGA_TEMPORARY_LAUNCH_ENVIRONMENT = {
+      SAGA_LICH_LAUNCH_ENVIRONMENT = {
         'SAGA_LICH_MODE' => '1',
         'SAGA_LICH_HOST' => '%host%',
         'SAGA_LICH_PORT' => '%port%',
@@ -303,27 +303,27 @@ module Lich
                  gui_selectable: true,
                  gui_platforms: %i[darwin windows linux],
                  launcher_adapter: :environment,
-                 launcher_status: :temporary_pending_cli_login,
-                 launch_notice: 'Temporary Saga launch bridge pending Saga CLI login support',
+                 launcher_status: :supported_cold_start_only,
+                 launch_notice: 'Saga 0.8.5 environment handoff; cold start only',
                  native_launch_only: true,
-                 # Temporary cold-start bridges pending Saga's external CLI
-                 # login capability. Saga currently forwards only the mode flag
-                 # to an existing process, not this connection payload.
+                 # Saga 0.8.5 consumes this environment when it owns process
+                 # startup. Its single-instance relay currently drops the
+                 # per-launch host, port, and key.
                  launch_plans: {
                    darwin: {
                      command: '/usr/bin/open',
                      arguments: %w[-n -b com.auchand.saga],
-                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                     environment: SAGA_LICH_LAUNCH_ENVIRONMENT
                    },
                    windows: {
                      command: :resolved_executable,
                      arguments: [],
-                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                     environment: SAGA_LICH_LAUNCH_ENVIRONMENT
                    },
                    linux: {
                      command: :resolved_executable,
                      arguments: [],
-                     environment: SAGA_TEMPORARY_LAUNCH_ENVIRONMENT
+                     environment: SAGA_LICH_LAUNCH_ENVIRONMENT
                    }
                  },
                  discovery: {
@@ -498,7 +498,7 @@ module Lich
         resolved_pid
       end
 
-      # Set PID from detachable client (for Profanity)
+      # Set PID from a detachable frontend such as Profanity or Saga.
       # @param pid [Integer] The PID sent by the client
       # @return [Integer] The stored PID
       def self.set_from_client(pid)

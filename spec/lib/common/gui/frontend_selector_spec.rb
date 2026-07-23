@@ -122,13 +122,13 @@ RSpec.describe Lich::Common::GUI::FrontendSelector do
     expect(described_class.new(locator: locator)).to be_native_launch_only
   end
 
-  it 'marks temporary launcher status in the option tooltip' do
+  it 'marks the Saga cold-start limitation in the option tooltip' do
     allow(locator).to receive(:available).and_return([resolution('saga')])
 
     selector = described_class.new(locator: locator)
     saga_button = selector.instance_variable_get(:@buttons).fetch('saga')
 
-    expect(saga_button.tooltip_text).to include('Temporary Saga launch bridge')
+    expect(saga_button.tooltip_text).to include('Saga 0.8.5 environment handoff; cold start only')
   end
 
   it 'revalidates the selected frontend through the locator' do

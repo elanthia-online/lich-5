@@ -40,9 +40,9 @@ RSpec.describe Lich::Common::Frontend do
       expect(definition.dig(:metadata, :display_name)).to eq('Saga')
       expect(definition.dig(:metadata, :gui_selectable)).to be(true)
       expect(definition.dig(:metadata, :gui_platforms)).to eq(%i[darwin windows linux])
-      expect(definition.dig(:metadata, :launcher_status)).to eq(:temporary_pending_cli_login)
+      expect(definition.dig(:metadata, :launcher_status)).to eq(:supported_cold_start_only)
       expect(definition.dig(:metadata, :launch_notice)).to eq(
-        'Temporary Saga launch bridge pending Saga CLI login support'
+        'Saga 0.8.5 environment handoff; cold start only'
       )
       expect(definition.dig(:metadata, :launch_plans, :darwin)).to eq(
         {
@@ -604,6 +604,22 @@ RSpec.describe Lich::Common::Frontend do
       frontend.client = 'stormfront'
       expect(frontend.supports_gsl?).to be false
       expect(frontend.supports_xml?).to be true
+    end
+  end
+
+  describe '.set_from_client' do
+    around do |example|
+      original = frontend.pid
+      example.run
+      frontend.pid = original
+    end
+
+    it 'records the process id supplied by a detachable Saga client' do
+      allow(Lich).to receive(:log)
+
+      expect(frontend.set_from_client(12_345)).to eq(12_345)
+      expect(frontend.pid).to eq(12_345)
+      expect(Lich).to have_received(:log).with('Frontend PID set from client: 12345')
     end
   end
 

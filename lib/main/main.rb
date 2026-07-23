@@ -108,7 +108,7 @@ reconnect_if_wanted = proc {
 
     if requested_fe == 'saga' && requested_custom_launch == :__unset && !ARGV.include?('--without-frontend')
       unless Lich::Common::FrontendLocator.launchable?('saga', refresh: true)
-        message = 'Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or start the session from Saga with --without-frontend --saga.'
+        message = "Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or use Saga's Via Lich login."
         $stderr.puts "error: #{message}"
         Lich.log "error: #{message}"
         raise SystemExit.new(1)
@@ -907,7 +907,7 @@ reconnect_if_wanted = proc {
               }
             end
             while (client_string = $_DETACHABLE_CLIENT_.gets)
-              # Profanity handshake:  SET_FRONTEND_PID <pid>
+              # Detachable frontend handshake (including Saga): SET_FRONTEND_PID <pid>
               if client_string =~ /^SET_FRONTEND_PID\s+(\d+)\s*$/
                 Frontend.set_from_client($1.to_i) if defined?(Frontend)
                 next # swallow the control line; don't pass it to do_client

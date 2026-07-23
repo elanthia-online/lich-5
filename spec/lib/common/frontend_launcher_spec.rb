@@ -8,7 +8,7 @@ require_relative '../../../lib/common/frontend_launcher'
 RSpec.describe Lich::Common::FrontendLauncher do
   let(:locator) { double('frontend locator') }
 
-  it 'returns a shell-free preliminary macOS Saga environment handoff' do
+  it 'returns the shell-free macOS Saga 0.8.5 cold-start handoff' do
     plan = described_class.spawn_plan(
       'saga',
       host: '127.0.0.1',
@@ -29,7 +29,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     expect(plan.argv).to be_frozen
   end
 
-  it 'uses the resolved Saga executable for the temporary Windows handoff' do
+  it 'uses the resolved Saga executable for the Windows cold-start handoff' do
     resolution = Lich::Common::FrontendLocator::Resolution.new(
       frontend_id: 'saga',
       executable_path: 'C:/Users/Test/AppData/Local/Programs/Saga/Saga.exe',
@@ -50,7 +50,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     expect(plan.environment['SAGA_LICH_KEY']).to eq('secret')
   end
 
-  it 'uses the resolved Saga executable for the temporary Linux handoff' do
+  it 'uses the resolved Saga executable for the Linux cold-start handoff' do
     resolution = Lich::Common::FrontendLocator::Resolution.new(
       frontend_id: 'saga',
       executable_path: '/opt/Saga/saga',
