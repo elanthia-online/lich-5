@@ -32,7 +32,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     Dir.mktmpdir do |directory|
       wrayth = executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 
@@ -48,7 +48,7 @@ RSpec.describe Lich::Common::FrontendLocator do
 
   it 'returns nil when a known frontend is unavailable' do
     locator = described_class.new(
-      platform: 'x86_64-linux',
+      platform_key: :linux,
       environment: { 'PATH' => '' }
     )
 
@@ -64,7 +64,7 @@ RSpec.describe Lich::Common::FrontendLocator do
         executable_name: 'Avalon'
       )
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -88,7 +88,7 @@ RSpec.describe Lich::Common::FrontendLocator do
         executable_name: 'Saga'
       )
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -102,7 +102,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'makes the conventional Linux Saga installation selectable' do
     saga = '/opt/Saga/saga'
     locator = described_class.new(
-      platform: 'x86_64-linux',
+      platform_key: :linux,
       environment: { 'PATH' => '' }
     )
     allow(File).to receive(:file?).with(saga).and_return(true)
@@ -120,11 +120,23 @@ RSpec.describe Lich::Common::FrontendLocator do
     expect(locator.launchable?('saga')).to be(true)
   end
 
+  it 'keeps Saga unavailable on an unsupported platform key' do
+    locator = described_class.new(
+      platform_key: :unsupported,
+      environment: { 'PATH' => '' }
+    )
+
+    expect(locator.resolve('saga')).to be_nil
+    expect(locator.selectable?('saga')).to be(false)
+    expect(locator.launchable?('saga')).to be(false)
+    expect(locator.available(gui_selectable: true).map(&:frontend_id)).not_to include('saga')
+  end
+
   it 'separates native launch support from GUI presentation metadata' do
     Dir.mktmpdir do |directory|
       executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x64-mingw32',
+        platform_key: :windows,
         environment: { 'PATH' => directory }
       )
 
@@ -135,14 +147,14 @@ RSpec.describe Lich::Common::FrontendLocator do
   end
 
   it 'raises for an unknown frontend identifier' do
-    locator = described_class.new(platform: 'x86_64-linux', environment: { 'PATH' => '' })
+    locator = described_class.new(platform_key: :linux, environment: { 'PATH' => '' })
 
     expect { locator.resolve('not-a-frontend') }
       .to raise_error(ArgumentError, 'unknown frontend: not-a-frontend')
   end
 
   it 'raises rather than falling back when an explicit override is invalid' do
-    locator = described_class.new(platform: 'x86_64-linux', environment: { 'PATH' => '' })
+    locator = described_class.new(platform_key: :linux, environment: { 'PATH' => '' })
 
     expect { locator.resolve('saga', override: '/missing/Saga') }
       .to raise_error(ArgumentError, 'frontend override is not executable: /missing/Saga')
@@ -151,7 +163,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'raises when an explicit override disappears during resolution' do
     Dir.mktmpdir do |directory|
       override = executable(File.join(directory, 'Saga'))
-      locator = described_class.new(platform: 'arm64-darwin', environment: { 'PATH' => '' })
+      locator = described_class.new(platform_key: :darwin, environment: { 'PATH' => '' })
       allow(File).to receive(:realpath).with(override).and_raise(Errno::ENOENT, override)
 
       expect { locator.resolve('saga', override: override) }
@@ -164,7 +176,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       discovered = executable(File.join(directory, 'installed', 'Wrayth.exe'))
       override = executable(File.join(directory, 'portable', 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => File.dirname(discovered) }
       )
 
@@ -177,7 +189,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'logs handled filesystem discovery failures and reports unavailable' do
     messages = []
     locator = described_class.new(
-      platform: 'x86_64-linux',
+      platform_key: :linux,
       environment: { 'PATH' => '/inaccessible' },
       logger: ->(message) { messages << message }
     )
@@ -192,7 +204,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     Dir.mktmpdir do |directory|
       executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 
@@ -202,7 +214,7 @@ RSpec.describe Lich::Common::FrontendLocator do
 
   it 'does not mutate the frontend definition collection while filtering by platform' do
     definitions = frontend.definitions(gui_selectable: true).freeze
-    locator = described_class.new(platform: 'x86_64-linux', environment: { 'PATH' => '' })
+    locator = described_class.new(platform_key: :linux, environment: { 'PATH' => '' })
     allow(frontend).to receive(:definitions).with(gui_selectable: true).and_return(definitions)
     allow(locator).to receive(:resolve).and_return(nil)
 
@@ -214,7 +226,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'refreshes cached unavailable results' do
     Dir.mktmpdir do |directory|
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 
@@ -228,7 +240,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'refreshes all cached results through available' do
     Dir.mktmpdir do |directory|
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 
@@ -244,7 +256,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     Dir.mktmpdir do |directory|
       executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => ":relative:" }
       )
 
@@ -256,7 +268,7 @@ RSpec.describe Lich::Common::FrontendLocator do
 
   it 'drops conventional candidates containing unresolved environment variables' do
     locator = described_class.new(
-      platform: 'x64-mingw32',
+      platform_key: :windows,
       environment: { 'PATH' => '' }
     )
 
@@ -267,7 +279,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     Dir.mktmpdir do |directory|
       saga = executable(File.join(directory, 'Programs', 'Saga', 'Saga.exe'))
       locator = described_class.new(
-        platform: 'x64-mingw32',
+        platform_key: :windows,
         environment: { 'PATH' => '', 'localappdata' => directory }
       )
 
@@ -276,12 +288,24 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
+  it 'expands the parenthesized PROGRAMFILES(X86) environment variable' do
+    Dir.mktmpdir do |directory|
+      saga = executable(File.join(directory, 'Saga', 'Saga.exe'))
+      locator = described_class.new(
+        platform_key: :windows,
+        environment: { 'PATH' => '', 'programfiles(x86)' => directory }
+      )
+
+      expect(locator.resolve('saga').executable_path).to eq(File.realpath(saga))
+    end
+  end
+
   it 'rejects directories and non-executable files from PATH' do
     Dir.mktmpdir do |directory|
       FileUtils.mkdir_p(File.join(directory, 'Wrayth.exe'))
       File.write(File.join(directory, 'StormFront.exe'), 'not executable')
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 
@@ -296,7 +320,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       conventional = executable(File.join(directory, 'conventional', 'Wrayth.exe'))
       executable(File.join(directory, 'path', 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => File.join(directory, 'path') }
       )
       allow(locator).to receive(:registry_candidates).and_return([registry])
@@ -332,7 +356,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       win32.const_set(:Registry, registry)
       stub_const('Win32', win32)
 
-      locator = described_class.new(platform: 'x64-mingw32', environment: { 'PATH' => '' })
+      locator = described_class.new(platform_key: :windows, environment: { 'PATH' => '' })
       allow(locator).to receive(:require).with('win32/registry').and_return(true)
 
       expect(locator.resolve('stormfront')).to eq(
@@ -355,7 +379,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       end
       stub_const('Wine', wine)
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => '' },
         wine: wine
       )
@@ -373,7 +397,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'does not consult ambient Wine when the injected provider is nil' do
     stub_const('Wine', Module.new)
     locator = described_class.new(
-      platform: 'x86_64-linux',
+      platform_key: :linux,
       environment: { 'PATH' => '' },
       wine: nil
     )
@@ -390,7 +414,7 @@ RSpec.describe Lich::Common::FrontendLocator do
         executable_name: 'Avalon'
       )
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -410,7 +434,7 @@ RSpec.describe Lich::Common::FrontendLocator do
         .with('/usr/bin/plutil', '-extract', 'CFBundleIdentifier', 'raw', '--', plist)
         .and_return(["com.auchand.saga\n", '', status])
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -434,7 +458,7 @@ RSpec.describe Lich::Common::FrontendLocator do
         executable_name: 'Saga'
       )
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -451,7 +475,7 @@ RSpec.describe Lich::Common::FrontendLocator do
   it 'refreshes the macOS application index with the resolution cache' do
     Dir.mktmpdir do |applications|
       locator = described_class.new(
-        platform: 'arm64-darwin',
+        platform_key: :darwin,
         environment: { 'PATH' => '' },
         application_roots: [applications]
       )
@@ -472,7 +496,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       messages = []
       wrayth = executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory },
         logger: ->(message) { messages << message }
       )
@@ -488,7 +512,7 @@ RSpec.describe Lich::Common::FrontendLocator do
       first = executable(File.join(directory, 'Wrayth.exe'))
       second = executable(File.join(directory, 'StormFront.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
       allow(File).to receive(:realpath).and_call_original
@@ -502,7 +526,7 @@ RSpec.describe Lich::Common::FrontendLocator do
     Dir.mktmpdir do |directory|
       executable(File.join(directory, 'Wrayth.exe'))
       locator = described_class.new(
-        platform: 'x86_64-linux',
+        platform_key: :linux,
         environment: { 'PATH' => directory }
       )
 

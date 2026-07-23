@@ -24,7 +24,7 @@ module Lich
         # Builds the platform command template for a registered frontend.
         #
         # @param frontend_id [String, Symbol] registered frontend identifier
-        # @param platform [String] Ruby platform identifier
+        # @param platform_key [Symbol] canonical host classification
         # @param locator [FrontendLocator] injectable discovery API
         # @param simu_launcher [#call] injectable legacy launcher lookup
         # @return [String]
@@ -33,7 +33,7 @@ module Lich
         # @raise [UnavailableError] when a required executable/launcher is absent
         def command(
           frontend_id,
-          platform: RUBY_PLATFORM,
+          platform_key: Frontend.platform_key,
           locator: FrontendLocator,
           simu_launcher: -> { Lich.get_simu_launcher }
         )
@@ -43,7 +43,7 @@ module Lich
           when :environment
             raise UnsupportedError, "#{definition[:id]} requires a structured spawn plan"
           when :avalon
-            avalon_command(definition, platform, locator)
+            avalon_command(definition, platform_key, locator)
           when :simutronics
             simu_launcher.call || raise(UnavailableError, 'Simutronics launcher was not found')
           else
@@ -62,13 +62,21 @@ module Lich
         # @param host [String] local proxy host
         # @param port [Integer, String] local proxy port
         # @param key [String] authenticated game connection key
-        # @param platform [String] Ruby platform identifier
+        # @param platform_key [Symbol] canonical host classification
         # @param locator [FrontendLocator] injectable discovery API
         # @param refresh [Boolean] refresh executable discovery before resolving
         # @return [SpawnPlan]
         # @raise [ArgumentError] for blank connection values
         # @raise [UnsupportedError] when no plan exists on the platform
-        def spawn_plan(frontend_id, host:, port:, key:, platform: RUBY_PLATFORM, locator: FrontendLocator, refresh: true)
+        def spawn_plan(
+          frontend_id,
+          host:,
+          port:,
+          key:,
+          platform_key: Frontend.platform_key,
+          locator: FrontendLocator,
+          refresh: true
+        )
           definition = Frontend.definition_for(frontend_id)
           unless definition.dig(:metadata, :launcher_adapter) == :environment
             raise UnsupportedError, "no environment launcher for #{definition[:id]}"
@@ -79,7 +87,7 @@ module Lich
             raise ArgumentError, "#{token.delete('%')} must not be empty" if value.to_s.empty?
           end
 
-          platform_key = Frontend.platform_key(platform)
+          platform_key = Frontend.validate_platform_key!(platform_key)
           plan = definition.dig(:metadata, :launch_plans, platform_key)
           unless plan
             raise UnsupportedError, "no #{platform_key} launcher for #{definition[:id]}"
@@ -108,8 +116,8 @@ module Lich
           resolution.executable_path
         end
 
-        def avalon_command(definition, platform, locator)
-          platform_key = Frontend.platform_key(platform)
+        def avalon_command(definition, platform_key, locator)
+          platform_key = Frontend.validate_platform_key!(platform_key)
           unless platform_key == :darwin
             raise UnsupportedError, "no #{platform_key} launcher for #{definition[:id]}"
           end

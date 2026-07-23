@@ -10,13 +10,14 @@ module Lich
       # Selects the current Ruby executable, preferring rubyw.exe on Windows
       # when that companion executable is actually installed.
       #
-      # @param platform [String] Ruby platform identifier
+      # @param platform_key [Symbol] canonical host classification
       # @param configured_ruby [String] current Ruby executable
       # @return [String]
       # @raise [ArgumentError] when configured_ruby is blank
-      def self.ruby_executable(platform: RUBY_PLATFORM, configured_ruby: RbConfig.ruby)
+      def self.ruby_executable(platform_key: Lich::Common::Frontend.platform_key, configured_ruby: RbConfig.ruby)
         raise ArgumentError, 'configured Ruby executable must not be empty' if configured_ruby.to_s.empty?
-        return configured_ruby unless Lich::Common::Frontend.windows_platform?(platform)
+        platform_key = Lich::Common::Frontend.validate_platform_key!(platform_key)
+        return configured_ruby unless platform_key == :windows
 
         windowed_ruby = configured_ruby.sub(/ruby(?:\.exe)?$/i, 'rubyw.exe')
         return configured_ruby if windowed_ruby == configured_ruby
@@ -41,8 +42,12 @@ module Lich
         raise ArgumentError, 'program must not be empty' if program.to_s.empty?
         raise ArgumentError, 'Ruby executable must not be empty' if ruby_executable.to_s.empty?
 
-        delay = Integer(reconnect_delay)
-        step = Integer(reconnect_step)
+        begin
+          delay = Integer(reconnect_delay)
+          step = Integer(reconnect_step)
+        rescue ArgumentError, TypeError
+          raise ArgumentError, 'reconnect delay values must be integers'
+        end
         raise ArgumentError, 'reconnect delay values must not be negative' if delay.negative? || step.negative?
 
         args = [ruby_executable, program, *argv]
@@ -52,8 +57,6 @@ module Lich
           args << "--reconnect-delay=#{delay + step}+#{step}"
         end
         args
-      rescue TypeError
-        raise ArgumentError, 'reconnect delay values must be integers'
       end
     end
   end

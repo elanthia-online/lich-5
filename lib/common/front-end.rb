@@ -6,12 +6,30 @@ require 'fileutils'
 require 'fiddle'
 require 'fiddle/import'
 require 'open3'
+require 'os'
+require_relative '../util/deep_freeze'
+
+# Define the ABI predicate before the top-level Win32 binding guard that uses it;
+# the main Frontend implementation continues in the module reopening below.
+module Lich
+  module Common
+    module Frontend
+      PLATFORM_KEYS = %i[darwin linux windows unsupported].freeze
+
+      # Native user32 bindings require a Windows MRI ABI, not merely a Windows host.
+      # @return [Boolean]
+      def self.native_windows_runtime?
+        OS.host_os.to_s.match?(/mingw|mswin/i)
+      end
+    end
+  end
+end
 
 # Windows API modules for frontend PID detection and window focus.
 # Keep this narrower than Frontend.windows_platform?: these direct Fiddle
 # bindings are supported by native mingw/mswin Ruby, not every Windows-like
 # compatibility runtime recognized for executable discovery.
-if RUBY_PLATFORM =~ /mingw|mswin/
+if Lich::Common::Frontend.native_windows_runtime?
   unless defined?(::Win32Enum)
     module ::Win32Enum
       extend Fiddle::Importer
@@ -54,17 +72,6 @@ module Lich
         end
       end
       private_class_method :deep_copy
-
-      def self.deep_freeze(value)
-        case value
-        when Hash
-          value.each { |key, item| deep_freeze(key); deep_freeze(item) }
-        when Array
-          value.each { |item| deep_freeze(item) }
-        end
-        value.freeze
-      end
-      private_class_method :deep_freeze
 
       # --- Frontend Registry -------------------------------------
       # Each registered frontend has:
@@ -138,7 +145,7 @@ module Lich
         raise ArgumentError, 'frontend name must not be empty' if key.empty?
         raise ArgumentError, "unknown frontend: #{frontend_name}" unless @registry.key?(key)
 
-        @definitions[key] ||= deep_freeze(
+        @definitions[key] ||= Lich::Util.deep_freeze(
           {
             id: key,
             capabilities: @registry.fetch(key)[:capabilities].to_a,
@@ -164,23 +171,31 @@ module Lich
       # Returns the canonical platform key used by frontend discovery and
       # launch-plan metadata.
       #
-      # @param platform [String] Ruby platform identifier
       # @return [Symbol] :darwin, :windows, :linux, or :unsupported
-      def self.platform_key(platform = RUBY_PLATFORM)
-        value = platform.to_s
-        return :darwin if value.match?(/darwin/i)
-        return :windows if value.match?(/mingw|mswin|cygwin|win32/i)
-        return :linux if value.match?(/linux/i)
+      def self.platform_key
+        return :darwin if OS.mac?
+        return :linux if OS.linux?
+        return :windows if OS.windows?
 
         :unsupported
       end
 
-      # Returns whether the supplied Ruby platform is native Windows.
+      # Validates a canonical platform key used by discovery and launch plans.
       #
-      # @param platform [String] Ruby platform identifier
+      # @param key [Symbol]
+      # @return [Symbol]
+      # @raise [ArgumentError] when key is not canonical
+      def self.validate_platform_key!(key)
+        return key if PLATFORM_KEYS.include?(key)
+
+        raise ArgumentError, "invalid platform key: #{key.inspect}"
+      end
+
+      # Returns whether the current host is classified as Windows.
+      #
       # @return [Boolean]
-      def self.windows_platform?(platform = RUBY_PLATFORM)
-        platform_key(platform) == :windows
+      def self.windows_platform?
+        platform_key == :windows
       end
 
       # Returns the catalog display name, with a stable fallback for legacy
@@ -239,8 +254,7 @@ module Lich
       register(:frostbite,
                capabilities: %i[xml])
 
-      # SUKS is handled inside the Lich process and requires no external
-      # executable, but remains hidden from the first-tier GUI selector.
+      # SUKS has no client socket, so frontend protocol capabilities do not apply.
       register(:suks,
                metadata: {
                  launcher_adapter: :embedded
@@ -316,7 +330,8 @@ module Lich
                    executables: %w[Saga Saga.exe saga],
                    mac_bundle_ids: %w[com.auchand.saga],
                    # Do not search PATH: `saga` also names the unrelated SAGA GIS
-                   # executable. Linux currently supports the packaged /opt layout.
+                   # executable. Saga's Linux AppImage location is user-selected;
+                   # /opt is one known convention pending desktop/AppImage discovery.
                    path_lookup: false,
                    paths: {
                      windows: [
@@ -736,7 +751,7 @@ module Lich
 
       # Ensure Windows modules are loaded (they're defined at top level)
       def self.ensure_windows_modules
-        return false unless windows_platform?
+        return false unless native_windows_runtime?
 
         defined?(::Win32Enum) && defined?(::WinAPI)
       end

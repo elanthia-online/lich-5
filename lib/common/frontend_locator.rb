@@ -78,19 +78,19 @@ module Lich
         end
       end
 
-      # @param platform [String] Ruby platform identifier
+      # @param platform_key [Symbol] canonical host classification
       # @param environment [Hash] environment used for path expansion/PATH
       # @param logger [#call, nil] receives handled discovery warning strings
       # @param application_roots [Array<String>] macOS application directories
       # @param wine [Module, nil] injected Wine integration provider
       def initialize(
-        platform: RUBY_PLATFORM,
+        platform_key: Frontend.platform_key,
         environment: ENV,
         logger: nil,
         application_roots: ['/Applications', '~/Applications'],
         wine: (defined?(Wine) ? Wine : nil)
       )
-        @platform = platform
+        @platform_key = Frontend.validate_platform_key!(platform_key)
         @environment = environment
         @logger = logger || method(:default_log)
         @application_roots = application_roots
@@ -276,7 +276,7 @@ module Lich
       end
 
       def platform_key
-        Frontend.platform_key(@platform)
+        @platform_key
       end
 
       def gui_platform_supported?(definition)
@@ -301,7 +301,7 @@ module Lich
       end
 
       def windows?
-        Frontend.windows_platform?(@platform)
+        platform_key == :windows
       end
 
       def expand_path(path)

@@ -3,6 +3,8 @@ util.rb: Core lich file for collection of utilities to extend Lich capabilities.
 Entries added here should always be accessible from Lich::Util.feature namespace.
 =end
 
+require_relative 'deep_freeze'
+
 module Lich
   module Util
     include Enumerable
@@ -284,35 +286,6 @@ module Lich
           raise("Please install the failed gems: #{failed_gems.join(', ')} manually to continue.")
         end
       end
-    end
-
-    ##
-    # Recursively freezes a nested data structure in-place.
-    #
-    # This method ensures that all elements of deeply nested Arrays and Hashes are frozen,
-    # including their keys and values. It helps prevent unintended mutations of static or
-    # constant data, particularly useful for reference tables like weapon, armor, or shield stats.
-    #
-    # @param obj [Object] The object to be deeply frozen. Can be a Hash, Array, or any Ruby object.
-    # @return [Object] The same object, after freezing all its elements recursively.
-    #
-    # @example Freezing a nested hash
-    #   data = { stats: { damage: [1, 2, 3], type: "slash" } }
-    #   Lich::Gemstone::Armaments::Freezer.deep_freeze(data)
-    #   data.frozen?                   # => true
-    #   data[:stats].frozen?           # => true
-    #   data[:stats][:damage].frozen?  # => true
-    def self.deep_freeze(obj)
-      case obj
-      when Hash
-        obj.each do |k, v|
-          deep_freeze(k)
-          deep_freeze(v)
-        end
-      when Array
-        obj.each { |el| deep_freeze(el) }
-      end
-      obj.freeze
     end
   end
 end
