@@ -45,6 +45,7 @@ module Lich
         @obj_after_name = nil
         @pc = nil
         @last_obj = nil
+        @last_npc = nil
         @in_stream = false
         @player_status = nil
         @fam_mode = String.new
@@ -409,18 +410,17 @@ module Lich
 
           if (name == 'compDef') or (name == 'component')
             if attributes['id'] == 'room objs'
-              GameObj.clear_loot
-              GameObj.clear_npcs
+              GameObj.begin_room_objs
               Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
               @pending_crtr_status.clear
             elsif attributes['id'] == 'room players'
-              GameObj.clear_pcs
+              GameObj.begin_room_players
             elsif attributes['id'] == 'room exits'
               @room_exits = Array.new
               @room_exits_string = String.new
             elsif attributes['id'] == 'room desc'
               @room_description = String.new
-              GameObj.clear_room_desc
+              GameObj.begin_room_desc
             end
           end
 
@@ -482,8 +482,8 @@ module Lich
               @assess_ids = []
             end
             if XMLData.game =~ /^GS/
-              GameObj.clear_inv if attributes['id'].to_s == 'inv'
-              GameObj.clear_reserve if attributes['id'].to_s == 'reserve'
+              GameObj.begin_inv if attributes['id'].to_s == 'inv'
+              GameObj.begin_reserve if attributes['id'].to_s == 'reserve'
             end
           end
 
@@ -503,6 +503,11 @@ module Lich
               end
             end
             @in_stream = false
+            # @current_stream still names the closing stream here; commit_* is a
+            # no-op when the matching refresh was never opened (e.g. in DR).
+            GameObj.commit_inv      if @current_stream == 'inv'
+            GameObj.commit_reserve  if @current_stream == 'reserve'
+            GameObj.commit_familiar if @current_stream == 'familiar'
             if attributes['id'] == 'bounty'
               @bounty_task.strip!
             end
@@ -550,6 +555,11 @@ module Lich
             @server_time_offset = (Time.now.to_f - @server_time)
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
 
+            # A prompt terminates the command burst and is the reliable close
+            # signal for clearContainer/inv container fills, which have no
+            # closing tag of their own. No-op when no container refresh is open.
+            GameObj.commit_all_containers
+
             if @dr_active_spell_tracking
               @dr_active_spell_tracking = false
               @dr_active_spells_slivers = false
@@ -562,9 +572,9 @@ module Lich
 
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
-              GameObj.clear_container(@stow_container_id)
+              GameObj.begin_container(@stow_container_id)
             else
-              GameObj.clear_container(attributes['id'])
+              GameObj.begin_container(attributes['id'])
             end
           end
           if name == 'deleteContainer'
@@ -928,7 +938,7 @@ module Lich
             if @active_ids.include?('room objs')
               if @active_tags.include?('a')
                 if @bold
-                  GameObj.new_npc(@obj_exist, @obj_noun, text_string)
+                  @last_npc = GameObj.new_npc(@obj_exist, @obj_noun, text_string)
                   if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
                     creature = Creature.register(text_string, @obj_exist, @obj_noun)
                     if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
@@ -939,7 +949,7 @@ module Lich
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
               elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
-                GameObj.npcs[-1].status = $1
+                @last_npc&.status = $1
               end
             elsif @active_ids.include?('room players')
               if @active_tags.include?('a')
@@ -953,7 +963,7 @@ module Lich
                 @player_title = nil
               else
                 if @game =~ /^DR/
-                  GameObj.clear_pcs
+                  GameObj.begin_room_players
                   text_string.sub(/^Also here\: /, '').sub(/ and ([^,]+)\./) { ", #{$1}" }.split(', ').each { |player|
                     if player =~ / who is (.+)/
                       status = $1
@@ -983,6 +993,7 @@ module Lich
                     end
                     GameObj.new_pc(nil, noun, player, status)
                   }
+                  GameObj.commit_room_players
                 else
                   if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
                     if @pc.status
@@ -1030,10 +1041,7 @@ module Lich
               @familiar_room_title = text_string
               @familiar_room_description = String.new
               @familiar_room_exits = Array.new
-              GameObj.clear_fam_room_desc
-              GameObj.clear_fam_loot
-              GameObj.clear_fam_npcs
-              GameObj.clear_fam_pcs
+              GameObj.begin_familiar
               @fam_mode = String.new
             elsif @current_style == 'roomDesc'
               @familiar_room_description.concat(text_string)
@@ -1136,6 +1144,15 @@ module Lich
             end
             @room_count += 1
             $room_count += 1
+          end
+          # Commit a staged room component when it closes. @active_ids.last is
+          # the component's own id at this point (inner <a> ids already popped).
+          if (name == 'component') or (name == 'compDef')
+            case @active_ids.last
+            when 'room objs'    then GameObj.commit_room_objs
+            when 'room players' then GameObj.commit_room_players
+            when 'room desc'    then GameObj.commit_room_desc
+            end
           end
           @last_tag = @active_tags.pop
           @last_id = @active_ids.pop

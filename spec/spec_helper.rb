@@ -91,6 +91,17 @@ RSpec.configure do |config|
       end
       g.class_variable_set(:@@right_hand, nil) if g.class_variable_defined?(:@@right_hand)
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
+
+      # Staged registry refresh buffers (present once lib/common/gameobj.rb is
+      # loaded). nil when idle; reset so a refresh left open by one example
+      # never leaks into the next.
+      %i[@@staging_inv @@staging_reserve @@staging_loot @@staging_npcs
+         @@staging_npc_status @@staging_pcs @@staging_pc_status @@staging_room_desc
+         @@staging_fam_room_desc @@staging_fam_loot @@staging_fam_npcs
+         @@staging_fam_pcs].each do |cv|
+        g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
+      end
+      g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
     end
 
     # DR mocks from spec_helper - these have reset! defined in the mock (not production)

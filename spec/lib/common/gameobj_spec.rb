@@ -699,4 +699,229 @@ RSpec.describe Lich::Common::GameObj do
       expect(index['555|kobold|a snarling kobold'].first).to equal(live) # live sibling kept
     end
   end
+
+  describe 'staged registry refresh (begin_*/commit_*)' do
+    describe 'inv staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        first = described_class.new_inv('1', 'gem', 'a ruby')
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+
+        described_class.begin_inv
+        described_class.new_inv('2', 'gem', 'a sapphire')
+
+        # Mid-refresh: readers still see the prior complete snapshot, not the
+        # half-built staging buffer.
+        expect(described_class.inv.map(&:id)).to eq([first.id])
+
+        described_class.commit_inv
+        expect(described_class.inv.map(&:id)).to eq(['2'])
+      end
+
+      it 'never returns nil during a refresh that started from a populated registry' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        # No items added yet this stream.
+        expect(described_class.inv).not_to be_nil
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+
+        described_class.commit_inv
+      end
+
+      it 'publishes an empty registry when the staged stream had no items' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        described_class.commit_inv
+
+        expect(described_class.inv).to be_nil
+      end
+
+      it 'commit is a no-op when no refresh was opened' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.commit_inv
+
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+      end
+
+      it 'reuses the same instance across a refresh via the shared index' do
+        first = described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        restaged = described_class.new_inv('1', 'gem', 'a ruby')
+        described_class.commit_inv
+
+        expect(restaged).to be(first)
+      end
+    end
+
+    describe 'reserve staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        described_class.new_reserve('1', 'herb', 'a sprig')
+        described_class.begin_reserve
+        described_class.new_reserve('2', 'herb', 'another sprig')
+
+        expect(described_class.reserve.map(&:id)).to eq(['1'])
+
+        described_class.commit_reserve
+        expect(described_class.reserve.map(&:id)).to eq(['2'])
+      end
+    end
+
+    describe 'room objs staging' do
+      it 'swaps loot, npcs and npc status atomically' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_loot('11', 'gem', 'a ruby')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold', 'stunned')
+
+        # Old room still visible mid-refresh.
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+        expect(described_class.loot.map(&:id)).to eq(['11'])
+
+        described_class.commit_room_objs
+        expect(described_class.npcs.map(&:id)).to eq(['20'])
+        expect(described_class.loot).to be_nil
+        expect(described_class['20'].status).to eq('stunned')
+      end
+
+      it 'applies a deferred status= to the staged npc and survives commit' do
+        described_class.begin_room_objs
+        npc = described_class.new_npc('20', 'kobold', 'a kobold')
+
+        # Mirrors xmlparser setting status on the just-created npc in a later
+        # text callback, while the refresh is still open.
+        npc.status = 'dead'
+
+        described_class.commit_room_objs
+        expect(described_class['20'].status).to eq('dead')
+      end
+
+      it 'an empty room objs stream clears stale npcs and loot on commit' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_loot('11', 'gem', 'a ruby')
+
+        described_class.begin_room_objs
+        described_class.commit_room_objs
+
+        expect(described_class.npcs).to be_nil
+        expect(described_class.loot).to be_nil
+      end
+    end
+
+    describe 'room players staging' do
+      it 'swaps pcs and pc status atomically' do
+        described_class.new_pc('30', 'elf', 'an elf', 'standing')
+
+        described_class.begin_room_players
+        described_class.new_pc('31', 'dwarf', 'a dwarf', 'sitting')
+
+        expect(described_class.pcs.map(&:id)).to eq(['30'])
+
+        described_class.commit_room_players
+        expect(described_class.pcs.map(&:id)).to eq(['31'])
+        expect(described_class['31'].status).to eq('sitting')
+      end
+    end
+
+    describe 'room desc staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        described_class.new_room_desc('40', 'statue', 'a statue')
+
+        described_class.begin_room_desc
+        described_class.new_room_desc('41', 'fountain', 'a fountain')
+
+        expect(described_class.room_desc.map(&:id)).to eq(['40'])
+
+        described_class.commit_room_desc
+        expect(described_class.room_desc.map(&:id)).to eq(['41'])
+      end
+    end
+
+    describe 'familiar staging' do
+      it 'swaps all four familiar registries atomically' do
+        described_class.new_fam_npc('50', 'orc', 'an orc')
+        described_class.new_fam_loot('51', 'gem', 'a ruby')
+
+        described_class.begin_familiar
+        described_class.new_fam_npc('60', 'troll', 'a troll')
+
+        expect(described_class.fam_npcs.map(&:id)).to eq(['50'])
+        expect(described_class.fam_loot.map(&:id)).to eq(['51'])
+
+        described_class.commit_familiar
+        expect(described_class.fam_npcs.map(&:id)).to eq(['60'])
+        expect(described_class.fam_loot).to be_nil
+      end
+    end
+
+    describe 'container staging' do
+      it 'keeps the previous container contents visible until commit' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['70'])
+
+        described_class.commit_container('bag-1')
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['71'])
+      end
+
+      it 'commit_all_containers publishes every open buffer at once' do
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+        described_class.begin_container('bag-2')
+        described_class.new_inv('72', 'gem', 'an emerald', 'bag-2')
+
+        described_class.commit_all_containers
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['71'])
+        expect(described_class.containers['bag-2'].map(&:id)).to eq(['72'])
+      end
+
+      it 'commit_all_containers is a no-op when nothing is staged' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        expect { described_class.commit_all_containers }.not_to(change { described_class.containers })
+      end
+
+      it 'delete_container aborts an open refresh so commit cannot resurrect the key' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.delete_container('bag-1')
+        described_class.commit_all_containers
+
+        expect(described_class.containers).not_to have_key('bag-1')
+      end
+
+      it 'clear_all_containers aborts open refreshes too' do
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        described_class.clear_all_containers
+        described_class.commit_all_containers
+
+        expect(described_class.containers).to be_empty
+      end
+    end
+
+    describe 'prune safety during a refresh' do
+      it 'never prunes an object held only in an open staging buffer' do
+        described_class.begin_room_objs
+        staged = described_class.new_npc('80', 'wraith', 'a wraith')
+
+        # Aggressive prune (everything older than 0s is stale) must still skip
+        # the in-flight staged object.
+        described_class.prune_index!(ttl: 0)
+
+        described_class.commit_room_objs
+        expect(described_class.npcs.map(&:id)).to eq([staged.id])
+        expect(described_class['80']).to be(staged)
+      end
+    end
+  end
 end
