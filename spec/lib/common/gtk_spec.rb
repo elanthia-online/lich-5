@@ -175,6 +175,8 @@ RSpec.describe 'Lich::Common GTK hardening' do
   end
 
   it 'quits the GTK main loop when no retained GTK cleanup remains' do
+    Gtk.main_level = 1
+
     expect(Lich::Common.cleanup_gtk!).to be(false)
     expect(Lich::Common.shutdown_gtk!).to eq(:main_quit_called)
     expect(Gtk.main_quit_calls).to eq(1)
@@ -263,7 +265,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
         expect(widget.destroyed?).to be true
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
-        # Loop already unwound — must not call gtk_main_quit (Gtk-CRITICAL).
+        # Loop already unwound -- must not call gtk_main_quit (Gtk-CRITICAL).
         expect(Gtk.main_quit_calls).to eq(0)
       end
 
