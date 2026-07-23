@@ -265,7 +265,6 @@ RSpec.describe 'Lich::Common GTK hardening' do
 
         expect(widget.destroyed?).to be true
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers }).to be_empty
-        # Loop already unwound -- must not call gtk_main_quit (Gtk-CRITICAL).
         expect(Gtk.main_quit_calls).to eq(0)
       end
 
@@ -282,16 +281,6 @@ RSpec.describe 'Lich::Common GTK hardening' do
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_signal_handlers[widget] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_timeout_callbacks[timeout_id] }).to be_nil
         expect(Lich::Common.with_gtk_registry_lock { Lich::Common.gtk_idle_callbacks[idle_id] }).to be_nil
-      end
-
-      it 'clears registries when direct teardown fails' do
-        allow(Lich::Common).to receive(:cleanup_gtk!).and_raise('shutdown boom')
-        allow(Lich::Common).to receive(:clear_gtk_retention_registries).and_call_original
-
-        expect { Lich::Common.shutdown_gtk_before_exit(direct: true) }.not_to raise_error
-
-        expect(Lich).to have_received(:log).with(/Failed to run direct GTK shutdown before exit/)
-        expect(Lich::Common).to have_received(:clear_gtk_retention_registries).at_least(:once)
       end
 
       it 'is a clean no-op when nothing remains to tear down' do

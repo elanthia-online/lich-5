@@ -94,13 +94,7 @@ module Lich
     # @return [Object, nil] GTK main quit result when available
     def self.shutdown_gtk!
       cleanup_gtk!
-      # Only quit when a loop is actually nested. The terminal lich.rbw backstop
-      # runs after Gtk.main returns (main_level == 0); calling gtk_main_quit then
-      # trips Gtk-CRITICAL "main_loops != NULL" -- common for headless /
-      # --without-frontend exits where Genie (or another FE) disconnects.
-      if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit) && gtk_main_loop_running?
-        Gtk.lich_main_quit
-      end
+      Gtk.lich_main_quit if defined?(Gtk) && Gtk.respond_to?(:lich_main_quit)
     end
 
     # Temporarily allows a core-owned Gtk.main_quit call to bypass script guards.
