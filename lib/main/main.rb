@@ -92,6 +92,7 @@ reconnect_if_wanted = proc {
   if ARGV.include?('--login')
     # CLI login flow: character authentication via saved entries
     require File.join(LIB_DIR, 'common', 'authentication', 'cli')
+    require File.join(LIB_DIR, 'common', 'saga_managed_login')
 
     # Extract character name from --login argument
     requested_character = ARGV[ARGV.index('--login') + 1].capitalize
@@ -102,18 +103,39 @@ reconnect_if_wanted = proc {
     modifiers = ARGV.dup
     requested_instance, requested_fe, requested_custom_launch = Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
     lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
+    new_character_login = requested_character.match?(Lich::Common::Authentication::LoginHelpers::NEW_CHARACTER_LOGIN)
 
-    if requested_fe == 'saga' && requested_custom_launch == :__unset && !ARGV.include?('--without-frontend')
-      unless Lich::Common::FrontendLocator.launchable?('saga', refresh: true)
-        message = "Native Saga launch is not available on this platform or Saga was not found. Use a saved Custom Launch entry, or use Saga's Via Lich login."
-        $stderr.puts "error: #{message}"
-        Lich.log "error: #{message}"
-        raise SystemExit.new(1)
+    saga_decision = Lich::Common::SagaManagedLogin.cli_decision(
+      character: requested_character,
+      game_code: requested_instance,
+      frontend: requested_fe,
+      custom_launch: requested_custom_launch,
+      headless: ARGV.include?('--without-frontend'),
+      data_dir: DATA_DIR
+    )
+
+    case saga_decision.action
+    when :launch
+      result = Lich::Common::SagaManagedLogin.launch(saga_decision.target)
+      if result[:ok]
+        Lich.log "info: Saga-managed CLI launch requested for #{requested_character}; pid=#{result[:pid]}"
+        raise SystemExit.new(0)
       end
+
+      message = "Failed to launch Saga: #{result[:error]}"
+      $stderr.puts "error: #{message}"
+      Lich.log "error: #{message}"
+      $stderr.flush
+      raise SystemExit.new(1)
+    when :error
+      $stderr.puts "error: #{saga_decision.error}"
+      Lich.log "error: #{saga_decision.error}"
+      $stderr.flush
+      raise SystemExit.new(1)
     end
 
     # Execute CLI login flow and get launch data
-    launch_data_array = if requested_character.match?(Lich::Common::Authentication::LoginHelpers::NEW_CHARACTER_LOGIN) && @argv_options[:account]
+    launch_data_array = if new_character_login && @argv_options[:account]
                           Lich::Common::Authentication::CLI.execute_new_character(
                             @argv_options[:account],
                             game_code: requested_instance,

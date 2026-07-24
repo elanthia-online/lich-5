@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../front-end'
+require_relative '../ruby_executable'
 
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Common::Authentication::LoginHelpers.method namespace.
@@ -607,7 +608,7 @@ module Lich
         # @param custom_launch_filter [String, nil] optional custom launch filter for entry selection
         # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
         def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil, custom_launch_filter: nil)
-          ruby_path = OS.windows? ? RbConfig.ruby.sub('ruby', 'rubyw') : RbConfig.ruby
+          ruby_path = Lich::Common::RubyExecutable.resolve
           lich_path ||= File.join(LICH_DIR, 'lich.rbw')
 
           spawn_cmd = [
