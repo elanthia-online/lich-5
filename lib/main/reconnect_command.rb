@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-require 'rbconfig'
-require_relative '../common/front-end'
+require_relative '../common/ruby_executable'
 
 module Lich
   module Main
@@ -15,16 +14,10 @@ module Lich
       # @return [String]
       # @raise [ArgumentError] when configured_ruby is blank
       def self.ruby_executable(platform_key: Lich::Common::Frontend.platform_key, configured_ruby: RbConfig.ruby)
-        raise ArgumentError, 'configured Ruby executable must not be empty' if configured_ruby.to_s.empty?
-        platform_key = Lich::Common::Frontend.validate_platform_key!(platform_key)
-        return configured_ruby unless platform_key == :windows
-
-        windowed_ruby = configured_ruby.sub(/ruby(?:\.exe)?$/i, 'rubyw.exe')
-        return configured_ruby if windowed_ruby == configured_ruby
-
-        File.file?(windowed_ruby) ? windowed_ruby : configured_ruby
-      rescue SystemCallError
-        configured_ruby
+        Lich::Common::RubyExecutable.resolve(
+          platform_key: platform_key,
+          configured_ruby: configured_ruby
+        )
       end
 
       # Builds reconnect argv without shell re-parsing or mutating caller input.

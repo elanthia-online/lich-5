@@ -249,7 +249,7 @@ module Lich
               dir = dir_file.slice(/^.*[\\\/]/)
               file = dir_file.sub(/^.*[\\\/]/, '')
               operation = (Win32.isXP? ? 'open' : 'runas')
-              Win32.ShellExecute(lpOperation: operation, lpFile: file, lpDirectory: dir, lpParameters: param)
+              r = Win32.ShellExecute(lpOperation: operation, lpFile: file, lpDirectory: dir, lpParameters: param)
               Lich.log "error: Win32.ShellExecute returned #{r}; Win32.GetLastError: #{Win32.GetLastError}" if r < 33
             elsif defined?(Wine)
               system("#{Wine::BIN} #{launcher_cmd}")

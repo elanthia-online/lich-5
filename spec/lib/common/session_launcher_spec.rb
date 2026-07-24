@@ -15,7 +15,6 @@ RSpec.describe Lich::Common::SessionLauncher do
 
   before(:each) do
     allow(Lich::Common::Authentication::LoginHelpers).to receive(:format_launch_flag).and_return('--GST')
-    allow(described_class).to receive(:windows?).and_return(false)
     allow(RbConfig).to receive(:ruby).and_return('/usr/bin/ruby')
     # Keep legacy spawn assertions stable unless explicitly testing optional passthrough.
     allow(described_class).to receive(:optional_spawn_flags).and_return([])
@@ -94,17 +93,18 @@ RSpec.describe Lich::Common::SessionLauncher do
   end
 
   it 'uses rubyw on Windows' do
-    allow(described_class).to receive(:windows?).and_return(true)
+    allow(Lich::Common::Frontend).to receive(:platform_key).and_return(:windows)
     allow(RbConfig).to receive(:ruby).and_return('C:/Ruby/bin/ruby.exe')
+    allow(File).to receive(:file?).with('C:/Ruby/bin/rubyw.exe').and_return(true)
 
     expect(described_class.send(:ruby_binary)).to eq('C:/Ruby/bin/rubyw.exe')
   end
 
-  it 'uses the shared OS-backed frontend classification' do
-    allow(described_class).to receive(:windows?).and_call_original
-    allow(Lich::Common::Frontend).to receive(:windows_platform?).and_return(true)
+  it 'delegates Ruby selection to the shared resolver' do
+    allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/opt/ruby/bin/ruby')
 
-    expect(described_class.send(:windows?)).to be(true)
+    expect(described_class.send(:ruby_binary)).to eq('/opt/ruby/bin/ruby')
+    expect(Lich::Common::RubyExecutable).to have_received(:resolve)
   end
 
   it 'forwards optional dark mode and directory flags only when defined' do

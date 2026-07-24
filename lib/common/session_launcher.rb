@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require 'rbconfig'
 require_relative 'authentication/login_helpers'
+require_relative 'ruby_executable'
 
 module Lich
   module Common
@@ -188,17 +188,9 @@ module Lich
           File.expand_path(Object.const_get(constant_name).to_s)
         end
 
-        # Mirrors existing CLI spawn behavior: use rubyw on Windows to avoid console.
+        # Uses the shared, existence-checked Ruby executable selection.
         def ruby_binary
-          if windows?
-            RbConfig.ruby.sub(/ruby(?:\.exe)?$/i, 'rubyw.exe')
-          else
-            RbConfig.ruby
-          end
-        end
-
-        def windows?
-          Lich::Common::Frontend.windows_platform?
+          Lich::Common::RubyExecutable.resolve
         end
       end
     end
