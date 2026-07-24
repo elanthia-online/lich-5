@@ -78,6 +78,80 @@ RSpec.describe Lich::Common::FrontendLauncher do
     )
   end
 
+  it 'builds a keyless macOS Saga-managed Via-Lich login plan' do
+    plan = described_class.saga_managed_login_plan(
+      account: 'TESTACCOUNT',
+      character: 'Tsetem',
+      game_code: 'gs3',
+      platform_key: :darwin
+    )
+
+    expect(plan.argv).to eq(['/usr/bin/open', '-n', '-b', 'com.auchand.saga'])
+    expect(plan.environment).to eq(
+      'SAGA_AUTO_LOGIN'         => 'Tsetem@GS3',
+      'SAGA_AUTO_LOGIN_ACCOUNT' => 'TESTACCOUNT',
+      'SAGA_AUTO_LOGIN_MODE'    => 'lich'
+    )
+    expect(plan.environment.keys).not_to include(
+      'SAGA_LICH_MODE',
+      'SAGA_LICH_HOST',
+      'SAGA_LICH_PORT',
+      'SAGA_LICH_KEY'
+    )
+  end
+
+  it 'uses the discovered Saga executable for managed Windows login' do
+    resolution = Lich::Common::FrontendLocator::Resolution.new(
+      frontend_id: 'saga',
+      executable_path: 'C:/Users/Test/AppData/Local/Programs/Saga/Saga.exe',
+      source: :conventional
+    )
+    allow(locator).to receive(:resolve).with('saga', refresh: false).and_return(resolution)
+
+    plan = described_class.saga_managed_login_plan(
+      account: 'TESTACCOUNT',
+      character: 'Tsetem',
+      game_code: 'GS3',
+      platform_key: :windows,
+      locator: locator,
+      refresh: false
+    )
+
+    expect(plan.argv).to eq(['C:/Users/Test/AppData/Local/Programs/Saga/Saga.exe'])
+    expect(locator).to have_received(:resolve).with('saga', refresh: false)
+  end
+
+  it 'rejects blank Saga-managed login identifiers' do
+    {
+      account: ['', 'Tsetem', 'GS3'],
+      character: ['TESTACCOUNT', ' ', 'GS3'],
+      game_code: ['TESTACCOUNT', 'Tsetem', nil]
+    }.each do |field, (account, character, game_code)|
+      expect {
+        described_class.saga_managed_login_plan(
+          account: account,
+          character: character,
+          game_code: game_code
+        )
+      }.to raise_error(ArgumentError, "#{field} must not be empty")
+    end
+  end
+
+  it 'rejects a Saga definition without the environment launcher adapter' do
+    definition = Lich::Common::Frontend.definition_for('saga')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('saga').and_return(
+      definition.merge(metadata: definition[:metadata].merge(launcher_adapter: :command))
+    )
+
+    expect {
+      described_class.saga_managed_login_plan(
+        account: 'TESTACCOUNT',
+        character: 'Tsetem',
+        game_code: 'GS3'
+      )
+    }.to raise_error(described_class::UnsupportedError, 'no environment launcher for saga')
+  end
+
   it 'reports a missing Windows Saga executable' do
     allow(locator).to receive(:resolve).with('saga', refresh: true).and_return(nil)
 

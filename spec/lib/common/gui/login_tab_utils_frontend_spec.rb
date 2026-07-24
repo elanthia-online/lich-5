@@ -8,7 +8,7 @@ require_relative '../../../../lib/common/gui/login_tab_utils'
 RSpec.describe Lich::Common::GUI::LoginTabUtils do
   let(:button) do
     Class.new do
-      attr_accessor :tooltip_text
+      attr_accessor :sensitive, :tooltip_text
       attr_reader :handler
 
       def signal_connect(_signal, &handler)
@@ -88,7 +88,16 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
   end
 
   describe '.setup_play_button_handler' do
-    let(:login_info) { { frontend: 'stormfront', custom_launch: nil } }
+    let(:login_info) do
+      {
+        frontend: 'stormfront',
+        custom_launch: nil,
+        user_id: 'TESTACCOUNT',
+        char_name: 'Tsetem',
+        game_code: 'GS3',
+        password: 'not-forwarded'
+      }
+    end
     let(:event) { Struct.new(:event_type, :button).new(:button_release, 1) }
 
     it 'keeps an initially unavailable entry actionable and revalidates on click' do
@@ -118,6 +127,74 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
         icon: :error
       )
       expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)
+    end
+
+    it 'routes a native Saga entry through Saga-managed Via-Lich login without Lich authentication' do
+      login_info[:frontend] = 'saga'
+      allow(described_class).to receive(:launchable_frontend?).and_return(true)
+      allow(Lich::Common::SagaManagedLauncher).to receive(:launch).and_return(ok: true, pid: 12_345)
+      allow(Lich::Common::Authentication::GUI).to receive(:authenticate_and_launch)
+      allow(Lich::Common::Authentication::GUI).to receive(:schedule_button_reenable)
+      callback = proc {}
+      allow(callback).to receive(:call).and_call_original
+
+      described_class.setup_play_button_handler(button, login_info, callback)
+      button.handler.call(button, event)
+
+      expect(Lich::Common::SagaManagedLauncher).to have_received(:launch).with(
+        account: 'TESTACCOUNT',
+        character: 'Tsetem',
+        game_code: 'GS3'
+      )
+      expect(callback).to have_received(:call).with(
+        nil,
+        hash_including(
+          managed_launch_completed: true,
+          managed_launch_pid: 12_345
+        )
+      )
+      expect(Lich::Common::Authentication::GUI).to have_received(:schedule_button_reenable).with(button)
+      expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)
+    end
+
+    it 'reports a Saga-managed launch failure without Lich authentication' do
+      login_info[:frontend] = 'saga'
+      allow(described_class).to receive(:launchable_frontend?).and_return(true)
+      allow(Lich::Common::SagaManagedLauncher).to receive(:launch)
+        .and_return(ok: false, error: 'Saga was not found')
+      allow(Lich::Common::Authentication::GUI).to receive(:authenticate_and_launch)
+      allow(Lich::Common::Authentication::GUI).to receive(:schedule_button_reenable)
+      allow(Lich).to receive(:msgbox)
+
+      described_class.setup_play_button_handler(button, login_info, proc {})
+      button.handler.call(button, event)
+
+      expect(Lich).to have_received(:msgbox).with(
+        message: 'Failed to launch Saga: Saga was not found',
+        icon: :error
+      )
+      expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)
+      expect(Lich::Common::Authentication::GUI).not_to have_received(:schedule_button_reenable)
+      expect(button.sensitive).to be true
+    end
+
+    it 'preserves Lich authentication for an explicit Saga Custom Launch' do
+      login_info[:frontend] = 'saga'
+      login_info[:custom_launch] = '/Applications/Saga.app/Contents/MacOS/Saga'
+      allow(described_class).to receive(:launchable_frontend?).and_return(true)
+      allow(Lich::Common::SagaManagedLauncher).to receive(:launch)
+      allow(Lich::Common::Authentication::GUI).to receive(:authenticate_and_launch)
+
+      callback = proc {}
+      described_class.setup_play_button_handler(button, login_info, callback)
+      button.handler.call(button, event)
+
+      expect(Lich::Common::SagaManagedLauncher).not_to have_received(:launch)
+      expect(Lich::Common::Authentication::GUI).to have_received(:authenticate_and_launch).with(
+        button: button,
+        login_info: login_info,
+        on_success: callback
+      )
     end
   end
 end

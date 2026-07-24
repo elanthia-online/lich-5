@@ -620,7 +620,8 @@ module Lich
                   char_name: normalized_character,
                   game_code: selected_iter[0],
                   frontend: frontend,
-                  custom_launch: custom_launch
+                  custom_launch: custom_launch,
+                  saved_entry: @make_quick_option.active? && save_success
                 }
 
                 # Backward compatibility: support both 1-arg and 2-arg callback handlers.

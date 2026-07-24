@@ -3,6 +3,7 @@
 require_relative '../authentication/gui'
 require_relative '../front-end'
 require_relative '../frontend_locator'
+require_relative '../saga_managed_launcher'
 
 module Lich
   module Common
@@ -99,15 +100,50 @@ module Lich
 
               button.tooltip_text = nil
 
-              Lich::Common::Authentication::GUI.authenticate_and_launch(
-                button: button,
-                login_info: login_info,
-                on_success: callback
-              )
+              if saga_managed_login?(login_info)
+                button.sensitive = false
+                result = SagaManagedLauncher.launch(
+                  account: login_info[:user_id],
+                  character: login_info[:char_name],
+                  game_code: login_info[:game_code]
+                )
+                if result[:ok]
+                  callback&.call(
+                    nil,
+                    login_info.merge(managed_launch_completed: true, managed_launch_pid: result[:pid])
+                  )
+                  Lich::Common::Authentication::GUI.schedule_button_reenable(button)
+                else
+                  button.sensitive = true
+                  Lich.msgbox(
+                    message: "Failed to launch Saga: #{result[:error]}",
+                    icon: :error
+                  )
+                end
+              else
+                Lich::Common::Authentication::GUI.authenticate_and_launch(
+                  button: button,
+                  login_info: login_info,
+                  on_success: callback
+                )
+              end
             elsif ev.button == 3
               pp "I would be adding to a team tab"
             end
           }
+        end
+
+        # Returns whether a saved entry should use Saga's own authentication
+        # and Via-Lich process launch instead of Lich's game-key handoff.
+        #
+        # Explicit Custom Launch entries preserve their existing behavior.
+        #
+        # @param login_info [Hash]
+        # @return [Boolean]
+        def self.saga_managed_login?(login_info)
+          return false if custom_launch?(login_info[:custom_launch])
+
+          Frontend.canonical_name(login_info[:frontend]) == 'saga'
         end
 
         # Checks machine-local frontend availability without constraining saved

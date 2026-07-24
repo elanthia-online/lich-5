@@ -103,6 +103,59 @@ module Lich
           )
         end
 
+        # Builds a shell-free Saga launch plan that asks Saga to authenticate
+        # the named character and start its own Via-Lich session. Unlike
+        # +spawn_plan+, this contract does not create a Lich proxy listener or
+        # pass a game key; Saga owns authentication and Lich process startup.
+        #
+        # @param account [String] Saga account with a saved password
+        # @param character [String] character to launch
+        # @param game_code [String] Saga instance code (for example, GS3 or DR)
+        # @param platform_key [Symbol] canonical host classification
+        # @param locator [FrontendLocator] injectable discovery API
+        # @param refresh [Boolean] refresh executable discovery before resolving
+        # @return [SpawnPlan]
+        # @raise [ArgumentError] for blank launch identifiers
+        # @raise [UnsupportedError] when no Saga plan exists on the platform
+        # @raise [UnavailableError] when Saga is not installed
+        def saga_managed_login_plan(
+          account:,
+          character:,
+          game_code:,
+          platform_key: Frontend.platform_key,
+          locator: FrontendLocator,
+          refresh: true
+        )
+          identifiers = {
+            account: account,
+            character: character,
+            game_code: game_code
+          }
+          identifiers.each do |name, value|
+            raise ArgumentError, "#{name} must not be empty" if value.to_s.strip.empty?
+          end
+
+          definition = Frontend.definition_for('saga')
+          unless definition.dig(:metadata, :launcher_adapter) == :environment
+            raise UnsupportedError, 'no environment launcher for saga'
+          end
+
+          platform_key = Frontend.validate_platform_key!(platform_key)
+          plan = definition.dig(:metadata, :launch_plans, platform_key)
+          raise UnsupportedError, "no #{platform_key} launcher for saga" unless plan
+
+          command = resolve_plan_command(plan.fetch(:command), definition, locator, refresh: refresh)
+          SpawnPlan.new(
+            environment: {
+              # Saga 0.8.5 implements this currently undocumented startup contract.
+              'SAGA_AUTO_LOGIN'         => "#{character.to_s.strip}@#{game_code.to_s.strip.upcase}",
+              'SAGA_AUTO_LOGIN_ACCOUNT' => account.to_s.strip,
+              'SAGA_AUTO_LOGIN_MODE'    => 'lich'
+            },
+            argv: [command, *plan.fetch(:arguments)]
+          )
+        end
+
         private
 
         def resolve_plan_command(command, definition, locator, refresh:)

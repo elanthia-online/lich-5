@@ -13,6 +13,7 @@ require File.join(LIB_DIR, 'main', 'bind_address_option.rb')
 require File.join(LIB_DIR, 'main', 'arg_normalization.rb')
 require File.join(LIB_DIR, 'main', 'detachable_client_target.rb')
 require File.join(LIB_DIR, 'main', 'help_text.rb')
+require File.join(LIB_DIR, 'main', 'startup_theme.rb')
 
 module Lich
   module Main
@@ -130,12 +131,8 @@ module Lich
         end
 
         def self.handle_dark_mode(value)
-          # Regex returns Integer/nil; force strict boolean for persisted settings.
+          # Regex returns Integer/nil; force strict boolean for startup handling.
           @argv_options[:dark_mode] = !!(value =~ /^(true|on)$/i)
-          if defined?(Gtk)
-            @theme_state = Lich.track_dark_mode = @argv_options[:dark_mode]
-            Gtk::Settings.default.gtk_application_prefer_dark_theme = true if @theme_state == true
-          end
         end
 
         def self.print_help(topic = nil)
@@ -158,6 +155,7 @@ module Lich
       # Apply side effects: dark mode, hosts-dir, bind-address, detachable-client
       module SideEffects
         def self.execute(argv_options)
+          StartupTheme.apply(argv_options)
           handle_hosts_dir(argv_options)
           handle_bind_address(argv_options)
           handle_detachable_client(argv_options)
