@@ -14,12 +14,15 @@ Gemfile.lock     export-ignore
 /*.iss           export-ignore
 /*.json          export-ignore
 /*.md            export-ignore
+/benchmark.rb    export-ignore
 
 # second, let's take a running stab at ignoring a directory
 /spec            export-ignore
 /.github         export-ignore
 /.rubocop        export-ignore
 /docs            export-ignore
+/bench           export-ignore
+/benchmark       export-ignore
 .yardopts        export-ignore
 
 # third, let's ignore a file in a directory
