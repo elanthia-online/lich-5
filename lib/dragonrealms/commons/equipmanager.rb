@@ -807,10 +807,14 @@ module Lich
           unless DRCI.get_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
-        else
-          # Ammo is sitting in a hand. Stow whichever hand is NOT the weapon, comparing
-          # by NOUN against the actual hand contents rather than trusting the unload
-          # response text (which can be "You stop aiming." and shadow "You unload ...").
+        elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
+          # Unload succeeded with the ammo now in a hand. Stow whichever hand is NOT
+          # the weapon, comparing by NOUN against the actual hand contents -- robust to
+          # the <dialogData ...AimTimer...> tag the game prepends (which the old
+          # ^-anchored /^(?:You unload|...)/ branch missed) and to ammo nouns that
+          # contain the weapon noun (e.g. "crossbow bolt"). Guarded on a positive
+          # success match so an unload failure or a bput timeout can't stow an
+          # unrelated off-hand item.
           weapon_noun = DRC.get_noun(name)
           [['left', DRC.left_hand], ['right', DRC.right_hand]].each do |side, held|
             next if held.nil? || DRC.get_noun(held) == weapon_noun

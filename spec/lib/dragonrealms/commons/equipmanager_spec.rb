@@ -684,6 +684,81 @@ RSpec.describe Lich::DragonRealms::EquipmentManager do
     end
   end
 
+  describe '#unload_weapon in-hand ammo' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+
+    before do
+      allow(em).to receive(:waitrt?)
+      allow(DRCI).to receive(:stow_hand).and_return(true)
+    end
+
+    it 'stows the ammo hand (not the weapon hand) even when the unload line carries a <dialogData> tag, and does not mistake "crossbow bolt" for the crossbow' do
+      allow(DRC).to receive(:bput)
+        .with('unload my crossbow', any_args)
+        .and_return("<dialogData id='AimTimerDialog'><timer id='firingTimer' value='0' /> </dialogData>You unload the crossbow.")
+      allow(DRC).to receive(:right_hand).and_return('battle crossbow') # weapon, noun: crossbow
+      allow(DRC).to receive(:left_hand).and_return('crossbow bolt')    # ammo, noun: bolt
+
+      em.unload_weapon('crossbow')
+
+      expect(DRCI).to have_received(:stow_hand).with('left')
+      expect(DRCI).not_to have_received(:stow_hand).with('right')
+    end
+
+    it 'does not stow an unrelated off-hand item when the unload fails' do
+      allow(DRC).to receive(:bput)
+        .with('unload my crossbow', any_args)
+        .and_return("But your crossbow isn't loaded.")
+      allow(DRC).to receive(:right_hand).and_return('battle crossbow')
+      allow(DRC).to receive(:left_hand).and_return('steel bola') # legitimate off-hand weapon
+
+      em.unload_weapon('crossbow')
+
+      expect(DRCI).not_to have_received(:stow_hand)
+    end
+
+    it 'does not stow anything when bput returns nil (timeout)' do
+      allow(DRC).to receive(:bput).and_return(nil)
+      allow(DRC).to receive(:right_hand).and_return('battle crossbow')
+      allow(DRC).to receive(:left_hand).and_return('steel bola')
+
+      em.unload_weapon('crossbow')
+
+      expect(DRCI).not_to have_received(:stow_hand)
+    end
+  end
+
+  describe '#wield_weapon_offhand?' do
+    let(:settings) { double('settings', gear_sets: {}, sort_auto_head: false, gear: []) }
+    let(:em) { described_class.new(settings) }
+    let(:weapon) do
+      double('weapon', short_name: 'bola', name: 'bola', short_regex: /\bbola/i, swappable: false)
+    end
+
+    before do
+      allow(em).to receive(:item_by_desc).with('bola').and_return(weapon)
+      allow(em).to receive(:get_item?).with(weapon).and_return(true)
+    end
+
+    it 'returns true (not a spurious false) and does not swap when the weapon is already in the left/off hand' do
+      allow(DRCI).to receive(:in_right_hand?).with(weapon).and_return(false)
+      allow(DRCI).to receive(:in_left_hand?).with(weapon).and_return(true)
+      expect(DRC).not_to receive(:bput)
+
+      expect(em.wield_weapon_offhand?('bola')).to be true
+    end
+
+    it 'swaps to the off hand when the weapon landed in the right hand' do
+      allow(DRCI).to receive(:in_right_hand?).with(weapon).and_return(true)
+      expect(DRC).to receive(:bput)
+        .with('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+        .and_return('You move a steel bola to your left hand.')
+
+      expect(em.wield_weapon_offhand?('bola')).to be true
+    end
+  end
+
   # --- return_held_gear failure_patterns --------------------------------
 
   describe '#return_held_gear passes failure_patterns to stow_helper' do
