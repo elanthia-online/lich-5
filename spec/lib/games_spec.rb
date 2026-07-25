@@ -7,6 +7,7 @@ require 'timeout'
 # Load production code
 require "ox"
 require "common/class_exts/synchronizedsocket"
+require "common/detachable_client_registry"
 require "common/sharedbuffer"
 require "common/shutdown_coordinator"
 require "common/xmlparser"
@@ -138,6 +139,49 @@ RSpec.describe Lich::GameBase do
       expect(described_class.handle_thread_error(error)).to be(false)
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
       expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
+    end
+
+    describe 'bounded parser queue' do
+      before do
+        Lich::Common::ShutdownCoordinator.reset!
+        described_class.instance_variable_set(:@server_queue, SizedQueue.new(1))
+      end
+
+      after do
+        described_class.thread&.kill
+        described_class.instance_variable_set(:@socket, nil)
+        described_class.initialize_buffers
+        Lich::Common::ShutdownCoordinator.reset!
+      end
+
+      it 'raises instead of blocking or dropping input when full' do
+        described_class.enqueue_server_string('first', 1.0)
+
+        expect { described_class.enqueue_server_string('second', 2.0) }
+          .to raise_error(Lich::GameBase::Game::ServerQueueOverflow)
+      end
+
+      it 'maps queue overflow to an unrecoverable shutdown' do
+        error = Lich::GameBase::Game::ServerQueueOverflow.new('full')
+
+        expect(described_class.handle_thread_error(error)).to be false
+        expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:unrecoverable_game_thread_error)
+      end
+
+      it 'stops the session after an unexpected parser exception' do
+        socket = instance_double(TCPSocket, close: nil)
+        described_class.instance_variable_set(:@socket, socket)
+        allow(described_class).to receive(:process_server_string).and_raise(RuntimeError, 'broken parser state')
+
+        described_class.start_server_processor_thread
+        described_class.server_queue << ['bad input', Process.clock_gettime(Process::CLOCK_MONOTONIC)]
+        described_class.thread.join(1)
+
+        expect(described_class.thread).not_to be_alive
+        expect(socket).to have_received(:close)
+        expect(Lich::Common::ShutdownCoordinator.reason).to eq(:unrecoverable_game_thread_error)
+        expect(Lich::Common::ShutdownCoordinator.current.source).to eq('game_parser')
+      end
     end
   end
 end
@@ -1041,34 +1085,63 @@ RSpec.describe Lich::GameBase::Game do
   end
 
   describe '.send_to_client' do
+    def eventually(timeout: 1)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        begin
+          return yield
+        rescue RSpec::Expectations::ExpectationNotMetError
+          raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.005
+        end
+      end
+    end
+
     before do
       allow(Lich).to receive(:log)
     end
 
-    context 'when using detachable client' do
+    context 'when using detachable clients' do
       let(:raw_socket) { double('raw_detachable_socket', closed?: false) }
-      let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket) }
+      let(:second_raw_socket) { double('second_raw_detachable_socket', closed?: false) }
+      let(:mock_detachable) { Lich::Common::SynchronizedSocket.new(raw_socket, role: :detachable) }
+      let(:second_detachable) { Lich::Common::SynchronizedSocket.new(second_raw_socket, role: :detachable) }
 
       before do
-        $_DETACHABLE_CLIENT_ = mock_detachable
+        allow(raw_socket).to receive(:close)
+        allow(second_raw_socket).to receive(:close)
+        $_DETACHABLE_CLIENT_REGISTRY_ = Lich::Common::DetachableClientRegistry.new
+        $_DETACHABLE_CLIENT_REGISTRY_.register(mock_detachable)
+        $_DETACHABLE_CLIENT_REGISTRY_.register(second_detachable)
+        $_DETACHABLE_CLIENT_ = nil
+        Lich::Common::ShutdownCoordinator.reset!
       end
 
       after do
+        mock_detachable.close rescue nil
+        second_detachable.close rescue nil
+        $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
+        Lich::Common::ShutdownCoordinator.reset!
       end
 
-      it 'writes to the detachable client' do
+      it 'fans output out to every detachable client' do
         allow(raw_socket).to receive(:write)
+        allow(second_raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
-        expect(raw_socket).to have_received(:write).with('test data')
+        eventually { expect(raw_socket).to have_received(:write).with('test data') }
+        eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
       end
 
-      it 'nils the global and closes delegate when write fails' do
+      it 'continues writing to another client when one write fails' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
-        allow(raw_socket).to receive(:close)
+        allow(second_raw_socket).to receive(:write)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
-        expect($_DETACHABLE_CLIENT_).to be_nil
+        eventually { expect(mock_detachable.alive?).to be false }
         expect(raw_socket).to have_received(:close)
+        eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
+        expect(Lich::Common::ShutdownCoordinator.current).to be_nil
       end
     end
 
@@ -1077,28 +1150,35 @@ RSpec.describe Lich::GameBase::Game do
       let(:mock_client) { Lich::Common::SynchronizedSocket.new(raw_socket) }
 
       before do
+        allow(raw_socket).to receive(:close)
+        $_DETACHABLE_CLIENT_REGISTRY_ = nil
         $_DETACHABLE_CLIENT_ = nil
         $_CLIENT_ = mock_client
+      end
+
+      after do
+        mock_client.close rescue nil
+        $_CLIENT_ = nil
       end
 
       it 'writes to the client' do
         allow(raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
-        expect(raw_socket).to have_received(:write).with('test data')
+        eventually { expect(raw_socket).to have_received(:write).with('test data') }
       end
 
       it 'absorbs Errno::EPIPE without raising' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
-        expect(Lich).to have_received(:log).with(/client socket write failed.*EPIPE/)
+        eventually { expect(Lich).to have_received(:log).with(/client socket write failed.*EPIPE/) }
       end
 
       it 'absorbs IOError without raising' do
         allow(raw_socket).to receive(:write).and_raise(IOError, 'closed stream')
         allow(raw_socket).to receive(:close)
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
-        expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/)
+        eventually { expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/) }
       end
     end
   end

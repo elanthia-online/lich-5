@@ -37,6 +37,13 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,')
       expect(output).to include('including when using --headless.')
     end
+
+    it 'documents multi-client detachable behavior' do
+      output = described_class.render('advanced')
+
+      expect(output).to include('Multiple frontends may attach to one detachable port.')
+      expect(output).to include('commands from all attached frontends are processed serially')
+    end
   end
 
   describe '.topic_from_argv' do
