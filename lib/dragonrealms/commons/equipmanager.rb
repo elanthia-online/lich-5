@@ -314,19 +314,23 @@ module Lich
           return false
         end
 
-        if get_item?(weapon)
-          swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
-          if DRCI.in_right_hand?(weapon)
-            case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
-            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
-              return true
-            else
-              return false
-            end
+        return false unless get_item?(weapon)
+
+        swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
+
+        # We want the weapon in the LEFT (off) hand. If it landed in the right hand
+        # (e.g. get placed it there), swap it over; if it's already in the left
+        # hand, we're done -- previously this returned false in that case.
+        if DRCI.in_right_hand?(weapon)
+          case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+          when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
+            return true
+          else
+            return false
           end
         end
 
-        return false
+        DRCI.in_left_hand?(weapon)
       end
 
       # @deprecated Use {#wield_weapon_offhand?} instead.
@@ -357,7 +361,7 @@ module Lich
         if get_item?(weapon)
           swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
 
-          if offhand && DRC.right_hand
+          if offhand && DRCI.in_right_hand?(weapon)
             case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
             when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
               return true
@@ -786,11 +790,15 @@ module Lich
       # @see DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS
       def unload_weapon(name)
         result = DRC.bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
+        waitrt? # wait out the unload roundtime so the ammo/hand state has settled before we act on it
+
         ammo_match = result&.match(/^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/)
-        if ammo_match
-          # Ammo fell to ground because hands are full.
-          # Lower weapon, stow ammo, then pick it back up.
-          ammo = ammo_match[:ammo]
+        ground_match = result&.match?(/As you release the string/) ? result.match(/the (?<ammo>\w+) tumbles/) : nil
+
+        if ammo_match || ground_match
+          # Ammo ended up on the GROUND (hands were full, or it tumbled). Lower the
+          # weapon, stow the ammo from your feet, then pick the weapon back up.
+          ammo = (ammo_match || ground_match)[:ammo]
           unless DRCI.lower_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
             return
@@ -799,31 +807,17 @@ module Lich
           unless DRCI.get_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
-        elsif result&.match?(/As you release the string/)
-          # Ammo tumbled to the ground (e.g., "As you release the string, the arrow tumbles to the ground.")
-          # Same recovery as ammo falling to feet: lower weapon, stow ammo, pick weapon back up.
-          ammo_ground_match = result.match(/the (?<ammo>\w+) tumbles/)
-          if ammo_ground_match
-            ammo = ammo_ground_match[:ammo]
-            unless DRCI.lower_item?(name)
-              Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
-              return
-            end
-            DRCI.put_away_item?(ammo)
-            unless DRCI.get_item?(name)
-              Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
-            end
-          end
-        elsif result&.match?(/^(?:You unload|You .* unloading)/)
-          # Ammo is in hand, stow whichever hand isn't holding the weapon.
-          unless DRCI.in_left_hand?(name)
-            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from left hand") unless DRCI.stow_hand('left')
-          end
-          unless DRCI.in_right_hand?(name)
-            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from right hand") unless DRCI.stow_hand('right')
+        else
+          # Ammo is sitting in a hand. Stow whichever hand is NOT the weapon, comparing
+          # by NOUN against the actual hand contents rather than trusting the unload
+          # response text (which can be "You stop aiming." and shadow "You unload ...").
+          weapon_noun = DRC.get_noun(name)
+          [['left', DRC.left_hand], ['right', DRC.right_hand]].each do |side, held|
+            next if held.nil? || DRC.get_noun(held) == weapon_noun
+
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from #{side} hand") unless DRCI.stow_hand(side)
           end
         end
-        waitrt?
       end
 
       # Stows a weapon in its configured location (sheath, wear, tie, container, or general stow).
