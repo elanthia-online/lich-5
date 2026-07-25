@@ -1735,6 +1735,13 @@ end unless defined?(Lich::Util)
 module Kernel
   def pause(_seconds = nil); end unless method_defined?(:pause)
 
+  # Stands in for the real global_defs get_settings (character-scoped settings).
+  # Returns an OpenStruct so any setting key (e.g. worn_trashcan) reads back nil
+  # by default; override per example with allow(self).to receive(:get_settings).
+  def get_settings(_character_suffixes = [])
+    OpenStruct.new
+  end unless method_defined?(:get_settings)
+
   def waitrt?; end unless method_defined?(:waitrt?)
 
   def waitcastrt?; end unless method_defined?(:waitcastrt?)
