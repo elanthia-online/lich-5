@@ -26,6 +26,7 @@ module Lich
 
     class Script
       VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
+      CHILD_MUTEX_INITIALIZER = Mutex.new
 
       @@elevated_script_start = proc { |args|
         if args.empty?
@@ -288,6 +289,8 @@ module Lich
         end
       }
       @@running = Array.new
+      @@library_mutex = Mutex.new
+      @@loaded_libraries = Set.new
       @@kill_metrics_mutex = Mutex.new
       @@kill_metrics = {
         :minute            => nil,
@@ -549,6 +552,33 @@ module Lich
         @@running.dup
       end
 
+      def Script.subscript(&block)
+        SubScript.start(:parent => Script.current, :quiet => true, &block)
+      end
+
+      def Script.start_child(*args)
+        parent = Script.current
+        child = Script.start(*args)
+        return child unless parent && child
+
+        parent.register_child(child)
+      end
+
+      def Script.run_child(*args)
+        child = Script.start_child(*args)
+        child&.join
+        child
+      end
+
+      def Script.daemon_me
+        return false unless (script = Script.current)
+
+        script.hidden = true
+        script.no_kill_all = true
+        script.no_pause_all = true
+        script
+      end
+
       def Script.current
         if (script = @@running.find { |s| s.has_thread?(Thread.current) })
           sleep 0.2 while script.paused? and not script.ignore_pause
@@ -566,6 +596,39 @@ module Lich
         if (s = @@elevated_script_start.call(args))
           sleep 0.1 while @@running.include?(s)
         end
+      end
+
+      def Script.loadlib(library)
+        library_name = library.to_s.downcase
+        library_name = "lib#{library_name}" unless library_name.start_with?('lib')
+        raise ArgumentError, 'library name cannot be empty' if library_name == 'lib'
+        raise LoadError, "script library not found: #{library_name}" unless Script.exists?(library_name)
+
+        script = @@library_mutex.synchronize do
+          running = @@running.find { |candidate| candidate.name.casecmp?(library_name) }
+          if @@loaded_libraries.include?(library_name)
+            running
+          else
+            @@loaded_libraries.add(library_name)
+            started = running || Script.start(library_name)
+            @@loaded_libraries.delete(library_name) unless started
+            started
+          end
+        end
+
+        raise LoadError, "failed to start script library: #{library_name}" unless @@loaded_libraries.include?(library_name)
+
+        script&.join
+        true
+      end
+
+      def Script.reloadlibs
+        @@library_mutex.synchronize { @@loaded_libraries.dup }.each { |library| Script.run(library) }
+        true
+      end
+
+      def Script.libs
+        @@library_mutex.synchronize { @@loaded_libraries.dup }
       end
 
       def Script.running?(name)
@@ -619,6 +682,16 @@ module Lich
         else
           false
         end
+      end
+
+      def Script.kill_all(force: false, context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
+        scripts = force ? Script.list : Script.running.reject(&:no_kill_all)
+        scripts.each { |script| script.kill(context: context) }
+        scripts.length
       end
 
       def Script.paused?(name)
@@ -992,6 +1065,7 @@ module Lich
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
 
+        @kill_requested = true
         source = @kill_source || caller[0..2]
 
         if context == :shutdown
@@ -1006,6 +1080,70 @@ module Lich
         end
 
         @name
+      end
+
+      def running?
+        @@running.include?(self)
+      end
+
+      def stopping?
+        @kill_requested == true
+      end
+
+      def join(timeout = nil)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
+        @killer_mutex.synchronize do
+          @stopped_condition ||= ConditionVariable.new
+          while @@running.include?(self)
+            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC) if deadline
+            return nil if remaining && remaining <= 0
+
+            @stopped_condition.wait(@killer_mutex, remaining)
+          end
+        end
+        self
+      end
+
+      def kill_sync(context: :runtime, timeout: nil)
+        kill(context: context) if running?
+        join(timeout)
+      end
+
+      def register_child(script)
+        return nil unless script
+
+        script.hidden = true if hidden
+        script.no_kill_all = true if no_kill_all
+        script.no_pause_all = true if no_pause_all
+        accepted = child_scripts_mutex.synchronize do
+          unless @child_shutdown_started
+            @child_scripts ||= []
+            @child_scripts << script unless @child_scripts.include?(script)
+            true
+          end
+        end
+        unless accepted
+          script.kill_sync if script.running?
+          return nil
+        end
+
+        begin
+          script.at_exit { unregister_child(script) }
+        rescue NoMethodError
+          # A short-lived child may finish before its exit handler is registered.
+        ensure
+          unregister_child(script) unless script.running?
+        end
+        script
+      end
+
+      def unregister_child(script)
+        child_scripts_mutex.synchronize { @child_scripts&.delete(script) }
+        script
+      end
+
+      def child_scripts
+        child_scripts_mutex.synchronize { Array(@child_scripts).dup }
       end
 
       # Runs the script cleanup body used by {#kill}.
@@ -1049,6 +1187,7 @@ module Lich
                 end
               }
               @thread_group.add(Thread.current)
+              __stop_children(context)
               # Forward the kill context so die_with dependents torn down during
               # shutdown also run inline -- otherwise they route back through the
               # default :runtime path and re-spawn the thread-per-kill burst that
@@ -1079,6 +1218,7 @@ module Lich
               @upstream_buffer = LimitedArray.new
               @die_with = @at_exit_procs = @match_stack_labels = @match_stack_strings = nil
               @@running.delete(self)
+              @stopped_condition&.broadcast
               unless @quiet
                 if @killed_externally
                   respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
@@ -1104,6 +1244,27 @@ module Lich
         }
       end
       private :__run_kill_cleanup
+
+      def __stop_children(context)
+        children = child_scripts_mutex.synchronize do
+          @child_shutdown_started = true
+          current = Array(@child_scripts).dup
+          @child_scripts = []
+          current
+        end
+        children.each do |child|
+          child.kill(context: context) if child.running?
+          child.join
+        end
+      end
+      private :__stop_children
+
+      def child_scripts_mutex
+        return @child_scripts_mutex if @child_scripts_mutex
+
+        CHILD_MUTEX_INITIALIZER.synchronize { @child_scripts_mutex ||= Mutex.new }
+      end
+      private :child_scripts_mutex
 
       # Logs when {#kill} cannot allocate its normal cleanup thread.
       #
@@ -1274,6 +1435,83 @@ module Lich
       def custom?
         @custom
       end
+    end
+
+    class SubScript < Script
+      @@name_subscript_mutex = Mutex.new
+
+      def SubScript.start(parent: Script.current, quiet: true, &block)
+        raise ArgumentError, 'a block is required' unless block
+
+        new_script = SubScript.new(:quiet => quiet)
+        return false if parent && !parent.register_child(new_script)
+
+        new_thread = Thread.new {
+          100.times { break if Script.current == new_script; sleep 0.01 }
+
+          if (script = Script.current)
+            Thread.current.priority = 1
+            respond("--- Lich: #{script.name} active.") unless script.quiet
+            begin
+              block.call
+            rescue SystemExit
+              nil
+            rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => e
+              respond "--- Lich error: #{e}"
+              respond e.backtrace.first
+              Lich.log "Exception: #{e}\n\t#{e.backtrace.join("\n\t")}"
+            ensure
+              script.kill if script.running? && !script.stopping?
+            end
+          else
+            respond '--- Lich: failed to start subscript'
+          end
+        }
+        new_script.thread_group.add(new_thread)
+        new_script
+      end
+
+      # SubScript has no source file or eval string, so it initializes only the
+      # runtime state shared by ordinary scripts.
+      # rubocop:disable Lint/MissingSuper
+      def initialize(quiet: true)
+        @custom = false
+        @vars = []
+        @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
+        @killer_mutex = Mutex.new
+        @want_downstream = true
+        @want_downstream_xml = false
+        @want_script_output = false
+        @upstream_buffer = LimitedArray.new
+        @want_upstream = false
+        @unique_buffer = LimitedArray.new
+        @at_exit_procs = []
+        @watchfor = {}
+        @hidden = false
+        @paused = false
+        @silent = false
+        @quiet = quiet
+        @safe = false
+        @no_echo = false
+        @thread_group = ThreadGroup.new
+        @die_with = []
+        @no_pause_all = false
+        @no_kill_all = false
+        @match_stack_labels = []
+        @match_stack_strings = []
+        @killed_externally = false
+        @kill_source = nil
+        @kill_requested = false
+        @ignore_pause = false
+        @@name_subscript_mutex.synchronize do
+          num = '1'
+          num.succ! while @@running.any? { |script| script.name == "subscript#{num}" }
+          @name = "subscript#{num}"
+          @@running.push(self)
+        end
+      end
+      # rubocop:enable Lint/MissingSuper
     end
 
     class ExecScript < Script
