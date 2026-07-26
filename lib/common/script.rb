@@ -168,128 +168,34 @@ module Lich
                 eval('script = Script.current', script_binding, script.name)
                 Thread.current.priority = 1
                 respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
-                if trusted
-                  begin
-                    eval(script.labels[script.current_label].to_s, script_binding, script.name)
-                    script.__send__(:__record_successful_exit)
-                  rescue SystemExit => e
-                    if e.success?
-                      script.__send__(:__record_successful_exit)
+                begin
+                  Script.__send__(
+                    :__execute,
+                    script,
+                    :on_error => proc { |error| Script.__send__(:__report_script_error, script, error, :untrusted => !trusted) }
+                  ) do
+                    if trusted
+                      eval(script.labels[script.current_label].to_s, script_binding, script.name)
                     else
-                      script.__send__(:__record_exit_error, e)
+                      while (script = Script.current) and script.current_label
+                        proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
+                        Script.current.get_next_label
+                      end
                     end
-                  rescue SyntaxError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue ScriptError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue NoMemoryError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue LoadError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue SecurityError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue ThreadError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue SystemStackError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue JumpError
-                    if $! == JUMP
-                      retry if Script.current.get_next_label != JUMP_ERROR
-                      respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
-                      respond $!.backtrace.first
-                      Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{$!.backtrace.join("\n\t")}"
-                      script.__send__(:__record_exit_error, JUMP_ERROR)
-                      script.kill if script.running? && !script.stopping?
-                    else
-                      script.__send__(:__record_exit_error, $!)
-                      respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                      Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  rescue StandardError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  ensure
-                    script.kill if script.running? && !script.stopping?
                   end
-                else
-                  begin
-                    while (script = Script.current) and script.current_label
-                      proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
-                      Script.current.get_next_label
-                    end
-                    script.__send__(:__record_successful_exit)
-                  rescue SystemExit => e
-                    if e.success?
-                      script.__send__(:__record_successful_exit)
-                    else
-                      script.__send__(:__record_exit_error, e)
-                    end
-                  rescue SyntaxError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue ScriptError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue NoMemoryError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue LoadError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue SecurityError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    if (name = Script.current.name)
-                      respond "--- Lich: review this script (#{name}) to make sure it isn't malicious, and type #{$clean_lich_char}trust #{name}"
-                    end
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue ThreadError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue SystemStackError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  rescue JumpError
-                    if $! == JUMP
-                      retry if Script.current.get_next_label != JUMP_ERROR
-                      respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
-                      respond $!.backtrace.first
-                      Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{$!.backtrace.join("\n\t")}"
-                      script.__send__(:__record_exit_error, JUMP_ERROR)
-                      script.kill if script.running? && !script.stopping?
-                    else
-                      script.__send__(:__record_exit_error, $!)
-                      respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                      Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                    end
-                  rescue StandardError
-                    script.__send__(:__record_exit_error, $!)
-                    respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                    Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  ensure
-                    script.kill if script.running? && !script.stopping?
+                rescue JumpError => error
+                  if error == JUMP
+                    retry if Script.current.get_next_label != JUMP_ERROR
+                    respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
+                    respond error.backtrace.first
+                    Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{error.backtrace.join("\n\t")}"
+                    script.__send__(:__record_exit_error, JUMP_ERROR)
+                  else
+                    script.__send__(:__record_exit_error, error)
+                    Script.__send__(:__report_script_error, script, error, :untrusted => !trusted)
                   end
+                ensure
+                  script.kill if script.running? && !script.stopping?
                 end
               else
                 respond '--- error: out of cheese'
@@ -675,6 +581,58 @@ module Lich
         Lich::Messaging.msg('bold', '########################################')
       end
       private_class_method :__warn_lich_too_old
+
+      def Script.__execute(script, on_error:)
+        yield
+        script.__send__(:__record_successful_exit)
+      rescue SystemExit => error
+        if error.success?
+          script.__send__(:__record_successful_exit)
+        else
+          script.__send__(:__record_exit_error, error)
+        end
+      rescue JumpError
+        raise
+      rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+        script.__send__(:__record_exit_error, error)
+        on_error.call(error)
+      end
+      private_class_method :__execute
+
+      def Script.__report_script_error(script, error, untrusted:)
+        respond "--- Lich: error: #{error}\n\t#{error.backtrace[0..1].join("\n\t")}"
+        if untrusted && error.is_a?(SecurityError)
+          respond "--- Lich: review this script (#{script.name}) to make sure it isn't malicious, and type #{$clean_lich_char}trust #{script.name}"
+        end
+        Lich.log "error: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_script_error
+
+      def Script.__report_subscript_error(error)
+        respond "--- Lich error: #{error}"
+        respond error.backtrace.first
+        Lich.log "Exception: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_subscript_error
+
+      def Script.__report_exec_error(error)
+        label =
+          case error
+          when SyntaxError then 'SyntaxError'
+          when LoadError then 'LoadError'
+          when ScriptError then 'ScriptError'
+          when NoMemoryError then 'NoMemoryError'
+          when SecurityError then 'SecurityError'
+          when ThreadError then 'ThreadError'
+          when SystemStackError then 'SystemStackError'
+          else 'Lich error'
+          end
+        log_label = label == 'Lich error' ? 'Exception' : label
+        respond "--- #{label}: #{error}"
+        respond(error.is_a?(SecurityError) ? error.backtrace[0..1] : error.backtrace.first)
+        Lich.log "#{log_label}: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_exec_error
 
       def Script.__registry_synchronize(&block)
         @@registry_mutex.synchronize(&block)
@@ -2374,19 +2332,12 @@ module Lich
                   begin
                     Thread.current.priority = 1
                     respond("--- Lich: #{script.name} active.") unless script.quiet
-                    block.call
-                    script.__send__(:__record_successful_exit)
-                  rescue SystemExit => e
-                    if e.success?
-                      script.__send__(:__record_successful_exit)
-                    else
-                      script.__send__(:__record_exit_error, e)
-                    end
-                  rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => e
-                    script.__send__(:__record_exit_error, e)
-                    respond "--- Lich error: #{e}"
-                    respond e.backtrace.first
-                    Lich.log "Exception: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                    Script.__send__(
+                      :__execute,
+                      script,
+                      :on_error => proc { |error| Script.__send__(:__report_subscript_error, error) },
+                      &block
+                    )
                   ensure
                     script.kill if script.running? && !script.stopping?
                   end
@@ -2508,66 +2459,16 @@ module Lich
                 Thread.current.priority = 1
                 respond("--- Lich: #{script.name} active.") unless script.quiet
                 begin
-                  script_binding = TRUSTED_SCRIPT_BINDING.call
-                  eval('script = Script.current', script_binding, script.name.to_s)
-                  eval(cmd_data, script_binding, script.name.to_s)
-                  script.__send__(:__record_successful_exit)
-                  script.kill if script.running? && !script.stopping?
-                rescue SystemExit => e
-                  if e.success?
-                    script.__send__(:__record_successful_exit)
-                  else
-                    script.__send__(:__record_exit_error, e)
+                  Script.__send__(
+                    :__execute,
+                    script,
+                    :on_error => proc { |error| Script.__send__(:__report_exec_error, error) }
+                  ) do
+                    script_binding = TRUSTED_SCRIPT_BINDING.call
+                    eval('script = Script.current', script_binding, script.name.to_s)
+                    eval(cmd_data, script_binding, script.name.to_s)
                   end
-                  script.kill if script.running? && !script.stopping?
-                rescue SyntaxError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- SyntaxError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "SyntaxError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue ScriptError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- ScriptError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "ScriptError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue NoMemoryError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- NoMemoryError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "NoMemoryError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue LoadError
-                  script.__send__(:__record_exit_error, $!)
-                  respond("--- LoadError: #{$!}")
-                  respond "--- LoadError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "LoadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue SecurityError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- SecurityError: #{$!}"
-                  respond $!.backtrace[0..1]
-                  Lich.log "SecurityError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue ThreadError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- ThreadError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "ThreadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue SystemStackError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- SystemStackError: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                  script.kill if script.running? && !script.stopping?
-                rescue StandardError
-                  script.__send__(:__record_exit_error, $!)
-                  respond "--- Lich error: #{$!}"
-                  respond $!.backtrace.first
-                  Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                ensure
                   script.kill if script.running? && !script.stopping?
                 end
               else
