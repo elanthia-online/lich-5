@@ -393,3 +393,23 @@ RSpec.describe 'global_defs.rb sentinel constants' do
     end
   end
 end
+
+RSpec.describe 'global_defs.rb built-in script commands' do
+  let(:source) { File.read(File.join(LIB_DIR, 'global_defs.rb')) }
+
+  it 'routes kd through forced script teardown' do
+    expect(source).to match(/elsif cmd == 'kd'\s+respond\(.+Script\.kill_all\(:force => true\)/m)
+  end
+
+  it 'documents kd in built-in help' do
+    expect(source).to include("respond \"   \#{$clean_lich_char}kd")
+    expect(source).to include('including protected and hidden scripts')
+  end
+
+  it 'uses the atomic Script#clear operation' do
+    clear_definition = source[/^def clear\b.*?^end$/m]
+
+    expect(clear_definition).to include('script.clear')
+    expect(clear_definition).not_to include('downstream_buffer.dup')
+  end
+end
