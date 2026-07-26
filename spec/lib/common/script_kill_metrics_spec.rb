@@ -47,6 +47,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
     allow(GC).to receive(:start)
+    allow_any_instance_of(script_class).to receive(:report_errors) { |_script, &block| block.call }
   end
 
   after do
@@ -135,7 +136,10 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(10.0, 10.025, 20.0, 20.050)
+      cleanup_times = [10.0, 10.025, 20.0, 20.050]
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
+        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
+      end
 
       first.kill
       first.join
@@ -154,7 +158,10 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(10.0, 10.025, 20.0, 20.050)
+      cleanup_times = [10.0, 10.025, 20.0, 20.050]
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
+        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
+      end
 
       first.kill
       first.join
