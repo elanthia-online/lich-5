@@ -60,6 +60,20 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'tears down an ordinary script whose worker dies during current-script lookup' do
+      Dir.mktmpdir('script-worker-current') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'ordinary.lic'), "# quiet\nnil\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+
+        script = kill_worker_during_current { script_class.start('ordinary') }
+
+        expect(script.join(1)).to equal(script)
+        expect(script).not_to be_running
+      end
+    end
+
     it 'does not publish an ordinary script before its worker is allocated' do
       Dir.mktmpdir('script-start') do |root|
         custom_dir = File.join(root, 'custom')
@@ -307,6 +321,21 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(subscript).to be_completed_successfully
     end
 
+    it 'records JumpError raised by a subscript block' do
+      subscript = subscript_class.start(:parent => nil) { raise script_class::JUMP }
+
+      expect(subscript.join(1)).to equal(subscript)
+      expect(subscript.exit_error).to be_a(script_class::JumpError)
+      expect(subscript).not_to be_completed_successfully
+    end
+
+    it 'tears down a subscript whose worker dies during current-script lookup' do
+      script = kill_worker_during_current { subscript_class.start(:parent => nil) {} }
+
+      expect(script.join(1)).to equal(script)
+      expect(script).not_to be_running
+    end
+
     it 'unregisters itself when it exits naturally' do
       parent = build_script('parent')
       script_class.class_variable_set(:@@running, [parent])
@@ -467,11 +496,12 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@running, [parent, child])
       launch_entered = Queue.new
       release_launch = Queue.new
+      registration_result = :pending
       launcher = Thread.new do
         parent.__send__(:__launch_child) do
           launch_entered << true
           release_launch.pop
-          parent.__send__(:__register_child_locked, child)
+          registration_result = parent.register_child(child)
         end
       end
       launch_entered.pop
@@ -484,6 +514,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       launcher.join
       killer.join
       expect(parent).not_to be_running
+      expect(registration_result).to be_nil
       expect(child.join(1)).to equal(child)
     end
 
@@ -558,6 +589,22 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(failed.join(1)).to equal(failed)
       expect(failed).not_to be_completed_successfully
       expect(failed.exit_error).to be_a(RuntimeError)
+    end
+
+    it 'records JumpError raised by exec code' do
+      allow(Lich::Common::TRUSTED_SCRIPT_BINDING).to receive(:call).and_return(Lich::Common::Scripting.new.script)
+      script = exec_script_class.start('raise Lich::Common::Script::JUMP')
+
+      expect(script.join(1)).to equal(script)
+      expect(script.exit_error).to be_a(script_class::JumpError)
+      expect(script).not_to be_completed_successfully
+    end
+
+    it 'tears down an exec script whose worker dies during current-script lookup' do
+      script = kill_worker_during_current { exec_script_class.start('nil') }
+
+      expect(script.join(1)).to equal(script)
+      expect(script).not_to be_running
     end
 
     it 'preserves direct constructor publication and shutdown admission' do
@@ -807,8 +854,59 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       cleanup_thread.kill
       cleanup_thread.join
 
+      script_class.progress_shutdown
       expect(script.join(1)).to equal(script)
       expect(script).not_to be_running
+    end
+
+    it 'resumes remaining exit callbacks after cleanup executor cancellation' do
+      script = build_script('cancelled-callback')
+      script_class.class_variable_set(:@@running, [script])
+      first_callback_entered = Queue.new
+      second_callback_ran = Queue.new
+      first_callback_calls = 0
+      script.at_exit do
+        first_callback_calls += 1
+        first_callback_entered << true
+        Queue.new.pop
+      end
+      script.at_exit { second_callback_ran << true }
+
+      script.kill
+      first_callback_entered.pop
+      cleanup_thread = Object.instance_method(:instance_variable_get).bind_call(script, :@cleanup_thread)
+      cleanup_thread.kill
+      cleanup_thread.join
+
+      expect(script).to be_running
+      script_class.progress_shutdown
+
+      expect(second_callback_ran.pop(true)).to be(true)
+      expect(first_callback_calls).to eq(1)
+      expect(script.join(1)).to equal(script)
+    end
+
+    it 'does not run deferred cleanup from a timeout-bounded join' do
+      script = build_script('observational-join')
+      script_class.class_variable_set(:@@running, [script])
+      script.instance_variable_set(:@kill_requested, true)
+      expect(script).not_to receive(:__refresh_deferred_stop)
+
+      expect(script.join(0.01)).to be_nil
+    end
+
+    it 'bounds shutdown kill_sync before a blocked exit callback finishes' do
+      script = build_script('bounded-shutdown-kill')
+      script_class.class_variable_set(:@@running, [script])
+      callback_entered = Queue.new
+      release_callback = Queue.new
+      script.at_exit { callback_entered << true; release_callback.pop }
+
+      expect(script.kill_sync(:context => :shutdown, :timeout => 0.02)).to be_nil
+      callback_entered.pop
+
+      release_callback << true
+      expect(script.join(1)).to equal(script)
     end
 
     it 'bounds an implicit join once teardown begins' do
@@ -1086,6 +1184,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.shutdown_scripts).to include(script)
 
       release_worker_cleanup << true
+      progress_shutdown_until(script)
       expect(script.join(1)).to equal(script)
     end
 
@@ -1175,25 +1274,97 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       child = build_script('child')
       script_class.class_variable_set(:@@running, [parent, child])
       expect(parent.register_child(child)).to equal(child)
-      launch_lock_held = Queue.new
-      release_launch_lock = Queue.new
+      parent_lock_held = Queue.new
+      release_parent_lock = Queue.new
+      parent_mutex = parent.__send__(:child_scripts_mutex)
       lock_holder = Thread.new do
-        parent.__send__(:__launch_child) do
-          launch_lock_held << true
-          release_launch_lock.pop
+        parent_mutex.synchronize do
+          parent_lock_held << true
+          release_parent_lock.pop
         end
       end
-      launch_lock_held.pop
+      parent_lock_held.pop
 
       child.kill
       expect(child.join(0.02)).to be_nil
       children = Object.instance_method(:instance_variable_get).bind_call(parent, :@child_scripts)
       expect(children).to contain_exactly(child)
 
-      release_launch_lock << true
+      release_parent_lock << true
       lock_holder.join
       expect(child.join(1)).to equal(child)
       expect(parent.child_scripts).to be_empty
+    end
+
+    it 'retries parent unlinking when its finalizer is cancelled' do
+      parent = build_script('parent')
+      child = build_script('child')
+      script_class.class_variable_set(:@@running, [parent, child])
+      expect(parent.register_child(child)).to equal(child)
+      parent_mutex = parent.__send__(:child_scripts_mutex)
+      parent_mutex.lock
+
+      child.kill
+      sleep 0.005 while child.running?
+      cleanup_thread = Object.instance_method(:instance_variable_get).bind_call(child, :@cleanup_thread)
+      cleanup_thread.kill
+      cleanup_thread.join
+      children = Object.instance_method(:instance_variable_get).bind_call(parent, :@child_scripts)
+      expect(Array(children)).to contain_exactly(child)
+
+      parent_mutex.unlock
+      script_class.progress_shutdown
+
+      expect(child.join(1)).to equal(child)
+      expect(parent.child_scripts).to be_empty
+    ensure
+      parent_mutex&.unlock if parent_mutex&.owned?
+    end
+
+    it 'holds child lifecycle state through public adoption' do
+      parent = build_script('parent')
+      child = build_script('child')
+      script_class.class_variable_set(:@@running, [parent, child])
+      adoption_entered = Queue.new
+      release_adoption = Queue.new
+      allow(parent).to receive(:__adopt_child_locked).and_wrap_original do |method, adopted|
+        adoption_entered << true
+        release_adoption.pop
+        method.call(adopted)
+      end
+
+      registrar = Thread.new { parent.register_child(child) }
+      adoption_entered.pop
+      killer = Thread.new { child.kill_sync(:timeout => 1) }
+      expect(killer.join(0.02)).to be_nil
+
+      release_adoption << true
+      expect(registrar.value).to equal(child)
+      expect(killer.value).to equal(child)
+      expect(parent.child_scripts).to be_empty
+    end
+
+    it 'preserves the standard ThreadGroup surface' do
+      script = build_script('thread-group-api')
+
+      expect(script.thread_group).to be_a(ThreadGroup)
+      expect(script.thread_group).to be_instance_of(ThreadGroup)
+      expect(script.thread_group).not_to be_enclosed
+      expect(script.thread_group.enclose).to equal(script.thread_group)
+      expect(script.thread_group).to be_enclosed
+    end
+
+    it 'records cleanup callback failures in lifecycle completion' do
+      script = build_script('cleanup-error')
+      script_class.class_variable_set(:@@running, [script])
+      script.__send__(:__record_successful_exit)
+      script.at_exit { raise 'cleanup failed' }
+
+      script.kill
+
+      expect(script.join(1)).to equal(script)
+      expect(script.exit_error).to be_a(RuntimeError)
+      expect(script).not_to be_completed_successfully
     end
   end
 
@@ -1220,6 +1391,30 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(script_class).to have_received(:start).with('libutil', { :force => true }).once
       expect(script_class.libs).to eq(Set['libutil'])
+    end
+
+    it 'lets a peer commit completion when the loader owner is cancelled' do
+      owner_join_entered = Queue.new
+      join_calls = 0
+      allow(library_script).to receive(:join) do
+        join_calls += 1
+        if join_calls == 1
+          owner_join_entered << true
+          Queue.new.pop
+        else
+          true
+        end
+      end
+      allow(script_class).to receive(:start).with('libutil', { :force => true }).and_return(library_script)
+
+      owner = Thread.new { script_class.loadlib('util') }
+      owner_join_entered.pop
+      expect(script_class.loadlib('util')).to be(true)
+      owner.kill
+      owner.join
+
+      expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
     end
 
     it 'starts a library without holding the library registry mutex' do
@@ -1519,7 +1714,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
       allow(script_class).to receive(:loadlib).with('libutil').and_raise(LoadError, 'broken reload')
 
-      expect(script_class.reloadlibs).to be(true)
+      expect(script_class.reloadlibs).to be(false)
       expect(script_class.libs).to be_empty
     end
 
@@ -1556,6 +1751,43 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(protected_script).to have_received(:kill).with(:context => :runtime).once
       expect(hidden).to have_received(:kill).with(:context => :runtime).once
     end
+  end
+
+  def progress_shutdown_until(script)
+    Timeout.timeout(1) do
+      while script_class.shutdown_scripts.include?(script)
+        script_class.progress_shutdown
+        sleep 0.005
+      end
+    end
+  rescue Timeout::Error
+    state = %i[@kill_requested @cleanup_started @cleanup_complete @cleanup_thread @stopping_threads].to_h do |name|
+      [name, Object.instance_method(:instance_variable_get).bind_call(script, name)]
+    end
+    warn "shutdown progress timed out: #{state.inspect}"
+    raise
+  end
+
+  def kill_worker_during_current
+    main_thread = Thread.current
+    lookup_entered = Queue.new
+    intercept = true
+    allow(script_class).to receive(:current).and_wrap_original do |method|
+      if Thread.current != main_thread && intercept
+        intercept = false
+        lookup_entered << true
+        Queue.new.pop
+      else
+        method.call
+      end
+    end
+
+    script = yield
+    lookup_entered.pop
+    worker = script.__send__(:__worker_threads).find(&:alive?)
+    worker.kill
+    worker.join
+    script
   end
 
   def build_script(name)
