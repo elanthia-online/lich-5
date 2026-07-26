@@ -781,6 +781,20 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@running, [])
     end
 
+    it 'returns a child after run_child observes complete teardown' do
+      child = instance_double(script_class, :join => true)
+      allow(script_class).to receive(:start_child).with('worker').and_return(child)
+
+      expect(script_class.run_child('worker')).to equal(child)
+    end
+
+    it 'returns nil when run_child teardown times out' do
+      child = instance_double(script_class, :join => nil)
+      allow(script_class).to receive(:start_child).with('worker').and_return(child)
+
+      expect(script_class.run_child('worker')).to be_nil
+    end
+
     it 'waits for exit handlers in kill_sync' do
       script = build_script('sync')
       script_class.class_variable_set(:@@running, [script])
