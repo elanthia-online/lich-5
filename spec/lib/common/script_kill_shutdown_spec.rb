@@ -181,7 +181,7 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
   end
 
   def build_script(name:, die_with: [])
-    thread_group = instance_double(ThreadGroup, list: [], add: true)
+    thread_group = ThreadGroup.new
     script_class.allocate.tap do |script|
       script.instance_variable_set(:@name, name)
       script.instance_variable_set(:@custom, false)

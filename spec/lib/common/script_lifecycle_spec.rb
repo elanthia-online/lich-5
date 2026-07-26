@@ -185,6 +185,22 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'reaps a startup reservation whose owner dies before its ensure runs' do
+      reservation = Object.new
+      admitted = Queue.new
+      owner = Thread.new do
+        script_class.__send__(:__begin_start, reservation, 'libabandoned', :force => false)
+        admitted << true
+        Queue.new.pop
+      end
+      admitted.pop
+      owner.kill
+      owner.join
+
+      expect(Timeout.timeout(1) { script_class.begin_shutdown }).to be_empty
+      expect(script_class.class_variable_get(:@@startup_reservations)).to be_empty
+    end
+
     it 'uses the published name when reserving a compressed script' do
       Dir.mktmpdir('script-compressed-start') do |root|
         custom_dir = File.join(root, 'custom')
@@ -518,6 +534,23 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(child.join(1)).to equal(child)
     end
 
+    it 'kills a parent worker before waiting on its child launch reservation' do
+      parent = build_script('parent')
+      script_class.class_variable_set(:@@running, [parent])
+      launch_entered = Queue.new
+      launcher = Thread.new do
+        parent.__send__(:__launch_child) do
+          launch_entered << true
+          Queue.new.pop
+        end
+      end
+      parent.thread_group.add(launcher)
+      launch_entered.pop
+
+      expect(parent.kill_sync(:context => :runtime, :timeout => 1)).to equal(parent)
+      expect(launcher).not_to be_alive
+    end
+
     it 'does not publish a subscript before its worker is allocated' do
       parent = build_script('parent')
       script_class.class_variable_set(:@@running, [parent])
@@ -748,23 +781,16 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script.join(1)).to equal(script)
     end
 
-    it 'attaches an async cleanup thread to the target before cleanup starts' do
-      parent = build_script('parent')
+    it 'sets the current script identity for an async cleanup thread' do
       child = build_script('child')
-      script_class.class_variable_set(:@@running, [parent, child])
-      parent.thread_group.add(Thread.current)
+      script_class.class_variable_set(:@@running, [child])
       observed = Queue.new
-      allow(child).to receive(:__run_kill_cleanup).and_wrap_original do |method, **kwargs|
-        observed << [child.has_thread?(Thread.current), parent.has_thread?(Thread.current)]
-        method.call(**kwargs)
-      end
+      child.at_exit { observed << script_class.current }
 
       child.kill
 
-      expect(observed.pop).to eq([true, false])
+      expect(observed.pop).to equal(child)
       expect(child.join(1)).to equal(child)
-    ensure
-      ThreadGroup::Default.add(Thread.current)
     end
 
     it 'releases async cleanup when the killing caller is killed mid-transition' do
@@ -772,7 +798,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@running, [script])
       attach_entered = Queue.new
       release_attach = Queue.new
-      allow(script).to receive(:__attach_startup_worker).and_wrap_original do |method, thread|
+      allow(script).to receive(:__claim_cleanup_thread).and_wrap_original do |method, thread|
         attach_entered << true
         release_attach.pop
         method.call(thread)
@@ -794,7 +820,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@running, [caller_script, target_script])
       attach_entered = Queue.new
       release_attach = Queue.new
-      allow(target_script).to receive(:__attach_startup_worker).and_wrap_original do |method, thread|
+      allow(target_script).to receive(:__claim_cleanup_thread).and_wrap_original do |method, thread|
         attach_entered << true
         release_attach.pop
         method.call(thread)
@@ -1145,24 +1171,6 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script.join(1)).to equal(script)
     end
 
-    it 'preserves an underlying thread-group rejection when worker teardown raises' do
-      script = build_script('group-rejection')
-      script_class.class_variable_set(:@@running, [script])
-      group = instance_double(ThreadGroup, :list => [])
-      allow(group).to receive(:add).and_raise(ThreadError, 'group rejected worker')
-      script.instance_variable_set(:@thread_group, group)
-      worker = Thread.new do
-        Thread.current.report_on_exception = false
-        begin
-          Queue.new.pop
-        ensure
-          raise 'worker teardown failed'
-        end
-      end
-
-      expect { script.thread_group.add(worker) }.to raise_error(ThreadError, /group rejected worker/)
-    end
-
     it 'does not block shutdown cleanup on a worker ensure block' do
       worker_ready = Queue.new
       worker_cleanup_entered = Queue.new
@@ -1224,6 +1232,93 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       release_descendant_cleanup << true
       expect(script.join(1)).to equal(script)
+    end
+
+    it 'joins descendant workers spawned by exit callbacks' do
+      script = build_script('callback-descendant')
+      script_class.class_variable_set(:@@running, [script])
+      worker_ready = Queue.new
+      worker_cleanup_entered = Queue.new
+      release_worker_cleanup = Queue.new
+      descendant = nil
+      script.at_exit do
+        descendant = Thread.new do
+          worker_ready << true
+          begin
+            Queue.new.pop
+          ensure
+            worker_cleanup_entered << true
+            release_worker_cleanup.pop
+          end
+        end
+        worker_ready.pop
+      end
+
+      script.kill
+      worker_cleanup_entered.pop
+      expect(script.thread_group.list).not_to include(descendant)
+      expect(descendant.group).not_to equal(script.thread_group)
+      expect(script.join(0.02)).to be_nil
+
+      release_worker_cleanup << true
+      expect(script.join(1)).to equal(script)
+    end
+
+    it 'does not detach an inline cleanup caller when its group becomes enclosed' do
+      caller_script = build_script('caller')
+      target_script = build_script('target')
+      script_class.class_variable_set(:@@running, [caller_script, target_script])
+      observed = Queue.new
+      start_cleanup = Queue.new
+      descendant_ready = Queue.new
+      descendant_cleanup_entered = Queue.new
+      release_descendant_cleanup = Queue.new
+      later_descendant_ready = Queue.new
+      later_descendant_cleanup_entered = Queue.new
+      release_later_descendant_cleanup = Queue.new
+      target_script.at_exit do
+        Thread.new do
+          descendant_ready << true
+          begin
+            Queue.new.pop
+          ensure
+            descendant_cleanup_entered << true
+            release_descendant_cleanup.pop
+          end
+        end
+        descendant_ready.pop
+        caller_script.thread_group.enclose
+      end
+      caller = Thread.new do
+        start_cleanup.pop
+        target_script.kill(:context => :shutdown, :async => false)
+        Thread.new do
+          later_descendant_ready << true
+          begin
+            Queue.new.pop
+          ensure
+            later_descendant_cleanup_entered << true
+            release_later_descendant_cleanup.pop
+          end
+        end
+        later_descendant_ready.pop
+        observed << script_class.current
+      end
+      caller_script.thread_group.add(caller)
+      start_cleanup << true
+
+      descendant_cleanup_entered.pop
+      expect(target_script.join(0.02)).to be_nil
+      release_descendant_cleanup << true
+      expect(observed.pop).to equal(caller_script)
+      caller.join
+      progress_shutdown_until(target_script)
+      expect(target_script.join(1)).to equal(target_script)
+      caller_script.kill
+      later_descendant_cleanup_entered.pop
+      expect(caller_script.join(0.02)).to be_nil
+      release_later_descendant_cleanup << true
+      expect(caller_script.join(1)).to equal(caller_script)
     end
 
     it 'allows a killed worker to join its own stopping script' do
@@ -1321,6 +1416,15 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       parent_mutex&.unlock if parent_mutex&.owned?
     end
 
+    it 'prunes completed scripts from the stopping registry snapshot' do
+      script = build_script('completed-stop')
+      script.instance_variable_set(:@cleanup_complete, true)
+      script_class.class_variable_set(:@@stopping, [script])
+
+      expect(script_class.shutdown_scripts).to be_empty
+      expect(script_class.class_variable_get(:@@stopping)).to be_empty
+    end
+
     it 'holds child lifecycle state through public adoption' do
       parent = build_script('parent')
       child = build_script('child')
@@ -1346,12 +1450,50 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
     it 'preserves the standard ThreadGroup surface' do
       script = build_script('thread-group-api')
+      script_class.class_variable_set(:@@running, [script])
+      worker = Thread.new { Queue.new.pop }
 
       expect(script.thread_group).to be_a(ThreadGroup)
       expect(script.thread_group).to be_instance_of(ThreadGroup)
+      expect(script.thread_group.add(worker)).to equal(script.thread_group)
+      expect(worker.group).to equal(script.thread_group)
+      expect { script.thread_group.add(Object.new) }.to raise_error(TypeError, /expected VM\/thread/)
       expect(script.thread_group).not_to be_enclosed
       expect(script.thread_group.enclose).to equal(script.thread_group)
       expect(script.thread_group).to be_enclosed
+      other_group = ThreadGroup.new
+      expect { other_group.add(worker) }.to raise_error(ThreadError, /enclosed/)
+      expect(worker.group).to equal(script.thread_group)
+    ensure
+      worker&.kill
+      worker&.join
+    end
+
+    it 'runs teardown callbacks after the public thread group is enclosed' do
+      script = build_script('enclosed-thread-group')
+      script_class.class_variable_set(:@@running, [script])
+      callback_ran = false
+      script.at_exit { callback_ran = true }
+      script.thread_group.enclose
+
+      expect(script.kill_sync(:timeout => 1)).to equal(script)
+      expect(callback_ran).to be(true)
+      expect(script_class.class_variable_get(:@@stopping)).to be_empty
+    end
+
+    it 'kills a worker when native thread-group registration fails' do
+      script = build_script('group-rejection')
+      script_class.class_variable_set(:@@running, [script])
+      source_group = ThreadGroup.new
+      worker = Thread.new { Queue.new.pop }
+      source_group.add(worker)
+      source_group.enclose
+
+      expect { script.thread_group.add(worker) }.to raise_error(ThreadError, /enclosed/)
+      expect(worker).not_to be_alive
+    ensure
+      worker&.kill
+      worker&.join
     end
 
     it 'records cleanup callback failures in lifecycle completion' do
@@ -1415,6 +1557,21 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(script_class.libs).to include('libutil')
       expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+    end
+
+    it 'publishes a started library before loader cancellation can take effect' do
+      allow(script_class).to receive(:start).with('libutil', { :force => true }) do
+        script_class.class_variable_set(:@@completed_named_starts, 'libutil' => library_script)
+        Thread.current.kill
+        library_script
+      end
+
+      loader = Thread.new { script_class.loadlib('util') }
+      loader.join
+
+      expect(script_class.class_variable_get(:@@loading_libraries)).to eq('libutil' => library_script)
+      expect(script_class.loadlib('util')).to be(true)
+      expect(script_class).to have_received(:start).with('libutil', { :force => true }).once
     end
 
     it 'starts a library without holding the library registry mutex' do
