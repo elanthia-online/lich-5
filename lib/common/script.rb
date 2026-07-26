@@ -721,8 +721,9 @@ module Lich
 
       def Script.run_child(*args)
         child = Script.start_child(*args)
-        child&.join
-        child
+        return nil unless child
+
+        child.join ? child : nil
       end
 
       def Script.daemon_me
@@ -1439,6 +1440,12 @@ module Lich
         lifecycle_mutex.synchronize { @completed_successfully == true }
       end
 
+      # Waits for this script to finish. Without an explicit timeout, normal
+      # execution may run indefinitely, but teardown is bounded by
+      # SCRIPT_CLEANUP_TIMEOUT once a stop has been requested.
+      #
+      # @param timeout [Numeric, nil] maximum seconds for the entire wait
+      # @return [Script, nil] this script on completion, or nil on timeout
       def join(timeout = nil)
         raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
 
