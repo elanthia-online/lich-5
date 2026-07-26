@@ -60,6 +60,11 @@ module Lich
 
         drain_attempts.times do
           remaining = remaining_scripts.call.uniq
+          newly_observed = remaining.reject { |script| scripts.include?(script) }
+          unless newly_observed.empty?
+            scripts.concat(newly_observed)
+            newly_observed.each { |script| kill_script(script) }
+          end
           now = clock.call
 
           scripts.each do |script|
@@ -74,8 +79,14 @@ module Lich
           sleeper.call(drain_interval)
         end
 
-        finished_at = clock.call
         remaining = remaining_scripts.call.uniq
+        newly_observed = remaining.reject { |script| scripts.include?(script) }
+        unless newly_observed.empty?
+          scripts.concat(newly_observed)
+          newly_observed.each { |script| kill_script(script) }
+          remaining = remaining_scripts.call.uniq
+        end
+        finished_at = clock.call
 
         Result.new(
           scripts_started: scripts.length,

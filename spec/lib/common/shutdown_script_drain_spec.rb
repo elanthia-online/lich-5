@@ -56,6 +56,82 @@ RSpec.describe Lich::Common::ShutdownScriptDrain do
     )
   end
 
+  it 'adopts and kills scripts that appear while draining' do
+    initial_script = build_script('initial')
+    late_script = build_script('late')
+    poll = 0
+
+    result = described_class.run(
+      initial_scripts: [initial_script],
+      remaining_scripts: proc {
+        poll += 1
+        poll == 1 ? [initial_script, late_script] : []
+      },
+      slow_threshold: 1.5,
+      clock: proc { 0.0 },
+      sleeper: proc { |_duration| nil }
+    )
+
+    expect(initial_script.kill_contexts).to eq([:shutdown])
+    expect(late_script.kill_contexts).to eq([:shutdown])
+    expect(result.scripts_started).to eq(2)
+    expect(result.scripts_remaining).to eq(0)
+  end
+
+  it 'kills a script first observed by the final status poll' do
+    initial_script = build_script('initial')
+    late_script = build_script('late')
+    poll = 0
+
+    result = described_class.run(
+      initial_scripts: [initial_script],
+      remaining_scripts: proc {
+        poll += 1
+        case poll
+        when 1 then []
+        when 2 then [late_script]
+        else []
+        end
+      },
+      slow_threshold: 1.5,
+      clock: proc { 0.0 },
+      sleeper: proc { |_duration| nil }
+    )
+
+    expect(late_script.kill_contexts).to eq([:shutdown])
+    expect(result.scripts_started).to eq(2)
+    expect(result.remaining_scripts).to be_empty
+  end
+
+  it 'includes a final-poll kill in slow-script timing' do
+    now = 0.0
+    late_script = Struct.new(:name) do
+      define_method(:kill) do |context:|
+        raise "unexpected context: #{context}" unless context == :shutdown
+
+        now = Thread.current[:shutdown_drain_clock]
+        Thread.current[:shutdown_drain_clock] = now + 2.0
+      end
+    end.new('late')
+    poll = 0
+    Thread.current[:shutdown_drain_clock] = now
+
+    result = described_class.run(
+      initial_scripts: [],
+      remaining_scripts: proc {
+        poll += 1
+        poll == 2 ? [late_script] : []
+      },
+      slow_threshold: 1.5,
+      clock: proc { Thread.current[:shutdown_drain_clock] },
+      sleeper: proc { |_duration| nil }
+    )
+
+    expect(result.slow_scripts).to eq(['late=2.000s'])
+  ensure
+    Thread.current[:shutdown_drain_clock] = nil
+  end
+
   it 'records a script that exits after the slow threshold' do
     script = build_script('slow-finished')
     now = 0.0

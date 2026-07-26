@@ -43,12 +43,18 @@ module Lich
           ShutdownLog.begin_user_exit_summary!
           coordinator.request(reason: :user_exit, source: source)
 
-          scripts_provider ||= proc { Script.running + Script.hidden }
+          initial_scripts =
+            if scripts_provider
+              scripts_provider.call
+            else
+              Script.begin_shutdown
+            end
+          scripts_provider ||= proc { Script.shutdown_scripts }
           remaining_scripts = proc { scripts_provider.call.reject { |script| script.equal?(current_script) } }
 
-          run(
+          result = run(
             coordinator: coordinator,
-            initial_scripts: remaining_scripts.call,
+            initial_scripts: initial_scripts.reject { |script| script.equal?(current_script) },
             remaining_scripts: remaining_scripts,
             script_drain: script_drain,
             vars: vars,
@@ -56,6 +62,11 @@ module Lich
             active_sessions_lifecycle: active_sessions_lifecycle,
             slow_threshold: slow_threshold
           )
+          if current_script && initial_scripts.include?(current_script)
+            result.scripts_drained = false
+            result.completed = false
+          end
+          result
         end
 
         # Executes orderly user shutdown once.
