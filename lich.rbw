@@ -10,19 +10,19 @@
 for arg in ARGV
   if arg =~ /^--(?:home)=(.+)[\\\/]?$/i
     LICH_DIR = $1
-  elsif arg =~ /^--temp=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:temp|temp-dir)=(.+)[\\\/]?$/i
     TEMP_DIR = $1
-  elsif arg =~ /^--scripts=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:scripts|script-dir)=(.+)[\\\/]?$/i
     SCRIPT_DIR = $1
-  elsif arg =~ /^--maps=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:maps|map-dir)=(.+)[\\\/]?$/i
     MAP_DIR = $1
-  elsif arg =~ /^--logs=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:logs|log-dir)=(.+)[\\\/]?$/i
     LOG_DIR = $1
-  elsif arg =~ /^--backup=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:backup|backup-dir)=(.+)[\\\/]?$/i
     BACKUP_DIR = $1
-  elsif arg =~ /^--data=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:data|data-dir)=(.+)[\\\/]?$/i
     DATA_DIR = $1
-  elsif arg =~ /^--lib=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:lib|lib-dir)=(.+)[\\\/]?$/i
     LIB_DIR = $1
   end
 end
