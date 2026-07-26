@@ -797,6 +797,44 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script).not_to be_running
     end
 
+    it 'bounds an implicit join once teardown begins' do
+      stub_const('Lich::Common::Script::SCRIPT_CLEANUP_TIMEOUT', 0.03)
+      stub_const('Lich::Common::Script::JOIN_WAIT_INTERVAL', 0.005)
+      worker_ready = Queue.new
+      worker_cleanup_entered = Queue.new
+      release_worker_cleanup = Queue.new
+      script = subscript_class.start(:parent => nil) do
+        worker_ready << true
+        begin
+          Queue.new.pop
+        ensure
+          worker_cleanup_entered << true
+          release_worker_cleanup.pop
+        end
+      end
+      worker_ready.pop
+
+      script.kill
+      worker_cleanup_entered.pop
+
+      expect(script.join).to be_nil
+
+      release_worker_cleanup << true
+      expect(script.join(1)).to equal(script)
+    end
+
+    it 'keeps shutdown snapshots free of teardown side effects' do
+      script = build_script('deferred-cleanup')
+      script_class.class_variable_set(:@@stopping, [script])
+      allow(script).to receive(:__refresh_deferred_stop)
+
+      expect(script_class.shutdown_scripts).to contain_exactly(script)
+      expect(script).not_to have_received(:__refresh_deferred_stop)
+
+      expect(script_class.progress_shutdown).to contain_exactly(script)
+      expect(script).to have_received(:__refresh_deferred_stop).once
+    end
+
     it 'finishes inline cleanup when the killing caller is cancelled' do
       script = build_script('cancelled-inline-cleanup')
       script_class.class_variable_set(:@@running, [script])

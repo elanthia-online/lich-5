@@ -49,7 +49,7 @@ module Lich
             else
               Script.begin_shutdown
             end
-          scripts_provider ||= proc { Script.shutdown_scripts }
+          scripts_provider ||= proc { Script.progress_shutdown }
           remaining_scripts = proc { scripts_provider.call.reject { |script| script.equal?(current_script) } }
 
           result = run(
