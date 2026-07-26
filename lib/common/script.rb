@@ -36,6 +36,7 @@ module Lich
       RAW_THREAD_GROUP_ENCLOSE = ThreadGroup.instance_method(:enclose)
       RAW_THREAD_GROUP_ENCLOSED = ThreadGroup.instance_method(:enclosed?)
       JOIN_WAIT_INTERVAL = 0.05
+      CLEANUP_SCRIPT_THREAD_KEY = :lich_cleanup_script
 
       # Nested lock order:
       #   startup -> registry -> per-script lifecycle -> child relationship
@@ -66,15 +67,6 @@ module Lich
 
         def list
           @script.__send__(:__public_worker_threads)
-        end
-
-        def enclose
-          @script.__send__(:__enclose_worker_group)
-          self
-        end
-
-        def enclosed?
-          @script.__send__(:__worker_group_enclosed?)
         end
 
         def enclose
@@ -136,7 +128,6 @@ module Lich
         registry_name = __script_registry_name(file_name)
         script_name = file_name.sub(/\.(?:lic|rb|cmd|wiz)(?:\.(?:gz|Z))?\z/i, '')
         startup_reservation = Object.new
-        startup_completed = false
         begin
           startup_status = __begin_start(startup_reservation, registry_name, :force => options[:force] == true)
           if startup_status == :shutdown
@@ -175,10 +166,10 @@ module Lich
           worker_released = false
           begin
             new_thread = Thread.new {
-              next unless start_gate.pop
-
-              script = script_obj
               begin
+                next unless start_gate.pop
+
+                script = script_obj
                 if Script.current
                   eval('script = Script.current', script_binding, script.name)
                   Thread.current.priority = 1
@@ -215,7 +206,7 @@ module Lich
                   respond '--- error: out of cheese'
                 end
               ensure
-                script.kill if script.running? && !script.stopping?
+                script_obj.kill if script_obj.running? && !script_obj.stopping?
               end
             }
             script_obj.__send__(:__attach_startup_worker, new_thread)
@@ -236,10 +227,9 @@ module Lich
               end
             end
           end
-          startup_completed = true
           script_obj
         ensure
-          __finish_start(startup_reservation, startup_completed ? script_obj : nil)
+          __finish_start(startup_reservation, setup_complete ? script_obj : nil)
         end
       }
       @@elevated_exists = proc { |script_name|
@@ -662,10 +652,30 @@ module Lich
       end
       private_class_method :__running_snapshot
 
+      def Script.__script_owning_thread_group(group)
+        __running_snapshot.find { |script| script.__send__(:__owns_public_thread_group?, group) }
+      end
+      private_class_method :__script_owning_thread_group
+
       def Script.__shutdown_snapshot
-        __registry_synchronize { (@@running + @@stopping).uniq }
+        __registry_synchronize do
+          __prune_completed_stops_locked
+          (@@running + @@stopping).uniq
+        end
       end
       private_class_method :__shutdown_snapshot
+
+      def Script.__prune_completed_stops_locked
+        @@stopping.reject! { |script| script.__send__(:__cleanup_complete?) }
+      end
+      private_class_method :__prune_completed_stops_locked
+
+      def Script.__discard_completed_stop(script)
+        __registry_synchronize do
+          @@stopping.delete(script) if script.__send__(:__cleanup_complete?)
+        end
+      end
+      private_class_method :__discard_completed_stop
 
       def Script.list
         __running_snapshot
@@ -686,7 +696,12 @@ module Lich
       def Script.begin_shutdown
         @@startup_mutex.synchronize do
           @@shutdown_started = true
-          @@startup_condition.wait(@@startup_mutex) until @@startup_reservations.empty?
+          until @@startup_reservations.empty?
+            __reap_abandoned_startups_locked
+            break if @@startup_reservations.empty?
+
+            @@startup_condition.wait(@@startup_mutex, JOIN_WAIT_INTERVAL)
+          end
           shutdown_scripts
         end
       end
@@ -694,6 +709,7 @@ module Lich
       def Script.__begin_start(reservation, name = nil, force: true)
         normalized_name = name&.downcase
         @@startup_mutex.synchronize do
+          __reap_abandoned_startups_locked
           return :shutdown if @@shutdown_started
           if normalized_name && !force
             active = __active_named_script(normalized_name)
@@ -702,7 +718,12 @@ module Lich
           end
 
           @@startup_generation += 1
-          @@startup_reservations[reservation] = [normalized_name, @@startup_generation]
+          @@startup_reservations[reservation] = [
+            normalized_name,
+            Thread.current,
+            @@startup_generation,
+            nil
+          ]
           :admitted
         end
       end
@@ -711,25 +732,29 @@ module Lich
       def Script.__begin_library_start(reservation, name)
         normalized_name = name.downcase
         @@startup_mutex.synchronize do
+          __reap_abandoned_startups_locked
           return [:shutdown, nil] if @@shutdown_started
 
           unless __startup_in_progress_locked?(normalized_name)
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
             candidate = completed || active
-            @@startup_reservations[reservation] = [normalized_name, nil, candidate]
+            @@startup_reservations[reservation] = [normalized_name, Thread.current, nil, candidate]
             return [candidate ? :duplicate : :admitted, candidate]
           end
 
           @@completed_start_waiters[normalized_name] += 1
           begin
             while __startup_in_progress_locked?(normalized_name)
-              @@startup_condition.wait(@@startup_mutex)
+              __reap_abandoned_startups_locked
+              break unless __startup_in_progress_locked?(normalized_name)
+
+              @@startup_condition.wait(@@startup_mutex, JOIN_WAIT_INTERVAL)
             end
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
             candidate = completed || active
-            @@startup_reservations[reservation] = [normalized_name, nil, candidate]
+            @@startup_reservations[reservation] = [normalized_name, Thread.current, nil, candidate]
             [candidate ? :duplicate : :admitted, candidate]
           ensure
             @@completed_start_waiters[normalized_name] -= 1
@@ -754,7 +779,9 @@ module Lich
 
       def Script.__finish_start(reservation, script = nil, preserve_completed: false)
         @@startup_mutex.synchronize do
-          name, generation, = @@startup_reservations.delete(reservation)
+          entry = @@startup_reservations.delete(reservation)
+          name = entry&.first
+          generation = entry&.[](2)
           if name&.start_with?('lib')
             current_generation = __completed_start_generation(@@completed_named_starts[name])
             if !preserve_completed && generation && generation >= current_generation
@@ -774,7 +801,7 @@ module Lich
       def Script.__reserved_start_candidate(reservation)
         @@startup_mutex.synchronize do
           entry = @@startup_reservations[reservation]
-          entry&.[](2)
+          entry&.[](3)
         end
       end
       private_class_method :__reserved_start_candidate
@@ -812,8 +839,22 @@ module Lich
       end
       private_class_method :__completed_start_generation
 
+      def Script.__peek_completed_start(name)
+        @@startup_mutex.synchronize do
+          __completed_start_value(@@completed_named_starts[name.downcase])
+        end
+      end
+      private_class_method :__peek_completed_start
+
+      def Script.__reap_abandoned_startups_locked
+        previous_size = @@startup_reservations.size
+        @@startup_reservations.delete_if { |_reservation, (_name, owner)| !owner.alive? }
+        @@startup_condition.broadcast if @@startup_reservations.size < previous_size
+      end
+      private_class_method :__reap_abandoned_startups_locked
+
       def Script.__startup_in_progress_locked?(name)
-        @@startup_reservations.any? { |_reservation, (reserved_name, _generation)| reserved_name == name }
+        @@startup_reservations.any? { |_reservation, (reserved_name, _owner)| reserved_name == name }
       end
       private_class_method :__startup_in_progress_locked?
 
@@ -876,7 +917,9 @@ module Lich
       end
 
       def Script.current
-        if (script = __running_snapshot.find { |s| s.has_thread?(Thread.current) })
+        script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+        script ||= __running_snapshot.find { |candidate| candidate.has_thread?(Thread.current) }
+        if script
           sleep 0.2 while script.paused? and not script.ignore_pause
           script
         else
@@ -968,6 +1011,12 @@ module Lich
             end
             __finish_start(startup_reservation, nil, :preserve_completed => start_required == true)
           ensure
+            if start_required
+              script ||= __peek_completed_start(library_name)
+              if script
+                @@library_mutex.synchronize { @@loading_libraries[library_name] = script }
+              end
+            end
             published_script = script || @@library_mutex.synchronize { @@loading_libraries[library_name] }
             __discard_completed_start(library_name, published_script) if published_script
           end
@@ -1528,12 +1577,11 @@ module Lich
       # ordinary script churn.
       #
       # Runtime kills run cleanup in a dedicated thread so the caller is not
-      # blocked. Shutdown kills run cleanup inline instead: the shutdown drain
-      # (see shutdown_script_drain.rb) kills every script in a tight loop, and on
-      # long sessions spawning one cleanup thread per script there pushes the
-      # process past the OS thread ceiling ("can't alloc thread"). Inline
-      # teardown at shutdown is also the order we want -- sequential, not a
-      # concurrent burst.
+      # blocked. The process shutdown drain runs cleanup inline: spawning one
+      # cleanup thread per script in long sessions can push the process past the
+      # OS thread ceiling ("can't alloc thread"). Shutdown requested from a
+      # normal script worker remains asynchronous so callback descendants belong
+      # to the target script rather than the caller.
       #
       # @param context [Symbol] :runtime for ordinary script stops, :shutdown
       #   when the owning Lich process is closing
@@ -1543,7 +1591,10 @@ module Lich
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
 
-        async = context != :shutdown if async.nil?
+        if async.nil?
+          shutdown_cleanup = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+          async = context != :shutdown || (!Thread.current.group.equal?(ThreadGroup::Default) && !shutdown_cleanup)
+        end
         launch_token = Object.new
         cleanup_thread = nil
         cleanup_released = false
@@ -1571,8 +1622,8 @@ module Lich
               __run_kill_cleanup(source: source, context: context, record_metrics: true)
             }
             ThreadGroup::Default.add(cleanup_thread)
-            __attach_startup_worker(cleanup_thread)
-            lifecycle_mutex.synchronize { @cleanup_thread = cleanup_thread }
+            __attach_cleanup_worker(cleanup_thread)
+            __claim_cleanup_thread(cleanup_thread)
             cleanup_owned = true
             raise ThreadError, 'cleanup thread stopped before ownership transfer' unless cleanup_thread.alive?
 
@@ -1741,6 +1792,27 @@ module Lich
         # cleanup body twice over already-nilled state, not skip it.)
         return if @killer_mutex.owned?
 
+        previous_cleanup_script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+        previous_thread_group = Thread.current.group
+        cleanup_thread_group = __cleanup_worker_group
+        previous_group_owner = nil
+        moved_to_cleanup_group = false
+        move_allowed = previous_thread_group.equal?(ThreadGroup::Default)
+        unless move_allowed || previous_cleanup_script
+          previous_group_owner = Script.__send__(:__script_owning_thread_group, previous_thread_group)
+          move_allowed = previous_group_owner&.__send__(:__borrow_worker, Thread.current, cleanup_thread_group)
+        end
+        if move_allowed
+          begin
+            RAW_THREAD_GROUP_ADD.bind_call(cleanup_thread_group, Thread.current)
+            moved_to_cleanup_group = true
+          rescue ThreadError
+            previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
+            previous_group_owner&.__send__(:__return_borrowed_group, cleanup_thread_group)
+            nil
+          end
+        end
+        Thread.current.thread_variable_set(CLEANUP_SCRIPT_THREAD_KEY, self)
         begin
           @killer_mutex.synchronize do
             lifecycle_mutex.synchronize { @cleanup_thread = Thread.current }
@@ -1750,23 +1822,23 @@ module Lich
               failed = false
               cleanup_body_complete = false
               begin
-                children = __begin_child_shutdown
+                __close_child_launch_admission
                 stopping_threads = lifecycle_mutex.synchronize do
                   @stopping_threads = __raw_worker_threads.reject { |thread| thread == Thread.current }
                 end
                 stopping_threads.each { |thread| thread.kill rescue nil }
-                __raw_add_worker(Thread.current)
+                children = __wait_for_child_launches
                 __stop_children(children, context)
-                __raw_add_worker(Thread.current)
                 # Shift each callback before invoking it. If this executor is
                 # cancelled, recovery resumes with the remaining callbacks.
+                @die_with ||= []
                 while (script_name = @die_with.shift)
                   failed = true unless __run_cleanup_callback do
                     Script.kill(script_name, context: context)
-                    __raw_add_worker(Thread.current)
                   end
                 end
                 @paused = false
+                @at_exit_procs ||= []
                 while (callback = @at_exit_procs.shift)
                   failed = true unless __run_cleanup_callback { callback.call }
                 end
@@ -1796,6 +1868,22 @@ module Lich
             end
           end
         ensure
+          Thread.current.thread_variable_set(CLEANUP_SCRIPT_THREAD_KEY, previous_cleanup_script)
+          if moved_to_cleanup_group
+            begin
+              RAW_THREAD_GROUP_ADD.bind_call(previous_thread_group, Thread.current)
+              previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
+              previous_group_owner&.__send__(:__return_borrowed_group, cleanup_thread_group)
+            rescue ThreadError
+              begin
+                borrowed_group = ThreadGroup.new
+                previous_group_owner&.__send__(:__adopt_borrowed_group, borrowed_group)
+                RAW_THREAD_GROUP_ADD.bind_call(borrowed_group, Thread.current)
+              rescue ThreadError
+                nil
+              end
+            end
+          end
           lifecycle_mutex.synchronize do
             @cleanup_thread = nil if @cleanup_thread == Thread.current
             @stopped_condition&.broadcast
@@ -1890,9 +1978,15 @@ module Lich
       end
       private :__unregister_child_locked
 
-      def __begin_child_shutdown
+      def __close_child_launch_admission
         child_scripts_mutex.synchronize do
           @child_shutdown_started = true
+        end
+      end
+      private :__close_child_launch_admission
+
+      def __wait_for_child_launches
+        child_scripts_mutex.synchronize do
           if @child_launches.to_i.positive?
             @child_launch_condition ||= ConditionVariable.new
             @child_launch_condition.wait(child_scripts_mutex) while @child_launches.to_i.positive?
@@ -1900,7 +1994,7 @@ module Lich
           Array(@child_scripts).dup
         end
       end
-      private :__begin_child_shutdown
+      private :__wait_for_child_launches
 
       def __stop_children(children, context)
         return if children.empty?
@@ -1912,8 +2006,6 @@ module Lich
           child.kill(context: context, async: true) if child.running?
         rescue StandardError => e
           Lich.log("error: failed to stop child script #{child.name}: #{e}") if defined?(Lich) && Lich.respond_to?(:log)
-        ensure
-          __raw_add_worker(Thread.current)
         end
 
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CHILD_JOIN_TIMEOUT
@@ -1962,49 +2054,43 @@ module Lich
       end
       private :__record_successful_exit
 
+      def __cleanup_complete?
+        lifecycle_mutex.synchronize { @cleanup_complete == true }
+      end
+      private :__cleanup_complete?
+
       def __register_worker(thread)
         registration = Object.new
         tracked_rejection = false
         accepted = false
-        begin
-          accepted = Script.__send__(:__registry_synchronize) do
-            lifecycle_mutex.synchronize do
-              if @@running.include?(self) && !@kill_requested
-                __raw_add_worker(thread)
-                true
-              else
-                @stopping_threads = (Array(@stopping_threads) + [thread]).uniq
-                unless @worker_admission_closed
-                  @worker_registrations ||= Set.new
-                  @worker_registrations.add(registration)
-                  tracked_rejection = true
-                end
-                false
+        accepted = Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            if @@running.include?(self) && !@kill_requested
+              __raw_add_worker(thread)
+              true
+            else
+              @stopping_threads = (Array(@stopping_threads) + [thread]).uniq
+              unless @worker_admission_closed
+                @worker_registrations ||= Set.new
+                @worker_registrations.add(registration)
+                tracked_rejection = true
               end
+              false
             end
           end
+        end
+        accepted
+      ensure
+        begin
           unless accepted
-            thread.kill
-            thread.join unless thread == Thread.current
-          end
-          accepted
-        rescue StandardError => error
-          thread.kill
-          begin
-            thread.join unless thread == Thread.current
-          rescue StandardError
-            nil
-          end
-          raise error
-        ensure
-          unless accepted
-            thread.kill
             begin
+              thread.kill
               thread.join unless thread == Thread.current
             rescue StandardError
               nil
             end
           end
+        ensure
           if tracked_rejection
             lifecycle_mutex.synchronize do
               @worker_registrations&.delete(registration)
@@ -2015,31 +2101,93 @@ module Lich
       end
       private :__register_worker
 
-      def __attach_startup_worker(thread)
-        __raw_add_worker(thread)
-        thread
-      end
-      private :__attach_startup_worker
-
       def __raw_add_worker(thread)
         RAW_THREAD_GROUP_ADD.bind_call(@thread_group, thread)
       end
       private :__raw_add_worker
 
       def __raw_worker_threads
-        RAW_THREAD_GROUP_LIST.bind_call(@thread_group).dup
+        groups = [@thread_group, @cleanup_thread_group, *Array(@borrowed_thread_groups)].compact
+        group_threads = groups.flat_map { |group| RAW_THREAD_GROUP_LIST.bind_call(group) }
+        (group_threads + Array(@borrowed_workers)).uniq
       end
       private :__raw_worker_threads
+
+      def __public_worker_threads
+        RAW_THREAD_GROUP_LIST.bind_call(@thread_group).dup
+      end
+      private :__public_worker_threads
+
+      def __owns_public_thread_group?(group)
+        @thread_group.equal?(group)
+      end
+      private :__owns_public_thread_group?
+
+      def __borrow_worker(thread, group)
+        lifecycle_mutex.synchronize do
+          return false if @kill_requested || @cleanup_complete
+
+          @borrowed_workers ||= Set.new
+          @borrowed_workers.add(thread)
+          @borrowed_thread_groups ||= Set.new
+          @borrowed_thread_groups.add(group)
+          true
+        end
+      end
+      private :__borrow_worker
+
+      def __return_borrowed_worker(thread)
+        lifecycle_mutex.synchronize do
+          @borrowed_workers&.delete(thread)
+          @stopped_condition&.broadcast
+        end
+      end
+      private :__return_borrowed_worker
+
+      def __adopt_borrowed_group(group)
+        lifecycle_mutex.synchronize do
+          @borrowed_thread_groups ||= Set.new
+          @borrowed_thread_groups.add(group)
+          @stopped_condition&.broadcast
+        end
+      end
+      private :__adopt_borrowed_group
+
+      def __return_borrowed_group(group)
+        lifecycle_mutex.synchronize do
+          @borrowed_thread_groups&.delete(group)
+          @stopped_condition&.broadcast
+        end
+      end
+      private :__return_borrowed_group
+
+      def __attach_startup_worker(thread)
+        __raw_add_worker(thread)
+        thread
+      end
+      private :__attach_startup_worker
+
+      def __claim_cleanup_thread(thread)
+        lifecycle_mutex.synchronize { @cleanup_thread = thread }
+        thread
+      end
+      private :__claim_cleanup_thread
+
+      def __cleanup_worker_group
+        lifecycle_mutex.synchronize { @cleanup_thread_group ||= ThreadGroup.new }
+      end
+      private :__cleanup_worker_group
+
+      def __attach_cleanup_worker(thread)
+        RAW_THREAD_GROUP_ADD.bind_call(__cleanup_worker_group, thread)
+        thread
+      end
+      private :__attach_cleanup_worker
 
       def __worker_threads
         __raw_worker_threads
       end
       private :__worker_threads
-
-      def __public_worker_threads
-        __raw_worker_threads
-      end
-      private :__public_worker_threads
 
       def __enclose_worker_group
         lifecycle_mutex.synchronize { RAW_THREAD_GROUP_ENCLOSE.bind_call(@thread_group) }
@@ -2054,7 +2202,7 @@ module Lich
 
       def __managed_thread_group
         lifecycle_mutex.synchronize do
-          @thread_group.extend(ThreadGroupHandle).__send__(:__attach_script, self)
+          @thread_group_handle ||= @thread_group.extend(ThreadGroupHandle).__send__(:__attach_script, self)
         end
       end
       private :__managed_thread_group
@@ -2062,6 +2210,7 @@ module Lich
       def __publish(admitted = false)
         Script.__send__(:__publish_to_registry, :admitted => admitted) do
           Script.__send__(:__registry_synchronize) do
+            Script.__send__(:__prune_completed_stops_locked)
             @@running.push(self) unless @@running.include?(self)
           end
         end
@@ -2072,6 +2221,7 @@ module Lich
       def __publish_generated(prefix, admitted)
         Script.__send__(:__publish_to_registry, :admitted => admitted) do
           Script.__send__(:__registry_synchronize) do
+            Script.__send__(:__prune_completed_stops_locked)
             num = '1'
             num.succ! while @@running.any? { |script| script.name == "#{prefix}#{num}" }
             @name = "#{prefix}#{num}"
@@ -2118,7 +2268,7 @@ module Lich
           @watchfor = {}
           @downstream_buffer = LimitedArray.new
           @upstream_buffer = LimitedArray.new
-          @die_with = @at_exit_procs = @match_stack_labels = @match_stack_strings = nil
+          @match_stack_labels = @match_stack_strings = nil
           unless @quiet
             if @killed_externally
               respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
@@ -2209,11 +2359,6 @@ module Lich
       end
       private :__refresh_deferred_stop
 
-      def __cleanup_complete?
-        lifecycle_mutex.synchronize { @cleanup_complete == true }
-      end
-      private :__cleanup_complete?
-
       def __finalize_stop
         finalization_mutex = lifecycle_mutex.synchronize { @finalization_mutex ||= Mutex.new }
         finalization_mutex.synchronize do
@@ -2223,13 +2368,12 @@ module Lich
           CHILD_RELATIONSHIP_MUTEX.synchronize { parent = @parent_script }
           parent&.unregister_child(self)
           CHILD_RELATIONSHIP_MUTEX.synchronize { @parent_script = nil }
-          Script.__send__(:__registry_synchronize) do
-            lifecycle_mutex.synchronize do
-              @cleanup_complete = true
-              @@stopping.delete(self)
-              @stopped_condition&.broadcast
-            end
+          lifecycle_mutex.synchronize do
+            @die_with = @at_exit_procs = nil
+            @cleanup_complete = true
+            @stopped_condition&.broadcast
           end
+          Script.__send__(:__discard_completed_stop, self)
         end
       end
       private :__finalize_stop
@@ -2428,10 +2572,10 @@ module Lich
             worker_released = false
             begin
               new_thread = Thread.new {
-                next unless start_gate.pop
-
-                script = new_script
                 begin
+                  next unless start_gate.pop
+
+                  script = new_script
                   if Script.current
                     Thread.current.priority = 1
                     respond("--- Lich: #{script.name} active.") unless script.quiet
@@ -2445,7 +2589,7 @@ module Lich
                     respond '--- Lich: failed to start subscript'
                   end
                 ensure
-                  script.kill if script.running? && !script.stopping?
+                  new_script.kill if new_script.running? && !new_script.stopping?
                 end
               }
               new_script.__send__(:__attach_startup_worker, new_thread)
@@ -2540,10 +2684,10 @@ module Lich
           worker_released = false
           begin
             new_thread = Thread.new {
-              next unless start_gate.pop
-
-              script = new_script
               begin
+                next unless start_gate.pop
+
+                script = new_script
                 if Script.current
                   Thread.current.priority = 1
                   respond("--- Lich: #{script.name} active.") unless script.quiet
@@ -2560,7 +2704,7 @@ module Lich
                   respond 'start_exec_script screwed up...'
                 end
               ensure
-                script.kill if script.running? && !script.stopping?
+                new_script.kill if new_script.running? && !new_script.stopping?
               end
             }
             new_script.__send__(:__attach_startup_worker, new_thread)
