@@ -1399,6 +1399,33 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.libs).to eq(Set['libutil'])
     end
 
+    it 'starts a library without holding the library registry mutex' do
+      library_mutex = script_class.class_variable_get(:@@library_mutex)
+      mutex_locked_during_start = nil
+      allow(script_class).to receive(:start).with('libutil', { :force => true }) do
+        mutex_locked_during_start = library_mutex.locked?
+        library_script
+      end
+
+      expect(script_class.loadlib('util')).to be(true)
+      expect(mutex_locked_during_start).to be(false)
+    end
+
+    it 'reports a library teardown timeout as a load failure' do
+      timed_out_script = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :join                    => nil,
+        :exit_error              => nil,
+        :completed_successfully? => false
+      )
+      allow(script_class).to receive(:start).with('libutil', { :force => true }).and_return(timed_out_script)
+
+      expect { script_class.loadlib('util') }.to raise_error(LoadError, /teardown timed out/)
+      expect(script_class.libs).to be_empty
+      expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+    end
+
     it 'adopts an admitted plain start across concurrent duplicate callers' do
       admitted_script = instance_double(
         script_class,

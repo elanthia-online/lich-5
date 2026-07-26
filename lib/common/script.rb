@@ -902,60 +902,65 @@ module Lich
         end
 
         startup_reservation = Object.new
-        begin
+        prepared = begin
           startup_status, completed_start = __begin_library_start(startup_reservation, library_name)
           raise LoadError, "cannot load script library during shutdown: #{library_name}" if startup_status == :shutdown
 
-          script, already_loaded, owns_loading = @@library_mutex.synchronize do
-            running = __running_snapshot.find { |candidate| candidate.name.casecmp?(library_name) }
+          running = __running_snapshot.find { |candidate| candidate.name.casecmp?(library_name) }
+          script, already_loaded, owns_loading, start_required = @@library_mutex.synchronize do
             if (loading = @@loading_libraries[library_name])
-              [loading, false, false]
+              [loading, false, false, false]
             elsif (candidate = completed_start || running)
               @@loading_libraries[library_name] = candidate
-              [candidate, false, true]
+              [candidate, false, true, false]
             elsif @@loaded_libraries.include?(library_name)
-              [nil, true, false]
+              [nil, true, false, false]
             else
-              started = Script.start(library_name, { :force => true })
-              raise LoadError, "failed to start script library: #{library_name}" unless started
-
-              @@loading_libraries[library_name] = started
-              [started, false, true]
+              [nil, false, true, true]
             end
+          end
+
+          if start_required
+            script = Script.start(library_name, { :force => true })
+            raise LoadError, "failed to start script library: #{library_name}" unless script
+
+            @@library_mutex.synchronize { @@loading_libraries[library_name] = script }
           end
           __discard_completed_start(library_name, script) if script
-          return true if already_loaded
 
-          __finish_start(startup_reservation)
-          begin
-            __join_library(library_name, script)
-          rescue ScriptError, StandardError
-            if owns_loading
-              @@library_mutex.synchronize do
-                @@loading_libraries.delete(library_name) if @@loading_libraries[library_name].equal?(script)
-              end
-            end
-            raise
-          end
-
-          error = script.exit_error
-          completed = script.completed_successfully?
-          @@library_mutex.synchronize do
-            if @@loading_libraries[library_name].equal?(script)
-              @@loading_libraries.delete(library_name)
-              if error || !completed
-                @@loaded_libraries.delete(library_name)
-              else
-                @@loaded_libraries.add(library_name)
-              end
-            end
-          end
-          __validate_library_completion(library_name, script)
-
-          true
+          [script, already_loaded, owns_loading]
         ensure
           __finish_start(startup_reservation)
         end
+        script, already_loaded, owns_loading = prepared
+        return true if already_loaded
+
+        begin
+          __join_library(library_name, script)
+        rescue ScriptError, StandardError
+          if owns_loading
+            @@library_mutex.synchronize do
+              @@loading_libraries.delete(library_name) if @@loading_libraries[library_name].equal?(script)
+            end
+          end
+          raise
+        end
+
+        error = script.exit_error
+        completed = script.completed_successfully?
+        @@library_mutex.synchronize do
+          if @@loading_libraries[library_name].equal?(script)
+            @@loading_libraries.delete(library_name)
+            if error || !completed
+              @@loaded_libraries.delete(library_name)
+            else
+              @@loaded_libraries.add(library_name)
+            end
+          end
+        end
+        __validate_library_completion(library_name, script)
+
+        true
       end
 
       # Runs each loaded script library again using a stable registry snapshot.
@@ -995,7 +1000,8 @@ module Lich
           end
         end
 
-        script.join
+        joined = script.join
+        raise LoadError, "script library teardown timed out: #{library_name}" unless joined
       ensure
         if caller_script
           @@library_mutex.synchronize do
