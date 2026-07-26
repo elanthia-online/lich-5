@@ -140,7 +140,7 @@ RSpec.describe Lich::Common::OrderlyShutdown do
     current_script = Struct.new(:name).new('shutdown-caller')
     other_script = Struct.new(:name).new('other')
     allow(Script).to receive(:begin_shutdown).and_return([current_script, other_script])
-    allow(Script).to receive(:shutdown_scripts).and_return([current_script, other_script])
+    allow(Script).to receive(:progress_shutdown).and_return([current_script, other_script])
 
     result = described_class.request_user_exit(
       source: 'script:shutdown-caller',

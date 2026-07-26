@@ -80,7 +80,7 @@ reconnect_if_wanted = proc {
     Lich::Common::BestEffortShutdownCleanup.run(
       coordinator: Lich::Common::ShutdownCoordinator,
       initial_scripts: Script.begin_shutdown,
-      remaining_scripts: proc { Script.shutdown_scripts },
+      remaining_scripts: proc { Script.progress_shutdown },
       script_drain: Lich::Common::ShutdownScriptDrain,
       vars: Vars,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
@@ -918,7 +918,7 @@ reconnect_if_wanted = proc {
         scripts_at_shutdown = Script.begin_shutdown
         script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
           initial_scripts: scripts_at_shutdown,
-          remaining_scripts: proc { Script.shutdown_scripts },
+          remaining_scripts: proc { Script.progress_shutdown },
           slow_threshold: script_shutdown_slow_threshold
         )
       end
