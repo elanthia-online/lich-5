@@ -33,10 +33,13 @@ module Lich
       SCRIPT_CLEANUP_TIMEOUT = 1.0
       JOIN_WAIT_INTERVAL = 0.05
 
-      # Lock order:
-      #   startup -> registry -> per-script lifecycle -> child ownership
-      # Library coordination never holds its mutex while starting or joining a
-      # script. No lock in this hierarchy may be held while invoking script code.
+      # Nested lock order:
+      #   parent child list -> startup -> registry -> generated name
+      #   -> per-script lifecycle -> child relationship
+      # Finalization releases the relationship lock before taking a parent's
+      # child-list lock. Library coordination releases its mutex before starting
+      # or joining a script. Registry and lifecycle locks are never held while
+      # invoking script code or cleanup callbacks.
 
       class ThreadGroupHandle
         def initialize(script)
