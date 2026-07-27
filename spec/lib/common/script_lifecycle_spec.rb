@@ -394,9 +394,17 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     it 'waits for a child through Script.run_child' do
       child = build_script('child')
       allow(script_class).to receive(:start_child).with('child').and_return(child)
-      expect(child).to receive(:join).and_return(child)
+      expect(child).to receive(:join).with(nil).and_return(child)
 
       expect(script_class.run_child('child')).to equal(child)
+    end
+
+    it 'applies an explicit Script.run_child timeout' do
+      child = build_script('child')
+      allow(script_class).to receive(:start_child).with('child').and_return(child)
+      expect(child).to receive(:join).with(0.25).and_return(nil)
+
+      expect(script_class.run_child('child', :timeout => 0.25)).to be_nil
     end
 
     it 'marks the current script as a daemon' do
@@ -973,9 +981,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script).not_to be_running
     end
 
-    it 'bounds an implicit join once teardown begins' do
-      stub_const('Lich::Common::Script::SCRIPT_CLEANUP_TIMEOUT', 0.03)
-      stub_const('Lich::Common::Script::JOIN_WAIT_INTERVAL', 0.005)
+    it 'waits indefinitely for teardown when no timeout is given' do
       worker_ready = Queue.new
       worker_cleanup_entered = Queue.new
       release_worker_cleanup = Queue.new
@@ -992,11 +998,12 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       script.kill
       worker_cleanup_entered.pop
+      waiter = Thread.new { script.join }
 
-      expect(script.join).to be_nil
+      expect(waiter.join(0.05)).to be_nil
 
       release_worker_cleanup << true
-      expect(script.join(1)).to equal(script)
+      expect(waiter.value).to equal(script)
     end
 
     it 'keeps shutdown snapshots free of teardown side effects' do

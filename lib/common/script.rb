@@ -35,7 +35,6 @@ module Lich
       RAW_THREAD_GROUP_LIST = ThreadGroup.instance_method(:list)
       RAW_THREAD_GROUP_ENCLOSE = ThreadGroup.instance_method(:enclose)
       RAW_THREAD_GROUP_ENCLOSED = ThreadGroup.instance_method(:enclosed?)
-      SCRIPT_CLEANUP_TIMEOUT = 1.0
       JOIN_WAIT_INTERVAL = 0.05
 
       # Lock order:
@@ -867,11 +866,13 @@ module Lich
 
       # Starts a child script and waits for it to finish.
       #
-      # @return [Script, nil] the completed child, or nil when startup fails
-      def Script.run_child(*args)
+      # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
+      # @return [Script, nil] the completed child, or nil on startup failure or timeout
+      def Script.run_child(*args, timeout: nil)
         child = Script.start_child(*args)
-        child&.join
-        child
+        return nil unless child
+
+        child.join(timeout) ? child : nil
       end
 
       # Marks the current script as hidden and protected from kill-all and
@@ -1613,7 +1614,9 @@ module Lich
       # A script worker cannot join its own script because that worker must
       # return before the script can complete.
       #
-      # @param timeout [Numeric, nil] maximum seconds to wait
+      # Without a timeout, this method waits indefinitely.
+      #
+      # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
       # @return [Script, nil] this script, or nil when the timeout expires
       # @raise [ThreadError] when called by one of this script's workers
       def join(timeout = nil)
@@ -1623,14 +1626,12 @@ module Lich
         end
 
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
-        cleanup_deadline = nil
         loop do
           __refresh_deferred_stop
-          running, stopping, cleanup_complete, current_worker = Script.__send__(:__registry_synchronize) do
+          running, cleanup_complete, current_worker = Script.__send__(:__registry_synchronize) do
             lifecycle_mutex.synchronize do
               [
                 @@running.include?(self),
-                @kill_requested == true,
                 @cleanup_complete == true,
                 Array(@stopping_threads).include?(Thread.current)
               ]
@@ -1639,9 +1640,7 @@ module Lich
           return self if !running && (cleanup_complete || current_worker)
 
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          cleanup_deadline ||= now + SCRIPT_CLEANUP_TIMEOUT if stopping
-          effective_deadline = [deadline, cleanup_deadline].compact.min
-          remaining = effective_deadline - now if effective_deadline
+          remaining = deadline - now if deadline
           return nil if remaining && remaining <= 0
 
           wait_for = remaining ? [remaining, JOIN_WAIT_INTERVAL].min : JOIN_WAIT_INTERVAL
