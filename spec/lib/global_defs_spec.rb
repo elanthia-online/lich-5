@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+require 'rbconfig'
 require_relative '../spec_helper'
 
 # NOTE: We intentionally do NOT `require 'global_defs.rb'` here.
@@ -395,21 +397,64 @@ RSpec.describe 'global_defs.rb sentinel constants' do
 end
 
 RSpec.describe 'global_defs.rb built-in script commands' do
-  let(:source) { File.read(File.join(LIB_DIR, 'global_defs.rb')) }
+  def run_global_defs_probe(probe)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+
+      $lich_char_regex = /;/
+      $clean_lich_char = ';'
+      Object.const_set(:LICH_VERSION, 'test') unless Object.const_defined?(:LICH_VERSION)
+      Lich.const_set(:MAX_DEBUG_LOGS_DEFAULT, 10) unless Lich.const_defined?(:MAX_DEBUG_LOGS_DEFAULT)
+      XMLData.define_singleton_method(:game) { '' }
+      UpstreamHook.define_singleton_method(:run) { |line| line }
+      Object.send(:define_method, :respond) { |message = nil| puts("RESPOND:\#{message}") }
+      Object.send(:define_method, :new_upstream) { |_line| nil }
+
+      #{probe}
+    RUBY
+    Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+  end
 
   it 'routes kd through forced script teardown' do
-    expect(source).to match(/elsif cmd == 'kd'\s+respond\(.+Script\.kill_all\(:force => true\)/m)
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      Script.define_singleton_method(:kill_all) do |force: false, context: :runtime|
+        puts "KILL_ALL force=#{force} context=#{context}"
+        1
+      end
+      do_client(';kd')
+    RUBY
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('KILL_ALL force=true context=runtime')
   end
 
   it 'documents kd in built-in help' do
-    expect(source).to include("respond \"   \#{$clean_lich_char}kd")
-    expect(source).to include('including protected and hidden scripts')
+    stdout, stderr, status = run_global_defs_probe("do_client(';help')")
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('RESPOND:   ;kd')
+    expect(stdout).to include('including protected and hidden scripts')
   end
 
   it 'uses the atomic Script#clear operation' do
-    clear_definition = source[/^def clear\b.*?^end$/m]
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      script = Object.new
+      script.define_singleton_method(:clear) do
+        puts 'SCRIPT_CLEAR'
+        %w[one two]
+      end
+      Script.define_singleton_method(:current) { script }
+      puts "RESULT=#{clear.inspect}"
+    RUBY
 
-    expect(clear_definition).to include('script.clear')
-    expect(clear_definition).not_to include('downstream_buffer.dup')
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('SCRIPT_CLEAR')
+    expect(stdout).to include('RESULT=["one", "two"]')
   end
 end
