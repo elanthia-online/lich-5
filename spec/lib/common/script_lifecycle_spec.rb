@@ -29,6 +29,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@stopping, [])
     script_class.class_variable_set(:@@startup_reservations, {})
     script_class.class_variable_set(:@@completed_named_starts, {})
+    script_class.class_variable_set(:@@completed_start_waiters, Hash.new(0))
     script_class.class_variable_set(:@@shutdown_started, false)
     script_class.class_variable_set(:@@loaded_libraries, Set.new)
     script_class.class_variable_set(:@@loading_libraries, {})
@@ -188,6 +189,32 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'rejects a non-forced start while the same name is still stopping' do
+      Dir.mktmpdir('script-stopping-start') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'ordinary.lic'), "# quiet\nnil\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        stopping = build_script('ordinary')
+        script_class.class_variable_set(:@@stopping, [stopping])
+
+        expect(script_class.start('ordinary')).to be_nil
+        expect(script_class.list).to be_empty
+      end
+    end
+
+    it 'retains an unclaimed completed library start only weakly' do
+      reservation = Object.new
+      library = build_script('libunused')
+      script_class.__send__(:__begin_start, reservation, 'libunused', :force => true)
+
+      script_class.__send__(:__finish_start, reservation, library)
+
+      completed = script_class.class_variable_get(:@@completed_named_starts)
+      expect(completed.fetch('libunused')).to be_a(WeakRef)
+      expect(completed.fetch('libunused').__getobj__).to equal(library)
+    end
+
     it 'records a missing-label jump as unsuccessful execution' do
       Dir.mktmpdir('script-label-error') do |root|
         custom_dir = File.join(root, 'custom')
@@ -311,13 +338,26 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
 
     it 'registers a named child through Script.start_child' do
-      parent = build_script('parent')
-      child = build_script('child')
-      allow(script_class).to receive(:current).and_return(parent)
-      allow(script_class).to receive(:start).with('child').and_return(child)
-      expect(parent).to receive(:register_child).with(child).and_return(child)
+      Dir.mktmpdir('script-facade-child') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'child.lic'), "# quiet\nSCRIPT_FACADE_RELEASE.pop\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        stub_const('SCRIPT_FACADE_RELEASE', Queue.new)
+        parent = build_script('parent')
+        script_class.class_variable_set(:@@running, [parent])
+        parent.thread_group.add(Thread.current)
 
-      expect(script_class.start_child('child')).to equal(child)
+        child = script_class.start_child('child')
+        ThreadGroup::Default.add(Thread.current)
+
+        expect(parent.child_scripts).to contain_exactly(child)
+        SCRIPT_FACADE_RELEASE << true
+        expect(child.join(1)).to equal(child)
+        expect(parent.child_scripts).to be_empty
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
     end
 
     it 'waits for a child through Script.run_child' do

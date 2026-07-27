@@ -7,6 +7,7 @@
 # also, don't put 'untrusted' in the name of the untrusted binding; it shows up in error messages and makes people think the error is caused by not trusting the script
 #
 
+require 'weakref'
 require_relative 'script_death'
 
 module Lich
@@ -378,6 +379,7 @@ module Lich
       @@startup_condition = ConditionVariable.new
       @@startup_reservations = {}
       @@completed_named_starts = {}
+      @@completed_start_waiters = Hash.new(0)
       @@shutdown_started = false
       @@library_mutex = Mutex.new
       @@loaded_libraries = Set.new
@@ -670,9 +672,9 @@ module Lich
         @@startup_mutex.synchronize do
           return :shutdown if @@shutdown_started
           if normalized_name && !force
-            running = @@running.any? { |script| script.name.casecmp?(normalized_name) }
+            active = (@@running + @@stopping).any? { |script| script.name.casecmp?(normalized_name) }
             starting = @@startup_reservations.value?(normalized_name)
-            return :duplicate if running || starting
+            return :duplicate if active || starting
           end
 
           @@startup_reservations[reservation] = normalized_name
@@ -686,7 +688,14 @@ module Lich
           name = @@startup_reservations.delete(reservation)
           if name&.start_with?('lib')
             @@completed_named_starts.delete(name)
-            @@completed_named_starts[name] = script if script
+            if script
+              @@completed_named_starts[name] =
+                if @@completed_start_waiters[name].positive?
+                  script
+                else
+                  WeakRef.new(script)
+                end
+            end
           end
           @@startup_condition.broadcast
         end
@@ -705,10 +714,19 @@ module Lich
       def Script.__take_completed_start(name)
         normalized_name = name.downcase
         @@startup_mutex.synchronize do
-          while @@startup_reservations.value?(normalized_name)
-            @@startup_condition.wait(@@startup_mutex)
+          @@completed_start_waiters[normalized_name] += 1
+          begin
+            while @@startup_reservations.value?(normalized_name)
+              @@startup_condition.wait(@@startup_mutex)
+            end
+            __completed_start_value(@@completed_named_starts[normalized_name])
+          ensure
+            @@completed_start_waiters[normalized_name] -= 1
+            if @@completed_start_waiters[normalized_name].zero?
+              @@completed_start_waiters.delete(normalized_name)
+              @@completed_named_starts.delete(normalized_name)
+            end
           end
-          @@completed_named_starts.delete(normalized_name)
         end
       end
       private_class_method :__take_completed_start
@@ -716,10 +734,18 @@ module Lich
       def Script.__discard_completed_start(name, script)
         normalized_name = name.downcase
         @@startup_mutex.synchronize do
-          @@completed_named_starts.delete(normalized_name) if @@completed_named_starts[normalized_name].equal?(script)
+          completed = __completed_start_value(@@completed_named_starts[normalized_name])
+          @@completed_named_starts.delete(normalized_name) if completed.equal?(script)
         end
       end
       private_class_method :__discard_completed_start
+
+      def Script.__completed_start_value(entry)
+        entry.is_a?(WeakRef) ? entry.__getobj__ : entry
+      rescue WeakRef::RefError
+        nil
+      end
+      private_class_method :__completed_start_value
 
       # Starts an anonymous child script owned by the current script.
       #
