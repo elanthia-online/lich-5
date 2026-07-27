@@ -333,6 +333,7 @@ module Lich
       KILL_METRICS_FEATURE_FLAG = :script_kill_metrics
 
       class JumpError < StandardError; end
+      class LibraryJoinTimeout < LoadError; end
       JUMP = JumpError.exception('JUMP')
       JUMP_ERROR = JumpError.exception('JUMP_ERROR')
 
@@ -871,10 +872,11 @@ module Lich
       # Loads a script library once and waits for its execution to finish.
       #
       # @param library [String, Symbol] library name, with or without the lib prefix
+      # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
       # @return [true]
       # @raise [ArgumentError] when the library name is empty
       # @raise [LoadError] when the library cannot be found or started
-      def Script.loadlib(library)
+      def Script.loadlib(library, timeout: nil)
         library_name = library.to_s.downcase
         library_name = "lib#{library_name}" unless library_name.start_with?('lib')
         raise ArgumentError, 'library name cannot be empty' if library_name == 'lib'
@@ -886,9 +888,10 @@ module Lich
         loading = @@library_mutex.synchronize { @@loading_libraries[library_name] }
         if loading
           begin
-            __join_library(library_name, loading)
-            __validate_library_completion(library_name, loading)
-            return true
+            __join_library(library_name, loading, timeout)
+            return __commit_library_completion(library_name, loading)
+          rescue LibraryJoinTimeout
+            raise
           rescue LoadError => e
             raise if e.message.start_with?('cyclic script library dependency:')
 
@@ -936,7 +939,9 @@ module Lich
         return true if already_loaded
 
         begin
-          __join_library(library_name, script)
+          __join_library(library_name, script, timeout)
+        rescue LibraryJoinTimeout
+          raise
         rescue ScriptError, StandardError
           if owns_loading
             @@library_mutex.synchronize do
@@ -946,21 +951,7 @@ module Lich
           raise
         end
 
-        error = script.exit_error
-        completed = script.completed_successfully?
-        @@library_mutex.synchronize do
-          if @@loading_libraries[library_name].equal?(script)
-            @@loading_libraries.delete(library_name)
-            if error || !completed
-              @@loaded_libraries.delete(library_name)
-            else
-              @@loaded_libraries.add(library_name)
-            end
-          end
-        end
-        __validate_library_completion(library_name, script)
-
-        true
+        __commit_library_completion(library_name, script)
       end
 
       # Runs each loaded script library again using a stable registry snapshot.
@@ -986,7 +977,7 @@ module Lich
         @@library_mutex.synchronize { @@loaded_libraries.dup }
       end
 
-      def Script.__join_library(library_name, script)
+      def Script.__join_library(library_name, script, timeout = nil)
         caller_script = Script.current
         @@library_mutex.synchronize do
           if caller_script
@@ -1000,8 +991,8 @@ module Lich
           end
         end
 
-        joined = script.join
-        raise LoadError, "script library teardown timed out: #{library_name}" unless joined
+        joined = script.join(timeout)
+        raise LibraryJoinTimeout, "script library wait timed out: #{library_name}" unless joined
       ensure
         if caller_script
           @@library_mutex.synchronize do
@@ -1016,6 +1007,24 @@ module Lich
         end
       end
       private_class_method :__join_library
+
+      def Script.__commit_library_completion(library_name, script)
+        error = script.exit_error
+        completed = script.completed_successfully?
+        @@library_mutex.synchronize do
+          if @@loading_libraries[library_name].equal?(script)
+            @@loading_libraries.delete(library_name)
+            if error || !completed
+              @@loaded_libraries.delete(library_name)
+            else
+              @@loaded_libraries.add(library_name)
+            end
+          end
+        end
+        __validate_library_completion(library_name, script)
+        true
+      end
+      private_class_method :__commit_library_completion
 
       def Script.__validate_library_completion(library_name, script)
         error = script.exit_error

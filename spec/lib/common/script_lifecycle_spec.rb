@@ -1411,19 +1411,26 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(mutex_locked_during_start).to be(false)
     end
 
-    it 'reports a library teardown timeout as a load failure' do
+    it 'keeps a timed-out generation as the single-flight owner for retry' do
       timed_out_script = instance_double(
         script_class,
         :name                    => 'libutil',
-        :join                    => nil,
         :exit_error              => nil,
-        :completed_successfully? => false
+        :completed_successfully? => true
       )
+      allow(timed_out_script).to receive(:join).with(0.01).and_return(nil, timed_out_script)
       allow(script_class).to receive(:start).with('libutil', { :force => true }).and_return(timed_out_script)
 
-      expect { script_class.loadlib('util') }.to raise_error(LoadError, /teardown timed out/)
+      expect {
+        script_class.loadlib('util', :timeout => 0.01)
+      }.to raise_error(script_class::LibraryJoinTimeout, /wait timed out/)
       expect(script_class.libs).to be_empty
+      expect(script_class.class_variable_get(:@@loading_libraries)).to eq('libutil' => timed_out_script)
+
+      expect(script_class.loadlib('util', :timeout => 0.01)).to be(true)
+      expect(script_class).to have_received(:start).with('libutil', { :force => true }).once
       expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+      expect(script_class.libs).to include('libutil')
     end
 
     it 'adopts an admitted plain start across concurrent duplicate callers' do
@@ -1707,6 +1714,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       allow(failed_attempt).to receive(:join) do
         first_joined << true
         join_mutex.synchronize { join_condition.wait(join_mutex) until first_released }
+        failed_attempt
       end
       allow(script_class).to receive(:start).with('libutil', { :force => true }).and_return(failed_attempt, successful_attempt)
 
