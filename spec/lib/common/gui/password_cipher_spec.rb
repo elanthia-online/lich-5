@@ -29,11 +29,18 @@ RSpec.describe Lich::Common::GUI::PasswordCipher do
         expect(described_class.decrypt(encrypted2, mode: :standard, account_name: account_name)).to eq(password)
       end
 
-      it 'fails to decrypt with wrong account name' do
+      it 'never recovers the password with wrong account name' do
         encrypted = described_class.encrypt(password, mode: :standard, account_name: account_name)
-        expect do
-          described_class.decrypt(encrypted, mode: :standard, account_name: 'WrongAccount')
-        end.to raise_error(Lich::Common::GUI::PasswordCipher::DecryptionError)
+        # AES-CBC with the wrong key usually raises on invalid padding, but
+        # roughly 1 in 256 garbage plaintexts carries coincidentally valid
+        # padding and decrypts without error. The cipher only guarantees the
+        # original password never comes back, so accept either outcome.
+        begin
+          result = described_class.decrypt(encrypted, mode: :standard, account_name: 'WrongAccount')
+          expect(result).not_to eq(password)
+        rescue Lich::Common::GUI::PasswordCipher::DecryptionError
+          # the overwhelmingly common outcome
+        end
       end
     end
 
@@ -57,11 +64,15 @@ RSpec.describe Lich::Common::GUI::PasswordCipher do
         expect(described_class.decrypt(encrypted2, mode: :enhanced, master_password: master_password)).to eq(password)
       end
 
-      it 'fails to decrypt with wrong master password' do
+      it 'never recovers the password with wrong master password' do
         encrypted = described_class.encrypt(password, mode: :enhanced, master_password: master_password)
-        expect do
-          described_class.decrypt(encrypted, mode: :enhanced, master_password: 'WrongMasterPass')
-        end.to raise_error(Lich::Common::GUI::PasswordCipher::DecryptionError)
+        # Same 1-in-256 valid-padding caveat as the wrong-account-name example.
+        begin
+          result = described_class.decrypt(encrypted, mode: :enhanced, master_password: 'WrongMasterPass')
+          expect(result).not_to eq(password)
+        rescue Lich::Common::GUI::PasswordCipher::DecryptionError
+          # the overwhelmingly common outcome
+        end
       end
     end
 
