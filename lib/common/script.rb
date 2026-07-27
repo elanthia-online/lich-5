@@ -552,10 +552,18 @@ module Lich
         @@running.dup
       end
 
+      # Starts an anonymous child script owned by the current script.
+      #
+      # @yield block executed by the new script
+      # @return [SubScript] the started anonymous script
       def Script.subscript(&block)
         SubScript.start(:parent => Script.current, :quiet => true, &block)
       end
 
+      # Starts a named script and registers it as a child of the current script.
+      # Outside a script worker, this behaves like {Script.start}.
+      #
+      # @return [Script, nil] the started script, or nil when startup fails
       def Script.start_child(*args)
         parent = Script.current
         child = Script.start(*args)
@@ -564,12 +572,19 @@ module Lich
         parent.register_child(child)
       end
 
+      # Starts a child script and waits for it to finish.
+      #
+      # @return [Script, nil] the completed child, or nil when startup fails
       def Script.run_child(*args)
         child = Script.start_child(*args)
         child&.join
         child
       end
 
+      # Marks the current script as hidden and protected from kill-all and
+      # pause-all commands.
+      #
+      # @return [Script, false] the current script, or false outside a script
       def Script.daemon_me
         return false unless (script = Script.current)
 
@@ -598,6 +613,12 @@ module Lich
         end
       end
 
+      # Loads a script library once and waits for its execution to finish.
+      #
+      # @param library [String, Symbol] library name, with or without the lib prefix
+      # @return [true]
+      # @raise [ArgumentError] when the library name is empty
+      # @raise [LoadError] when the library cannot be found or started
       def Script.loadlib(library)
         library_name = library.to_s.downcase
         library_name = "lib#{library_name}" unless library_name.start_with?('lib')
@@ -622,11 +643,17 @@ module Lich
         true
       end
 
+      # Runs each loaded script library again using a stable registry snapshot.
+      #
+      # @return [true]
       def Script.reloadlibs
         @@library_mutex.synchronize { @@loaded_libraries.dup }.each { |library| Script.run(library) }
         true
       end
 
+      # Returns a snapshot of loaded script library names.
+      #
+      # @return [Set<String>]
       def Script.libs
         @@library_mutex.synchronize { @@loaded_libraries.dup }
       end
@@ -684,6 +711,11 @@ module Lich
         end
       end
 
+      # Requests teardown for scripts eligible for kill-all.
+      #
+      # @param force [Boolean] include hidden and kill-all-protected scripts
+      # @param context [Symbol] lifecycle context forwarded to {Script#kill}
+      # @return [Integer] number of scripts selected
       def Script.kill_all(force: false, context: :runtime)
         unless VALID_KILL_CONTEXTS.include?(context)
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
@@ -1082,15 +1114,33 @@ module Lich
         @name
       end
 
+      # Reports whether this script remains in the running registry.
+      #
+      # @return [Boolean]
       def running?
         @@running.include?(self)
       end
 
+      # Reports whether teardown has been requested.
+      #
+      # @return [Boolean]
       def stopping?
         @kill_requested == true
       end
 
+      # Waits for complete script teardown.
+      #
+      # A script worker cannot join its own script because that worker must
+      # return before the script can complete.
+      #
+      # @param timeout [Numeric, nil] maximum seconds to wait
+      # @return [Script, nil] this script, or nil when the timeout expires
+      # @raise [ThreadError] when called by one of this script's workers
       def join(timeout = nil)
+        if running? && has_thread?(Thread.current)
+          raise ThreadError, 'cannot join the current script from one of its workers'
+        end
+
         deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
         @killer_mutex.synchronize do
           @stopped_condition ||= ConditionVariable.new
@@ -1104,11 +1154,20 @@ module Lich
         self
       end
 
+      # Requests teardown and waits for completion.
+      #
+      # @param context [Symbol] lifecycle context forwarded to {#kill}
+      # @param timeout [Numeric, nil] maximum seconds to wait
+      # @return [Script, nil] this script, or nil when the timeout expires
       def kill_sync(context: :runtime, timeout: nil)
         kill(context: context) if running?
         join(timeout)
       end
 
+      # Adopts a script as a child of this script.
+      #
+      # @param script [Script] script to adopt
+      # @return [Script, nil] the child, or nil when child admission is closed
       def register_child(script)
         return nil unless script
 
@@ -1137,11 +1196,18 @@ module Lich
         script
       end
 
+      # Removes a script from this script's children.
+      #
+      # @param script [Script] child to remove
+      # @return [Script] the removed child
       def unregister_child(script)
         child_scripts_mutex.synchronize { @child_scripts&.delete(script) }
         script
       end
 
+      # Returns a snapshot of this script's children.
+      #
+      # @return [Array<Script>]
       def child_scripts
         child_scripts_mutex.synchronize { Array(@child_scripts).dup }
       end
@@ -1440,6 +1506,12 @@ module Lich
     class SubScript < Script
       @@name_subscript_mutex = Mutex.new
 
+      # Starts an anonymous script backed by a Ruby block.
+      #
+      # @param parent [Script, nil] owning script
+      # @param quiet [Boolean] suppress lifecycle messages
+      # @yield block executed by the new script
+      # @return [SubScript, false] the new script, or false when adoption fails
       def SubScript.start(parent: Script.current, quiet: true, &block)
         raise ArgumentError, 'a block is required' unless block
 

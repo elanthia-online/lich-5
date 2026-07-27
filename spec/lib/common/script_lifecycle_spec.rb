@@ -34,6 +34,48 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@running, [])
   end
 
+  describe 'Script facade' do
+    it 'starts an anonymous child through Script.subscript' do
+      parent = build_script('parent')
+      child = build_script('child')
+      block = proc {}
+      allow(script_class).to receive(:current).and_return(parent)
+      expect(subscript_class).to receive(:start)
+        .with(:parent => parent, :quiet => true)
+        .and_return(child)
+
+      expect(script_class.subscript(&block)).to equal(child)
+    end
+
+    it 'registers a named child through Script.start_child' do
+      parent = build_script('parent')
+      child = build_script('child')
+      allow(script_class).to receive(:current).and_return(parent)
+      allow(script_class).to receive(:start).with('child').and_return(child)
+      expect(parent).to receive(:register_child).with(child).and_return(child)
+
+      expect(script_class.start_child('child')).to equal(child)
+    end
+
+    it 'waits for a child through Script.run_child' do
+      child = build_script('child')
+      allow(script_class).to receive(:start_child).with('child').and_return(child)
+      expect(child).to receive(:join).and_return(child)
+
+      expect(script_class.run_child('child')).to equal(child)
+    end
+
+    it 'marks the current script as a daemon' do
+      script = build_script('daemon')
+      allow(script_class).to receive(:current).and_return(script)
+
+      expect(script_class.daemon_me).to equal(script)
+      expect(script.hidden).to be(true)
+      expect(script.no_kill_all).to be(true)
+      expect(script.no_pause_all).to be(true)
+    end
+  end
+
   describe 'SubScript' do
     it 'runs a block with its own Script.current identity' do
       observed = Queue.new
@@ -116,6 +158,26 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.class_variable_set(:@@running, [script])
 
       expect(script.join(0.01)).to be_nil
+    end
+
+    it 'rejects joining from one of the script workers' do
+      script = build_script('self-join')
+      script_class.class_variable_set(:@@running, [script])
+      result = Queue.new
+      start = Queue.new
+      worker = Thread.new do
+        start.pop
+        begin
+          script.join
+        rescue ThreadError => error
+          result << error
+        end
+      end
+      script.thread_group.add(worker)
+      start << true
+
+      expect(worker.join(1)).to equal(worker)
+      expect(result.pop(true).message).to match(/current script/)
     end
   end
 
