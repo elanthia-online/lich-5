@@ -554,8 +554,10 @@ module Lich
 
       # Starts an anonymous child script owned by the current script.
       #
-      # @yield block executed by the new script
-      # @return [SubScript] the started anonymous script
+      # @yield required block executed by the new script
+      # @return [SubScript, false] the started anonymous script, or false when
+      #   startup or parent adoption fails
+      # @raise [ArgumentError] when no block is given
       def Script.subscript(&block)
         SubScript.start(:parent => Script.current, :quiet => true, &block)
       end

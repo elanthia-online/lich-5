@@ -47,6 +47,16 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.subscript(&block)).to equal(child)
     end
 
+    it 'returns false when anonymous child startup fails' do
+      allow(subscript_class).to receive(:start).and_return(false)
+
+      expect(script_class.subscript {}).to be(false)
+    end
+
+    it 'requires a block when starting an anonymous child' do
+      expect { script_class.subscript }.to raise_error(ArgumentError, /block is required/)
+    end
+
     it 'registers a named child through Script.start_child' do
       parent = build_script('parent')
       child = build_script('child')
