@@ -533,7 +533,7 @@ RSpec.describe Lich::GemCheck do
       body = described_class.build_alert_body([], nil)
       expect(body).to include(described_class::UNIX_MESSAGE)
       expect(body).not_to include('Missing gems:')
-      expect(body).not_to include('Bundler reported:')
+      expect(body).not_to include('Underlying error:')
     end
 
     it 'appends a bulleted list when gems are provided' do
@@ -543,18 +543,19 @@ RSpec.describe Lich::GemCheck do
       expect(body).to include('- sqlite3')
     end
 
-    it 'falls back to the Bundler error when no gems were detected' do
+    it 'shows the underlying error when no gems were detected' do
       error = double('error', message: "Could not find gem 'transitive' in locally installed gems.")
       body = described_class.build_alert_body([], error)
-      expect(body).to include('Bundler reported:')
+      expect(body).to include('Underlying error:')
       expect(body).to include("Could not find gem 'transitive'")
     end
 
-    it 'prefers the detected list over the Bundler error when both are present' do
-      error = double('error', message: 'some bundler message')
-      body = described_class.build_alert_body(['ox'], error)
+    it 'shows both the detected list and the underlying error when both are present' do
+      error = double('error', message: 'cannot load such file -- glib2.so')
+      body = described_class.build_alert_body(['gtk3'], error)
       expect(body).to include('Missing gems:')
-      expect(body).not_to include('Bundler reported:')
+      expect(body).to include('Underlying error:')
+      expect(body).to include('cannot load such file -- glib2.so')
     end
 
     it 'points at the log file when TEMP_DIR is defined' do
