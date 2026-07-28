@@ -702,8 +702,8 @@ module Lich
 
             @@startup_condition.wait(@@startup_mutex, JOIN_WAIT_INTERVAL)
           end
-          shutdown_scripts
         end
+        shutdown_scripts
       end
 
       def Script.__begin_start(reservation, name = nil, force: true)
@@ -1798,9 +1798,12 @@ module Lich
         previous_group_owner = nil
         moved_to_cleanup_group = false
         move_allowed = previous_thread_group.equal?(ThreadGroup::Default)
-        unless move_allowed || previous_cleanup_script
+        if previous_cleanup_script
+          previous_group_owner = previous_cleanup_script
+          move_allowed = previous_group_owner.__send__(:__borrow_worker, Thread.current)
+        elsif !move_allowed
           previous_group_owner = Script.__send__(:__script_owning_thread_group, previous_thread_group)
-          move_allowed = previous_group_owner&.__send__(:__borrow_worker, Thread.current, cleanup_thread_group)
+          move_allowed = previous_group_owner&.__send__(:__borrow_worker, Thread.current)
         end
         if move_allowed
           begin
@@ -1808,7 +1811,6 @@ module Lich
             moved_to_cleanup_group = true
           rescue ThreadError
             previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
-            previous_group_owner&.__send__(:__return_borrowed_group, cleanup_thread_group)
             nil
           end
         end
@@ -1873,12 +1875,12 @@ module Lich
             begin
               RAW_THREAD_GROUP_ADD.bind_call(previous_thread_group, Thread.current)
               previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
-              previous_group_owner&.__send__(:__return_borrowed_group, cleanup_thread_group)
             rescue ThreadError
               begin
                 borrowed_group = ThreadGroup.new
                 previous_group_owner&.__send__(:__adopt_borrowed_group, borrowed_group)
                 RAW_THREAD_GROUP_ADD.bind_call(borrowed_group, Thread.current)
+                previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
               rescue ThreadError
                 nil
               end
@@ -2069,11 +2071,13 @@ module Lich
               __raw_add_worker(thread)
               true
             else
-              @stopping_threads = (Array(@stopping_threads) + [thread]).uniq
-              unless @worker_admission_closed
-                @worker_registrations ||= Set.new
-                @worker_registrations.add(registration)
-                tracked_rejection = true
+              unless thread == Thread.current
+                @stopping_threads = (Array(@stopping_threads) + [thread]).uniq
+                unless @worker_admission_closed
+                  @worker_registrations ||= Set.new
+                  @worker_registrations.add(registration)
+                  tracked_rejection = true
+                end
               end
               false
             end
@@ -2082,7 +2086,7 @@ module Lich
         accepted
       ensure
         begin
-          unless accepted
+          unless accepted || thread == Thread.current
             begin
               thread.kill
               thread.join unless thread == Thread.current
@@ -2123,14 +2127,12 @@ module Lich
       end
       private :__owns_public_thread_group?
 
-      def __borrow_worker(thread, group)
+      def __borrow_worker(thread)
         lifecycle_mutex.synchronize do
-          return false if @kill_requested || @cleanup_complete
+          return false if @cleanup_complete
 
           @borrowed_workers ||= Set.new
           @borrowed_workers.add(thread)
-          @borrowed_thread_groups ||= Set.new
-          @borrowed_thread_groups.add(group)
           true
         end
       end
@@ -2152,14 +2154,6 @@ module Lich
         end
       end
       private :__adopt_borrowed_group
-
-      def __return_borrowed_group(group)
-        lifecycle_mutex.synchronize do
-          @borrowed_thread_groups&.delete(group)
-          @stopped_condition&.broadcast
-        end
-      end
-      private :__return_borrowed_group
 
       def __attach_startup_worker(thread)
         __raw_add_worker(thread)

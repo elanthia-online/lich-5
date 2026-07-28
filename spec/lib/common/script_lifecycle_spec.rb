@@ -148,6 +148,18 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'releases startup coordination before taking the shutdown snapshot' do
+      startup_mutex = script_class.class_variable_get(:@@startup_mutex)
+      startup_mutex_owned = nil
+      allow(script_class).to receive(:shutdown_scripts) do
+        startup_mutex_owned = startup_mutex.owned?
+        []
+      end
+
+      expect(script_class.begin_shutdown).to be_empty
+      expect(startup_mutex_owned).to be(false)
+    end
+
     it 'rejects direct constructor publication after shutdown begins' do
       Dir.mktmpdir('script-direct-shutdown') do |root|
         custom_dir = File.join(root, 'custom')
@@ -1474,6 +1486,47 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script.join(1)).to equal(script)
     end
 
+    it 'assigns descendants from nested cleanup to the inner script' do
+      outer_script = build_script('outer-cleanup')
+      inner_script = build_script('inner-cleanup')
+      script_class.class_variable_set(:@@running, [outer_script, inner_script])
+      descendant_ready = Queue.new
+      descendant_owner = Queue.new
+      descendant_cleanup_entered = Queue.new
+      release_descendant_cleanup = Queue.new
+      inner_completed = Queue.new
+      inner_script.at_exit do
+        Thread.new do
+          descendant_owner << script_class.current
+          descendant_ready << true
+          begin
+            Queue.new.pop
+          ensure
+            descendant_cleanup_entered << true
+            release_descendant_cleanup.pop
+          end
+        end
+        descendant_ready.pop
+      end
+      outer_script.at_exit do
+        inner_script.kill(:context => :shutdown, :async => false)
+        inner_completed << inner_script.__send__(:__cleanup_complete?)
+      end
+
+      outer_script.kill(:context => :shutdown, :async => false)
+
+      expect(descendant_owner.pop).to equal(inner_script)
+      expect(inner_completed.pop).to be(false)
+      descendant_cleanup_entered.pop
+      release_descendant_cleanup << true
+      progress_shutdown_until(inner_script)
+      progress_shutdown_until(outer_script)
+      expect(inner_script.join(1)).to equal(inner_script)
+      expect(outer_script.join(1)).to equal(outer_script)
+    ensure
+      release_descendant_cleanup << true if defined?(release_descendant_cleanup) && release_descendant_cleanup
+    end
+
     it 'does not detach an inline cleanup caller when its group becomes enclosed' do
       caller_script = build_script('caller')
       target_script = build_script('target')
@@ -1677,6 +1730,17 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     ensure
       worker&.kill
       worker&.join
+    end
+
+    it 'rejects self-registration without stopping the caller' do
+      script = build_script('self-registration')
+      script_class.class_variable_set(:@@running, [script])
+      script.instance_variable_set(:@kill_requested, true)
+
+      expect { script.thread_group.add(Thread.current) }.to raise_error(ThreadError, /stopping script/)
+      expect(Thread.current).to be_alive
+      stopping_threads = Object.instance_method(:instance_variable_get).bind_call(script, :@stopping_threads)
+      expect(Array(stopping_threads)).not_to include(Thread.current)
     end
 
     it 'runs teardown callbacks after the public thread group is enclosed' do
