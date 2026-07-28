@@ -31,8 +31,9 @@ module Lich
       # Regex for extracting the spelled-out remaining duration from FOCUSing a
       # moon weapon, e.g. "You judge that the moonblade will last for roughly
       # twenty-nine roisaen." The count is captured as words (a compound like
-      # "twenty-nine" or a single word like "five"). One roisaen == 60 seconds.
-      MOON_FOCUS_DURATION_REGEX = /will last for roughly (?<count>[a-z][a-z-]*) roisaen/i.freeze
+      # "twenty-nine" or a single word like "five"). The unit is "roisaen"
+      # (plural) or "roisan" (singular, i.e. one); one roisaen == 60 seconds.
+      MOON_FOCUS_DURATION_REGEX = /will last for roughly (?<count>[a-z][a-z-]*) roisae?n/i.freeze
 
       # Maps divination tool keywords to their use verb.
       DIV_TOOL_VERBS = {

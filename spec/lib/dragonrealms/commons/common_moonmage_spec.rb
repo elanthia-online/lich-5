@@ -414,6 +414,15 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       expect(described_class.moon_weapon_duration).to eq(41)
     end
 
+    it 'parses the singular unit "roisan" (one remaining)' do
+      # The game uses "roisan" (singular) for exactly one and "roisaen" (plural)
+      # for more; a moonblade counts down through one before it dissipates.
+      allow(DRC).to receive(:bput)
+        .with('focus my moonblade', anything, anything, anything)
+        .and_return('You judge that the moonblade will last for roughly one roisan.')
+      expect(described_class.moon_weapon_duration).to eq(1)
+    end
+
     it 'falls back to moonstaff when no moonblade is present' do
       allow(DRC).to receive(:bput).with('focus my moonblade', anything, anything, anything).and_return('I could not find')
       allow(DRC).to receive(:bput).with('focus my moonstaff', anything, anything, anything)
