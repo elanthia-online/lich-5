@@ -47,10 +47,12 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.subscript(&block)).to equal(child)
     end
 
-    it 'returns false when anonymous child startup fails' do
+    it 'raises when anonymous child startup is rejected' do
       allow(subscript_class).to receive(:start).and_return(false)
 
-      expect(script_class.subscript {}).to be(false)
+      expect {
+        script_class.subscript {}
+      }.to raise_error(ThreadError, /shutdown or parent teardown/)
     end
 
     it 'requires a block when starting an anonymous child' do
