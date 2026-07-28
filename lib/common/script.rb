@@ -866,8 +866,8 @@ module Lich
       private_class_method :__startup_in_progress_locked?
 
       def Script.__library_handoff_reserved_locked?(name)
-        @@startup_reservations.any? do |_reservation, (reserved_name, _owner, generation)|
-          reserved_name == name && generation.nil?
+        @@startup_reservations.any? do |_reservation, (reserved_name, owner, generation)|
+          reserved_name == name && owner == Thread.current && generation.nil?
         end
       end
       private_class_method :__library_handoff_reserved_locked?
@@ -1040,7 +1040,7 @@ module Lich
             if start_required
               script ||= __peek_completed_start(library_name)
               if script
-                @@library_mutex.synchronize { @@loading_libraries[library_name] = script }
+                @@library_mutex.synchronize { @@loading_libraries[library_name] ||= script }
               end
             end
             published_script = script || @@library_mutex.synchronize { @@loading_libraries[library_name] }
@@ -1113,8 +1113,11 @@ module Lich
             dependencies = @@library_waits[caller_script]
             dependencies = {} unless dependencies.is_a?(Hash)
             @@library_waits[caller_script] = dependencies
-            dependencies[script] ||= Set.new
-            dependencies[script].add(dependency_token)
+            if dependencies.key?(script)
+              dependencies[script].add(dependency_token)
+            else
+              dependencies[script] = Set[dependency_token]
+            end
           end
         end
 
@@ -1647,7 +1650,11 @@ module Lich
           start_cleanup = Script.__send__(:__registry_synchronize) do
             lifecycle_mutex.synchronize do
               next false unless @@running.include?(self)
-              next false if @cleanup_started
+              if @cleanup_started
+                cleanup_active = @cleanup_launch_pending ||
+                                 (@cleanup_thread&.alive? && @cleanup_thread != Thread.current)
+                next false if cleanup_active
+              end
 
               @kill_requested = true
               @cleanup_started = launch_token
@@ -1656,10 +1663,7 @@ module Lich
               true
             end
           end
-          unless start_cleanup
-            __refresh_deferred_stop(:context => context)
-            return @name
-          end
+          return @name unless start_cleanup
 
           if async
             cleanup_thread = Thread.new {
@@ -1694,10 +1698,8 @@ module Lich
             end
           end
           if @cleanup_started.equal?(launch_token)
-            executor_abandoned = !cleanup_owned || !cleanup_thread&.alive? || cleanup_thread == Thread.current
-            __run_kill_cleanup(source: source, context: context, record_metrics: false) if running? && executor_abandoned
             executor_abandoned = __finish_cleanup_launch
-            __run_kill_cleanup(source: source, context: context, record_metrics: false) if running? && executor_abandoned
+            kill(:context => context, :async => true) if running? && executor_abandoned
           end
         end
 

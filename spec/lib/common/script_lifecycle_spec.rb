@@ -1125,6 +1125,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       finish_entered = Queue.new
       release_finish = Queue.new
       first_cleanup = true
+      finish_blocked = false
       allow(script).to receive(:__run_kill_cleanup).and_wrap_original do |method, **kwargs|
         if first_cleanup
           first_cleanup = false
@@ -1135,8 +1136,11 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         end
       end
       allow(script).to receive(:__finish_cleanup_launch).and_wrap_original do |method|
-        finish_entered << true
-        release_finish.pop
+        unless finish_blocked
+          finish_blocked = true
+          finish_entered << true
+          release_finish.pop
+        end
         method.call
       end
 
@@ -1156,6 +1160,46 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     ensure
       release_finish << true if defined?(release_finish) && release_finish
       first_killer&.kill
+    end
+
+    it 'does not run abandoned cleanup recovery on a target worker' do
+      script = build_script('worker-cleanup-retry')
+      script_class.class_variable_set(:@@running, [script])
+      cleanup_entered = Queue.new
+      retry_kill = Queue.new
+      cleanup_executors = Queue.new
+      first_cleanup = true
+      allow(script).to receive(:__run_kill_cleanup).and_wrap_original do |method, **kwargs|
+        if first_cleanup
+          first_cleanup = false
+          cleanup_entered << true
+          Queue.new.pop
+        else
+          cleanup_executors << Thread.current
+          method.call(**kwargs)
+        end
+      end
+      worker = Thread.new do
+        retry_kill.pop
+        script.kill
+      end
+      script.thread_group.add(worker)
+
+      script.kill
+      cleanup_entered.pop
+      cleanup_thread = Object.instance_method(:instance_variable_get).bind_call(script, :@cleanup_thread)
+      cleanup_thread.kill
+      cleanup_thread.join
+      retry_kill << true
+
+      expect(cleanup_executors.pop).not_to equal(worker)
+      expect(script.join(1)).to equal(script)
+      expect(worker).not_to be_alive
+      expect(script).not_to be_running
+    ensure
+      retry_kill << true if defined?(retry_kill) && retry_kill
+      worker&.kill
+      worker&.join
     end
 
     it 'resumes remaining exit callbacks after cleanup executor cancellation' do
@@ -2163,6 +2207,24 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.__send__(:__completed_start_value, completed)).to equal(newer_generation)
     end
 
+    it 'does not retain a forced completion for another thread library reservation' do
+      library_reservation = Object.new
+      script_class.__send__(:__begin_library_start, library_reservation, 'libutil')
+      completed_generation = instance_double(script_class)
+
+      Thread.new do
+        forced_reservation = Object.new
+        script_class.__send__(:__begin_start, forced_reservation, 'libutil', :force => true)
+        script_class.__send__(:__finish_start, forced_reservation, completed_generation)
+      end.join
+
+      expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
+    ensure
+      if defined?(library_reservation) && library_reservation
+        script_class.__send__(:__finish_start, library_reservation)
+      end
+    end
+
     it 'adopts a completed forced generation ahead of an older running generation' do
       old_generation = instance_double(script_class, :name => 'libutil', :running? => false)
       allow(old_generation).to receive(:join) { raise 'older generation should not be joined' }
@@ -2404,6 +2466,34 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       waiter&.kill
     end
 
+    it 'publishes a dependency token atomically with its target edge' do
+      caller_script = build_script('libcaller')
+      target_script = instance_double(script_class, :name => 'libtarget')
+      assignment_entered = Queue.new
+      blocking_dependencies = Class.new(Hash) do
+        define_method(:[]=) do |key, value|
+          super(key, value)
+          assignment_entered << true
+          Queue.new.pop
+        end
+      end.new
+      script_class.class_variable_set(:@@library_waits, caller_script => blocking_dependencies)
+      allow(script_class).to receive(:current).and_return(caller_script)
+
+      waiter = Thread.new do
+        script_class.__send__(:__join_library, 'libtarget', target_script)
+      end
+      assignment_entered.pop
+
+      expect(blocking_dependencies.fetch(target_script).size).to eq(1)
+
+      waiter.kill
+      waiter.join
+      expect(script_class.class_variable_get(:@@library_waits)).to be_empty
+    ensure
+      waiter&.kill
+    end
+
     it 'keeps a completed marker until loaded state is published' do
       interrupting_set = Class.new(Set) do
         def add(value)
@@ -2472,6 +2562,68 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(retry_loader.value).to be(true)
       expect(script_class.libs).to include('libutil')
       expect(script_class).to have_received(:start).with('libutil', { :force => true }).twice
+    end
+
+    it 'does not republish a failed generation over a replacement loader' do
+      failed_attempt = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :join                    => true,
+        :exit_error              => RuntimeError.new('failed generation'),
+        :completed_successfully? => false
+      )
+      replacement_joined = Queue.new
+      release_replacement = Queue.new
+      successful_attempt = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :exit_error              => nil,
+        :completed_successfully? => true
+      )
+      allow(successful_attempt).to receive(:join) do
+        replacement_joined << true
+        release_replacement.pop
+        successful_attempt
+      end
+      allow(script_class).to receive(:start)
+        .with('libutil', { :force => true })
+        .and_return(failed_attempt, successful_attempt)
+      first_finish_entered = Queue.new
+      release_first_finish = Queue.new
+      allow(script_class).to receive(:__finish_start).and_wrap_original do |method, *args, **kwargs|
+        result = method.call(*args, **kwargs)
+        if Thread.current.thread_variable_get(:pause_library_finish) && kwargs[:preserve_completed]
+          first_finish_entered << true
+          release_first_finish.pop
+        end
+        result
+      end
+
+      first_loader = Thread.new do
+        Thread.current.thread_variable_set(:pause_library_finish, true)
+        script_class.loadlib('util')
+      rescue LoadError
+        false
+      end
+      first_finish_entered.pop
+      replacement_loader = Thread.new { script_class.loadlib('util') }
+      replacement_joined.pop
+
+      release_first_finish << true
+      expect(first_loader.value).to be(false)
+      expect(script_class.class_variable_get(:@@loading_libraries)).to eq(
+        'libutil' => successful_attempt
+      )
+
+      release_replacement << true
+      expect(replacement_loader.value).to be(true)
+      expect(script_class.libs).to include('libutil')
+      expect(script_class).to have_received(:start).twice
+    ensure
+      release_first_finish << true if defined?(release_first_finish) && release_first_finish
+      release_replacement << true if defined?(release_replacement) && release_replacement
+      first_loader&.kill
+      replacement_loader&.kill
     end
 
     it 'raises without recording a missing library' do
