@@ -321,6 +321,7 @@ module Lich
       @@shutdown_started = false
       @@library_mutex = Mutex.new
       @@loaded_libraries = Set.new
+      @@loaded_library_owners = {}
       @@loading_libraries = {}
       @@library_waits = {}
       @@kill_metrics_mutex = Mutex.new
@@ -730,7 +731,7 @@ module Lich
       end
       private_class_method :__begin_start
 
-      def Script.__begin_library_start(reservation, name)
+      def Script.__begin_library_start(reservation, name, deadline: nil)
         normalized_name = name.downcase
         @@startup_mutex.synchronize do
           __reap_abandoned_startups_locked
@@ -750,7 +751,12 @@ module Lich
               __reap_abandoned_startups_locked
               break unless __startup_in_progress_locked?(normalized_name)
 
-              @@startup_condition.wait(@@startup_mutex, JOIN_WAIT_INTERVAL)
+              remaining = __remaining_library_timeout(deadline)
+              if remaining && remaining <= 0
+                raise LibraryJoinTimeout, "script library wait timed out: #{normalized_name}"
+              end
+              wait_for = remaining ? [JOIN_WAIT_INTERVAL, remaining].min : JOIN_WAIT_INTERVAL
+              @@startup_condition.wait(@@startup_mutex, wait_for)
             end
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
@@ -866,6 +872,13 @@ module Lich
       end
       private_class_method :__library_handoff_reserved_locked?
 
+      def Script.__remaining_library_timeout(deadline)
+        return nil unless deadline
+
+        [deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC), 0].max
+      end
+      private_class_method :__remaining_library_timeout
+
       # Starts an anonymous child script owned by the current script.
       #
       # @yield required block executed by the new script
@@ -946,6 +959,9 @@ module Lich
       # @raise [ArgumentError] when the library name is empty
       # @raise [LoadError] when the library cannot be found or started
       def Script.loadlib(library, timeout: nil)
+        raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
         library_name = library.to_s.downcase
         library_name = "lib#{library_name}" unless library_name.start_with?('lib')
         raise ArgumentError, 'library name cannot be empty' if library_name == 'lib'
@@ -957,7 +973,7 @@ module Lich
         loading = @@library_mutex.synchronize { @@loading_libraries[library_name] }
         if loading
           begin
-            __join_library(library_name, loading, timeout)
+            __join_library(library_name, loading, __remaining_library_timeout(deadline))
             return __commit_library_completion(library_name, loading)
           rescue LibraryJoinTimeout
             raise
@@ -968,6 +984,7 @@ module Lich
               if @@loading_libraries[library_name].equal?(loading)
                 @@loading_libraries.delete(library_name)
                 @@loaded_libraries.delete(library_name)
+                @@loaded_library_owners.delete(library_name)
               end
             end
           end
@@ -975,7 +992,11 @@ module Lich
 
         startup_reservation = Object.new
         prepared = begin
-          startup_status, completed_start = __begin_library_start(startup_reservation, library_name)
+          startup_status, completed_start = __begin_library_start(
+            startup_reservation,
+            library_name,
+            :deadline => deadline
+          )
           raise LoadError, "cannot load script library during shutdown: #{library_name}" if startup_status == :shutdown
 
           running = __running_snapshot.find { |candidate| candidate.name.casecmp?(library_name) }
@@ -993,6 +1014,10 @@ module Lich
           end
 
           if start_required
+            remaining = __remaining_library_timeout(deadline)
+            if remaining && remaining <= 0
+              raise LibraryJoinTimeout, "script library wait timed out: #{library_name}"
+            end
             script = Script.start(library_name, { :force => true })
             raise LoadError, "failed to start script library: #{library_name}" unless script
 
@@ -1026,7 +1051,7 @@ module Lich
         return true if already_loaded
 
         begin
-          __join_library(library_name, script, timeout)
+          __join_library(library_name, script, __remaining_library_timeout(deadline))
         rescue LibraryJoinTimeout
           raise
         rescue ScriptError, StandardError
@@ -1052,9 +1077,15 @@ module Lich
           next if library == current_library
 
           @@library_mutex.synchronize do
-            was_loaded = @@loaded_libraries.include?(library)
-            @@loaded_libraries.delete(library)
-            @@loading_libraries.delete(library) if was_loaded
+            if @@loaded_libraries.include?(library)
+              loaded_owner = @@loaded_library_owners[library]
+              loading_script = @@loading_libraries[library]
+              if loaded_owner && loading_script&.object_id == loaded_owner
+                @@loading_libraries.delete(library)
+              end
+              @@loaded_library_owners.delete(library)
+              @@loaded_libraries.delete(library)
+            end
           end
           Script.loadlib(library, :timeout => timeout)
         rescue LoadError => e
@@ -1073,29 +1104,30 @@ module Lich
 
       def Script.__join_library(library_name, script, timeout = nil)
         caller_script = Script.current
-        dependency_registered = false
+        dependency_token = Object.new
         @@library_mutex.synchronize do
           if caller_script
             if __library_dependency_reaches?(script, caller_script)
               raise LoadError, "cyclic script library dependency: #{library_name}"
             end
             dependencies = @@library_waits[caller_script]
-            dependencies = Hash.new(0) unless dependencies.is_a?(Hash)
+            dependencies = {} unless dependencies.is_a?(Hash)
             @@library_waits[caller_script] = dependencies
-            dependencies[script] += 1
-            dependency_registered = true
+            dependencies[script] ||= Set.new
+            dependencies[script].add(dependency_token)
           end
         end
 
         joined = script.join(timeout)
         raise LibraryJoinTimeout, "script library wait timed out: #{library_name}" unless joined
       ensure
-        if caller_script && dependency_registered
+        if caller_script
           @@library_mutex.synchronize do
             dependencies = @@library_waits[caller_script]
             if dependencies.is_a?(Hash)
-              dependencies[script] -= 1
-              dependencies.delete(script) unless dependencies[script].positive?
+              tokens = dependencies[script]
+              tokens&.delete(dependency_token)
+              dependencies.delete(script) if tokens && tokens.empty?
               @@library_waits.delete(caller_script) if dependencies.empty?
             elsif dependencies.equal?(script)
               @@library_waits.delete(caller_script)
@@ -1112,7 +1144,9 @@ module Lich
           if @@loading_libraries[library_name].equal?(script)
             if error || !completed
               @@loaded_libraries.delete(library_name)
+              @@loaded_library_owners.delete(library_name)
             else
+              @@loaded_library_owners[library_name] = script.object_id
               @@loaded_libraries.add(library_name)
             end
             @@loading_libraries.delete(library_name)
@@ -1662,7 +1696,8 @@ module Lich
           if @cleanup_started.equal?(launch_token)
             executor_abandoned = !cleanup_owned || !cleanup_thread&.alive? || cleanup_thread == Thread.current
             __run_kill_cleanup(source: source, context: context, record_metrics: false) if running? && executor_abandoned
-            lifecycle_mutex.synchronize { @cleanup_launch_pending = false }
+            executor_abandoned = __finish_cleanup_launch
+            __run_kill_cleanup(source: source, context: context, record_metrics: false) if running? && executor_abandoned
           end
         end
 
@@ -1844,8 +1879,6 @@ module Lich
               failed = false
               cleanup_body_complete = false
               begin
-                raise cleanup_group_error if cleanup_group_error
-
                 __close_child_launch_admission
                 stopping_threads = lifecycle_mutex.synchronize do
                   @stopping_threads = __raw_worker_threads.reject { |thread| thread == Thread.current }
@@ -1853,6 +1886,8 @@ module Lich
                 stopping_threads.each { |thread| thread.kill rescue nil }
                 children = __wait_for_child_launches
                 __stop_children(children, context)
+                raise cleanup_group_error if cleanup_group_error
+
                 # Shift each callback before invoking it. If this executor is
                 # cancelled, recovery resumes with the remaining callbacks.
                 @die_with ||= []
@@ -2188,6 +2223,14 @@ module Lich
         thread
       end
       private :__claim_cleanup_thread
+
+      def __finish_cleanup_launch
+        lifecycle_mutex.synchronize do
+          @cleanup_launch_pending = false
+          !@cleanup_thread || !@cleanup_thread.alive? || @cleanup_thread == Thread.current
+        end
+      end
+      private :__finish_cleanup_launch
 
       def __cleanup_worker_group
         lifecycle_mutex.synchronize { @cleanup_thread_group ||= ThreadGroup.new }

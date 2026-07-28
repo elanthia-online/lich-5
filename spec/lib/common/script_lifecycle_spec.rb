@@ -33,6 +33,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@completed_start_waiters, Hash.new(0))
     script_class.class_variable_set(:@@shutdown_started, false)
     script_class.class_variable_set(:@@loaded_libraries, Set.new)
+    script_class.class_variable_set(:@@loaded_library_owners, {})
     script_class.class_variable_set(:@@loading_libraries, {})
     script_class.class_variable_set(:@@library_waits, {})
     allow(Lich).to receive(:log)
@@ -1117,6 +1118,46 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script).not_to be_running
     end
 
+    it 'rechecks a dead cleanup executor after launch completion' do
+      script = build_script('cleanup-launch-recheck')
+      script_class.class_variable_set(:@@running, [script])
+      cleanup_entered = Queue.new
+      finish_entered = Queue.new
+      release_finish = Queue.new
+      first_cleanup = true
+      allow(script).to receive(:__run_kill_cleanup).and_wrap_original do |method, **kwargs|
+        if first_cleanup
+          first_cleanup = false
+          cleanup_entered << true
+          Queue.new.pop
+        else
+          method.call(**kwargs)
+        end
+      end
+      allow(script).to receive(:__finish_cleanup_launch).and_wrap_original do |method|
+        finish_entered << true
+        release_finish.pop
+        method.call
+      end
+
+      first_killer = Thread.new { script.kill }
+      cleanup_entered.pop
+      finish_entered.pop
+      cleanup_thread = Object.instance_method(:instance_variable_get).bind_call(script, :@cleanup_thread)
+      cleanup_thread.kill
+      cleanup_thread.join
+
+      expect(Thread.new { script.kill }.value).to eq(script.name)
+      release_finish << true
+      first_killer.join
+
+      expect(script.join(1)).to equal(script)
+      expect(script).not_to be_running
+    ensure
+      release_finish << true if defined?(release_finish) && release_finish
+      first_killer&.kill
+    end
+
     it 'resumes remaining exit callbacks after cleanup executor cancellation' do
       script = build_script('cancelled-callback')
       script_class.class_variable_set(:@@running, [script])
@@ -1557,12 +1598,14 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     it 'does not run callbacks when cleanup ownership cannot move from an enclosed group' do
       caller_script = build_script('enclosed-caller')
       target_script = build_script('ownership-target')
-      script_class.class_variable_set(:@@running, [caller_script, target_script])
+      child_script = build_script('ownership-child')
+      script_class.class_variable_set(:@@running, [caller_script, target_script, child_script])
+      target_script.register_child(child_script)
       callback_ran = false
       target_script.at_exit { callback_ran = true }
       result = Queue.new
       caller = Thread.new do
-        target_script.kill(:context => :shutdown, :async => false)
+        target_script.kill(:context => :runtime, :async => false)
         result << script_class.current
       end
       caller_script.thread_group.add(caller)
@@ -1572,6 +1615,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(result.pop).to equal(caller_script)
       expect(target_script.join(1)).to equal(target_script)
+      expect(child_script.join(1)).to equal(child_script)
+      expect(target_script.child_scripts).to be_empty
       expect(callback_ran).to be(false)
       expect(target_script.exit_error).to be_a(ThreadError)
       expect(target_script.exit_error.message).to match(/cannot establish cleanup ownership/)
@@ -1973,7 +2018,11 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         :exit_error              => nil,
         :completed_successfully? => true
       )
-      allow(timed_out_script).to receive(:join).with(0.01).and_return(nil, timed_out_script)
+      join_calls = 0
+      allow(timed_out_script).to receive(:join) do
+        join_calls += 1
+        join_calls == 1 ? nil : timed_out_script
+      end
       allow(script_class).to receive(:start).with('libutil', { :force => true }).and_return(timed_out_script)
 
       expect {
@@ -1989,7 +2038,11 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
 
     it 'keeps a fast-path timeout as the single-flight owner for retry' do
-      allow(library_script).to receive(:join).with(0.01).and_return(nil, library_script)
+      join_calls = 0
+      allow(library_script).to receive(:join) do
+        join_calls += 1
+        join_calls == 1 ? nil : library_script
+      end
       script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
 
       expect {
@@ -2028,8 +2081,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       startup_token = Object.new
       script_class.__send__(:__begin_start, startup_token, 'libutil', :force => false)
       original_begin = script_class.method(:__begin_library_start)
-      allow(script_class).to receive(:__begin_library_start) do |*args|
-        result = original_begin.call(*args)
+      allow(script_class).to receive(:__begin_library_start) do |*args, **kwargs|
+        result = original_begin.call(*args, **kwargs)
         Thread.current.kill
         result
       end
@@ -2225,7 +2278,10 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       )
       script_class.class_variable_set(:@@running, [caller_script])
       script_class.class_variable_set(:@@loading_libraries, { 'libtarget' => target_script })
-      script_class.class_variable_set(:@@library_waits, { target_script => { caller_script => 1 } })
+      script_class.class_variable_set(
+        :@@library_waits,
+        target_script => { caller_script => Set[Object.new] }
+      )
       allow(script_class).to receive(:current).and_return(caller_script)
       allow(script_class).to receive(:__find_script_file).with('libtarget').and_return('/custom/team/libtarget.lic')
 
@@ -2280,10 +2336,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       ]
       2.times { entered.pop }
 
-      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(
-        target_one => 1,
-        target_two => 1
-      )
+      dependencies = script_class.class_variable_get(:@@library_waits)[caller_script]
+      expect(dependencies.keys).to contain_exactly(target_one, target_two)
+      expect(dependencies.values.map(&:size)).to contain_exactly(1, 1)
 
       2.times { release << true }
       waiters.each(&:join)
@@ -2302,12 +2357,14 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         Thread.new { script_class.__send__(:__join_library, 'libtarget', target_script) }
       end
       2.times { entered.pop }
-      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 2)
+      dependencies = script_class.class_variable_get(:@@library_waits)[caller_script]
+      expect(dependencies.fetch(target_script).size).to eq(2)
 
       waiters.first.kill
       waiters.first.join
 
-      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 1)
+      dependencies = script_class.class_variable_get(:@@library_waits)[caller_script]
+      expect(dependencies.fetch(target_script).size).to eq(1)
       expect(
         script_class.__send__(:__library_dependency_reaches?, caller_script, target_script)
       ).to be(true)
@@ -2324,9 +2381,10 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       caller_script = build_script('libcaller')
       target_script = instance_double(script_class, :name => 'libtarget')
       library_mutex = script_class.class_variable_get(:@@library_mutex)
+      existing_token = Object.new
       script_class.class_variable_set(
         :@@library_waits,
-        caller_script => { target_script => 1 }
+        caller_script => { target_script => Set[existing_token] }
       )
       allow(script_class).to receive(:current).and_return(caller_script)
       library_mutex.lock
@@ -2339,7 +2397,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       library_mutex.unlock
       waiter.join
 
-      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 1)
+      dependencies = script_class.class_variable_get(:@@library_waits)[caller_script]
+      expect(dependencies.fetch(target_script)).to eq(Set[existing_token])
     ensure
       library_mutex&.unlock if library_mutex&.owned?
       waiter&.kill
@@ -2469,6 +2528,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         :completed_successfully? => true
       )
       script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      script_class.class_variable_set(:@@loaded_library_owners, 'libutil' => library_script.object_id)
       script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
       allow(script_class).to receive(:start)
         .with('libutil', { :force => true })
@@ -2478,6 +2538,78 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class).to have_received(:start).once
       expect(script_class.libs).to include('libutil')
       expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+    end
+
+    it 'does not evict a newer active owner while reloading an older generation' do
+      newer_generation = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :join                    => true,
+        :exit_error              => nil,
+        :completed_successfully? => true
+      )
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      script_class.class_variable_set(:@@loaded_library_owners, 'libutil' => library_script.object_id)
+      script_class.class_variable_set(:@@loading_libraries, 'libutil' => newer_generation)
+      allow(script_class).to receive(:start)
+
+      expect(script_class.reloadlibs).to be(true)
+      expect(script_class).not_to have_received(:start)
+      expect(script_class.class_variable_get(:@@loaded_library_owners)).to eq(
+        'libutil' => newer_generation.object_id
+      )
+    end
+
+    it 'completes stale-owner removal after a concurrent reload is interrupted' do
+      interrupting_owners = Class.new(Hash) do
+        def delete(key)
+          value = super
+          unless defined?(@interrupted)
+            @interrupted = true
+            Thread.current.kill
+          end
+          value
+        end
+      end.new
+      interrupting_owners['libutil'] = library_script.object_id
+      replacement = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :join                    => true,
+        :exit_error              => nil,
+        :completed_successfully? => true
+      )
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      script_class.class_variable_set(:@@loaded_library_owners, interrupting_owners)
+      script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
+      allow(script_class).to receive(:start)
+        .with('libutil', { :force => true })
+        .and_return(replacement)
+
+      interrupted_reload = Thread.new { script_class.reloadlibs }
+      interrupted_reload.join
+
+      expect(script_class.reloadlibs).to be(true)
+      expect(script_class).to have_received(:start).once
+      expect(script_class.libs).to include('libutil')
+    ensure
+      interrupted_reload&.kill
+    end
+
+    it 'bounds reload while another startup reservation is live' do
+      reservation = Object.new
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      script_class.__send__(:__begin_start, reservation, 'libutil', :force => true)
+      allow(script_class).to receive(:start)
+
+      reload = Thread.new { script_class.reloadlibs(:timeout => 0.01) }
+
+      expect(reload.join(0.2)).to equal(reload)
+      expect(reload.value).to be(false)
+      expect(script_class).not_to have_received(:start)
+    ensure
+      script_class.__send__(:__finish_start, reservation, nil) if defined?(reservation) && reservation
+      reload&.kill
     end
   end
 
