@@ -378,8 +378,10 @@ module Lich
             GameObj.clear_pcs
             GameObj.clear_room_desc
             # Creature tracks its own room roster independently of GameObj
-            # (see lib/gemstone/creature.rb) - not loaded for DR sessions.
+            # (see lib/gemstone/creature.rb / lib/dragonrealms/creature.rb).
+            # Only one game's Creature is ever loaded per session.
             Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
+            Lich::DragonRealms::Creature.clear_room if defined?(Lich::DragonRealms::Creature)
             # Any <crtrStatus> cached for the room being left is scoped to
             # that room - don't let it survive to misapply if the id gets
             # reused elsewhere.
@@ -417,6 +419,9 @@ module Lich
             if attributes['id'] == 'room objs'
               GameObj.begin_room_objs
               Lich::Gemstone::Creature.clear_room if defined?(Lich::Gemstone::Creature)
+              # DR rebuilds the roster from the <crtrStatus> batch that follows
+              # this component; clearing here gives that batch a clean snapshot.
+              Lich::DragonRealms::Creature.clear_room if defined?(Lich::DragonRealms::Creature)
               @pending_crtr_status.clear
             elsif attributes['id'] == 'room players'
               GameObj.begin_room_players
@@ -445,8 +450,22 @@ module Lich
             # reappear in Creature.targets/.in_room. Deferring to the text()
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
+            #
+            # DragonRealms differs: its room-objs carry no per-creature <a exist>
+            # tag, so there is no text() path to defer to. Its <crtrStatus> tags
+            # arrive batched after the room-objs component and carry their own
+            # id, so they are applied immediately, id-first (name-less; the name
+            # is backfilled later from the assess stream - see
+            # lib/dragonrealms/creature.rb).
             crtr_id = attributes['exist']
-            @pending_crtr_status[crtr_id] = attributes.reject { |k, _| k == 'exist' } if crtr_id
+            if crtr_id
+              crtr_flags = attributes.reject { |k, _| k == 'exist' }
+              if XMLData.game =~ /^DR/
+                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
+              else
+                @pending_crtr_status[crtr_id] = crtr_flags
+              end
+            end
           end
           if name == 'inv'
             if attributes['id'] == 'stow'
@@ -498,7 +517,15 @@ module Lich
           if name == 'popStream'
             if @current_stream == 'assess' && @assess_buffer
               entry = parse_assess_line(@assess_buffer, @assess_ids)
-              @assess << entry if entry
+              if entry
+                @assess << entry
+                # The assess stream is DragonRealms' only tie between an exist id
+                # and a creature name/position, so it backfills the id-first
+                # instances created from <crtrStatus>. Self and PCs are skipped.
+                if XMLData.game =~ /^DR/ && !entry[:self] && !entry[:pc] && defined?(Lich::DragonRealms::Creature)
+                  Lich::DragonRealms::Creature.feed_assess(entry)
+                end
+              end
               @assess_buffer = nil
             end
             if attributes['id'] == 'room'

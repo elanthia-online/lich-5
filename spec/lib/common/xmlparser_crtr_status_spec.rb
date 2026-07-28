@@ -19,7 +19,9 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
 
   before do
     Lich::Gemstone::Creature.clear
-    stub_const('XMLData', double(current_target_ids: []))
+    # game is consulted by the <crtrStatus> handler to route GS vs DR; these
+    # fixtures are GemStone captures, so it must report a GS instance.
+    stub_const('XMLData', double(current_target_ids: [], game: 'GSIV'))
     allow(Lich::Common::GameObj).to receive(:new_npc)
     allow(Lich::Common::GameObj).to receive(:new_loot)
     allow(Lich::Common::GameObj).to receive(:clear_loot)

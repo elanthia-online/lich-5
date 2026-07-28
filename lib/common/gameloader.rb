@@ -58,6 +58,7 @@ module Lich
         require File.join(LIB_DIR, 'dragonrealms', 'dependency', 'settings_config.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
+        require File.join(LIB_DIR, 'dragonrealms', 'creature.rb')
         DRInfomon.watch!
         self.common_after
       end
