@@ -1398,6 +1398,24 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.__send__(:__completed_start_value, completed)).to equal(newer_generation)
     end
 
+    it 'does not let a library reservation erase a newer completion' do
+      adopted_generation = instance_double(script_class)
+      newer_generation = instance_double(script_class)
+      adopted_reservation = Object.new
+      script_class.__send__(:__begin_start, adopted_reservation, 'libutil', :force => true)
+      script_class.__send__(:__finish_start, adopted_reservation, adopted_generation)
+      library_reservation = Object.new
+      script_class.__send__(:__begin_library_start, library_reservation, 'libutil')
+      newer_reservation = Object.new
+      script_class.__send__(:__begin_start, newer_reservation, 'libutil', :force => true)
+
+      script_class.__send__(:__finish_start, newer_reservation, newer_generation)
+      script_class.__send__(:__finish_start, library_reservation, nil)
+
+      completed = script_class.class_variable_get(:@@completed_named_starts)['libutil']
+      expect(script_class.__send__(:__completed_start_value, completed)).to equal(newer_generation)
+    end
+
     it 'adopts a completed forced generation ahead of an older running generation' do
       old_generation = instance_double(script_class, :name => 'libutil', :running? => false)
       allow(old_generation).to receive(:join) { raise 'older generation should not be joined' }

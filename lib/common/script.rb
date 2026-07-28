@@ -753,7 +753,7 @@ module Lich
           name, generation = @@startup_reservations.delete(reservation)
           if name&.start_with?('lib')
             current_generation = __completed_start_generation(@@completed_named_starts[name])
-            if generation.nil? || generation >= current_generation
+            if generation && generation >= current_generation
               @@completed_named_starts.delete(name)
               if script
                 completed = if @@completed_start_waiters[name].positive?
@@ -911,24 +911,24 @@ module Lich
           startup_status, completed_start = __begin_library_start(startup_reservation, library_name)
           raise LoadError, "cannot load script library during shutdown: #{library_name}" if startup_status == :shutdown
 
-          script, already_loaded, owns_loading, started_here = @@library_mutex.synchronize do
+          script, already_loaded, owns_loading = @@library_mutex.synchronize do
             running = @@running.find { |candidate| candidate.name.casecmp?(library_name) }
             if (loading = @@loading_libraries[library_name])
-              [loading, false, false, false]
+              [loading, false, false]
             elsif (candidate = completed_start || running)
               @@loading_libraries[library_name] = candidate
-              [candidate, false, true, false]
+              [candidate, false, true]
             elsif @@loaded_libraries.include?(library_name)
-              [nil, true, false, false]
+              [nil, true, false]
             else
               started = Script.start(library_name, { :force => true })
               raise LoadError, "failed to start script library: #{library_name}" unless started
 
               @@loading_libraries[library_name] = started
-              [started, false, true, true]
+              [started, false, true]
             end
           end
-          __discard_completed_start(library_name, script) if started_here
+          __discard_completed_start(library_name, script) if script
           return true if already_loaded
 
           __finish_start(startup_reservation)
