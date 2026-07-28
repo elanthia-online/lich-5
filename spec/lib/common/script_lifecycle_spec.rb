@@ -30,12 +30,12 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@startup_reservations, {})
     script_class.class_variable_set(:@@startup_generation, 0)
     script_class.class_variable_set(:@@completed_named_starts, {})
-    script_class.class_variable_set(:@@completed_start_waiters, Hash.new(0))
+    script_class.class_variable_set(:@@completed_start_waiters, {})
     script_class.class_variable_set(:@@shutdown_started, false)
     script_class.class_variable_set(:@@loaded_libraries, Set.new)
     script_class.class_variable_set(:@@loaded_library_owners, {})
     script_class.class_variable_set(:@@loading_libraries, {})
-    script_class.class_variable_set(:@@reloading_libraries, Set.new)
+    script_class.class_variable_set(:@@reloading_libraries, {})
     script_class.class_variable_set(:@@library_waits, {})
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
@@ -247,6 +247,61 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       waiter&.kill
     end
 
+    it 'does not decrement startup waiter accounting when cancelled before registration' do
+      reservation = Object.new
+      script_class.__send__(:__begin_start, reservation, 'libwaiting', :force => true)
+      interrupting_waiters = Class.new(Hash) do
+        def initialize
+          super(0)
+        end
+
+        def [](name)
+          unless defined?(@interrupted)
+            @interrupted = true
+            Thread.current.kill
+          end
+          super
+        end
+      end.new
+      script_class.class_variable_set(:@@completed_start_waiters, interrupting_waiters)
+
+      waiter = Thread.new do
+        script_class.__send__(:__begin_library_start, Object.new, 'libwaiting')
+      end
+      waiter.join
+
+      expect(script_class.class_variable_get(:@@completed_start_waiters)).to be_empty
+    ensure
+      script_class.__send__(:__finish_start, reservation) if defined?(reservation) && reservation
+      waiter&.kill
+    end
+
+    it 'consumes a gate value enqueued immediately before its owner exits' do
+      gate = Queue.new
+      release_owner = Queue.new
+      owner = Thread.new do
+        release_owner.pop
+        gate << true
+      end
+      first_pop = true
+      gate.define_singleton_method(:pop) do |non_block = false|
+        if first_pop
+          first_pop = false
+          release_owner << true
+          owner.join
+          raise ThreadError, 'simulated stale empty observation'
+        end
+        super(non_block)
+      end
+
+      result = script_class.__send__(:__await_thread_gate, gate, owner, false)
+
+      expect(result).to be(true)
+    ensure
+      release_owner << true if defined?(release_owner) && release_owner
+      owner&.kill
+    end
+
     it 'uses the published name when reserving a compressed script' do
       Dir.mktmpdir('script-compressed-start') do |root|
         custom_dir = File.join(root, 'custom')
@@ -412,6 +467,43 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         expect(script_class.libs).not_to include('libfailure')
       end
     end
+
+    it 'does not discard a published script when gate release is interrupted' do
+      Dir.mktmpdir('script-gate-release') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'gate_release.lic'), "# quiet\nsleep 1\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        interrupt_next_queue_release(:after)
+
+        expect { script_class.start('gate_release') }.to raise_error(Timeout::Error, /gate release/)
+
+        script = script_class.list.find { |candidate| candidate.name == 'gate_release' }
+        expect(script).not_to be_nil
+        expect(script.kill_sync(:timeout => 1)).to equal(script)
+      end
+    end
+
+    it 'tears down a gated script when its launcher is killed after publication' do
+      Dir.mktmpdir('script-killed-gate-release') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'gate_release.lic'), "# quiet\nsleep 1\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        gate_entered, release_gate = block_next_queue_release
+        launcher = Thread.new { script_class.start('gate_release') }
+        gate_entered.pop
+
+        expect(script_class.list.map(&:name)).to include('gate_release')
+        launcher.kill
+        launcher.join
+
+        Timeout.timeout(1) { sleep 0.01 until script_class.list.empty? }
+      ensure
+        release_gate << true if defined?(release_gate) && release_gate
+        launcher&.kill
+      end
+    end
   end
 
   describe 'Script facade' do
@@ -528,6 +620,18 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(subscript.join(1)).to equal(subscript)
       expect(subscript.exit_error).to be_a(script_class::JumpError)
       expect(subscript).not_to be_completed_successfully
+    end
+
+    it 'does not discard a published subscript when gate release is interrupted' do
+      interrupt_next_queue_release(:after)
+
+      expect {
+        subscript_class.start(:parent => nil) { sleep 1 }
+      }.to raise_error(Timeout::Error, /gate release/)
+
+      script = script_class.list.find { |candidate| candidate.name.start_with?('subscript') }
+      expect(script).not_to be_nil
+      expect(script.kill_sync(:timeout => 1)).to equal(script)
     end
 
     it 'tears down a subscript whose worker dies during current-script lookup' do
@@ -924,6 +1028,18 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script = launcher.value
       expect(script.join(2)).to equal(script)
     end
+
+    it 'does not discard a published exec script when gate release is interrupted' do
+      interrupt_next_queue_release(:after)
+
+      expect {
+        exec_script_class.start('sleep 1')
+      }.to raise_error(Timeout::Error, /gate release/)
+
+      script = script_class.list.find { |candidate| candidate.name.start_with?('exec') }
+      expect(script).not_to be_nil
+      expect(script.kill_sync(:timeout => 1)).to equal(script)
+    end
   end
 
   describe 'synchronous lifecycle methods' do
@@ -1193,6 +1309,18 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script).not_to be_running
     end
 
+    it 'completes cleanup when the launch-gate ensure is interrupted' do
+      script = build_script('interrupted-cleanup-gate')
+      script_class.class_variable_set(:@@running, [script])
+      interrupt_next_queue_release(:before)
+      allow(script).to receive(:__claim_cleanup_thread).and_raise(RuntimeError, 'handoff failed')
+
+      expect { script.kill }.to raise_error(Exception)
+
+      expect(script.join(1)).to equal(script)
+      expect(script).not_to be_running
+    end
+
     it 'rechecks a dead cleanup executor after launch completion' do
       script = build_script('cleanup-launch-recheck')
       script_class.class_variable_set(:@@running, [script])
@@ -1319,18 +1447,20 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         end
       end
       callback_calls = 0
+      callback = proc { callback_calls += 1 }
       script = build_script('cancelled-callback-dequeue')
-      script.instance_variable_set(:@at_exit_procs, interrupting_callbacks.new([proc { callback_calls += 1 }]))
+      script.instance_variable_set(:@at_exit_procs, interrupting_callbacks.new([callback, callback]))
       script_class.class_variable_set(:@@running, [script])
 
       cleanup_thread = Thread.new { script.kill(:context => :shutdown, :async => false) }
       Timeout.timeout(1) { dequeue_interrupted.pop }
+      script.at_exit { callback_calls += 10 }
       cleanup_thread.kill
       cleanup_thread.join
       script_class.progress_shutdown
 
       expect(script.join(1)).to equal(script)
-      expect(callback_calls).to eq(1)
+      expect(callback_calls).to eq(12)
     ensure
       release_dequeue << true if defined?(release_dequeue) && release_dequeue
     end
@@ -1364,6 +1494,58 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class).to have_received(:kill).once
     ensure
       release_dequeue << true if defined?(release_dequeue) && release_dequeue
+    end
+
+    it 'does not duplicate a callback when claim restoration is interrupted' do
+      interrupting_callbacks = Class.new(Array) do
+        def shift
+          entry = super()
+          unless defined?(@shift_interrupted)
+            @shift_interrupted = true
+            raise RuntimeError, 'dequeue interrupted'
+          end
+          entry
+        end
+
+        def unshift(*entries)
+          result = super
+          unless defined?(@restore_interrupted)
+            @restore_interrupted = true
+            Thread.current.kill
+          end
+          result
+        end
+
+        def []=(index, entry)
+          if @interrupt_assignment
+            @interrupt_assignment = false
+            Thread.current.kill
+          end
+          super
+        end
+      end
+      callback_calls = 0
+      callback = proc { callback_calls += 1 }
+      callbacks = interrupting_callbacks.new([callback])
+      script = build_script('interrupted-claim-restore')
+      cleanup_thread = Thread.new do
+        script.__send__(:__run_cleanup_queue, callbacks) { |entry| entry.call }
+      end
+      cleanup_thread.report_on_exception = false
+      cleanup_thread.join
+      callbacks.instance_variable_set(:@interrupt_assignment, true)
+      retry_thread = Thread.new do
+        script.__send__(:__run_cleanup_queue, callbacks) { |entry| entry.call }
+      end
+      retry_thread.report_on_exception = false
+      retry_thread.join
+      script.__send__(:__run_cleanup_queue, callbacks) { |entry| entry.call }
+
+      expect(callbacks).to be_empty
+      expect(callback_calls).to eq(1)
+    ensure
+      cleanup_thread&.kill
+      retry_thread&.kill
     end
 
     it 'does not run deferred cleanup from a timeout-bounded join' do
@@ -2144,7 +2326,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
       loaders = Array.new(2) { Thread.new { script_class.loadlib('util') } }
       waiters = script_class.class_variable_get(:@@completed_start_waiters)
-      Timeout.timeout(1) { Thread.pass until waiters['libutil'] == loaders.length }
+      Timeout.timeout(1) do
+        Thread.pass until completed_start_waiter_count(waiters, 'libutil') == loaders.length
+      end
 
       owner.kill
       owner.join
@@ -2270,7 +2454,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.__send__(:__begin_start, startup_token, 'libutil', :force => false)
       loaders = Array.new(3) { Thread.new { script_class.loadlib('util') } }
       waiters = script_class.class_variable_get(:@@completed_start_waiters)
-      Timeout.timeout(1) { Thread.pass until waiters['libutil'] == loaders.length }
+      Timeout.timeout(1) do
+        Thread.pass until completed_start_waiter_count(waiters, 'libutil') == loaders.length
+      end
       allow(script_class).to receive(:start)
 
       script_class.__send__(:__finish_start, startup_token, admitted_script)
@@ -2291,7 +2477,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
       loader = Thread.new { script_class.loadlib('util') }
       waiters = script_class.class_variable_get(:@@completed_start_waiters)
-      Timeout.timeout(1) { Thread.pass until waiters['libutil'] == 1 }
+      Timeout.timeout(1) do
+        Thread.pass until completed_start_waiter_count(waiters, 'libutil') == 1
+      end
 
       script_class.__send__(:__finish_start, startup_token, library_script)
       loader.join
@@ -2981,7 +3169,10 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
         end
       end.new(['libutil'])
       script_class.class_variable_set(:@@loaded_libraries, interrupting_libraries)
-      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0).and_return(true)
+      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0) do
+        script_class.class_variable_get(:@@loaded_libraries).add('libutil')
+        true
+      end
 
       interrupted_reload = Thread.new { script_class.reloadlibs }
       interrupted_reload.join
@@ -2992,6 +3183,99 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.class_variable_get(:@@reloading_libraries)).to be_empty
     ensure
       interrupted_reload&.kill
+    end
+
+    it 'keeps another reloader marker when an overlapping reload times out' do
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      first_reload_entered = Queue.new
+      release_first_reload = Queue.new
+      load_roles = Queue.new
+      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0) do
+        role = Thread.current.thread_variable_get(:reload_role)
+        load_roles << role
+        case role
+        when :first
+          first_reload_entered << true
+          release_first_reload.pop
+        when :second
+          raise script_class::LibraryJoinTimeout, 'overlapping reload timed out'
+        else
+          script_class.class_variable_get(:@@loaded_libraries).add('libutil')
+          true
+        end
+      end
+      first_reloader = Thread.new do
+        Thread.current.thread_variable_set(:reload_role, :first)
+        script_class.reloadlibs
+      end
+      first_reload_entered.pop
+      second_reloader = Thread.new do
+        Thread.current.thread_variable_set(:reload_role, :second)
+        script_class.reloadlibs
+      end
+
+      expect(second_reloader.value).to be(false)
+      expect(script_class.class_variable_get(:@@reloading_libraries).fetch('libutil').size).to eq(1)
+      first_reloader.kill
+      first_reloader.join
+
+      expect(script_class.reloadlibs).to be(true)
+      expect(3.times.map { load_roles.pop }).to contain_exactly(:first, :second, nil)
+      expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@reloading_libraries)).to be_empty
+    ensure
+      release_first_reload << true if defined?(release_first_reload) && release_first_reload
+      first_reloader&.kill
+      second_reloader&.kill
+    end
+
+    it 'keeps a concurrent reloader marker after another reload succeeds' do
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      first_load_committed = Queue.new
+      release_first_reload = Queue.new
+      second_reload_entered = Queue.new
+      load_roles = Queue.new
+      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0) do
+        role = Thread.current.thread_variable_get(:reload_role)
+        load_roles << role
+        case role
+        when :first
+          script_class.class_variable_get(:@@loaded_libraries).add('libutil')
+          first_load_committed << true
+          release_first_reload.pop
+        when :second
+          second_reload_entered << true
+          Queue.new.pop
+        else
+          script_class.class_variable_get(:@@loaded_libraries).add('libutil')
+          true
+        end
+      end
+      first_reloader = Thread.new do
+        Thread.current.thread_variable_set(:reload_role, :first)
+        script_class.reloadlibs
+      end
+      first_load_committed.pop
+      second_reloader = Thread.new do
+        Thread.current.thread_variable_set(:reload_role, :second)
+        script_class.reloadlibs
+      end
+      second_reload_entered.pop
+      release_first_reload << true
+
+      expect(first_reloader.value).to be(true)
+      expect(script_class.class_variable_get(:@@reloading_libraries).fetch('libutil').size).to eq(1)
+      second_reloader.kill
+      second_reloader.join
+
+      expect(script_class.reloadlibs).to be(true)
+      expect(3.times.map { load_roles.pop }).to contain_exactly(:first, :second, nil)
+      expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@reloading_libraries)).to be_empty
+    ensure
+      release_first_reload << true if defined?(release_first_reload) && release_first_reload
+      first_reloader&.kill
+      second_reloader&.kill
     end
 
     it 'bounds reload while another startup reservation is live' do
@@ -3047,6 +3331,47 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
     warn "shutdown progress timed out: #{state.inspect}"
     raise
+  end
+
+  def interrupt_next_queue_release(timing)
+    first_queue = true
+    allow(Queue).to receive(:new).and_wrap_original do |method, *args|
+      queue = method.call(*args)
+      if first_queue
+        first_queue = false
+        queue.define_singleton_method(:<<) do |value|
+          Thread.current.raise(Timeout::Error, 'gate release interrupted') if timing == :before
+          result = super(value)
+          Thread.current.raise(Timeout::Error, 'gate release interrupted') if timing == :after
+          result
+        end
+      end
+      queue
+    end
+  end
+
+  def block_next_queue_release
+    gate_entered = Queue.new
+    release_gate = Queue.new
+    first_queue = true
+    allow(Queue).to receive(:new).and_wrap_original do |method, *args|
+      queue = method.call(*args)
+      if first_queue
+        first_queue = false
+        queue.define_singleton_method(:<<) do |value|
+          gate_entered << true
+          release_gate.pop
+          super(value)
+        end
+      end
+      queue
+    end
+    [gate_entered, release_gate]
+  end
+
+  def completed_start_waiter_count(waiters, name)
+    value = waiters[name]
+    value.respond_to?(:size) ? value.size : (value || 0).to_i
   end
 
   def kill_worker_during_current
