@@ -1554,6 +1554,29 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       release_descendant_cleanup << true if defined?(release_descendant_cleanup) && release_descendant_cleanup
     end
 
+    it 'does not run callbacks when cleanup ownership cannot move from an enclosed group' do
+      caller_script = build_script('enclosed-caller')
+      target_script = build_script('ownership-target')
+      script_class.class_variable_set(:@@running, [caller_script, target_script])
+      callback_ran = false
+      target_script.at_exit { callback_ran = true }
+      result = Queue.new
+      caller = Thread.new do
+        target_script.kill(:context => :shutdown, :async => false)
+        result << script_class.current
+      end
+      caller_script.thread_group.add(caller)
+      caller_script.thread_group.enclose
+
+      caller.join
+
+      expect(result.pop).to equal(caller_script)
+      expect(target_script.join(1)).to equal(target_script)
+      expect(callback_ran).to be(false)
+      expect(target_script.exit_error).to be_a(ThreadError)
+      expect(target_script.exit_error.message).to match(/cannot establish cleanup ownership/)
+    end
+
     it 'does not detach an inline cleanup caller when its group becomes enclosed' do
       caller_script = build_script('caller')
       target_script = build_script('target')
@@ -2278,6 +2301,31 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       release << true if defined?(release) && release
     end
 
+    it 'does not remove another waiter edge when cancelled before registration' do
+      caller_script = build_script('libcaller')
+      target_script = instance_double(script_class, :name => 'libtarget')
+      library_mutex = script_class.class_variable_get(:@@library_mutex)
+      script_class.class_variable_set(
+        :@@library_waits,
+        caller_script => { target_script => 1 }
+      )
+      allow(script_class).to receive(:current).and_return(caller_script)
+      library_mutex.lock
+
+      waiter = Thread.new do
+        script_class.__send__(:__join_library, 'libtarget', target_script)
+      end
+      Timeout.timeout(1) { Thread.pass until waiter.status == 'sleep' }
+      waiter.kill
+      library_mutex.unlock
+      waiter.join
+
+      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 1)
+    ensure
+      library_mutex&.unlock if library_mutex&.owned?
+      waiter&.kill
+    end
+
     it 'keeps a completed marker until loaded state is published' do
       interrupting_set = Class.new(Set) do
         def add(value)
@@ -2391,6 +2439,26 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(script_class.reloadlibs(:timeout => 0.01)).to be(false)
       expect(script_class.libs).to be_empty
+    end
+
+    it 'starts a replacement when reload consumes an interrupted completion marker' do
+      replacement = instance_double(
+        script_class,
+        :name                    => 'libutil',
+        :join                    => true,
+        :exit_error              => nil,
+        :completed_successfully? => true
+      )
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
+      allow(script_class).to receive(:start)
+        .with('libutil', { :force => true })
+        .and_return(replacement)
+
+      expect(script_class.reloadlibs).to be(true)
+      expect(script_class).to have_received(:start).once
+      expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
     end
   end
 

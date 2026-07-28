@@ -1051,7 +1051,11 @@ module Lich
         @@library_mutex.synchronize { @@loaded_libraries.dup }.each do |library|
           next if library == current_library
 
-          @@library_mutex.synchronize { @@loaded_libraries.delete(library) }
+          @@library_mutex.synchronize do
+            was_loaded = @@loaded_libraries.include?(library)
+            @@loaded_libraries.delete(library)
+            @@loading_libraries.delete(library) if was_loaded
+          end
           Script.loadlib(library, :timeout => timeout)
         rescue LoadError => e
           successful = false
@@ -1069,6 +1073,7 @@ module Lich
 
       def Script.__join_library(library_name, script, timeout = nil)
         caller_script = Script.current
+        dependency_registered = false
         @@library_mutex.synchronize do
           if caller_script
             if __library_dependency_reaches?(script, caller_script)
@@ -1078,13 +1083,14 @@ module Lich
             dependencies = Hash.new(0) unless dependencies.is_a?(Hash)
             @@library_waits[caller_script] = dependencies
             dependencies[script] += 1
+            dependency_registered = true
           end
         end
 
         joined = script.join(timeout)
         raise LibraryJoinTimeout, "script library wait timed out: #{library_name}" unless joined
       ensure
-        if caller_script
+        if caller_script && dependency_registered
           @@library_mutex.synchronize do
             dependencies = @@library_waits[caller_script]
             if dependencies.is_a?(Hash)
@@ -1802,6 +1808,7 @@ module Lich
         cleanup_thread_group = __cleanup_worker_group
         previous_group_owner = nil
         moved_to_cleanup_group = false
+        cleanup_group_error = nil
         move_allowed = previous_thread_group.equal?(ThreadGroup::Default)
         if previous_cleanup_script
           previous_group_owner = previous_cleanup_script
@@ -1814,9 +1821,11 @@ module Lich
           begin
             RAW_THREAD_GROUP_ADD.bind_call(cleanup_thread_group, Thread.current)
             moved_to_cleanup_group = true
-          rescue ThreadError
+          rescue ThreadError => error
             previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
-            nil
+            cleanup_group_error = ThreadError.new(
+              "cannot establish cleanup ownership for #{@name}: #{error.message}"
+            )
           end
         end
         Thread.current.thread_variable_set(CLEANUP_SCRIPT_THREAD_KEY, self)
@@ -1829,6 +1838,8 @@ module Lich
               failed = false
               cleanup_body_complete = false
               begin
+                raise cleanup_group_error if cleanup_group_error
+
                 __close_child_launch_admission
                 stopping_threads = lifecycle_mutex.synchronize do
                   @stopping_threads = __raw_worker_threads.reject { |thread| thread == Thread.current }
