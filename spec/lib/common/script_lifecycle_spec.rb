@@ -28,6 +28,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@running, [])
     script_class.class_variable_set(:@@stopping, [])
     script_class.class_variable_set(:@@startup_reservations, {})
+    script_class.class_variable_set(:@@startup_generation, 0)
     script_class.class_variable_set(:@@completed_named_starts, {})
     script_class.class_variable_set(:@@completed_start_waiters, Hash.new(0))
     script_class.class_variable_set(:@@shutdown_started, false)
@@ -229,8 +230,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.__send__(:__finish_start, reservation, library)
 
       completed = script_class.class_variable_get(:@@completed_named_starts)
-      expect(completed.fetch('libunused')).to be_a(WeakRef)
-      expect(completed.fetch('libunused').__getobj__).to equal(library)
+      completed_reference = completed.fetch('libunused').last
+      expect(completed_reference).to be_a(WeakRef)
+      expect(completed_reference.__getobj__).to equal(library)
     end
 
     it 'records a missing-label jump as unsuccessful execution' do
@@ -1365,6 +1367,35 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       script_class.__send__(:__finish_start, reservation, nil)
 
       expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
+    end
+
+    it 'does not let an older failed start erase a newer completion' do
+      newer_generation = instance_double(script_class)
+      older_reservation = Object.new
+      newer_reservation = Object.new
+      script_class.__send__(:__begin_start, older_reservation, 'libutil', :force => true)
+      script_class.__send__(:__begin_start, newer_reservation, 'libutil', :force => true)
+
+      script_class.__send__(:__finish_start, newer_reservation, newer_generation)
+      script_class.__send__(:__finish_start, older_reservation, nil)
+
+      completed = script_class.class_variable_get(:@@completed_named_starts)['libutil']
+      expect(script_class.__send__(:__completed_start_value, completed)).to equal(newer_generation)
+    end
+
+    it 'does not let an older completion replace a newer completion' do
+      older_generation = instance_double(script_class)
+      newer_generation = instance_double(script_class)
+      older_reservation = Object.new
+      newer_reservation = Object.new
+      script_class.__send__(:__begin_start, older_reservation, 'libutil', :force => true)
+      script_class.__send__(:__begin_start, newer_reservation, 'libutil', :force => true)
+
+      script_class.__send__(:__finish_start, newer_reservation, newer_generation)
+      script_class.__send__(:__finish_start, older_reservation, older_generation)
+
+      completed = script_class.class_variable_get(:@@completed_named_starts)['libutil']
+      expect(script_class.__send__(:__completed_start_value, completed)).to equal(newer_generation)
     end
 
     it 'adopts a completed forced generation ahead of an older running generation' do

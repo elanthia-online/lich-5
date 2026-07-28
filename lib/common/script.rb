@@ -397,6 +397,7 @@ module Lich
       @@startup_mutex = Mutex.new
       @@startup_condition = ConditionVariable.new
       @@startup_reservations = {}
+      @@startup_generation = 0
       @@completed_named_starts = {}
       @@completed_start_waiters = Hash.new(0)
       @@shutdown_started = false
@@ -692,11 +693,12 @@ module Lich
           return :shutdown if @@shutdown_started
           if normalized_name && !force
             active = __active_named_script(normalized_name)
-            starting = @@startup_reservations.value?(normalized_name)
+            starting = __startup_in_progress_locked?(normalized_name)
             return :duplicate if active || starting
           end
 
-          @@startup_reservations[reservation] = normalized_name
+          @@startup_generation += 1
+          @@startup_reservations[reservation] = [normalized_name, @@startup_generation]
           :admitted
         end
       end
@@ -707,22 +709,22 @@ module Lich
         @@startup_mutex.synchronize do
           return [:shutdown, nil] if @@shutdown_started
 
-          unless @@startup_reservations.value?(normalized_name)
+          unless __startup_in_progress_locked?(normalized_name)
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
-            @@startup_reservations[reservation] = normalized_name
+            @@startup_reservations[reservation] = [normalized_name, nil]
             candidate = completed || active
             return [candidate ? :duplicate : :admitted, candidate]
           end
 
           @@completed_start_waiters[normalized_name] += 1
           begin
-            while @@startup_reservations.value?(normalized_name)
+            while __startup_in_progress_locked?(normalized_name)
               @@startup_condition.wait(@@startup_mutex)
             end
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
-            @@startup_reservations[reservation] = normalized_name
+            @@startup_reservations[reservation] = [normalized_name, nil]
             candidate = completed || active
             [candidate ? :duplicate : :admitted, candidate]
           ensure
@@ -748,16 +750,19 @@ module Lich
 
       def Script.__finish_start(reservation, script = nil)
         @@startup_mutex.synchronize do
-          name = @@startup_reservations.delete(reservation)
+          name, generation = @@startup_reservations.delete(reservation)
           if name&.start_with?('lib')
-            @@completed_named_starts.delete(name)
-            if script
-              @@completed_named_starts[name] =
-                if @@completed_start_waiters[name].positive?
-                  script
-                else
-                  WeakRef.new(script)
-                end
+            current_generation = __completed_start_generation(@@completed_named_starts[name])
+            if generation.nil? || generation >= current_generation
+              @@completed_named_starts.delete(name)
+              if script
+                completed = if @@completed_start_waiters[name].positive?
+                              script
+                            else
+                              WeakRef.new(script)
+                            end
+                @@completed_named_starts[name] = [generation, completed]
+              end
             end
           end
           @@startup_condition.broadcast
@@ -784,11 +789,24 @@ module Lich
       private_class_method :__discard_completed_start
 
       def Script.__completed_start_value(entry)
+        entry = entry[1] if entry.is_a?(Array) && entry.first.is_a?(Integer)
         entry.is_a?(WeakRef) ? entry.__getobj__ : entry
       rescue WeakRef::RefError
         nil
       end
       private_class_method :__completed_start_value
+
+      def Script.__completed_start_generation(entry)
+        return entry.first if entry.is_a?(Array) && entry.first.is_a?(Integer)
+
+        0
+      end
+      private_class_method :__completed_start_generation
+
+      def Script.__startup_in_progress_locked?(name)
+        @@startup_reservations.any? { |_reservation, (reserved_name, _generation)| reserved_name == name }
+      end
+      private_class_method :__startup_in_progress_locked?
 
       # Starts an anonymous child script owned by the current script.
       #
