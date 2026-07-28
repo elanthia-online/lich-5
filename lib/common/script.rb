@@ -699,8 +699,8 @@ module Lich
           unless __startup_in_progress_locked?(normalized_name)
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
-            @@startup_reservations[reservation] = [normalized_name, nil]
             candidate = completed || active
+            @@startup_reservations[reservation] = [normalized_name, nil, candidate]
             return [candidate ? :duplicate : :admitted, candidate]
           end
 
@@ -711,8 +711,8 @@ module Lich
             end
             completed = __completed_start_value(@@completed_named_starts[normalized_name])
             active = __active_named_script(normalized_name)
-            @@startup_reservations[reservation] = [normalized_name, nil]
             candidate = completed || active
+            @@startup_reservations[reservation] = [normalized_name, nil, candidate]
             [candidate ? :duplicate : :admitted, candidate]
           ensure
             @@completed_start_waiters[normalized_name] -= 1
@@ -735,12 +735,12 @@ module Lich
       end
       private_class_method :__active_named_script
 
-      def Script.__finish_start(reservation, script = nil)
+      def Script.__finish_start(reservation, script = nil, preserve_completed: false)
         @@startup_mutex.synchronize do
-          name, generation = @@startup_reservations.delete(reservation)
+          name, generation, = @@startup_reservations.delete(reservation)
           if name&.start_with?('lib')
             current_generation = __completed_start_generation(@@completed_named_starts[name])
-            if generation && generation >= current_generation
+            if !preserve_completed && generation && generation >= current_generation
               @@completed_named_starts.delete(name)
               handoff_expected = @@completed_start_waiters[name].positive? ||
                                  __library_handoff_reserved_locked?(name)
@@ -753,6 +753,14 @@ module Lich
         end
       end
       private_class_method :__finish_start
+
+      def Script.__reserved_start_candidate(reservation)
+        @@startup_mutex.synchronize do
+          entry = @@startup_reservations[reservation]
+          entry&.[](2)
+        end
+      end
+      private_class_method :__reserved_start_candidate
 
       def Script.__publish_to_registry(admitted:)
         @@startup_mutex.synchronize do
@@ -933,7 +941,19 @@ module Lich
 
           [script, already_loaded, owns_loading]
         ensure
-          __finish_start(startup_reservation)
+          begin
+            reserved_candidate = __reserved_start_candidate(startup_reservation)
+            if reserved_candidate
+              script ||= reserved_candidate
+              @@library_mutex.synchronize do
+                @@loading_libraries[library_name] ||= reserved_candidate
+              end
+            end
+            __finish_start(startup_reservation, nil, :preserve_completed => start_required == true)
+          ensure
+            published_script = script || @@library_mutex.synchronize { @@loading_libraries[library_name] }
+            __discard_completed_start(library_name, published_script) if published_script
+          end
         end
         script, already_loaded, owns_loading = prepared
         return true if already_loaded
@@ -985,9 +1005,9 @@ module Lich
               raise LoadError, "cyclic script library dependency: #{library_name}"
             end
             dependencies = @@library_waits[caller_script]
-            dependencies = Set.new(Array(dependencies)) unless dependencies.is_a?(Set)
+            dependencies = Hash.new(0) unless dependencies.is_a?(Hash)
             @@library_waits[caller_script] = dependencies
-            dependencies.add(script)
+            dependencies[script] += 1
           end
         end
 
@@ -997,8 +1017,9 @@ module Lich
         if caller_script
           @@library_mutex.synchronize do
             dependencies = @@library_waits[caller_script]
-            if dependencies.is_a?(Set)
-              dependencies.delete(script)
+            if dependencies.is_a?(Hash)
+              dependencies[script] -= 1
+              dependencies.delete(script) unless dependencies[script].positive?
               @@library_waits.delete(caller_script) if dependencies.empty?
             elsif dependencies.equal?(script)
               @@library_waits.delete(caller_script)
@@ -1013,12 +1034,12 @@ module Lich
         completed = script.completed_successfully?
         @@library_mutex.synchronize do
           if @@loading_libraries[library_name].equal?(script)
-            @@loading_libraries.delete(library_name)
             if error || !completed
               @@loaded_libraries.delete(library_name)
             else
               @@loaded_libraries.add(library_name)
             end
+            @@loading_libraries.delete(library_name)
           end
         end
         __validate_library_completion(library_name, script)
@@ -1040,7 +1061,7 @@ module Lich
 
         visited.add(start)
         dependencies = @@library_waits[start]
-        dependencies = dependencies.is_a?(Set) ? dependencies : Array(dependencies)
+        dependencies = dependencies.is_a?(Hash) ? dependencies.keys : Array(dependencies)
         dependencies.any? { |dependency| __library_dependency_reaches?(dependency, target, visited) }
       end
       private_class_method :__library_dependency_reaches?

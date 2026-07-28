@@ -1455,6 +1455,31 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.libs).to include('libutil')
     end
 
+    it 'preserves an adopted generation when cancelled before publishing it' do
+      startup_token = Object.new
+      script_class.__send__(:__begin_start, startup_token, 'libutil', :force => false)
+      original_begin = script_class.method(:__begin_library_start)
+      allow(script_class).to receive(:__begin_library_start) do |*args|
+        result = original_begin.call(*args)
+        Thread.current.kill
+        result
+      end
+      loader = Thread.new { script_class.loadlib('util') }
+      waiters = script_class.class_variable_get(:@@completed_start_waiters)
+      Timeout.timeout(1) { Thread.pass until waiters['libutil'] == 1 }
+
+      script_class.__send__(:__finish_start, startup_token, library_script)
+      loader.join
+      allow(script_class).to receive(:__begin_library_start).and_call_original
+      allow(script_class).to receive(:start)
+
+      expect(script_class.loadlib('util')).to be(true)
+      expect(script_class).not_to have_received(:start)
+      expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
+    ensure
+      loader&.kill
+    end
+
     it 'clears an older completed generation when a newer startup fails' do
       old_generation = instance_double(script_class)
       script_class.class_variable_set(:@@completed_named_starts, { 'libutil' => old_generation })
@@ -1631,7 +1656,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       )
       script_class.class_variable_set(:@@running, [caller_script])
       script_class.class_variable_set(:@@loading_libraries, { 'libtarget' => target_script })
-      script_class.class_variable_set(:@@library_waits, { target_script => caller_script })
+      script_class.class_variable_set(:@@library_waits, { target_script => { caller_script => 1 } })
       allow(script_class).to receive(:current).and_return(caller_script)
       allow(script_class).to receive(:__find_script_file).with('libtarget').and_return('/custom/team/libtarget.lic')
 
@@ -1686,11 +1711,69 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       ]
       2.times { entered.pop }
 
-      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(Set[target_one, target_two])
+      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(
+        target_one => 1,
+        target_two => 1
+      )
 
       2.times { release << true }
       waiters.each(&:join)
       expect(script_class.class_variable_get(:@@library_waits)).to be_empty
+    end
+
+    it 'retains a shared dependency edge when one same-target waiter is cancelled' do
+      caller_script = build_script('libcaller')
+      target_script = instance_double(script_class, :name => 'libtarget')
+      entered = Queue.new
+      release = Queue.new
+      allow(target_script).to receive(:join) { entered << true; release.pop }
+      allow(script_class).to receive(:current).and_return(caller_script)
+
+      waiters = Array.new(2) do
+        Thread.new { script_class.__send__(:__join_library, 'libtarget', target_script) }
+      end
+      2.times { entered.pop }
+      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 2)
+
+      waiters.first.kill
+      waiters.first.join
+
+      expect(script_class.class_variable_get(:@@library_waits)[caller_script]).to eq(target_script => 1)
+      expect(
+        script_class.__send__(:__library_dependency_reaches?, caller_script, target_script)
+      ).to be(true)
+
+      release << true
+      waiters.last.join
+      expect(script_class.class_variable_get(:@@library_waits)).to be_empty
+    ensure
+      waiters&.each(&:kill)
+      release << true if defined?(release) && release
+    end
+
+    it 'keeps a completed marker until loaded state is published' do
+      interrupting_set = Class.new(Set) do
+        def add(value)
+          super
+          unless defined?(@interrupted)
+            @interrupted = true
+            Thread.current.kill
+          end
+          self
+        end
+      end.new
+      script_class.class_variable_set(:@@loaded_libraries, interrupting_set)
+      script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
+
+      loader = Thread.new { script_class.loadlib('util') }
+      loader.join
+
+      expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@loading_libraries)).to eq('libutil' => library_script)
+      expect(script_class.loadlib('util')).to be(true)
+      expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+    ensure
+      loader&.kill
     end
 
     it 'serializes a retry behind the failed generation' do
