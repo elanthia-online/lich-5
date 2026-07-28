@@ -1090,6 +1090,33 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script).not_to be_running
     end
 
+    it 'recovers a dead cleanup executor when explicitly killed again' do
+      script = build_script('runtime-cleanup-retry')
+      script_class.class_variable_set(:@@running, [script])
+      cleanup_entered = Queue.new
+      first_cleanup = true
+      allow(script).to receive(:__run_kill_cleanup).and_wrap_original do |method, **kwargs|
+        if first_cleanup
+          first_cleanup = false
+          cleanup_entered << true
+          Queue.new.pop
+        else
+          method.call(**kwargs)
+        end
+      end
+
+      script.kill
+      cleanup_entered.pop
+      cleanup_thread = Object.instance_method(:instance_variable_get).bind_call(script, :@cleanup_thread)
+      cleanup_thread.kill
+      cleanup_thread.join
+
+      script.kill
+
+      expect(script.join(1)).to equal(script)
+      expect(script).not_to be_running
+    end
+
     it 'resumes remaining exit callbacks after cleanup executor cancellation' do
       script = build_script('cancelled-callback')
       script_class.class_variable_set(:@@running, [script])
@@ -1919,6 +1946,20 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.libs).to include('libutil')
     end
 
+    it 'keeps a fast-path timeout as the single-flight owner for retry' do
+      allow(library_script).to receive(:join).with(0.01).and_return(nil, library_script)
+      script_class.class_variable_set(:@@loading_libraries, 'libutil' => library_script)
+
+      expect {
+        script_class.loadlib('util', :timeout => 0.01)
+      }.to raise_error(script_class::LibraryJoinTimeout, /wait timed out/)
+      expect(script_class.class_variable_get(:@@loading_libraries)).to eq('libutil' => library_script)
+
+      expect(script_class.loadlib('util', :timeout => 0.01)).to be(true)
+      expect(script_class.class_variable_get(:@@loading_libraries)).to be_empty
+      expect(script_class.libs).to include('libutil')
+    end
+
     it 'adopts an admitted plain start across concurrent duplicate callers' do
       admitted_script = instance_double(
         script_class,
@@ -2319,13 +2360,13 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       allow(script_class).to receive(:loadlib).and_return(true)
 
       expect(script_class.reloadlibs).to be(true)
-      expect(script_class).to have_received(:loadlib).with('libutil')
-      expect(script_class).to have_received(:loadlib).with('libstatus')
+      expect(script_class).to have_received(:loadlib).with('libutil', :timeout => 1.0)
+      expect(script_class).to have_received(:loadlib).with('libstatus', :timeout => 1.0)
     end
 
     it 'invalidates a library cache entry when reload fails' do
       script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
-      allow(script_class).to receive(:loadlib).with('libutil').and_raise(LoadError, 'broken reload')
+      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0).and_raise(LoadError, 'broken reload')
 
       expect(script_class.reloadlibs).to be(false)
       expect(script_class.libs).to be_empty
@@ -2340,6 +2381,16 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.reloadlibs).to be(true)
       expect(script_class).not_to have_received(:loadlib)
       expect(script_class.libs).to include('libutil')
+    end
+
+    it 'bounds reload waits for a still-running library' do
+      script_class.class_variable_set(:@@loaded_libraries, Set['libutil'])
+      allow(script_class).to receive(:loadlib)
+        .with('libutil', :timeout => 0.01)
+        .and_raise(script_class::LibraryJoinTimeout, 'still running')
+
+      expect(script_class.reloadlibs(:timeout => 0.01)).to be(false)
+      expect(script_class.libs).to be_empty
     end
   end
 

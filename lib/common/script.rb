@@ -31,6 +31,7 @@ module Lich
       CHILD_RELATIONSHIP_MUTEX = Mutex.new
       LIFECYCLE_MUTEX_INITIALIZER = Mutex.new
       CHILD_JOIN_TIMEOUT = 1.0
+      LIBRARY_RELOAD_TIMEOUT = 1.0
       RAW_THREAD_GROUP_ADD = ThreadGroup.instance_method(:add)
       RAW_THREAD_GROUP_LIST = ThreadGroup.instance_method(:list)
       RAW_THREAD_GROUP_ENCLOSE = ThreadGroup.instance_method(:enclose)
@@ -859,7 +860,7 @@ module Lich
       private_class_method :__startup_in_progress_locked?
 
       def Script.__library_handoff_reserved_locked?(name)
-        @@startup_reservations.any? do |_reservation, (reserved_name, generation)|
+        @@startup_reservations.any? do |_reservation, (reserved_name, _owner, generation)|
           reserved_name == name && generation.nil?
         end
       end
@@ -1042,15 +1043,16 @@ module Lich
 
       # Runs each loaded script library again using a stable registry snapshot.
       #
-      # @return [true]
-      def Script.reloadlibs
+      # @param timeout [Numeric, nil] maximum seconds to wait for each library
+      # @return [Boolean] whether every library completed successfully
+      def Script.reloadlibs(timeout: LIBRARY_RELOAD_TIMEOUT)
         current_library = Script.current&.name&.downcase
         successful = true
         @@library_mutex.synchronize { @@loaded_libraries.dup }.each do |library|
           next if library == current_library
 
           @@library_mutex.synchronize { @@loaded_libraries.delete(library) }
-          Script.loadlib(library)
+          Script.loadlib(library, :timeout => timeout)
         rescue LoadError => e
           successful = false
           Lich.log("error: failed to reload script library #{library}: #{e.message}")
@@ -1614,7 +1616,10 @@ module Lich
               true
             end
           end
-          return @name unless start_cleanup
+          unless start_cleanup
+            __refresh_deferred_stop(:context => context)
+            return @name
+          end
 
           if async
             cleanup_thread = Thread.new {
@@ -2326,7 +2331,7 @@ module Lich
       end
       private :__wait_for_worker_shutdown
 
-      def __refresh_deferred_stop
+      def __refresh_deferred_stop(context: :shutdown)
         abandoned_cleanup = Script.__send__(:__registry_synchronize) do
           lifecycle_mutex.synchronize do
             if @cleanup_started && !@cleanup_launch_pending && @@running.include?(self) &&
@@ -2338,7 +2343,7 @@ module Lich
         if abandoned_cleanup
           __run_kill_cleanup(
             :source         => @kill_source || ['abandoned cleanup recovery'],
-            :context        => :shutdown,
+            :context        => context,
             :record_metrics => false
           )
         end
