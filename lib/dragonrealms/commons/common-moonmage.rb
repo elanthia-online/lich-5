@@ -28,6 +28,12 @@ module Lich
       # Regex for extracting moon color from glance output.
       MOON_GLANCE_REGEX = /You glance at a .* (?<color>black|red-hot|blue-white) moon(?:blade|staff)/i.freeze
 
+      # Regex for extracting the spelled-out remaining duration from FOCUSing a
+      # moon weapon, e.g. "You judge that the moonblade will last for roughly
+      # twenty-nine roisaen." The count is captured as words (a compound like
+      # "twenty-nine" or a single word like "five"). One roisaen == 60 seconds.
+      MOON_FOCUS_DURATION_REGEX = /will last for roughly (?<count>[a-z][a-z-]*) roisaen/i.freeze
+
       # Maps divination tool keywords to their use verb.
       DIV_TOOL_VERBS = {
         'charts' => 'review',
@@ -321,6 +327,40 @@ module Lich
           return MOON_COLOR_TO_NAME[match[:color]] if match
         end
         nil
+      end
+
+      # Focuses the summoned moon weapon (moonblade/moonstaff) you are holding or
+      # wearing and returns how many roisaen it will last, or nil if you have no
+      # moon weapon or the duration could not be parsed. One roisaen == 60
+      # seconds; moonblade duration ranges 12-41 minutes.
+      # https://elanthipedia.play.net/Moonblade
+      #
+      # NOTE: FOCUS incurs roundtime, so callers should not poll this every tick.
+      def moon_weapon_duration
+        MOON_WEAPON_NAMES.each do |weapon|
+          result = DRC.bput("focus my #{weapon}", MOON_FOCUS_DURATION_REGEX, "I could not find", "Focus on what")
+          match = result&.match(MOON_FOCUS_DURATION_REGEX)
+          next unless match
+
+          waitrt?
+          return parse_roisaen(match[:count])
+        end
+        nil
+      end
+
+      # Converts a spelled-out roisaen count (as reported by FOCUS, e.g. "five",
+      # "twenty", "twenty-nine", "forty-one") into an Integer, or nil if any word
+      # is not a recognized number. Reuses the canonical DR number word map, so
+      # compounds may be hyphen- or space-separated and are summed
+      # ("forty-one" -> 41). Case-insensitive.
+      def parse_roisaen(text)
+        return nil if text.nil?
+
+        words = text.downcase.tr('-', ' ').split
+        return nil if words.empty?
+        return nil unless words.all? { |word| NUM_MAP.key?(word) }
+
+        words.sum { |word| NUM_MAP[word] }
       end
 
       def update_astral_data(data, settings = nil)
