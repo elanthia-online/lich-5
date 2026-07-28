@@ -35,6 +35,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@loaded_libraries, Set.new)
     script_class.class_variable_set(:@@loaded_library_owners, {})
     script_class.class_variable_set(:@@loading_libraries, {})
+    script_class.class_variable_set(:@@reloading_libraries, Set.new)
     script_class.class_variable_set(:@@library_waits, {})
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
@@ -214,6 +215,36 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(Timeout.timeout(1) { script_class.begin_shutdown }).to be_empty
       expect(script_class.class_variable_get(:@@startup_reservations)).to be_empty
+    end
+
+    it 'releases startup waiter accounting when cancelled after registration' do
+      reservation = Object.new
+      script_class.__send__(:__begin_start, reservation, 'libwaiting', :force => true)
+      interrupting_waiters = Class.new(Hash) do
+        def initialize
+          super(0)
+        end
+
+        def []=(name, count)
+          super
+          unless defined?(@interrupted)
+            @interrupted = true
+            Thread.current.kill
+          end
+        end
+      end.new
+      script_class.class_variable_set(:@@completed_start_waiters, interrupting_waiters)
+
+      waiter = Thread.new do
+        script_class.__send__(:__begin_library_start, Object.new, 'libwaiting')
+      end
+      waiter.join
+
+      expect(script_class.class_variable_get(:@@completed_start_waiters)).to be_empty
+      expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
+    ensure
+      script_class.__send__(:__finish_start, reservation) if defined?(reservation) && reservation
+      waiter&.kill
     end
 
     it 'uses the published name when reserving a compressed script' do
@@ -711,6 +742,50 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(parent.kill_sync(:context => :runtime, :timeout => 1)).to equal(parent)
       expect(launcher).not_to be_alive
+    end
+
+    it 'releases a child launch reservation when cancelled after admission' do
+      parent = build_script('parent')
+      script_class.class_variable_set(:@@running, [parent])
+      original_mutex = parent.__send__(:child_scripts_mutex)
+      interrupting_mutex = Object.new
+      first_synchronize = true
+      interrupting_mutex.define_singleton_method(:synchronize) do |&block|
+        result = original_mutex.synchronize(&block)
+        if first_synchronize
+          first_synchronize = false
+          Thread.current.kill
+        end
+        result
+      end
+      parent.instance_variable_set(:@child_scripts_mutex, interrupting_mutex)
+
+      launcher = Thread.new { parent.__send__(:__launch_child) { raise 'unreachable' } }
+      launcher.join
+
+      launches = Object.instance_method(:instance_variable_get).bind_call(parent, :@child_launches)
+      expect(launches.nil? || launches.empty?).to be(true)
+      expect(parent.kill_sync(:context => :runtime, :timeout => 1)).to equal(parent)
+    ensure
+      launcher&.kill
+    end
+
+    it 'reaps a child launch reservation when its owner dies without signaling' do
+      parent = build_script('parent')
+      script_class.class_variable_set(:@@running, [parent])
+      launch_owner = Thread.new { Queue.new.pop }
+      parent.instance_variable_set(:@child_launches, Object.new => launch_owner)
+      killer = Thread.new { parent.kill_sync(:context => :runtime, :timeout => 1) }
+      sleep 0.02
+
+      launch_owner.kill
+      launch_owner.join
+
+      expect(killer.value).to equal(parent)
+      expect(parent).not_to be_running
+    ensure
+      launch_owner&.kill
+      killer&.kill
     end
 
     it 'does not publish a subscript before its worker is allocated' do
@@ -1229,6 +1304,68 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script.join(1)).to equal(script)
     end
 
+    it 'retries an exit callback when cancellation interrupts its dequeue' do
+      dequeue_interrupted = Queue.new
+      release_dequeue = Queue.new
+      interrupting_callbacks = Class.new(Array) do
+        define_method(:shift) do
+          entry = super()
+          unless defined?(@interrupted)
+            @interrupted = true
+            dequeue_interrupted << true
+            release_dequeue.pop
+          end
+          entry
+        end
+      end
+      callback_calls = 0
+      script = build_script('cancelled-callback-dequeue')
+      script.instance_variable_set(:@at_exit_procs, interrupting_callbacks.new([proc { callback_calls += 1 }]))
+      script_class.class_variable_set(:@@running, [script])
+
+      cleanup_thread = Thread.new { script.kill(:context => :shutdown, :async => false) }
+      Timeout.timeout(1) { dequeue_interrupted.pop }
+      cleanup_thread.kill
+      cleanup_thread.join
+      script_class.progress_shutdown
+
+      expect(script.join(1)).to equal(script)
+      expect(callback_calls).to eq(1)
+    ensure
+      release_dequeue << true if defined?(release_dequeue) && release_dequeue
+    end
+
+    it 'retries a die-with callback when cancellation interrupts its dequeue' do
+      dequeue_interrupted = Queue.new
+      release_dequeue = Queue.new
+      interrupting_callbacks = Class.new(Array) do
+        define_method(:shift) do
+          entry = super()
+          unless defined?(@interrupted)
+            @interrupted = true
+            dequeue_interrupted << true
+            release_dequeue.pop
+          end
+          entry
+        end
+      end
+      script = build_script('cancelled-die-with-dequeue')
+      script.instance_variable_set(:@die_with, interrupting_callbacks.new(['target']))
+      script_class.class_variable_set(:@@running, [script])
+      allow(script_class).to receive(:kill).with('target', hash_including(:context)).and_return(true)
+
+      cleanup_thread = Thread.new { script.kill(:context => :shutdown, :async => false) }
+      Timeout.timeout(1) { dequeue_interrupted.pop }
+      cleanup_thread.kill
+      cleanup_thread.join
+      script_class.progress_shutdown
+
+      expect(script.join(1)).to equal(script)
+      expect(script_class).to have_received(:kill).once
+    ensure
+      release_dequeue << true if defined?(release_dequeue) && release_dequeue
+    end
+
     it 'does not run deferred cleanup from a timeout-bounded join' do
       script = build_script('observational-join')
       script_class.class_variable_set(:@@running, [script])
@@ -1683,6 +1820,28 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(callback_ran).to be(false)
       expect(target_script.exit_error).to be_a(ThreadError)
       expect(target_script.exit_error.message).to match(/source thread group is not managed/)
+    end
+
+    it 'recognizes cleanup ownership from a script already in the stopping registry' do
+      caller_script = build_script('stopping-owner')
+      target_script = build_script('stopping-owner-target')
+      script_class.class_variable_set(:@@running, [caller_script, target_script])
+      callback_ran = false
+      target_script.at_exit { callback_ran = true }
+      caller = Thread.new do
+        target_script.kill(:context => :shutdown, :async => false)
+      end
+      caller_script.thread_group.add(caller)
+      script_class.class_variable_set(:@@running, [target_script])
+      script_class.class_variable_set(:@@stopping, [caller_script])
+
+      caller.join
+
+      expect(target_script.join(1)).to equal(target_script)
+      expect(callback_ran).to be(true)
+      expect(target_script.exit_error).to be_nil
+    ensure
+      caller&.kill
     end
 
     it 'does not detach an inline cleanup caller when its group becomes enclosed' do
@@ -2466,6 +2625,68 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       waiter&.kill
     end
 
+    it 'completes dependency cleanup after repeated cancellation' do
+      caller_script = build_script('libcaller')
+      target_script = instance_double(script_class, :name => 'libtarget')
+      join_entered = Queue.new
+      join_unwinding = Queue.new
+      allow(target_script).to receive(:join) do
+        join_entered << true
+        begin
+          Queue.new.pop
+        ensure
+          join_unwinding << true
+        end
+      end
+      allow(script_class).to receive(:current).and_return(caller_script)
+      library_mutex = script_class.class_variable_get(:@@library_mutex)
+      waiter = Thread.new do
+        script_class.__send__(:__join_library, 'libtarget', target_script)
+      end
+      join_entered.pop
+      library_mutex.lock
+
+      waiter.kill
+      join_unwinding.pop
+      waiter.kill
+      library_mutex.unlock
+      waiter.join
+
+      expect(script_class.class_variable_get(:@@library_waits)).to be_empty
+    ensure
+      library_mutex&.unlock if library_mutex&.owned?
+      waiter&.kill
+    end
+
+    it 'prunes a dead waiter when cancellation interrupts dependency cleanup' do
+      caller_script = build_script('libcaller')
+      target_script = instance_double(script_class, :name => 'libtarget', :join => true)
+      allow(script_class).to receive(:current).and_return(caller_script)
+      original_mutex = script_class.class_variable_get(:@@library_mutex)
+      interrupting_mutex = Object.new
+      synchronize_calls = 0
+      interrupting_mutex.define_singleton_method(:synchronize) do |&block|
+        synchronize_calls += 1
+        Thread.current.kill if synchronize_calls == 2
+        original_mutex.synchronize(&block)
+      end
+      script_class.class_variable_set(:@@library_mutex, interrupting_mutex)
+
+      waiter = Thread.new do
+        script_class.__send__(:__join_library, 'libtarget', target_script)
+      end
+      waiter.join
+      script_class.class_variable_set(:@@library_mutex, original_mutex)
+
+      expect(
+        script_class.__send__(:__library_dependency_reaches?, caller_script, target_script)
+      ).to be(false)
+      expect(script_class.class_variable_get(:@@library_waits)).to be_empty
+    ensure
+      script_class.class_variable_set(:@@library_mutex, original_mutex) if defined?(original_mutex)
+      waiter&.kill
+    end
+
     it 'publishes a dependency token atomically with its target edge' do
       caller_script = build_script('libcaller')
       target_script = instance_double(script_class, :name => 'libtarget')
@@ -2744,6 +2965,31 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.reloadlibs).to be(true)
       expect(script_class).to have_received(:start).once
       expect(script_class.libs).to include('libutil')
+    ensure
+      interrupted_reload&.kill
+    end
+
+    it 'retries a reload interrupted after removing its loaded marker' do
+      interrupting_libraries = Class.new(Set) do
+        def delete?(library)
+          removed = super
+          unless defined?(@interrupted)
+            @interrupted = true
+            Thread.current.kill
+          end
+          removed
+        end
+      end.new(['libutil'])
+      script_class.class_variable_set(:@@loaded_libraries, interrupting_libraries)
+      allow(script_class).to receive(:loadlib).with('libutil', :timeout => 1.0).and_return(true)
+
+      interrupted_reload = Thread.new { script_class.reloadlibs }
+      interrupted_reload.join
+
+      expect(script_class.libs).to be_empty
+      expect(script_class.reloadlibs).to be(true)
+      expect(script_class).to have_received(:loadlib).once
+      expect(script_class.class_variable_get(:@@reloading_libraries)).to be_empty
     ensure
       interrupted_reload&.kill
     end
