@@ -5,7 +5,7 @@ require_relative '../../../spec_helper'
 # Global used by check_moonwatch for autostart message
 $clean_lich_char ||= ';'
 
-# Load production code. drvariables provides Lich::DragonRealms::NUM_MAP, which
+# Load production code. drvariables publishes the $NUM_MAP global, which
 # parse_roisaen uses to convert spelled-out durations; it is a pure constants
 # file (no side effects) so requiring it here is safe.
 require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drvariables.rb')

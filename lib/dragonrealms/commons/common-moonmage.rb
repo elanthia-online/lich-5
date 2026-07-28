@@ -350,17 +350,21 @@ module Lich
 
       # Converts a spelled-out roisaen count (as reported by FOCUS, e.g. "five",
       # "twenty", "twenty-nine", "forty-one") into an Integer, or nil if any word
-      # is not a recognized number. Reuses the canonical DR number word map, so
-      # compounds may be hyphen- or space-separated and are summed
-      # ("forty-one" -> 41). Case-insensitive.
+      # is not a recognized number. Compounds may be hyphen- or space-separated
+      # and are summed ("forty-one" -> 41). Case-insensitive.
+      #
+      # Uses the global $NUM_MAP published by drinfomon/drvariables.rb (the same
+      # number word map DRC.text2num uses) rather than the Lich::DragonRealms
+      # constant, to avoid any namespace-resolution surface.
       def parse_roisaen(text)
         return nil if text.nil?
+        return nil if $NUM_MAP.nil?
 
         words = text.downcase.tr('-', ' ').split
         return nil if words.empty?
-        return nil unless words.all? { |word| NUM_MAP.key?(word) }
+        return nil unless words.all? { |word| $NUM_MAP.key?(word) }
 
-        words.sum { |word| NUM_MAP[word] }
+        words.sum { |word| $NUM_MAP[word] }
       end
 
       def update_astral_data(data, settings = nil)
