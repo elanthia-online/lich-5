@@ -755,13 +755,10 @@ module Lich
             current_generation = __completed_start_generation(@@completed_named_starts[name])
             if generation && generation >= current_generation
               @@completed_named_starts.delete(name)
-              if script
-                completed = if @@completed_start_waiters[name].positive?
-                              script
-                            else
-                              WeakRef.new(script)
-                            end
-                @@completed_named_starts[name] = [generation, completed]
+              handoff_expected = @@completed_start_waiters[name].positive? ||
+                                 __library_handoff_reserved_locked?(name)
+              if script && handoff_expected
+                @@completed_named_starts[name] = [generation, script]
               end
             end
           end
@@ -807,6 +804,13 @@ module Lich
         @@startup_reservations.any? { |_reservation, (reserved_name, _generation)| reserved_name == name }
       end
       private_class_method :__startup_in_progress_locked?
+
+      def Script.__library_handoff_reserved_locked?(name)
+        @@startup_reservations.any? do |_reservation, (reserved_name, generation)|
+          reserved_name == name && generation.nil?
+        end
+      end
+      private_class_method :__library_handoff_reserved_locked?
 
       # Starts an anonymous child script owned by the current script.
       #

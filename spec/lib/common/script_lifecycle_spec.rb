@@ -222,17 +222,26 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
-    it 'retains an unclaimed completed library start only weakly' do
+    it 'does not retain an unclaimed completed library start' do
       reservation = Object.new
       library = build_script('libunused')
       script_class.__send__(:__begin_start, reservation, 'libunused', :force => true)
 
       script_class.__send__(:__finish_start, reservation, library)
 
+      expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
+    end
+
+    it 'retains a completed library handoff strongly for a waiter' do
+      reservation = Object.new
+      library = build_script('libwaiting')
+      script_class.__send__(:__begin_start, reservation, 'libwaiting', :force => true)
+      script_class.class_variable_get(:@@completed_start_waiters)['libwaiting'] = 1
+
+      script_class.__send__(:__finish_start, reservation, library)
+
       completed = script_class.class_variable_get(:@@completed_named_starts)
-      completed_reference = completed.fetch('libunused').last
-      expect(completed_reference).to be_a(WeakRef)
-      expect(completed_reference.__getobj__).to equal(library)
+      expect(completed.fetch('libwaiting').last).to equal(library)
     end
 
     it 'records a missing-label jump as unsuccessful execution' do
@@ -1375,6 +1384,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       newer_reservation = Object.new
       script_class.__send__(:__begin_start, older_reservation, 'libutil', :force => true)
       script_class.__send__(:__begin_start, newer_reservation, 'libutil', :force => true)
+      script_class.class_variable_get(:@@completed_start_waiters)['libutil'] = 1
 
       script_class.__send__(:__finish_start, newer_reservation, newer_generation)
       script_class.__send__(:__finish_start, older_reservation, nil)
@@ -1390,6 +1400,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       newer_reservation = Object.new
       script_class.__send__(:__begin_start, older_reservation, 'libutil', :force => true)
       script_class.__send__(:__begin_start, newer_reservation, 'libutil', :force => true)
+      script_class.class_variable_get(:@@completed_start_waiters)['libutil'] = 1
 
       script_class.__send__(:__finish_start, newer_reservation, newer_generation)
       script_class.__send__(:__finish_start, older_reservation, older_generation)
@@ -1403,6 +1414,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       newer_generation = instance_double(script_class)
       adopted_reservation = Object.new
       script_class.__send__(:__begin_start, adopted_reservation, 'libutil', :force => true)
+      script_class.class_variable_get(:@@completed_start_waiters)['libutil'] = 1
       script_class.__send__(:__finish_start, adopted_reservation, adopted_generation)
       library_reservation = Object.new
       script_class.__send__(:__begin_library_start, library_reservation, 'libutil')
@@ -1430,7 +1442,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       allow(script_class).to receive(:current).and_return(nil)
       reservation = Object.new
       script_class.__send__(:__begin_start, reservation, 'libutil', :force => true)
+      script_class.class_variable_get(:@@completed_start_waiters)['libutil'] = 1
       script_class.__send__(:__finish_start, reservation, new_generation)
+      script_class.class_variable_get(:@@completed_start_waiters).delete('libutil')
 
       expect(script_class.loadlib('util')).to be(true)
       expect(old_generation).not_to have_received(:join)
