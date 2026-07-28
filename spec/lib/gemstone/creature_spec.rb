@@ -467,10 +467,12 @@ RSpec.describe Lich::Gemstone::Creature do
       # room changes and a zone change. Anything sourced from it alone (not
       # also in the room roster) must not leak into an "authoritative"
       # in-room list.
-      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
+      stale = Lich::Gemstone::CreatureInstance.register('departed thing', 9)
       stale.sync_crtr_status('hostile' => '1')
-      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
-      XMLData.current_target_ids = ['9'] # registered, hostile, but never marked into the room roster
+      # Registered and hostile, but no longer in the room roster (e.g. it left
+      # or died and the room refreshed) - only the sticky dropdown still names it.
+      Lich::Gemstone::CreatureInstance.clear_room
+      XMLData.current_target_ids = ['9']
 
       expect(described_class.targets.map(&:id)).to eq([])
     end
@@ -516,8 +518,8 @@ RSpec.describe Lich::Gemstone::Creature do
     end
 
     it 'also ignores current_target_ids, same as .targets' do
-      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
-      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
+      Lich::Gemstone::CreatureInstance.register('departed thing', 9)
+      Lich::Gemstone::CreatureInstance.clear_room # registered, but not in the room roster
       XMLData.current_target_ids = ['9']
 
       expect(described_class.in_room.map(&:id)).to eq([])
