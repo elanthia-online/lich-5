@@ -1577,6 +1577,25 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(target_script.exit_error.message).to match(/cannot establish cleanup ownership/)
     end
 
+    it 'does not run callbacks from an unmanaged non-default thread group' do
+      target_script = build_script('unmanaged-ownership-target')
+      script_class.class_variable_set(:@@running, [target_script])
+      callback_ran = false
+      target_script.at_exit { callback_ran = true }
+      source_group = ThreadGroup.new
+      caller = Thread.new do
+        target_script.kill(:context => :shutdown, :async => false)
+      end
+      source_group.add(caller)
+
+      caller.join
+
+      expect(target_script.join(1)).to equal(target_script)
+      expect(callback_ran).to be(false)
+      expect(target_script.exit_error).to be_a(ThreadError)
+      expect(target_script.exit_error.message).to match(/source thread group is not managed/)
+    end
+
     it 'does not detach an inline cleanup caller when its group becomes enclosed' do
       caller_script = build_script('caller')
       target_script = build_script('target')

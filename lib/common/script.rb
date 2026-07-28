@@ -1809,13 +1809,19 @@ module Lich
         previous_group_owner = nil
         moved_to_cleanup_group = false
         cleanup_group_error = nil
-        move_allowed = previous_thread_group.equal?(ThreadGroup::Default)
+        move_allowed = previous_thread_group.equal?(ThreadGroup::Default) ||
+                       previous_thread_group.equal?(cleanup_thread_group)
         if previous_cleanup_script
           previous_group_owner = previous_cleanup_script
           move_allowed = previous_group_owner.__send__(:__borrow_worker, Thread.current)
         elsif !move_allowed
           previous_group_owner = Script.__send__(:__script_owning_thread_group, previous_thread_group)
           move_allowed = previous_group_owner&.__send__(:__borrow_worker, Thread.current)
+        end
+        unless move_allowed
+          cleanup_group_error = ThreadError.new(
+            "cannot establish cleanup ownership for #{@name}: source thread group is not managed"
+          )
         end
         if move_allowed
           begin
