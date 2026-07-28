@@ -203,6 +203,24 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'allows a non-forced restart after a completed stopping entry is stranded' do
+      Dir.mktmpdir('script-completed-stopper-start') do |root|
+        custom_dir = File.join(root, 'custom')
+        FileUtils.mkdir_p(custom_dir)
+        File.write(File.join(custom_dir, 'ordinary.lic'), "# quiet\nnil\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        stopping = build_script('ordinary')
+        stopping.instance_variable_set(:@cleanup_complete, true)
+        script_class.class_variable_set(:@@stopping, [stopping])
+
+        restarted = script_class.start('ordinary')
+
+        expect(restarted).to be_a(script_class)
+        expect(restarted.join(2)).to equal(restarted)
+        expect(script_class.class_variable_get(:@@stopping)).to contain_exactly(stopping)
+      end
+    end
+
     it 'retains an unclaimed completed library start only weakly' do
       reservation = Object.new
       library = build_script('libunused')
@@ -326,7 +344,9 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
 
     it 'raises when anonymous child startup is rejected' do
-      allow(subscript_class).to receive(:start).and_return(false)
+      parent = build_script('stopping-parent')
+      parent.__send__(:__begin_child_shutdown)
+      allow(script_class).to receive(:current).and_return(parent)
 
       expect {
         script_class.subscript {}
@@ -497,6 +517,13 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(parent.register_child(child)).to be_nil
       expect(child).not_to be_running
+    end
+
+    it 'returns false when parent teardown rejects subscript startup' do
+      parent = build_script('stopping-parent')
+      parent.__send__(:__begin_child_shutdown)
+
+      expect(subscript_class.start(:parent => parent) {}).to be(false)
     end
 
     it 'rolls back registration when worker allocation fails' do
@@ -703,6 +730,29 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
   end
 
   describe 'synchronous lifecycle methods' do
+    it 'preserves the standard ThreadGroup surface' do
+      script = build_script('thread-group-api')
+      script_class.class_variable_set(:@@running, [script])
+      worker = Thread.new { Queue.new.pop }
+      group = script.thread_group
+
+      expect(group).to be_a(ThreadGroup)
+      expect(group).to be_instance_of(ThreadGroup)
+      expect(group.add(worker)).to equal(group)
+      expect(worker.group).to equal(group)
+      expect { group.add(Object.new) }.to raise_error(TypeError, /expected VM\/thread/)
+      expect(group).not_to be_enclosed
+      expect(group.enclose).to equal(group)
+      expect(group).to be_enclosed
+      other_group = ThreadGroup.new
+      expect { other_group.add(worker) }.to raise_error(ThreadError, /enclosed/)
+      expect(worker.group).to equal(group)
+    ensure
+      worker&.kill
+      worker&.join
+      script_class.class_variable_set(:@@running, [])
+    end
+
     it 'waits for exit handlers in kill_sync' do
       script = build_script('sync')
       script_class.class_variable_set(:@@running, [script])
@@ -1112,9 +1162,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     it 'preserves an underlying thread-group rejection when worker teardown raises' do
       script = build_script('group-rejection')
       script_class.class_variable_set(:@@running, [script])
-      group = instance_double(ThreadGroup, :list => [])
-      allow(group).to receive(:add).and_raise(ThreadError, 'group rejected worker')
-      script.instance_variable_set(:@thread_group, group)
+      source_group = ThreadGroup.new
       worker = Thread.new do
         Thread.current.report_on_exception = false
         begin
@@ -1123,8 +1171,10 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
           raise 'worker teardown failed'
         end
       end
+      source_group.add(worker)
+      source_group.enclose
 
-      expect { script.thread_group.add(worker) }.to raise_error(ThreadError, /group rejected worker/)
+      expect { script.thread_group.add(worker) }.to raise_error(ThreadError, /enclosed/)
     end
 
     it 'does not block shutdown cleanup on a worker ensure block' do
@@ -1284,7 +1334,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.libs).to eq(Set['libutil'])
     end
 
-    it 'adopts an admitted plain start instead of reporting a duplicate failure' do
+    it 'adopts an admitted plain start across concurrent duplicate callers' do
       admitted_script = instance_double(
         script_class,
         :name                    => 'libutil',
@@ -1294,13 +1344,14 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       )
       startup_token = Object.new
       script_class.__send__(:__begin_start, startup_token, 'libutil', :force => false)
-      loader = Thread.new { script_class.loadlib('util') }
-      expect(loader.join(0.02)).to be_nil
+      loaders = Array.new(3) { Thread.new { script_class.loadlib('util') } }
+      waiters = script_class.class_variable_get(:@@completed_start_waiters)
+      Timeout.timeout(1) { Thread.pass until waiters['libutil'] == loaders.length }
       allow(script_class).to receive(:start)
 
       script_class.__send__(:__finish_start, startup_token, admitted_script)
 
-      expect(loader.value).to be(true)
+      expect(loaders.map(&:value)).to all be(true)
       expect(script_class).not_to have_received(:start)
       expect(script_class.libs).to include('libutil')
     end
@@ -1335,6 +1386,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.loadlib('util')).to be(true)
       expect(old_generation).not_to have_received(:join)
       expect(script_class.libs).to include('libutil')
+      expect(script_class.class_variable_get(:@@completed_named_starts)).to be_empty
     end
 
     it 'uses the resolved library name when adopting a prefix start' do

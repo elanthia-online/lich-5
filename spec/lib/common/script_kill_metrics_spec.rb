@@ -10,7 +10,7 @@ require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/common/upstreamhook'
 
 RSpec.describe 'Lich::Common::Script kill metrics' do
-  let(:thread_group) { instance_double(ThreadGroup, list: [], add: true) }
+  let(:thread_group) { ThreadGroup.new }
   let(:script_class) { Lich::Common::Script }
 
   before(:context) do
