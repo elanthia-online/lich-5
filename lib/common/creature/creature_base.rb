@@ -275,6 +275,11 @@ module Lich
 
         # Configures registry limits.
         #
+        # Every call resets omitted options to their defaults - max_size to 1000
+        # and auto_register to true - so calling this with no arguments restores
+        # all defaults. Facade callers (e.g. `Creature.configure(**options)`)
+        # should pass every option they mean to keep.
+        #
         # @param max_size [Integer] maximum number of retained instances.
         # @param auto_register [Boolean] whether {#register} creates instances.
         # @return [void]

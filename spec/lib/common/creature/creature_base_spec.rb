@@ -91,8 +91,10 @@ RSpec.describe Lich::Common::CreatureBase do
       creature.add_status('web', 5) # 5-second lifetime
       expect(creature.has_status?('web')).to be true
 
-      # Fast-forward past the expiry rather than sleeping.
-      allow(Time).to receive(:now).and_return(Time.now + 6)
+      # Fast-forward past the expiry rather than sleeping. Compute the target
+      # time before stubbing so it never reads back through the stub.
+      later = Time.now + 6
+      allow(Time).to receive(:now).and_return(later)
       expect(creature.has_status?('web')).to be false
     end
 
@@ -151,7 +153,7 @@ RSpec.describe Lich::Common::CreatureBase do
   end
 
   describe '#flag_active?' do
-    it 'matches a status, a classification flag, or a not_ negation' do
+    it 'matches either a status or a classification flag' do
       creature = SampleCreature.register('kobold', 1)
       creature.sync_crtr_status('hostile' => '1', 'prone' => '1')
 
