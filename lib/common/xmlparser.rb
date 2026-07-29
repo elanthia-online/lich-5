@@ -66,12 +66,13 @@ module Lich
         @next_level_text = String.new
         @current_target_ids = Array.new
         @pending_crtr_status = Hash.new
-        # DragonRealms stream-order name backfill: bold room-objs names captured
-        # in order, then paired index-for-index with the <crtrStatus> batch that
-        # follows (see the room-objs and crtrStatus handlers). DR-only; unused by
+        # DragonRealms stream-order name backfill: bold room-objs names and the
+        # <crtrStatus> batch ids are both captured in order, then paired at the
+        # following <prompt> - but only when their counts match exactly (an
+        # all-or-nothing gate; see the prompt handler). DR-only; unused by
         # GemStone, which carries the name inline on the bold <a> tag.
         @dr_room_npc_names = []
-        @dr_crtr_index = 0
+        @dr_crtr_ids = []
 
         @room_count = 0
         @room_title = String.new
@@ -206,9 +207,9 @@ module Lich
         # exist id (ids are recycled - see Creature.targets' notes).
         @pending_crtr_status.clear
         # A reset mid-fragment invalidates the room-objs<->crtrStatus pairing, so
-        # drop any captured names and restart the batch index.
+        # drop any captured names and collected ids.
         @dr_room_npc_names = []
-        @dr_crtr_index = 0
+        @dr_crtr_ids = []
       end
 
       def safe_to_respond?
@@ -434,10 +435,10 @@ module Lich
               Lich::DragonRealms::Creature.clear_room if defined?(Lich::DragonRealms::Creature)
               @pending_crtr_status.clear
               # Start a fresh room-objs<->crtrStatus pairing for this refresh: the
-              # bold names captured below are zipped, in order, to the crtrStatus
-              # batch that follows this component.
+              # bold names captured below and the crtrStatus ids that follow are
+              # zipped at the next <prompt>, gated on equal counts.
               @dr_room_npc_names = []
-              @dr_crtr_index = 0
+              @dr_crtr_ids = []
             elsif attributes['id'] == 'room players'
               GameObj.begin_room_players
             elsif attributes['id'] == 'room exits'
@@ -468,21 +469,21 @@ module Lich
             #
             # DragonRealms differs: its room-objs carry no per-creature <a exist>
             # tag, so there is no text() path to defer to. Its <crtrStatus> tags
-            # arrive batched after the room-objs component and carry their own
-            # id, so they are applied immediately, id-first. The name is
-            # backfilled two ways: the stream-order pairing here (the Nth bold
-            # room-objs name captured above -> the Nth crtrStatus in this batch),
-            # and, authoritatively, later from the assess stream (see
+            # arrive batched after the room-objs component and carry their own id,
+            # so flags are applied immediately, id-first. The name is backfilled
+            # two ways: the stream-order pairing (bold room-objs names zipped to
+            # this batch's ids at the next <prompt>, gated on equal counts) and,
+            # authoritatively, later from the assess stream (see
             # lib/dragonrealms/creature.rb).
             crtr_id = attributes['exist']
             if crtr_id
               crtr_flags = attributes.reject { |k, _| k == 'exist' }
               if XMLData.game =~ /^DR/
-                # Bounds-checked: more crtrStatus than captured names yields nil
-                # (the count-guard), never a mis-paired earlier slot.
-                positional_name = @dr_room_npc_names[@dr_crtr_index]
-                @dr_crtr_index += 1
-                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags, positional_name) if defined?(Lich::DragonRealms::Creature)
+                # Apply flags now (id-first, name-less); collect the id in arrival
+                # order so the prompt handler can pair it to a bold name only if
+                # the counts match for this refresh.
+                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
+                @dr_crtr_ids << crtr_id
               else
                 @pending_crtr_status[crtr_id] = crtr_flags
               end
@@ -620,6 +621,24 @@ module Lich
               @dr_active_spells_tmp = {}
             elsif @dr_active_spells_clear
               @dr_active_spells = {}
+            end
+
+            # DragonRealms stream-order name backfill, applied as an
+            # all-or-nothing batch at the end of the room-objs + crtrStatus
+            # sequence. Only when the captured bold-name count exactly matches
+            # this batch's crtrStatus id count do we pair them by position; on any
+            # mismatch (e.g. a bold room entity that emits no crtrStatus) we skip
+            # naming rather than risk a shifted mis-pair - assess still backfills
+            # names by id. Reset after every prompt so a later lone crtrStatus
+            # batch can't reuse a previous refresh's names.
+            if XMLData.game =~ /^DR/ && defined?(Lich::DragonRealms::Creature)
+              if !@dr_crtr_ids.empty? && @dr_crtr_ids.length == @dr_room_npc_names.length
+                @dr_crtr_ids.each_with_index do |id, i|
+                  Lich::DragonRealms::Creature[id]&.apply_room_name(@dr_room_npc_names[i])
+                end
+              end
+              @dr_room_npc_names = []
+              @dr_crtr_ids = []
             end
           end
 

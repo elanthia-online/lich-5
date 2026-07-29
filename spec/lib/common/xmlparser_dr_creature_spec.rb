@@ -93,21 +93,32 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(Lich::DragonRealms::Creature[99355351].noun).to eq('moradu')
     end
 
-    it 'count-guards: crtrStatus beyond the captured bold names get no name' do
+    it 'count-guard (all-or-nothing): more crtrStatus than bold names -> no names applied' do
       feed(%(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, <pushBold/>a kobold<popBold/> and some junk.</component><crtrStatus exist="1" hostile="1"/><crtrStatus exist="2" hostile="1"/><crtrStatus exist="3" hostile="1"/><prompt time="1785273999">R&gt;</prompt>))
 
-      expect(Lich::DragonRealms::Creature[1].name).to eq('a jeol moradu')
-      expect(Lich::DragonRealms::Creature[2].name).to eq('a kobold')
-      expect(Lich::DragonRealms::Creature[3].name).to be_nil # no matching bold slot
+      # 3 crtrStatus vs 2 bold names: counts differ, so NONE are positionally
+      # named (assess would backfill). Roster/flags still built from crtrStatus.
+      expect(Lich::DragonRealms::Creature.in_room.map(&:id)).to contain_exactly(1, 2, 3)
+      expect(Lich::DragonRealms::Creature.in_room.map(&:name)).to all(be_nil)
     end
 
-    it 'count-guards the reverse: more bold names than crtrStatus, extras unregistered' do
+    it 'count-guard (all-or-nothing): more bold names than crtrStatus -> no names applied' do
       feed(%(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, <pushBold/>a kobold<popBold/>, <pushBold/>an orc<popBold/> and some junk.</component><crtrStatus exist="1" hostile="1"/><crtrStatus exist="2" hostile="1"/><prompt time="1785274111">R&gt;</prompt>))
 
-      # two crtrStatus -> the first two bold names by position; third name unused
-      expect(Lich::DragonRealms::Creature[1].name).to eq('a jeol moradu')
-      expect(Lich::DragonRealms::Creature[2].name).to eq('a kobold')
       expect(Lich::DragonRealms::Creature.in_room.map(&:id)).to contain_exactly(1, 2)
+      expect(Lich::DragonRealms::Creature.in_room.map(&:name)).to all(be_nil)
+    end
+
+    it 'count-guard: a bold entity with no crtrStatus never mis-names the real mob' do
+      # The mid-list-gap case: a bold room entity that emits no crtrStatus (a
+      # gelapod-like object) would shift a positional pairing. The all-or-nothing
+      # gate refuses to name on the count mismatch, so the real mob is NOT named
+      # after the odd entity - it stays nil until assess ties it by id.
+      feed(%(<component id='room objs'>You also see <pushBold/>a domesticated gelapod<popBold/>, <pushBold/>a jeol moradu<popBold/> and some junk.</component><crtrStatus exist="42" hostile="1"/><prompt time="1785274444">R&gt;</prompt>))
+
+      moradu = Lich::DragonRealms::Creature[42]
+      expect(moradu).not_to be_nil # tracked by crtrStatus (id + flags)
+      expect(moradu.name).to be_nil # NOT mis-named "a domesticated gelapod"
     end
 
     it 'derives the noun for a multi-word bold name via the positional path' do
@@ -126,14 +137,14 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(Lich::DragonRealms::Creature[500].name).to eq('a kobold')
     end
 
-    it 'reset clears the room-objs name buffer and batch index' do
+    it 'reset clears the room-objs name buffer and collected crtrStatus ids' do
       feed(%(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> and some junk.</component>))
       expect(parser.instance_variable_get(:@dr_room_npc_names)).not_to be_empty
 
       parser.reset
 
       expect(parser.instance_variable_get(:@dr_room_npc_names)).to eq([])
-      expect(parser.instance_variable_get(:@dr_crtr_index)).to eq(0)
+      expect(parser.instance_variable_get(:@dr_crtr_ids)).to eq([])
     end
 
     it 'applies each creature\'s flags from its own tag' do

@@ -48,51 +48,51 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class.targets.map(&:id)).to contain_exactly(99353095, 99355263)
     end
 
-    it 'names a creature from the stream-order backfill and derives its noun' do
-      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
+    it 'names a creature (via apply_room_name) from the stream-order backfill and derives its noun' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a jeol moradu')
 
-      creature = described_class[99353095]
       expect(creature.name).to eq('a jeol moradu')
       expect(creature.noun).to eq('moradu')
     end
 
-    it 'backfills the name onto an already id-first-registered instance' do
+    it 'applies the room name to an already id-first-registered instance' do
       described_class.sync('99353095', 'hostile' => '1') # id-first, no name
       expect(described_class[99353095].name).to be_nil
 
-      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
+      described_class[99353095].apply_room_name('a jeol moradu')
       expect(described_class[99353095].name).to eq('a jeol moradu')
       expect(described_class[99353095].noun).to eq('moradu')
     end
 
-    it 'leaves name and noun nil when no backfill name is supplied' do
+    it 'leaves name and noun nil when no room name is applied' do
       described_class.sync('99353095', 'hostile' => '1')
 
       expect(described_class[99353095].name).to be_nil
       expect(described_class[99353095].noun).to be_nil
     end
 
-    it 'does not let a stream-order name overwrite an assess-set name' do
+    it 'does not let a stream-order room name overwrite an assess-set name' do
       described_class.feed_assess(
         name: 'A jeol moradu', id: '99353095', number: 1,
         relation: 'behind you', range: :melee, self: false, pc: false
       )
       # A later refresh's positional guess must never clobber the authoritative
       # assess name (they normally match; this pins the precedence).
-      described_class.sync('99353095', { 'hostile' => '1' }, 'a wrong name')
+      described_class[99353095].apply_room_name('a wrong name')
 
       expect(described_class[99353095].name).to eq('a jeol moradu')
       expect(described_class[99353095].noun).to eq('moradu')
     end
 
-    it 'a nil backfill name (out-of-range count-guard) leaves an existing name intact' do
-      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
-      described_class.sync('99353095', 'hostile' => '1', 'dead' => '1') # later refresh, no name
-      # nil positional name (surplus crtrStatus / no bold slot) must not wipe it
-      described_class.sync('99353095', { 'hostile' => '1' }, nil)
+    it 'a nil room name (count-gate skip) leaves an existing name intact' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a jeol moradu')
+      # count mismatch on a later refresh -> the gate applies no name at all
+      creature.apply_room_name(nil)
 
-      expect(described_class[99353095].name).to eq('a jeol moradu')
-      expect(described_class[99353095].noun).to eq('moradu')
+      expect(creature.name).to eq('a jeol moradu')
+      expect(creature.noun).to eq('moradu')
     end
   end
 

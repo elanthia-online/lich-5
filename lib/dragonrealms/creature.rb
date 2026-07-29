@@ -278,21 +278,18 @@ module Lich
       # This is the automatic, name-less DragonRealms feed: it produces an
       # id-keyed hostile roster with flags before any `assess` has run.
       #
-      # The optional `name` is the stream-order backfill: the XML parser pairs the
-      # Nth bold room-objs name with the Nth `<crtrStatus>` in the batch and passes
-      # it here, so creatures are named every refresh without waiting for `assess`.
-      # It is applied via {CreatureInstance#apply_room_name} (assess still wins;
-      # a nil name is ignored), and works whether the id is new or already known.
+      # Name-less on purpose: the stream-order room-objs name is applied
+      # separately via {CreatureInstance#apply_room_name}, batched at the prompt
+      # once the parser has confirmed the bold-name and crtrStatus counts match
+      # (see lib/common/xmlparser.rb). assess later backfills authoritatively.
       #
       # @param id [Integer, String] server creature id (the tag's `exist`).
       # @param flags [Hash{String=>String}] tag attributes excluding `exist`.
-      # @param name [String, nil] stream-order room-objs name for this id, if any.
       # @return [CreatureInstance, nil] the synced instance, or nil if disabled/full.
-      def self.sync(id, flags, name = nil)
-        instance = CreatureInstance.register(name, id)
+      def self.sync(id, flags)
+        instance = CreatureInstance.register(nil, id)
         return nil unless instance
 
-        instance.apply_room_name(name)
         instance.sync_crtr_status(flags)
         instance
       end
