@@ -383,6 +383,18 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class.targets.map(&:id)).to eq([99353135])
       expect(described_class.in_room.map(&:id)).to contain_exactly(99353095, 99353135)
     end
+
+    it 'excludes a non-hostile creature (crtrStatus hostile="0") from .targets but tracks it' do
+      # Real case: a Warrior Mage familiar (a white-tailed leopard, exist 104139961)
+      # reports hostile="0" -- durable friend/foe straight from crtrStatus, unlike
+      # an empath-manipulated enemy which stays hostile="1". targets' hostile
+      # baseline must skip it; in_room must still track it.
+      described_class.sync('104139961', 'hostile' => '0', 'disengaged' => '1') # familiar
+      described_class.sync('105955994', 'hostile' => '1') # a real mob
+
+      expect(described_class.targets.map(&:id)).to eq([105955994])
+      expect(described_class.in_room.map(&:id)).to contain_exactly(104139961, 105955994)
+    end
   end
 
   describe '.cleanup_old (positional, per the shared base contract)' do
