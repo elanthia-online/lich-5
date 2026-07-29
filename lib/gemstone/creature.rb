@@ -203,7 +203,7 @@ module Lich
     # Individual GemStone creature instance (runtime tracking with ID).
     #
     # Shares its id-keyed registry, room roster and `<crtrStatus>` status/flag
-    # handling with DragonRealms via the {Lich::Common::Creature} mixins; the
+    # handling with DragonRealms via the {Lich::Common::CreatureBase} mixin; the
     # GemStone-specific layer here adds bestiary templates, UCS (Unarmed Combat
     # System) tracking, HP/injury modelling and the GemStone `valid_target?`
     # exclusions.
@@ -456,9 +456,9 @@ module Lich
 
     # Public Creature API for GemStone runtime creature tracking.
     #
-    # Delegates registry/roster operations to {CreatureInstance} and inherits
-    # the shared `targets`/`in_room` query methods from
-    # {Lich::Common::Creature::Targeting}.
+    # A thin facade: every call delegates to {CreatureInstance}, which mixes in
+    # the shared id-keyed registry, room roster and `targets`/`in_room` query
+    # methods from {Lich::Common::CreatureBase}.
     module Creature
       # Toggles live echo of status, flag, and registration changes.
       #
@@ -523,9 +523,18 @@ module Lich
         CreatureInstance.clear
       end
 
-      # Cleanup old instances
-      def self.cleanup_old(**options)
-        CreatureInstance.cleanup_old(**options)
+      # Removes creatures older than the given age (in seconds).
+      #
+      # Positional to match {CreatureInstance#cleanup_old} (supplied by
+      # {Lich::Common::CreatureBase}) and the positional call in
+      # Combat::Tracker#cleanup_creatures. A keyword-only signature here raised
+      # ArgumentError on every scheduled tracker cleanup, which the tracker's
+      # rescue then swallowed - so registry cleanup silently never ran.
+      #
+      # @param max_age_seconds [Integer] age cutoff in seconds.
+      # @return [Integer] number of instances removed.
+      def self.cleanup_old(max_age_seconds = 600)
+        CreatureInstance.cleanup_old(max_age_seconds)
       end
 
       # Generate damage report for HP analysis

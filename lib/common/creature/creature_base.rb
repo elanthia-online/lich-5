@@ -137,6 +137,20 @@ module Lich
       # @return [Hash{String=>String, Symbol}]
       ALL_CRTR_FLAGS = CRTR_STATUS_FLAGS.merge(CRTR_CLASSIFICATION_FLAGS).freeze
 
+      # Every filter name {ClassMethods#targets} and {ClassMethods#in_room} can
+      # match: the canonical status vocabulary (both the `<crtrStatus>` status
+      # spellings and the timer-based message statuses in {STATUS_DURATIONS})
+      # plus the classification keys. A filter outside this set is "unknown" and,
+      # per the query contract, matches no candidates - even when negated with a
+      # `not_` prefix.
+      #
+      # @return [Array<String>]
+      KNOWN_FLAG_NAMES = (
+        CRTR_STATUS_FLAGS.values +
+        STATUS_DURATIONS.keys +
+        CRTR_CLASSIFICATION_FLAGS.values.map(&:to_s)
+      ).uniq.freeze
+
       # Class-level behaviour: the id-keyed instance registry, the current-room
       # roster and the target/room queries shared by both games' `Creature`
       # facades.
@@ -160,9 +174,14 @@ module Lich
         # @return [Object, nil] the registered instance, or nil when
         #   auto-registration is disabled or the registry is full.
         def register(name, id, noun = nil)
-          return nil unless auto_register?
-
+          # Record room presence first: the feed event that triggers this call
+          # (a bolded room-object name or a <crtrStatus> tag) is itself proof the
+          # creature is in the room, and that stays true even when
+          # auto-registration is disabled and no instance will be created. Mark
+          # before the guard so a known creature's room presence is still tracked
+          # while auto-registration is off.
           entered_room = mark_in_room(id)
+          return nil unless auto_register?
 
           existing = instances[id.to_i]
           if existing
@@ -192,9 +211,9 @@ module Lich
         # @return [Boolean] true when the id was newly added.
         def mark_in_room(id)
           id = id.to_i
-          return false if current_room_ids.include?(id)
+          return false if room_roster.include?(id)
 
-          current_room_ids << id
+          room_roster << id
           true
         end
 
@@ -205,16 +224,21 @@ module Lich
         #
         # @return [void]
         def clear_room
-          count = current_room_ids.size
+          count = room_roster.size
           @current_room_ids = []
           respond "--- room: roster cleared (#{count} creature#{'s' unless count == 1})" if $creature_debug && count > 0
         end
 
         # Returns the creature ids currently present in the room.
         #
+        # Hands back a copy, not the live roster. The internal roster is mutated
+        # in place by {#mark_in_room} / {#clear_room}, so a caller that mutated
+        # the returned array - the GemStone facade relied on this defensive copy
+        # before the extraction - would otherwise corrupt shared targeting state.
+        #
         # @return [Array<Integer>]
         def current_room_ids
-          @current_room_ids ||= []
+          room_roster.dup
         end
 
         # Looks up a registered instance by id.
@@ -291,7 +315,7 @@ module Lich
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
         def targets(*filters)
-          candidates = current_room_ids
+          candidates = room_roster
                        .filter_map { |id| self[id] }
                        .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
           apply_filters(candidates, filters)
@@ -307,7 +331,7 @@ module Lich
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
         def in_room(*filters)
-          candidates = current_room_ids.filter_map { |id| self[id] }
+          candidates = room_roster.filter_map { |id| self[id] }
           apply_filters(candidates, filters)
         end
 
@@ -332,9 +356,26 @@ module Lich
           filters.each do |filter|
             negate = filter.to_s.start_with?('not_')
             key = negate ? filter.to_s.delete_prefix('not_') : filter.to_s
+
+            # Unknown filters match nothing, per the documented contract. Without
+            # this guard a negated unknown filter (e.g. a typo like :not_prnoe)
+            # inverts "matches nothing" into "matches everything", silently
+            # widening a query instead of narrowing it. Filters are ANDed, so an
+            # unknown one collapses the whole result to empty.
+            return [] unless known_flag?(key)
+
             candidates = candidates.select { |c| c.flag_active?(key) != negate }
           end
           candidates
+        end
+
+        # Whether a filter name (with any `not_` prefix already removed) is part
+        # of the recognized filter vocabulary. See {CreatureBase::KNOWN_FLAG_NAMES}.
+        #
+        # @param key [String, Symbol] filter name without its `not_` prefix.
+        # @return [Boolean]
+        def known_flag?(key)
+          KNOWN_FLAG_NAMES.include?(key.to_s)
         end
 
         # The backing store of id => instance.
@@ -342,6 +383,15 @@ module Lich
         # @return [Hash{Integer=>Object}]
         def instances
           @instances ||= {}
+        end
+
+        # The live current-room roster. Mutated in place by {#mark_in_room} and
+        # replaced wholesale by {#clear_room}; {#current_room_ids} hands callers a
+        # copy so this array never escapes to be mutated from outside.
+        #
+        # @return [Array<Integer>]
+        def room_roster
+          @current_room_ids ||= []
         end
       end
 

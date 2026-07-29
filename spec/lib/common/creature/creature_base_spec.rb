@@ -38,9 +38,40 @@ class SampleCreature
   def self.respond(*); end
 end
 
+# A second, unrelated host class. Proves each including class gets its own
+# registry, roster and configuration: GemStone and DragonRealms must never share
+# creature state even though they share this code. Kept at file scope for the
+# same reason SampleCreature is - a normal constant, not a constant-in-a-block.
+class OtherSampleCreature
+  include Lich::Common::CreatureBase
+
+  attr_reader :id, :noun, :name, :created_at
+
+  def initialize(id, noun, name)
+    @id = id.to_i
+    @noun = noun
+    @name = name
+    @created_at = Time.now
+    initialize_status_tracking
+  end
+
+  def valid_target?
+    !crtr_flag?(:dead)
+  end
+
+  def respond(*); end
+  def self.respond(*); end
+end
+
 RSpec.describe Lich::Common::CreatureBase do
   before do
     SampleCreature.clear
+    OtherSampleCreature.clear
+    # Reset configuration to defaults. #configure mutates per-class instance vars
+    # that would otherwise leak across examples under random ordering; calling it
+    # with no arguments restores the documented defaults.
+    SampleCreature.configure
+    OtherSampleCreature.configure
     $creature_debug = nil
   end
 
@@ -250,6 +281,202 @@ RSpec.describe Lich::Common::CreatureBase do
 
       expect(SampleCreature.targets).to eq([])
       expect(SampleCreature.in_room).to eq([])
+    end
+  end
+
+  describe 'unknown filters (F3)' do
+    before do
+      hostile = SampleCreature.register('kobold', 1)
+      hostile.sync_crtr_status('hostile' => '1', 'prone' => '1')
+    end
+
+    it 'treats a positive unknown filter as matching nothing' do
+      expect(SampleCreature.in_room(:bogus)).to eq([])
+      expect(SampleCreature.targets(:bogus)).to eq([])
+    end
+
+    it 'treats a negated unknown filter as matching nothing, not everything' do
+      # Regression: `:not_prnoe` (a typo of :not_prone) used to invert
+      # "unknown matches nothing" into "matches everything", silently widening
+      # the query to every candidate in the room.
+      expect(SampleCreature.in_room(:not_prnoe)).to eq([])
+      expect(SampleCreature.targets(:not_prnoe)).to eq([])
+    end
+
+    it 'lets an unknown filter anywhere in an AND chain collapse the whole result' do
+      # :prone alone would match the kobold; because filters are ANDed, the
+      # unknown filter must still zero the result regardless of position.
+      expect(SampleCreature.in_room(:prone, :not_bogus)).to eq([])
+      expect(SampleCreature.in_room(:not_bogus, :prone)).to eq([])
+    end
+
+    it 'still returns empty for a known filter that no candidate has' do
+      # A known-but-absent filter and an unknown filter both yield empty; only
+      # the reason differs. This pins the known path so the F3 fix cannot
+      # accidentally start rejecting legitimate filters.
+      expect(SampleCreature.in_room(:webbed)).to eq([])
+    end
+
+    it 'still honours a known negation alongside real matches' do
+      standing = SampleCreature.register('goblin', 2)
+      standing.sync_crtr_status('hostile' => '1')
+
+      expect(SampleCreature.in_room(:not_prone).map(&:id)).to eq([2])
+    end
+  end
+
+  describe 'defensive copy of the room roster (F1)' do
+    it 'hands back a copy so external mutation cannot corrupt the live roster' do
+      SampleCreature.register('kobold', 1)
+
+      snapshot = SampleCreature.current_room_ids
+      snapshot << 999
+      snapshot.clear
+
+      expect(SampleCreature.current_room_ids).to eq([1])
+    end
+
+    it 'returns a fresh array on each call' do
+      SampleCreature.register('kobold', 1)
+
+      expect(SampleCreature.current_room_ids).not_to equal(SampleCreature.current_room_ids)
+    end
+
+    it 'keeps target/in_room queries intact after a returned copy is mutated' do
+      hostile = SampleCreature.register('kobold', 1)
+      hostile.sync_crtr_status('hostile' => '1')
+
+      SampleCreature.current_room_ids.clear # must not touch the live roster
+
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+      expect(SampleCreature.in_room.map(&:id)).to eq([1])
+    end
+  end
+
+  describe 'auto-registration toggle (F2)' do
+    it 'creates no instance when auto-registration is disabled' do
+      SampleCreature.configure(auto_register: false)
+
+      expect(SampleCreature.register('kobold', 1)).to be_nil
+      expect(SampleCreature[1]).to be_nil
+      expect(SampleCreature.size).to eq(0)
+    end
+
+    it 'still records room presence with auto-registration off' do
+      SampleCreature.configure(auto_register: false)
+
+      SampleCreature.register('kobold', 42)
+
+      expect(SampleCreature.current_room_ids).to eq([42])
+    end
+
+    it 're-marks an already-known creature into the room while auto-registration is off' do
+      known = SampleCreature.register('kobold', 42) # registered while enabled (default)
+      SampleCreature.clear_room                     # e.g. a nav / room-objs refresh
+      SampleCreature.configure(auto_register: false)
+
+      SampleCreature.register('kobold', 42)         # reappears; no new instance created
+
+      expect(SampleCreature.current_room_ids).to eq([42])
+      expect(SampleCreature[42]).to equal(known)    # same instance, not duplicated
+      expect(SampleCreature.size).to eq(1)
+    end
+  end
+
+  describe 'capacity and configuration boundaries' do
+    it 'exposes lazy defaults on a freshly-including class before any configure' do
+      klass = Class.new { include Lich::Common::CreatureBase }
+
+      expect(klass.max_size).to eq(1000)
+      expect(klass.auto_register?).to be true
+      expect(klass.size).to eq(0)
+      expect(klass.full?).to be false
+      expect(klass.current_room_ids).to eq([])
+    end
+
+    it 'reports full? exactly at the configured capacity' do
+      SampleCreature.configure(max_size: 2)
+      expect(SampleCreature.full?).to be false
+
+      SampleCreature.register('a', 1)
+      expect(SampleCreature.full?).to be false
+
+      SampleCreature.register('b', 2)
+      expect(SampleCreature.full?).to be true
+    end
+
+    it 'refuses a newcomer when full and nothing is old enough to evict' do
+      SampleCreature.configure(max_size: 2)
+      SampleCreature.register('a', 1)
+      SampleCreature.register('b', 2)
+
+      overflow = SampleCreature.register('c', 3)
+
+      expect(overflow).to be_nil
+      expect(SampleCreature.size).to eq(2)
+      expect(SampleCreature[3]).to be_nil
+    end
+
+    it 'evicts an aged creature to make room, then registers the newcomer' do
+      SampleCreature.configure(max_size: 2)
+      old = SampleCreature.register('old', 1)
+      old.instance_variable_set(:@created_at, Time.now - 10_800) # 3 hours old
+      SampleCreature.register('fresh', 2)
+      expect(SampleCreature.full?).to be true
+
+      newcomer = SampleCreature.register('new', 3)
+
+      expect(newcomer).not_to be_nil
+      expect(SampleCreature[1]).to be_nil # aged one evicted
+      expect(SampleCreature[3]).to equal(newcomer)
+      expect(SampleCreature.size).to eq(2)
+    end
+
+    it 'defaults cleanup_old to a 600s cutoff when called with no argument' do
+      old = SampleCreature.register('old', 1)
+      old.instance_variable_set(:@created_at, Time.now - 601)
+      SampleCreature.register('fresh', 2)
+
+      expect(SampleCreature.cleanup_old).to eq(1)
+      expect(SampleCreature[1]).to be_nil
+      expect(SampleCreature[2]).not_to be_nil
+    end
+  end
+
+  describe 'per-class isolation across including classes' do
+    it 'keeps registries independent' do
+      SampleCreature.register('kobold', 1)
+      OtherSampleCreature.register('spider', 1)
+      OtherSampleCreature.register('spider', 2)
+
+      expect(SampleCreature.all.map(&:id)).to eq([1])
+      expect(OtherSampleCreature.all.map(&:id)).to contain_exactly(1, 2)
+      expect(SampleCreature[2]).to be_nil
+    end
+
+    it 'keeps room rosters independent' do
+      SampleCreature.register('kobold', 1)
+      OtherSampleCreature.register('spider', 9)
+
+      expect(SampleCreature.current_room_ids).to eq([1])
+      expect(OtherSampleCreature.current_room_ids).to eq([9])
+    end
+
+    it 'keeps configuration independent' do
+      SampleCreature.configure(max_size: 5, auto_register: false)
+
+      expect(OtherSampleCreature.max_size).to eq(1000)
+      expect(OtherSampleCreature.auto_register?).to be true
+    end
+
+    it 'clearing one class leaves the other untouched' do
+      SampleCreature.register('kobold', 1)
+      OtherSampleCreature.register('spider', 1)
+
+      SampleCreature.clear
+
+      expect(SampleCreature.all).to be_empty
+      expect(OtherSampleCreature.all.map(&:id)).to eq([1])
     end
   end
 end
