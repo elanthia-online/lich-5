@@ -204,10 +204,17 @@ module Lich
         condition?('cursed')
       end
 
-      # The assess "friendly" marker: a creature that will not attack you (a
-      # summon or charmed ally). This is the ONLY friend/foe signal DragonRealms
-      # exposes - crtrStatus does not carry it (a friendly plague spawn still
-      # reports hostile="1"). Assess-only, so it is a staleable pull field.
+      # True while assess reports this creature as "friendly" - i.e. it has been
+      # empathically manipulated (an Empath ability: "manipulate ... to consider
+      # you friend, not foe") into treating you as a friend.
+      #
+      # This is a TEMPORARY, manipulated state, NOT a permanent classification:
+      # crtrStatus keeps reporting hostile="1" throughout, and it wears off.
+      # Confirmed from logs - one jeol moradu (exist 105829093) went
+      # hostile/flanking-you -> manipulated "friendly" (and turned on its own
+      # kind) while crtrStatus stayed hostile the whole time. Assess-only, so it
+      # is a staleable pull field: re-assess before relying on it, and do not
+      # treat it as a durable friend/foe flag (a summon/pet is a different thing).
       #
       # @return [Boolean]
       def friendly?
