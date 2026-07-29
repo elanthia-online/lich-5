@@ -413,4 +413,55 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class.cleanup_old).to eq(1)
     end
   end
+
+  # Data-driven over the ACTUAL vocabularies so every flag/balance value is
+  # covered by construction -- a new entry added to CreatureBase's maps or
+  # DR_BALANCE_VALUES is exercised automatically, with no hand-maintained list to
+  # fall out of date. (This is why "flying", "hidden", etc. can't be missed.)
+  describe 'exhaustive crtrStatus + balance vocabulary coverage' do
+    Lich::Common::CreatureBase::CRTR_STATUS_FLAGS.each do |xml_name, status|
+      it "tracks status flag #{xml_name.inspect} as has_status?(#{status.inspect}), and clears it" do
+        creature = described_class.sync('1', 'hostile' => '1', xml_name => '1')
+        expect(creature.has_status?(status)).to be true
+
+        described_class.sync('1', 'hostile' => '1') # flag dropped on next snapshot
+        expect(creature.has_status?(status)).to be false
+      end
+    end
+
+    Lich::Common::CreatureBase::CRTR_CLASSIFICATION_FLAGS.each do |xml_name, key|
+      it "tracks classification flag #{xml_name.inspect} as crtr_flag?(#{key.inspect}), and clears it" do
+        creature = described_class.sync('1', xml_name => '1')
+        expect(creature.crtr_flag?(key)).to be true
+
+        described_class.sync('1', {}) # dropped on next snapshot
+        expect(creature.crtr_flag?(key)).to be false
+      end
+    end
+
+    Lich::Common::CreatureBase::ALL_CRTR_FLAGS.each_key do |xml_name|
+      it "never leaks crtrStatus flag word #{xml_name.inspect} into assess conditions" do
+        described_class.feed_assess(
+          name: 'A test creature', id: '1', number: 1,
+          status: "#{xml_name} and solidly balanced", relation: 'facing',
+          range: :melee, self: false, pc: false
+        )
+        expect(described_class[1].conditions).not_to include(xml_name)
+      end
+    end
+
+    solidly_idx = Lich::DragonRealms::DR_BALANCE_VALUES.index('solidly')
+    Lich::DragonRealms::DR_BALANCE_VALUES.each_with_index do |descriptor, idx|
+      it "captures balance descriptor #{descriptor.inspect} (off_balance?=#{idx < solidly_idx})" do
+        described_class.feed_assess(
+          name: 'A test creature', id: '1', number: 1,
+          status: "#{descriptor} balanced", relation: 'facing',
+          range: :melee, self: false, pc: false
+        )
+        creature = described_class[1]
+        expect(creature.balance).to eq(descriptor)
+        expect(creature.off_balance?).to be(idx < solidly_idx)
+      end
+    end
+  end
 end
