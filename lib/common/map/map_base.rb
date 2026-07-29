@@ -69,6 +69,34 @@ module Lich
       end
     end
 
+    # An Array of tag names that tells its owning Map class to drop the tag
+    # index whenever it is mutated, so Map.rooms_by_tag cannot go stale behind
+    # a caller's back. Reads are plain Array reads with no added indirection.
+    class TagList < Array
+      # Array methods that change the receiver's contents.
+      MUTATORS = %i[
+        << []= append clear collect! compact! concat delete delete_at delete_if
+        fill flatten! insert keep_if map! pop prepend push reject! replace
+        rotate! select! shift shuffle! slice! sort! sort_by! uniq! unshift
+      ].freeze
+
+      # @param contents [Array, nil] initial tag names
+      # @param owner [Class, nil] Map class notified on mutation
+      def initialize(contents = nil, owner = nil)
+        super()
+        concat(contents.to_a) unless contents.nil?
+        @owner = owner
+      end
+
+      MUTATORS.each do |name|
+        define_method(name) do |*args, &block|
+          result = super(*args, &block)
+          @owner.reset_tag_index if @owner.respond_to?(:reset_tag_index)
+          result
+        end
+      end
+    end
+
     # Base module containing shared map functionality
     # Include this in game-specific Map classes
     module MapBase
@@ -117,6 +145,49 @@ module Lich
             echo 'Map.dijkstra: error: invalid source room'
             nil
           end
+        end
+
+        # Class-level dispatcher for the hash-returning variant of #dijkstra
+        def dijkstra_hashes(source, destination = nil)
+          if source.is_a?(self)
+            source.dijkstra_hashes(destination)
+          elsif (room = self[source])
+            room.dijkstra_hashes(destination)
+          else
+            echo 'Map.dijkstra: error: invalid source room'
+            nil
+          end
+        end
+
+        # Tag name => Array of room ids carrying that tag. Memoized; the memo
+        # shares its lifecycle with Map.tags and is dropped by #reset_tag_index.
+        # @return [Hash{String => Array<Integer>}]
+        def tag_index
+          self.load unless loaded?
+          @tag_index = build_tag_index if @tag_index.nil? || @tag_index.empty?
+          @tag_index
+        end
+
+        # Room ids carrying a tag, nearest-agnostic and in room id order
+        # @param tag_name [String] Tag to look up
+        # @return [Array<Integer>] Room ids, empty when the tag is unknown
+        def rooms_by_tag(tag_name)
+          (tag_index[tag_name] || []).dup
+        end
+
+        # Drop the tag memo. Call after mutating any room's tags in place.
+        # @return [nil]
+        def reset_tag_index
+          @tag_index = nil
+        end
+
+        # @return [Hash{String => Array<Integer>}]
+        def build_tag_index
+          index = {}
+          list.compact.each do |room|
+            room.tags.each { |tag| (index[tag] ||= []) << room.id }
+          end
+          index
         end
 
         # Find path between two rooms
@@ -323,8 +394,28 @@ module Lich
 
         # Run Dijkstra's algorithm from this room
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
-        # @return [Array] [previous_hash, distances_hash] for path reconstruction
+        # @return [Array, nil] [previous, distances] as Arrays indexed by room id
         def dijkstra(destination = nil)
+          previous_hash, shortest_distances_hash = dijkstra_hashes(destination)
+          return nil if previous_hash.nil?
+
+          # Convert hashes back to arrays for backward compatibility
+          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
+          previous = Array.new(max_room_id + 1)
+          shortest_distances = Array.new(max_room_id + 1)
+
+          previous_hash.each { |key, value| previous[key] = value }
+          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
+
+          [previous, shortest_distances]
+        end
+
+        # Same search as #dijkstra, returning the raw hashes keyed by room id.
+        # Internal callers use this so nothing allocates arrays sized by the
+        # highest room id in the database.
+        # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
+        # @return [Array, nil] [previous_hash, distances_hash], or nil on error
+        def dijkstra_hashes(destination = nil)
           self.class.load unless self.class.loaded?
           source = @id
           visited = {}
@@ -376,15 +467,7 @@ module Lich
             end
           end
 
-          # Convert hashes back to arrays for backward compatibility
-          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
-          previous = Array.new(max_room_id + 1)
-          shortest_distances = Array.new(max_room_id + 1)
-
-          previous_hash.each { |key, value| previous[key] = value }
-          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
-
-          [previous, shortest_distances]
+          [previous_hash, shortest_distances_hash]
         rescue StandardError => e
           echo "Map.dijkstra: error: #{e}"
           respond e.backtrace
@@ -397,7 +480,7 @@ module Lich
         def path_to(destination)
           self.class.load unless self.class.loaded?
           destination = destination.to_i
-          previous, = dijkstra(destination)
+          previous, = dijkstra_hashes(destination)
           return nil unless previous[destination]
 
           path = [destination]
@@ -409,9 +492,8 @@ module Lich
         # @param tag_name [String] Tag to search for
         # @return [Integer, nil] Room ID of nearest tagged room
         def find_nearest_by_tag(tag_name)
-          target_list = []
-          self.class.list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-          _, shortest_distances = self.class.dijkstra(@id, target_list)
+          target_list = self.class.rooms_by_tag(tag_name)
+          _, shortest_distances = self.class.dijkstra_hashes(@id, target_list)
           if target_list.include?(@id)
             @id
           else
@@ -424,9 +506,8 @@ module Lich
         # @param tag_name [String] Tag to search for
         # @return [Array<Integer>] Room IDs sorted by distance
         def find_all_nearest_by_tag(tag_name)
-          target_list = []
-          self.class.list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-          _, shortest_distances = self.class.dijkstra(@id)
+          target_list = self.class.rooms_by_tag(tag_name)
+          _, shortest_distances = self.class.dijkstra_hashes(@id)
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
           target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
         end
@@ -439,7 +520,7 @@ module Lich
           if target_list.include?(@id)
             @id
           else
-            _, shortest_distances = self.class.dijkstra(@id, target_list)
+            _, shortest_distances = self.class.dijkstra_hashes(@id, target_list)
             valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
             valid_rooms.min_by { |room_num| shortest_distances[room_num] }
           end

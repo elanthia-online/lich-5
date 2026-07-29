@@ -365,6 +365,125 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       end
     end
 
+    describe '.rooms_by_tag' do
+      before do
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
+        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+        map_class.new(4, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop', 'bank'])
+        map_class.new(2, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [])
+      end
+
+      it 'returns ids of rooms carrying the tag in ascending order' do
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
+      end
+
+      it 'returns an empty array for an unknown tag' do
+        expect(map_class.rooms_by_tag('nonexistent')).to eq([])
+      end
+
+      it 'skips nil holes in the room list' do
+        expect(map_class.class_variable_get(:@@list)[3]).to be_nil
+
+        expect(map_class.rooms_by_tag('bank')).to eq([4])
+      end
+
+      it 'is not corrupted by a caller mutating the result' do
+        map_class.rooms_by_tag('shop').clear
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
+      end
+    end
+
+    describe 'tag index invalidation' do
+      before do
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
+        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+        map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [])
+        map_class.rooms_by_tag('shop') # prime the memo
+      end
+
+      it 'picks up a tag appended in place' do
+        map_class[2].tags << 'shop'
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
+      end
+
+      it 'picks up a tag deleted in place' do
+        map_class[1].tags.delete('shop')
+
+        expect(map_class.rooms_by_tag('shop')).to eq([])
+      end
+
+      it 'picks up a whole tag list assignment' do
+        map_class[2].tags = ['shop', 'bank']
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
+        expect(map_class.rooms_by_tag('bank')).to eq([2])
+      end
+
+      it 'picks up an in place clear' do
+        map_class[1].tags.clear
+
+        expect(map_class.rooms_by_tag('shop')).to eq([])
+      end
+
+      it 'is reflected in .tags as well' do
+        map_class[2].tags << 'inn'
+
+        expect(map_class.tags).to include('inn')
+      end
+
+      it 'wraps room tags in a TagList' do
+        expect(map_class[1].tags).to be_a(Lich::Common::TagList)
+      end
+
+      it 'keeps room tags comparable to a plain Array' do
+        expect(map_class[1].tags).to eq(['shop'])
+      end
+
+      it 'is dropped by clear_tags_cache' do
+        map_class.new(3, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+        map_class.clear_tags_cache
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 3])
+      end
+    end
+
+    describe '.[] fuzzy lookup precedence' do
+      before do
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
+        map_class.new(1, ['[Market Row]'],   ['Stalls line the muddy street.'], ['path'])
+        map_class.new(4, ['[Quiet Lane]'],   ['Marble counters gleam here.'],   ['path'])
+        map_class.new(6, ['[Bank Lobby]'],   ['Stalls line the far wall.'],     ['path'])
+      end
+
+      it 'prefers a title match over an earlier description match' do
+        expect(map_class['[Bank Lobby]'].id).to eq(6)
+      end
+
+      it 'falls back to an exact description match when no title matches' do
+        expect(map_class['Marble counters gleam'].id).to eq(4)
+      end
+
+      it 'returns the first room when several descriptions match' do
+        expect(map_class['Stalls line'].id).to eq(1)
+      end
+
+      it 'falls back to the loose regex form last' do
+        expect(map_class['Stalls line...muddy street'].id).to eq(1)
+      end
+
+      it 'returns nil when nothing matches' do
+        expect(map_class['no such room anywhere']).to be_nil
+      end
+
+      it 'skips nil holes without raising' do
+        expect(map_class.class_variable_get(:@@list)[3]).to be_nil
+
+        expect { map_class['no such room anywhere'] }.not_to raise_error
+      end
+    end
+
     describe '.clear' do
       before do
         map_class.class_variable_set(:@@loaded, true) # see NOTE above

@@ -13,7 +13,6 @@ module Lich
       @@loaded                   = false
       @@load_mutex               = Mutex.new
       @@list                   ||= []
-      @@tags                   ||= []
       @@current_room_mutex       = Mutex.new
       @@current_room_id        ||= -1
       @@current_room_count     ||= -1
@@ -27,9 +26,20 @@ module Lich
 
       attr_reader :id
       attr_accessor :title, :description, :paths, :location, :climate, :terrain,
-                    :wayto, :timeto, :image, :image_coords, :tags, :check_location,
+                    :wayto, :timeto, :image, :image_coords, :check_location,
                     :unique_loot, :uid, :room_objects,
                     :genie_id, :genie_zone, :genie_pos
+
+      # @return [TagList] mutation-aware list of this room's tags
+      attr_reader :tags
+
+      # Replace this room's tags and drop the tag index
+      # @param value [Array, nil] new tag names
+      # @return [Array, nil] the assigned value, per Ruby writer semantics
+      def tags=(value)
+        @tags = TagList.new(value, self.class)
+        self.class.reset_tag_index
+      end
 
       def initialize(id, title, description, paths, uid = [], location = nil,
                      climate = nil, terrain = nil, wayto = {}, timeto = {},
@@ -48,7 +58,7 @@ module Lich
         @timeto = timeto
         @image = image
         @image_coords = image_coords
-        @tags = tags
+        @tags = TagList.new(tags, self.class)
         @check_location = check_location
         @unique_loot = unique_loot
         @genie_id = genie_id
@@ -85,7 +95,7 @@ module Lich
         end
 
         def clear_tags_cache
-          @@tags.clear
+          reset_tag_index
         end
 
         def mark_loaded
@@ -117,9 +127,21 @@ module Lich
         else
           chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
           chk = /#{Regexp.escape(val.strip)}/i
-          @@list.find { |room| room&.title&.find { |title| title =~ chk } } ||
-            @@list.find { |room| room&.description&.find { |desc| desc =~ chk } } ||
-            @@list.find { |room| room&.description&.find { |desc| desc =~ chkre } }
+          # Title and exact-description matches share one pass; the loose
+          # regex pass only runs when neither found anything. Same precedence
+          # as the three sequential scans this replaces.
+          rooms = @@list.compact
+          by_title = nil
+          by_desc = nil
+          rooms.each do |room|
+            if room.title.find { |title| title =~ chk }
+              by_title = room
+              break
+            end
+            by_desc = room if by_desc.nil? && room.description.find { |desc| desc =~ chk }
+          end
+          by_title || by_desc ||
+            rooms.find { |room| room.description.find { |desc| desc =~ chkre } }
         end
       end
 
@@ -323,8 +345,7 @@ module Lich
 
       def self.tags
         self.load unless @@loaded
-        @@tags = @@list.compact.each_with_object({}) { |r, h| r.tags.each { |t| h[t] = nil unless h.key?(t) } }.keys if @@tags.empty?
-        @@tags.dup
+        tag_index.keys
       end
 
       def self.ids_from_uid(n)
@@ -334,7 +355,7 @@ module Lich
       def self.clear
         @@load_mutex.synchronize do
           @@list.clear
-          @@tags.clear
+          clear_tags_cache
           @@loaded = false
           GC.start
         end
@@ -415,7 +436,7 @@ module Lich
                 )
               end
             end
-            @@tags.clear
+            clear_tags_cache
             respond "--- Map loaded #{filename}"
             @@loaded = true
             load_uids
@@ -549,7 +570,7 @@ module Lich
               return false
             end
 
-            @@tags.clear
+            clear_tags_cache
             load_uids
             @@loaded = true
             true

@@ -420,6 +420,70 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
+    describe '#dijkstra_hashes' do
+      it 'returns hashes keyed by room id rather than arrays' do
+        previous, distances = test_class.test_list[0].dijkstra_hashes
+
+        expect(previous).to be_a(Hash)
+        expect(distances).to be_a(Hash)
+      end
+
+      it 'keys only the rooms it actually reached' do
+        _, distances = test_class.test_list[0].dijkstra_hashes
+
+        expect(distances.keys).to contain_exactly(0, 1, 2, 3)
+      end
+
+      it 'does not grow with the highest room id in the list' do
+        test_class.test_list[500_000] = test_class.new(500_000)
+        _, distances = test_class.test_list[0].dijkstra_hashes
+
+        expect(distances).not_to have_key(500_000)
+        expect(distances.size).to eq(4)
+      end
+
+      it 'agrees with the array form returned by #dijkstra' do
+        previous_hash, distances_hash = test_class.test_list[0].dijkstra_hashes
+        previous, distances = test_class.test_list[0].dijkstra
+
+        previous_hash.each { |id, from| expect(previous[id]).to eq(from) }
+        distances_hash.each { |id, dist| expect(distances[id]).to eq(dist) }
+      end
+    end
+
+    describe '#dijkstra return contract' do
+      it 'still returns two Arrays for backward compatibility' do
+        previous, distances = test_class.test_list[0].dijkstra
+
+        expect(previous).to be_a(Array)
+        expect(distances).to be_a(Array)
+      end
+
+      it 'indexes the arrays by room id' do
+        _, distances = test_class.test_list[0].dijkstra
+
+        expect(distances[0]).to eq(0)
+        expect(distances[1]).to eq(1)
+        expect(distances[2]).to eq(2)
+      end
+
+      it 'sizes the arrays to the highest room id reached' do
+        test_class.test_list[7] = test_class.new(7, wayto: { '0' => 'south' }, timeto: { '0' => 0.1 })
+        test_class.test_list[0].wayto['7'] = 'north'
+        test_class.test_list[0].timeto['7'] = 0.1
+        _, distances = test_class.test_list[0].dijkstra
+
+        expect(distances.length).to eq(8)
+      end
+
+      it 'returns nil when the search raises' do
+        room = test_class.test_list[0]
+        allow(room).to receive(:dijkstra_hashes).and_return(nil)
+
+        expect(room.dijkstra).to be_nil
+      end
+    end
+
     describe '#find_nearest_by_tag' do
       before do
         test_class.test_list[2].tags = ['shop']
@@ -471,6 +535,114 @@ RSpec.describe Lich::Common::MapBase do
         test_class.test_list[5] = test_class.new(5)
 
         expect(test_class.get_free_id).to eq(6)
+      end
+    end
+
+    describe '.tag_index' do
+      it 'maps each tag to the ids of the rooms carrying it' do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop', 'bank'])
+        test_class.test_list[1] = test_class.new(1, tags: ['shop'])
+
+        expect(test_class.tag_index).to eq('shop' => [0, 1], 'bank' => [0])
+      end
+
+      it 'lists ids in ascending room id order' do
+        test_class.test_list[5] = test_class.new(5, tags: ['shop'])
+        test_class.test_list[2] = test_class.new(2, tags: ['shop'])
+        test_class.test_list[9] = test_class.new(9, tags: ['shop'])
+
+        expect(test_class.tag_index['shop']).to eq([2, 5, 9])
+      end
+
+      it 'skips nil holes in the room list' do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop'])
+        test_class.test_list[3] = test_class.new(3, tags: ['shop'])
+
+        expect { test_class.tag_index }.not_to raise_error
+        expect(test_class.tag_index['shop']).to eq([0, 3])
+      end
+
+      it 'returns an empty index when no room carries a tag' do
+        test_class.test_list[0] = test_class.new(0)
+
+        expect(test_class.tag_index).to eq({})
+      end
+
+      it 'memoizes the index across calls' do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop'])
+        first_call = test_class.tag_index
+
+        expect(test_class.tag_index).to be(first_call)
+      end
+    end
+
+    describe '.rooms_by_tag' do
+      before do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop'])
+        test_class.test_list[1] = test_class.new(1, tags: ['bank'])
+      end
+
+      it 'returns the ids carrying the tag' do
+        expect(test_class.rooms_by_tag('shop')).to eq([0])
+      end
+
+      it 'returns an empty array for an unknown tag' do
+        expect(test_class.rooms_by_tag('nonexistent')).to eq([])
+      end
+
+      it 'returns a copy so callers cannot corrupt the index' do
+        returned = test_class.rooms_by_tag('shop')
+        returned.clear
+
+        expect(test_class.rooms_by_tag('shop')).to eq([0])
+      end
+
+      it 'is stable across repeated calls that mutate the result' do
+        3.times { test_class.rooms_by_tag('shop').delete_if { true } }
+
+        expect(test_class.rooms_by_tag('shop')).to eq([0])
+      end
+    end
+
+    describe '.reset_tag_index' do
+      it 'forces the index to be rebuilt on the next read' do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop'])
+        expect(test_class.rooms_by_tag('shop')).to eq([0])
+
+        test_class.test_list[1] = test_class.new(1, tags: ['shop'])
+        test_class.reset_tag_index
+
+        expect(test_class.rooms_by_tag('shop')).to eq([0, 1])
+      end
+
+      it 'returns nil' do
+        expect(test_class.reset_tag_index).to be_nil
+      end
+    end
+
+    describe '.dijkstra_hashes' do
+      before do
+        test_class.test_list[0] = test_class.new(0, wayto: { '1' => 'north' }, timeto: { '1' => 0.5 })
+        test_class.test_list[1] = test_class.new(1)
+      end
+
+      it 'accepts a room instance as the source' do
+        previous, distances = test_class.dijkstra_hashes(test_class.test_list[0])
+
+        expect(previous).to be_a(Hash)
+        expect(distances[1]).to be_within(0.001).of(0.5)
+      end
+
+      it 'accepts a room id as the source' do
+        _, distances = test_class.dijkstra_hashes(0)
+
+        expect(distances[1]).to be_within(0.001).of(0.5)
+      end
+
+      it 'returns nil for an invalid source room' do
+        allow(test_class).to receive(:echo)
+
+        expect(test_class.dijkstra_hashes(999)).to be_nil
       end
     end
 
@@ -764,6 +936,104 @@ RSpec.describe Lich::Common::MapBase do
       settings.personal_map_targets = nil
 
       expect { test_class.apply_wayto_overrides }.not_to raise_error
+    end
+  end
+end
+
+RSpec.describe Lich::Common::TagList do
+  let(:owner) { double('MapClass', reset_tag_index: nil) }
+
+  describe 'Array compatibility' do
+    it 'compares equal to a plain Array with the same contents' do
+      expect(described_class.new(['shop'], owner)).to eq(['shop'])
+    end
+
+    it 'compares equal when the plain Array is the receiver' do
+      expect(['shop'] == described_class.new(['shop'], owner)).to be true
+    end
+
+    it 'starts empty when given no contents' do
+      expect(described_class.new).to eq([])
+    end
+
+    it 'tolerates nil contents' do
+      expect(described_class.new(nil, owner)).to eq([])
+    end
+
+    it 'supports read methods without notifying the owner' do
+      list = described_class.new(['shop', 'bank'], owner)
+      expect(owner).not_to receive(:reset_tag_index)
+
+      expect(list.include?('shop')).to be true
+      expect(list.sort).to eq(['bank', 'shop'])
+      expect(list.find { |tag| tag == 'bank' }).to eq('bank')
+    end
+
+    it 'does not notify the owner while being constructed' do
+      expect(owner).not_to receive(:reset_tag_index)
+
+      described_class.new(['shop'], owner)
+    end
+  end
+
+  describe 'mutation notifies the owner' do
+    it 'notifies on append' do
+      list = described_class.new([], owner)
+      expect(owner).to receive(:reset_tag_index)
+
+      list << 'shop'
+    end
+
+    it 'notifies on delete' do
+      list = described_class.new(['shop'], owner)
+      expect(owner).to receive(:reset_tag_index)
+
+      list.delete('shop')
+    end
+
+    it 'notifies on clear' do
+      list = described_class.new(['shop'], owner)
+      expect(owner).to receive(:reset_tag_index)
+
+      list.clear
+    end
+
+    it 'still performs the mutation it reports' do
+      list = described_class.new(['shop'], owner)
+      list << 'bank'
+
+      expect(list).to eq(['shop', 'bank'])
+    end
+
+    described_class::MUTATORS.each do |mutator|
+      it "notifies on ##{mutator}" do
+        list = described_class.new(['shop', 'bank'], owner)
+        expect(owner).to receive(:reset_tag_index).at_least(:once)
+
+        case mutator
+        when :[]= then list[0] = 'inn'
+        when :insert then list.insert(0, 'inn')
+        when :fill then list.fill('inn')
+        when :concat, :replace then list.public_send(mutator, ['inn'])
+        when :delete then list.delete('shop')
+        when :delete_at, :slice! then list.public_send(mutator, 0)
+        when :rotate! then list.rotate!(1)
+        when :sort_by! then list.sort_by! { |tag| tag }
+        when :collect!, :map!, :delete_if, :keep_if, :reject!, :select!
+          list.public_send(mutator) { |tag| tag == 'shop' }
+        when :<<, :push, :append, :prepend, :unshift then list.public_send(mutator, 'inn')
+        else list.public_send(mutator)
+        end
+      end
+    end
+  end
+
+  describe 'without an owner' do
+    it 'mutates without raising' do
+      list = described_class.new(['shop'])
+
+      expect { list << 'bank' }.not_to raise_error
+      expect(list).to eq(['shop', 'bank'])
     end
   end
 end

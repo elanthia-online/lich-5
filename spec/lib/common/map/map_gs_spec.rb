@@ -276,3 +276,83 @@ RSpec.describe 'Code sharing between DR and GS' do
     end
   end
 end
+
+RSpec.describe 'Map sparse room id handling' do
+  let(:base_content) { File.read(File.expand_path('../../../../lib/common/map/map_base.rb', __dir__)) }
+  let(:dr_content) { File.read(File.expand_path('../../../../lib/common/map/map_dr.rb', __dir__)) }
+  let(:gs_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
+
+  describe 'hash returning dijkstra' do
+    it 'base module defines both the instance and class level variants' do
+      expect(base_content).to include('def dijkstra_hashes(destination = nil)')
+      expect(base_content).to include('def dijkstra_hashes(source, destination = nil)')
+    end
+
+    it 'keeps the array conversion on the public dijkstra' do
+      expect(base_content).to include('Convert hashes back to arrays for backward compatibility')
+    end
+
+    it 'internal callers use the hash variant' do
+      expect(base_content).to include('previous, = dijkstra_hashes(destination)')
+      expect(base_content).to include('self.class.dijkstra_hashes(@id, target_list)')
+      expect(base_content).to include('self.class.dijkstra_hashes(@id)')
+    end
+
+    it 'neither game overrides the pathfinding methods' do
+      [dr_content, gs_content].each do |content|
+        expect(content).not_to include('def dijkstra')
+        expect(content).not_to include('def path_to')
+        expect(content).not_to include('def find_nearest')
+      end
+    end
+  end
+
+  describe 'tag index' do
+    it 'base module defines the index and its accessors' do
+      expect(base_content).to include('class TagList < Array')
+      expect(base_content).to include('def tag_index')
+      expect(base_content).to include('def rooms_by_tag(tag_name)')
+      expect(base_content).to include('def reset_tag_index')
+      expect(base_content).to include('def build_tag_index')
+    end
+
+    it 'the tag finders read the index instead of scanning the room list' do
+      expect(base_content).to include('target_list = self.class.rooms_by_tag(tag_name)')
+      expect(base_content).not_to include('target_list.push(room.id) if room.tags.include?')
+    end
+
+    it 'both games retire the separate tag name cache' do
+      [dr_content, gs_content].each do |content|
+        expect(content).not_to include('@@tags')
+      end
+    end
+
+    it 'both games route invalidation through clear_tags_cache' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include("def clear_tags_cache\n          reset_tag_index")
+      end
+    end
+
+    it 'both games wrap room tags in a TagList with an invalidating writer' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include('@tags = TagList.new(tags, self.class)')
+        expect(content).to include('def tags=(value)')
+        expect(content).not_to include(':image_coords, :tags,')
+      end
+    end
+  end
+
+  describe 'fuzzy lookup' do
+    it 'both games compact the room list once instead of scanning it three times' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include('rooms = @@list.compact')
+        expect(content).not_to include('@@list.find { |room| room.title.find')
+        expect(content).not_to include('@@list.find { |room| room&.title&.find')
+      end
+    end
+
+    it 'base module compacts before building the tag index' do
+      expect(base_content).to include('list.compact.each do |room|')
+    end
+  end
+end
