@@ -72,9 +72,11 @@ module Lich
       #   parenthetical, one of DR_BALANCE_VALUES (e.g. "solidly", "off"). nil
       #   until an assess with a balance phrase arrives. See #off_balance?.
       attr_reader :balance
-      # @return [Array<String>] afflictions parsed from the `assess` parenthetical
-      #   that crtrStatus does NOT carry (e.g. ["cursed"]); [] when none/unseen.
-      #   crtrStatus states (prone/sleeping/stunned/...) live in crtr_flag?, not here.
+      # @return [Array<String>] assess-only condition/classification words parsed
+      #   from the `assess` parenthetical that crtrStatus does NOT carry (e.g.
+      #   ["cursed"], ["friendly", "cursed"]); [] when none/unseen. crtrStatus
+      #   states (prone/sleeping/stunned/immobile/hidden/...) live in crtr_flag?/
+      #   has_status?, not here. See #cursed? and #friendly?.
       attr_reader :conditions
       # @return [Time, nil] when assess enrichment last landed for this id; nil
       #   until first assess. See #enriched?. Assess fields (range/balance/
@@ -195,23 +197,33 @@ module Lich
         @conditions.include?(name.to_s)
       end
 
-      # Convenience for the one affliction confirmed so far; use #condition? for
-      # others until they are confirmed and given their own predicate.
+      # Convenience for the "cursed" affliction; use #condition? for others.
       #
       # @return [Boolean]
       def cursed?
         condition?('cursed')
       end
 
-      # Matches a DR_BALANCE_VALUES descriptor followed by "balance(d)" in an
-      # assess parenthetical, e.g. "solidly balanced", "off balance". Built lazily
+      # The assess "friendly" marker: a creature that will not attack you (a
+      # summon or charmed ally). This is the ONLY friend/foe signal DragonRealms
+      # exposes - crtrStatus does not carry it (a friendly plague spawn still
+      # reports hostile="1"). Assess-only, so it is a staleable pull field.
+      #
+      # @return [Boolean]
+      def friendly?
+        condition?('friendly')
+      end
+
+      # Matches a DR_BALANCE_VALUES descriptor followed by the balance word in an
+      # assess parenthetical, e.g. "solidly balanced", "off balance", and the
+      # worst levels' "imbalanced" phrasing ("extremely imbalanced"). Built lazily
       # so DR_BALANCE_VALUES (loaded with drvariables) is present by first use;
       # union order (longest multi-word values first in the array) resolves
       # "somewhat off" ahead of "off".
       #
       # @return [Regexp]
       def self.balance_pattern
-        @balance_pattern ||= /\b(#{Regexp.union(DR_BALANCE_VALUES)})\s+balanced?\b/i
+        @balance_pattern ||= /\b(#{Regexp.union(DR_BALANCE_VALUES)})\s+(?:im)?balanced?\b/i
       end
 
       private

@@ -283,6 +283,31 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(assess('14', 'hopelessly balanced').off_balance?).to be true
       expect(assess('13', 'somewhat off balance').balance).to eq('somewhat off')
     end
+
+    it 'parses the "imbalanced" phrasing used by the worst balance levels' do
+      # Real log form: the worst levels say "extremely imbalanced", not
+      # "...balanced". Must still capture the descriptor (and be off_balance?).
+      c = assess('20', 'cursed and extremely imbalanced')
+      expect(c.balance).to eq('extremely')
+      expect(c.off_balance?).to be true
+      expect(c.conditions).to eq(['cursed']) # "extremely imbalanced" is balance, not a condition
+    end
+
+    it 'parses "friendly" and an Oxford-comma condition list (real log form)' do
+      c = assess('21', 'friendly, cursed, and nimbly balanced')
+      expect(c.balance).to eq('nimbly')
+      expect(c.conditions).to eq(%w[friendly cursed])
+      expect(c.friendly?).to be true # assess friend/foe marker
+      expect(c.cursed?).to be true
+    end
+
+    it 'drops a crtrStatus flag from an Oxford-comma list, keeping real conditions' do
+      # "hidden, cursed, and solidly balanced" -> hidden excluded (crtrStatus),
+      # cursed kept; validates comma handling + flag exclusion together.
+      c = assess('22', 'hidden, cursed, and solidly balanced')
+      expect(c.balance).to eq('solidly')
+      expect(c.conditions).to eq(['cursed'])
+    end
   end
 
   describe '#noun (derive_noun) across DragonRealms name shapes' do
