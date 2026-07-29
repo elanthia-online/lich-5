@@ -249,7 +249,9 @@ module Lich
       # @param name [String, nil]
       # @return [String, nil]
       def derive_noun(name)
-        name && name[/[A-Za-z'-]+$/]
+        # scan+last (not an end-anchored match) so trailing whitespace or
+        # punctuation on the name can't swallow the noun.
+        name && name.scan(/[A-Za-z'-]+/).last
       end
     end
 

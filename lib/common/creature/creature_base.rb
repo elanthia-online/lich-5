@@ -84,7 +84,8 @@ module Lich
         'blind'       => nil,
         'sunburst'    => nil,
         'webbed'      => nil,
-        'poisoned'    => nil
+        'poisoned'    => nil,
+        'hidden'      => nil
       }.freeze
 
       # Maps `<crtrStatus>` transient XML flags to canonical status names.
@@ -107,7 +108,8 @@ module Lich
         'prone'       => 'prone',
         'sitting'     => 'sitting',
         'flying'      => 'flying',
-        'hovering'    => 'hovering'
+        'hovering'    => 'hovering',
+        'hidden'      => 'hidden'
       }.freeze
 
       # Maps `<crtrStatus>` classification XML flags to predicate keys.

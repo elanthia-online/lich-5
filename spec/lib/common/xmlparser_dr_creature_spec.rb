@@ -101,6 +101,41 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(Lich::DragonRealms::Creature[3].name).to be_nil # no matching bold slot
     end
 
+    it 'count-guards the reverse: more bold names than crtrStatus, extras unregistered' do
+      feed(%(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>, <pushBold/>a kobold<popBold/>, <pushBold/>an orc<popBold/> and some junk.</component><crtrStatus exist="1" hostile="1"/><crtrStatus exist="2" hostile="1"/><prompt time="1785274111">R&gt;</prompt>))
+
+      # two crtrStatus -> the first two bold names by position; third name unused
+      expect(Lich::DragonRealms::Creature[1].name).to eq('a jeol moradu')
+      expect(Lich::DragonRealms::Creature[2].name).to eq('a kobold')
+      expect(Lich::DragonRealms::Creature.in_room.map(&:id)).to contain_exactly(1, 2)
+    end
+
+    it 'derives the noun for a multi-word bold name via the positional path' do
+      feed(%(<component id='room objs'>You also see <pushBold/>a void-black umbral moth<popBold/> and some junk.</component><crtrStatus exist="7" hostile="1"/><prompt time="1785274222">R&gt;</prompt>))
+
+      moth = Lich::DragonRealms::Creature[7]
+      expect(moth.name).to eq('a void-black umbral moth')
+      expect(moth.noun).to eq('moth')
+    end
+
+    it 'resets the name buffer on each room-objs refresh (no stale carry-over)' do
+      feed(DR_ROOM_AND_CRTR) # five jeol moradu captured
+      feed(%(<component id='room objs'>You also see <pushBold/>a kobold<popBold/> and some junk.</component><crtrStatus exist="500" hostile="1"/><prompt time="1785274333">R&gt;</prompt>))
+
+      # the new room's crtrStatus pairs with the fresh buffer, not a leftover name
+      expect(Lich::DragonRealms::Creature[500].name).to eq('a kobold')
+    end
+
+    it 'reset clears the room-objs name buffer and batch index' do
+      feed(%(<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/> and some junk.</component>))
+      expect(parser.instance_variable_get(:@dr_room_npc_names)).not_to be_empty
+
+      parser.reset
+
+      expect(parser.instance_variable_get(:@dr_room_npc_names)).to eq([])
+      expect(parser.instance_variable_get(:@dr_crtr_index)).to eq(0)
+    end
+
     it 'applies each creature\'s flags from its own tag' do
       feed(DR_ROOM_AND_CRTR)
 

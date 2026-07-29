@@ -84,6 +84,16 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class[99353095].name).to eq('a jeol moradu')
       expect(described_class[99353095].noun).to eq('moradu')
     end
+
+    it 'a nil backfill name (out-of-range count-guard) leaves an existing name intact' do
+      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
+      described_class.sync('99353095', 'hostile' => '1', 'dead' => '1') # later refresh, no name
+      # nil positional name (surplus crtrStatus / no bold slot) must not wipe it
+      described_class.sync('99353095', { 'hostile' => '1' }, nil)
+
+      expect(described_class[99353095].name).to eq('a jeol moradu')
+      expect(described_class[99353095].noun).to eq('moradu')
+    end
   end
 
   describe '.feed_assess (the id-to-name tie-in)' do
@@ -207,6 +217,128 @@ RSpec.describe Lich::DragonRealms::Creature do
     it 'ignores an entry with no id' do
       expect(described_class.feed_assess(name: 'You', id: nil, self: true, pc: false)).to be_nil
       expect(described_class.all).to be_empty
+    end
+
+    it 'stores the engaged target name and its assess number when present' do
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '99353095', number: 5,
+        status: 'solidly balanced', relation: 'facing', target: 'a plague spawn',
+        target_number: 2, target_id: '99351111', range: :melee, self: false, pc: false
+      )
+
+      c = described_class[99353095]
+      expect(c.target).to eq('a plague spawn')
+      expect(c.target_number).to eq(2)
+      expect(c.target_id).to eq('99351111')
+    end
+  end
+
+  describe 'assess status parsing (parse_assess_status edge cases)' do
+    def assess(id, status)
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: id, number: 1, status: status,
+        relation: 'facing', range: :melee, self: false, pc: false
+      )
+      described_class[id.to_i]
+    end
+
+    it 'parses multiple assess-only afflictions' do
+      c = assess('1', 'cursed and poisoned and solidly balanced')
+      expect(c.balance).to eq('solidly')
+      expect(c.conditions).to eq(%w[cursed poisoned])
+      expect(c.cursed?).to be true
+      expect(c.condition?('poisoned')).to be true
+    end
+
+    it 'drops crtrStatus flag words even when mixed with real afflictions' do
+      c = assess('2', 'cursed and stunned and off balance')
+      expect(c.balance).to eq('off')
+      expect(c.conditions).to eq(['cursed']) # stunned excluded, cursed kept
+    end
+
+    it 'handles a status with afflictions but no balance phrase' do
+      c = assess('3', 'cursed')
+      expect(c.balance).to be_nil
+      expect(c.off_balance?).to be false # unknown balance is not "off"
+      expect(c.conditions).to eq(['cursed'])
+    end
+
+    it 'handles an empty or nil status (still enriched, no balance/conditions)' do
+      empty = assess('4', '')
+      expect(empty.balance).to be_nil
+      expect(empty.conditions).to eq([])
+      expect(empty.enriched?).to be true
+
+      nilst = assess('5', nil)
+      expect(nilst.balance).to be_nil
+      expect(nilst.conditions).to eq([])
+      expect(nilst.enriched?).to be true
+    end
+
+    it 'maps the balance ladder for off_balance? on both sides of "solidly"' do
+      expect(assess('10', 'incredibly balanced').off_balance?).to be false
+      expect(assess('11', 'nimbly balanced').off_balance?).to be false
+      expect(assess('12', 'solidly balanced').off_balance?).to be false
+      expect(assess('13', 'somewhat off balance').off_balance?).to be true # multi-word, below solidly
+      expect(assess('14', 'hopelessly balanced').off_balance?).to be true
+      expect(assess('13', 'somewhat off balance').balance).to eq('somewhat off')
+    end
+  end
+
+  describe '#noun (derive_noun) across DragonRealms name shapes' do
+    def named(id, assess_name)
+      described_class.feed_assess(
+        name: assess_name, id: id, number: 1, status: 'solidly balanced',
+        relation: 'facing', range: :melee, self: false, pc: false
+      )
+      described_class[id.to_i]
+    end
+
+    it 'takes the trailing noun of a multi-word name' do
+      expect(named('1', 'A void-black umbral moth').noun).to eq('moth')
+    end
+
+    it 'keeps an apostrophe when it is part of the trailing noun' do
+      expect(named('2', "A lesser Adan'f").noun).to eq("adan'f") # downcased
+    end
+
+    it 'takes the last word past an apostrophe-bearing adjective' do
+      expect(named('3', "An elder Adan'f blademaster").noun).to eq('blademaster')
+    end
+
+    it 'is robust to trailing whitespace or punctuation on the name' do
+      # end-anchored matching would return nil here; scan+last must not.
+      expect(named('4', 'A jeol moradu ').noun).to eq('moradu')
+      expect(named('5', 'A jeol moradu.').noun).to eq('moradu')
+    end
+  end
+
+  describe 'hidden (a crtrStatus flag DR emits but the maps originally omitted)' do
+    it 'tracks a hidden creature via has_status? from crtrStatus' do
+      described_class.sync('9001', 'hostile' => '1', 'hidden' => '1')
+
+      c = described_class[9001]
+      expect(c.has_status?('hidden')).to be true
+    end
+
+    it 'clears hidden on a later snapshot that drops it' do
+      described_class.sync('9001', 'hostile' => '1', 'hidden' => '1')
+      described_class.sync('9001', 'hostile' => '1') # came out of hiding
+
+      expect(described_class[9001].has_status?('hidden')).to be false
+    end
+
+    it 'excludes hidden from assess conditions (now a known crtrStatus flag)' do
+      described_class.sync('9001', 'hostile' => '1', 'hidden' => '1')
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '9001', number: 1,
+        status: 'hidden and solidly balanced', relation: 'facing',
+        range: :melee, self: false, pc: false
+      )
+
+      c = described_class[9001]
+      expect(c.conditions).to eq([]) # hidden excluded, tracked via crtrStatus
+      expect(c.has_status?('hidden')).to be true
     end
   end
 
