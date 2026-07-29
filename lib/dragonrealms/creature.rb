@@ -218,10 +218,15 @@ module Lich
 
       # Splits an `assess` parenthetical status into [balance, conditions].
       # Balance is the DR_BALANCE_VALUES descriptor before "balance(d)"; the rest
-      # (afflictions joined by "and") becomes the conditions list. crtrStatus
-      # states are not present here, so they are never captured as conditions.
+      # (afflictions joined by "and") becomes the conditions list.
       #
-      # @param status [String, nil] e.g. "cursed and solidly balanced".
+      # crtrStatus flag words that also appear in the parenthetical (e.g.
+      # "immobile") are dropped from conditions: they are tracked fresh via
+      # crtr_flag?/has_status? (a "push" source), whereas assess is a staleable
+      # "pull" snapshot, so keeping them here would duplicate and could disagree.
+      # Only assess-only afflictions (cursed, poisoned, ...) remain.
+      #
+      # @param status [String, nil] e.g. "immobile and slightly off balance".
       # @return [Array(String, Array<String>)] [balance_or_nil, conditions].
       def parse_assess_status(status)
         return [nil, []] if status.nil? || status.strip.empty?
@@ -229,7 +234,10 @@ module Lich
         pattern = self.class.balance_pattern
         balance = status[pattern, 1]
         remainder = balance ? status.sub(pattern, '') : status
-        conditions = remainder.split(/\s+and\s+|,/).map(&:strip).reject { |w| w.empty? || w == 'and' }
+        conditions = remainder.split(/\s+and\s+|,/)
+                              .map(&:strip)
+                              .reject { |w| w.empty? || w == 'and' }
+                              .reject { |w| Lich::Common::CreatureBase::ALL_CRTR_FLAGS.key?(w) }
         [balance, conditions]
       end
 

@@ -144,6 +144,39 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(c.off_balance?).to be false
     end
 
+    it 'keeps a crtrStatus flag word (immobile) out of assess conditions' do
+      # "immobile" appears in the assess parenthetical AND as a crtrStatus flag;
+      # it must be tracked via crtr_flag? (fresh), not duplicated into conditions.
+      described_class.sync('103723880', 'hostile' => '1', 'immobile' => '1')
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '103723880', number: 1,
+        status: 'immobile and slightly off balance', relation: 'facing',
+        target: 'Holdigor', target_id: '-10592432', range: :melee, self: false, pc: false
+      )
+
+      c = described_class[103723880]
+      expect(c.balance).to eq('slightly off')
+      expect(c.off_balance?).to be true
+      expect(c.conditions).to eq([]) # immobile excluded (it is a crtrStatus flag)
+      expect(c.has_status?('immobilized')).to be true # tracked via crtrStatus, fresh
+    end
+
+    it 'excludes stunned (a crtrStatus flag) and parses a multi-word balance' do
+      described_class.sync('103732844', 'hostile' => '1', 'stunned' => '1')
+      described_class.feed_assess(
+        name: 'A void-black umbral moth', id: '103732844', number: 1,
+        status: 'stunned and very badly balanced', relation: 'facing',
+        target: 'you', target_id: nil, range: :melee, self: false, pc: false
+      )
+
+      c = described_class[103732844]
+      expect(c.balance).to eq('very badly') # multi-word DR_BALANCE_VALUES entry
+      expect(c.off_balance?).to be true
+      expect(c.conditions).to eq([]) # stunned excluded (crtrStatus flag)
+      expect(c.has_status?('stunned')).to be true # tracked via crtrStatus, fresh
+      expect(c.noun).to eq('moth') # trailing noun of a multi-word name
+    end
+
     it 'reports prone from crtrStatus (a push flag), not from assess conditions' do
       # prone/sleeping/stunned/etc. are crtrStatus flags, kept out of #conditions.
       described_class.sync('99353095', 'hostile' => '1', 'prone' => '1')
