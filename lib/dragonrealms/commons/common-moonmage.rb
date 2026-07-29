@@ -35,6 +35,11 @@ module Lich
       # (plural) or "roisan" (singular, i.e. one); one roisaen == 60 seconds.
       MOON_FOCUS_DURATION_REGEX = /will last for roughly (?<count>[a-z][a-z-]*) roisae?n/i.freeze
 
+      # Near expiry (under one roisaen remaining) FOCUS drops the "roughly <count>"
+      # form entirely and reports "will last for less than one roisan" -- no
+      # spelled count. moon_weapon_duration treats this as 0 roisaen (expiring now).
+      MOON_FOCUS_EXPIRING_REGEX = /will last for less than one roisae?n/i.freeze
+
       # Maps divination tool keywords to their use verb.
       DIV_TOOL_VERBS = {
         'charts' => 'review',
@@ -331,15 +336,24 @@ module Lich
       end
 
       # Focuses the summoned moon weapon (moonblade/moonstaff) you are holding or
-      # wearing and returns how many roisaen it will last, or nil if you have no
-      # moon weapon or the duration could not be parsed. One roisaen == 60
-      # seconds; moonblade duration ranges 12-41 minutes.
+      # wearing and returns how many roisaen it will last: a positive Integer for
+      # the "roughly <count> roisaen" form, 0 for the near-expiry "less than one
+      # roisan" form, or nil if you have no moon weapon or the phrase could not be
+      # parsed. One roisaen == 60 seconds; moonblade duration ranges 12-41 minutes.
       # https://elanthipedia.play.net/Moonblade
       #
       # NOTE: FOCUS incurs roundtime, so callers should not poll this every tick.
       def moon_weapon_duration
         MOON_WEAPON_NAMES.each do |weapon|
-          result = DRC.bput("focus my #{weapon}", MOON_FOCUS_DURATION_REGEX, "I could not find", "Focus on what")
+          result = DRC.bput("focus my #{weapon}", MOON_FOCUS_DURATION_REGEX, MOON_FOCUS_EXPIRING_REGEX, "I could not find", "Focus on what")
+
+          # Near expiry FOCUS reports "less than one roisan" with no count; treat
+          # as 0 roisaen (expiring now) so callers can refresh immediately.
+          if result&.match?(MOON_FOCUS_EXPIRING_REGEX)
+            waitrt?
+            return 0
+          end
+
           match = result&.match(MOON_FOCUS_DURATION_REGEX)
           next unless match
 
