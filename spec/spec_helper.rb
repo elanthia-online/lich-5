@@ -77,6 +77,10 @@ RSpec.configure do |config|
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
     Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
+    # Drain Infomon's async write queue so a queued INSERT from a prior example
+    # cannot land in a later example's freshly reset table (seed/timing-dependent
+    # cross-file leakage). Specs that need a clean slate still call reset! themselves.
+    Lich::Gemstone::Infomon.flush if defined?(Lich::Gemstone::Infomon) && Lich::Gemstone::Infomon.respond_to?(:flush)
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
