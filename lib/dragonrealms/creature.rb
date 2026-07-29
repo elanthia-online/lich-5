@@ -29,6 +29,7 @@
 # =============================================================================
 
 require_relative '../common/creature/creature_base'
+require_relative 'drinfomon/drvariables' # DR_BALANCE_VALUES (assess balance parsing)
 
 module Lich
   module DragonRealms
@@ -62,6 +63,24 @@ module Lich
       attr_reader :range
       # @return [String, nil] id of the creature/PC this one is engaging, from `assess`.
       attr_reader :target_id
+      # @return [String, nil] name of the creature/PC this one is engaging, from
+      #   `assess` (e.g. "you", "Holdigor", "a plague spawn").
+      attr_reader :target
+      # @return [Integer, nil] the engaged target's `assess` list number, if any.
+      attr_reader :target_number
+      # @return [String, nil] balance descriptor parsed from the `assess`
+      #   parenthetical, one of DR_BALANCE_VALUES (e.g. "solidly", "off"). nil
+      #   until an assess with a balance phrase arrives. See #off_balance?.
+      attr_reader :balance
+      # @return [Array<String>] afflictions parsed from the `assess` parenthetical
+      #   that crtrStatus does NOT carry (e.g. ["cursed"]); [] when none/unseen.
+      #   crtrStatus states (prone/sleeping/stunned/...) live in crtr_flag?, not here.
+      attr_reader :conditions
+      # @return [Time, nil] when assess enrichment last landed for this id; nil
+      #   until first assess. See #enriched?. Assess fields (range/balance/
+      #   conditions/relation/target) are "pull" snapshots and can go stale -
+      #   poll assess before relying on one.
+      attr_reader :enriched_at
 
       # @param id [Integer, String] server creature id.
       # @param noun [String, nil] noun, when available.
@@ -76,6 +95,11 @@ module Lich
         @assess_status = nil
         @range = nil
         @target_id = nil
+        @target = nil
+        @target_number = nil
+        @balance = nil
+        @conditions = []
+        @enriched_at = nil
         # The assess stream is the authoritative id<->name tie; once it names a
         # creature, the room-objs backfill must not overwrite it (see
         # #apply_room_name). Room-objs may still supply a name first, before any
@@ -103,9 +127,13 @@ module Lich
         end
         @assess_number = entry[:number]
         @assess_status = entry[:status]
+        @balance, @conditions = parse_assess_status(entry[:status])
         @relation = entry[:relation]
         @range = entry[:range]
         @target_id = entry[:target_id]
+        @target = entry[:target]
+        @target_number = entry[:target_number]
+        @enriched_at = Time.now
       end
 
       # Applies a name learned from the room-objs stream, and derives the attack
@@ -139,7 +167,71 @@ module Lich
         !crtr_flag?(:dead)
       end
 
+      # Whether any `assess` enrichment (range/balance/conditions/relation/target)
+      # has landed for this id. These are "pull" snapshots -- poll assess before
+      # relying on them, and see #enriched_at for staleness.
+      #
+      # @return [Boolean]
+      def enriched?
+        !@enriched_at.nil?
+      end
+
+      # Whether the creature is below "solidly balanced" per the last `assess`
+      # (a softer target). False when balance is unknown.
+      #
+      # @return [Boolean]
+      def off_balance?
+        return false unless @balance
+
+        idx = DR_BALANCE_VALUES.index(@balance)
+        !idx.nil? && idx < DR_BALANCE_VALUES.index('solidly')
+      end
+
+      # Whether a given assess affliction is present (e.g. "cursed", "poisoned").
+      #
+      # @param name [String, Symbol]
+      # @return [Boolean]
+      def condition?(name)
+        @conditions.include?(name.to_s)
+      end
+
+      # Convenience for the one affliction confirmed so far; use #condition? for
+      # others until they are confirmed and given their own predicate.
+      #
+      # @return [Boolean]
+      def cursed?
+        condition?('cursed')
+      end
+
+      # Matches a DR_BALANCE_VALUES descriptor followed by "balance(d)" in an
+      # assess parenthetical, e.g. "solidly balanced", "off balance". Built lazily
+      # so DR_BALANCE_VALUES (loaded with drvariables) is present by first use;
+      # union order (longest multi-word values first in the array) resolves
+      # "somewhat off" ahead of "off".
+      #
+      # @return [Regexp]
+      def self.balance_pattern
+        @balance_pattern ||= /\b(#{Regexp.union(DR_BALANCE_VALUES)})\s+balanced?\b/i
+      end
+
       private
+
+      # Splits an `assess` parenthetical status into [balance, conditions].
+      # Balance is the DR_BALANCE_VALUES descriptor before "balance(d)"; the rest
+      # (afflictions joined by "and") becomes the conditions list. crtrStatus
+      # states are not present here, so they are never captured as conditions.
+      #
+      # @param status [String, nil] e.g. "cursed and solidly balanced".
+      # @return [Array(String, Array<String>)] [balance_or_nil, conditions].
+      def parse_assess_status(status)
+        return [nil, []] if status.nil? || status.strip.empty?
+
+        pattern = self.class.balance_pattern
+        balance = status[pattern, 1]
+        remainder = balance ? status.sub(pattern, '') : status
+        conditions = remainder.split(/\s+and\s+|,/).map(&:strip).reject { |w| w.empty? || w == 'and' }
+        [balance, conditions]
+      end
 
       # Extracts the attack noun (trailing word) from a display name, matching
       # DragonRealms' end-anchored creature-name convention (see

@@ -103,9 +103,58 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(creature.relation).to eq('behind you')
       expect(creature.range).to eq(:melee)
       expect(creature.assess_status).to eq('cursed and solidly balanced')
+      # parsed breakdown of the parenthetical
+      expect(creature.balance).to eq('solidly')
+      expect(creature.off_balance?).to be false
+      expect(creature.conditions).to eq(['cursed'])
+      expect(creature.cursed?).to be true
+      expect(creature.condition?('poisoned')).to be false
+      expect(creature.enriched?).to be true
       # flags from the earlier crtrStatus are preserved through the backfill
       expect(creature.crtr_flag?(:hostile)).to be true
       expect(creature.has_status?('immobilized')).to be true
+    end
+
+    it 'parses balance, target and open-ended conditions from assess' do
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '99355263', number: 6,
+        status: 'poisoned and off balance', relation: 'facing',
+        target: 'Mithandres', target_number: nil, target_id: '-10579963',
+        range: :melee, self: false, pc: false
+      )
+
+      c = described_class[99355263]
+      expect(c.balance).to eq('off')
+      expect(c.off_balance?).to be true
+      expect(c.conditions).to eq(['poisoned'])
+      # generic predicate covers not-yet-confirmed statuses like poisoned
+      expect(c.condition?('poisoned')).to be true
+      expect(c.cursed?).to be false
+      expect(c.target).to eq('Mithandres')
+      expect(c.target_id).to eq('-10579963')
+    end
+
+    it 'is not enriched (and has empty conditions/nil balance) until an assess arrives' do
+      described_class.sync('99353095', 'hostile' => '1')
+
+      c = described_class[99353095]
+      expect(c.enriched?).to be false
+      expect(c.balance).to be_nil
+      expect(c.conditions).to eq([])
+      expect(c.off_balance?).to be false
+    end
+
+    it 'reports prone from crtrStatus (a push flag), not from assess conditions' do
+      # prone/sleeping/stunned/etc. are crtrStatus flags, kept out of #conditions.
+      described_class.sync('99353095', 'hostile' => '1', 'prone' => '1')
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '99353095', number: 1,
+        status: 'cursed and solidly balanced', range: :melee, self: false, pc: false
+      )
+
+      c = described_class[99353095]
+      expect(c.has_status?('prone')).to be true # from crtrStatus
+      expect(c.conditions).to eq(['cursed']) # assess conditions exclude prone
     end
 
     it 'registers a creature from assess when no crtrStatus has been seen yet' do

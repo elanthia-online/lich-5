@@ -130,13 +130,23 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       # parse_assess_line splits "behind you" into relation + target ("you"),
       # so the stored relation is the bare positional word.
       expect(melee.relation).to eq('behind')
+      expect(melee.target).to eq('you')
       expect(melee.range).to eq(:melee)
+      # parenthetical "(1: cursed and solidly balanced)" -> balance + conditions
+      expect(melee.balance).to eq('solidly')
+      expect(melee.off_balance?).to be false
+      expect(melee.conditions).to eq(['cursed'])
+      expect(melee.cursed?).to be true
+      expect(melee.enriched?).to be true
 
       flanker = Lich::DragonRealms::Creature[99355263]
       expect(flanker.assess_number).to eq(3)
       expect(flanker.relation).to eq('flanking') # "moving to flank" normalized
       expect(flanker.range).to eq(:pole)
+      expect(flanker.target).to eq('Kythkani')
       expect(flanker.target_id).to eq('-10544759')
+      expect(flanker.balance).to eq('solidly') # "(3: solidly balanced)" -> no conditions
+      expect(flanker.conditions).to eq([])
     end
 
     it 'preserves the crtrStatus flags through the assess backfill' do
