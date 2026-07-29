@@ -47,6 +47,43 @@ RSpec.describe Lich::DragonRealms::Creature do
 
       expect(described_class.targets.map(&:id)).to contain_exactly(99353095, 99355263)
     end
+
+    it 'names a creature from the stream-order backfill and derives its noun' do
+      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
+
+      creature = described_class[99353095]
+      expect(creature.name).to eq('a jeol moradu')
+      expect(creature.noun).to eq('moradu')
+    end
+
+    it 'backfills the name onto an already id-first-registered instance' do
+      described_class.sync('99353095', 'hostile' => '1') # id-first, no name
+      expect(described_class[99353095].name).to be_nil
+
+      described_class.sync('99353095', { 'hostile' => '1' }, 'a jeol moradu')
+      expect(described_class[99353095].name).to eq('a jeol moradu')
+      expect(described_class[99353095].noun).to eq('moradu')
+    end
+
+    it 'leaves name and noun nil when no backfill name is supplied' do
+      described_class.sync('99353095', 'hostile' => '1')
+
+      expect(described_class[99353095].name).to be_nil
+      expect(described_class[99353095].noun).to be_nil
+    end
+
+    it 'does not let a stream-order name overwrite an assess-set name' do
+      described_class.feed_assess(
+        name: 'A jeol moradu', id: '99353095', number: 1,
+        relation: 'behind you', range: :melee, self: false, pc: false
+      )
+      # A later refresh's positional guess must never clobber the authoritative
+      # assess name (they normally match; this pins the precedence).
+      described_class.sync('99353095', { 'hostile' => '1' }, 'a wrong name')
+
+      expect(described_class[99353095].name).to eq('a jeol moradu')
+      expect(described_class[99353095].noun).to eq('moradu')
+    end
   end
 
   describe '.feed_assess (the id-to-name tie-in)' do
@@ -61,6 +98,7 @@ RSpec.describe Lich::DragonRealms::Creature do
 
       creature = described_class[99353095]
       expect(creature.name).to eq('a jeol moradu') # downcased to match DR vocab
+      expect(creature.noun).to eq('moradu') # derived from the name
       expect(creature.assess_number).to eq(1)
       expect(creature.relation).to eq('behind you')
       expect(creature.range).to eq(:melee)

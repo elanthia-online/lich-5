@@ -66,6 +66,12 @@ module Lich
         @next_level_text = String.new
         @current_target_ids = Array.new
         @pending_crtr_status = Hash.new
+        # DragonRealms stream-order name backfill: bold room-objs names captured
+        # in order, then paired index-for-index with the <crtrStatus> batch that
+        # follows (see the room-objs and crtrStatus handlers). DR-only; unused by
+        # GemStone, which carries the name inline on the bold <a> tag.
+        @dr_room_npc_names = []
+        @dr_crtr_index = 0
 
         @room_count = 0
         @room_title = String.new
@@ -199,6 +205,10 @@ module Lich
         # could misapply to an unrelated creature that later reuses the same
         # exist id (ids are recycled - see Creature.targets' notes).
         @pending_crtr_status.clear
+        # A reset mid-fragment invalidates the room-objs<->crtrStatus pairing, so
+        # drop any captured names and restart the batch index.
+        @dr_room_npc_names = []
+        @dr_crtr_index = 0
       end
 
       def safe_to_respond?
@@ -423,6 +433,11 @@ module Lich
               # this component; clearing here gives that batch a clean snapshot.
               Lich::DragonRealms::Creature.clear_room if defined?(Lich::DragonRealms::Creature)
               @pending_crtr_status.clear
+              # Start a fresh room-objs<->crtrStatus pairing for this refresh: the
+              # bold names captured below are zipped, in order, to the crtrStatus
+              # batch that follows this component.
+              @dr_room_npc_names = []
+              @dr_crtr_index = 0
             elsif attributes['id'] == 'room players'
               GameObj.begin_room_players
             elsif attributes['id'] == 'room exits'
@@ -454,14 +469,20 @@ module Lich
             # DragonRealms differs: its room-objs carry no per-creature <a exist>
             # tag, so there is no text() path to defer to. Its <crtrStatus> tags
             # arrive batched after the room-objs component and carry their own
-            # id, so they are applied immediately, id-first (name-less; the name
-            # is backfilled later from the assess stream - see
+            # id, so they are applied immediately, id-first. The name is
+            # backfilled two ways: the stream-order pairing here (the Nth bold
+            # room-objs name captured above -> the Nth crtrStatus in this batch),
+            # and, authoritatively, later from the assess stream (see
             # lib/dragonrealms/creature.rb).
             crtr_id = attributes['exist']
             if crtr_id
               crtr_flags = attributes.reject { |k, _| k == 'exist' }
               if XMLData.game =~ /^DR/
-                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
+                # Bounds-checked: more crtrStatus than captured names yields nil
+                # (the count-guard), never a mis-paired earlier slot.
+                positional_name = @dr_room_npc_names[@dr_crtr_index]
+                @dr_crtr_index += 1
+                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags, positional_name) if defined?(Lich::DragonRealms::Creature)
               else
                 @pending_crtr_status[crtr_id] = crtr_flags
               end
@@ -971,7 +992,19 @@ module Lich
               if @active_tags.include?('a')
                 if @bold
                   @last_npc = GameObj.new_npc(@obj_exist, @obj_noun, text_string)
-                  if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
+                  if XMLData.game =~ /^DR/
+                    # Future-proofing: DragonRealms room-objs creatures currently
+                    # carry no <a> tag, but if that ever changes to GemStone's
+                    # <a exist noun> shape, register id-first with the inline
+                    # name/noun via DR's own Creature (never the unqualified
+                    # Gemstone Creature below, which is not loaded in DR). With an
+                    # <a> present the stream-order capture branch is skipped, so
+                    # this becomes the sole name source - no double-set.
+                    if @obj_exist && defined?(Lich::DragonRealms::Creature)
+                      dr_creature = Lich::DragonRealms::Creature.register(text_string, @obj_exist, @obj_noun)
+                      dr_creature&.apply_room_name(text_string)
+                    end
+                  elsif XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
                     creature = Creature.register(text_string, @obj_exist, @obj_noun)
                     if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
                       creature.sync_crtr_status(pending_flags)
@@ -980,7 +1013,18 @@ module Lich
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
                 end
+              elsif @bold && XMLData.game =~ /^DR/
+                # DragonRealms room-objs bold NPC names carry no <a> tag. Capture
+                # them in stream order so the <crtrStatus> batch that follows can
+                # pair the Nth name to the Nth id (see the crtrStatus handler).
+                # Only bold runs are names; the non-bold "(dead)"/"(immobile)"
+                # status runs fall through to the annotation branch below.
+                @dr_room_npc_names << text_string
               elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
+                # @last_npc is nil in DragonRealms here (DR room-objs bold names
+                # carry no <a> tag, so the new_npc branch above never runs and
+                # never sets it), so the &. keeps this a safe no-op in DR while
+                # still annotating the last GemStone npc.
                 @last_npc&.status = $1
               end
             elsif @active_ids.include?('room players')

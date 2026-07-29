@@ -43,9 +43,11 @@ module Lich
 
       # @return [Integer] server creature id.
       attr_reader :id
-      # @return [String, nil] noun, when a feed supplies one (usually nil in DR).
+      # @return [String, nil] attack noun (the trailing word of the name),
+      #   derived whenever a name is set; nil until then.
       attr_reader :noun
-      # @return [String, nil] display name; nil until an `assess` tie-in arrives.
+      # @return [String, nil] display name; nil until a room-objs backfill or an
+      #   `assess` tie-in supplies one.
       attr_accessor :name
       # @return [Time] when this instance was first registered.
       attr_reader :created_at
@@ -74,6 +76,11 @@ module Lich
         @assess_status = nil
         @range = nil
         @target_id = nil
+        # The assess stream is the authoritative id<->name tie; once it names a
+        # creature, the room-objs backfill must not overwrite it (see
+        # #apply_room_name). Room-objs may still supply a name first, before any
+        # assess has run.
+        @name_from_assess = false
         initialize_status_tracking
       end
 
@@ -88,12 +95,38 @@ module Lich
       #   `:name`, `:number`, `:status`, `:relation`, `:range`, `:target_id`.
       # @return [void]
       def feed_assess(entry)
-        @name = entry[:name].to_s.downcase if entry[:name]
+        if entry[:name]
+          @name = entry[:name].to_s.downcase
+          @noun = derive_noun(@name)
+          # Authoritative from here on: subsequent room-objs backfills no-op.
+          @name_from_assess = true
+        end
         @assess_number = entry[:number]
         @assess_status = entry[:status]
         @relation = entry[:relation]
         @range = entry[:range]
         @target_id = entry[:target_id]
+      end
+
+      # Applies a name learned from the room-objs stream, and derives the attack
+      # noun from it.
+      #
+      # Two producers call this, both via the XML parser: the stream-order
+      # backfill that pairs the Nth bold room-objs name with the Nth
+      # `<crtrStatus>` id, and (future-proofing) a GemStone-style
+      # `<a exist noun>` room-objs tag if DragonRealms ever emits one. The
+      # `assess` stream is the authoritative id<->name tie, so once #feed_assess
+      # has named the creature this is a no-op. A nil name (e.g. an out-of-range
+      # positional lookup, the count-guard) is ignored, leaving any existing name
+      # intact.
+      #
+      # @param name [String, nil] display name from the room-objs stream.
+      # @return [void]
+      def apply_room_name(name)
+        return if name.nil? || @name_from_assess
+
+        @name = name
+        @noun = derive_noun(name)
       end
 
       # Whether this creature should be considered attackable.
@@ -104,6 +137,19 @@ module Lich
       # @return [Boolean]
       def valid_target?
         !crtr_flag?(:dead)
+      end
+
+      private
+
+      # Extracts the attack noun (trailing word) from a display name, matching
+      # DragonRealms' end-anchored creature-name convention (see
+      # DRDefsPattern::CREATURE_NAME) so `noun` is a drop-in for `attack <noun>`
+      # -- e.g. "a jeol moradu" -> "moradu".
+      #
+      # @param name [String, nil]
+      # @return [String, nil]
+      def derive_noun(name)
+        name && name[/[A-Za-z'-]+$/]
       end
     end
 
@@ -130,13 +176,21 @@ module Lich
       # This is the automatic, name-less DragonRealms feed: it produces an
       # id-keyed hostile roster with flags before any `assess` has run.
       #
+      # The optional `name` is the stream-order backfill: the XML parser pairs the
+      # Nth bold room-objs name with the Nth `<crtrStatus>` in the batch and passes
+      # it here, so creatures are named every refresh without waiting for `assess`.
+      # It is applied via {CreatureInstance#apply_room_name} (assess still wins;
+      # a nil name is ignored), and works whether the id is new or already known.
+      #
       # @param id [Integer, String] server creature id (the tag's `exist`).
       # @param flags [Hash{String=>String}] tag attributes excluding `exist`.
+      # @param name [String, nil] stream-order room-objs name for this id, if any.
       # @return [CreatureInstance, nil] the synced instance, or nil if disabled/full.
-      def self.sync(id, flags)
-        instance = CreatureInstance.register(nil, id)
+      def self.sync(id, flags, name = nil)
+        instance = CreatureInstance.register(name, id)
         return nil unless instance
 
+        instance.apply_room_name(name)
         instance.sync_crtr_status(flags)
         instance
       end

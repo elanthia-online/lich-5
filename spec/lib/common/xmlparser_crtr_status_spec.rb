@@ -66,7 +66,7 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
   end
 
   it 'still registers via the pre-existing current_target_ids path when crtrStatus is absent' do
-    stub_const('XMLData', double(current_target_ids: ['614999']))
+    stub_const('XMLData', double(current_target_ids: ['614999'], game: 'GSIV'))
 
     feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614999" noun="ooze">gelatinous ooze</a><popBold/>.</component>))
 
@@ -152,7 +152,7 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
 
       # Id reused later by an unrelated creature via the current_target_ids path.
-      stub_const('XMLData', double(current_target_ids: ['999999']))
+      stub_const('XMLData', double(current_target_ids: ['999999'], game: 'GSIV'))
       feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="999999" noun="crab">giant crab</a><popBold/>.</component>))
 
       expect(Lich::Gemstone::Creature[999999].crtr_flag?(:dead)).to be false
