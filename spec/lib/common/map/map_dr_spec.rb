@@ -427,6 +427,18 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         expect(map_class.rooms_by_tag('shop')).to eq([])
       end
 
+      it 'picks up a newly constructed tagged room' do
+        map_class.new(3, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 3])
+      end
+
+      it 'picks up a room replaced at an existing id' do
+        map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
+      end
+
       it 'is reflected in .tags as well' do
         map_class[2].tags << 'inn'
 
