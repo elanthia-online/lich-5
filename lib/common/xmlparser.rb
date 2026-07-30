@@ -187,6 +187,11 @@ module Lich
         @current_stream = String.new
         @current_style = String.new
         @sax_parse_errors = []
+        # Any staged GameObj refresh still open here is incomplete. Left in
+        # place, an interrupted container fill would be published as
+        # authoritative by the next <prompt>, so drop the in-flight buffers and
+        # keep the previously published snapshot visible instead.
+        GameObj.discard_staged_refreshes
         # A <crtrStatus> tag can be fully parsed and cached here while the
         # matching bold <a> text is still in an as-yet-unparsed remainder of
         # the fragment. If a malformed/truncated fragment forces a reset in
