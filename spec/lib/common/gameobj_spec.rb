@@ -844,16 +844,22 @@ RSpec.describe Lich::Common::GameObj do
       it 'swaps all four familiar registries atomically' do
         described_class.new_fam_npc('50', 'orc', 'an orc')
         described_class.new_fam_loot('51', 'gem', 'a ruby')
+        described_class.new_fam_pc('52', 'elf', 'an elf')
+        described_class.new_fam_room_desc('53', 'statue', 'a statue')
 
         described_class.begin_familiar
         described_class.new_fam_npc('60', 'troll', 'a troll')
 
         expect(described_class.fam_npcs.map(&:id)).to eq(['50'])
         expect(described_class.fam_loot.map(&:id)).to eq(['51'])
+        expect(described_class.fam_pcs.map(&:id)).to eq(['52'])
+        expect(described_class.fam_room_desc.map(&:id)).to eq(['53'])
 
         described_class.commit_familiar
         expect(described_class.fam_npcs.map(&:id)).to eq(['60'])
         expect(described_class.fam_loot).to be_nil
+        expect(described_class.fam_pcs).to be_nil
+        expect(described_class.fam_room_desc).to be_nil
       end
     end
 
