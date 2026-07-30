@@ -1,6 +1,7 @@
 # spec/lib/gemcheck_spec.rb
 require 'tmpdir'
 require 'fileutils'
+require 'benchmark'
 
 # TEMP_DIR is referenced by GemCheck#write_log; it must exist before that
 # method runs. Constants are resolved at call time (not require time),
@@ -301,7 +302,8 @@ RSpec.describe Lich::GemCheck do
 
     it 'waits for the release-page alert and opens the URL only after OK' do
       expect(shell).to receive(:Popup)
-        .with("alert\nClick OK to open the download page.", 0, described_class::TITLE, 1 + 64).and_return(1)
+        .with("alert\nClick OK to open the download page.", described_class::ALERT_TIMEOUT_SECONDS,
+              described_class::TITLE, 1 + 64).and_return(1)
       expect(shell).to receive(:Run).with(described_class::RELEASE_URL)
 
       described_class.alert_windows('alert')
@@ -692,9 +694,10 @@ RSpec.describe Lich::GemCheck do
     context 'when zenity is available' do
       before { stub_only_available('zenity') }
 
-      it 'shows a zenity info dialog with the given body' do
-        expect(described_class).to receive(:system)
-          .with('zenity', '--info', '--title', described_class::TITLE, '--text', 'body text')
+      it 'shows a zenity info dialog bounded by a timeout' do
+        expect(described_class).to receive(:run_with_timeout)
+          .with(['zenity', '--info', '--title', described_class::TITLE, '--text', 'body text'],
+                described_class::ALERT_TIMEOUT_SECONDS)
         described_class.alert_linux('body text')
       end
     end
@@ -702,9 +705,10 @@ RSpec.describe Lich::GemCheck do
     context 'when only kdialog is available' do
       before { stub_only_available('kdialog') }
 
-      it 'shows a kdialog msgbox' do
-        expect(described_class).to receive(:system)
-          .with('kdialog', '--title', described_class::TITLE, '--msgbox', 'body text')
+      it 'shows a kdialog msgbox bounded by a timeout' do
+        expect(described_class).to receive(:run_with_timeout)
+          .with(['kdialog', '--title', described_class::TITLE, '--msgbox', 'body text'],
+                described_class::ALERT_TIMEOUT_SECONDS)
         described_class.alert_linux('body text')
       end
     end
@@ -712,9 +716,9 @@ RSpec.describe Lich::GemCheck do
     context 'when only xmessage is available' do
       before { stub_only_available('xmessage') }
 
-      it 'shows an xmessage dialog' do
-        expect(described_class).to receive(:system)
-          .with('xmessage', '-center', 'body text')
+      it 'shows an xmessage dialog bounded by a timeout' do
+        expect(described_class).to receive(:run_with_timeout)
+          .with(['xmessage', '-center', 'body text'], described_class::ALERT_TIMEOUT_SECONDS)
         described_class.alert_linux('body text')
       end
     end
@@ -741,6 +745,19 @@ RSpec.describe Lich::GemCheck do
         .with('which', 'definitely-not-a-real-command', out: File::NULL, err: File::NULL)
         .and_return(false)
       expect(described_class.cmd_available?('definitely-not-a-real-command')).to be(false)
+    end
+  end
+
+  describe '.run_with_timeout' do
+    it 'returns true when the command exits on its own before the timeout' do
+      expect(described_class.run_with_timeout(['true'], 5)).to be(true)
+    end
+
+    it 'kills the process and returns false when it outlives the timeout' do
+      elapsed = Benchmark.realtime do
+        expect(described_class.run_with_timeout(['sleep', '30'], 1)).to be(false)
+      end
+      expect(elapsed).to be < 5
     end
   end
 end
