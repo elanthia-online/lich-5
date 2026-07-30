@@ -1088,6 +1088,14 @@ module Lich
           @@npcs = []
         end
 
+        # Mirrors the production API so XMLParser#reset - which discards
+        # in-flight staged refreshes when resynchronizing - works against this
+        # lightweight double. The double has no staging buffers, so it is a
+        # no-op here.
+        def discard_staged_refreshes
+          nil
+        end
+
         def set_right_hand(obj)
           @right_hand = obj
         end
