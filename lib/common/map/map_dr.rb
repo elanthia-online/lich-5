@@ -65,6 +65,7 @@ module Lich
         @genie_zone = genie_zone
         @genie_pos = genie_pos
         @@list[@id] = self
+        self.class.reset_tag_index
       end
 
       def to_s
