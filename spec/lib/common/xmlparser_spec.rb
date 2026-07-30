@@ -427,6 +427,26 @@ RSpec.describe Lich::Common::XMLParser do
         expect(gameobj.containers['A'].map(&:id)).to eq(['a1'])
         expect(gameobj.containers['B'].map(&:id)).to eq(['b1'])
       end
+
+      it 'does not publish a truncated fill when a reset intervenes' do
+        cid = '2136851'
+        gameobj.new_inv('900', 'codex', 'an old codex', cid) # previously published
+
+        parser.tag_start('clearContainer', { 'id' => cid })
+        parser.tag_end('clearContainer')
+        feed_container_item(cid, '901', 'codex', 'a runic codex')
+
+        # A malformed/truncated fragment forces the parser to resynchronize
+        # while the fill is still open.
+        parser.reset
+
+        parser.tag_start('prompt', { 'time' => '1' })
+        parser.tag_end('prompt')
+
+        # The incomplete listing is discarded, not published; the previous
+        # snapshot stays visible.
+        expect(gameobj.containers[cid].map(&:id)).to eq(['900'])
+      end
     end
   end
 end
