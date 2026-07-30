@@ -929,5 +929,62 @@ RSpec.describe Lich::Common::GameObj do
         expect(described_class['80']).to be(staged)
       end
     end
+
+    describe '.discard_staged_refreshes' do
+      it 'drops an open container refresh so a later commit cannot publish it' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        described_class.discard_staged_refreshes
+        described_class.commit_all_containers
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['70'])
+      end
+
+      it 'leaves the published registries untouched' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_inv('1', 'cloak', 'a wool cloak')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold')
+        described_class.begin_inv
+        described_class.new_inv('2', 'tunic', 'a linen tunic')
+
+        described_class.discard_staged_refreshes
+
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+      end
+
+      it 'closes every refresh so a subsequent commit is a no-op' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold')
+
+        described_class.discard_staged_refreshes
+        described_class.commit_room_objs
+
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+      end
+
+      it 'routes later writes back to the published registry' do
+        described_class.begin_inv
+        described_class.discard_staged_refreshes
+
+        described_class.new_inv('9', 'gem', 'an opal')
+
+        expect(described_class.inv.map(&:id)).to eq(['9'])
+      end
+
+      it 'is a no-op when no refresh is open' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+
+        expect { described_class.discard_staged_refreshes }
+          .not_to(change { described_class.npcs.map(&:id) })
+      end
+    end
   end
 end
