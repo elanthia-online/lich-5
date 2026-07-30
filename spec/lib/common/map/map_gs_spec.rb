@@ -321,6 +321,16 @@ RSpec.describe 'Map sparse room id handling' do
       expect(base_content).not_to include('target_list.push(room.id) if room.tags.include?')
     end
 
+    it 'base module memoizes the index unconditionally' do
+      expect(base_content).to include('@tag_index ||= build_tag_index')
+    end
+
+    it 'both games invalidate the index when the room list is mutated' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include("@@list[@id] = self\n        self.class.reset_tag_index")
+      end
+    end
+
     it 'both games retire the separate tag name cache' do
       [dr_content, gs_content].each do |content|
         expect(content).not_to include('@@tags')
