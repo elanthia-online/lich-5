@@ -164,8 +164,7 @@ module Lich
         # @return [Hash{String => Array<Integer>}]
         def tag_index
           self.load unless loaded?
-          @tag_index = build_tag_index if @tag_index.nil? || @tag_index.empty?
-          @tag_index
+          @tag_index ||= build_tag_index
         end
 
         # Room ids carrying a tag, nearest-agnostic and in room id order
