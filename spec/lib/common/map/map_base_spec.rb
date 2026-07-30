@@ -568,6 +568,22 @@ RSpec.describe Lich::Common::MapBase do
         expect(test_class.tag_index).to eq({})
       end
 
+      it 'memoizes an empty index instead of rebuilding on every call' do
+        test_class.test_list[0] = test_class.new(0)
+        first_call = test_class.tag_index
+
+        expect(test_class.tag_index).to be(first_call)
+      end
+
+      it 'builds only once when no room carries a tag' do
+        test_class.test_list[0] = test_class.new(0)
+        allow(test_class).to receive(:build_tag_index).and_call_original
+
+        3.times { test_class.tag_index }
+
+        expect(test_class).to have_received(:build_tag_index).once
+      end
+
       it 'memoizes the index across calls' do
         test_class.test_list[0] = test_class.new(0, tags: ['shop'])
         first_call = test_class.tag_index
