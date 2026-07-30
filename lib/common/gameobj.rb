@@ -718,6 +718,38 @@ module Lich
         @@staging_contents.clear
       end
 
+      # Discards every in-flight staged refresh without publishing it.
+      #
+      # Called by +XMLParser#reset+ after a malformed or truncated fragment
+      # forces the parser to resynchronize. Any refresh open at that moment is
+      # known to be incomplete, so its buffer is dropped rather than published:
+      # the previously published snapshot stays visible, which is the same
+      # failure mode as an interrupted stream that never commits.
+      #
+      # Without this, an interrupted container fill would be published as
+      # authoritative by the next +commit_all_containers+ at the following
+      # +prompt+, and objects held only in an abandoned buffer would keep
+      # appearing in +live_registry_objects+ (blocking +prune_index!+) until the
+      # next refresh of that same registry replaced it.
+      #
+      # @return [void]
+      def self.discard_staged_refreshes
+        @@staging_inv           = nil
+        @@staging_reserve       = nil
+        @@staging_loot          = nil
+        @@staging_npcs          = nil
+        @@staging_npc_status    = nil
+        @@staging_pcs           = nil
+        @@staging_pc_status     = nil
+        @@staging_room_desc     = nil
+        @@staging_fam_room_desc = nil
+        @@staging_fam_loot      = nil
+        @@staging_fam_npcs      = nil
+        @@staging_fam_pcs       = nil
+        @@staging_contents.clear
+      end
+
+
       # ---------------------------------------------------------------------------
       # Lookup
       # ---------------------------------------------------------------------------
