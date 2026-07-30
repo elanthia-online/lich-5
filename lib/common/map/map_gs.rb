@@ -62,6 +62,7 @@ module Lich
         @check_location = check_location
         @unique_loot = unique_loot
         @@list[@id] = self
+        self.class.reset_tag_index
       end
 
       # Class method accessors required by MapBase
