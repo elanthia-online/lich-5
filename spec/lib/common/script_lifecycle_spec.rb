@@ -407,6 +407,14 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.run_child('child', :timeout => 0.25)).to be_nil
     end
 
+    it 'rejects a negative Script.run_child timeout before starting the child' do
+      expect(script_class).not_to receive(:start_child)
+
+      expect {
+        script_class.run_child('child', :timeout => -1)
+      }.to raise_error(ArgumentError, /non-negative/)
+    end
+
     it 'marks the current script as a daemon' do
       script = build_script('daemon')
       allow(script_class).to receive(:current).and_return(script)

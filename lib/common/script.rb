@@ -868,7 +868,10 @@ module Lich
       #
       # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
       # @return [Script, nil] the completed child, or nil on startup failure or timeout
+      # @raise [ArgumentError] when the timeout is negative, before the child starts
       def Script.run_child(*args, timeout: nil)
+        raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
+
         child = Script.start_child(*args)
         return nil unless child
 
