@@ -571,8 +571,10 @@ RSpec.describe Lich::DragonRealms::DRParser do
     describe 'RoomID toggle (no longer enforced)' do
       it 'ignores the "no longer see room IDs" line without warning or re-enabling the flag' do
         # Room UIDs now come from the <nav> tag regardless of the ShowRoomID flag, so turning
-        # it off is a valid player choice: Lich must not nag or force the flag back on.
+        # it off is a valid player choice: Lich must neither nag nor send a command to force
+        # the flag back on (the old handler ran put("flag showroomid on")).
         expect(Lich::Messaging).not_to receive(:msg)
+        expect(described_class).not_to receive(:put)
 
         line = "You will no longer see room IDs when LOOKing in the game and room windows."
         expect { described_class.parse(line) }.not_to raise_error

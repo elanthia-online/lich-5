@@ -459,9 +459,10 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
       expect(dr.process_room_display(+'PROMPT')).not_to include('Room Number:')
     end
 
-    it 'shows the Room Number line for the "both" placement' do
+    it 'renders in both the title and the below-room line for the "both" placement' do
       Lich.display_lichid = true
       Lich.display_roomid_location = 'both'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - 1234]')
       expect(dr.process_room_display(+'PROMPT')).to include('Room Number: 1234')
     end
 
