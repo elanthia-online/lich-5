@@ -467,10 +467,12 @@ RSpec.describe Lich::Gemstone::Creature do
       # room changes and a zone change. Anything sourced from it alone (not
       # also in the room roster) must not leak into an "authoritative"
       # in-room list.
-      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
+      stale = Lich::Gemstone::CreatureInstance.register('departed thing', 9)
       stale.sync_crtr_status('hostile' => '1')
-      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
-      XMLData.current_target_ids = ['9'] # registered, hostile, but never marked into the room roster
+      # Registered and hostile, but no longer in the room roster (e.g. it left
+      # or died and the room refreshed) - only the sticky dropdown still names it.
+      Lich::Gemstone::CreatureInstance.clear_room
+      XMLData.current_target_ids = ['9']
 
       expect(described_class.targets.map(&:id)).to eq([])
     end
@@ -516,11 +518,123 @@ RSpec.describe Lich::Gemstone::Creature do
     end
 
     it 'also ignores current_target_ids, same as .targets' do
-      stale = Lich::Gemstone::CreatureInstance.new(9, 'thing', 'departed thing')
-      Lich::Gemstone::CreatureInstance.class_variable_get(:@@instances)[9] = stale
+      Lich::Gemstone::CreatureInstance.register('departed thing', 9)
+      Lich::Gemstone::CreatureInstance.clear_room # registered, but not in the room roster
       XMLData.current_target_ids = ['9']
 
       expect(described_class.in_room.map(&:id)).to eq([])
+    end
+  end
+end
+
+RSpec.describe Lich::Gemstone::CreatureInstance, 'roster defensive copy (F1)' do
+  before { described_class.clear }
+
+  it 'returns a copy of current_room_ids so callers cannot corrupt the live roster' do
+    hostile = described_class.register('sea nymph', 1)
+    hostile.sync_crtr_status('hostile' => '1')
+
+    described_class.current_room_ids << 999 # a stray external append
+    described_class.current_room_ids.clear  # and an external clear
+
+    expect(described_class.current_room_ids).to eq([1])
+    expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([1])
+  end
+
+  it 'returns a fresh array on each call' do
+    described_class.register('sea nymph', 1)
+
+    expect(described_class.current_room_ids).not_to equal(described_class.current_room_ids)
+  end
+end
+
+RSpec.describe Lich::Gemstone::Creature, 'facade delegation and cleanup_old (F4)' do
+  let(:instance_class) { Lich::Gemstone::CreatureInstance }
+
+  before do
+    instance_class.clear
+    instance_class.configure # reset to documented defaults
+  end
+
+  # #configure mutates per-class state on CreatureInstance; restore defaults so a
+  # disabled-auto_register or shrunken max_size never leaks into another example.
+  after { instance_class.configure }
+
+  describe '.cleanup_old' do
+    it 'accepts a positional age - the exact form Combat::Tracker#cleanup_creatures passes' do
+      old = described_class.register('old thing', 1)
+      old.created_at = Time.now - 10_800 # 3 hours old
+      described_class.register('fresh thing', 2)
+
+      # Mirrors tracker.rb: `removed = Creature.cleanup_old(max_age)`. Before the
+      # F4 fix the keyword-only facade raised ArgumentError here, which the
+      # tracker's rescue swallowed - so registry cleanup silently never ran.
+      removed = nil
+      expect { removed = described_class.cleanup_old(600) }.not_to raise_error
+
+      expect(removed).to eq(1)
+      expect(described_class[1]).to be_nil
+      expect(described_class[2]).not_to be_nil
+    end
+
+    it 'defaults to a 600s cutoff when called with no argument' do
+      old = described_class.register('old thing', 1)
+      old.created_at = Time.now - 601
+      described_class.register('fresh thing', 2)
+
+      expect(described_class.cleanup_old).to eq(1)
+    end
+
+    it 'removes nothing when everything is newer than the cutoff' do
+      described_class.register('fresh thing', 1)
+
+      expect(described_class.cleanup_old(600)).to eq(0)
+      expect(described_class[1]).not_to be_nil
+    end
+  end
+
+  describe 'delegation to CreatureInstance' do
+    it 'registers through the facade into the shared registry' do
+      registered = described_class.register('sea nymph', 42, 'nymph')
+
+      expect(instance_class[42]).to equal(registered)
+      expect(described_class[42]).to equal(registered)
+    end
+
+    it 'clears every instance and the roster via .clear' do
+      described_class.register('sea nymph', 1)
+
+      described_class.clear
+
+      expect(instance_class.all).to be_empty
+      expect(described_class.in_room).to be_empty
+    end
+
+    it 'clears only the roster via .clear_room, keeping the registry' do
+      described_class.register('sea nymph', 1)
+
+      described_class.clear_room
+
+      expect(instance_class[1]).not_to be_nil
+      expect(described_class.in_room).to be_empty
+    end
+
+    it 'forwards configure(**options) to the shared registry' do
+      described_class.configure(max_size: 3, auto_register: false)
+
+      expect(instance_class.max_size).to eq(3)
+      expect(instance_class.auto_register?).to be false
+    end
+
+    it 'reports registry stats sourced from the shared registry' do
+      described_class.register('sea nymph', 1)
+
+      stats = described_class.stats
+
+      expect(stats[:instances]).to eq(1)
+      expect(stats[:max_size]).to eq(1000)
+      expect(stats[:auto_register]).to be true
+      expect(stats).to have_key(:templates)
     end
   end
 end
