@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+require 'rbconfig'
 require_relative '../spec_helper'
 
 # NOTE: We intentionally do NOT `require 'global_defs.rb'` here.
@@ -391,5 +393,68 @@ RSpec.describe 'global_defs.rb sentinel constants' do
       expect(lich_common_block).to include('CORE_PARSE_ARGS')
       expect(lich_common_block).to include('CORE_AUTOSTART')
     end
+  end
+end
+
+RSpec.describe 'global_defs.rb built-in script commands' do
+  def run_global_defs_probe(probe)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+
+      $lich_char_regex = /;/
+      $clean_lich_char = ';'
+      Object.const_set(:LICH_VERSION, 'test') unless Object.const_defined?(:LICH_VERSION)
+      Lich.const_set(:MAX_DEBUG_LOGS_DEFAULT, 10) unless Lich.const_defined?(:MAX_DEBUG_LOGS_DEFAULT)
+      XMLData.define_singleton_method(:game) { '' }
+      UpstreamHook.define_singleton_method(:run) { |line| line }
+      Object.send(:define_method, :respond) { |message = nil| puts("RESPOND:\#{message}") }
+      Object.send(:define_method, :new_upstream) { |_line| nil }
+
+      #{probe}
+    RUBY
+    Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+  end
+
+  it 'routes kd through forced script teardown' do
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      Script.define_singleton_method(:kill_all) do |force: false, context: :runtime|
+        puts "KILL_ALL force=#{force} context=#{context}"
+        1
+      end
+      do_client(';kd')
+    RUBY
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('KILL_ALL force=true context=runtime')
+  end
+
+  it 'documents kd in built-in help' do
+    stdout, stderr, status = run_global_defs_probe("do_client(';help')")
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('RESPOND:   ;kd')
+    expect(stdout).to include('including protected and hidden scripts')
+  end
+
+  it 'uses the atomic Script#clear operation' do
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      script = Object.new
+      script.define_singleton_method(:clear) do
+        puts 'SCRIPT_CLEAR'
+        %w[one two]
+      end
+      Script.define_singleton_method(:current) { script }
+      puts "RESULT=#{clear.inspect}"
+    RUBY
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('SCRIPT_CLEAR')
+    expect(stdout).to include('RESULT=["one", "two"]')
   end
 end

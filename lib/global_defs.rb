@@ -1423,9 +1423,7 @@ end
 
 def clear(_opt = 0)
   unless (script = Script.current) then respond('--- clear: Unable to identify calling script.'); return false; end
-  to_return = script.downstream_buffer.dup
-  script.downstream_buffer.clear
-  to_return
+  script.clear
 end
 
 def match(label, string)
@@ -2424,9 +2422,9 @@ def do_client(client_string)
       end
       nil
     elsif cmd =~ /^ka$|^kill\s?all$|^stop\s?all$/
-      did_something = false
-      Script.running.find_all { |s_check| not s_check.no_kill_all }.each { |s_check| s_check.kill; did_something = true }
-      respond('--- Lich: no scripts to kill') unless did_something
+      respond('--- Lich: no scripts to kill') if Script.kill_all.zero?
+    elsif cmd == 'kd'
+      respond('--- Lich: no scripts to kill') if Script.kill_all(:force => true).zero?
     elsif cmd =~ /^pa$|^pause\s?all$/
       did_something = false
       Script.running.find_all { |s_check| not s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.pause; did_something = true }
@@ -2766,6 +2764,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}ua                        ''"
       respond "   #{$clean_lich_char}kill all                  kill all scripts"
       respond "   #{$clean_lich_char}ka                        ''"
+      respond "   #{$clean_lich_char}kd                        kill all scripts, including protected and hidden scripts"
       respond "   #{$clean_lich_char}list all                  show all running scripts"
       respond "   #{$clean_lich_char}la                        ''"
       respond
