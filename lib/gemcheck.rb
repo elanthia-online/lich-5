@@ -282,7 +282,7 @@ module Lich
 
     # @param missing [Array<String>] gem names identified by our detector
     # @param groups [Array<Symbol>] groups being verified
-    # @param error [Exception, nil] the Bundler exception, if any
+    # @param error [Exception, nil] the Bundler or require exception, if any
     # @return [void]
     def alert(missing: [], groups: [:default], error: nil)
       write_log(missing: missing, groups: groups, error: error)
@@ -302,9 +302,11 @@ module Lich
       end
     end
 
-    # Composes the alert dialog body: platform message + either a bulleted
-    # list of detected missing gems, or the raw Bundler error if our
-    # detector came up empty.
+    # Composes the alert dialog body: platform message + a bulleted list of
+    # detected missing gems, plus the underlying error when one was captured.
+    # The error is always shown when present: a failed `require 'gtk3'` may
+    # mean a native DLL failed to load even though every gem is installed, so
+    # hiding the message behind the missing-gems list misdiagnoses the fault.
     # @param missing [Array<String>]
     # @param error [Exception, nil]
     # @return [String]
@@ -312,8 +314,9 @@ module Lich
       parts = [message]
       if missing.any?
         parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
-      elsif error
-        parts << "Bundler reported:\n  #{error.message.lines.first.to_s.strip}"
+      end
+      if error
+        parts << "Underlying error:\n  #{error.message.lines.first.to_s.strip}"
       end
       parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
       parts.join("\n\n")
