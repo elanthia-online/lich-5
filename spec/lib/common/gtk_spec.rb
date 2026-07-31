@@ -39,8 +39,25 @@ RSpec.describe 'Lich::Common GTK hardening' do
   end
 
   it 'allows core-owned Gtk shutdown through Gtk.lich_main_quit' do
+    Gtk.main_level = 1
+
     expect(Gtk.lich_main_quit).to eq(:main_quit_called)
     expect(Gtk.main_quit_calls).to eq(1)
+  end
+
+  it 'no-ops Gtk.lich_main_quit when no main loop is nested' do
+    Gtk.main_level = 0
+
+    expect(Gtk.lich_main_quit).to be_nil
+    expect(Gtk.main_quit_calls).to eq(0)
+  end
+
+  it 'no-ops Gtk.lich_main_quit when main_level is unavailable' do
+    allow(Gtk).to receive(:respond_to?).and_call_original
+    allow(Gtk).to receive(:respond_to?).with(:main_level).and_return(false)
+
+    expect(Gtk.lich_main_quit).to be_nil
+    expect(Gtk.main_quit_calls).to eq(0)
   end
 
   it 'retains signal handlers until the widget emits destroy' do
@@ -137,6 +154,7 @@ RSpec.describe 'Lich::Common GTK hardening' do
   end
 
   it 'destroys retained GTK receivers and clears callback registries during shutdown' do
+    Gtk.main_level = 1
     widget = Gtk::Widget.new
     timeout_id = GLib::Timeout.add(50) { true }
     idle_id = GLib::Idle.add { true }
@@ -158,11 +176,15 @@ RSpec.describe 'Lich::Common GTK hardening' do
   end
 
   it 'routes shared GTK shutdown through the guarded helper' do
+    Gtk.main_level = 1
+
     expect(Lich::Common.quit_gtk_main_loop).to eq(:main_quit_called)
     expect(Gtk.main_quit_calls).to eq(1)
   end
 
   it 'quits the GTK main loop when no retained GTK cleanup remains' do
+    Gtk.main_level = 1
+
     expect(Lich::Common.cleanup_gtk!).to be(false)
     expect(Lich::Common.shutdown_gtk!).to eq(:main_quit_called)
     expect(Gtk.main_quit_calls).to eq(1)
