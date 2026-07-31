@@ -2360,18 +2360,14 @@ def handle_detachable_client(client)
       next
     end
 
-    client_string = "#{$cmd_prefix}#{client_string}"
-    if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-      # Detachable exits run script shutdown inline, so arm the same watchdog
-      # used by primary-frontend exits before entering that potentially
-      # blocking path.
-      Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
-      Lich::Common::OrderlyShutdown.request_user_exit(
-        source: :detachable_frontend,
-        active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
-      )
+    # Detachable exits run script shutdown inline, so the watchdog must be armed
+    # before that potentially blocking path. Route through the shared dispatch so
+    # the primary and detachable frontend exit paths stay identical; it applies
+    # the same $cmd_prefix prefixing before matching.
+    if Lich::Main::UserExitDispatch.dispatch_detachable_client(client_string, cmd_prefix: $cmd_prefix)
       break
     end
+    client_string = "#{$cmd_prefix}#{client_string}"
 
     begin
       dispatch_client_input(client_string)

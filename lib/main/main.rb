@@ -64,19 +64,16 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_log.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
+  require File.join(LIB_DIR, 'main', 'user_exit_dispatch.rb')
 
+  # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
+  # kills scripts and runs their before_dying hooks inline (any of which can
+  # hang) before the main teardown/watchdog below is reached. arm is idempotent,
+  # so the later arm during teardown is a no-op. Both the primary and detachable
+  # frontend exit paths route through Lich::Main::UserExitDispatch so neither can
+  # run the hang-prone inline drain without the watchdog armed.
   run_orderly_user_shutdown = proc { |source: :primary_frontend|
-    # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
-    # their before_dying hooks inline (any of which can hang) before the main
-    # teardown/watchdog below is reached, so arm here as well. arm is
-    # idempotent, so the later arm during teardown is a no-op. Both the primary
-    # and detachable frontend exit paths route through here so neither can run
-    # the hang-prone inline drain without the watchdog armed.
-    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
-    Lich::Common::OrderlyShutdown.request_user_exit(
-      source: source,
-      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
-    )
+    Lich::Main::UserExitDispatch.run_orderly_user_shutdown(source: source)
   }
 
   run_best_effort_shutdown_cleanup = proc {
