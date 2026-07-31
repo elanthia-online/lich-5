@@ -232,13 +232,9 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = if ARGV.any? { |a| a =~ /^--saga$/i }
-                          'saga'
-                        elsif @argv_options[:detachable_client_port] && !ARGV.any? { |a| a =~ /^--genie$/i }
-                          'profanity'
-                        else
-                          'unknown'
-                        end
+      Frontend.client = Lich::Common::Authentication::LoginHelpers.resolve_headless_frontend(
+        ARGV, detachable_client: !@argv_options[:detachable_client_port].nil?
+      )
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
