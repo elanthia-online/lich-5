@@ -543,6 +543,28 @@ module Lich
           requested_frontend
         end
 
+        # Resolves the frontend identity for a headless (`--without-frontend`)
+        # launch.
+        #
+        # Lich spawns no frontend here, but a detachable client still attaches
+        # and renders the stream, so the identity has to name whatever is
+        # reading it: `respond` uses the frontend's registered capabilities to
+        # decide whether to XML-escape script output and wrap it in mono
+        # brackets. A Genie client left as 'unknown' receives unescaped output,
+        # so any script text containing angle brackets is swallowed by Genie's
+        # XML parser as if it were a tag.
+        #
+        # @param argv [Array<String>] command line arguments
+        # @param detachable_client [Boolean] whether a detachable client port is configured
+        # @return [String] frontend identity for Frontend.client
+        def self.resolve_headless_frontend(argv, detachable_client: false)
+          return 'saga' if argv.any? { |arg| arg.match?(/^--saga$/i) }
+          return 'unknown' unless detachable_client
+          return 'genie' if argv.any? { |arg| arg.match?(/^--genie$/i) }
+
+          'profanity'
+        end
+
         # Formats the game instance launch flag for Lich based on version.
         #
         # Older versions of Lich (pre-5.12) only recognize specific lowercase flags
