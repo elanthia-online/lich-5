@@ -2382,6 +2382,21 @@ rescue StandardError => e
 ensure
   client.close rescue nil
   detachable_client_unregister(client)
+  # Mirror the connect-side "listening on" line so an operator sharing the
+  # controlling terminal (for example a wrapper script that exec's a frontend)
+  # sees which session dropped and from where. Emitted after unregister so the
+  # attached count reflects the clients that remain.
+  if $_DETACHABLE_LISTENER_
+    session_name = Lich::Common::SessionLifecycle.resolve_session_name(
+      argv: ARGV, account_character: (Lich::Common::Account.character rescue nil)
+    )
+    $stdout.puts Lich::Main::DetachableClientNotice.disconnected(
+      name: session_name,
+      host: $_DETACHABLE_LISTENER_[:host],
+      port: $_DETACHABLE_LISTENER_[:port],
+      attached: detachable_client_count
+    ) rescue nil
+  end
   Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
 end
 
