@@ -60,6 +60,7 @@ module Lich
 
         drain_attempts.times do
           remaining = remaining_scripts.call.uniq
+          observe_scripts!(scripts, remaining)
           now = clock.call
 
           scripts.each do |script|
@@ -74,8 +75,12 @@ module Lich
           sleeper.call(drain_interval)
         end
 
-        finished_at = clock.call
         remaining = remaining_scripts.call.uniq
+        newly_observed = observe_scripts!(scripts, remaining)
+        unless newly_observed.empty?
+          remaining = remaining_scripts.call.uniq
+        end
+        finished_at = clock.call
 
         Result.new(
           scripts_started: scripts.length,
@@ -85,6 +90,14 @@ module Lich
           remaining_scripts: script_names(remaining)
         )
       end
+
+      def self.observe_scripts!(scripts, observed)
+        newly_observed = observed.reject { |script| scripts.include?(script) }
+        scripts.concat(newly_observed)
+        newly_observed.each { |script| kill_script(script) }
+        newly_observed
+      end
+      private_class_method :observe_scripts!
 
       # Attempts shutdown kill for a script and logs failures without stopping
       # the remaining shutdown drain.

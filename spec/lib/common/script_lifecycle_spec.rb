@@ -394,9 +394,25 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     it 'waits for a child through Script.run_child' do
       child = build_script('child')
       allow(script_class).to receive(:start_child).with('child').and_return(child)
-      expect(child).to receive(:join).and_return(child)
+      expect(child).to receive(:join).with(nil).and_return(child)
 
       expect(script_class.run_child('child')).to equal(child)
+    end
+
+    it 'applies an explicit Script.run_child timeout' do
+      child = build_script('child')
+      allow(script_class).to receive(:start_child).with('child').and_return(child)
+      expect(child).to receive(:join).with(0.25).and_return(nil)
+
+      expect(script_class.run_child('child', :timeout => 0.25)).to be_nil
+    end
+
+    it 'rejects a negative Script.run_child timeout before starting the child' do
+      expect(script_class).not_to receive(:start_child)
+
+      expect {
+        script_class.run_child('child', :timeout => -1)
+      }.to raise_error(ArgumentError, /non-negative/)
     end
 
     it 'marks the current script as a daemon' do
@@ -971,6 +987,43 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
 
       expect(script.join(1)).to equal(script)
       expect(script).not_to be_running
+    end
+
+    it 'waits indefinitely for teardown when no timeout is given' do
+      worker_ready = Queue.new
+      worker_cleanup_entered = Queue.new
+      release_worker_cleanup = Queue.new
+      script = subscript_class.start(:parent => nil) do
+        worker_ready << true
+        begin
+          Queue.new.pop
+        ensure
+          worker_cleanup_entered << true
+          release_worker_cleanup.pop
+        end
+      end
+      worker_ready.pop
+
+      script.kill
+      worker_cleanup_entered.pop
+      waiter = Thread.new { script.join }
+
+      expect(waiter.join(0.05)).to be_nil
+
+      release_worker_cleanup << true
+      expect(waiter.value).to equal(script)
+    end
+
+    it 'keeps shutdown snapshots free of teardown side effects' do
+      script = build_script('deferred-cleanup')
+      script_class.class_variable_set(:@@stopping, [script])
+      allow(script).to receive(:__refresh_deferred_stop)
+
+      expect(script_class.shutdown_scripts).to contain_exactly(script)
+      expect(script).not_to have_received(:__refresh_deferred_stop)
+
+      expect(script_class.progress_shutdown).to contain_exactly(script)
+      expect(script).to have_received(:__refresh_deferred_stop).once
     end
 
     it 'finishes inline cleanup when the killing caller is cancelled' do
