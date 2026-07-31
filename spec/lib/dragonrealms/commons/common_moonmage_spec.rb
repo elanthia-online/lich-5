@@ -5,7 +5,10 @@ require_relative '../../../spec_helper'
 # Global used by check_moonwatch for autostart message
 $clean_lich_char ||= ';'
 
-# Load production code
+# Load production code. drvariables publishes the $NUM_MAP global, which
+# parse_roisaen uses to convert spelled-out durations; it is a pure constants
+# file (no side effects) so requiring it here is safe.
+require File.join(LIB_DIR, 'dragonrealms', 'drinfomon', 'drvariables.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-moonmage.rb')
 
 DRCMM = Lich::DragonRealms::DRCMM unless defined?(DRCMM)
@@ -41,6 +44,14 @@ RSpec.describe Lich::DragonRealms::DRCMM do
 
     it 'MOON_GLANCE_REGEX is frozen' do
       expect(described_class::MOON_GLANCE_REGEX).to be_frozen
+    end
+
+    it 'MOON_FOCUS_DURATION_REGEX is frozen' do
+      expect(described_class::MOON_FOCUS_DURATION_REGEX).to be_frozen
+    end
+
+    it 'MOON_FOCUS_EXPIRING_REGEX is frozen' do
+      expect(described_class::MOON_FOCUS_EXPIRING_REGEX).to be_frozen
     end
 
     it 'DIV_TOOL_VERBS is frozen' do
@@ -315,6 +326,179 @@ RSpec.describe Lich::DragonRealms::DRCMM do
       allow(DRC).to receive(:bput).with('glance my moonblade', anything, anything).and_return('I could not find')
       allow(DRC).to receive(:bput).with('glance my moonstaff', anything, anything).and_return('You glance at a wicked black moonstaff')
       expect(described_class.moon_used_to_summon_weapon).to eq('katamba')
+    end
+  end
+
+  # ================================================================
+  # parse_roisaen
+  #
+  # Converts the spelled-out roisaen count reported by FOCUS into an
+  # Integer. A moonblade lasts 12-41 minutes (== roisaen, at 60s each),
+  # but near expiry it counts down toward 0, so the full 0-41 range is
+  # exercised. An independent word generator (built here, not from the
+  # production NUM_MAP) is used as the oracle so the test does not merely
+  # mirror the implementation.
+  # ================================================================
+  describe '.parse_roisaen' do
+    # Independent English-number oracle for 0..41, built from definition-time
+    # locals (a lambda closure) so it is usable in example descriptions. It is
+    # deliberately NOT the production NUM_MAP the method under test relies on,
+    # so the test does not merely mirror the implementation.
+    ones = %w[zero one two three four five six seven eight nine ten eleven twelve
+              thirteen fourteen fifteen sixteen seventeen eighteen nineteen]
+    tens = { 20 => 'twenty', 30 => 'thirty', 40 => 'forty' }
+    words_for = lambda do |number|
+      next ones[number] if number < 20
+
+      ten = (number / 10) * 10
+      one = number % 10
+      one.zero? ? tens[ten] : "#{tens[ten]}-#{ones[one]}"
+    end
+
+    context 'across the full 0-41 duration range' do
+      (0..41).each do |minutes|
+        words = words_for.call(minutes)
+        it "parses \"#{words}\" as #{minutes}" do
+          expect(described_class.parse_roisaen(words)).to eq(minutes)
+        end
+      end
+    end
+
+    context 'boundary values' do
+      it('parses the minimum documented duration (twelve)') { expect(described_class.parse_roisaen('twelve')).to eq(12) }
+      it('parses the maximum documented duration (forty-one)') { expect(described_class.parse_roisaen('forty-one')).to eq(41) }
+      it('parses zero (fully expired)') { expect(described_class.parse_roisaen('zero')).to eq(0) }
+      it('parses one (singular, about to expire)') { expect(described_class.parse_roisaen('one')).to eq(1) }
+    end
+
+    context 'formatting tolerance' do
+      it('accepts a space-separated compound') { expect(described_class.parse_roisaen('twenty nine')).to eq(29) }
+      it('accepts a hyphen-separated compound') { expect(described_class.parse_roisaen('twenty-nine')).to eq(29) }
+      it('is case-insensitive') { expect(described_class.parse_roisaen('Twenty-Nine')).to eq(29) }
+      it('is case-insensitive for all-caps') { expect(described_class.parse_roisaen('FORTY-ONE')).to eq(41) }
+      it('tolerates surrounding whitespace') { expect(described_class.parse_roisaen('  thirty-five  ')).to eq(35) }
+    end
+
+    context 'adversarial / malformed input' do
+      it('returns nil for nil') { expect(described_class.parse_roisaen(nil)).to be_nil }
+      it('returns nil for an empty string') { expect(described_class.parse_roisaen('')).to be_nil }
+      it('returns nil for whitespace only') { expect(described_class.parse_roisaen('   ')).to be_nil }
+      it('returns nil for a non-number word') { expect(described_class.parse_roisaen('banana')).to be_nil }
+      it('returns nil for the article "a" (unsupported phrasing)') { expect(described_class.parse_roisaen('a')).to be_nil }
+      it('returns nil when any word is unknown') { expect(described_class.parse_roisaen('twenty-banana')).to be_nil }
+      it('returns nil for digits (game spells numbers out)') { expect(described_class.parse_roisaen('29')).to be_nil }
+      it('does not misread a partial word') { expect(described_class.parse_roisaen('twent')).to be_nil }
+    end
+  end
+
+  # ================================================================
+  # moon_weapon_duration
+  # ================================================================
+  describe '.moon_weapon_duration' do
+    # The real call passes: duration regex, expiring regex, then the two
+    # not-found strings. The first example asserts the exact pattern list; the
+    # rest use any_args so they do not re-encode the pattern count.
+    let(:focus_args) { [described_class::MOON_FOCUS_EXPIRING_REGEX, 'I could not find', 'Focus on what'] }
+
+    it 'focuses the moonblade with the exact pattern list and returns its roisaen' do
+      allow(DRC).to receive(:bput)
+        .with('focus my moonblade', described_class::MOON_FOCUS_DURATION_REGEX, *focus_args)
+        .and_return('You judge that the moonblade will last for roughly twenty-nine roisaen.')
+      expect(described_class.moon_weapon_duration).to eq(29)
+    end
+
+    it 'parses a small plural duration (confirmed "two roisaen")' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for roughly two roisaen.')
+      expect(described_class.moon_weapon_duration).to eq(2)
+    end
+
+    it 'parses the maximum duration' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for roughly forty-one roisaen.')
+      expect(described_class.moon_weapon_duration).to eq(41)
+    end
+
+    it 'returns 0 for the confirmed near-expiry phrase "less than one roisan"' do
+      # Near expiry the game drops "roughly <count>" and reports "less than one
+      # roisan" (singular unit); treat as 0 roisaen == expiring now.
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for less than one roisan.')
+      expect(described_class.moon_weapon_duration).to eq(0)
+    end
+
+    it 'returns 0 for a defensive plural-unit "less than one roisaen"' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for less than one roisaen.')
+      expect(described_class.moon_weapon_duration).to eq(0)
+    end
+
+    it 'distinguishes 0 (expiring now) from nil (no weapon)' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for less than one roisan.')
+      expect(described_class.moon_weapon_duration).to eq(0)
+      expect(described_class.moon_weapon_duration).not_to be_nil
+    end
+
+    it 'falls back to moonstaff when no moonblade is present' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args).and_return('I could not find')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args)
+                                  .and_return('You judge that the moonstaff will last for roughly forty roisaen.')
+      expect(described_class.moon_weapon_duration).to eq(40)
+    end
+
+    it 'reads an expiring moonstaff after no moonblade' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args).and_return('I could not find')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args)
+                                  .and_return('You judge that the moonstaff will last for less than one roisan.')
+      expect(described_class.moon_weapon_duration).to eq(0)
+    end
+
+    it 'checks moonblade before moonstaff and stops once found' do
+      expect(DRC).to receive(:bput).with('focus my moonblade', any_args).ordered
+                                   .and_return('You judge that the moonblade will last for roughly ten roisaen.')
+      expect(DRC).not_to receive(:bput).with('focus my moonstaff', any_args)
+      described_class.moon_weapon_duration
+    end
+
+    it 'returns nil when neither moon weapon is present' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args).and_return('I could not find')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args).and_return('I could not find')
+      expect(described_class.moon_weapon_duration).to be_nil
+    end
+
+    it 'returns nil on the "Focus on what" no-target response' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args).and_return('Focus on what?')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args).and_return('Focus on what?')
+      expect(described_class.moon_weapon_duration).to be_nil
+    end
+
+    it 'returns nil when the roughly-count phrase has an unknown number word' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for roughly banana roisaen.')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args).and_return('I could not find')
+      expect(described_class.moon_weapon_duration).to be_nil
+    end
+
+    it 'waits out the focus roundtime after a successful count read' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for roughly fifteen roisaen.')
+      expect(described_class).to receive(:waitrt?)
+      described_class.moon_weapon_duration
+    end
+
+    it 'waits out the focus roundtime on an expiring read' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args)
+                                  .and_return('You judge that the moonblade will last for less than one roisan.')
+      expect(described_class).to receive(:waitrt?)
+      described_class.moon_weapon_duration
+    end
+
+    it 'does not wait out roundtime when nothing is focused' do
+      allow(DRC).to receive(:bput).with('focus my moonblade', any_args).and_return('I could not find')
+      allow(DRC).to receive(:bput).with('focus my moonstaff', any_args).and_return('I could not find')
+      expect(described_class).not_to receive(:waitrt?)
+      described_class.moon_weapon_duration
     end
   end
 
