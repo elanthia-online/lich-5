@@ -30,7 +30,7 @@ end
 RSpec.describe HMR, "#loaded" do
   context "can tell what has been loaded" do
     it "can find itself loaded" do
-      expect(Lich::Common::HMR.loaded.any?(%r{lich-5/lib/common/hmr.rb$})).to be_truthy
+      expect(Lich::Common::HMR.loaded.any?(%r{/lib/common/hmr\.rb$})).to be_truthy
     end
 
     it "can tell something has been freshly loaded" do
