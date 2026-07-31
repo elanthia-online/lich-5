@@ -359,7 +359,15 @@ module Lich
         case result
         when *TEND_DISLODGE_PATTERNS
           dislodge_match = result.match(/^You \w+ remove (?:a|the|some) (?<item>.+) from/)
-          DRCI.dispose_trash(dislodge_match[:item], get_settings.worn_trashcan, get_settings.worn_trashcan_verb) if dislodge_match
+          # Only dispose the item the tend just removed, and only while it is in
+          # hand. A freshly dislodged item (e.g. a crossbow bolt) lands in a free
+          # hand; disposing it there is safe. But if the item is gone (the maze
+          # can yank you out and clear your hands the instant it drops), a blind
+          # dispose_trash would GET a same-named item from a worn container --
+          # trashing the character's own ammunition -- so skip it in that case.
+          if dislodge_match && DRCI.in_hands?(dislodge_match[:item])
+            DRCI.dispose_trash(dislodge_match[:item], get_settings.worn_trashcan, get_settings.worn_trashcan_verb)
+          end
           bind_wound(body_part, person)
         when *TEND_FAILURE_PATTERNS
           false
