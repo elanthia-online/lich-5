@@ -643,7 +643,8 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       allocation_entered.pop
 
       expect(script_class.list).to contain_exactly(parent)
-      expect(Array(parent.instance_variable_get(:@child_scripts))).to be_empty
+      children = Object.instance_method(:instance_variable_get).bind_call(parent, :@child_scripts)
+      expect(Array(children)).to be_empty
 
       release_allocation << true
       child = launcher.value
