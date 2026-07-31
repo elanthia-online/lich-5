@@ -133,7 +133,9 @@ module Lich
         @dialogs = {}
 
         # real id updates
-        @room_id = nil
+        # Default 0 (not nil) so a read before the first <nav> tag is a valid "no UID" value
+        # rather than a NoMethodError on room_id.zero? (DR) or room_id > N (GS) in the map layer.
+        @room_id = 0
         @previous_nav_rm = nil
 
         # Lich::Claim update
@@ -385,10 +387,13 @@ module Lich
             # reused elsewhere.
             @pending_crtr_status.clear
             @check_obvious_hiding = true
-            unless XMLData.game =~ /^DR/
-              @previous_nav_rm = @room_id
-              @room_id = attributes['rm'].to_i
-            end
+            # The <nav rm='NNNN'/> tag is the authoritative room UID for every game, including
+            # DragonRealms, which now emits it on every arrival (a plain <nav/> with no rm
+            # attribute for a room that has no UID, which yields 0 here). Capturing it on nav
+            # gives early room knowledge before the room text streams, and keeps
+            # @previous_nav_rm accurate for Map.previous_uid.
+            @previous_nav_rm = @room_id
+            @room_id = attributes['rm'].to_i
             @arrival_pcs = []
             $nav_seen = true
           end
@@ -533,10 +538,13 @@ module Lich
                   end
                   @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
                 elsif XMLData.game =~ /^DR/
-                  # - [Bosque Deriel, Hermit's Shacks] (230008)
+                  # - [Bosque Deriel, Hermit's Shacks] (a trailing " (230008)" is present only
+                  # when the game's ShowRoomID flag is ON). Parse the bracketed title only; the
+                  # room UID comes from the <nav rm=.../> tag (see the nav handler above), never
+                  # from this subtitle. Scraping it here would write 0 whenever ShowRoomID is OFF
+                  # and clobber the UID nav already captured for this room.
                   room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+)\))?/)
                   @room_title = "[#{room[:roomtitle]}]"
-                  @room_id = room[:uid].to_i
                 else
                   @room_title = String.new
                 end

@@ -108,6 +108,20 @@ RSpec.describe Lich::DragonRealms::DRInfomon do
       script = described_class.startup_script
       expect(script).to include('Array(Lich::Util.issue_command("flag"')
     end
+
+    it 'still enforces the MonsterBold flag' do
+      expect(described_class.startup_script).to include('MonsterBold')
+    end
+
+    it 'requires only MonsterBold (ShowRoomID is no longer forced)' do
+      expect(described_class.startup_script).to include('required = ["MonsterBold"]')
+    end
+
+    it 'no longer lists ShowRoomID among the enforced flags (room UIDs come from the <nav> tag)' do
+      # The explanatory comment in the script still names ShowRoomID; what matters is that it is
+      # not one of the quoted flags in the required array, so match the array-literal form.
+      expect(described_class.startup_script).not_to include('"ShowRoomID"')
+    end
   end
 
   describe '.post_startup_checks' do

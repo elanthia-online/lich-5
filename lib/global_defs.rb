@@ -2594,6 +2594,7 @@ def do_client(client_string)
       end
       respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
       Lich.hide_uid_flag = new_value
+      respond "Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2614,6 +2615,15 @@ def do_client(client_string)
       end
       respond "Changing Lich to display RealID#s to #{new_value}"
       Lich.display_uid = new_value
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display roomid(?:\s+(title|line|both))?/i
+      requested = Regexp.last_match(1)&.downcase
+      if requested.nil?
+        respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
+        respond "Usage: ;display roomid <title|line|both>  (title = in the room name line, line = a Room Number line below the room, both = both places)"
+      else
+        Lich.display_roomid_location = requested
+        respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
+      end
     elsif cmd =~ /^display exits?(?: (true|false))?/i
       new_value = !(Lich.display_exits)
       case Regexp.last_match(1)
@@ -2799,7 +2809,8 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       elsif XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display flaguid           toggle display of RealID in Room Title with FLAG ShowRoomID (required for Lich5 to be ON)"
+        respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
+        respond "   #{$clean_lich_char}display roomid <where>    where to show room id/RealID: title (room name line), line (below-room line), or both"
       end
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"

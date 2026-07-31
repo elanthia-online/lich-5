@@ -33,7 +33,6 @@ module Lich
         PlayedAccount = /^(?:<.*?\/>)?Account Info for (?<account>.+):/.freeze
         PlayedSubscription = /Current Account Status: (?<subscription>F2P|Basic|Premium|Platinum)/.freeze
         LastLogoff = /^\s+Logoff :  (?<weekday>[A-Z][a-z]{2}) (?<month>[A-Z][a-z]{2}) (?<day>[\s\d]{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2}) ET (?<year>\d{4})/.freeze
-        RoomIDOff = /^You will no longer see room IDs when LOOKing in the game and room windows\./.freeze
         Rested_EXP = %r{^<component id='exp rexp'>Rested EXP Stored:\s*(?<stored>.*?)\s*Usable This Cycle:\s*(?<usable>.*?)\s*Cycle Refreshes:\s*(?<refresh>.*)</component>}.freeze
         Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
         TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
@@ -589,10 +588,6 @@ module Lich
               end
               $last_logoff = Time.new(match[:year].to_i, month, match[:day].to_i, match[:hour].to_i, match[:minute].to_i, match[:second].to_i, tz).getlocal
             end
-          elsif Pattern::RoomIDOff.match?(line)
-            put("flag showroomid on")
-            Lich::Messaging.msg("bold", "DRParser: Lich requires ShowRoomID to be ON for mapping to work, please do not turn this off.")
-            Lich::Messaging.msg("plain", "DRParser: If you wish to hide the Real ID#, you can toggle it off by doing ;display flaguid")
           elsif (match = line.match(Pattern::Rested_EXP))
             DRSkill.update_rested_exp(match[:stored].strip, match[:usable].strip, match[:refresh].strip)
           elsif Pattern::Rested_EXP_F2P.match?(line)

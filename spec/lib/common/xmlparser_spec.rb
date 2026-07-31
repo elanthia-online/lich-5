@@ -449,4 +449,51 @@ RSpec.describe Lich::Common::XMLParser do
       end
     end
   end
+
+  # DragonRealms now emits <nav rm='NNNN'/> on every arrival (a plain <nav/> with no rm for
+  # a room that has no UID). The parser must take room_id from that tag, never from the
+  # streamWindow subtitle, so the UID is captured whether or not the player's ShowRoomID flag
+  # is on. These drive the real StreamListener pipeline the way REXML feeds it in production.
+  describe 'DragonRealms room id capture from the <nav> tag' do
+    def feed(parser, fragment)
+      REXML::Document.parse_stream("<root>#{fragment}</root>", parser)
+    end
+
+    before { XMLData.game = 'DR' }
+
+    it 'sets room_id from the rm attribute on arrival' do
+      feed(parser, "<nav rm='230008'/>")
+      expect(parser.room_id).to eq(230008)
+    end
+
+    it 'records the room being left in previous_nav_rm on the next arrival' do
+      feed(parser, "<nav rm='230007'/>")
+      feed(parser, "<nav rm='230008'/>")
+      expect(parser.previous_nav_rm).to eq(230007)
+    end
+
+    it 'sets room_id to 0 for a no-uid room (a bare <nav/> with no rm attribute)' do
+      feed(parser, "<nav rm='230008'/>")
+      feed(parser, "<nav/>")
+      expect(parser.room_id).to eq(0)
+    end
+
+    it 'parses the DR streamWindow subtitle into room_title (double-bracketed, no uid suffix)' do
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks]"/>))
+      expect(parser.room_title).to eq("[[Bosque Deriel, Hermit's Shacks]]")
+    end
+
+    it 'keeps the nav room_id when a ShowRoomID-off subtitle (no uid) arrives afterward' do
+      feed(parser, "<nav rm='230008'/>")
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks]"/>))
+      expect(parser.room_id).to eq(230008)
+    end
+
+    it 'keeps the nav room_id even when a ShowRoomID-on subtitle carries a uid suffix' do
+      feed(parser, "<nav rm='230008'/>")
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)"/>))
+      expect(parser.room_id).to eq(230008)
+      expect(parser.room_title).to eq("[[Bosque Deriel, Hermit's Shacks]]")
+    end
+  end
 end

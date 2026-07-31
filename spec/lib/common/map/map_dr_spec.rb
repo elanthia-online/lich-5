@@ -538,6 +538,23 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       expect(parsed).not_to have_key('image_coords')
     end
   end
+
+  describe 'nav-tag room id integration' do
+    it 'previous_uid returns XMLData.previous_nav_rm (now populated from the <nav> tag)' do
+      XMLData.previous_nav_rm = 4242
+      expect(map_class.previous_uid).to eq(4242)
+    end
+
+    it 'ids_from_uid treats 0 as "no uid" even if a room was stamped with it' do
+      map_class.uids_add(0, 9)
+      expect(map_class.ids_from_uid(0)).to eq([])
+    end
+
+    it 'ids_from_uid resolves a real (nonzero) uid to its room ids' do
+      map_class.uids_add(230008, 5)
+      expect(map_class.ids_from_uid(230008)).to eq([5])
+    end
+  end
 end
 
 RSpec.describe Lich::Common::Room, 'DragonRealms' do
