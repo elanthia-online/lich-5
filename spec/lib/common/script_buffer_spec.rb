@@ -18,7 +18,7 @@ RSpec.describe 'Lich::Common::Script downstream buffer' do
   end
 
   after(:context) do
-    %i[ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+    %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
       Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
     end
     $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
