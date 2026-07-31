@@ -163,6 +163,74 @@ module Lich
         @@list[id]
       end
 
+      # Pattern identifying a room whose disambiguation depends on a manual
+      # +peer+ action (for example peering through a doorway to read an adjacent
+      # room before committing to a match). Such rooms cannot be told apart
+      # without a running script to perform the peer, so scriptless fuzzy
+      # matching declines to resolve them. Kept verbatim from the historical
+      # inline checks in {match_fuzzy}.
+      PEER_TAG_PATTERN = /^(set desc on; )?peer [a-z]+ =~ \/.+\/$/
+
+      # Whether +room+ carries a peer-disambiguation tag (see {PEER_TAG_PATTERN}).
+      #
+      # @param room [Lich::Common::Map] a room already matched on
+      #   title/description/paths
+      # @return [Boolean] +true+ when the room requires a manual peer to
+      #   disambiguate, +false+ otherwise
+      def self.peer_disambiguation_tag?(room)
+        room.tags.any? { |tag| tag =~ PEER_TAG_PATTERN }
+      end
+
+      # Resolve a room that already matched on title/description/paths down to a
+      # final room id, applying UID disambiguation.
+      #
+      # The governing invariant is that *a stored UID must never make a room less
+      # resolvable than an otherwise identical room with no UID.*
+      #
+      # * When the game exposes a live UID (+XMLData.room_id+ is non-zero) and the
+      #   matched room carries one or more UIDs, the match only stands if the live
+      #   UID is among them. This is what keeps distinct rooms that share a
+      #   title/description/paths (day/night variants, look-alike maze cells) from
+      #   collapsing onto one another.
+      # * When the game exposes *no* UID (+XMLData.room_id+ is zero, a room the
+      #   server does not surface a UID for), UID disambiguation is skipped and the
+      #   title/description/paths match is trusted regardless of any UID stored on
+      #   the room. Previously such a room returned +nil+ here (a stored UID can
+      #   never include the zero live id), so a UID accidentally or provisionally
+      #   stamped onto a no-UID room made that room permanently unresolvable
+      #   (+Map.current+ became +nil+). Trusting the text match in the no-UID case
+      #   removes that failure mode without weakening disambiguation when the game
+      #   does expose a UID.
+      #
+      # @param room [Lich::Common::Map] the room matched on title/description/paths
+      # @param honor_peer_tags [Boolean] when +true+, a room requiring a manual
+      #   peer to disambiguate (see {peer_disambiguation_tag?}) resolves to +nil+;
+      #   used by scriptless fuzzy matching, which cannot perform the peer. Exact
+      #   ({match_current}) matching passes +false+ and never consults peer tags.
+      # @return [Integer, nil] the resolved room id; +nil+ when a UID'd room's
+      #   stored UIDs exclude the live game UID, or when a peer-tagged room cannot
+      #   be disambiguated
+      def self.resolve_matched_room(room, honor_peer_tags:)
+        if room.uid.any? && !XMLData.room_id.zero?
+          return room.uid.include?(XMLData.room_id) ? room.id : nil
+        end
+        return nil if honor_peer_tags && peer_disambiguation_tag?(room)
+
+        room.id
+      end
+
+      # Resolve the current room by exact title/description/paths matching.
+      #
+      # Used when a script is running (see {match_no_uid}). Tries an exact
+      # description match first, then a punctuation-tolerant regex description
+      # match, re-reading the room whenever the live +room_count+ changes
+      # mid-match. Final UID disambiguation is delegated to
+      # {resolve_matched_room} (peer tags are not honored on this path).
+      #
+      # @param _script [Object] the running script (unused; retained for the
+      #   historical call signature)
+      # @return [Integer, nil] the resolved room id, or +nil+ when nothing matches
+      #   or UID disambiguation rejects the match
       def self.match_current(_script)
         @@current_room_mutex.synchronize do
           need_set_desc_off = false
@@ -178,11 +246,7 @@ module Lich
 
               if room
                 redo unless @@current_room_count == XMLData.room_count
-                if room.uid.any?
-                  return room.uid.include?(XMLData.room_id) ? room.id : nil
-                else
-                  return room.id
-                end
+                return resolve_matched_room(room, honor_peer_tags: false)
               else
                 redo unless @@current_room_count == XMLData.room_count
                 desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
@@ -194,11 +258,7 @@ module Lich
 
                 if room
                   redo unless @@current_room_count == XMLData.room_count
-                  if room.uid.any?
-                    return room.uid.include?(XMLData.room_id) ? room.id : nil
-                  else
-                    return room.id
-                  end
+                  return resolve_matched_room(room, honor_peer_tags: false)
                 else
                   redo unless @@current_room_count == XMLData.room_count
                   return nil
@@ -211,6 +271,16 @@ module Lich
         end
       end
 
+      # Resolve the current room by fuzzy title/description/paths matching.
+      #
+      # Used when no script is running (see {match_no_uid}). Mirrors
+      # {match_current} but honors peer-disambiguation tags: a room that would
+      # need a manual peer to tell apart cannot be resolved without a script, so
+      # it yields +nil+. Final UID disambiguation is delegated to
+      # {resolve_matched_room} with +honor_peer_tags: true+.
+      #
+      # @return [Integer, nil] the resolved room id, or +nil+ when nothing
+      #   matches, UID disambiguation rejects the match, or the room needs a peer
       def self.match_fuzzy
         @@fuzzy_room_mutex.synchronize do
           @@fuzzy_room_count = XMLData.room_count
@@ -225,13 +295,7 @@ module Lich
             if room
               redo unless @@fuzzy_room_count == XMLData.room_count
 
-              if room.uid.any?
-                return room.uid.include?(XMLData.room_id) ? room.id : nil
-              elsif room.tags.any? { |tag| tag =~ /^(set desc on; )?peer [a-z]+ =~ \/.+\/$/ }
-                return nil
-              else
-                return room.id
-              end
+              return resolve_matched_room(room, honor_peer_tags: true)
             else
               redo unless @@fuzzy_room_count == XMLData.room_count
               desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
@@ -244,13 +308,7 @@ module Lich
               if room
                 redo unless @@fuzzy_room_count == XMLData.room_count
 
-                if room.uid.any?
-                  return room.uid.include?(XMLData.room_id) ? room.id : nil
-                elsif room.tags.any? { |tag| tag =~ /^(set desc on; )?peer [a-z]+ =~ \/.+\/$/ }
-                  return nil
-                else
-                  return room.id
-                end
+                return resolve_matched_room(room, honor_peer_tags: true)
               else
                 redo unless @@fuzzy_room_count == XMLData.room_count
                 return nil
