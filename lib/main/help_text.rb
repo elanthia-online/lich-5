@@ -190,6 +190,10 @@ module Lich
             --script-dir=PATH
             --data-dir=PATH
             --temp-dir=PATH
+            --map-dir=PATH
+            --log-dir=PATH
+            --backup-dir=PATH
+            --lib-dir=PATH
             --hosts-dir=PATH
             --hosts-file=PATH
 

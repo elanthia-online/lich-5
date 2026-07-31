@@ -192,11 +192,9 @@ module Lich
         end
 
         def self.handle_hosts_dir(argv_options)
-          if (arg = ARGV.find { |a| a == '--hosts-dir' })
-            i = ARGV.index(arg)
-            ARGV.delete_at(i)
-            hosts_dir = ARGV[i]
-            ARGV.delete_at(i)
+          if (arg = ARGV.find { |a| a =~ /^--hosts-dir=(.+)$/i })
+            hosts_dir = arg[/^--hosts-dir=(.+)$/i, 1]
+            ARGV.delete(arg)
             if hosts_dir && File.exist?(hosts_dir)
               hosts_dir = hosts_dir.tr('\\', '/')
               hosts_dir += '/' unless hosts_dir[-1..-1] == '/'
