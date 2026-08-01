@@ -1162,7 +1162,7 @@ module Lich
             else
               reloaders = @@reloading_libraries[library]
               reloaders&.delete(reload_token)
-              @@reloading_libraries.delete(library) if reloaders&.empty?
+              @@reloading_libraries.delete(library) if reloaders && reloaders.empty?
             end
           end
         rescue LoadError => e
@@ -1170,7 +1170,7 @@ module Lich
           @@library_mutex.synchronize do
             reloaders = @@reloading_libraries[library]
             reloaders&.delete(reload_token)
-            @@reloading_libraries.delete(library) if reloaders&.empty?
+            @@reloading_libraries.delete(library) if reloaders && reloaders.empty?
           end
           Lich.log("error: failed to reload script library #{library}: #{e.message}")
         end
