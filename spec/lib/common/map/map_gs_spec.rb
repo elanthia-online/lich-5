@@ -294,8 +294,8 @@ RSpec.describe 'Map sparse room id handling' do
 
     it 'internal callers use the hash variant' do
       expect(base_content).to include('previous, = dijkstra_hashes(destination)')
-      expect(base_content).to include('self.class.dijkstra_hashes(@id, target_list)')
-      expect(base_content).to include('self.class.dijkstra_hashes(@id)')
+      expect(base_content).to include('_, shortest_distances = dijkstra_hashes(target_list)')
+      expect(base_content).not_to include('self.class.dijkstra_hashes(@id')
     end
 
     it 'neither game overrides the pathfinding methods' do
@@ -321,8 +321,10 @@ RSpec.describe 'Map sparse room id handling' do
       expect(base_content).not_to include('target_list.push(room.id) if room.tags.include?')
     end
 
-    it 'base module memoizes the index unconditionally' do
-      expect(base_content).to include('@tag_index ||= build_tag_index')
+    it 'base module keeps the cache private behind query methods' do
+      expect(base_content).to include('private :tag_index, :tag_index_generation, :build_tag_index')
+      expect(base_content).to include('def rooms_by_tag(tag_name)')
+      expect(base_content).to include('def tag_names')
     end
 
     it 'both games invalidate the index when the room list is mutated' do

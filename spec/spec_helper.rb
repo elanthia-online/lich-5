@@ -883,7 +883,7 @@ class Room
     attr_writer :current
 
     def current
-      @current ||= OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+      @current ||= OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}], dijkstra_hashes: [{}, {}])
     end
 
     def id
@@ -891,7 +891,7 @@ class Room
     end
 
     def [](_key)
-      OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+      OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}], dijkstra_hashes: [{}, {}])
     end
   end
 end unless defined?(Room)
@@ -916,6 +916,14 @@ class Map
 
     def dijkstra(_id, _target = nil)
       [nil, {}]
+    end
+
+    def dijkstra_hashes(_id, _target = nil)
+      [{}, {}]
+    end
+
+    def rooms_by_tag(_tag_name)
+      []
     end
 
     def findpath(_room, _target)

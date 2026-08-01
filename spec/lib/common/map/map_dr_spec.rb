@@ -464,11 +464,70 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         expect(map_class[1].tags).to eq(['shop'])
       end
 
-      it 'is dropped by clear_tags_cache' do
-        map_class.new(3, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-        map_class.clear_tags_cache
+      it 'rebuilds after clear_tags_cache drops a populated cache' do
+        allow(map_class).to receive(:build_tag_index).and_call_original
+        map_class.rooms_by_tag('shop') # cache is already primed by the before block
 
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 3])
+        map_class.clear_tags_cache
+        map_class.rooms_by_tag('shop')
+
+        expect(map_class).to have_received(:build_tag_index).once
+      end
+
+      it 'does not rebuild while the cache is valid' do
+        allow(map_class).to receive(:build_tag_index).and_call_original
+
+        3.times { map_class.rooms_by_tag('shop') }
+
+        expect(map_class).not_to have_received(:build_tag_index)
+      end
+    end
+
+    describe 'legacy .dat map loading' do
+      # load_dat assigns Marshal-restored rooms straight into the list. Marshal
+      # skips the constructor, so a map written before TagList existed carries a
+      # plain Array in @tags. Rebuild that shape explicitly.
+      let(:legacy_list) do
+        map_class.class_variable_set(:@@loaded, true) # see NOTE above
+        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
+        restored = Marshal.load(Marshal.dump(map_class.class_variable_get(:@@list)))
+        restored[1].instance_variable_set(:@tags, ['shop'])
+        restored
+      end
+
+      it 'starts from a room whose tags are a plain Array' do
+        expect(legacy_list[1].instance_variable_get(:@tags)).to be_an(Array)
+        expect(legacy_list[1].instance_variable_get(:@tags)).not_to be_a(Lich::Common::TagList)
+      end
+
+      it 'rewraps tags when the list is assigned' do
+        map_class.list = legacy_list
+
+        expect(map_class[1].tags).to be_a(Lich::Common::TagList)
+      end
+
+      it 'still indexes the loaded tags' do
+        map_class.list = legacy_list
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1])
+      end
+
+      it 'invalidates on an in place tag change after a legacy load' do
+        map_class.list = legacy_list
+        map_class.rooms_by_tag('shop') # prime the cache
+
+        map_class[1].tags << 'bank'
+
+        expect(map_class.rooms_by_tag('bank')).to eq([1])
+      end
+
+      it 'drops a cache carried over from the previous map' do
+        map_class.list = legacy_list
+        map_class.rooms_by_tag('shop') # prime against the loaded list
+
+        map_class.list = []
+
+        expect(map_class.rooms_by_tag('shop')).to eq([])
       end
     end
 

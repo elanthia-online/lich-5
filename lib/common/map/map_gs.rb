@@ -98,6 +98,7 @@ module Lich
 
         def list=(value)
           @@list = value
+          normalize_tag_lists
         end
 
         def uids
@@ -517,7 +518,7 @@ module Lich
 
       def self.tags
         self.load unless @@loaded
-        tag_index.keys
+        tag_names
       end
 
       def self.uids_clear

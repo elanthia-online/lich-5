@@ -272,7 +272,7 @@ module Lich
 
       def tag_to_id(target)
         start_room = Room.current.id
-        target_list = Map.list.find_all { |room| room.tags.include?(target) }.collect { |room| room.id }
+        target_list = Map.rooms_by_tag(target)
 
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: No go2 targets matching '#{target}' found.")
@@ -283,7 +283,7 @@ module Lich
           Lich::Messaging.msg('plain', "DRCT: You're already here.")
           return start_room
         end
-        _previous, shortest_distances = Room.current.dijkstra(target_list)
+        _previous, shortest_distances = Room.current.dijkstra_hashes(target_list)
         target_list.delete_if { |room_id| shortest_distances[room_id].nil? }
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: Couldn't find a path from here to any room with a '#{target}' tag.")
@@ -357,7 +357,7 @@ module Lich
 
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
-        _previous, shortest_distances = Map.dijkstra(Room.current.id)
+        _previous, shortest_distances = Map.dijkstra_hashes(Room.current.id)
         target_list.delete_if { |room_num| shortest_distances[room_num].nil? && room_num != Room.current.id }
         target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
       end
@@ -368,7 +368,7 @@ module Lich
       end
 
       def time_to_room(origin, destination)
-        _previous, shortest_paths = Map.dijkstra(origin, destination)
+        _previous, shortest_paths = Map.dijkstra_hashes(origin, destination)
         shortest_paths[destination]
       end
 

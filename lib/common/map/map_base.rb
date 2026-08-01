@@ -73,12 +73,19 @@ module Lich
     # index whenever it is mutated, so Map.rooms_by_tag cannot go stale behind
     # a caller's back. Reads are plain Array reads with no added indirection.
     class TagList < Array
-      # Array methods that change the receiver's contents.
-      MUTATORS = %i[
-        << []= append clear collect! compact! concat delete delete_at delete_if
-        fill flatten! insert keep_if map! pop prepend push reject! replace
-        rotate! select! shift shuffle! slice! sort! sort_by! uniq! unshift
+      # Array mutators that do not end in a bang. This is a closed set, unlike
+      # the bang methods, which are derived below so that a mutator added by a
+      # future Ruby is covered without editing this list.
+      NON_BANG_MUTATORS = %i[
+        << []= append clear concat delete delete_at delete_if fill insert
+        keep_if pop prepend push replace shift unshift
       ].freeze
+
+      # Every Array method that changes the receiver's contents.
+      MUTATORS = (
+        Array.public_instance_methods(false).select { |name| name.to_s.end_with?('!') } +
+        NON_BANG_MUTATORS
+      ).uniq.freeze
 
       # @param contents [Array, nil] initial tag names
       # @param owner [Class, nil] Map class notified on mutation
@@ -135,6 +142,38 @@ module Lich
           time
         end
 
+        # Tag name => Array of room ids. Private: callers must go through
+        # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.
+        # @return [Hash{String => Array<Integer>}]
+        def tag_index
+          self.load unless loaded?
+          cached = @tag_index
+          return cached unless cached.nil?
+
+          generation = tag_index_generation
+          built = build_tag_index
+          # Discard the build if the index was invalidated while it was running,
+          # so a concurrent tag change cannot be clobbered by a stale rebuild.
+          @tag_index = built if generation == tag_index_generation
+          built
+        end
+
+        # @return [Integer]
+        def tag_index_generation
+          @tag_index_generation ||= 0
+        end
+
+        # @return [Hash{String => Array<Integer>}]
+        def build_tag_index
+          index = {}
+          list.compact.each do |room|
+            room.tags.each { |tag| (index[tag] ||= []) << room.id }
+          end
+          index
+        end
+
+        private :tag_index, :tag_index_generation, :build_tag_index
+
         # Class-level dijkstra dispatcher
         def dijkstra(source, destination = nil)
           if source.is_a?(self)
@@ -159,17 +198,15 @@ module Lich
           end
         end
 
-        # Tag name => Array of room ids carrying that tag. Memoized; the memo
-        # shares its lifecycle with Map.tags and is dropped by #reset_tag_index.
-        # @return [Hash{String => Array<Integer>}]
-        def tag_index
-          self.load unless loaded?
-          @tag_index ||= build_tag_index
+        # Tag names present anywhere in the room list, in room id order
+        # @return [Array<String>]
+        def tag_names
+          tag_index.keys
         end
 
         # Room ids carrying a tag, nearest-agnostic and in room id order
         # @param tag_name [String] Tag to look up
-        # @return [Array<Integer>] Room ids, empty when the tag is unknown
+        # @return [Array<Integer>] a copy, empty when the tag is unknown
         def rooms_by_tag(tag_name)
           (tag_index[tag_name] || []).dup
         end
@@ -177,16 +214,18 @@ module Lich
         # Drop the tag memo. Call after mutating any room's tags in place.
         # @return [nil]
         def reset_tag_index
+          @tag_index_generation = tag_index_generation + 1
           @tag_index = nil
         end
 
-        # @return [Hash{String => Array<Integer>}]
-        def build_tag_index
-          index = {}
+        # Re-wrap plain Array tags as TagList. Rooms restored by Marshal skip the
+        # constructor, so their tags cannot invalidate the index on mutation.
+        # @return [nil]
+        def normalize_tag_lists
           list.compact.each do |room|
-            room.tags.each { |tag| (index[tag] ||= []) << room.id }
+            room.tags = room.tags unless room.tags.is_a?(TagList)
           end
-          index
+          reset_tag_index
         end
 
         # Find path between two rooms
@@ -492,7 +531,7 @@ module Lich
         # @return [Integer, nil] Room ID of nearest tagged room
         def find_nearest_by_tag(tag_name)
           target_list = self.class.rooms_by_tag(tag_name)
-          _, shortest_distances = self.class.dijkstra_hashes(@id, target_list)
+          _, shortest_distances = dijkstra_hashes(target_list)
           if target_list.include?(@id)
             @id
           else
@@ -506,7 +545,7 @@ module Lich
         # @return [Array<Integer>] Room IDs sorted by distance
         def find_all_nearest_by_tag(tag_name)
           target_list = self.class.rooms_by_tag(tag_name)
-          _, shortest_distances = self.class.dijkstra_hashes(@id)
+          _, shortest_distances = dijkstra_hashes
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
           target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
         end
@@ -519,7 +558,7 @@ module Lich
           if target_list.include?(@id)
             @id
           else
-            _, shortest_distances = self.class.dijkstra_hashes(@id, target_list)
+            _, shortest_distances = dijkstra_hashes(target_list)
             valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
             valid_rooms.min_by { |room_num| shortest_distances[room_num] }
           end

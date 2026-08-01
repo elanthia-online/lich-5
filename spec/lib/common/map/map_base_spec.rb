@@ -484,6 +484,49 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
+    describe 'nearest helpers dispatch' do
+      before do
+        test_class.test_list[2].tags = ['shop']
+        test_class.reset_tag_index
+      end
+
+      it 'calls dijkstra_hashes on the room itself, so overrides are honoured' do
+        room = test_class.test_list[0]
+        allow(room).to receive(:dijkstra_hashes).and_return([{}, { 2 => 0.25 }])
+
+        expect(room.find_nearest_by_tag('shop')).to eq(2)
+        expect(room).to have_received(:dijkstra_hashes)
+      end
+
+      it 'does not dispatch find_nearest_by_tag through the class' do
+        room = test_class.test_list[0]
+        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+
+        expect { room.find_nearest_by_tag('shop') }.not_to raise_error
+      end
+
+      it 'does not dispatch find_all_nearest_by_tag through the class' do
+        room = test_class.test_list[0]
+        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+
+        expect { room.find_all_nearest_by_tag('shop') }.not_to raise_error
+      end
+
+      it 'does not dispatch find_nearest through the class' do
+        room = test_class.test_list[0]
+        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+
+        expect { room.find_nearest([2, 3]) }.not_to raise_error
+      end
+
+      it 'keeps the class level dispatcher available for external callers' do
+        previous, distances = test_class.dijkstra_hashes(0)
+
+        expect(previous).to be_a(Hash)
+        expect(distances[2]).to eq(2)
+      end
+    end
+
     describe '#find_nearest_by_tag' do
       before do
         test_class.test_list[2].tags = ['shop']
@@ -538,12 +581,12 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
-    describe '.tag_index' do
+    describe '.tag_index (private cache)' do
       it 'maps each tag to the ids of the rooms carrying it' do
         test_class.test_list[0] = test_class.new(0, tags: ['shop', 'bank'])
         test_class.test_list[1] = test_class.new(1, tags: ['shop'])
 
-        expect(test_class.tag_index).to eq('shop' => [0, 1], 'bank' => [0])
+        expect(test_class.send(:tag_index)).to eq('shop' => [0, 1], 'bank' => [0])
       end
 
       it 'lists ids in ascending room id order' do
@@ -551,44 +594,79 @@ RSpec.describe Lich::Common::MapBase do
         test_class.test_list[2] = test_class.new(2, tags: ['shop'])
         test_class.test_list[9] = test_class.new(9, tags: ['shop'])
 
-        expect(test_class.tag_index['shop']).to eq([2, 5, 9])
+        expect(test_class.send(:tag_index)['shop']).to eq([2, 5, 9])
       end
 
       it 'skips nil holes in the room list' do
         test_class.test_list[0] = test_class.new(0, tags: ['shop'])
         test_class.test_list[3] = test_class.new(3, tags: ['shop'])
 
-        expect { test_class.tag_index }.not_to raise_error
-        expect(test_class.tag_index['shop']).to eq([0, 3])
+        expect { test_class.send(:tag_index) }.not_to raise_error
+        expect(test_class.send(:tag_index)['shop']).to eq([0, 3])
       end
 
       it 'returns an empty index when no room carries a tag' do
         test_class.test_list[0] = test_class.new(0)
 
-        expect(test_class.tag_index).to eq({})
+        expect(test_class.send(:tag_index)).to eq({})
       end
 
       it 'memoizes an empty index instead of rebuilding on every call' do
         test_class.test_list[0] = test_class.new(0)
-        first_call = test_class.tag_index
+        first_call = test_class.send(:tag_index)
 
-        expect(test_class.tag_index).to be(first_call)
+        expect(test_class.send(:tag_index)).to be(first_call)
       end
 
       it 'builds only once when no room carries a tag' do
         test_class.test_list[0] = test_class.new(0)
         allow(test_class).to receive(:build_tag_index).and_call_original
 
-        3.times { test_class.tag_index }
+        3.times { test_class.send(:tag_index) }
 
         expect(test_class).to have_received(:build_tag_index).once
       end
 
       it 'memoizes the index across calls' do
         test_class.test_list[0] = test_class.new(0, tags: ['shop'])
-        first_call = test_class.tag_index
+        first_call = test_class.send(:tag_index)
 
-        expect(test_class.tag_index).to be(first_call)
+        expect(test_class.send(:tag_index)).to be(first_call)
+      end
+    end
+
+    describe 'tag cache encapsulation' do
+      before do
+        test_class.test_list[0] = test_class.new(0, tags: ['shop'])
+      end
+
+      it 'does not expose the cache as a public method' do
+        expect { test_class.tag_index }.to raise_error(NoMethodError, /private method/)
+      end
+
+      it 'exposes tag names as a fresh array' do
+        first = test_class.tag_names
+        first << 'injected'
+
+        expect(test_class.tag_names).to eq(['shop'])
+      end
+
+      it 'survives a caller mutating the array returned by rooms_by_tag' do
+        test_class.rooms_by_tag('shop') << 999
+
+        expect(test_class.rooms_by_tag('shop')).to eq([0])
+      end
+
+      it 'discards a rebuild that raced an invalidation' do
+        original = test_class.method(:build_tag_index)
+        allow(test_class).to receive(:build_tag_index) do
+          test_class.reset_tag_index # a concurrent tag change lands mid-build
+          original.call
+        end
+
+        test_class.send(:tag_index)
+
+        expect(test_class.instance_variable_get(:@tag_index)).to be_nil
       end
     end
 
@@ -1040,6 +1118,67 @@ RSpec.describe Lich::Common::TagList do
         when :<<, :push, :append, :prepend, :unshift then list.public_send(mutator, 'inn')
         else list.public_send(mutator)
         end
+      end
+    end
+  end
+
+  describe 'mutation surface completeness' do
+    # Guards against a future Ruby adding an Array mutator that MUTATORS misses,
+    # which is how filter! and reverse! were originally missed.
+    let(:recorder) do
+      Class.new do
+        attr_reader :hits
+
+        def initialize
+          @hits = 0
+        end
+
+        def reset_tag_index
+          @hits += 1
+        end
+      end
+    end
+
+    it 'notifies the owner for every Array method that changes the receiver' do
+      block_args = {
+        delete_if: proc { |v| v == 'a' }, keep_if: proc { |v| v == 'a' },
+        reject!: proc { |v| v == 'a' }, select!: proc { |v| v == 'a' },
+        filter!: proc { |v| v == 'a' }, map!: proc { |v| v },
+        collect!: proc { |v| v }, sort_by!: proc { |v| v }
+      }
+      positional_args = {
+        :[]= => [0, 'x'], :insert => [1, 'x'], :fill => ['x'], :concat => [['x']],
+        :replace => [['x']], :delete => ['a'], :delete_at => [0], :rotate! => [1],
+        :push => ['x'], :append => ['x'], :prepend => ['x'], :unshift => ['x'],
+        :<< => ['x'], :slice! => [0]
+      }
+
+      uninstrumented = Array.public_instance_methods(false).select do |name|
+        owner = recorder.new
+        list = described_class.new(%w[a b c d e f], owner)
+        contents = list.to_a
+        begin
+          if block_args.key?(name)
+            list.public_send(name, &block_args[name])
+          else
+            list.public_send(name, *positional_args.fetch(name, []))
+          end
+        rescue StandardError
+          next false # not exercisable with generic arguments; readers only
+        end
+        list.to_a != contents && owner.hits.zero?
+      end
+
+      expect(uninstrumented).to be_empty
+    end
+
+    it 'covers filter! and reverse! specifically' do
+      [:filter!, :reverse!].each do |mutator|
+        owner = recorder.new
+        list = described_class.new(%w[a b], owner)
+        mutator == :filter! ? list.filter! { |v| v == 'a' } : list.reverse!
+
+        expect(owner.hits).to be_positive
       end
     end
   end
