@@ -307,7 +307,8 @@ module Lich
             login_info[:user_id],
             login_info[:char_name],
             login_info[:game_code],
-            login_info[:frontend]
+            login_info[:frontend],
+            login_info[:custom_launch]
           )
             # Reload entry_data from updated YAML to stay in sync
             begin

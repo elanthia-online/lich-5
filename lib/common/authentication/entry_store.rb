@@ -491,8 +491,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if operation was successful
-        def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil)
+        def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
@@ -501,7 +502,7 @@ module Lich
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
-            character = find_character(yaml_data, username, char_name, game_code, frontend)
+            character = find_character(yaml_data, username, char_name, game_code, frontend, custom_launch)
             return false unless character
 
             # Don't add if already a favorite
@@ -532,8 +533,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if operation was successful
-        def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil)
+        def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
@@ -542,7 +544,7 @@ module Lich
             yaml_data = migrate_to_favorites_format(yaml_data)
 
             # Find the character with frontend precision
-            character = find_character(yaml_data, username, char_name, game_code, frontend)
+            character = find_character(yaml_data, username, char_name, game_code, frontend, custom_launch)
             return false unless character
 
             # Don't remove if not a favorite
@@ -575,8 +577,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if character is a favorite
-        def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil)
+        def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
           return false unless File.exist?(yaml_file)
 
@@ -584,7 +587,7 @@ module Lich
             yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
             yaml_data = migrate_to_favorites_format(yaml_data)
 
-            character = find_character(yaml_data, username, char_name, game_code, frontend)
+            character = find_character(yaml_data, username, char_name, game_code, frontend, custom_launch)
             character && character['is_favorite'] == true
           rescue StandardError => e
             Lich.log "error: Error checking favorite status: #{e.message}"
@@ -848,8 +851,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String, nil] Frontend identifier
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Hash, nil] Character hash or nil if not found
-        def self.find_character(yaml_data, username, char_name, game_code, frontend = nil)
+        def self.find_character(yaml_data, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           return nil unless yaml_data['accounts'] && yaml_data['accounts'][username]
           account_data = yaml_data['accounts'][username]
           return nil unless account_data['characters']
@@ -859,7 +863,8 @@ module Lich
             exact_match = account_data['characters'].find do |character|
               character['char_name'] == char_name &&
                 character['game_code'] == game_code &&
-                character['frontend'] == frontend
+                character['frontend'] == frontend &&
+                (custom_launch == :__unset || character['custom_launch'].to_s.strip == custom_launch.to_s.strip)
             end
             return exact_match if exact_match
           end
@@ -867,7 +872,9 @@ module Lich
           # Fallback to basic matching only if no exact match found and frontend is nil
           if frontend.nil?
             account_data['characters'].find do |character|
-              character['char_name'] == char_name && character['game_code'] == game_code
+              character['char_name'] == char_name &&
+                character['game_code'] == game_code &&
+                (custom_launch == :__unset || character['custom_launch'].to_s.strip == custom_launch.to_s.strip)
             end
           else
             # If frontend was specified but no exact match found, return nil

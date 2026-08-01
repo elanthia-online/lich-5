@@ -400,7 +400,7 @@ module Lich
 
           # Get all favorite characters with frontend precision
           favorite_entries = @entry_data.select do |login_info|
-            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
           end
 
           # Sort favorites by favorite_order if available, then by character name
@@ -519,7 +519,7 @@ module Lich
 
           # Check if this character is a favorite with frontend precision
           is_favorite = @favorites_enabled &&
-                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
 
           # Get realm name from game code
           realm = Utilities.game_code_to_realm(login_params.game_code)
@@ -625,7 +625,14 @@ module Lich
           favorite_button.signal_connect('clicked') do
             begin
               # Toggle favorite status with frontend precision
-              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code, login_params.frontend)
+              new_status = FavoritesManager.toggle_favorite(
+                @data_dir,
+                login_params.user_id,
+                login_params.char_name,
+                login_params.game_code,
+                login_params.frontend,
+                login_params.custom_launch
+              )
 
               # Update button appearance
               # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.

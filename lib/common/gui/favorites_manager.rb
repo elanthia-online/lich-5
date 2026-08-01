@@ -15,12 +15,13 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if operation was successful
-        def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil)
+        def self.add_favorite(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = Lich::Common::Authentication::EntryStore.add_favorite(data_dir, username, char_name, game_code, frontend)
+            result = Lich::Common::Authentication::EntryStore.add_favorite(data_dir, username, char_name, game_code, frontend, custom_launch)
 
             if result
               frontend_info = frontend ? " (#{frontend})" : ""
@@ -45,12 +46,13 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if operation was successful
-        def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil)
+        def self.remove_favorite(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            result = Lich::Common::Authentication::EntryStore.remove_favorite(data_dir, username, char_name, game_code, frontend)
+            result = Lich::Common::Authentication::EntryStore.remove_favorite(data_dir, username, char_name, game_code, frontend, custom_launch)
 
             if result
               frontend_info = frontend ? " (#{frontend})" : ""
@@ -75,16 +77,17 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if character is now a favorite, false if not
-        def self.toggle_favorite(data_dir, username, char_name, game_code, frontend = nil)
+        def self.toggle_favorite(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            if is_favorite?(data_dir, username, char_name, game_code, frontend)
-              remove_favorite(data_dir, username, char_name, game_code, frontend)
+            if is_favorite?(data_dir, username, char_name, game_code, frontend, custom_launch)
+              remove_favorite(data_dir, username, char_name, game_code, frontend, custom_launch)
               false
             else
-              add_favorite(data_dir, username, char_name, game_code, frontend)
+              add_favorite(data_dir, username, char_name, game_code, frontend, custom_launch)
               true
             end
           rescue StandardError => e
@@ -101,12 +104,13 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if character is a favorite
-        def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil)
+        def self.is_favorite?(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           return false if data_dir.nil? || username.nil? || char_name.nil? || game_code.nil?
 
           begin
-            Lich::Common::Authentication::EntryStore.is_favorite?(data_dir, username, char_name, game_code, frontend)
+            Lich::Common::Authentication::EntryStore.is_favorite?(data_dir, username, char_name, game_code, frontend, custom_launch)
           rescue StandardError => e
             Lich.log "error: Error in FavoritesManager.is_favorite?: #{e.message}"
             false
