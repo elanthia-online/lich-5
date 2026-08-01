@@ -1455,33 +1455,46 @@ module Lich
         DRParser.parse(server_string)
       end
 
+      # Rewrites the room-name line (the "<style id=\"roomName\" />[Title]" chunk) on its way
+      # to the client. Two independent concerns:
+      #   1. When the player wants the room id/UID in the title (";display roomid title|both"),
+      #      strip any RealID the game appended (present only under the ShowRoomID flag) and
+      #      inject Lich's configured id/UID, so the name reads e.g.
+      #      "[Town Square - 1234 - (u230008)]".
+      #   2. Otherwise preserve the historical behavior of hiding the game's inline RealID when
+      #      the player asked to (";display uid" or ";display flaguid").
+      # Edits only this outbound client string; XMLData (and therefore scripts) are untouched,
+      # because process_xml_data has already parsed the inbound stream before this runs.
+      # @param alt_string [String] the outbound room-name server string, modified in place
+      # @return [String] the rewritten string
       def modify_room_display(alt_string)
-        if Lich.display_uid == true
+        if room_id_in_title?
           alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-        elsif Lich.hide_uid_flag == true
+          room_number = room_number_display
+          alt_string.sub!(']') { " - #{room_number}]" } unless room_number.empty?
+        elsif Lich.display_uid == true || Lich.hide_uid_flag == true
           alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
         end
 
         alt_string
       end
 
-      # Prepends the shared exit / StringProc lines plus the DragonRealms
-      # "Room Number:" line, and updates the room-window subtitle on frontends
-      # that host one. The visible room-number line honors the mono toggle; the
-      # streamWindow subtitle tags are title-bar metadata and are left as-is.
+      # Prepends the shared exit / StringProc lines, then renders the optional DragonRealms
+      # room id/UID. The "Room Number:" line below the room appears for the "line" and "both"
+      # placements (honoring the mono toggle). The room-window subtitle (room-window front-ends
+      # only) reflects the id/UID for every placement, since the window title bar is itself a
+      # title surface. The inline room-name injection for the "title"/"both" placements is
+      # handled separately in #modify_room_display.
       # @param alt_string [String] the server string being rewritten
       # @return [String] the rewritten server string
       def process_room_display(alt_string)
         alt_string = prepend_room_lines(alt_string, room_stringproc_entries, room_exit_entries)
 
-        # DR-specific room number display
-        room_number = ""
-        room_number += "#{Map.current.id}" if Lich.display_lichid
-        room_number += " - " if Lich.display_lichid && Lich.display_uid
-        room_number += "(#{XMLData.room_id == 0 ? "**" : "u#{XMLData.room_id}"})" if Lich.display_uid
-
+        room_number = room_number_display
         unless room_number.empty?
-          alt_string = "#{room_styled("Room Number: #{room_number}")}\r\n#{alt_string}"
+          if room_id_in_line?
+            alt_string = "#{room_styled("Room Number: #{room_number}")}\r\n#{alt_string}"
+          end
           if Frontend.supports_room_window?
             alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
             alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
@@ -1489,6 +1502,39 @@ module Lich
         end
 
         alt_string
+      end
+
+      private
+
+      # Builds the DragonRealms room id / RealID string chosen via ";display lichid" and
+      # ";display uid", e.g. "1234 - (u230008)", "1234", or "(u230008)". The lich id is omitted
+      # (rather than raising) when the current room is unmapped, and the UID renders as "(**)"
+      # for a no-UID room (XMLData.room_id == 0). Shared by #modify_room_display (title
+      # injection) and #process_room_display (below-room line and window subtitle) so the two
+      # never drift in format.
+      # @return [String] the formatted id/UID, or "" when there is nothing to show
+      def room_number_display
+        segments = []
+        if Lich.display_lichid
+          current = Map.current
+          segments << current.id.to_s if current
+        end
+        segments << (XMLData.room_id == 0 ? "(**)" : "(u#{XMLData.room_id})") if Lich.display_uid
+        segments.join(" - ")
+      end
+
+      # @return [Boolean] whether the id/UID is injected into the room-name (title) line;
+      #   true for the "title" and "both" placements
+      def room_id_in_title?
+        %w[title both].include?(Lich.display_roomid_location)
+      end
+
+      # @return [Boolean] whether the id/UID is shown as a "Room Number:" line below the room;
+      #   true for the "line" and "both" placements, and as the default before a game is
+      #   identified (display_roomid_location still nil)
+      def room_id_in_line?
+        location = Lich.display_roomid_location
+        location.nil? || %w[line both].include?(location)
       end
     end
 

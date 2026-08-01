@@ -133,8 +133,15 @@ module Lich
         @dialogs = {}
 
         # real id updates
-        @room_id = nil
+        # Default 0 (not nil) so a read before the first <nav> tag is a valid "no UID" value
+        # rather than a NoMethodError on room_id.zero? (DR) or room_id > N (GS) in the map layer.
+        @room_id = 0
         @previous_nav_rm = nil
+        # True once <nav> has supplied a real (non-zero) UID for the current
+        # arrival and the streamWindow subtitle has not yet consumed it. Keeps a
+        # ShowRoomID-on subtitle from overwriting an authoritative nav UID in the
+        # same arrival (see the streamWindow handler).
+        @nav_uid_pending = false
 
         # Lich::Claim update
         @arrival_pcs = []
@@ -385,10 +392,18 @@ module Lich
             # reused elsewhere.
             @pending_crtr_status.clear
             @check_obvious_hiding = true
-            unless XMLData.game =~ /^DR/
-              @previous_nav_rm = @room_id
-              @room_id = attributes['rm'].to_i
-            end
+            # The <nav rm='NNNN'/> tag is the authoritative room UID for every game, including
+            # DragonRealms, which now emits it on every arrival (a plain <nav/> with no rm
+            # attribute for a room that has no UID, which yields 0 here). Capturing it on nav
+            # gives early room knowledge before the room text streams, and keeps
+            # @previous_nav_rm accurate for Map.previous_uid.
+            @previous_nav_rm = @room_id
+            @room_id = attributes['rm'].to_i
+            # A real nav UID this arrival is authoritative; flag it so the
+            # streamWindow subtitle below treats its own UID marker as a fallback
+            # and does not overwrite this value. A bare <nav/> (no UID, room_id 0)
+            # leaves the subtitle free to supply one.
+            @nav_uid_pending = @room_id.positive?
             @arrival_pcs = []
             $nav_seen = true
           end
@@ -533,10 +548,27 @@ module Lich
                   end
                   @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
                 elsif XMLData.game =~ /^DR/
-                  # - [Bosque Deriel, Hermit's Shacks] (230008)
-                  room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+)\))?/)
-                  @room_title = "[#{room[:roomtitle]}]"
-                  @room_id = room[:uid].to_i
+                  # - [Bosque Deriel, Hermit's Shacks] (a trailing UID marker is present only when
+                  # the game's ShowRoomID flag is ON): " (230008)" for a room that has a UID, or
+                  # " (**)" for a room that has none. The <nav rm=.../> tag is the PRIMARY UID
+                  # source (see the nav handler above); this subtitle marker is only a FALLBACK
+                  # for arrivals where nav arrived late, was absent, or was a bare no-uid <nav/>.
+                  # When nav already supplied a real UID this arrival (@nav_uid_pending), leave
+                  # room_id alone so the subtitle never clobbers the authoritative nav value; the
+                  # subtitle consumes that flag either way, so the next arrival's marker (if its
+                  # nav is missing) is free to act as the fallback. When nav did not supply one, a
+                  # numeric marker sets the UID and "(**)" clears it to 0 (explicit "no UID",
+                  # dropping any stale id from a prior room). A ShowRoomID-OFF subtitle has no
+                  # marker at all, so room_id is left untouched (never write 0 blindly). The title
+                  # stays UID-free in every case. Guard the match: a blank/identity-less subtitle
+                  # (e.g. " - ") has no "[...]" and returns nil, so leave the prior title untouched
+                  # rather than crash.
+                  room = attributes['subtitle'].match(%r{(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+|\*+)\))?})
+                  if room
+                    @room_title = "[#{room[:roomtitle]}]"
+                    @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid] && !@nav_uid_pending
+                    @nav_uid_pending = false
+                  end
                 else
                   @room_title = String.new
                 end
