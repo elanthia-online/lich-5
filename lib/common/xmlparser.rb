@@ -137,6 +137,11 @@ module Lich
         # rather than a NoMethodError on room_id.zero? (DR) or room_id > N (GS) in the map layer.
         @room_id = 0
         @previous_nav_rm = nil
+        # True once <nav> has supplied a real (non-zero) UID for the current
+        # arrival and the streamWindow subtitle has not yet consumed it. Keeps a
+        # ShowRoomID-on subtitle from overwriting an authoritative nav UID in the
+        # same arrival (see the streamWindow handler).
+        @nav_uid_pending = false
 
         # Lich::Claim update
         @arrival_pcs = []
@@ -394,6 +399,11 @@ module Lich
             # @previous_nav_rm accurate for Map.previous_uid.
             @previous_nav_rm = @room_id
             @room_id = attributes['rm'].to_i
+            # A real nav UID this arrival is authoritative; flag it so the
+            # streamWindow subtitle below treats its own UID marker as a fallback
+            # and does not overwrite this value. A bare <nav/> (no UID, room_id 0)
+            # leaves the subtitle free to supply one.
+            @nav_uid_pending = @room_id.positive?
             @arrival_pcs = []
             $nav_seen = true
           end
@@ -540,20 +550,24 @@ module Lich
                 elsif XMLData.game =~ /^DR/
                   # - [Bosque Deriel, Hermit's Shacks] (a trailing UID marker is present only when
                   # the game's ShowRoomID flag is ON): " (230008)" for a room that has a UID, or
-                  # " (**)" for a room that has none. The <nav rm=.../> tag is the primary UID
-                  # source (see the nav handler above), but it can arrive late or be absent on
-                  # some arrivals; when it is, this marker is the only UID signal the game gives,
-                  # so use it as a FALLBACK: a numeric marker sets the UID, and "(**)" clears it
-                  # to 0 (explicit "no UID"), which also drops any stale id from a prior room. A
-                  # ShowRoomID-OFF subtitle has no marker at all, so we leave room_id untouched
-                  # (never write 0 blindly, never clobber a good nav value; nav and subtitle name
-                  # the same room in the same frame). The title stays UID-free either way.
-                  # Guard the match: a blank/identity-less subtitle (e.g. " - ") has no "[...]"
-                  # and returns nil, so leave the prior title untouched rather than crash.
+                  # " (**)" for a room that has none. The <nav rm=.../> tag is the PRIMARY UID
+                  # source (see the nav handler above); this subtitle marker is only a FALLBACK
+                  # for arrivals where nav arrived late, was absent, or was a bare no-uid <nav/>.
+                  # When nav already supplied a real UID this arrival (@nav_uid_pending), leave
+                  # room_id alone so the subtitle never clobbers the authoritative nav value; the
+                  # subtitle consumes that flag either way, so the next arrival's marker (if its
+                  # nav is missing) is free to act as the fallback. When nav did not supply one, a
+                  # numeric marker sets the UID and "(**)" clears it to 0 (explicit "no UID",
+                  # dropping any stale id from a prior room). A ShowRoomID-OFF subtitle has no
+                  # marker at all, so room_id is left untouched (never write 0 blindly). The title
+                  # stays UID-free in every case. Guard the match: a blank/identity-less subtitle
+                  # (e.g. " - ") has no "[...]" and returns nil, so leave the prior title untouched
+                  # rather than crash.
                   room = attributes['subtitle'].match(%r{(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+|\*+)\))?})
                   if room
                     @room_title = "[#{room[:roomtitle]}]"
-                    @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid]
+                    @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid] && !@nav_uid_pending
+                    @nav_uid_pending = false
                   end
                 else
                   @room_title = String.new

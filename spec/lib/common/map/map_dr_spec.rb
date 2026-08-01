@@ -595,6 +595,23 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
                  exits: 'Obvious exits: east, west')
       expect { map_class.current_or_new }.to change { map_class.list.compact.size }.by(1)
     end
+
+    # Before any room resolves, @@current_room_id is the -1 sentinel. A blank frame
+    # must not fall back to set_current(-1), which would index @@list[-1] (the last
+    # room) and make an unrelated room current; it returns nil instead.
+    it 'returns nil (not the last room) for a blank frame when no room has resolved yet' do
+      map_class.class_variable_set(:@@current_room_id, -1)
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect(map_class.current_or_new).to be_nil
+    end
+
+    it 'does not mint a stub for a blank frame when current_room_id is the -1 sentinel' do
+      map_class.class_variable_set(:@@current_room_id, -1)
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect { map_class.current_or_new }.not_to(change { map_class.list.compact.size })
+    end
   end
 end
 

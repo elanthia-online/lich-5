@@ -497,6 +497,15 @@ RSpec.describe Lich::Common::XMLParser do
       expect(parser.room_title).to eq("[[Bosque Deriel, Hermit's Shacks]]")
     end
 
+    # <nav> is authoritative within an arrival: a same-arrival subtitle marker must
+    # never overwrite a real nav UID, even when the two disagree (CodeRabbit #1491).
+    it 'keeps the nav uid when the same arrival subtitle marker carries a different uid' do
+      feed(parser, "<nav rm='54202'/>")
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Catacombs, Labyrinth] (54209)"/>))
+      expect(parser.room_id).to eq(54202)
+      expect(parser.room_title).to eq('[[Catacombs, Labyrinth]]')
+    end
+
     # The <nav> tag is primary, but it can arrive late or not at all on some arrivals. When it
     # does, a ShowRoomID-on subtitle is the only place the UID appears, so the subtitle acts as
     # a fallback UID source (adopted only when it carries a real number; never writes 0).
@@ -507,8 +516,10 @@ RSpec.describe Lich::Common::XMLParser do
     end
 
     it 'corrects a stale room_id from the subtitle when the new arrival had no <nav>' do
-      feed(parser, "<nav rm='54200'/>") # previous room
-      # next arrival streams no <nav>, but the subtitle carries the real uid
+      # previous arrival: nav plus its own subtitle (which consumes the nav-uid flag)
+      feed(parser, "<nav rm='54200'/>")
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Old Room] (54200)"/>))
+      # new arrival streams no <nav>, but the subtitle carries the real uid
       feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Catacombs, Labyrinth] (54201)"/>))
       expect(parser.room_id).to eq(54201)
     end
@@ -520,7 +531,10 @@ RSpec.describe Lich::Common::XMLParser do
     end
 
     it 'clears a stale uid when a no-uid room shows the "(**)" marker (nav delayed/absent)' do
-      feed(parser, "<nav rm='54202'/>") # previous room had a uid
+      # previous arrival: nav plus its own subtitle (which consumes the nav-uid flag)
+      feed(parser, "<nav rm='54202'/>")
+      feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Lit Room] (54202)"/>))
+      # new arrival has no <nav>; a no-uid room shows "(**)" and must clear the stale uid
       feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Dark Cave] (**)"/>))
       expect(parser.room_id).to eq(0)
       expect(parser.room_title).to eq('[[Dark Cave]]')

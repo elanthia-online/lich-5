@@ -349,7 +349,13 @@ module Lich
            XMLData.room_exits_string.to_s.strip.empty? &&
            XMLData.room_description.to_s.strip == "It's pitch dark and you can't see a thing!"
           echo 'Map: skipped blank/incomplete room frame (no uid, pitch-dark, no exits)'
-          return set_current(@@current_room_id)
+          # Keep the current room - but only if one has actually resolved.
+          # @@current_room_id is the -1 sentinel before the first match; passing
+          # that to set_current would index @@list[-1] (the last room) and make an
+          # unrelated room current, so fall back to nil in that case instead.
+          return set_current(@@current_room_id) if @@current_room_id.is_a?(Integer) && @@current_room_id >= 0
+
+          return nil
         end
 
         id = get_free_id
