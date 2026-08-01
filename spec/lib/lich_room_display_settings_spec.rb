@@ -74,4 +74,69 @@ RSpec.describe 'Lich.display_room_* real getters (lib/lich.rb)' do
       expect(real_getter_value(:display_room_links, '')).to be_nil
     end
   end
+
+  # Runs a snippet against the real lib/lich.rb in a fresh subprocess (isolated from the
+  # suite's Lich mock) with a stubbed XMLData.game and a single-value lich_settings DB stub,
+  # returning the snippet's stdout verbatim. Mirrors real_getter_value but supports the
+  # string-valued display_roomid_location getter/setter and a preloaded DB row.
+  # @param game [String] the value XMLData.game should report
+  # @param body [String] Ruby to execute after setup (expected to print a result)
+  # @param db_value [String, nil] the value the settings-table stub returns for any lookup
+  # @return [String] the snippet's stdout
+  def run_real_lich(game:, body:, db_value: nil)
+    lib_path = File.expand_path('../../lib', __dir__)
+    script = <<~RUBY
+      $LOAD_PATH.unshift(#{lib_path.inspect})
+      require 'lich'
+      module XMLData; end
+      XMLData.define_singleton_method(:game) { #{game.inspect} }
+      def Lich.db
+        @stub ||= begin
+          o = Object.new
+          stored = #{db_value.inspect}
+          o.define_singleton_method(:get_first_value) { |_query| stored }
+          o.define_singleton_method(:execute) { |_query, _params = []| nil }
+          o
+        end
+      end
+      #{body}
+    RUBY
+
+    `#{Shellwords.escape(RbConfig.ruby)} -e #{Shellwords.escape(script)}`
+  end
+
+  describe '.display_roomid_location' do
+    it 'defaults to "line" (the historical below-room line) for DragonRealms' do
+      expect(run_real_lich(game: 'DR', body: 'print Lich.display_roomid_location.inspect')).to eq('"line"')
+    end
+
+    it 'stays unresolved (nil) until a game is identified' do
+      expect(run_real_lich(game: '', body: 'print Lich.display_roomid_location.inspect')).to eq('nil')
+    end
+
+    it 'returns a valid persisted placement from the settings table' do
+      expect(run_real_lich(game: 'DR', db_value: 'title', body: 'print Lich.display_roomid_location.inspect')).to eq('"title"')
+    end
+
+    it 'falls back to "line" when the persisted value is not a recognized placement' do
+      expect(run_real_lich(game: 'DR', db_value: 'garbage', body: 'print Lich.display_roomid_location.inspect')).to eq('"line"')
+    end
+
+    it 'normalizes an assigned value to lowercase' do
+      body = 'Lich.display_roomid_location = "TITLE"; print Lich.display_roomid_location.inspect'
+      expect(run_real_lich(game: 'DR', body: body)).to eq('"title"')
+    end
+
+    it 'ignores an unrecognized assignment and retains the current value' do
+      body = 'Lich.display_roomid_location = "both"; Lich.display_roomid_location = "bogus"; print Lich.display_roomid_location.inspect'
+      expect(run_real_lich(game: 'DR', body: body)).to eq('"both"')
+    end
+
+    it 'accepts each recognized placement value' do
+      %w[title line both].each do |placement|
+        body = "Lich.display_roomid_location = #{placement.inspect}; print Lich.display_roomid_location.inspect"
+        expect(run_real_lich(game: 'DR', body: body)).to eq(placement.inspect)
+      end
+    end
+  end
 end

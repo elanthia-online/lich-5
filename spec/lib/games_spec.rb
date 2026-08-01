@@ -341,6 +341,149 @@ RSpec.describe Lich::DragonRealms::GameInstance do
   end
 end
 
+# The DragonRealms room-id/RealID display: "what to show" is display_lichid/display_uid,
+# "where to show it" is Lich.display_roomid_location (title | line | both, default line).
+# modify_room_display handles the inline room-name (title) injection; process_room_display
+# handles the below-room "Room Number:" line. Defaults are unchanged (flags off, placement
+# line), and the inline injection must never touch XMLData (scripts read the clean title).
+RSpec.describe 'DragonRealms room-id placement (games.rb)' do
+  let(:dr) { Lich::DragonRealms::GameInstance.new }
+  let(:gs) { Lich::Gemstone::GameInstance.new }
+
+  before do
+    XMLData.reset
+    XMLData.game = 'DR'
+    XMLData.room_title = '[Test Room]'
+    XMLData.room_id = 230008
+    Lich.display_lichid = false
+    Lich.display_uid = false
+    Lich.hide_uid_flag = false
+    Lich.display_exits = false
+    Lich.display_stringprocs = false
+    Lich.display_room_links = false
+    Lich.display_room_mono = false
+    Lich.display_roomid_location = nil
+    allow(Frontend).to receive(:client).and_return('profanity') # not a room-window frontend
+    allow(Frontend).to receive(:supports_mono?).and_return(false)
+  end
+
+  # Reset the shared mock accessors so per-example toggles do not leak (random order).
+  after do
+    Lich.display_lichid = nil
+    Lich.display_uid = nil
+    Lich.hide_uid_flag = nil
+    Lich.display_exits = nil
+    Lich.display_stringprocs = nil
+    Lich.display_room_links = nil
+    Lich.display_room_mono = nil
+    Lich.display_roomid_location = nil
+  end
+
+  describe '#modify_room_display (inline room-name injection)' do
+    it 'injects the lich id into the room name for the "title" placement' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - 1234]')
+    end
+
+    it 'injects the uid into the room name for the "title" placement' do
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - (u230008)]')
+    end
+
+    it 'injects both id and uid for the "title" placement' do
+      Lich.display_lichid = true
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - 1234 - (u230008)]')
+    end
+
+    it 'renders (**) for a no-uid room (room_id 0) in the title' do
+      XMLData.room_id = 0
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - (**)]')
+    end
+
+    it 'strips a game-supplied RealID before injecting, leaving no duplicate' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room - 1234]')
+    end
+
+    it 'injects nothing (and does not raise) when the room is unmapped and only lichid is on' do
+      allow(Map).to receive(:current).and_return(nil)
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room]')
+    end
+
+    it 'does not inject for the "line" placement (room name left as sent)' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room] (230008)')
+    end
+
+    it 'still hides the game RealID for the "line" placement when display_uid is on (historical behavior)' do
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room]')
+    end
+
+    it 'does not mutate XMLData.room_title when injecting into the title' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      dr.modify_room_display(+'[Test Room]')
+      expect(XMLData.room_title).to eq('[Test Room]')
+    end
+  end
+
+  describe '#process_room_display (below-room "Room Number:" line)' do
+    it 'shows the Room Number line for the "line" placement' do
+      Lich.display_lichid = true
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.process_room_display(+'PROMPT')).to include('Room Number: 1234 - (u230008)')
+    end
+
+    it 'shows the Room Number line by default (nil placement behaves as "line")' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = nil
+      expect(dr.process_room_display(+'PROMPT')).to include('Room Number: 1234')
+    end
+
+    it 'omits the Room Number line for the "title" placement' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).not_to include('Room Number:')
+    end
+
+    it 'renders in both the title and the below-room line for the "both" placement' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'both'
+      expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - 1234]')
+      expect(dr.process_room_display(+'PROMPT')).to include('Room Number: 1234')
+    end
+
+    it 'adds no line and does not raise when the room is unmapped and only lichid is on' do
+      allow(Map).to receive(:current).and_return(nil)
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.process_room_display(+'PROMPT')).not_to include('Room Number:')
+    end
+  end
+
+  describe 'GemStone is unaffected by the DR placement setting' do
+    it 'GS #modify_room_display ignores display_roomid_location' do
+      XMLData.game = 'GS'
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'line' # suppresses DR title injection; must not affect GS
+      expect(gs.modify_room_display(+'[Test Room] (123)')).to include(' - 1234]')
+    end
+  end
+end
+
 # Unit coverage for the shared formatting mixin, exercised on a throwaway host
 # class so the helpers are tested in isolation from the game instances.
 RSpec.describe Lich::GameBase::RoomFormatter do

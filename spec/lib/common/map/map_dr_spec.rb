@@ -669,6 +669,81 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       expect(parsed).not_to have_key('image_coords')
     end
   end
+
+  describe 'nav-tag room id integration' do
+    it 'previous_uid returns XMLData.previous_nav_rm (now populated from the <nav> tag)' do
+      XMLData.previous_nav_rm = 4242
+      expect(map_class.previous_uid).to eq(4242)
+    end
+
+    it 'ids_from_uid treats 0 as "no uid" even if a room was stamped with it' do
+      map_class.uids_add(0, 9)
+      expect(map_class.ids_from_uid(0)).to eq([])
+    end
+
+    it 'ids_from_uid resolves a real (nonzero) uid to its room ids' do
+      map_class.uids_add(230008, 5)
+      expect(map_class.ids_from_uid(230008)).to eq([5])
+    end
+  end
+
+  # DR sometimes streams a blank/incomplete arrival before the <nav> UID lands: room_id 0, the
+  # description is only the "pitch dark" placeholder, and there are no exits. current_or_new must
+  # not mint a junk room from that frame (it would orphan/duplicate the real room); it keeps the
+  # current room until a real frame/UID arrives.
+  describe 'blank/incomplete arrival-frame guard (current_or_new)' do
+    before do
+      allow(Script).to receive(:current).and_return(double('script'))
+      allow(map_class).to receive(:current).and_return(nil) # force the create/guard path
+      map_class.class_variable_set(:@@loaded, true)
+      # Seed a room so get_free_id has a base and there is a "current" to fall back to.
+      map_class.new(1, ['[[Seed Room]]'], ['seed desc'], ['Obvious exits: north'], [])
+      map_class.class_variable_set(:@@current_room_id, 1)
+    end
+
+    def stub_frame(room_id:, title:, description:, exits:)
+      allow(XMLData).to receive(:room_id).and_return(room_id)
+      allow(XMLData).to receive(:room_title).and_return(title)
+      allow(XMLData).to receive(:room_description).and_return(description)
+      allow(XMLData).to receive(:room_exits_string).and_return(exits)
+    end
+
+    it 'does not mint a stub when the frame is blank (no uid, pitch-dark desc, no exits)' do
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect { map_class.current_or_new }.not_to(change { map_class.list.compact.size })
+    end
+
+    it 'keeps the current room when it skips the blank frame' do
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect(map_class.current_or_new).to eq(map_class[1])
+    end
+
+    it 'still maps a normal complete arrival into a new room' do
+      stub_frame(room_id: 54202, title: '[[Catacombs, Labyrinth]]',
+                 description: 'The narrow passageways of these burial chambers give rise to new horrors.',
+                 exits: 'Obvious exits: east, west')
+      expect { map_class.current_or_new }.to change { map_class.list.compact.size }.by(1)
+    end
+
+    # Before any room resolves, @@current_room_id is the -1 sentinel. A blank frame
+    # must not fall back to set_current(-1), which would index @@list[-1] (the last
+    # room) and make an unrelated room current; it returns nil instead.
+    it 'returns nil (not the last room) for a blank frame when no room has resolved yet' do
+      map_class.class_variable_set(:@@current_room_id, -1)
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect(map_class.current_or_new).to be_nil
+    end
+
+    it 'does not mint a stub for a blank frame when current_room_id is the -1 sentinel' do
+      map_class.class_variable_set(:@@current_room_id, -1)
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect { map_class.current_or_new }.not_to(change { map_class.list.compact.size })
+    end
+  end
 end
 
 RSpec.describe Lich::Common::Room, 'DragonRealms' do

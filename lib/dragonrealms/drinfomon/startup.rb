@@ -65,10 +65,12 @@ module Lich
           #   - Thieves: parsed by check_known_thief_khri
           Lich::Util.issue_command("ability", /^You (?:know the Berserks|recall the spells you have learned from your training)|^From (?:your apprenticeship you remember practicing|the \\w+ tree)/, /^You (?:recall that you have \\d+ training sessions|can use SPELL STANCE \\[HELP\\]|have \\d+ available slot)/, quiet: true, timeout: 1)
 
-          # Ensure ShowRoomID and MonsterBold flags are enabled (one-time per character)
+          # Ensure the MonsterBold flag is enabled (one-time per character). ShowRoomID is no
+          # longer forced: room UIDs now come from the <nav> tag regardless of that flag, so
+          # whether the game shows inline room IDs is left entirely to the player's preference.
           unless UserVars.dependency_setflags
             flags = Array(Lich::Util.issue_command("flag", /^Usage/, /^For other setting options, see AVOID, SET, and TOGGLE/, quiet: true, timeout: 1, usexml: false))
-            required = ["ShowRoomID", "MonsterBold"]
+            required = ["MonsterBold"]
             required.each do |flag|
               fput("flag \#{flag} on") unless flags.any? { |f| f.match?(/\#{Regexp.escape(flag)}\\s+ON/) }
             end

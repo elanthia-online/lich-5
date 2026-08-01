@@ -362,6 +362,25 @@ module Lich
           return set_current(room.id)
         end
 
+        # Guard against a blank/incomplete arrival frame. DR occasionally streams a room whose
+        # <nav> UID is delayed or absent (room_id 0) before the room text populates: the
+        # description is only the "pitch dark" placeholder and there are no exits. Minting a
+        # room here creates a junk stub (empty title, no UID) that orphans or duplicates the
+        # real room. Keep the current room instead; the real room resolves by UID once the
+        # delayed nav (or a re-look) provides it.
+        if XMLData.room_id.zero? &&
+           XMLData.room_exits_string.to_s.strip.empty? &&
+           XMLData.room_description.to_s.strip == "It's pitch dark and you can't see a thing!"
+          echo 'Map: skipped blank/incomplete room frame (no uid, pitch-dark, no exits)'
+          # Keep the current room - but only if one has actually resolved.
+          # @@current_room_id is the -1 sentinel before the first match; passing
+          # that to set_current would index @@list[-1] (the last room) and make an
+          # unrelated room current, so fall back to nil in that case instead.
+          return set_current(@@current_room_id) if @@current_room_id.is_a?(Integer) && @@current_room_id >= 0
+
+          return nil
+        end
+
         id = get_free_id
         title = [XMLData.room_title]
         description = [XMLData.room_description.strip]
