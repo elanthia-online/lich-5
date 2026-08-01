@@ -555,6 +555,47 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       expect(map_class.ids_from_uid(230008)).to eq([5])
     end
   end
+
+  # DR sometimes streams a blank/incomplete arrival before the <nav> UID lands: room_id 0, the
+  # description is only the "pitch dark" placeholder, and there are no exits. current_or_new must
+  # not mint a junk room from that frame (it would orphan/duplicate the real room); it keeps the
+  # current room until a real frame/UID arrives.
+  describe 'blank/incomplete arrival-frame guard (current_or_new)' do
+    before do
+      allow(Script).to receive(:current).and_return(double('script'))
+      allow(map_class).to receive(:current).and_return(nil) # force the create/guard path
+      map_class.class_variable_set(:@@loaded, true)
+      # Seed a room so get_free_id has a base and there is a "current" to fall back to.
+      map_class.new(1, ['[[Seed Room]]'], ['seed desc'], ['Obvious exits: north'], [])
+      map_class.class_variable_set(:@@current_room_id, 1)
+    end
+
+    def stub_frame(room_id:, title:, description:, exits:)
+      allow(XMLData).to receive(:room_id).and_return(room_id)
+      allow(XMLData).to receive(:room_title).and_return(title)
+      allow(XMLData).to receive(:room_description).and_return(description)
+      allow(XMLData).to receive(:room_exits_string).and_return(exits)
+    end
+
+    it 'does not mint a stub when the frame is blank (no uid, pitch-dark desc, no exits)' do
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect { map_class.current_or_new }.not_to(change { map_class.list.compact.size })
+    end
+
+    it 'keeps the current room when it skips the blank frame' do
+      stub_frame(room_id: 0, title: '[]',
+                 description: "It's pitch dark and you can't see a thing!", exits: '')
+      expect(map_class.current_or_new).to eq(map_class[1])
+    end
+
+    it 'still maps a normal complete arrival into a new room' do
+      stub_frame(room_id: 54202, title: '[[Catacombs, Labyrinth]]',
+                 description: 'The narrow passageways of these burial chambers give rise to new horrors.',
+                 exits: 'Obvious exits: east, west')
+      expect { map_class.current_or_new }.to change { map_class.list.compact.size }.by(1)
+    end
+  end
 end
 
 RSpec.describe Lich::Common::Room, 'DragonRealms' do

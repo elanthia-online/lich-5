@@ -538,13 +538,23 @@ module Lich
                   end
                   @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
                 elsif XMLData.game =~ /^DR/
-                  # - [Bosque Deriel, Hermit's Shacks] (a trailing " (230008)" is present only
-                  # when the game's ShowRoomID flag is ON). Parse the bracketed title only; the
-                  # room UID comes from the <nav rm=.../> tag (see the nav handler above), never
-                  # from this subtitle. Scraping it here would write 0 whenever ShowRoomID is OFF
-                  # and clobber the UID nav already captured for this room.
-                  room = attributes['subtitle'].match(/(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+)\))?/)
-                  @room_title = "[#{room[:roomtitle]}]"
+                  # - [Bosque Deriel, Hermit's Shacks] (a trailing UID marker is present only when
+                  # the game's ShowRoomID flag is ON): " (230008)" for a room that has a UID, or
+                  # " (**)" for a room that has none. The <nav rm=.../> tag is the primary UID
+                  # source (see the nav handler above), but it can arrive late or be absent on
+                  # some arrivals; when it is, this marker is the only UID signal the game gives,
+                  # so use it as a FALLBACK: a numeric marker sets the UID, and "(**)" clears it
+                  # to 0 (explicit "no UID"), which also drops any stale id from a prior room. A
+                  # ShowRoomID-OFF subtitle has no marker at all, so we leave room_id untouched
+                  # (never write 0 blindly, never clobber a good nav value; nav and subtitle name
+                  # the same room in the same frame). The title stays UID-free either way.
+                  # Guard the match: a blank/identity-less subtitle (e.g. " - ") has no "[...]"
+                  # and returns nil, so leave the prior title untouched rather than crash.
+                  room = attributes['subtitle'].match(%r{(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+|\*+)\))?})
+                  if room
+                    @room_title = "[#{room[:roomtitle]}]"
+                    @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid]
+                  end
                 else
                   @room_title = String.new
                 end
