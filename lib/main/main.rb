@@ -277,40 +277,35 @@ reconnect_if_wanted = proc {
       end
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
+    extract_game_key = proc do
+      key_entry = @launch_data.find { |opt| opt =~ /KEY=/ }
+      game_key_value = key_entry&.split('=', 2)&.last&.chomp
+      unless game_key_value
+        $stdout.puts "error: launch_data contains no KEY info"
+        Lich.log "error: launch_data contains no KEY info"
+        exit(1)
+      end
+      game_key_value
+    end
+    requires_game_key = false
     begin
       if ARGV.include?('--without-frontend')
         Frontend.client = Lich::Common::Authentication::LoginHelpers.resolve_headless_frontend(
           ARGV, detachable_client: !@argv_options[:detachable_client_port].nil?
         )
-        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-          $stdout.puts "error: launch_data contains no KEY info"
-          Lich.log "error: launch_data contains no KEY info"
-          exit(1)
-        end
+        requires_game_key = true
       elsif game =~ /SUKS/i
         Frontend.client = 'suks'
-        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-          $stdout.puts "error: launch_data contains no KEY info"
-          Lich.log "error: launch_data contains no KEY info"
-          exit(1)
-        end
+        requires_game_key = true
       elsif game =~ /SAGA/i && native_saga_launch
-        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-          $stdout.puts "error: launch_data contains no KEY info"
-          Lich.log "error: launch_data contains no KEY info"
-          exit(1)
-        end
+        requires_game_key = true
       elsif game =~ /SAGA/i
         raise Lich::Common::FrontendLauncher::UnsupportedError,
               'no native Saga launch adapter is available on this platform'
       elsif game =~ /AVALON/i
         launcher_cmd = Lich::Common::FrontendLauncher.command('avalon')
       elsif custom_launch
-        unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
-          $stdout.puts "error: launch_data contains no KEY info"
-          Lich.log "error: launch_data contains no KEY info"
-          exit(1)
-        end
+        requires_game_key = true
       else
         frontend_id = game =~ /WIZ/i ? 'wizard' : 'stormfront'
         launcher_cmd = Lich::Common::FrontendLauncher.command(frontend_id)
@@ -320,6 +315,7 @@ reconnect_if_wanted = proc {
       Lich.log "error: #{e.message}"
       exit(1)
     end
+    game_key = extract_game_key.call if requires_game_key
     gamecode.split('=').last
     gameport = gameport.split('=').last
     gamehost = gamehost.split('=').last
@@ -367,10 +363,15 @@ reconnect_if_wanted = proc {
       end
       localport = listener.local_address.ip_port
       if native_saga_launch
+        saga_host = if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
+                      @argv_options[:bind_address]
+                    else
+                      '127.0.0.1'
+                    end
         begin
           saga_plan = Lich::Common::FrontendLauncher.spawn_plan(
             'saga',
-            host: '127.0.0.1',
+            host: saga_host,
             port: localport,
             key: game_key,
             refresh: false
@@ -381,7 +382,7 @@ reconnect_if_wanted = proc {
           Lich.log "error: #{e.message}"
           exit(1)
         end
-        Lich.log "info: launching Saga environment handoff on 127.0.0.1:#{localport}"
+        Lich.log "info: launching Saga environment handoff on #{saga_host}:#{localport}"
         sal_filename = nil
       elsif custom_launch
         sal_filename = nil
@@ -419,7 +420,12 @@ reconnect_if_wanted = proc {
         end
 
         frontend_pid = if native_saga_launch
-                         spawn(saga_plan.environment, *saga_plan.argv)
+                         if saga_plan.argv.one?
+                           executable = saga_plan.argv.first
+                           spawn(saga_plan.environment, [executable, File.basename(executable)])
+                         else
+                           spawn(saga_plan.environment, *saga_plan.argv)
+                         end
                        else
                          spawn(launcher_cmd)
                        end

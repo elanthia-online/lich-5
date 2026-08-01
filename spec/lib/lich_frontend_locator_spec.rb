@@ -2,13 +2,15 @@
 
 require_relative '../spec_helper'
 require 'rbconfig'
-require 'shellwords'
+require 'open3'
 
 RSpec.describe 'Lich.seek frontend locator compatibility' do
   def run_lich(script)
     lib_path = File.expand_path('../../lib', __dir__)
     source = "$LOAD_PATH.unshift(#{lib_path.inspect}); require 'lich'; #{script}"
-    `#{Shellwords.escape(RbConfig.ruby)} -e #{Shellwords.escape(source)}`
+    output, status = Open3.capture2(RbConfig.ruby, '-e', source)
+    expect(status).to be_success
+    output
   end
 
   it 'delegates to FrontendLocator when the locator is loaded' do

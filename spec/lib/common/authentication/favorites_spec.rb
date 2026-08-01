@@ -348,6 +348,53 @@ RSpec.describe 'EntryStore Favorites' do
       expect(result.first[:char_name]).to eq('AnotherChar') # order 1
       expect(result.last[:char_name]).to eq('TestChar1')    # order 2
     end
+
+    it 'includes custom launch identity for precise favorite operations' do
+      data = sample_yaml_data
+      character = data['accounts']['ANOTHERUSER']['characters'].first
+      character['custom_launch'] = '/opt/warlock'
+      File.write(yaml_file, YAML.dump(data))
+
+      result = Lich::Common::Authentication::EntryStore.get_favorites(data_dir)
+
+      expect(result.first[:custom_launch]).to eq('/opt/warlock')
+    end
+  end
+
+  describe '.reorder_favorites' do
+    it 'reorders only the entry with the matching custom launch command' do
+      data = sample_yaml_data
+      data['accounts']['TESTUSER']['characters'] = [
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => nil, 'is_favorite' => true,
+          'favorite_order' => 1
+        },
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => '/opt/warlock', 'is_favorite' => true,
+          'favorite_order' => 2
+        }
+      ]
+      File.write(yaml_file, YAML.dump(data))
+
+      result = Lich::Common::Authentication::EntryStore.reorder_favorites(
+        data_dir,
+        [
+          {
+            username: 'TESTUSER', char_name: 'Warlock', game_code: 'GS3',
+            frontend: 'stormfront', custom_launch: '/opt/warlock'
+          }
+        ]
+      )
+
+      expect(result).to eq(true)
+      characters = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+                       .dig('accounts', 'TESTUSER', 'characters')
+      standard, custom = characters
+      expect(standard['favorite_order']).to eq(1)
+      expect(custom['favorite_order']).to eq(1)
+    end
   end
 
   describe '.sort_entries_with_favorites' do

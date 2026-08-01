@@ -68,7 +68,10 @@ RSpec.describe Lich::Common::SessionLauncher do
   end
 
   it 'maps Saga launch data back to the Saga CLI selector' do
-    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'GAME=SAGA'])
+    saga_launch_data = launch_data.reject { |line| line.start_with?('GAME=') }
+    saga_launch_data.concat(['CHARACTER=Tsetem', 'GAME=SAGA'])
+
+    described_class.launch(saga_launch_data)
 
     expect(described_class).to have_received(:spawn).with(
       '/usr/bin/ruby',

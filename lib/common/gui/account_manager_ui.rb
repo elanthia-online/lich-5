@@ -125,7 +125,7 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String) # Added favorites column
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
 
@@ -259,6 +259,7 @@ module Lich
               _game_name = iter[2] # Game name is in column 2, not character
               frontend_display = iter[3] # Frontend display name
               game_code = iter[4] # Game code is in hidden column 4
+              custom_launch = iter[6] # Custom launch is in hidden column 6
 
               if character.nil? || character.empty?
                 # This is an account node
@@ -313,7 +314,7 @@ module Lich
                              end
 
                   # Remove character with frontend precision
-                  if AccountManager.remove_character(@data_dir, account, character, game_code, frontend)
+                  if AccountManager.remove_character(@data_dir, account, character, game_code, frontend, custom_launch)
                     @msgbox.call("Character removed successfully.")
                     populate_accounts_view(accounts_store)
                     # Notify other tabs of data change
@@ -321,7 +322,8 @@ module Lich
                       account: account,
                       character: character,
                       game_code: game_code,
-                      frontend: frontend
+                      frontend: frontend,
+                      custom_launch: custom_launch
                     })
                   else
                     @msgbox.call("Failed to remove character.")
@@ -873,6 +875,7 @@ module Lich
                   character = iter[1]
                   game_code = iter[4]
                   frontend_display = iter[3]
+                  custom_launch = iter[6]
 
                   # Convert display name back to internal frontend format
                   frontend = case frontend_display.downcase
@@ -887,7 +890,9 @@ module Lich
                              end
 
                   # Toggle favorite status with frontend precision
-                  new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code, frontend)
+                  new_status = FavoritesManager.toggle_favorite(
+                    data_dir, account, character, game_code, frontend, custom_launch
+                  )
                   # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
                   iter[5] = new_status ? '★' : '☆'
                   # rubocop:enable Custom/AsciiOnlySource
@@ -897,6 +902,7 @@ module Lich
                     account: account,
                     character: character,
                     game_code: game_code,
+                    custom_launch: custom_launch,
                     is_favorite: new_status
                   })
                 end
@@ -1170,9 +1176,12 @@ module Lich
                 char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
               end
               char_iter[4] = character[:game_code] # Store game_code in hidden column
+              char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
 
               # Add favorites information with frontend precision
-              is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code], character[:frontend])
+              is_favorite = FavoritesManager.is_favorite?(
+                @data_dir, account, character[:char_name], character[:game_code], character[:frontend], character[:custom_launch]
+              )
               # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               char_iter[5] = is_favorite ? '★' : '☆'
               # rubocop:enable Custom/AsciiOnlySource

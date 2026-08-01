@@ -621,6 +621,7 @@ module Lich
                     game_code: character['game_code'],
                     game_name: character['game_name'],
                     frontend: character['frontend'],
+                    custom_launch: character['custom_launch'],
                     favorite_order: character['favorite_order'] || 999,
                     favorite_added: character['favorite_added']
                   }
@@ -652,12 +653,20 @@ module Lich
 
             # Update favorite order for each character in the provided order
             ordered_favorites.each_with_index do |favorite_info, index|
+              custom_launch = if favorite_info.key?(:custom_launch)
+                                favorite_info[:custom_launch]
+                              elsif favorite_info.key?('custom_launch')
+                                favorite_info['custom_launch']
+                              else
+                                :__unset
+                              end
               character = find_character(
                 yaml_data,
                 favorite_info[:username] || favorite_info['username'],
                 favorite_info[:char_name] || favorite_info['char_name'],
                 favorite_info[:game_code] || favorite_info['game_code'],
-                favorite_info[:frontend] || favorite_info['frontend']
+                favorite_info[:frontend] || favorite_info['frontend'],
+                custom_launch
               )
 
               if character && character['is_favorite']
@@ -913,8 +922,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Hash, nil] Entry hash if found, nil otherwise
-        def self.find_entry_in_legacy_format(entry_data, username, char_name, game_code, frontend = nil)
+        def self.find_entry_in_legacy_format(entry_data, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           entry_data.find do |entry|
             # Match on username first
             next unless entry[:user_id] == username
@@ -922,12 +932,14 @@ module Lich
             # Apply same matching logic as find_character
             matches_basic = entry[:char_name] == char_name && entry[:game_code] == game_code
 
+            matches_custom_launch = custom_launch == :__unset || entry[:custom_launch].to_s.strip == custom_launch.to_s.strip
+
             if frontend.nil?
               # Backward compatibility: if no frontend specified, match any frontend
-              matches_basic
+              matches_basic && matches_custom_launch
             else
               # Frontend precision: must match exact frontend
-              matches_basic && entry[:frontend] == frontend
+              matches_basic && entry[:frontend] == frontend && matches_custom_launch
             end
           end
         end
