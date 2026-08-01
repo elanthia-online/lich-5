@@ -1810,9 +1810,9 @@ def respond(first = "", *messages)
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     if Frontend.supports_mono?
-      str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
+      str = "<output class=\"mono\"/>\r\n#{Lich::Common::XmlEntities.encode(str)}<output class=\"\"/>\r\n"
     elsif Frontend.client.eql?('profanity')
-      str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
+      str = Lich::Common::XmlEntities.encode(str)
     end
     $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
     detachable_clients_respond(str)
@@ -2281,7 +2281,14 @@ def detachable_clients_respond(string)
       next
     end
 
-    client.puts_main_stream(string)
+    # Isolate per-client failures: a raise from one client's socket must not
+    # abort the loop and starve the remaining attached clients of this output.
+    # Mirrors the per-client rescue in detachable_clients_close.
+    begin
+      client.puts_main_stream(string)
+    rescue StandardError => e
+      Lich.log "warning: detachable_clients_respond: #{e}"
+    end
     detachable_client_unregister(client) unless client.alive?
   end
 end
@@ -2301,16 +2308,16 @@ def detachable_client_send_init(client)
   init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
   init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
   init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-  init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+  init_str.concat "<spell>#{Lich::Common::XmlEntities.encode(XMLData.prepared_spell)}</spell>"
   %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
     init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
   end
   if XMLData.game.to_s.match?(/GS/)
     init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
-    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-    init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-    init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.mind_text)}'/>"
+    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.encumbrance_text)}'/>"
+    init_str.concat "<right>#{Lich::Common::XmlEntities.encode(GameObj.right_hand.name)}</right>"
+    init_str.concat "<left>#{Lich::Common::XmlEntities.encode(GameObj.left_hand.name)}</left>"
     %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
       if Wounds.send(area) > 0
         init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
@@ -2382,6 +2389,21 @@ rescue StandardError => e
 ensure
   client.close rescue nil
   detachable_client_unregister(client)
+  # Mirror the connect-side "listening on" line so an operator sharing the
+  # controlling terminal (for example a wrapper script that exec's a frontend)
+  # sees which session dropped and from where. Emitted after unregister so the
+  # attached count reflects the clients that remain.
+  if $_DETACHABLE_LISTENER_
+    session_name = Lich::Common::SessionLifecycle.resolve_session_name(
+      argv: ARGV, account_character: (Lich::Common::Account.character rescue nil)
+    )
+    $stdout.puts Lich::Main::DetachableClientNotice.disconnected(
+      name: session_name,
+      host: $_DETACHABLE_LISTENER_[:host],
+      port: $_DETACHABLE_LISTENER_[:port],
+      attached: detachable_client_count
+    ) rescue nil
+  end
   Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
 end
 
@@ -2594,6 +2616,7 @@ def do_client(client_string)
       end
       respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
       Lich.hide_uid_flag = new_value
+      respond "Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2614,6 +2637,15 @@ def do_client(client_string)
       end
       respond "Changing Lich to display RealID#s to #{new_value}"
       Lich.display_uid = new_value
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display roomid(?:\s+(title|line|both))?/i
+      requested = Regexp.last_match(1)&.downcase
+      if requested.nil?
+        respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
+        respond "Usage: ;display roomid <title|line|both>  (title = in the room name line, line = a Room Number line below the room, both = both places)"
+      else
+        Lich.display_roomid_location = requested
+        respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
+      end
     elsif cmd =~ /^display exits?(?: (true|false))?/i
       new_value = !(Lich.display_exits)
       case Regexp.last_match(1)
@@ -2799,7 +2831,8 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       elsif XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display flaguid           toggle display of RealID in Room Title with FLAG ShowRoomID (required for Lich5 to be ON)"
+        respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
+        respond "   #{$clean_lich_char}display roomid <where>    where to show room id/RealID: title (room name line), line (below-room line), or both"
       end
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"

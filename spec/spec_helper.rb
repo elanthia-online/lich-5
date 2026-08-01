@@ -75,6 +75,7 @@ RSpec.configure do |config|
     # Lich messaging
     Lich::Messaging.clear_messages! if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
+    Lich.display_roomid_location = nil if defined?(Lich) && Lich.respond_to?(:display_roomid_location=)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
     Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
     # Drain Infomon's async write queue so a queued INSERT from a prior example
@@ -532,7 +533,7 @@ module XMLData
   @dr_active_spells_stellar_percentage = 0
 
   class << self
-    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time
+    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
     attr_accessor :current_target_ids
 
@@ -567,6 +568,7 @@ module XMLData
       @dialogs = {}
       @injuries = {}
       @room_id = 0
+      @previous_nav_rm = nil
       @room_title = ''
       @room_description = ''
       @room_exits = []
@@ -700,7 +702,7 @@ module Lich
   class << self
     # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
     attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
-    attr_accessor :display_expgains
+    attr_accessor :display_expgains, :display_roomid_location
 
     def db
       @db ||= MockDB.new
@@ -1099,6 +1101,14 @@ module Lich
         def discard_staged_refreshes
           nil
         end
+
+        # Room-collection clears the <nav> handler invokes on arrival. The mock only needs
+        # them to exist as no-ops so xmlparser specs can drive a real <nav> tag end-to-end.
+        def clear_loot; end
+
+        def clear_pcs; end
+
+        def clear_room_desc; end
 
         def set_right_hand(obj)
           @right_hand = obj

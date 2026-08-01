@@ -145,6 +145,7 @@ module Lich
   @@display_room_links   = nil # boolean
   @@display_room_mono    = nil # boolean
   @@display_expgains     = nil # boolean (DragonRealms only)
+  @@display_roomid_location = nil # string (DragonRealms only): "title" | "line" | "both"
   @@hide_uid_flag        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
@@ -877,6 +878,49 @@ module Lich
     @@display_uid = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_uid',?);", [@@display_uid.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # The valid values for Lich.display_roomid_location.
+  ROOMID_LOCATIONS = %w[title line both].freeze
+
+  # Where DragonRealms renders the optional room id / UID chosen via ;display lichid and
+  # ;display uid: "title" injects into the room-name line (visible on every front-end),
+  # "line" is the historical "Room Number:" line below the room, and "both" does both.
+  # GemStone ignores this setting (it always injects into the title line). The value is
+  # read fresh from the lich_settings table on first access and then memoized.
+  # @return [String, nil] one of ROOMID_LOCATIONS, or nil before a game has been identified
+  def Lich.display_roomid_location
+    if @@display_roomid_location.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_roomid_location';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      # Default to the historical below-room line once a game is known; leave unresolved
+      # (nil) until then, matching the other display_* getters.
+      val = "line" if val.nil? && XMLData.game != ""
+      @@display_roomid_location = (ROOMID_LOCATIONS.include?(val) ? val : "line") unless val.nil?
+    end
+    return @@display_roomid_location
+  end
+
+  # Sets the DragonRealms room-id display placement and persists it. An unrecognized value is
+  # ignored (the current setting is retained) so a typo can never blank the display or feed the
+  # renderer an invalid placement.
+  # @param val [String, Symbol] one of ROOMID_LOCATIONS ("title", "line", or "both"); case-insensitive
+  # @return [void]
+  def Lich.display_roomid_location=(val)
+    normalized = val.to_s.downcase
+    return unless ROOMID_LOCATIONS.include?(normalized)
+
+    @@display_roomid_location = normalized
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_roomid_location',?);", [normalized.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry

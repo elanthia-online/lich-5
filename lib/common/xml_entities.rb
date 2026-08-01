@@ -15,6 +15,14 @@ module Lich
 
         str.gsub('&lt;', '<').gsub('&gt;', '>').gsub('&quot;', '"').gsub('&apos;', "'").gsub('&amp;', '&')
       end
+
+      # Encodes the three markup-significant characters so a raw value can be
+      # safely embedded in an XML-like payload sent to a frontend. &amp; is
+      # encoded first so the ampersands introduced by encoding < and > are not
+      # themselves double-encoded.
+      def self.encode(str)
+        str.to_s.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
+      end
     end
   end
 end

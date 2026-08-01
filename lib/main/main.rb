@@ -67,6 +67,9 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
   require File.join(LIB_DIR, 'main', 'user_exit_dispatch.rb')
+  # Detachable listener stdout notices (connect/disconnect); the disconnect
+  # notice is emitted from handle_detachable_client in global_defs at runtime.
+  require File.join(LIB_DIR, 'main', 'detachable_client_notice.rb')
 
   # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
   # kills scripts and runs their before_dying hooks inline (any of which can
@@ -827,11 +830,13 @@ reconnect_if_wanted = proc {
               end
               detachable_listener_connected(detachable_client_count.positive?)
 
-              listen_ip = $_DETACHABLE_LISTENER_[:host]
-              listen_ip = "[#{listen_ip}]" if server.local_address.ipv6?
-              listen_address = "#{listen_ip}:#{$_DETACHABLE_LISTENER_[:port]}"
+              listen_address = Lich::Main::DetachableClientNotice.address(
+                $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port]
+              )
               Lich.log "info: detachable client server listening on #{listen_address}"
-              $stdout.puts "--- Lich: detachable client listening on #{listen_address}" rescue nil
+              $stdout.puts Lich::Main::DetachableClientNotice.listening(
+                host: $_DETACHABLE_LISTENER_[:host], port: $_DETACHABLE_LISTENER_[:port]
+              ) rescue nil
             end
 
             accepted_socket, = server.accept
