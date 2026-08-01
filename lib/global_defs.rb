@@ -1810,9 +1810,9 @@ def respond(first = "", *messages)
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     if Frontend.supports_mono?
-      str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
+      str = "<output class=\"mono\"/>\r\n#{Lich::Common::XmlEntities.encode(str)}<output class=\"\"/>\r\n"
     elsif Frontend.client.eql?('profanity')
-      str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
+      str = Lich::Common::XmlEntities.encode(str)
     end
     $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
     detachable_clients_respond(str)
@@ -2281,7 +2281,14 @@ def detachable_clients_respond(string)
       next
     end
 
-    client.puts_main_stream(string)
+    # Isolate per-client failures: a raise from one client's socket must not
+    # abort the loop and starve the remaining attached clients of this output.
+    # Mirrors the per-client rescue in detachable_clients_close.
+    begin
+      client.puts_main_stream(string)
+    rescue StandardError => e
+      Lich.log "warning: detachable_clients_respond: #{e}"
+    end
     detachable_client_unregister(client) unless client.alive?
   end
 end
@@ -2301,16 +2308,16 @@ def detachable_client_send_init(client)
   init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
   init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
   init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-  init_str.concat "<spell>#{XMLData.prepared_spell}</spell>"
+  init_str.concat "<spell>#{Lich::Common::XmlEntities.encode(XMLData.prepared_spell)}</spell>"
   %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
     init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
   end
   if XMLData.game.to_s.match?(/GS/)
     init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{XMLData.mind_text}'/>"
-    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{XMLData.encumbrance_text}'/>"
-    init_str.concat "<right>#{GameObj.right_hand.name}</right>"
-    init_str.concat "<left>#{GameObj.left_hand.name}</left>"
+    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.mind_text)}'/>"
+    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.encumbrance_text)}'/>"
+    init_str.concat "<right>#{Lich::Common::XmlEntities.encode(GameObj.right_hand.name)}</right>"
+    init_str.concat "<left>#{Lich::Common::XmlEntities.encode(GameObj.left_hand.name)}</left>"
     %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
       if Wounds.send(area) > 0
         init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
