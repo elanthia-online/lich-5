@@ -223,7 +223,12 @@ module Lich
         # @return [nil]
         def normalize_tag_lists
           list.compact.each do |room|
-            room.tags = room.tags unless room.tags.is_a?(TagList)
+            existing = room.tags
+            next if existing.is_a?(TagList)
+
+            # Round trip through the writer, which is what rewraps the plain
+            # Array as a TagList bound to this class.
+            room.tags = existing
           end
           reset_tag_index
         end
