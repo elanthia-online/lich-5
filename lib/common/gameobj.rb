@@ -96,6 +96,37 @@ module Lich
       # ---------------------------------------------------------------------------
 
       # ---------------------------------------------------------------------------
+      # Staging buffers for atomic registry refresh.
+      #
+      # While a stream or component is being parsed, incoming objects accumulate
+      # in a private staging buffer instead of the published registry. A matching
+      # +commit_*+ swaps the buffer in with a single reference assignment, so a
+      # reader never observes an empty or half-filled registry mid-stream - it
+      # sees the previous complete snapshot until commit, then the new one.
+      #
+      # Each buffer is +nil+ when no refresh is in flight and an Array (or Hash,
+      # for the paired status maps) while one is open. This mirrors the existing
+      # +@dr_active_spells_tmp+ swap-on-prompt pattern in xmlparser.rb.
+      #
+      # Under MRI the reference swap is atomic and the reader's +dup+ is
+      # consistent, so no lock is required.
+      # ---------------------------------------------------------------------------
+
+      @@staging_inv           = nil
+      @@staging_reserve       = nil
+      @@staging_loot          = nil
+      @@staging_npcs          = nil
+      @@staging_npc_status    = nil
+      @@staging_pcs           = nil
+      @@staging_pc_status     = nil
+      @@staging_room_desc     = nil
+      @@staging_fam_room_desc = nil
+      @@staging_fam_loot      = nil
+      @@staging_fam_npcs      = nil
+      @@staging_fam_pcs       = nil
+      @@staging_contents      = {}
+
+      # ---------------------------------------------------------------------------
       # Instance interface
       # ---------------------------------------------------------------------------
 
@@ -174,15 +205,22 @@ module Lich
       # Returns a comma-separated string of matching type tags for this object,
       # or +nil+ if no types match.
       #
-      # Results are memoized in +@@type_cache+ by name.
+      # Results are memoized in +@@type_cache+ under a composite key combining
+      # +noun+, +name+, and {#full_name} - i.e. every value {#matching_data_keys}
+      # inspects. Two objects that differ in any matcher input (for example a
+      # shared +full_name+ but a different +noun+, or differing
+      # +before_name+/+after_name+) are therefore cached independently rather
+      # than sharing an entry. The +"|"+-delimited form mirrors the composite
+      # keys used by +@@index+.
       #
       # @return [String, nil]
       def type
         GameObj.load_data if @@type_data.empty?
-        return @@type_cache[@name] if @@type_cache.key?(@name)
+        cache_key = "#{@noun}|#{@name}|#{full_name}"
+        return @@type_cache[cache_key] if @@type_cache.key?(cache_key)
 
         matches = matching_data_keys(@@type_data)
-        @@type_cache[@name] = matches.empty? ? nil : matches.join(',')
+        @@type_cache[cache_key] = matches.empty? ? nil : matches.join(',')
       end
 
       # Returns whether this object matches the given type tag.
@@ -219,13 +257,20 @@ module Lich
 
       # Sets the status of this NPC or PC by ID.
       #
+      # When a room-objects or room-players refresh is in flight, the object
+      # lives in the staging buffer rather than the published registry, so this
+      # checks the staging pools first and writes to the staging status map.
+      # When no refresh is open it behaves exactly as before.
+      #
       # @param val [String, nil] the new status value
       # @return [String, nil]
       def status=(val)
-        if @@npcs.any? { |npc| npc.id == @id }
-          @@npc_status[@id] = val
-        elsif @@pcs.any? { |pc| pc.id == @id }
-          @@pc_status[@id] = val
+        npc_pool = @@staging_npcs || @@npcs
+        pc_pool  = @@staging_pcs  || @@pcs
+        if npc_pool.any? { |npc| npc.id == @id }
+          (@@staging_npc_status || @@npc_status)[@id] = val
+        elsif pc_pool.any? { |pc| pc.id == @id }
+          (@@staging_pc_status || @@pc_status)[@id] = val
         end
       end
 
@@ -241,8 +286,8 @@ module Lich
       # @param status [String, nil]
       # @return [GameObj]
       def self.new_npc(id, noun, name, status = nil)
-        obj = find_or_create(@@npcs, id, noun, name)
-        @@npc_status[obj.id] = status
+        obj = find_or_create(@@staging_npcs || @@npcs, id, noun, name)
+        (@@staging_npc_status || @@npc_status)[obj.id] = status
         obj
       end
 
@@ -253,7 +298,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_loot(id, noun, name)
-        find_or_create(@@loot, id, noun, name)
+        find_or_create(@@staging_loot || @@loot, id, noun, name)
       end
 
       # Creates and registers a new PC.
@@ -264,8 +309,8 @@ module Lich
       # @param status [String, nil]
       # @return [GameObj]
       def self.new_pc(id, noun, name, status = nil)
-        obj = find_or_create(@@pcs, id, noun, name)
-        @@pc_status[obj.id] = status
+        obj = find_or_create(@@staging_pcs || @@pcs, id, noun, name)
+        (@@staging_pc_status || @@pc_status)[obj.id] = status
         obj
       end
 
@@ -280,10 +325,10 @@ module Lich
       # @return [GameObj]
       def self.new_inv(id, noun, name, container = nil, before = nil, after = nil)
         if container
-          @@contents[container] ||= []
-          find_or_create(@@contents[container], id, noun, name, before, after)
+          target = @@staging_contents[container] || (@@contents[container] ||= [])
+          find_or_create(target, id, noun, name, before, after)
         else
-          find_or_create(@@inv, id, noun, name, before, after)
+          find_or_create(@@staging_inv || @@inv, id, noun, name, before, after)
         end
       end
 
@@ -298,7 +343,7 @@ module Lich
       # @return [GameObj]
       def self.new_reserve(id, noun, name)
         @@reserve ||= []
-        find_or_create(@@reserve, id, noun, name)
+        find_or_create(@@staging_reserve || @@reserve, id, noun, name)
       end
 
       # Creates and registers a new room description object.
@@ -308,7 +353,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_room_desc(id, noun, name)
-        find_or_create(@@room_desc, id, noun, name)
+        find_or_create(@@staging_room_desc || @@room_desc, id, noun, name)
       end
 
       # Creates and registers a new familiar room description object.
@@ -318,7 +363,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_fam_room_desc(id, noun, name)
-        find_or_create(@@fam_room_desc, id, noun, name)
+        find_or_create(@@staging_fam_room_desc || @@fam_room_desc, id, noun, name)
       end
 
       # Creates and registers a new familiar loot object.
@@ -328,7 +373,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_fam_loot(id, noun, name)
-        find_or_create(@@fam_loot, id, noun, name)
+        find_or_create(@@staging_fam_loot || @@fam_loot, id, noun, name)
       end
 
       # Creates and registers a new familiar NPC.
@@ -338,7 +383,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_fam_npc(id, noun, name)
-        find_or_create(@@fam_npcs, id, noun, name)
+        find_or_create(@@staging_fam_npcs || @@fam_npcs, id, noun, name)
       end
 
       # Creates and registers a new familiar PC.
@@ -348,7 +393,7 @@ module Lich
       # @param name [String, nil]
       # @return [GameObj]
       def self.new_fam_pc(id, noun, name)
-        find_or_create(@@fam_pcs, id, noun, name)
+        find_or_create(@@staging_fam_pcs || @@fam_pcs, id, noun, name)
       end
 
       # Sets the right-hand object, replacing any existing one.
@@ -506,11 +551,15 @@ module Lich
       # @return [void]
       def self.clear_fam_pcs       = @@fam_pcs.clear
 
-      # Clears all container registries. The shared identity index is preserved
+      # Clears all container registries. Any in-flight staged container
+      # refreshes are aborted as well. The shared identity index is preserved
       # so previously seen objects are reused if re-encountered.
       #
       # @return [void]
-      def self.clear_all_containers = @@contents.clear
+      def self.clear_all_containers
+        @@staging_contents.clear
+        @@contents.clear
+      end
 
       # Resets a single container's contents to an empty array.
       # The shared identity index is preserved.
@@ -522,12 +571,189 @@ module Lich
       end
 
       # Removes a container and all its contents from the registry.
+      # Any in-flight staged refresh for the same container is aborted so a
+      # later commit cannot resurrect the deleted key.
       # The shared identity index is preserved.
       #
       # @param container_id [String]
       # @return [GameObj, nil]
       def self.delete_container(container_id)
+        @@staging_contents.delete(container_id)
         @@contents.delete(container_id)
+      end
+
+      # ---------------------------------------------------------------------------
+      # Staged registry refresh - begin/commit pairs
+      #
+      # +begin_*+ opens a refresh by allocating a fresh staging buffer; the
+      # published registry is left untouched and stays visible to readers.
+      # Incoming objects route into the staging buffer (see the +new_*+ methods).
+      # +commit_*+ publishes the staged buffer with a single reference swap and
+      # closes the refresh.
+      #
+      # Each +commit_*+ is a no-op when its refresh was never opened, so an
+      # interrupted stream simply leaves the previous published snapshot in
+      # place rather than emptying it.
+      #
+      # These intentionally do *not* replace the +clear_*+ methods: room
+      # movement (+<nav>+) still clears immediately via +clear_*+ to publish an
+      # empty "contents unknown" state, and the subsequent component fill is the
+      # staged part.
+      # ---------------------------------------------------------------------------
+
+      # @return [Array]
+      def self.begin_inv = @@staging_inv = []
+
+      # @return [void]
+      def self.commit_inv
+        return if @@staging_inv.nil?
+
+        @@inv         = @@staging_inv
+        @@staging_inv = nil
+      end
+
+      # @return [Array]
+      def self.begin_reserve = @@staging_reserve = []
+
+      # @return [void]
+      def self.commit_reserve
+        return if @@staging_reserve.nil?
+
+        @@reserve         = @@staging_reserve
+        @@staging_reserve = nil
+      end
+
+      # Opens a refresh of the room object registries (loot + npcs + npc status).
+      #
+      # @return [void]
+      def self.begin_room_objs
+        @@staging_loot       = []
+        @@staging_npcs       = []
+        @@staging_npc_status = {}
+      end
+
+      # @return [void]
+      def self.commit_room_objs
+        return if @@staging_npcs.nil?
+
+        @@loot               = @@staging_loot
+        @@npcs               = @@staging_npcs
+        @@npc_status         = @@staging_npc_status
+        @@staging_loot       = nil
+        @@staging_npcs       = nil
+        @@staging_npc_status = nil
+      end
+
+      # Opens a refresh of the room player registries (pcs + pc status).
+      #
+      # @return [void]
+      def self.begin_room_players
+        @@staging_pcs       = []
+        @@staging_pc_status = {}
+      end
+
+      # @return [void]
+      def self.commit_room_players
+        return if @@staging_pcs.nil?
+
+        @@pcs               = @@staging_pcs
+        @@pc_status         = @@staging_pc_status
+        @@staging_pcs       = nil
+        @@staging_pc_status = nil
+      end
+
+      # @return [Array]
+      def self.begin_room_desc = @@staging_room_desc = []
+
+      # @return [void]
+      def self.commit_room_desc
+        return if @@staging_room_desc.nil?
+
+        @@room_desc         = @@staging_room_desc
+        @@staging_room_desc = nil
+      end
+
+      # Opens a refresh of the four familiar registries.
+      #
+      # @return [void]
+      def self.begin_familiar
+        @@staging_fam_room_desc = []
+        @@staging_fam_loot      = []
+        @@staging_fam_npcs      = []
+        @@staging_fam_pcs       = []
+      end
+
+      # @return [void]
+      def self.commit_familiar
+        return if @@staging_fam_npcs.nil?
+
+        @@fam_room_desc         = @@staging_fam_room_desc
+        @@fam_loot              = @@staging_fam_loot
+        @@fam_npcs              = @@staging_fam_npcs
+        @@fam_pcs               = @@staging_fam_pcs
+        @@staging_fam_room_desc = nil
+        @@staging_fam_loot      = nil
+        @@staging_fam_npcs      = nil
+        @@staging_fam_pcs       = nil
+      end
+
+      # Opens a refresh of a single container's contents.
+      #
+      # @param container_id [String]
+      # @return [Array]
+      def self.begin_container(container_id) = @@staging_contents[container_id] = []
+
+      # @param container_id [String]
+      # @return [void]
+      def self.commit_container(container_id)
+        staged = @@staging_contents.delete(container_id)
+        return if staged.nil?
+
+        @@contents[container_id] = staged
+      end
+
+      # Publishes every open container staging buffer. Called at the +prompt+
+      # that terminates a command burst, the reliable close signal for the
+      # +clearContainer+ ... +inv+ fill sequence (which has no closing tag).
+      # No-op when no container refresh is open.
+      #
+      # @return [void]
+      def self.commit_all_containers
+        return if @@staging_contents.empty?
+
+        @@staging_contents.each { |id, staged| @@contents[id] = staged }
+        @@staging_contents.clear
+      end
+
+      # Discards every in-flight staged refresh without publishing it.
+      #
+      # Called by +XMLParser#reset+ after a malformed or truncated fragment
+      # forces the parser to resynchronize. Any refresh open at that moment is
+      # known to be incomplete, so its buffer is dropped rather than published:
+      # the previously published snapshot stays visible, which is the same
+      # failure mode as an interrupted stream that never commits.
+      #
+      # Without this, an interrupted container fill would be published as
+      # authoritative by the next +commit_all_containers+ at the following
+      # +prompt+, and objects held only in an abandoned buffer would keep
+      # appearing in +live_registry_objects+ (blocking +prune_index!+) until the
+      # next refresh of that same registry replaced it.
+      #
+      # @return [void]
+      def self.discard_staged_refreshes
+        @@staging_inv           = nil
+        @@staging_reserve       = nil
+        @@staging_loot          = nil
+        @@staging_npcs          = nil
+        @@staging_npc_status    = nil
+        @@staging_pcs           = nil
+        @@staging_pc_status     = nil
+        @@staging_room_desc     = nil
+        @@staging_fam_room_desc = nil
+        @@staging_fam_loot      = nil
+        @@staging_fam_npcs      = nil
+        @@staging_fam_pcs       = nil
+        @@staging_contents.clear
       end
 
       # ---------------------------------------------------------------------------
@@ -921,15 +1147,21 @@ module Lich
         end
       end
 
-      # Returns the keys from +data_hash+ whose +:name+ or +:noun+ patterns match
-      # this object, subject to optional +:exclude+ filtering.
+      # Returns the keys from +data_hash+ whose +:name+, +:noun+, or +:full_name+
+      # patterns match this object, subject to optional +:exclude+ filtering.
+      #
+      # +:name+ and +:exclude+ are matched against +name+, +:noun+ against +noun+,
+      # and +:full_name+ against {#full_name} (the composed +before_name+ +
+      # +name+ + +after_name+). Any absent pattern is +nil+ and matches nothing,
+      # so an entry that omits +:full_name+ behaves exactly as before.
       #
       # @param data_hash [Hash]
       # @return [Array<String>]
       def matching_data_keys(data_hash)
+        obj_full_name = full_name
         data_hash.keys.select do |t|
           entry = data_hash[t]
-          matches = (@name =~ entry[:name] || @noun =~ entry[:noun])
+          matches = (@name =~ entry[:name] || @noun =~ entry[:noun] || obj_full_name =~ entry[:full_name])
           excluded = entry[:exclude] && @name =~ entry[:exclude]
           matches && !excluded
         end
@@ -1091,6 +1323,11 @@ module Lich
             *@@loot, *@@npcs, *@@pcs, *@@inv, *@@reserve,
             *@@room_desc, *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
             *@@contents.values.flatten,
+            *Array(@@staging_inv), *Array(@@staging_reserve), *Array(@@staging_loot),
+            *Array(@@staging_npcs), *Array(@@staging_pcs), *Array(@@staging_room_desc),
+            *Array(@@staging_fam_loot), *Array(@@staging_fam_npcs),
+            *Array(@@staging_fam_pcs), *Array(@@staging_fam_room_desc),
+            *@@staging_contents.values.flatten,
             @@right_hand, @@left_hand
           ].compact
           defined?(Set) ? Set.new(objs) : objs
@@ -1169,7 +1406,7 @@ module Lich
         # When +merge: true+, existing patterns are merged via +Regexp.union+.
         #
         # Uses Ox in generic mode. skip: :skip_none keeps the regex text in
-        # +<name>/<noun>/<exclude>+ verbatim. Unlike the permissive SAX parser,
+        # +<name>/<noun>/<full_name>/<exclude>+ verbatim. Unlike the permissive SAX parser,
         # Ox.load is strict and raises Ox::ParseError on malformed XML, so the
         # caller's rescue still treats a corrupt data file as a load failure.
         #
@@ -1198,7 +1435,7 @@ module Lich
             next unless key
 
             target[key] ||= {}
-            %i[name noun exclude].each do |field|
+            %i[name noun full_name exclude].each do |field|
               text = e.locate(field.to_s).first&.text
               next if text.nil? || text.empty?
 

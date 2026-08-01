@@ -41,7 +41,7 @@ RSpec.describe Lich::Common::BindHostResolver do
 
       expect {
         described_class.resolve('tailscale', address_list: addresses, route_probe: no_route)
-      }.to raise_error(described_class::Error, /start Tailscale or use lan:PORT/)
+      }.to raise_error(described_class::Error, /start Tailscale or use the lan keyword/)
     end
   end
 

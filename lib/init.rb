@@ -448,12 +448,12 @@ end
 
 begin
   require 'sqlite3'
-rescue LoadError
+rescue LoadError => sqlite_load_error
   # sqlite3 is a required dependency. It is restored only from an approved,
   # hash-verified Ruby4Lich5 manifest unit; this never falls back to `gem
   # install` or a user GEM_HOME.
   unless Lich::GemCheck.self_healing_supported?
-    Lich::GemCheck.alert(missing: ['sqlite3'], groups: [:default])
+    Lich::GemCheck.alert(missing: ['sqlite3'], groups: [:default], error: sqlite_load_error)
     exit 1
   end
 
@@ -481,7 +481,7 @@ unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
   begin
     require 'gtk3'
     HAVE_GTK = true
-  rescue LoadError
+  rescue LoadError => gtk_load_error
     # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
     # native dependency therefore restores the complete, ordered closure.
     if Lich::GemCheck.self_healing_supported?
@@ -507,7 +507,7 @@ unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
     else
       # GTK is required unless the user explicitly selected a headless launch.
       # Do not infer that choice from DISPLAY, TTY, or cron environment state.
-      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk])
+      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: gtk_load_error)
       exit 1
     end
   end

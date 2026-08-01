@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../../lib/common/limitedarray'
 require_relative '../../../lib/common/feature_flags'
 # Load the real hook classes so Script's kill cleanup resolves them
 # deterministically (rather than the top-level spec_helper mocks), letting us
@@ -9,7 +10,7 @@ require_relative '../../../lib/common/downstreamhook'
 require_relative '../../../lib/common/upstreamhook'
 
 RSpec.describe 'Lich::Common::Script kill metrics' do
-  let(:thread_group) { instance_double(ThreadGroup, list: [], add: true) }
+  let(:thread_group) { ThreadGroup.new }
   let(:script_class) { Lich::Common::Script }
 
   before(:context) do
@@ -17,7 +18,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
   end
 
   after(:context) do
-    %i[ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+    %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
       Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
     end
     $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
@@ -25,6 +26,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
 
   before do
     script_class.class_variable_set(:@@running, [])
+    script_class.class_variable_set(:@@stopping, [])
     script_class.class_variable_set(:@@kill_metrics, {
       :minute            => nil,
       :runtime_stops     => 0,
@@ -44,12 +46,13 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
     Lich::Common::UpstreamHook.class_variable_set(:@@upstream_hook_persist, {})
     allow(Lich).to receive(:log)
     allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(false)
-    allow(Thread).to receive(:new) { |&block| block.call; instance_double(Thread) }
     allow(GC).to receive(:start)
+    allow_any_instance_of(script_class).to receive(:report_errors) { |_script, &block| block.call }
   end
 
   after do
     script_class.class_variable_set(:@@running, [])
+    script_class.class_variable_set(:@@stopping, [])
   end
 
   describe '#kill' do
@@ -58,6 +61,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [script])
 
       expect(script.kill).to eq('metric-target')
+      script.join
 
       expect(script_class.list).to be_empty
       expect(GC).not_to have_received(:start)
@@ -88,6 +92,7 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [script])
 
       script.kill
+      script.join
 
       # The dying script's hooks are gone; a hook owned by another instance survives.
       expect(Lich::Common::DownstreamHook.list).to contain_exactly('keep')
@@ -131,10 +136,15 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(10.0, 10.025, 20.0, 20.050)
+      cleanup_times = [10.0, 10.025, 20.0, 20.050]
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
+        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
+      end
 
       first.kill
+      first.join
       second.kill
+      second.join
 
       expect(Lich).to have_received(:log).with(
         'debug: script kill metrics runtime_stops_last_minute=1 avg_ms=25.00 max_ms=25.00 failures=0'
@@ -148,10 +158,15 @@ RSpec.describe 'Lich::Common::Script kill metrics' do
       script_class.class_variable_set(:@@running, [first, second])
       allow(Lich::Common::FeatureFlags).to receive(:enabled?).with(:script_kill_metrics).and_return(true)
       allow(Time).to receive(:now).and_return(Time.at(60), Time.at(120))
-      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC).and_return(10.0, 10.025, 20.0, 20.050)
+      cleanup_times = [10.0, 10.025, 20.0, 20.050]
+      allow(Process).to receive(:clock_gettime).with(Process::CLOCK_MONOTONIC) do
+        Thread.current == Thread.main ? 0.0 : cleanup_times.shift
+      end
 
       first.kill
+      first.join
       second.kill
+      second.join
 
       expect(Lich).to have_received(:log).with(
         'debug: script kill metrics runtime_stops_last_minute=1 avg_ms=25.00 max_ms=25.00 failures=1'

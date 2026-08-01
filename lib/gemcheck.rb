@@ -1,5 +1,6 @@
 # lib/gemcheck.rb
 require 'bundler'
+require 'timeout'
 require_relative 'bundler_recovery'
 require_relative 'dependency_recovery'
 
@@ -18,6 +19,7 @@ module Lich
     LOG_FILENAME    = 'lich5-missing-gems.log'
     CONSENT_TIMEOUT_SECONDS = 120
     BUNDLER_RECOVERY_TIMEOUT_SECONDS = 120
+    ALERT_TIMEOUT_SECONDS = 120
 
     # Records why a recovery did not run without treating that decision as a
     # manifest or Bundler failure.
@@ -282,7 +284,7 @@ module Lich
 
     # @param missing [Array<String>] gem names identified by our detector
     # @param groups [Array<Symbol>] groups being verified
-    # @param error [Exception, nil] the Bundler exception, if any
+    # @param error [Exception, nil] the Bundler or require exception, if any
     # @return [void]
     def alert(missing: [], groups: [:default], error: nil)
       write_log(missing: missing, groups: groups, error: error)
@@ -302,9 +304,11 @@ module Lich
       end
     end
 
-    # Composes the alert dialog body: platform message + either a bulleted
-    # list of detected missing gems, or the raw Bundler error if our
-    # detector came up empty.
+    # Composes the alert dialog body: platform message + a bulleted list of
+    # detected missing gems, plus the underlying error when one was captured.
+    # The error is always shown when present: a failed `require 'gtk3'` may
+    # mean a native DLL failed to load even though every gem is installed, so
+    # hiding the message behind the missing-gems list misdiagnoses the fault.
     # @param missing [Array<String>]
     # @param error [Exception, nil]
     # @return [String]
@@ -312,8 +316,9 @@ module Lich
       parts = [message]
       if missing.any?
         parts << "Missing gems:\n  - #{missing.join("\n  - ")}"
-      elsif error
-        parts << "Bundler reported:\n  #{error.message.lines.first.to_s.strip}"
+      end
+      if error
+        parts << "Underlying error:\n  #{error.message.lines.first.to_s.strip}"
       end
       parts << "See #{File.join(TEMP_DIR, LOG_FILENAME)} for details." if defined?(TEMP_DIR)
       parts.join("\n\n")
@@ -479,7 +484,7 @@ module Lich
       require 'win32ole'
       shell = WIN32OLE.new('WScript.Shell')
       result = shell.Popup("#{body}\nClick OK to open the download page.",
-                           0, TITLE, 1 + 64) # OK/Cancel + Information icon
+                           ALERT_TIMEOUT_SECONDS, TITLE, 1 + 64) # OK/Cancel + Information icon
       shell.Run(RELEASE_URL) if result == 1
     end
 
@@ -506,11 +511,11 @@ module Lich
     # @return [void]
     def alert_linux(body)
       if cmd_available?('zenity')
-        system('zenity', '--info', '--title', TITLE, '--text', body)
+        run_with_timeout(['zenity', '--info', '--title', TITLE, '--text', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('kdialog')
-        system('kdialog', '--title', TITLE, '--msgbox', body)
+        run_with_timeout(['kdialog', '--title', TITLE, '--msgbox', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('xmessage')
-        system('xmessage', '-center', body)
+        run_with_timeout(['xmessage', '-center', body], ALERT_TIMEOUT_SECONDS)
       else
         warn "!!ALERT!! #{body}"
       end
@@ -520,6 +525,25 @@ module Lich
     # @return [Boolean]
     def cmd_available?(cmd)
       system('which', cmd, out: File::NULL, err: File::NULL)
+    end
+
+    # Runs an external command that would otherwise block indefinitely (a
+    # GUI dialog with no one present to dismiss it, e.g. a dead or forwarded
+    # X display) and forcibly reclaims control once the timeout elapses.
+    # Wrapping a blocking Kernel#system call in Timeout can't do this safely,
+    # since the spawned child keeps running as an orphan; spawning it
+    # ourselves lets us kill it directly.
+    # @param cmd [Array<String>] command and arguments for Process.spawn
+    # @param timeout [Integer] seconds to wait before killing the process
+    # @return [Boolean] whether the command exited on its own within the timeout
+    def run_with_timeout(cmd, timeout)
+      pid = Process.spawn(*cmd, out: File::NULL, err: File::NULL)
+      Timeout.timeout(timeout) { Process.wait(pid) }
+      true
+    rescue Timeout::Error
+      Process.kill('TERM', pid)
+      Process.wait(pid)
+      false
     end
   end
 end

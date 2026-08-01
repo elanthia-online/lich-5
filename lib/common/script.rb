@@ -7,6 +7,7 @@
 # also, don't put 'untrusted' in the name of the untrusted binding; it shows up in error messages and makes people think the error is caused by not trusting the script
 #
 
+require 'weakref'
 require_relative 'script_death'
 
 module Lich
@@ -26,8 +27,60 @@ module Lich
 
     class Script
       VALID_KILL_CONTEXTS = [:runtime, :shutdown].freeze
+      CHILD_MUTEX_INITIALIZER = Mutex.new
+      CHILD_RELATIONSHIP_MUTEX = Mutex.new
+      LIFECYCLE_MUTEX_INITIALIZER = Mutex.new
+      CHILD_JOIN_TIMEOUT = 1.0
+      LIBRARY_RELOAD_TIMEOUT = 1.0
+      RAW_THREAD_GROUP_ADD = ThreadGroup.instance_method(:add)
+      RAW_THREAD_GROUP_LIST = ThreadGroup.instance_method(:list)
+      RAW_THREAD_GROUP_ENCLOSE = ThreadGroup.instance_method(:enclose)
+      RAW_THREAD_GROUP_ENCLOSED = ThreadGroup.instance_method(:enclosed?)
+      JOIN_WAIT_INTERVAL = 0.05
+      CLEANUP_SCRIPT_THREAD_KEY = :lich_cleanup_script
 
-      @@elevated_script_start = proc { |args|
+      # Nested lock order:
+      #   startup -> registry -> per-script lifecycle -> child relationship
+      # Child adoption takes the parent's child-list lock before the child's
+      # registry/lifecycle locks. Child launch reservations avoid holding that
+      # lock across startup. Finalization releases the relationship lock before
+      # taking a parent's child-list lock. Library coordination releases its
+      # mutex before starting or joining a script. Registry and lifecycle locks
+      # are never held while invoking script code or cleanup callbacks.
+
+      module ThreadGroupHandle
+        def __attach_script(script)
+          @script = script
+          self
+        end
+        private :__attach_script
+
+        def add(thread)
+          unless thread.is_a?(Thread)
+            raise TypeError, "wrong argument type #{thread.class} (expected VM/thread)"
+          end
+
+          accepted = @script.__send__(:__register_worker, thread)
+          raise ThreadError, 'cannot add a worker to a stopping script' unless accepted
+
+          self
+        end
+
+        def list
+          @script.__send__(:__public_worker_threads)
+        end
+
+        def enclose
+          @script.__send__(:__enclose_worker_group)
+          self
+        end
+
+        def enclosed?
+          @script.__send__(:__worker_group_enclosed?)
+        end
+      end
+
+      @@elevated_script_start = proc { |args, parent = nil|
         if args.empty?
           # fixme: error
           next nil
@@ -69,147 +122,121 @@ module Lich
         # Resolve via the shared resolver so script discovery stays identical
         # everywhere (custom/ root, custom/<subdir>/, then SCRIPT_DIR root).
         file_name = __find_script_file(script_name)
-        script_name = file_name.sub(/\..{1,3}$/, '') if file_name
         if file_name.nil?
           respond "--- Lich: could not find script '#{script_name}' in directory #{SCRIPT_DIR} or #{SCRIPT_DIR}/custom"
           next nil
         end
-        if (options[:force] != true) and (Script.running + Script.hidden).find { |s| s.name =~ /^#{Regexp.escape(script_name.sub(%r{/custom/([^/]+/)?}, ''))}$/i }
-          respond "--- Lich: #{script_name} is already running (use #{$clean_lich_char}force [scriptname] if desired)."
-          next nil
-        end
+        registry_name = __script_registry_name(file_name)
+        script_name = file_name.sub(/\.(?:lic|rb|cmd|wiz)(?:\.(?:gz|Z))?\z/i, '')
+        startup_reservation = Object.new
         begin
-          if file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
-            trusted = false
-            script_obj = WizardScript.new("#{SCRIPT_DIR}/#{file_name}", script_args)
-          else
-            if script_obj.labels.length > 1
-              trusted = false
-            else
-              trusted = true
-            end
-            script_obj = Script.new(:file => "#{SCRIPT_DIR}/#{file_name}", :args => script_args, :quiet => options[:quiet])
+          startup_status = __begin_start(startup_reservation, registry_name, :force => options[:force] == true)
+          if startup_status == :shutdown
+            respond "--- Lich: cannot start #{registry_name} while shutting down."
+            next nil
+          elsif startup_status == :duplicate
+            respond "--- Lich: #{script_name} is already running (use #{$clean_lich_char}force [scriptname] if desired)."
+            next nil
           end
-          if trusted
-            script_binding = TRUSTED_SCRIPT_BINDING.call
-          else
-            script_binding = Scripting.new.script
-          end
-        rescue
-          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-          next nil
-        end
-        unless script_obj
-          respond "--- Lich: error: failed to start script (#{script_name})"
-          next nil
-        end
-        script_obj.quiet = true if options[:quiet]
-        new_thread = Thread.new {
-          100.times { break if Script.current == script_obj; sleep 0.01 }
 
-          if (script = Script.current)
-            eval('script = Script.current', script_binding, script.name)
-            Thread.current.priority = 1
-            respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
-            if trusted
-              begin
-                eval(script.labels[script.current_label].to_s, script_binding, script.name)
-              rescue SystemExit
-                nil
-              rescue SyntaxError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue ScriptError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue NoMemoryError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue LoadError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue SecurityError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue ThreadError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue SystemStackError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue JumpError
-                if $! == JUMP
-                  retry if Script.current.get_next_label != JUMP_ERROR
-                  respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
-                  respond $!.backtrace.first
-                  Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{$!.backtrace.join("\n\t")}"
-                  Script.current.kill
-                else
-                  respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                  Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-                end
-              rescue StandardError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              ensure
-                Script.current.kill
-              end
+          begin
+            if file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
+              trusted = false
+              script_obj = WizardScript.new("#{SCRIPT_DIR}/#{file_name}", script_args, false)
             else
+              script_obj = Script.new(:file => "#{SCRIPT_DIR}/#{file_name}", :args => script_args, :quiet => options[:quiet], :publish => false)
+              trusted = script_obj.labels.length <= 1
+            end
+            if trusted
+              script_binding = TRUSTED_SCRIPT_BINDING.call
+            else
+              script_binding = Scripting.new.script
+            end
+          rescue
+            respond "--- Lich: error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+            next nil
+          end
+          unless script_obj
+            respond "--- Lich: error: failed to start script (#{script_name})"
+            next nil
+          end
+          script_obj.quiet = true if options[:quiet]
+
+          start_gate = Queue.new
+          setup_complete = false
+          launcher_thread = Thread.current
+          gate_release_failed = false
+          begin
+            new_thread = Thread.new {
               begin
-                while (script = Script.current) and script.current_label
-                  proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
-                  Script.current.get_next_label
-                end
-              rescue SystemExit
-                nil
-              rescue SyntaxError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue ScriptError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue NoMemoryError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue LoadError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue SecurityError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                if (name = Script.current.name)
-                  respond "--- Lich: review this script (#{name}) to make sure it isn't malicious, and type #{$clean_lich_char}trust #{name}"
-                end
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue ThreadError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue SystemStackError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              rescue JumpError
-                if $! == JUMP
-                  retry if Script.current.get_next_label != JUMP_ERROR
-                  respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
-                  respond $!.backtrace.first
-                  Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{$!.backtrace.join("\n\t")}"
-                  Script.current.kill
+                next unless Script.__send__(:__await_thread_gate, start_gate, launcher_thread, false)
+
+                script = script_obj
+                if Script.current
+                  eval('script = Script.current', script_binding, script.name)
+                  Thread.current.priority = 1
+                  respond("--- Lich: #{script.custom? ? 'custom/' : ''}#{script.name} active.") unless script.quiet
+                  begin
+                    Script.__send__(
+                      :__execute,
+                      script,
+                      :on_error       => proc { |error| Script.__send__(:__report_script_error, script, error, :untrusted => !trusted) },
+                      :propagate_jump => true
+                    ) do
+                      if trusted
+                        eval(script.labels[script.current_label].to_s, script_binding, script.name)
+                      else
+                        while (script = Script.current) and script.current_label
+                          proc { foo = script.labels[script.current_label]; eval(foo, script_binding, script.name, 1) }.call
+                          Script.current.get_next_label
+                        end
+                      end
+                    end
+                  rescue JumpError => error
+                    if error == JUMP
+                      retry if Script.current.get_next_label != JUMP_ERROR
+                      respond "--- label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!"
+                      respond error.backtrace.first
+                      Lich.log "label error: `#{Script.current.jump_label}' was not found, and no `LabelError' label was found!\n\t#{error.backtrace.join("\n\t")}"
+                      script.__send__(:__record_exit_error, JUMP_ERROR)
+                    else
+                      script.__send__(:__record_exit_error, error)
+                      Script.__send__(:__report_script_error, script, error, :untrusted => !trusted)
+                    end
+                  end
                 else
-                  respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                  Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+                  respond '--- error: out of cheese'
                 end
-              rescue StandardError
-                respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-                Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
               ensure
-                Script.current.kill
+                script_obj.kill if script_obj.running? && !script_obj.stopping?
+              end
+            }
+            script_obj.__send__(:__attach_startup_worker, new_thread)
+            next nil if parent && !parent.__send__(:__adopt_child, script_obj)
+
+            script_obj.__send__(:__publish, true)
+            setup_complete = true
+          ensure
+            Thread.handle_interrupt(Exception => :never) do
+              begin
+                start_gate << setup_complete
+              rescue Exception # rubocop:disable Lint/RescueException
+                gate_release_failed = true
+                raise
+              ensure
+                unless setup_complete && !gate_release_failed
+                  new_thread&.kill
+                  new_thread&.join
+                  parent.unregister_child(script_obj) if parent
+                  script_obj.__send__(:__discard_startup)
+                end
               end
             end
-          else
-            respond '--- error: out of cheese'
           end
-        }
-        script_obj.thread_group.add(new_thread)
-        script_obj
+          script_obj
+        ensure
+          __finish_start(startup_reservation, setup_complete ? script_obj : nil)
+        end
       }
       @@elevated_exists = proc { |script_name|
         if script_name =~ /\\|\//
@@ -288,6 +315,21 @@ module Lich
         end
       }
       @@running = Array.new
+      @@stopping = Array.new
+      @@startup_mutex = Mutex.new
+      @@startup_condition = ConditionVariable.new
+      @@registry_mutex = Mutex.new
+      @@startup_reservations = {}
+      @@startup_generation = 0
+      @@completed_named_starts = {}
+      @@completed_start_waiters = {}
+      @@shutdown_started = false
+      @@library_mutex = Mutex.new
+      @@loaded_libraries = Set.new
+      @@loaded_library_owners = {}
+      @@loading_libraries = {}
+      @@reloading_libraries = {}
+      @@library_waits = {}
       @@kill_metrics_mutex = Mutex.new
       @@kill_metrics = {
         :minute            => nil,
@@ -297,12 +339,15 @@ module Lich
         :failures          => 0
       }
 
-      attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs
+      attr_reader :name, :vars, :safe, :file_name, :label_order, :at_exit_procs, :exit_error
       attr_accessor :quiet, :no_echo, :jump_label, :current_label, :want_downstream, :want_downstream_xml, :want_upstream, :want_script_output, :hidden, :paused, :silent, :no_pause_all, :no_kill_all, :downstream_buffer, :upstream_buffer, :unique_buffer, :die_with, :match_stack_labels, :match_stack_strings, :watchfor, :command_line, :ignore_pause, :killed_externally, :kill_source
 
       KILL_METRICS_FEATURE_FLAG = :script_kill_metrics
+      CLEANUP_QUEUE_ENTRY_MARKER = Object.new.freeze
+      private_constant :CLEANUP_QUEUE_ENTRY_MARKER
 
       class JumpError < StandardError; end
+      class LibraryJoinTimeout < LoadError; end
       JUMP = JumpError.exception('JUMP')
       JUMP_ERROR = JumpError.exception('JUMP_ERROR')
 
@@ -346,6 +391,13 @@ module Lich
           file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}[^.]+\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i }
       end
       private_class_method :__find_script_file
+
+      def Script.__script_registry_name(file_name)
+        file_name
+          .sub(%r{\A/custom/(?:[^/]+/)?}, '')
+          .sub(/\.(?:lic|rb|cmd|wiz)(?:\.(?:gz|Z))?\z/i, '')
+      end
+      private_class_method :__script_registry_name
 
       # Extracts the leading header-comment lines from raw script source.
       #
@@ -545,12 +597,404 @@ module Lich
       end
       private_class_method :__warn_lich_too_old
 
+      def Script.__execute(script, on_error:, propagate_jump: false)
+        yield
+        script.__send__(:__record_successful_exit)
+      rescue SystemExit => error
+        if error.success?
+          script.__send__(:__record_successful_exit)
+        else
+          script.__send__(:__record_exit_error, error)
+        end
+      rescue JumpError => error
+        raise if propagate_jump
+
+        script.__send__(:__record_exit_error, error)
+        on_error.call(error)
+      rescue ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+        script.__send__(:__record_exit_error, error)
+        on_error.call(error)
+      end
+      private_class_method :__execute
+
+      def Script.__report_script_error(script, error, untrusted:)
+        respond "--- Lich: error: #{error}\n\t#{error.backtrace[0..1].join("\n\t")}"
+        if untrusted && error.is_a?(SecurityError)
+          respond "--- Lich: review this script (#{script.name}) to make sure it isn't malicious, and type #{$clean_lich_char}trust #{script.name}"
+        end
+        Lich.log "error: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_script_error
+
+      def Script.__report_subscript_error(error)
+        respond "--- Lich error: #{error}"
+        respond error.backtrace.first
+        Lich.log "Exception: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_subscript_error
+
+      def Script.__report_exec_error(error)
+        label =
+          case error
+          when SyntaxError then 'SyntaxError'
+          when LoadError then 'LoadError'
+          when ScriptError then 'ScriptError'
+          when NoMemoryError then 'NoMemoryError'
+          when SecurityError then 'SecurityError'
+          when ThreadError then 'ThreadError'
+          when SystemStackError then 'SystemStackError'
+          else 'Lich error'
+          end
+        log_label = label == 'Lich error' ? 'Exception' : label
+        respond "--- #{label}: #{error}"
+        respond(error.is_a?(SecurityError) ? error.backtrace[0..1] : error.backtrace.first)
+        Lich.log "#{log_label}: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private_class_method :__report_exec_error
+
+      def Script.__registry_synchronize(&block)
+        @@registry_mutex.synchronize(&block)
+      end
+      private_class_method :__registry_synchronize
+
+      def Script.__running_snapshot
+        __registry_synchronize { @@running.dup }
+      end
+      private_class_method :__running_snapshot
+
+      def Script.__script_owning_thread_group(group)
+        __registry_synchronize do
+          __prune_completed_stops_locked
+          (@@running + @@stopping).uniq.find do |script|
+            script.__send__(:__owns_public_thread_group?, group)
+          end
+        end
+      end
+      private_class_method :__script_owning_thread_group
+
+      def Script.__shutdown_snapshot
+        __registry_synchronize do
+          __prune_completed_stops_locked
+          (@@running + @@stopping).uniq
+        end
+      end
+      private_class_method :__shutdown_snapshot
+
+      def Script.__prune_completed_stops_locked
+        @@stopping.reject! { |script| script.__send__(:__cleanup_complete?) }
+      end
+      private_class_method :__prune_completed_stops_locked
+
+      def Script.__discard_completed_stop(script)
+        __registry_synchronize do
+          @@stopping.delete(script) if script.__send__(:__cleanup_complete?)
+        end
+      end
+      private_class_method :__discard_completed_stop
+
       def Script.list
-        @@running.dup
+        __running_snapshot
+      end
+
+      def Script.shutdown_scripts
+        __shutdown_snapshot
+      end
+
+      # Advances teardown that lost its cleanup executor, then returns the
+      # scripts still participating in shutdown.
+      def Script.progress_shutdown
+        scripts = __shutdown_snapshot
+        scripts.each { |script| script.__send__(:__refresh_deferred_stop) }
+        __shutdown_snapshot
+      end
+
+      def Script.begin_shutdown
+        @@startup_mutex.synchronize do
+          @@shutdown_started = true
+          until @@startup_reservations.empty?
+            __reap_abandoned_startups_locked
+            break if @@startup_reservations.empty?
+
+            @@startup_condition.wait(@@startup_mutex, JOIN_WAIT_INTERVAL)
+          end
+        end
+        shutdown_scripts
+      end
+
+      def Script.__begin_start(reservation, name = nil, force: true)
+        normalized_name = name&.downcase
+        @@startup_mutex.synchronize do
+          __reap_abandoned_startups_locked
+          return :shutdown if @@shutdown_started
+          if normalized_name && !force
+            active = __active_named_script(normalized_name)
+            starting = __startup_in_progress_locked?(normalized_name)
+            return :duplicate if active || starting
+          end
+
+          @@startup_generation += 1
+          @@startup_reservations[reservation] = [
+            normalized_name,
+            Thread.current,
+            @@startup_generation,
+            nil
+          ]
+          :admitted
+        end
+      end
+      private_class_method :__begin_start
+
+      def Script.__begin_library_start(reservation, name, deadline: nil)
+        normalized_name = name.downcase
+        @@startup_mutex.synchronize do
+          __reap_abandoned_startups_locked
+          __completed_start_waiter_expected_locked?(normalized_name)
+          return [:shutdown, nil] if @@shutdown_started
+
+          unless __startup_in_progress_locked?(normalized_name)
+            completed = __completed_start_value(@@completed_named_starts[normalized_name])
+            active = __active_named_script(normalized_name)
+            candidate = completed || active
+            @@startup_reservations[reservation] = [normalized_name, Thread.current, nil, candidate]
+            return [candidate ? :duplicate : :admitted, candidate]
+          end
+
+          waiter_token = [Object.new, Thread.current]
+          Thread.handle_interrupt(Exception => :never) do
+            begin
+              waiters = @@completed_start_waiters[normalized_name]
+              unless waiters.is_a?(Set)
+                waiters = Set.new
+                @@completed_start_waiters[normalized_name] = waiters
+              end
+              waiters.add(waiter_token)
+              Thread.handle_interrupt(Exception => :immediate) do
+                while __startup_in_progress_locked?(normalized_name)
+                  __reap_abandoned_startups_locked
+                  break unless __startup_in_progress_locked?(normalized_name)
+
+                  remaining = __remaining_library_timeout(deadline)
+                  if remaining && remaining <= 0
+                    raise LibraryJoinTimeout, "script library wait timed out: #{normalized_name}"
+                  end
+                  wait_for = remaining ? [JOIN_WAIT_INTERVAL, remaining].min : JOIN_WAIT_INTERVAL
+                  @@startup_condition.wait(@@startup_mutex, wait_for)
+                end
+              end
+              completed = __completed_start_value(@@completed_named_starts[normalized_name])
+              active = __active_named_script(normalized_name)
+              candidate = completed || active
+              @@startup_reservations[reservation] = [normalized_name, Thread.current, nil, candidate]
+              [candidate ? :duplicate : :admitted, candidate]
+            ensure
+              waiters = @@completed_start_waiters[normalized_name]
+              if waiters.is_a?(Set)
+                waiters.delete(waiter_token)
+                if waiters.empty?
+                  @@completed_start_waiters.delete(normalized_name)
+                  @@completed_named_starts.delete(normalized_name)
+                end
+              end
+            end
+          end
+        end
+      end
+      private_class_method :__begin_library_start
+
+      def Script.__active_named_script(name)
+        __registry_synchronize do
+          running = @@running.find { |script| script.name.casecmp?(name) }
+          running || @@stopping.find do |script|
+            script.name.casecmp?(name) && !script.__send__(:__cleanup_complete?)
+          end
+        end
+      end
+      private_class_method :__active_named_script
+
+      def Script.__finish_start(reservation, script = nil, preserve_completed: false)
+        @@startup_mutex.synchronize do
+          entry = @@startup_reservations.delete(reservation)
+          name = entry&.first
+          generation = entry&.[](2)
+          if name&.start_with?('lib')
+            current_generation = __completed_start_generation(@@completed_named_starts[name])
+            if !preserve_completed && generation && generation >= current_generation
+              @@completed_named_starts.delete(name)
+              handoff_expected = __completed_start_waiter_expected_locked?(name) ||
+                                 __library_handoff_reserved_locked?(name)
+              if script && handoff_expected
+                @@completed_named_starts[name] = [generation, script]
+              end
+            end
+          end
+          @@startup_condition.broadcast
+        end
+      end
+      private_class_method :__finish_start
+
+      def Script.__reserved_start_candidate(reservation)
+        @@startup_mutex.synchronize do
+          entry = @@startup_reservations[reservation]
+          entry&.[](3)
+        end
+      end
+      private_class_method :__reserved_start_candidate
+
+      def Script.__publish_to_registry(admitted:)
+        @@startup_mutex.synchronize do
+          raise ThreadError, 'cannot publish a script while shutting down' if @@shutdown_started && !admitted
+
+          yield
+        end
+      end
+      private_class_method :__publish_to_registry
+
+      def Script.__discard_completed_start(name, script)
+        normalized_name = name.downcase
+        @@startup_mutex.synchronize do
+          completed = __completed_start_value(@@completed_named_starts[normalized_name])
+          @@completed_named_starts.delete(normalized_name) if completed.equal?(script)
+        end
+      end
+      private_class_method :__discard_completed_start
+
+      def Script.__completed_start_value(entry)
+        entry = entry[1] if entry.is_a?(Array) && entry.first.is_a?(Integer)
+        entry.is_a?(WeakRef) ? entry.__getobj__ : entry
+      rescue WeakRef::RefError
+        nil
+      end
+      private_class_method :__completed_start_value
+
+      def Script.__completed_start_generation(entry)
+        return entry.first if entry.is_a?(Array) && entry.first.is_a?(Integer)
+
+        0
+      end
+      private_class_method :__completed_start_generation
+
+      def Script.__completed_start_waiter_expected_locked?(name)
+        waiters = @@completed_start_waiters[name]
+        return (waiters || 0).to_i.positive? unless waiters.is_a?(Set)
+
+        waiters.delete_if do |token|
+          token.is_a?(Array) && token.last.is_a?(Thread) && !token.last.alive?
+        end
+        if waiters.empty?
+          @@completed_start_waiters.delete(name)
+          @@completed_named_starts.delete(name)
+          false
+        else
+          true
+        end
+      end
+      private_class_method :__completed_start_waiter_expected_locked?
+
+      def Script.__peek_completed_start(name)
+        @@startup_mutex.synchronize do
+          __completed_start_value(@@completed_named_starts[name.downcase])
+        end
+      end
+      private_class_method :__peek_completed_start
+
+      def Script.__reap_abandoned_startups_locked
+        previous_size = @@startup_reservations.size
+        @@startup_reservations.delete_if { |_reservation, (_name, owner)| !owner.alive? }
+        @@startup_condition.broadcast if @@startup_reservations.size < previous_size
+      end
+      private_class_method :__reap_abandoned_startups_locked
+
+      def Script.__startup_in_progress_locked?(name)
+        @@startup_reservations.any? { |_reservation, (reserved_name, _owner)| reserved_name == name }
+      end
+      private_class_method :__startup_in_progress_locked?
+
+      def Script.__library_handoff_reserved_locked?(name)
+        @@startup_reservations.any? do |_reservation, (reserved_name, owner, generation)|
+          reserved_name == name && owner == Thread.current && generation.nil?
+        end
+      end
+      private_class_method :__library_handoff_reserved_locked?
+
+      def Script.__remaining_library_timeout(deadline)
+        return nil unless deadline
+
+        [deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC), 0].max
+      end
+      private_class_method :__remaining_library_timeout
+
+      def Script.__await_thread_gate(gate, owner, abandoned_value)
+        loop do
+          return gate.pop(true)
+        rescue ThreadError
+          unless owner.alive?
+            begin
+              return gate.pop(true)
+            rescue ThreadError
+              return abandoned_value
+            end
+          end
+
+          sleep JOIN_WAIT_INTERVAL
+        end
+      end
+      private_class_method :__await_thread_gate
+
+      # Starts an anonymous child script owned by the current script.
+      #
+      # @yield required block executed by the new script
+      # @return [SubScript] the started anonymous script
+      # @raise [ArgumentError] when no block is given
+      # @raise [ThreadError] when shutdown or parent teardown rejects startup
+      def Script.subscript(&block)
+        subscript = SubScript.start(:parent => Script.current, :quiet => true, &block)
+        return subscript if subscript
+
+        raise ThreadError, 'subscript startup rejected during shutdown or parent teardown'
+      end
+
+      # Starts a named script and registers it as a child of the current script.
+      # Outside a script worker, this behaves like {Script.start}.
+      #
+      # @return [Script, nil] the started script, or nil when startup fails
+      def Script.start_child(*args)
+        parent = Script.current
+        return Script.start(*args) unless parent
+
+        parent.__send__(:__launch_child) { @@elevated_script_start.call(args, parent) }
+      end
+
+      # Starts a child script and waits for it to finish.
+      #
+      # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
+      # @return [Script, nil] the completed child, or nil on startup failure or timeout
+      # @raise [ArgumentError] when the timeout is negative, before the child starts
+      def Script.run_child(*args, timeout: nil)
+        raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
+
+        child = Script.start_child(*args)
+        return nil unless child
+
+        child.join(timeout) ? child : nil
+      end
+
+      # Marks the current script as hidden and protected from kill-all and
+      # pause-all commands.
+      #
+      # @return [Script, false] the current script, or false outside a script
+      def Script.daemon_me
+        return false unless (script = Script.current)
+
+        script.hidden = true
+        script.no_kill_all = true
+        script.no_pause_all = true
+        script
       end
 
       def Script.current
-        if (script = @@running.find { |s| s.has_thread?(Thread.current) })
+        script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+        script ||= __running_snapshot.find { |candidate| candidate.has_thread?(Thread.current) }
+        if script
           sleep 0.2 while script.paused? and not script.ignore_pause
           script
         else
@@ -559,17 +1003,288 @@ module Lich
       end
 
       def Script.start(*args)
-        @@elevated_script_start.call(args)
+        @@elevated_script_start.call(args, nil)
       end
 
       def Script.run(*args)
-        if (s = @@elevated_script_start.call(args))
-          sleep 0.1 while @@running.include?(s)
+        if (s = @@elevated_script_start.call(args, nil))
+          s.join
         end
       end
 
+      # Loads a script library once and waits for its execution to finish.
+      #
+      # @param library [String, Symbol] library name, with or without the lib prefix
+      # @param timeout [Numeric, nil] maximum time spent waiting on startup
+      #   coordination and script completion, or nil to wait indefinitely;
+      #   synchronous script construction is not preempted
+      # @return [true]
+      # @raise [ArgumentError] when the library name is empty
+      # @raise [LoadError] when the library cannot be found or started
+      def Script.loadlib(library, timeout: nil)
+        raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
+        library_name = library.to_s.downcase
+        library_name = "lib#{library_name}" unless library_name.start_with?('lib')
+        raise ArgumentError, 'library name cannot be empty' if library_name == 'lib'
+        resolved_file = __find_script_file(library_name)
+        raise LoadError, "script library not found: #{library_name}" unless resolved_file
+
+        library_name = __script_registry_name(resolved_file).downcase
+
+        loading = @@library_mutex.synchronize { @@loading_libraries[library_name] }
+        if loading
+          begin
+            __join_library(library_name, loading, __remaining_library_timeout(deadline))
+            return __commit_library_completion(library_name, loading)
+          rescue LibraryJoinTimeout
+            raise
+          rescue LoadError => e
+            raise if e.message.start_with?('cyclic script library dependency:')
+
+            @@library_mutex.synchronize do
+              if @@loading_libraries[library_name].equal?(loading)
+                @@loading_libraries.delete(library_name)
+                @@loaded_libraries.delete(library_name)
+                @@loaded_library_owners.delete(library_name)
+              end
+            end
+          end
+        end
+
+        startup_reservation = Object.new
+        prepared = begin
+          startup_status, completed_start = __begin_library_start(
+            startup_reservation,
+            library_name,
+            :deadline => deadline
+          )
+          raise LoadError, "cannot load script library during shutdown: #{library_name}" if startup_status == :shutdown
+
+          running = __running_snapshot.find { |candidate| candidate.name.casecmp?(library_name) }
+          script, already_loaded, owns_loading, start_required = @@library_mutex.synchronize do
+            if (loading = @@loading_libraries[library_name])
+              [loading, false, false, false]
+            elsif (candidate = completed_start || running)
+              @@loading_libraries[library_name] = candidate
+              [candidate, false, true, false]
+            elsif @@loaded_libraries.include?(library_name)
+              [nil, true, false, false]
+            else
+              [nil, false, true, true]
+            end
+          end
+
+          if start_required
+            remaining = __remaining_library_timeout(deadline)
+            if remaining && remaining <= 0
+              raise LibraryJoinTimeout, "script library wait timed out: #{library_name}"
+            end
+            script = Script.start(library_name, { :force => true })
+            raise LoadError, "failed to start script library: #{library_name}" unless script
+
+            @@library_mutex.synchronize { @@loading_libraries[library_name] = script }
+          end
+          __discard_completed_start(library_name, script) if script
+
+          [script, already_loaded, owns_loading]
+        ensure
+          begin
+            reserved_candidate = __reserved_start_candidate(startup_reservation)
+            if reserved_candidate
+              script ||= reserved_candidate
+              @@library_mutex.synchronize do
+                @@loading_libraries[library_name] ||= reserved_candidate
+              end
+            end
+            __finish_start(startup_reservation, nil, :preserve_completed => start_required == true)
+          ensure
+            if start_required
+              script ||= __peek_completed_start(library_name)
+              if script
+                @@library_mutex.synchronize { @@loading_libraries[library_name] ||= script }
+              end
+            end
+            published_script = script || @@library_mutex.synchronize { @@loading_libraries[library_name] }
+            __discard_completed_start(library_name, published_script) if published_script
+          end
+        end
+        script, already_loaded, owns_loading = prepared
+        return true if already_loaded
+
+        begin
+          __join_library(library_name, script, __remaining_library_timeout(deadline))
+        rescue LibraryJoinTimeout
+          raise
+        rescue ScriptError, StandardError
+          if owns_loading
+            @@library_mutex.synchronize do
+              @@loading_libraries.delete(library_name) if @@loading_libraries[library_name].equal?(script)
+            end
+          end
+          raise
+        end
+
+        __commit_library_completion(library_name, script)
+      end
+
+      # Runs each loaded script library again using a stable registry snapshot.
+      #
+      # @param timeout [Numeric, nil] maximum seconds to wait for each library
+      # @return [Boolean] whether every library completed successfully
+      def Script.reloadlibs(timeout: LIBRARY_RELOAD_TIMEOUT)
+        current_library = Script.current&.name&.downcase
+        successful = true
+        libraries = @@library_mutex.synchronize do
+          @@loaded_libraries | Set.new(@@reloading_libraries.keys)
+        end
+        libraries.each do |library|
+          next if library == current_library
+
+          reload_token = Object.new
+          @@library_mutex.synchronize do
+            @@reloading_libraries[library] ||= Set.new
+            @@reloading_libraries[library].add(reload_token)
+            if @@loaded_libraries.delete?(library)
+              loaded_owner = @@loaded_library_owners[library]
+              loading_script = @@loading_libraries[library]
+              if loaded_owner && loading_script&.object_id == loaded_owner
+                @@loading_libraries.delete(library)
+              end
+              @@loaded_library_owners.delete(library)
+            end
+          end
+          Script.loadlib(library, :timeout => timeout)
+          @@library_mutex.synchronize do
+            if @@loaded_libraries.include?(library)
+              @@reloading_libraries.delete(library)
+            else
+              reloaders = @@reloading_libraries[library]
+              reloaders&.delete(reload_token)
+              @@reloading_libraries.delete(library) if reloaders&.empty?
+            end
+          end
+        rescue LoadError => e
+          successful = false
+          @@library_mutex.synchronize do
+            reloaders = @@reloading_libraries[library]
+            reloaders&.delete(reload_token)
+            @@reloading_libraries.delete(library) if reloaders&.empty?
+          end
+          Lich.log("error: failed to reload script library #{library}: #{e.message}")
+        end
+        successful
+      end
+
+      # Returns a snapshot of loaded script library names.
+      #
+      # @return [Set<String>]
+      def Script.libs
+        @@library_mutex.synchronize { @@loaded_libraries.dup }
+      end
+
+      def Script.__join_library(library_name, script, timeout = nil)
+        caller_script = Script.current
+        dependency_token = [Object.new, Thread.current]
+        Thread.handle_interrupt(Exception => :never) do
+          begin
+            @@library_mutex.synchronize do
+              if caller_script
+                if __library_dependency_reaches?(script, caller_script)
+                  raise LoadError, "cyclic script library dependency: #{library_name}"
+                end
+                dependencies = @@library_waits[caller_script]
+                dependencies = {} unless dependencies.is_a?(Hash)
+                @@library_waits[caller_script] = dependencies
+                if dependencies.key?(script)
+                  dependencies[script].add(dependency_token)
+                else
+                  dependencies[script] = Set[dependency_token]
+                end
+              end
+            end
+
+            joined = Thread.handle_interrupt(Exception => :immediate) do
+              script.join(timeout)
+            end
+            raise LibraryJoinTimeout, "script library wait timed out: #{library_name}" unless joined
+          ensure
+            if caller_script
+              @@library_mutex.synchronize do
+                dependencies = @@library_waits[caller_script]
+                if dependencies.is_a?(Hash)
+                  tokens = dependencies[script]
+                  tokens&.delete(dependency_token)
+                  dependencies.delete(script) if tokens && tokens.empty?
+                  @@library_waits.delete(caller_script) if dependencies.empty?
+                elsif dependencies.equal?(script)
+                  @@library_waits.delete(caller_script)
+                end
+              end
+            end
+          end
+        end
+      end
+      private_class_method :__join_library
+
+      def Script.__commit_library_completion(library_name, script)
+        error = script.exit_error
+        completed = script.completed_successfully?
+        @@library_mutex.synchronize do
+          if @@loading_libraries[library_name].equal?(script)
+            if error || !completed
+              @@loaded_libraries.delete(library_name)
+              @@loaded_library_owners.delete(library_name)
+            else
+              @@loaded_library_owners[library_name] = script.object_id
+              @@loaded_libraries.add(library_name)
+            end
+            @@loading_libraries.delete(library_name)
+          end
+        end
+        __validate_library_completion(library_name, script)
+        true
+      end
+      private_class_method :__commit_library_completion
+
+      def Script.__validate_library_completion(library_name, script)
+        error = script.exit_error
+        raise LoadError, "script library failed: #{library_name}: #{error.message}" if error
+        raise LoadError, "script library did not complete: #{library_name}" unless script.completed_successfully?
+      end
+      private_class_method :__validate_library_completion
+
+      def Script.__library_dependency_reaches?(start, target, visited = Set.new)
+        __prune_library_waits_locked(target) if visited.empty?
+        return true if start.equal?(target)
+        return false unless start
+        return false if visited.include?(start)
+
+        visited.add(start)
+        dependencies = @@library_waits[start]
+        dependencies = dependencies.is_a?(Hash) ? dependencies.keys : Array(dependencies)
+        dependencies.any? { |dependency| __library_dependency_reaches?(dependency, target, visited) }
+      end
+      private_class_method :__library_dependency_reaches?
+
+      def Script.__prune_library_waits_locked(preserve = nil)
+        @@library_waits.delete_if do |caller, dependencies|
+          next false unless dependencies.is_a?(Hash)
+
+          dependencies.delete_if do |_target, tokens|
+            tokens.delete_if do |token|
+              token.is_a?(Array) && token.last.is_a?(Thread) && !token.last.alive?
+            end
+            tokens.empty?
+          end
+          dependencies.empty? && !caller.equal?(preserve)
+        end
+      end
+      private_class_method :__prune_library_waits_locked
+
       def Script.running?(name)
-        @@running.any? { |i| (i.name =~ /^#{name}$/i) }
+        __running_snapshot.any? { |i| (i.name =~ /^#{name}$/i) }
       end
 
       def Script.pause(name = nil)
@@ -577,7 +1292,8 @@ module Lich
           Script.current.pause
           Script.current
         else
-          if (s = (@@running.find { |i| (i.name == name) and not i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and not i.paused? }))
+          running = __running_snapshot
+          if (s = (running.find { |i| (i.name == name) and not i.paused? }) || (running.find { |i| (i.name =~ /^#{name}$/i) and not i.paused? }))
             s.pause
             true
           else
@@ -587,7 +1303,8 @@ module Lich
       end
 
       def Script.unpause(name)
-        if (s = (@@running.find { |i| (i.name == name) and i.paused? }) || (@@running.find { |i| (i.name =~ /^#{name}$/i) and i.paused? }))
+        running = __running_snapshot
+        if (s = (running.find { |i| (i.name == name) and i.paused? }) || (running.find { |i| (i.name =~ /^#{name}$/i) and i.paused? }))
           s.unpause
           true
         else
@@ -611,7 +1328,8 @@ module Lich
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
 
-        if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
+        running = __running_snapshot
+        if (s = (running.find { |i| i.name == name }) || (running.find { |i| i.name =~ /^#{name}$/i }))
           s.killed_externally = true
           s.kill_source = caller[0..2]
           s.kill(context: context)
@@ -621,8 +1339,24 @@ module Lich
         end
       end
 
+      # Requests teardown for scripts eligible for kill-all.
+      #
+      # @param force [Boolean] include hidden and kill-all-protected scripts
+      # @param context [Symbol] lifecycle context forwarded to {Script#kill}
+      # @return [Integer] number of scripts selected
+      def Script.kill_all(force: false, context: :runtime)
+        unless VALID_KILL_CONTEXTS.include?(context)
+          raise ArgumentError, "invalid script kill context: #{context.inspect}"
+        end
+
+        scripts = force ? Script.list : Script.running.reject(&:no_kill_all)
+        scripts.each { |script| script.kill(context: context) }
+        scripts.length
+      end
+
       def Script.paused?(name)
-        if (s = (@@running.find { |i| i.name == name }) || (@@running.find { |i| i.name =~ /^#{name}$/i }))
+        running = __running_snapshot
+        if (s = (running.find { |i| i.name == name }) || (running.find { |i| i.name =~ /^#{name}$/i }))
           s.paused?
         else
           nil
@@ -634,32 +1368,54 @@ module Lich
       end
 
       def Script.new_downstream_xml(line)
-        for script in @@running
+        for script in __running_snapshot
           script.downstream_buffer.push(line.chomp) if script.want_downstream_xml
         end
       end
 
       def Script.new_upstream(line)
-        for script in @@running
+        for script in __running_snapshot
           script.upstream_buffer.push(line.chomp) if script.want_upstream
         end
       end
 
       def Script.new_downstream(line)
-        @@running.each { |script|
+        __running_snapshot.each { |script|
           script.downstream_buffer.push(line.chomp) if script.want_downstream
           unless script.watchfor.empty?
             script.watchfor.each_pair { |trigger, action|
               if line =~ trigger
-                new_thread = Thread.new {
-                  sleep 0.011 until Script.current
-                  begin
-                    action.call
-                  rescue
-                    echo "watchfor error: #{$!}"
+                start_gate = Queue.new
+                worker_registered = false
+                gate_release_failed = false
+                launcher_thread = Thread.current
+                begin
+                  new_thread = Thread.new {
+                    next unless Script.__send__(:__await_thread_gate, start_gate, launcher_thread, false)
+
+                    sleep 0.011 until Script.current
+                    begin
+                      action.call
+                    rescue
+                      echo "watchfor error: #{$!}"
+                    end
+                  }
+                  worker_registered = script.__send__(:__register_worker, new_thread)
+                ensure
+                  Thread.handle_interrupt(Exception => :never) do
+                    begin
+                      start_gate << worker_registered
+                    rescue Exception # rubocop:disable Lint/RescueException
+                      gate_release_failed = true
+                      raise
+                    ensure
+                      unless worker_registered && !gate_release_failed
+                        new_thread&.kill
+                        new_thread&.join
+                      end
+                    end
                   end
-                }
-                script.thread_group.add(new_thread)
+                end
               end
             }
           end
@@ -667,7 +1423,7 @@ module Lich
       end
 
       def Script.new_script_output(line)
-        for script in @@running
+        for script in __running_snapshot
           script.downstream_buffer.push(line.chomp) if script.want_script_output
         end
       end
@@ -718,7 +1474,7 @@ module Lich
 
       def Script.running
         list = Array.new
-        for script in @@running
+        for script in __running_snapshot
           list.push(script) unless script.hidden
         end
         return list
@@ -730,7 +1486,7 @@ module Lich
 
       def Script.hidden
         list = Array.new
-        for script in @@running
+        for script in __running_snapshot
           list.push(script) if script.hidden
         end
         return list
@@ -932,6 +1688,9 @@ module Lich
         @killer_mutex = Mutex.new
         @killed_externally = false
         @kill_source = nil
+        @kill_requested = false
+        @cleanup_started = false
+        @completed_successfully = false
         @ignore_pause = false
         data = nil
         if @file_name =~ /\.gz$/i
@@ -965,7 +1724,7 @@ module Lich
         data = nil
         @current_label = @label_order[0]
         @thread_group = ThreadGroup.new
-        @@running.push(self)
+        __publish if args.fetch(:publish, true)
         # return self
       end
 
@@ -977,35 +1736,206 @@ module Lich
       # ordinary script churn.
       #
       # Runtime kills run cleanup in a dedicated thread so the caller is not
-      # blocked. Shutdown kills run cleanup inline instead: the shutdown drain
-      # (see shutdown_script_drain.rb) kills every script in a tight loop, and on
-      # long sessions spawning one cleanup thread per script there pushes the
-      # process past the OS thread ceiling ("can't alloc thread"). Inline
-      # teardown at shutdown is also the order we want -- sequential, not a
-      # concurrent burst.
+      # blocked. The process shutdown drain runs cleanup inline: spawning one
+      # cleanup thread per script in long sessions can push the process past the
+      # OS thread ceiling ("can't alloc thread"). Shutdown requested from a
+      # normal script worker remains asynchronous so callback descendants belong
+      # to the target script rather than the caller.
       #
       # @param context [Symbol] :runtime for ordinary script stops, :shutdown
       #   when the owning Lich process is closing
       # @return [String] script name
-      def kill(context: :runtime)
+      def kill(context: :runtime, async: nil)
         unless VALID_KILL_CONTEXTS.include?(context)
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
 
+        if async.nil?
+          shutdown_cleanup = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+          async = context != :shutdown || (!Thread.current.group.equal?(ThreadGroup::Default) && !shutdown_cleanup)
+        end
+        launch_token = Object.new
+        cleanup_thread = nil
+        cleanup_released = false
+        cleanup_owned = false
+        gate_release_failed = false
+        start_gate = Queue.new if async
+        launch_owner = Thread.current
         source = @kill_source || caller[0..2]
-
-        if context == :shutdown
-          __run_kill_cleanup(source: source, context: context, record_metrics: false)
-        else
+        Thread.handle_interrupt(Exception => :never) do
           begin
-            Thread.new { __run_kill_cleanup(source: source, context: context, record_metrics: true) }
+            start_cleanup = Script.__send__(:__registry_synchronize) do
+              lifecycle_mutex.synchronize do
+                next false unless @@running.include?(self)
+                if @cleanup_started
+                  cleanup_active = @cleanup_launch_pending ||
+                                   (@cleanup_thread&.alive? && @cleanup_thread != Thread.current)
+                  next false if cleanup_active
+                end
+
+                @kill_requested = true
+                @cleanup_started = launch_token
+                @cleanup_launch_pending = true
+                @@stopping << self unless @@stopping.include?(self)
+                true
+              end
+            end
+            return @name unless start_cleanup
+
+            if async
+              cleanup_thread = Thread.new {
+                Script.__send__(:__await_thread_gate, start_gate, launch_owner, true)
+                __run_kill_cleanup(source: source, context: context, record_metrics: true)
+              }
+              ThreadGroup::Default.add(cleanup_thread)
+              __attach_cleanup_worker(cleanup_thread)
+              __claim_cleanup_thread(cleanup_thread)
+              cleanup_owned = true
+              raise ThreadError, 'cleanup thread stopped before ownership transfer' unless cleanup_thread.alive?
+
+              start_gate << true
+              cleanup_released = true
+            else
+              lifecycle_mutex.synchronize { @cleanup_thread = Thread.current }
+              cleanup_owned = true
+              __run_kill_cleanup_interruptibly(source: source, context: context, record_metrics: false)
+            end
           rescue ThreadError => e
+            raise unless @cleanup_started.equal?(launch_token)
+
+            cleanup_thread&.kill
             __log_kill_thread_fallback(e)
-            __run_kill_cleanup(source: source, context: context, record_metrics: false)
+            __run_kill_cleanup_interruptibly(source: source, context: context, record_metrics: false)
+          ensure
+            begin
+              if async && @cleanup_started.equal?(launch_token) && !cleanup_released
+                begin
+                  start_gate << true
+                rescue Exception # rubocop:disable Lint/RescueException
+                  gate_release_failed = true
+                  raise
+                ensure
+                  unless !gate_release_failed && cleanup_owned && cleanup_thread&.alive?
+                    cleanup_thread&.kill
+                    __run_kill_cleanup_interruptibly(source: source, context: context, record_metrics: false)
+                  end
+                end
+              end
+            ensure
+              if @cleanup_started.equal?(launch_token)
+                executor_abandoned = __finish_cleanup_launch
+                kill(:context => context, :async => true) if running? && executor_abandoned
+              end
+            end
           end
         end
 
         @name
+      end
+
+      # Reports whether this script remains in the running registry.
+      #
+      # @return [Boolean]
+      def running?
+        Script.__send__(:__registry_synchronize) { @@running.include?(self) }
+      end
+
+      # Reports whether teardown has been requested.
+      #
+      # @return [Boolean]
+      def stopping?
+        @kill_requested == true
+      end
+
+      def completed_successfully?
+        lifecycle_mutex.synchronize { @completed_successfully == true && !@exit_error }
+      end
+
+      # Waits for complete script teardown.
+      #
+      # A script worker cannot join its own script because that worker must
+      # return before the script can complete.
+      #
+      # Without a timeout, this method waits indefinitely.
+      #
+      # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
+      # @return [Script, nil] this script, or nil when the timeout expires
+      # @raise [ThreadError] when called by one of this script's workers
+      def join(timeout = nil)
+        raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
+        if running? && has_thread?(Thread.current)
+          raise ThreadError, 'cannot join the current script from one of its workers'
+        end
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout if timeout
+        loop do
+          running, cleanup_complete, current_worker = Script.__send__(:__registry_synchronize) do
+            lifecycle_mutex.synchronize do
+              [
+                @@running.include?(self),
+                @cleanup_complete == true,
+                Array(@stopping_threads).include?(Thread.current)
+              ]
+            end
+          end
+          return self if !running && (cleanup_complete || current_worker)
+
+          now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          remaining = deadline - now if deadline
+          return nil if remaining && remaining <= 0
+
+          wait_for = remaining ? [remaining, JOIN_WAIT_INTERVAL].min : JOIN_WAIT_INTERVAL
+          lifecycle_mutex.synchronize do
+            @stopped_condition ||= ConditionVariable.new
+            @stopped_condition.wait(lifecycle_mutex, wait_for)
+          end
+        end
+      end
+
+      # Requests teardown and waits for completion.
+      #
+      # @param context [Symbol] lifecycle context forwarded to {#kill}
+      # @param timeout [Numeric, nil] maximum seconds to wait
+      # @return [Script, nil] this script, or nil when the timeout expires
+      def kill_sync(context: :runtime, timeout: nil)
+        if running?
+          timeout ? kill(context: context, :async => true) : kill(context: context)
+        end
+        join(timeout)
+      end
+
+      # Adopts a script as a child of this script.
+      #
+      # @param script [Script] script to adopt
+      # @return [Script, nil] the child, or nil when child admission is closed
+      def register_child(script)
+        return nil unless script
+
+        accepted = child_scripts_mutex.synchronize do
+          __register_child_locked(script)
+        end
+        unless accepted
+          script.kill_sync(context: :runtime, timeout: CHILD_JOIN_TIMEOUT) if script.running?
+          return nil
+        end
+
+        script
+      end
+
+      # Removes a script from this script's children.
+      #
+      # @param script [Script] child to remove
+      # @return [Script] the removed child
+      def unregister_child(script)
+        child_scripts_mutex.synchronize { __unregister_child_locked(script) }
+        script
+      end
+
+      # Returns a snapshot of this script's children.
+      #
+      # @return [Array<Script>]
+      def child_scripts
+        child_scripts_mutex.synchronize { Array(@child_scripts).dup }
       end
 
       # Runs the script cleanup body used by {#kill}.
@@ -1025,6 +1955,13 @@ module Lich
       # @param record_metrics [Boolean] whether this cleanup can feed runtime metrics
       # @return [void]
       # @api private
+      def __run_kill_cleanup_interruptibly(**kwargs)
+        Thread.handle_interrupt(Exception => :immediate) do
+          __run_kill_cleanup(**kwargs)
+        end
+      end
+      private :__run_kill_cleanup_interruptibly
+
       def __run_kill_cleanup(source:, context:, record_metrics:)
         # Re-entrancy guard. A die_with cycle (A die_with B and B die_with A, or
         # a self-reference) reached on the inline cleanup path routes Script.kill
@@ -1037,73 +1974,670 @@ module Lich
         # cleanup body twice over already-nilled state, not skip it.)
         return if @killer_mutex.owned?
 
-        @killer_mutex.synchronize {
-          if @@running.include?(self)
-            instrument_kill = record_metrics && (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
-            started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
-            failed = false
-            begin
-              @thread_group.list.dup.each { |t|
-                unless t == Thread.current
-                  t.kill rescue nil
+        previous_cleanup_script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
+        previous_thread_group = Thread.current.group
+        cleanup_thread_group = __cleanup_worker_group
+        previous_group_owner = nil
+        moved_to_cleanup_group = false
+        cleanup_group_error = nil
+        move_allowed = previous_thread_group.equal?(ThreadGroup::Default) ||
+                       previous_thread_group.equal?(cleanup_thread_group)
+        if previous_cleanup_script
+          previous_group_owner = previous_cleanup_script
+          move_allowed = previous_group_owner.__send__(:__borrow_worker, Thread.current)
+        elsif !move_allowed
+          previous_group_owner = Script.__send__(:__script_owning_thread_group, previous_thread_group)
+          move_allowed = previous_group_owner&.__send__(:__borrow_worker, Thread.current)
+        end
+        unless move_allowed
+          cleanup_group_error = ThreadError.new(
+            "cannot establish cleanup ownership for #{@name}: source thread group is not managed"
+          )
+        end
+        if move_allowed
+          begin
+            RAW_THREAD_GROUP_ADD.bind_call(cleanup_thread_group, Thread.current)
+            moved_to_cleanup_group = true
+          rescue ThreadError => error
+            previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
+            cleanup_group_error = ThreadError.new(
+              "cannot establish cleanup ownership for #{@name}: #{error.message}"
+            )
+          end
+        end
+        Thread.current.thread_variable_set(CLEANUP_SCRIPT_THREAD_KEY, self)
+        begin
+          @killer_mutex.synchronize do
+            lifecycle_mutex.synchronize { @cleanup_thread = Thread.current }
+            if running?
+              instrument_kill = record_metrics && (context != :shutdown) && Script.__send__(:__script_kill_metrics_enabled?)
+              started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC) if instrument_kill
+              failed = false
+              cleanup_body_complete = false
+              begin
+                __close_child_launch_admission
+                stopping_threads = lifecycle_mutex.synchronize do
+                  @stopping_threads = __raw_worker_threads.reject { |thread| thread == Thread.current }
                 end
-              }
-              @thread_group.add(Thread.current)
-              # Forward the kill context so die_with dependents torn down during
-              # shutdown also run inline -- otherwise they route back through the
-              # default :runtime path and re-spawn the thread-per-kill burst that
-              # inline shutdown teardown exists to avoid.
-              @die_with.each { |script_name| Script.kill(script_name, context: context) }
-              @paused = false
-              @at_exit_procs.each { |p| report_errors { p.call } }
-              # Let each per-script-state subsystem (the hook registries, etc.)
-              # apply its own death policy for what this script registered.
-              # Subsystems register with ScriptDeath, so kill does not name them;
-              # cleanup keys on this instance (not its name), so a force: true
-              # sibling sharing our name is unaffected. Hooks persist by default
-              # (so register-and-exit patterns like ;alias keep working); a hook
-              # is only removed if it opted in with persist: false.
-              ScriptDeath.run(self)
-              # Release per-script watchfor procs (and the bindings they
-              # capture). The script is removed from @@running below, so they can
-              # never fire again; cleared to {} rather than nil so a concurrent
-              # new_downstream sweep still sees a safe, empty collection.
-              @watchfor = {}
-              # Same reasoning for the stream buffers: Script.new_downstream,
-              # new_downstream_xml and new_upstream run on the parser thread and
-              # push to these without a nil guard, and can fire in the window
-              # before the @@running.delete below. Reset to fresh empty buffers
-              # ("no pending lines") rather than nil so a concurrent push cannot
-              # raise NoMethodError. Distinct arrays - never the same object.
-              @downstream_buffer = LimitedArray.new
-              @upstream_buffer = LimitedArray.new
-              @die_with = @at_exit_procs = @match_stack_labels = @match_stack_strings = nil
-              @@running.delete(self)
-              unless @quiet
-                if @killed_externally
-                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
-                else
-                  respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
+                stopping_threads.each { |thread| thread.kill rescue nil }
+                children = __wait_for_child_launches
+                __stop_children(children, context)
+                raise cleanup_group_error if cleanup_group_error
+
+                @die_with ||= []
+                __run_cleanup_queue(@die_with) do |script_name|
+                  failed = true unless __run_cleanup_callback do
+                    Script.kill(script_name, context: context)
+                  end
                 end
-              end
-            rescue
-              failed = true
-              respond "--- Lich: error: #{$!}"
-              Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-            ensure
-              if instrument_kill
-                finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-                Script.__send__(
-                  :__record_kill_metric,
-                  :duration_ms => (finished_at - started_at) * 1000.0,
-                  :failed      => failed
-                )
+                @paused = false
+                @at_exit_procs ||= []
+                __run_cleanup_queue(@at_exit_procs) do |callback|
+                  failed = true unless __run_cleanup_callback { callback.call }
+                end
+                # ScriptDeath handlers are individually isolated by the
+                # registry and are safe to retry after executor cancellation.
+                ScriptDeath.run(self)
+                cleanup_body_complete = true
+              rescue SystemExit, ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+                failed = true
+                __record_exit_error(error)
+                __report_cleanup_error(error)
+                cleanup_body_complete = true
+              ensure
+                begin
+                  if instrument_kill && cleanup_body_complete
+                    finished_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                    Script.__send__(
+                      :__record_kill_metric,
+                      :duration_ms => (finished_at - started_at) * 1000.0,
+                      :failed      => failed
+                    )
+                  end
+                ensure
+                  __complete_stop(source, context) if cleanup_body_complete
+                end
               end
             end
           end
-        }
+        ensure
+          Thread.current.thread_variable_set(CLEANUP_SCRIPT_THREAD_KEY, previous_cleanup_script)
+          if moved_to_cleanup_group
+            begin
+              RAW_THREAD_GROUP_ADD.bind_call(previous_thread_group, Thread.current)
+              previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
+            rescue ThreadError
+              begin
+                borrowed_group = ThreadGroup.new
+                previous_group_owner&.__send__(:__adopt_borrowed_group, borrowed_group)
+                RAW_THREAD_GROUP_ADD.bind_call(borrowed_group, Thread.current)
+                previous_group_owner&.__send__(:__return_borrowed_worker, Thread.current)
+              rescue ThreadError
+                nil
+              end
+            end
+          end
+          lifecycle_mutex.synchronize do
+            @cleanup_thread = nil if @cleanup_thread == Thread.current
+            @stopped_condition&.broadcast
+          end
+        end
       end
       private :__run_kill_cleanup
+
+      def __run_cleanup_queue(queue)
+        __restore_cleanup_queue_claim
+        loop do
+          queued_entry = queue.first
+          break unless queued_entry
+
+          entry =
+            if queued_entry.is_a?(Array) && queued_entry.first.equal?(CLEANUP_QUEUE_ENTRY_MARKER)
+              queued_entry.last
+            else
+              queued_entry
+            end
+
+          claim = {
+            :queue            => queue,
+            :entry            => entry,
+            :queued_entry     => queued_entry,
+            :marker           => Object.new,
+            :marker_installed => false,
+            :dispatched       => false,
+            :restored_entry   => [CLEANUP_QUEUE_ENTRY_MARKER, entry]
+          }
+          @cleanup_queue_claim = claim
+          begin
+            queue[0] = claim[:marker]
+            claim[:marker_installed] = true
+            queue.shift
+            # Once dispatch is claimed, the entry remains at-most-once even if
+            # the cleanup executor is cancelled inside the callback.
+            claim[:dispatched] = true
+            yield entry
+          ensure
+            __restore_cleanup_queue_claim
+          end
+        end
+      ensure
+        __restore_cleanup_queue_claim
+      end
+      private :__run_cleanup_queue
+
+      def __restore_cleanup_queue_claim
+        Thread.handle_interrupt(Exception => :never) do
+          claim = @cleanup_queue_claim
+          return unless claim
+
+          unless claim[:dispatched]
+            marker_index = claim[:queue].find_index { |entry| entry.equal?(claim[:marker]) }
+            restored = claim[:restored_entry]
+            restored_index = claim[:queue].find_index { |entry| entry.equal?(restored) }
+            queued_index = claim[:queue].find_index { |entry| entry.equal?(claim[:queued_entry]) }
+            if marker_index
+              claim[:queue][marker_index] = restored
+            elsif claim[:marker_installed]
+              claim[:queue].unshift(restored) unless restored_index
+            elsif !queued_index && !claim[:queue].first.equal?(claim[:entry]) && !restored_index
+              claim[:queue].unshift(restored)
+            end
+          end
+          @cleanup_queue_claim = nil if @cleanup_queue_claim.equal?(claim)
+        end
+      end
+      private :__restore_cleanup_queue_claim
+
+      def __run_cleanup_callback
+        yield
+        true
+      rescue SystemExit, ScriptError, NoMemoryError, SecurityError, SystemStackError, StandardError => error
+        __record_exit_error(error)
+        __report_cleanup_error(error)
+        false
+      end
+      private :__run_cleanup_callback
+
+      def __report_cleanup_error(error)
+        respond "--- Lich: error: #{error}"
+        Lich.log "error: #{error}\n\t#{error.backtrace.join("\n\t")}"
+      end
+      private :__report_cleanup_error
+
+      def __launch_child
+        launch_token = Object.new
+        Thread.handle_interrupt(Exception => :never) do
+          begin
+            child_scripts_mutex.synchronize do
+              return nil if @child_shutdown_started
+
+              @child_launches ||= {}
+              @child_launches[launch_token] = Thread.current
+            end
+            Thread.handle_interrupt(Exception => :immediate) { yield }
+          ensure
+            child_scripts_mutex.synchronize do
+              @child_launches&.delete(launch_token)
+              @child_launch_condition&.broadcast
+            end
+          end
+        end
+      end
+      private :__launch_child
+
+      def __register_child_locked(script)
+        return nil if @child_shutdown_started
+
+        script.__send__(:__while_running) do
+          __adopt_child_locked(script)
+        end
+      end
+      private :__register_child_locked
+
+      def __adopt_child(script)
+        child_scripts_mutex.synchronize { __adopt_child_locked(script) }
+      end
+      private :__adopt_child
+
+      def __adopt_child_locked(script)
+        return nil if @child_shutdown_started
+
+        CHILD_RELATIONSHIP_MUTEX.synchronize do
+          raise ArgumentError, 'script cannot be its own child' if script.equal?(self)
+
+          ancestor = self
+          while ancestor
+            raise ArgumentError, 'script child relationship would create a cycle' if ancestor.equal?(script)
+
+            ancestor = ancestor.__send__(:__parent_script)
+          end
+          current_parent = script.__send__(:__parent_script)
+          if current_parent && !current_parent.equal?(self)
+            raise ArgumentError, "script already belongs to parent #{current_parent.name}"
+          end
+
+          script.__send__(:__set_parent_script, self)
+          script.hidden = true if hidden
+          script.no_kill_all = true if no_kill_all
+          script.no_pause_all = true if no_pause_all
+          @child_scripts ||= []
+          @child_scripts << script unless @child_scripts.include?(script)
+        end
+        script
+      end
+      private :__adopt_child_locked
+
+      def __unregister_child_locked(script)
+        CHILD_RELATIONSHIP_MUTEX.synchronize do
+          @child_scripts&.delete(script)
+          script.__send__(:__set_parent_script, nil) if script.__send__(:__parent_script).equal?(self)
+        end
+      end
+      private :__unregister_child_locked
+
+      def __close_child_launch_admission
+        child_scripts_mutex.synchronize do
+          @child_shutdown_started = true
+        end
+      end
+      private :__close_child_launch_admission
+
+      def __wait_for_child_launches
+        child_scripts_mutex.synchronize do
+          if @child_launches
+            @child_launches.delete_if { |_token, owner| !owner.alive? }
+            @child_launch_condition ||= ConditionVariable.new
+            until @child_launches.empty?
+              @child_launch_condition.wait(child_scripts_mutex, JOIN_WAIT_INTERVAL)
+              @child_launches.delete_if { |_token, owner| !owner.alive? }
+            end
+          end
+          Array(@child_scripts).dup
+        end
+      end
+      private :__wait_for_child_launches
+
+      def __stop_children(children, context)
+        return if children.empty?
+        # The process-wide shutdown drain already owns every running script.
+        # Recursing here would allocate one cleanup thread per child.
+        return if context == :shutdown
+
+        children.each do |child|
+          child.kill(context: context, async: true) if child.running?
+        rescue StandardError => e
+          Lich.log("error: failed to stop child script #{child.name}: #{e}") if defined?(Lich) && Lich.respond_to?(:log)
+        end
+
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + CHILD_JOIN_TIMEOUT
+        children.each do |child|
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break if remaining <= 0
+
+          next if child.join(remaining)
+
+          Lich.log("warning: child script #{child.name} did not stop within #{CHILD_JOIN_TIMEOUT}s") if defined?(Lich) && Lich.respond_to?(:log)
+        end
+      end
+      private :__stop_children
+
+      def child_scripts_mutex
+        return @child_scripts_mutex if @child_scripts_mutex
+
+        CHILD_MUTEX_INITIALIZER.synchronize { @child_scripts_mutex ||= Mutex.new }
+      end
+      private :child_scripts_mutex
+
+      def lifecycle_mutex
+        return @lifecycle_mutex if @lifecycle_mutex
+
+        LIFECYCLE_MUTEX_INITIALIZER.synchronize { @lifecycle_mutex ||= Mutex.new }
+      end
+      private :lifecycle_mutex
+
+      def __parent_script
+        @parent_script
+      end
+      private :__parent_script
+
+      def __set_parent_script(parent)
+        @parent_script = parent
+      end
+      private :__set_parent_script
+
+      def __record_exit_error(error)
+        lifecycle_mutex.synchronize { @exit_error ||= error }
+      end
+      private :__record_exit_error
+
+      def __record_successful_exit
+        lifecycle_mutex.synchronize { @completed_successfully = true unless @exit_error }
+      end
+      private :__record_successful_exit
+
+      def __cleanup_complete?
+        lifecycle_mutex.synchronize { @cleanup_complete == true }
+      end
+      private :__cleanup_complete?
+
+      def __register_worker(thread)
+        registration = Object.new
+        tracked_rejection = false
+        accepted = false
+        accepted = Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            if @@running.include?(self) && !@kill_requested
+              __raw_add_worker(thread)
+              true
+            else
+              unless thread == Thread.current
+                @stopping_threads = (Array(@stopping_threads) + [thread]).uniq
+                unless @worker_admission_closed
+                  @worker_registrations ||= Set.new
+                  @worker_registrations.add(registration)
+                  tracked_rejection = true
+                end
+              end
+              false
+            end
+          end
+        end
+        accepted
+      ensure
+        begin
+          unless accepted || thread == Thread.current
+            begin
+              thread.kill
+              thread.join unless thread == Thread.current
+            rescue StandardError
+              nil
+            end
+          end
+        ensure
+          if tracked_rejection
+            lifecycle_mutex.synchronize do
+              @worker_registrations&.delete(registration)
+              @stopped_condition&.broadcast
+            end
+          end
+        end
+      end
+      private :__register_worker
+
+      def __raw_add_worker(thread)
+        RAW_THREAD_GROUP_ADD.bind_call(@thread_group, thread)
+      end
+      private :__raw_add_worker
+
+      def __raw_worker_threads
+        groups = [@thread_group, @cleanup_thread_group, *Array(@borrowed_thread_groups)].compact
+        group_threads = groups.flat_map { |group| RAW_THREAD_GROUP_LIST.bind_call(group) }
+        (group_threads + Array(@borrowed_workers)).uniq
+      end
+      private :__raw_worker_threads
+
+      def __public_worker_threads
+        RAW_THREAD_GROUP_LIST.bind_call(@thread_group).dup
+      end
+      private :__public_worker_threads
+
+      def __owns_public_thread_group?(group)
+        @thread_group.equal?(group)
+      end
+      private :__owns_public_thread_group?
+
+      def __borrow_worker(thread)
+        lifecycle_mutex.synchronize do
+          return false if @cleanup_complete
+
+          @borrowed_workers ||= Set.new
+          @borrowed_workers.add(thread)
+          true
+        end
+      end
+      private :__borrow_worker
+
+      def __return_borrowed_worker(thread)
+        lifecycle_mutex.synchronize do
+          @borrowed_workers&.delete(thread)
+          @stopped_condition&.broadcast
+        end
+      end
+      private :__return_borrowed_worker
+
+      def __adopt_borrowed_group(group)
+        lifecycle_mutex.synchronize do
+          @borrowed_thread_groups ||= Set.new
+          @borrowed_thread_groups.add(group)
+          @stopped_condition&.broadcast
+        end
+      end
+      private :__adopt_borrowed_group
+
+      def __attach_startup_worker(thread)
+        __raw_add_worker(thread)
+        thread
+      end
+      private :__attach_startup_worker
+
+      def __claim_cleanup_thread(thread)
+        lifecycle_mutex.synchronize { @cleanup_thread = thread }
+        thread
+      end
+      private :__claim_cleanup_thread
+
+      def __finish_cleanup_launch
+        lifecycle_mutex.synchronize do
+          @cleanup_launch_pending = false
+          !@cleanup_thread || !@cleanup_thread.alive? || @cleanup_thread == Thread.current
+        end
+      end
+      private :__finish_cleanup_launch
+
+      def __cleanup_worker_group
+        lifecycle_mutex.synchronize { @cleanup_thread_group ||= ThreadGroup.new }
+      end
+      private :__cleanup_worker_group
+
+      def __attach_cleanup_worker(thread)
+        RAW_THREAD_GROUP_ADD.bind_call(__cleanup_worker_group, thread)
+        thread
+      end
+      private :__attach_cleanup_worker
+
+      def __worker_threads
+        __raw_worker_threads
+      end
+      private :__worker_threads
+
+      def __enclose_worker_group
+        lifecycle_mutex.synchronize { RAW_THREAD_GROUP_ENCLOSE.bind_call(@thread_group) }
+        self
+      end
+      private :__enclose_worker_group
+
+      def __worker_group_enclosed?
+        lifecycle_mutex.synchronize { RAW_THREAD_GROUP_ENCLOSED.bind_call(@thread_group) }
+      end
+      private :__worker_group_enclosed?
+
+      def __managed_thread_group
+        lifecycle_mutex.synchronize do
+          @thread_group_handle ||= @thread_group.extend(ThreadGroupHandle).__send__(:__attach_script, self)
+        end
+      end
+      private :__managed_thread_group
+
+      def __publish(admitted = false)
+        Script.__send__(:__publish_to_registry, :admitted => admitted) do
+          Script.__send__(:__registry_synchronize) do
+            Script.__send__(:__prune_completed_stops_locked)
+            @@running.push(self) unless @@running.include?(self)
+          end
+        end
+        self
+      end
+      private :__publish
+
+      def __publish_generated(prefix, admitted)
+        Script.__send__(:__publish_to_registry, :admitted => admitted) do
+          Script.__send__(:__registry_synchronize) do
+            Script.__send__(:__prune_completed_stops_locked)
+            num = '1'
+            num.succ! while @@running.any? { |script| script.name == "#{prefix}#{num}" }
+            @name = "#{prefix}#{num}"
+            @@running.push(self)
+          end
+        end
+        self
+      end
+      private :__publish_generated
+
+      def __while_running
+        Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            return nil unless @@running.include?(self) && !stopping?
+
+            yield
+          end
+        end
+      end
+      private :__while_running
+
+      def __discard_startup
+        parent = nil
+        Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            @@running.delete(self)
+            @@stopping.delete(self)
+            @worker_admission_closed = true
+            @cleanup_complete = true
+            CHILD_RELATIONSHIP_MUTEX.synchronize do
+              parent = @parent_script
+              @parent_script = nil
+            end
+            @stopped_condition&.broadcast
+          end
+        end
+        parent&.unregister_child(self)
+        self
+      end
+      private :__discard_startup
+
+      def __complete_stop(source, context)
+        begin
+          @watchfor = {}
+          @downstream_buffer = LimitedArray.new
+          @upstream_buffer = LimitedArray.new
+          @match_stack_labels = @match_stack_strings = nil
+          unless @quiet
+            if @killed_externally
+              respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} was killed. (#{source.first})")
+            else
+              respond("--- Lich: #{@custom ? 'custom/' : ''}#{@name} has exited.")
+            end
+          end
+        ensure
+          late_workers = nil
+          Script.__send__(:__registry_synchronize) do
+            lifecycle_mutex.synchronize do
+              late_workers = __raw_worker_threads.reject { |thread| thread == Thread.current }
+              @stopping_threads = (Array(@stopping_threads) + late_workers).uniq
+              @@running.delete(self)
+              @stopped_condition&.broadcast
+            end
+          end
+          late_workers.each { |thread| thread.kill rescue nil }
+          workers_stopped = __wait_for_worker_shutdown(:wait => context != :shutdown)
+          __finalize_stop if workers_stopped
+        end
+      end
+      private :__complete_stop
+
+      def __wait_for_worker_shutdown(wait:)
+        loop do
+          workers = lifecycle_mutex.synchronize do
+            current_workers = __raw_worker_threads
+            @stopping_threads = (Array(@stopping_threads) + current_workers).uniq
+            @stopping_threads.reject { |thread| thread == Thread.current || thread == @cleanup_thread || !thread.alive? }
+          end
+          if workers.empty?
+            done = lifecycle_mutex.synchronize do
+              if !@worker_registrations || @worker_registrations.empty?
+                @worker_admission_closed = true
+                true
+              elsif !wait
+                false
+              else
+                @stopped_condition ||= ConditionVariable.new
+                @stopped_condition.wait(lifecycle_mutex)
+                nil
+              end
+            end
+            return true if done
+            return false if done == false
+
+            next
+          end
+
+          workers.each { |thread| thread.kill rescue nil }
+          return false unless wait
+
+          workers.each do |thread|
+            thread.join
+          rescue StandardError => e
+            __record_exit_error(e)
+            Lich.log("error: worker shutdown failed for #{@name}: #{e.class}: #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+          end
+        end
+      end
+      private :__wait_for_worker_shutdown
+
+      def __refresh_deferred_stop(context: :shutdown)
+        abandoned_cleanup = Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            if @cleanup_started && !@cleanup_launch_pending && @@running.include?(self) &&
+               (!@cleanup_thread || !@cleanup_thread.alive?)
+              true
+            end
+          end
+        end
+        if abandoned_cleanup
+          __run_kill_cleanup(
+            :source         => @kill_source || ['abandoned cleanup recovery'],
+            :context        => context,
+            :record_metrics => false
+          )
+        end
+
+        should_refresh = Script.__send__(:__registry_synchronize) do
+          lifecycle_mutex.synchronize do
+            cleanup_active_elsewhere = @cleanup_thread&.alive? && @cleanup_thread != Thread.current
+            @cleanup_started && !@cleanup_complete && !@@running.include?(self) && !cleanup_active_elsewhere
+          end
+        end
+        __finalize_stop if should_refresh && __wait_for_worker_shutdown(:wait => false)
+      end
+      private :__refresh_deferred_stop
+
+      def __finalize_stop
+        finalization_mutex = lifecycle_mutex.synchronize { @finalization_mutex ||= Mutex.new }
+        finalization_mutex.synchronize do
+          return if lifecycle_mutex.synchronize { @cleanup_complete }
+
+          parent = nil
+          CHILD_RELATIONSHIP_MUTEX.synchronize { parent = @parent_script }
+          parent&.unregister_child(self)
+          CHILD_RELATIONSHIP_MUTEX.synchronize { @parent_script = nil }
+          lifecycle_mutex.synchronize do
+            @die_with = @at_exit_procs = nil
+            @cleanup_complete = true
+            @stopped_condition&.broadcast
+          end
+          Script.__send__(:__discard_completed_stop, self)
+        end
+      end
+      private :__finalize_stop
 
       # Logs when {#kill} cannot allocate its normal cleanup thread.
       #
@@ -1150,11 +2684,11 @@ module Lich
       end
 
       def thread_group
-        @thread_group
+        __managed_thread_group
       end
 
       def has_thread?(t)
-        @thread_group.list.include?(t)
+        __raw_worker_threads.include?(t)
       end
 
       def pause
@@ -1276,77 +2810,193 @@ module Lich
       end
     end
 
+    class SubScript < Script
+      # Starts an anonymous script backed by a Ruby block.
+      #
+      # @param parent [Script, nil] owning script
+      # @param quiet [Boolean] suppress lifecycle messages
+      # @yield block executed by the new script
+      # @return [SubScript, false] the new script, or false when startup
+      #   admission is closed or the parent refuses adoption
+      def SubScript.start(parent: Script.current, quiet: true, &block)
+        raise ArgumentError, 'a block is required' unless block
+
+        startup_reservation = Object.new
+        begin
+          startup_status = Script.__send__(:__begin_start, startup_reservation)
+          return false if startup_status == :shutdown
+
+          starter = proc do
+            new_script = SubScript.new(:quiet => quiet, :publish => false)
+            start_gate = Queue.new
+            setup_complete = false
+            launcher_thread = Thread.current
+            gate_release_failed = false
+            begin
+              new_thread = Thread.new {
+                begin
+                  next unless Script.__send__(:__await_thread_gate, start_gate, launcher_thread, false)
+
+                  script = new_script
+                  if Script.current
+                    Thread.current.priority = 1
+                    respond("--- Lich: #{script.name} active.") unless script.quiet
+                    Script.__send__(
+                      :__execute,
+                      script,
+                      :on_error => proc { |error| Script.__send__(:__report_subscript_error, error) },
+                      &block
+                    )
+                  else
+                    respond '--- Lich: failed to start subscript'
+                  end
+                ensure
+                  new_script.kill if new_script.running? && !new_script.stopping?
+                end
+              }
+              new_script.__send__(:__attach_startup_worker, new_thread)
+              next false if parent && !parent.__send__(:__adopt_child, new_script)
+
+              new_script.__send__(:__publish, true)
+              setup_complete = true
+            ensure
+              Thread.handle_interrupt(Exception => :never) do
+                begin
+                  start_gate << setup_complete
+                rescue Exception # rubocop:disable Lint/RescueException
+                  gate_release_failed = true
+                  raise
+                ensure
+                  unless setup_complete && !gate_release_failed
+                    new_thread&.kill
+                    new_thread&.join
+                    parent.unregister_child(new_script) if parent
+                    new_script.__send__(:__discard_startup)
+                  end
+                end
+              end
+            end
+            new_script
+          end
+
+          if parent
+            parent.__send__(:__launch_child, &starter) || false
+          else
+            starter.call
+          end
+        ensure
+          Script.__send__(:__finish_start, startup_reservation)
+        end
+      end
+
+      # SubScript has no source file or eval string, so it initializes only the
+      # runtime state shared by ordinary scripts.
+      # rubocop:disable Lint/MissingSuper
+      def initialize(quiet: true, publish: true)
+        @custom = false
+        @vars = []
+        @downstream_buffer = LimitedArray.new
+        @downstream_buffer.max_size = 400
+        @killer_mutex = Mutex.new
+        @want_downstream = true
+        @want_downstream_xml = false
+        @want_script_output = false
+        @upstream_buffer = LimitedArray.new
+        @want_upstream = false
+        @unique_buffer = LimitedArray.new
+        @at_exit_procs = []
+        @watchfor = {}
+        @hidden = false
+        @paused = false
+        @silent = false
+        @quiet = quiet
+        @safe = false
+        @no_echo = false
+        @thread_group = ThreadGroup.new
+        @die_with = []
+        @no_pause_all = false
+        @no_kill_all = false
+        @match_stack_labels = []
+        @match_stack_strings = []
+        @killed_externally = false
+        @kill_source = nil
+        @kill_requested = false
+        @cleanup_started = false
+        @completed_successfully = false
+        @ignore_pause = false
+        __publish if publish
+      end
+
+      def __publish(admitted = false)
+        __publish_generated('subscript', admitted)
+      end
+      private :__publish
+      # rubocop:enable Lint/MissingSuper
+    end
+
     class ExecScript < Script
-      @@name_exec_mutex = Mutex.new
       attr_reader :cmd_data
 
       def ExecScript.start(cmd_data, options = {})
         options = { :quiet => true } if options == true
-        unless (new_script = ExecScript.new(cmd_data, options))
-          respond '--- Lich: failed to start exec script'
-          return false
-        end
-        new_thread = Thread.new {
-          100.times { break if Script.current == new_script; sleep 0.01 }
+        startup_reservation = Object.new
+        begin
+          startup_status = Script.__send__(:__begin_start, startup_reservation)
+          return false if startup_status == :shutdown
 
-          if (script = Script.current)
-            Thread.current.priority = 1
-            respond("--- Lich: #{script.name} active.") unless script.quiet
-            begin
-              script_binding = TRUSTED_SCRIPT_BINDING.call
-              eval('script = Script.current', script_binding, script.name.to_s)
-              eval(cmd_data, script_binding, script.name.to_s)
-              Script.current.kill
-            rescue SystemExit
-              Script.current.kill
-            rescue SyntaxError
-              respond "--- SyntaxError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "SyntaxError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue ScriptError
-              respond "--- ScriptError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "ScriptError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue NoMemoryError
-              respond "--- NoMemoryError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "NoMemoryError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue LoadError
-              respond("--- LoadError: #{$!}")
-              respond "--- LoadError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "LoadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue SecurityError
-              respond "--- SecurityError: #{$!}"
-              respond $!.backtrace[0..1]
-              Lich.log "SecurityError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue ThreadError
-              respond "--- ThreadError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "ThreadError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue SystemStackError
-              respond "--- SystemStackError: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "SystemStackError: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
-            rescue StandardError
-              respond "--- Lich error: #{$!}"
-              respond $!.backtrace.first
-              Lich.log "Exception: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-              Script.current.kill
+          new_script = ExecScript.new(cmd_data, options.merge(:publish => false))
+          start_gate = Queue.new
+          setup_complete = false
+          launcher_thread = Thread.current
+          gate_release_failed = false
+          begin
+            new_thread = Thread.new {
+              begin
+                next unless Script.__send__(:__await_thread_gate, start_gate, launcher_thread, false)
+
+                script = new_script
+                if Script.current
+                  Thread.current.priority = 1
+                  respond("--- Lich: #{script.name} active.") unless script.quiet
+                  Script.__send__(
+                    :__execute,
+                    script,
+                    :on_error => proc { |error| Script.__send__(:__report_exec_error, error) }
+                  ) do
+                    script_binding = TRUSTED_SCRIPT_BINDING.call
+                    eval('script = Script.current', script_binding, script.name.to_s)
+                    eval(cmd_data, script_binding, script.name.to_s)
+                  end
+                else
+                  respond 'start_exec_script screwed up...'
+                end
+              ensure
+                new_script.kill if new_script.running? && !new_script.stopping?
+              end
+            }
+            new_script.__send__(:__attach_startup_worker, new_thread)
+            new_script.__send__(:__publish, true)
+            setup_complete = true
+          ensure
+            Thread.handle_interrupt(Exception => :never) do
+              begin
+                start_gate << setup_complete
+              rescue Exception # rubocop:disable Lint/RescueException
+                gate_release_failed = true
+                raise
+              ensure
+                unless setup_complete && !gate_release_failed
+                  new_thread&.kill
+                  new_thread&.join
+                  new_script.__send__(:__discard_startup)
+                end
+              end
             end
-          else
-            respond 'start_exec_script screwed up...'
           end
-        }
-        new_script.thread_group.add(new_thread)
-        new_script
+          new_script
+        ensure
+          Script.__send__(:__finish_start, startup_reservation)
+        end
       end
 
       # FIXME: when modernized, ensure proper use of variables and init of parent class
@@ -1381,16 +3031,21 @@ module Lich
         @no_kill_all = false
         @match_stack_labels = Array.new
         @match_stack_strings = Array.new
-        if flags[:name].nil?
-          num = '1'; num.succ! while @@running.any? { |s| s.name == "exec#{num}" }
-          @name = "exec#{num}"
-        else
-          num = '1'; num.succ! while @@running.any? { |s| s.name == "#{flags[:name]}#{num}" }
-          @name = "#{flags[:name]}#{num}"
-        end
-        @@running.push(self)
+        @name_prefix = flags[:name] || 'exec'
+        @killed_externally = false
+        @kill_source = nil
+        @kill_requested = false
+        @cleanup_started = false
+        @completed_successfully = false
+        @ignore_pause = false
+        __publish if flags.fetch(:publish, true)
       end
       # rubocop:enable Lint/MissingSuper
+
+      def __publish(admitted = false)
+        __publish_generated(@name_prefix, admitted)
+      end
+      private :__publish
 
       def get_next_label
         echo 'goto labels are not available in exec scripts.'
@@ -1403,7 +3058,7 @@ module Lich
       # rubocop:disable Lint/MissingSuper
       # rubocop:disable Lint/UselessAssignment
       # rubocop:disable Lint/InterpolationCheck
-      def initialize(file_name, cli_vars = [])
+      def initialize(file_name, cli_vars = [], publish = true)
         @name = /.*[\/\\]+([^\.]+)\./.match(file_name).captures.first
         @file_name = file_name
         @vars = Array.new
@@ -1606,7 +3261,7 @@ module Lich
         data = nil
         @current_label = @label_order[0]
         @thread_group = ThreadGroup.new
-        @@running.push(self)
+        __publish if publish
         # return self
       end
       # rubocop:enable Lint/InterpolationCheck

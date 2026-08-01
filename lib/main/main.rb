@@ -64,26 +64,23 @@ reconnect_if_wanted = proc {
   require File.join(LIB_DIR, 'common', 'shutdown_log.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_script_drain.rb')
   require File.join(LIB_DIR, 'common', 'shutdown_watchdog.rb')
+  require File.join(LIB_DIR, 'main', 'user_exit_dispatch.rb')
 
+  # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
+  # kills scripts and runs their before_dying hooks inline (any of which can
+  # hang) before the main teardown/watchdog below is reached. arm is idempotent,
+  # so the later arm during teardown is a no-op. Both the primary and detachable
+  # frontend exit paths route through Lich::Main::UserExitDispatch so neither can
+  # run the hang-prone inline drain without the watchdog armed.
   run_orderly_user_shutdown = proc { |source: :primary_frontend|
-    # Guard the user-initiated ("...exit") drain too: it kills scripts and runs
-    # their before_dying hooks inline (any of which can hang) before the main
-    # teardown/watchdog below is reached, so arm here as well. arm is
-    # idempotent, so the later arm during teardown is a no-op. Both the primary
-    # and detachable frontend exit paths route through here so neither can run
-    # the hang-prone inline drain without the watchdog armed.
-    Lich::Common::ShutdownWatchdog.arm if defined?(Lich::Common::ShutdownWatchdog)
-    Lich::Common::OrderlyShutdown.request_user_exit(
-      source: source,
-      active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
-    )
+    Lich::Main::UserExitDispatch.run_orderly_user_shutdown(source: source)
   }
 
   run_best_effort_shutdown_cleanup = proc {
     Lich::Common::BestEffortShutdownCleanup.run(
       coordinator: Lich::Common::ShutdownCoordinator,
-      initial_scripts: (Script.running + Script.hidden),
-      remaining_scripts: proc { Script.running + Script.hidden },
+      initial_scripts: Script.begin_shutdown,
+      remaining_scripts: proc { Script.progress_shutdown },
       script_drain: Lich::Common::ShutdownScriptDrain,
       vars: Vars,
       active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
@@ -235,13 +232,9 @@ reconnect_if_wanted = proc {
       Lich.log "info: Current WINE working directory is #{custom_launch_dir}"
     end
     if ARGV.include?('--without-frontend')
-      Frontend.client = if ARGV.any? { |a| a =~ /^--saga$/i }
-                          'saga'
-                        elsif @argv_options[:detachable_client_port] && !ARGV.any? { |a| a =~ /^--genie$/i }
-                          'profanity'
-                        else
-                          'unknown'
-                        end
+      Frontend.client = Lich::Common::Authentication::LoginHelpers.resolve_headless_frontend(
+        ARGV, detachable_client: !@argv_options[:detachable_client_port].nil?
+      )
       unless (game_key = @launch_data.find { |opt| opt =~ /KEY=/ }) && (game_key = game_key.split('=').last.chomp)
         $stdout.puts "error: launch_data contains no KEY info"
         Lich.log "error: launch_data contains no KEY info"
@@ -918,9 +911,10 @@ reconnect_if_wanted = proc {
         # Individual script names are reported at 2x the step threshold so normal
         # teardown stays quiet while slow exits remain visible.
         script_shutdown_slow_threshold = shutdown_step_trace_thresholds.fetch('script shutdown', 0.75) * 2
+        scripts_at_shutdown = Script.begin_shutdown
         script_shutdown_result = Lich::Common::ShutdownScriptDrain.run(
-          initial_scripts: (Script.running + Script.hidden),
-          remaining_scripts: proc { Script.running + Script.hidden },
+          initial_scripts: scripts_at_shutdown,
+          remaining_scripts: proc { Script.progress_shutdown },
           slow_threshold: script_shutdown_slow_threshold
         )
       end

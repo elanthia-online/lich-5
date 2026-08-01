@@ -77,6 +77,10 @@ RSpec.configure do |config|
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
     Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
+    # Drain Infomon's async write queue so a queued INSERT from a prior example
+    # cannot land in a later example's freshly reset table (seed/timing-dependent
+    # cross-file leakage). Specs that need a clean slate still call reset! themselves.
+    Lich::Gemstone::Infomon.flush if defined?(Lich::Gemstone::Infomon) && Lich::Gemstone::Infomon.respond_to?(:flush)
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
@@ -91,6 +95,17 @@ RSpec.configure do |config|
       end
       g.class_variable_set(:@@right_hand, nil) if g.class_variable_defined?(:@@right_hand)
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
+
+      # Staged registry refresh buffers (present once lib/common/gameobj.rb is
+      # loaded). nil when idle; reset so a refresh left open by one example
+      # never leaks into the next.
+      %i[@@staging_inv @@staging_reserve @@staging_loot @@staging_npcs
+         @@staging_npc_status @@staging_pcs @@staging_pc_status @@staging_room_desc
+         @@staging_fam_room_desc @@staging_fam_loot @@staging_fam_npcs
+         @@staging_fam_pcs].each do |cv|
+        g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
+      end
+      g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
     end
 
     # DR mocks from spec_helper - these have reset! defined in the mock (not production)
@@ -1077,6 +1092,14 @@ module Lich
           @@npcs = []
         end
 
+        # Mirrors the production API so XMLParser#reset - which discards
+        # in-flight staged refreshes when resynchronizing - works against this
+        # lightweight double. The double has no staging buffers, so it is a
+        # no-op here.
+        def discard_staged_refreshes
+          nil
+        end
+
         def set_right_hand(obj)
           @right_hand = obj
         end
@@ -1734,6 +1757,13 @@ end unless defined?(Lich::Util)
 
 module Kernel
   def pause(_seconds = nil); end unless method_defined?(:pause)
+
+  # Stands in for the real global_defs get_settings (character-scoped settings).
+  # Returns an OpenStruct so any setting key (e.g. worn_trashcan) reads back nil
+  # by default; override per example with allow(self).to receive(:get_settings).
+  def get_settings(_character_suffixes = [])
+    OpenStruct.new
+  end unless method_defined?(:get_settings)
 
   def waitrt?; end unless method_defined?(:waitrt?)
 
