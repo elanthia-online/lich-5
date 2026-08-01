@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../../lib/common/limitedarray'
 require_relative '../../../lib/common/feature_flags'
 # Load the real hook classes so the ScriptDeath cleanup that the kill path runs
 # resolves against real registries (matching production) rather than the
@@ -22,7 +23,7 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
   end
 
   after(:context) do
-    %i[ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+    %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
       Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
     end
     $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
@@ -30,6 +31,7 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
 
   before do
     script_class.class_variable_set(:@@running, [])
+    script_class.class_variable_set(:@@stopping, [])
     # Empty hook registries so the ScriptDeath cleanup has no stale state to act
     # on and nothing leaks across examples (these are class-level).
     Lich::Common::DownstreamHook.class_variable_set(:@@downstream_hooks, {})
@@ -46,6 +48,7 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
 
   after do
     script_class.class_variable_set(:@@running, [])
+    script_class.class_variable_set(:@@stopping, [])
   end
 
   describe 're-entrancy guard (Fix 1)' do
@@ -80,9 +83,9 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
       script = build_script(name: 'idempotent')
       script.at_exit { cleanup_counts[:n] += 1 }
       script_class.class_variable_set(:@@running, [script])
-      allow(Thread).to receive(:new) { |&block| block.call; instance_double(Thread) }
 
       script.kill
+      expect(script.join(1)).to equal(script)
       expect(script_class.list).to be_empty
       expect(cleanup_counts[:n]).to eq(1)
 
@@ -160,9 +163,10 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
     it 'still runs cleanup asynchronously in a dedicated thread' do
       script = build_script(name: 'async-target')
       script_class.class_variable_set(:@@running, [script])
-      expect(Thread).to receive(:new) { |&block| block.call; instance_double(Thread) }
+      expect(Thread).to receive(:new).and_call_original
 
       expect(script.kill).to eq('async-target')
+      expect(script.join(1)).to equal(script)
 
       expect(script_class.list).to be_empty
     end
@@ -177,7 +181,7 @@ RSpec.describe 'Lich::Common::Script shutdown kill path' do
   end
 
   def build_script(name:, die_with: [])
-    thread_group = instance_double(ThreadGroup, list: [], add: true)
+    thread_group = ThreadGroup.new
     script_class.allocate.tap do |script|
       script.instance_variable_set(:@name, name)
       script.instance_variable_set(:@custom, false)

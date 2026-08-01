@@ -127,11 +127,35 @@ RSpec.describe Lich::Common::OrderlyShutdown do
       scripts_provider: proc { [current_script, other_script] }
     )
 
-    expect(result).to be_completed
+    expect(result).not_to be_completed
+    expect(result).not_to be_scripts_drained
     expect(coordinator.reason).to eq(:user_exit)
     expect(coordinator.current.source).to eq('script:shutdown-caller')
     expect(script_drain.calls.first[:initial_scripts]).to eq([other_script])
     expect(script_drain.calls.first[:remaining_scripts].call).to eq([other_script])
+  end
+
+  it 'closes script startup admission before the production drain snapshot' do
+    coordinator.reset!
+    current_script = Struct.new(:name).new('shutdown-caller')
+    other_script = Struct.new(:name).new('other')
+    allow(Script).to receive(:begin_shutdown).and_return([current_script, other_script])
+    allow(Script).to receive(:progress_shutdown).and_return([current_script, other_script])
+
+    result = described_class.request_user_exit(
+      source: 'script:shutdown-caller',
+      current_script: current_script,
+      coordinator: coordinator,
+      script_drain: script_drain,
+      vars: vars,
+      game: game,
+      active_sessions_lifecycle: active_sessions_lifecycle
+    )
+
+    expect(result).not_to be_completed
+    expect(result).not_to be_scripts_drained
+    expect(Script).to have_received(:begin_shutdown).once
+    expect(script_drain.calls.first[:initial_scripts]).to eq([other_script])
   end
 
   it 'continues later cleanup steps when one step fails' do

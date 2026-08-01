@@ -29,11 +29,19 @@ RSpec.describe Lich::Common::GUI::PasswordCipher do
         expect(described_class.decrypt(encrypted2, mode: :standard, account_name: account_name)).to eq(password)
       end
 
-      it 'fails to decrypt with wrong account name' do
+      it 'does not recover the password with a wrong account name' do
         encrypted = described_class.encrypt(password, mode: :standard, account_name: account_name)
-        expect do
-          described_class.decrypt(encrypted, mode: :standard, account_name: 'WrongAccount')
-        end.to raise_error(Lich::Common::GUI::PasswordCipher::DecryptionError)
+
+        # AES-256-CBC is unauthenticated: a wrong key usually raises on invalid
+        # PKCS7 padding, but ~1/256 of the time it yields garbage instead of
+        # raising. Both outcomes are acceptable; recovering the real password is
+        # not. Asserting "always raises" makes this test flaky.
+        begin
+          result = described_class.decrypt(encrypted, mode: :standard, account_name: 'WrongAccount')
+          expect(result).not_to eq(password)
+        rescue Lich::Common::GUI::PasswordCipher::DecryptionError
+          # expected the vast majority of the time
+        end
       end
     end
 
@@ -57,11 +65,17 @@ RSpec.describe Lich::Common::GUI::PasswordCipher do
         expect(described_class.decrypt(encrypted2, mode: :enhanced, master_password: master_password)).to eq(password)
       end
 
-      it 'fails to decrypt with wrong master password' do
+      it 'does not recover the password with a wrong master password' do
         encrypted = described_class.encrypt(password, mode: :enhanced, master_password: master_password)
-        expect do
-          described_class.decrypt(encrypted, mode: :enhanced, master_password: 'WrongMasterPass')
-        end.to raise_error(Lich::Common::GUI::PasswordCipher::DecryptionError)
+
+        # See note above: AES-256-CBC decrypt with a wrong key does not
+        # deterministically raise, so assert the recoverability property instead.
+        begin
+          result = described_class.decrypt(encrypted, mode: :enhanced, master_password: 'WrongMasterPass')
+          expect(result).not_to eq(password)
+        rescue Lich::Common::GUI::PasswordCipher::DecryptionError
+          # expected the vast majority of the time
+        end
       end
     end
 

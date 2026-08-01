@@ -528,7 +528,7 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
-    it 'caches type results by object name in type_cache' do
+    it 'caches type results under a composite noun|name|full_name key' do
       Dir.mktmpdir do |dir|
         base_file = File.join(dir, 'base.xml')
         File.write(base_file, base_xml)
@@ -538,7 +538,8 @@ RSpec.describe Lich::Common::GameObj do
         obj = described_class.new('506', 'sword', 'a steel sword')
 
         expect(obj.type).to eq('weapon')
-        expect(described_class.type_cache['a steel sword']).to eq('weapon')
+        # noun "sword", name "a steel sword", full_name "a steel sword" (no before/after)
+        expect(described_class.type_cache['sword|a steel sword|a steel sword']).to eq('weapon')
       end
     end
 
@@ -571,6 +572,84 @@ RSpec.describe Lich::Common::GameObj do
 
       expect(described_class.merge_data(a, b)).to be_a(Regexp)
       expect(described_class.merge_data(nil, b)).to eq(b)
+    end
+
+    describe 'full_name classification (matches composed before_name + name + after_name)' do
+      it 'classifies a type via full_name when the bare name does not match' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="magic"><full_name>glowing wand</full_name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          # full_name "wand" does not match the pattern; "glowing wand" does
+          expect(described_class.new('701', 'wand', 'wand').type).to be_nil
+          expect(described_class.new('702', 'wand', 'wand', 'glowing').type).to include('magic')
+        end
+      end
+
+      it 'classifies a sellable via full_name using before_name and after_name text' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          xml = '<data><sellable name="charged"><full_name>enruned .* of power</full_name></sellable></data>'
+          File.write(file, xml)
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          expect(described_class.new('703', 'rod', 'rod').sellable).to be_nil
+          expect(described_class.new('704', 'rod', 'rod', 'enruned', 'of power').sellable).to include('charged')
+        end
+      end
+
+      it 'leaves name/noun matching unchanged when no full_name pattern is present' do
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="weapon"><name>sword</name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          expect(described_class.new('705', 'sword', 'a sword').type).to include('weapon')
+          expect(described_class.new('706', 'gem', 'a gem').type).to be_nil
+        end
+      end
+
+      it 'does not let same-name objects with different before_name collide' do
+        # Regression guard for the cache-key change: the type cache is keyed by a
+        # composite of noun|name|full_name, not name alone. Two objects sharing
+        # name "wand" but differing in before_name must not share a cache entry,
+        # or the second (queried after the first populates the cache) would
+        # inherit the first's classification.
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="magic"><full_name>glowing wand</full_name></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          plain   = described_class.new('707', 'wand', 'wand')            # full_name "wand"
+          glowing = described_class.new('708', 'wand', 'wand', 'glowing') # full_name "glowing wand"
+
+          expect(plain.type).to be_nil             # populates cache under plain's key
+          expect(glowing.type).to include('magic') # distinct composite key -> no collision
+        end
+      end
+
+      it 'does not let same-full_name objects with different noun collide' do
+        # The matcher also reads noun, so the composite cache key includes it:
+        # two objects with an identical full_name but different noun classify
+        # independently even though the type entry matches on noun only.
+        Dir.mktmpdir do |dir|
+          file = File.join(dir, 'gameobj-data.xml')
+          File.write(file, '<data><type name="blade"><noun>sword</noun></type></data>')
+          stub_const('DATA_DIR', dir)
+
+          expect(described_class.load_data(file)).to be(true)
+          match_noun = described_class.new('709', 'sword',  'a gleaming blade') # full_name "a gleaming blade"
+          other_noun = described_class.new('710', 'dagger', 'a gleaming blade') # same full_name, noun differs
+
+          expect(match_noun.type).to include('blade') # populates cache under its key
+          expect(other_noun.type).to be_nil           # different noun -> distinct key, no collision
+        end
+      end
     end
   end
 
@@ -697,6 +776,294 @@ RSpec.describe Lich::Common::GameObj do
 
       expect(index).not_to have_key('555|kobold|a kobold') # stale variant evicted
       expect(index['555|kobold|a snarling kobold'].first).to equal(live) # live sibling kept
+    end
+  end
+
+  describe 'staged registry refresh (begin_*/commit_*)' do
+    describe 'inv staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        first = described_class.new_inv('1', 'gem', 'a ruby')
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+
+        described_class.begin_inv
+        described_class.new_inv('2', 'gem', 'a sapphire')
+
+        # Mid-refresh: readers still see the prior complete snapshot, not the
+        # half-built staging buffer.
+        expect(described_class.inv.map(&:id)).to eq([first.id])
+
+        described_class.commit_inv
+        expect(described_class.inv.map(&:id)).to eq(['2'])
+      end
+
+      it 'never returns nil during a refresh that started from a populated registry' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        # No items added yet this stream.
+        expect(described_class.inv).not_to be_nil
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+
+        described_class.commit_inv
+      end
+
+      it 'publishes an empty registry when the staged stream had no items' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        described_class.commit_inv
+
+        expect(described_class.inv).to be_nil
+      end
+
+      it 'commit is a no-op when no refresh was opened' do
+        described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.commit_inv
+
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+      end
+
+      it 'reuses the same instance across a refresh via the shared index' do
+        first = described_class.new_inv('1', 'gem', 'a ruby')
+
+        described_class.begin_inv
+        restaged = described_class.new_inv('1', 'gem', 'a ruby')
+        described_class.commit_inv
+
+        expect(restaged).to be(first)
+      end
+    end
+
+    describe 'reserve staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        described_class.new_reserve('1', 'herb', 'a sprig')
+        described_class.begin_reserve
+        described_class.new_reserve('2', 'herb', 'another sprig')
+
+        expect(described_class.reserve.map(&:id)).to eq(['1'])
+
+        described_class.commit_reserve
+        expect(described_class.reserve.map(&:id)).to eq(['2'])
+      end
+    end
+
+    describe 'room objs staging' do
+      it 'swaps loot, npcs and npc status atomically' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_loot('11', 'gem', 'a ruby')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold', 'stunned')
+
+        # Old room still visible mid-refresh.
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+        expect(described_class.loot.map(&:id)).to eq(['11'])
+
+        described_class.commit_room_objs
+        expect(described_class.npcs.map(&:id)).to eq(['20'])
+        expect(described_class.loot).to be_nil
+        expect(described_class['20'].status).to eq('stunned')
+      end
+
+      it 'applies a deferred status= to the staged npc and survives commit' do
+        described_class.begin_room_objs
+        npc = described_class.new_npc('20', 'kobold', 'a kobold')
+
+        # Mirrors xmlparser setting status on the just-created npc in a later
+        # text callback, while the refresh is still open.
+        npc.status = 'dead'
+
+        described_class.commit_room_objs
+        expect(described_class['20'].status).to eq('dead')
+      end
+
+      it 'an empty room objs stream clears stale npcs and loot on commit' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_loot('11', 'gem', 'a ruby')
+
+        described_class.begin_room_objs
+        described_class.commit_room_objs
+
+        expect(described_class.npcs).to be_nil
+        expect(described_class.loot).to be_nil
+      end
+    end
+
+    describe 'room players staging' do
+      it 'swaps pcs and pc status atomically' do
+        described_class.new_pc('30', 'elf', 'an elf', 'standing')
+
+        described_class.begin_room_players
+        described_class.new_pc('31', 'dwarf', 'a dwarf', 'sitting')
+
+        expect(described_class.pcs.map(&:id)).to eq(['30'])
+
+        described_class.commit_room_players
+        expect(described_class.pcs.map(&:id)).to eq(['31'])
+        expect(described_class['31'].status).to eq('sitting')
+      end
+    end
+
+    describe 'room desc staging' do
+      it 'keeps the previous snapshot visible until commit' do
+        described_class.new_room_desc('40', 'statue', 'a statue')
+
+        described_class.begin_room_desc
+        described_class.new_room_desc('41', 'fountain', 'a fountain')
+
+        expect(described_class.room_desc.map(&:id)).to eq(['40'])
+
+        described_class.commit_room_desc
+        expect(described_class.room_desc.map(&:id)).to eq(['41'])
+      end
+    end
+
+    describe 'familiar staging' do
+      it 'swaps all four familiar registries atomically' do
+        described_class.new_fam_npc('50', 'orc', 'an orc')
+        described_class.new_fam_loot('51', 'gem', 'a ruby')
+        described_class.new_fam_pc('52', 'elf', 'an elf')
+        described_class.new_fam_room_desc('53', 'statue', 'a statue')
+
+        described_class.begin_familiar
+        described_class.new_fam_npc('60', 'troll', 'a troll')
+
+        expect(described_class.fam_npcs.map(&:id)).to eq(['50'])
+        expect(described_class.fam_loot.map(&:id)).to eq(['51'])
+        expect(described_class.fam_pcs.map(&:id)).to eq(['52'])
+        expect(described_class.fam_room_desc.map(&:id)).to eq(['53'])
+
+        described_class.commit_familiar
+        expect(described_class.fam_npcs.map(&:id)).to eq(['60'])
+        expect(described_class.fam_loot).to be_nil
+        expect(described_class.fam_pcs).to be_nil
+        expect(described_class.fam_room_desc).to be_nil
+      end
+    end
+
+    describe 'container staging' do
+      it 'keeps the previous container contents visible until commit' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['70'])
+
+        described_class.commit_container('bag-1')
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['71'])
+      end
+
+      it 'commit_all_containers publishes every open buffer at once' do
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+        described_class.begin_container('bag-2')
+        described_class.new_inv('72', 'gem', 'an emerald', 'bag-2')
+
+        described_class.commit_all_containers
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['71'])
+        expect(described_class.containers['bag-2'].map(&:id)).to eq(['72'])
+      end
+
+      it 'commit_all_containers is a no-op when nothing is staged' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        expect { described_class.commit_all_containers }.not_to(change { described_class.containers })
+      end
+
+      it 'delete_container aborts an open refresh so commit cannot resurrect the key' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.delete_container('bag-1')
+        described_class.commit_all_containers
+
+        expect(described_class.containers).not_to have_key('bag-1')
+      end
+
+      it 'clear_all_containers aborts open refreshes too' do
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        described_class.clear_all_containers
+        described_class.commit_all_containers
+
+        expect(described_class.containers).to be_empty
+      end
+    end
+
+    describe 'prune safety during a refresh' do
+      it 'never prunes an object held only in an open staging buffer' do
+        described_class.begin_room_objs
+        staged = described_class.new_npc('80', 'wraith', 'a wraith')
+
+        # Aggressive prune (everything older than 0s is stale) must still skip
+        # the in-flight staged object.
+        described_class.prune_index!(ttl: 0)
+
+        described_class.commit_room_objs
+        expect(described_class.npcs.map(&:id)).to eq([staged.id])
+        expect(described_class['80']).to be(staged)
+      end
+    end
+
+    describe '.discard_staged_refreshes' do
+      it 'drops an open container refresh so a later commit cannot publish it' do
+        described_class.new_inv('70', 'gem', 'a ruby', 'bag-1')
+
+        described_class.begin_container('bag-1')
+        described_class.new_inv('71', 'gem', 'a sapphire', 'bag-1')
+
+        described_class.discard_staged_refreshes
+        described_class.commit_all_containers
+
+        expect(described_class.containers['bag-1'].map(&:id)).to eq(['70'])
+      end
+
+      it 'leaves the published registries untouched' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+        described_class.new_inv('1', 'cloak', 'a wool cloak')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold')
+        described_class.begin_inv
+        described_class.new_inv('2', 'tunic', 'a linen tunic')
+
+        described_class.discard_staged_refreshes
+
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+        expect(described_class.inv.map(&:id)).to eq(['1'])
+      end
+
+      it 'closes every refresh so a subsequent commit is a no-op' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+
+        described_class.begin_room_objs
+        described_class.new_npc('20', 'kobold', 'a kobold')
+
+        described_class.discard_staged_refreshes
+        described_class.commit_room_objs
+
+        expect(described_class.npcs.map(&:id)).to eq(['10'])
+      end
+
+      it 'routes later writes back to the published registry' do
+        described_class.begin_inv
+        described_class.discard_staged_refreshes
+
+        described_class.new_inv('9', 'gem', 'an opal')
+
+        expect(described_class.inv.map(&:id)).to eq(['9'])
+      end
+
+      it 'is a no-op when no refresh is open' do
+        described_class.new_npc('10', 'orc', 'an orc', 'standing')
+
+        expect { described_class.discard_staged_refreshes }
+          .not_to(change { described_class.npcs.map(&:id) })
+      end
     end
   end
 end

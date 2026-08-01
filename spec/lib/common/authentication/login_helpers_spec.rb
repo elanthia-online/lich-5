@@ -498,6 +498,28 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
+  describe '.resolve_headless_frontend' do
+    it 'identifies a Genie client attached to the detachable port' do
+      expect(
+        described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'], detachable_client: true)
+      ).to eq('genie')
+    end
+
+    it 'identifies Saga regardless of the detachable port' do
+      expect(described_class.resolve_headless_frontend(['--saga'], detachable_client: true)).to eq('saga')
+      expect(described_class.resolve_headless_frontend(['--saga'], detachable_client: false)).to eq('saga')
+    end
+
+    it 'assumes Profanity for a detachable client with no frontend flag' do
+      expect(described_class.resolve_headless_frontend(['--login', 'pickasso'], detachable_client: true)).to eq('profanity')
+    end
+
+    it 'returns unknown when nothing can attach' do
+      expect(described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'])).to eq('unknown')
+      expect(described_class.resolve_headless_frontend(['--login', 'pickasso'])).to eq('unknown')
+    end
+  end
+
   describe '.format_launch_flag' do
     it 'returns nil for empty game code' do
       expect(described_class.format_launch_flag('')).to be_nil

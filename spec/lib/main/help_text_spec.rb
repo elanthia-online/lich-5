@@ -44,6 +44,21 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('Multiple frontends may attach to one detachable port.')
       expect(output).to include('commands from all attached frontends are processed serially')
     end
+
+    it 'lists every supported path option' do
+      output = described_class.render('paths')
+
+      expect(output).to include('--home=PATH')
+      expect(output).to include('--script-dir=PATH')
+      expect(output).to include('--data-dir=PATH')
+      expect(output).to include('--temp-dir=PATH')
+      expect(output).to include('--map-dir=PATH')
+      expect(output).to include('--log-dir=PATH')
+      expect(output).to include('--backup-dir=PATH')
+      expect(output).to include('--lib-dir=PATH')
+      expect(output).to include('--hosts-dir=PATH')
+      expect(output).to include('--hosts-file=PATH')
+    end
   end
 
   describe '.topic_from_argv' do

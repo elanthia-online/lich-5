@@ -46,6 +46,17 @@ XMLData = OpenStruct.new(
   previous_nav_rm: 11111
 ) unless defined?(XMLData)
 
+# When the shared spec_helper XMLData module wins (the usual case), it does not
+# declare the DR-specific room fields the matchers read. Add them idempotently
+# so the matching specs below can drive them via plain assignment.
+if defined?(XMLData) && XMLData.is_a?(Module)
+  module XMLData
+    class << self
+      attr_accessor :room_exits_string, :room_count, :room_window_disabled, :previous_nav_rm
+    end
+  end
+end
+
 # Mock Script
 module Script
   def self.current
@@ -667,5 +678,357 @@ RSpec.describe Lich::Common::Room, 'DragonRealms' do
 
   it 'delegates method_missing to super' do
     expect { Lich::Common::Room.nonexistent_method }.to raise_error(NoMethodError)
+  end
+end
+
+# =============================================================================
+# UID-aware room resolution
+# =============================================================================
+# Exercises the shared UID-disambiguation helper (resolve_matched_room) and the
+# two matchers that delegate to it (match_current for scripted matching,
+# match_fuzzy for scriptless matching), plus the end-to-end Map.current path.
+#
+# The behavior under test is the "no-UID fallback" invariant: a stored UID must
+# never make a room *less* resolvable than an otherwise identical room with no
+# UID. When the game exposes a live UID (XMLData.room_id != 0), a UID'd room only
+# matches if the live UID is among its stored UIDs; when the game exposes no UID
+# (XMLData.room_id == 0), UID disambiguation is skipped and the
+# title/description/paths match is trusted regardless of any stored UID.
+RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
+  let(:map_class) { Lich::Common::Map }
+
+  # Build and register a room. Ids are kept dense from 0 by every caller so the
+  # @@list.find / load_uids iterations in the matchers never trip over nil holes.
+  def build_room(id, title:, description:, exits:, uid: [], tags: [])
+    map_class.new(id, [title], [description], [exits], uid,
+                  nil, nil, nil, {}, {}, nil, nil, tags)
+  end
+
+  # Point the live XMLData room fields at a single room reading.
+  def live_room(title:, description:, exits:, room_id:, room_count: 1, window_disabled: false)
+    XMLData.room_title           = title
+    XMLData.room_description     = description
+    XMLData.room_exits_string    = exits
+    XMLData.room_id              = room_id
+    XMLData.room_count           = room_count
+    XMLData.room_window_disabled = window_disabled
+  end
+
+  before(:each) do
+    map_class.clear rescue nil
+    # clear resets @@loaded to false; the matchers must not try to load a file,
+    # so mark the (empty) registry loaded and reset every navigation cache var.
+    map_class.class_variable_set(:@@uids, {})
+    map_class.class_variable_set(:@@previous_room_id, -1)
+    map_class.class_variable_set(:@@current_room_id, -1)
+    map_class.class_variable_set(:@@current_room_count, -1)
+    map_class.class_variable_set(:@@fuzzy_room_count, -1)
+    map_class.class_variable_set(:@@loaded, true)
+    Script.current = nil
+  end
+
+  # ---------------------------------------------------------------------------
+  describe '.peer_disambiguation_tag?' do
+    it 'is true for a bare peer tag' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['peer window =~ /a guard/'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be true
+    end
+
+    it 'is true for a peer tag carrying the "set desc on; " prefix' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['set desc on; peer east =~ /a door/'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be true
+    end
+
+    it 'is true when at least one of several tags is a peer tag' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['no-uid', 'peer north =~ /trail/'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be true
+    end
+
+    it 'is false for a room with no tags' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: [])
+      expect(map_class.peer_disambiguation_tag?(room)).to be false
+    end
+
+    it 'is false for a peer-like tag missing the =~ clause' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['peer east'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be false
+    end
+
+    it 'is false when the verb is "peers" rather than "peer "' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['peers east =~ /door/'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be false
+    end
+
+    it 'is false for an unrelated tag' do
+      room = build_room(0, title: 'T', description: 'D', exits: 'E', tags: ['lich-map-no-uid-room'])
+      expect(map_class.peer_disambiguation_tag?(room)).to be false
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  describe '.resolve_matched_room' do
+    context 'when the matched room has no stored UID' do
+      it 'resolves to the room id when the game exposes a UID (exact path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [])
+        XMLData.room_id = 4242
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+
+      it 'resolves to the room id when the game exposes no UID (exact path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+
+      it 'resolves to the room id when the game exposes a UID (fuzzy path, no peer tag)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [])
+        XMLData.room_id = 4242
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to eq(0)
+      end
+    end
+
+    context 'when the game exposes a UID the room carries' do
+      it 'resolves to the room id (exact path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500])
+        XMLData.room_id = 500
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+
+      it 'resolves to the room id (fuzzy path) even when a peer tag is present, because the UID branch wins' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 500
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to eq(0)
+      end
+
+      it 'resolves to the room id when the live UID is the second of several stored UIDs' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500, 501])
+        XMLData.room_id = 501
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+    end
+
+    context 'when the game exposes a UID the room does not carry' do
+      it 'rejects the match with nil (exact path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500])
+        XMLData.room_id = 999
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to be_nil
+      end
+
+      it 'rejects the match with nil (fuzzy path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500])
+        XMLData.room_id = 999
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to be_nil
+      end
+
+      it 'rejects the match with nil when none of several stored UIDs match' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500, 501])
+        XMLData.room_id = 888
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to be_nil
+      end
+    end
+
+    context 'when the game exposes no UID (room_id 0) on a UID-stamped room -- the no-UID fallback fix' do
+      it 'resolves to the room id instead of nil (exact path)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+
+      it 'resolves to the room id instead of nil (fuzzy path, no peer tag)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to eq(0)
+      end
+
+      it 'resolves to the room id for a multi-UID room' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500, 501])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+    end
+
+    context 'peer-disambiguation tag interplay' do
+      it 'rejects a no-UID peer room with nil on the fuzzy path (game exposes a UID)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 4242
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to be_nil
+      end
+
+      it 'ignores the peer tag on the exact path and resolves to the room id' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 4242
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+
+      it 'still rejects a no-UID peer room with nil on the fuzzy path when the game exposes no UID' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to be_nil
+      end
+
+      it 'rejects a UID room with a peer tag on the fuzzy path once the UID branch is skipped for room_id 0' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: true)).to be_nil
+      end
+
+      it 'resolves a UID room with a peer tag on the exact path for room_id 0 (peer never consulted)' do
+        room = build_room(0, title: 'T', description: 'D', exits: 'E', uid: [500], tags: ['peer east =~ /gate/'])
+        XMLData.room_id = 0
+        expect(map_class.resolve_matched_room(room, honor_peer_tags: false)).to eq(0)
+      end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  describe '.match_current' do
+    it 'resolves a UID room by exact match when the game exposes a matching UID' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', uid: [70])
+      live_room(title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', room_id: 70)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'rejects a UID room by exact match when the game exposes a non-matching UID' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', uid: [70])
+      live_room(title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', room_id: 71)
+      expect(map_class.match_current(nil)).to be_nil
+    end
+
+    it 'resolves a UID room by exact match when the game exposes no UID (the fix)' do
+      build_room(0, title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', uid: [12015])
+      live_room(title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'resolves a no-UID room by exact match' do
+      build_room(0, title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', uid: [])
+      live_room(title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'ignores a peer-disambiguation tag on the exact path and resolves the room' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down',
+                    uid: [], tags: ['peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'falls back to the punctuation-tolerant regex description branch and applies the fix' do
+      # Stored description ends with a period; live reading drops it, so the exact
+      # include? fails and the regex branch must carry the match.
+      build_room(0, title: 'Garden Path', description: 'A winding path.', exits: 'Obvious paths: east', uid: [150013])
+      live_room(title: 'Garden Path', description: 'A winding path', exits: 'Obvious paths: east', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'matches on title and paths alone when the room window is disabled' do
+      build_room(0, title: 'Dim Cellar', description: 'The stored cellar description.', exits: 'Obvious paths: up', uid: [])
+      live_room(title: 'Dim Cellar', description: 'A completely different live description',
+                exits: 'Obvious paths: up', room_id: 0, window_disabled: true)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'ignores the paths line when exits are obscured by fog' do
+      build_room(0, title: 'Misty Field', description: 'Fog rolls across the field.', exits: 'Obvious paths: north, south', uid: [])
+      live_room(title: 'Misty Field', description: 'Fog rolls across the field.',
+                exits: 'Obvious paths: obscured by a thick fog', room_id: 0)
+      expect(map_class.match_current(nil)).to eq(0)
+    end
+
+    it 'returns nil when nothing matches' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', uid: [])
+      live_room(title: 'Nowhere', description: 'The void.', exits: 'Obvious paths: none', room_id: 0)
+      expect(map_class.match_current(nil)).to be_nil
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  describe '.match_fuzzy' do
+    it 'resolves a UID room when the game exposes a matching UID' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', uid: [70])
+      live_room(title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north', room_id: 70)
+      expect(map_class.match_fuzzy).to eq(0)
+    end
+
+    it 'resolves a UID room when the game exposes no UID (the fix)' do
+      build_room(0, title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', uid: [12015])
+      live_room(title: 'Auditorium', description: 'Rows of seats.', exits: 'Obvious paths: out', room_id: 0)
+      expect(map_class.match_fuzzy).to eq(0)
+    end
+
+    it 'rejects a no-UID peer room with nil (cannot peer without a script)' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down',
+                    uid: [], tags: ['peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down', room_id: 0)
+      expect(map_class.match_fuzzy).to be_nil
+    end
+
+    it 'rejects a UID peer room with nil once the UID branch is skipped for room_id 0' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down',
+                    uid: [700], tags: ['peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down', room_id: 0)
+      expect(map_class.match_fuzzy).to be_nil
+    end
+
+    it 'resolves a UID peer room when the game exposes the matching UID (UID branch wins over peer)' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down',
+                    uid: [700], tags: ['peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down', room_id: 700)
+      expect(map_class.match_fuzzy).to eq(0)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  describe '.current (end-to-end)' do
+    before(:each) { Script.current = :test_script }
+
+    it 'resolves via the UID fast path when the game exposes a stamped UID' do
+      build_room(0, title: 'Crossroads', description: 'Roads meet here.', exits: 'Obvious paths: north', uid: [800])
+      map_class.load_uids
+      live_room(title: 'Crossroads', description: 'Roads meet here.', exits: 'Obvious paths: north', room_id: 800)
+      expect(map_class.current&.id).to eq(0)
+    end
+
+    it 'disambiguates day/night variants sharing title/description/paths via the UID fast path' do
+      # Two distinct real rooms with identical text but different UIDs -- the exact
+      # matcher alone would collapse them, the UID index keeps them apart.
+      build_room(0, title: 'Bazaar Stall', description: 'A crowded stall.', exits: 'Obvious paths: out', uid: [3014010])
+      build_room(1, title: 'Bazaar Stall', description: 'A crowded stall.', exits: 'Obvious paths: out', uid: [3014027])
+      map_class.load_uids
+
+      live_room(title: 'Bazaar Stall', description: 'A crowded stall.', exits: 'Obvious paths: out', room_id: 3014027)
+      expect(map_class.current&.id).to eq(1)
+
+      map_class.class_variable_set(:@@current_room_id, -1)
+      map_class.class_variable_set(:@@current_room_count, -1)
+      live_room(title: 'Bazaar Stall', description: 'A crowded stall.', exits: 'Obvious paths: out', room_id: 3014010)
+      expect(map_class.current&.id).to eq(0)
+    end
+
+    it 'still resolves a room carrying a stray UID when the game reports no UID (Ancient Tower 9375 regression)' do
+      # A genuinely no-UID room that had a stray UID stamped onto it: the game
+      # reports room_id 0, so the UID fast path finds nothing and the exact matcher
+      # must trust the title/description/paths match rather than returning nil.
+      build_room(0, title: 'Abandoned Workshop', description: 'Dusty benches line the walls.',
+                    exits: 'Obvious paths: out', uid: [253306])
+      map_class.load_uids
+      live_room(title: 'Abandoned Workshop', description: 'Dusty benches line the walls.',
+                exits: 'Obvious paths: out', room_id: 0)
+      expect(map_class.current&.id).to eq(0)
+    end
+
+    it 'resolves an ordinary no-UID room when the game reports no UID' do
+      build_room(0, title: 'Root Cellar', description: 'Cold and damp.', exits: 'Obvious paths: up', uid: [])
+      map_class.load_uids
+      live_room(title: 'Root Cellar', description: 'Cold and damp.', exits: 'Obvious paths: up', room_id: 0)
+      expect(map_class.current&.id).to eq(0)
+    end
+
+    it 'returns nil when the game reports no UID and nothing matches' do
+      build_room(0, title: 'Root Cellar', description: 'Cold and damp.', exits: 'Obvious paths: up', uid: [])
+      map_class.load_uids
+      live_room(title: 'Unknown Void', description: 'Nothing here.', exits: 'Obvious paths: none', room_id: 0)
+      expect(map_class.current).to be_nil
+    end
   end
 end
