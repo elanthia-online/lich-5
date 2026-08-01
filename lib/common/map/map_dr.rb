@@ -89,7 +89,7 @@ module Lich
 
         def list=(value)
           @@list = value
-          normalize_tag_lists
+          normalize_tag_lists(value)
         end
 
         def uids
@@ -444,7 +444,7 @@ module Lich
       def self.load(filename = nil)
         file_list = if filename.nil?
                       Dir.entries(File.join(DATA_DIR, XMLData.game))
-                         .find_all { |fn| fn =~ /^map-[0-9]+\.(?:dat|xml|json)$/i }
+                         .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
                          .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
                          .sort
                          .reverse
@@ -454,17 +454,12 @@ module Lich
 
         if file_list.empty?
           respond '--- Lich: error: no map database found'
+          report_legacy_map_files
           return false
         end
 
         while (filename = file_list.shift)
-          if filename =~ /\.json$/i
-            return true if load_json(filename)
-          elsif filename =~ /\.xml$/
-            return true if load_xml(filename)
-          elsif load_dat(filename)
-            return true
-          end
+          return true if load_json(filename)
         end
         false
       end
@@ -525,145 +520,7 @@ module Lich
       end
 
       # @deprecated Use load_json instead. XML format is deprecated and will be removed in a future version.
-      def self.load_xml(filename = File.join(DATA_DIR, XMLData.game, 'map.xml'))
-        respond '--- WARNING: Map.load_xml is deprecated. Use Map.load_json instead.'
-        @@load_mutex.synchronize do
-          return true if @@loaded
-
-          unless File.exist?(filename)
-            raise Exception.exception('MapDatabaseError'), "Fatal error: file `#{filename}' does not exist!"
-          end
-
-          missing_end = false
-          current_tag = nil
-          current_attributes = nil
-          room = nil
-          buffer = String.new
-          unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
-
-          tag_start = proc do |element, attributes|
-            current_tag = element
-            current_attributes = attributes
-            if element == 'room'
-              room = {}
-              room['id'] = attributes['id'].to_i
-              room['location'] = attributes['location']
-              room['climate'] = attributes['climate']
-              room['terrain'] = attributes['terrain']
-              room['wayto'] = {}
-              room['timeto'] = {}
-              room['title'] = []
-              room['description'] = []
-              room['paths'] = []
-              room['tags'] = []
-              room['unique_loot'] = []
-              room['uid'] = []
-              room['room_objects'] = []
-            elsif element =~ /^(?:image|tsoran)$/ && attributes['name'] && attributes['x'] && attributes['y'] && attributes['size']
-              room['image'] = attributes['name']
-              room['image_coords'] = [
-                (attributes['x'].to_i - (attributes['size'] / 2.0).round),
-                (attributes['y'].to_i - (attributes['size'] / 2.0).round),
-                (attributes['x'].to_i + (attributes['size'] / 2.0).round),
-                (attributes['y'].to_i + (attributes['size'] / 2.0).round)
-              ]
-            elsif element == 'image' && attributes['name'] && attributes['coords'] && attributes['coords'] =~ /[0-9]+,[0-9]+,[0-9]+,[0-9]+/
-              room['image'] = attributes['name']
-              room['image_coords'] = attributes['coords'].split(',').collect(&:to_i)
-            elsif element == 'map'
-              missing_end = true
-            end
-          end
-
-          text = proc do |text_string|
-            if current_tag == 'tag'
-              room['tags'].push(text_string)
-            elsif current_tag =~ /^(?:title|description|paths|unique_loot|tag|room_objects)$/
-              room[current_tag].push(text_string)
-            elsif current_tag =~ /^(?:uid)$/
-              room[current_tag].push(text_string.to_i)
-            elsif current_tag == 'exit' && current_attributes['target']
-              room['wayto'][current_attributes['target']] = if current_attributes['type'].downcase == 'string'
-                                                              text_string
-                                                            else
-                                                              StringProc.new(text_string)
-                                                            end
-              room['timeto'][current_attributes['target']] = if current_attributes['cost'] =~ /^[0-9.]+$/
-                                                               current_attributes['cost'].to_f
-                                                             elsif current_attributes['cost'].length.positive?
-                                                               StringProc.new(current_attributes['cost'])
-                                                             else
-                                                               0.2
-                                                             end
-            end
-          end
-
-          tag_end = proc do |element|
-            if element == 'room'
-              room['unique_loot'] = nil if room['unique_loot'].empty?
-              room['room_objects'] = nil if room['room_objects'].empty?
-              new(
-                room['id'], room['title'], room['description'], room['paths'],
-                room['uid'], room['location'], room['climate'], room['terrain'],
-                room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                room['tags'], room['check_location'], room['unique_loot'], room['room_objects']
-              )
-            elsif element == 'map'
-              missing_end = false
-            end
-            current_tag = nil
-          end
-
-          begin
-            File.open(filename) do |file|
-              while (line = file.gets)
-                buffer.concat(line)
-                while (str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/))
-                  if str[0, 1] == '<'
-                    if str[1, 1] == '/'
-                      element = %r{^</([^\s>/]+)}.match(str).captures.first
-                      tag_end.call(element)
-                    elsif str =~ %r{^<([^>]+)></\1>}
-                      element = ::Regexp.last_match(1)
-                      tag_start.call(element)
-                      text.call('')
-                      tag_end.call(element)
-                    else
-                      element = %r{^<([^\s>/]+)}.match(str).captures.first
-                      attributes = {}
-                      str.scan(/([A-z][A-z0-9_-]*)=(["'])(.*?)\2/).each do |attr|
-                        attributes[attr[0]] = attr[2].gsub(/&(#{unescape.keys.join('|')});/) { unescape[::Regexp.last_match(1)] }
-                      end
-                      tag_start.call(element, attributes)
-                      tag_end.call(element) if str[-2, 1] == '/'
-                    end
-                  else
-                    text.call(str.gsub(/&(#{unescape.keys.join('|')});/) { unescape[::Regexp.last_match(1)] })
-                  end
-                end
-              end
-            end
-
-            if missing_end
-              respond "--- Lich: error: failed to load #{filename}: unexpected end of file"
-              return false
-            end
-
-            clear_tags_cache
-            load_uids
-            @@loaded = true
-            true
-          rescue StandardError => e
-            respond "--- Lich: error: failed to load #{filename}: #{e}"
-            false
-          end
-        end
-      end
-
       # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
-      def self.save_xml(_filename = nil)
-        respond '--- WARNING: Map.save_xml is deprecated. Use Map.save_json instead.'
-      end
     end
 
     class Room < Map

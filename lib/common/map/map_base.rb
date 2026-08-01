@@ -91,6 +91,9 @@ module Lich
       # @param owner [Class, nil] Map class notified on mutation
       def initialize(contents = nil, owner = nil)
         super()
+        # Order matters: concat is an intercepted mutator, so the initial fill
+        # has to happen while @owner is still nil. Construction must not
+        # invalidate the index, or a full map load would fire once per room.
         concat(contents.to_a) unless contents.nil?
         @owner = owner
       end
@@ -174,6 +177,23 @@ module Lich
 
         private :tag_index, :tag_index_generation, :build_tag_index
 
+        # Explain why an old map database no longer loads. The Marshal (.dat) and
+        # XML formats were deprecated for years and support has been removed, so
+        # "no map database found" on its own would be misleading for anyone whose
+        # data directory still holds one.
+        # @return [nil]
+        def report_legacy_map_files
+          directory = File.join(DATA_DIR, XMLData.game)
+          return unless Dir.exist?(directory)
+
+          legacy = Dir.entries(directory).grep(/^map(?:-[0-9]+)?\.(?:dat|xml)$/i).sort
+          return if legacy.empty?
+
+          respond "--- Lich: found map data in a format that is no longer supported: #{legacy.join(', ')}"
+          respond '--- Lich: download the current JSON map database to continue.'
+          nil
+        end
+
         # Class-level dijkstra dispatcher
         def dijkstra(source, destination = nil)
           if source.is_a?(self)
@@ -220,9 +240,14 @@ module Lich
 
         # Re-wrap plain Array tags as TagList. Rooms restored by Marshal skip the
         # constructor, so their tags cannot invalidate the index on mutation.
+        #
+        # Callers inside a load must pass the rooms explicitly, because the #list
+        # accessor triggers #load when the map is not yet loaded, and #load holds
+        # a non-reentrant mutex.
+        # @param rooms [Array] rooms to normalize; defaults to the current list
         # @return [nil]
-        def normalize_tag_lists
-          list.compact.each do |room|
+        def normalize_tag_lists(rooms = list)
+          rooms.compact.each do |room|
             existing = room.tags
             next if existing.is_a?(TagList)
 
@@ -291,48 +316,6 @@ module Lich
         end
 
         alias_method :save, :save_json
-
-        # Load map from .dat file (Marshal format)
-        # @deprecated Use load_json instead. Marshal format is deprecated and will be removed in a future version.
-        def load_dat(filename = nil)
-          respond '--- WARNING: Map.load_dat (Marshal .dat format) is deprecated. Use Map.load_json instead.'
-          synchronize_load do
-            return true if loaded?
-
-            file_list = if filename.nil?
-                          Dir.entries(File.join(DATA_DIR, XMLData.game))
-                             .find_all { |fn| fn =~ /^map-[0-9]+\.dat$/ }
-                             .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                             .sort
-                             .reverse
-                        else
-                          respond "--- file_list = #{filename.inspect}"
-                          [filename]
-                        end
-
-            if file_list.empty?
-              respond '--- Lich: error: no map database found'
-              return false
-            end
-
-            while (filename = file_list.shift)
-              begin
-                self.list = File.open(filename, 'rb') { |f| Marshal.load(f.read) }
-                respond "--- Map loaded #{filename}"
-                mark_loaded
-                load_uids
-                return true
-              rescue StandardError => e
-                if file_list.empty?
-                  respond "--- Lich: error: failed to load #{filename}: #{e}"
-                else
-                  respond "--- warning: failed to load #{filename}: #{e}"
-                end
-              end
-            end
-            false
-          end
-        end
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets

@@ -2,6 +2,7 @@
 
 require_relative '../../../spec_helper'
 require 'json'
+require 'fileutils'
 
 # Mock StringProc
 class StringProc
@@ -483,10 +484,78 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       end
     end
 
-    describe 'legacy .dat map loading' do
-      # load_dat assigns Marshal-restored rooms straight into the list. Marshal
-      # skips the constructor, so a map written before TagList existed carries a
-      # plain Array in @tags. Rebuild that shape explicitly.
+    describe 'JSON-only map loading' do
+      # Stub the game so the map directory is unique to these examples and
+      # cannot pick up files another spec left in DATA_DIR.
+      let(:game) { 'rspec-maploader' }
+      let(:map_dir) { File.join(DATA_DIR, game) }
+
+      before do
+        # These examples clear the shared room list, so snapshot it and put it
+        # back afterwards rather than leaving later examples with an empty map.
+        @saved_list = map_class.class_variable_get(:@@list).dup
+        @saved_loaded = map_class.class_variable_get(:@@loaded)
+
+        allow(XMLData).to receive(:game).and_return(game)
+        FileUtils.rm_rf(map_dir)
+        FileUtils.mkdir_p(map_dir)
+        map_class.class_variable_set(:@@loaded, false)
+        map_class.class_variable_get(:@@list).clear
+        allow(map_class).to receive(:respond)
+      end
+
+      after do
+        FileUtils.rm_rf(map_dir)
+        restored = map_class.class_variable_get(:@@list)
+        restored.clear
+        restored.concat(@saved_list)
+        map_class.class_variable_set(:@@loaded, @saved_loaded)
+        map_class.clear_tags_cache
+      end
+
+      it 'refuses to load a .dat map database' do
+        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+
+        expect(map_class.load).to be false
+      end
+
+      it 'refuses to load an .xml map database' do
+        File.write(File.join(map_dir, 'map-1.xml'), '<map></map>')
+
+        expect(map_class.load).to be false
+      end
+
+      it 'explains that the format is unsupported rather than only reporting none found' do
+        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/no longer supported/)
+      end
+
+      it 'names the legacy files it found' do
+        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+        File.write(File.join(map_dir, 'map.xml'), '<map></map>')
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/map-1\.dat, map\.xml/)
+      end
+
+      it 'stays quiet about legacy formats when the directory has none' do
+        map_class.load
+
+        expect(map_class).not_to have_received(:respond).with(/no longer supported/)
+      end
+
+      it 'still reports when no map database is present at all' do
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/no map database found/)
+      end
+    end
+
+    describe 'tag normalization on list assignment' do
+      # Marshal skips the constructor, so a room restored that way carries a
+      # plain Array in @tags rather than a TagList. Rebuild that shape here.
       let(:legacy_list) do
         map_class.class_variable_set(:@@loaded, true) # see NOTE above
         map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])

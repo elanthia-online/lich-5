@@ -368,6 +368,9 @@ module Lich
       end
 
       def time_to_room(origin, destination)
+        # Results are keyed by Integer room id, and dijkstra only terminates
+        # early when the destination compares as an Integer.
+        destination = destination.to_i
         _previous, shortest_paths = Map.dijkstra_hashes(origin, destination)
         shortest_paths[destination]
       end

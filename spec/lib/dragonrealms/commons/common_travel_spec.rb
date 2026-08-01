@@ -512,6 +512,13 @@ RSpec.describe DRCT do
       expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
     end
 
+    it 'normalizes a String destination to an Integer room id' do
+      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
+                                             .and_return([{}, { 888_000 => 12.5 }])
+
+      expect(DRCT.time_to_room(1, '888000')).to eq(12.5)
+    end
+
     it 'reports time to a very high room id' do
       allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
                                              .and_return([{}, { 888_000 => 12.5 }])

@@ -253,9 +253,36 @@ RSpec.describe 'Code sharing between DR and GS' do
     end
   end
 
+  describe 'legacy map formats' do
+    it 'neither game defines the removed .dat or .xml loaders' do
+      [dr_content, gs_content].each do |content|
+        expect(content).not_to include('def self.load_xml')
+        expect(content).not_to include('def self.save_xml')
+      end
+    end
+
+    it 'base module no longer defines load_dat' do
+      expect(base_content).not_to include('def load_dat')
+      expect(base_content).not_to include('Marshal.load')
+    end
+
+    it 'both games only glob for JSON map files' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include("/^map-[0-9]+\\.json$/i")
+        expect(content).not_to include('(?:dat|xml|json)')
+      end
+    end
+
+    it 'both games report a legacy map database instead of failing silently' do
+      [dr_content, gs_content].each do |content|
+        expect(content).to include('report_legacy_map_files')
+      end
+    end
+  end
+
   describe 'common file operations' do
     # Methods defined in game-specific files
-    %w[load load_json load_xml save_xml].each do |method|
+    %w[load load_json].each do |method|
       it "both define self.#{method}" do
         expect(dr_content).to include("def self.#{method}")
         expect(gs_content).to include("def self.#{method}")
@@ -263,7 +290,7 @@ RSpec.describe 'Code sharing between DR and GS' do
     end
 
     # Methods moved to map_base.rb (shared via MapBase module)
-    %w[load_dat save_json].each do |method|
+    %w[save_json].each do |method|
       it "base module defines #{method}" do
         base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
         expect(base_content).to include("def #{method}")
