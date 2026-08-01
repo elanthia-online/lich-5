@@ -1,5 +1,43 @@
 # Changelog
 
+## [5.20.0](https://github.com/elanthia-online/lich-5/compare/v5.19.1...v5.20.0) (2026-08-01)
+
+
+### Features
+
+* **all:** --bind-address speaks the same keywords as --detachable-client ([#1461](https://github.com/elanthia-online/lich-5/issues/1461)) ([48e2296](https://github.com/elanthia-online/lich-5/commit/48e229664b923be97b866c44d182bd10e920066e))
+* **all:** add concurrent runtime I/O and multi-client detach support ([#1459](https://github.com/elanthia-online/lich-5/issues/1459)) ([44cb27e](https://github.com/elanthia-online/lich-5/commit/44cb27ed15f4aaa0135de0ce19c389e3ab996bf0))
+* **all:** Add forced script teardown command (06 of 06) ([#1479](https://github.com/elanthia-online/lich-5/issues/1479)) ([8f0772d](https://github.com/elanthia-online/lich-5/commit/8f0772dcdac73a7218f60989b342aec025e8f41b))
+* **all:** Add supervised child script APIs (01 of 06) ([#1474](https://github.com/elanthia-online/lich-5/issues/1474)) ([6259b25](https://github.com/elanthia-online/lich-5/commit/6259b25114b3068ee970bd62fa867f4fb3f67d43))
+* **dr:** capture room UID from &lt;nav&gt; tag; stop enforcing ShowRoomID; opt-in room-id placement ([#1491](https://github.com/elanthia-online/lich-5/issues/1491)) ([e5c852b](https://github.com/elanthia-online/lich-5/commit/e5c852b07fde40334142fc2dc45dbf023273e8a9))
+* **dr:** DRCMM.moon_weapon_duration - read a moon weapon's remaining life ([#1483](https://github.com/elanthia-online/lich-5/issues/1483)) ([88b0ba3](https://github.com/elanthia-online/lich-5/commit/88b0ba3a16c50c851e3e97ca0ead44966d50b89d))
+* **dr:** id-based creature tracking from crtrStatus + assess ([#1485](https://github.com/elanthia-online/lich-5/issues/1485)) ([5e1f9a5](https://github.com/elanthia-online/lich-5/commit/5e1f9a5dc99e658a8d76526282ad7ce880e467f9))
+* **gs:** gameobj add full_name matcher to type/sellable classification ([#1453](https://github.com/elanthia-online/lich-5/issues/1453)) ([0546bef](https://github.com/elanthia-online/lich-5/commit/0546bef56d55e504f15220228ce173239d18df39))
+
+
+### Bug Fixes
+
+* **all:** bound GemCheck alert dialogs with a timeout so they can't hang forever ([#1488](https://github.com/elanthia-online/lich-5/issues/1488)) ([291bfca](https://github.com/elanthia-online/lich-5/commit/291bfcac9a801efd28b8d0bb1d6a88c9b60d1031))
+* **all:** Coordinate script shutdown draining (03 of 06) ([#1476](https://github.com/elanthia-online/lich-5/issues/1476)) ([0ce5bae](https://github.com/elanthia-online/lich-5/commit/0ce5bae9807cced74ae76d62d05befffafba99ae))
+* **all:** correct path-flag aliases and document all path options ([#1472](https://github.com/elanthia-online/lich-5/issues/1472)) ([db5e38d](https://github.com/elanthia-online/lich-5/commit/db5e38d504e56d3425ed7ffdf05eb12b20c64028))
+* **all:** extract game-agnostic CreatureBase into lib/common ([#1484](https://github.com/elanthia-online/lich-5/issues/1484)) ([76f8052](https://github.com/elanthia-online/lich-5/commit/76f8052276f55eee5e02dd0578fdf7392178365d))
+* **all:** harden detachable client teardown and escape init payload ([#1493](https://github.com/elanthia-online/lich-5/issues/1493)) ([84ce0fb](https://github.com/elanthia-online/lich-5/commit/84ce0fb3be7bc1c772c0089be5d2396bfff75af5))
+* **all:** Harden script lifecycle ownership (05 of 06) ([#1478](https://github.com/elanthia-online/lich-5/issues/1478)) ([ec448f1](https://github.com/elanthia-online/lich-5/commit/ec448f1d2e29f94f21d6772b4072551a50e33def))
+* **all:** identify Genie as the frontend for headless launches ([#1490](https://github.com/elanthia-online/lich-5/issues/1490)) ([67e853e](https://github.com/elanthia-online/lich-5/commit/67e853e44037167a539ddb0daf4b1fd2e74d4b9d))
+* **all:** no-op Gtk.lich_main_quit when no main loop is nested ([#1464](https://github.com/elanthia-online/lich-5/issues/1464)) ([0028738](https://github.com/elanthia-online/lich-5/commit/00287384042030c316f33fb3d84e780addce2d04))
+* **all:** prevent empty/partial GameObj registry reads during mid-stream refresh ([#1370](https://github.com/elanthia-online/lich-5/issues/1370)) ([e9c5eda](https://github.com/elanthia-online/lich-5/commit/e9c5eda6df04305769f1ee85dace5aef361438db))
+* **all:** restore detachable client disconnect notice to stdout ([#1492](https://github.com/elanthia-online/lich-5/issues/1492)) ([13b9142](https://github.com/elanthia-online/lich-5/commit/13b9142e870dd205f6d988720fb4b8ca5132dad6))
+* **all:** surface the underlying LoadError in dependency alerts ([#1480](https://github.com/elanthia-online/lich-5/issues/1480)) ([1fc7fc8](https://github.com/elanthia-online/lich-5/commit/1fc7fc8723eacdc6097df72aff2946d510af45ef))
+* **all:** Synchronize script lifecycle transitions (02 of 06) ([#1475](https://github.com/elanthia-online/lich-5/issues/1475)) ([a6ff9a1](https://github.com/elanthia-online/lich-5/commit/a6ff9a149e3615734d8703f4b0ce944d1e903de6))
+* **dr:** common-healing.rb -  DRCH.bind_wound: only dispose a dislodged item while it is in hand ([#1469](https://github.com/elanthia-online/lich-5/issues/1469)) ([422d5a7](https://github.com/elanthia-online/lich-5/commit/422d5a7843b2128269cfe20dd941a794b4c1a702))
+* **dr:** equipmanager.rb - reliable ranged-weapon transitions - stow ammo after unload + verify offhand wield hand ([#1468](https://github.com/elanthia-online/lich-5/issues/1468)) ([a1555c0](https://github.com/elanthia-online/lich-5/commit/a1555c026e7c03a41201ab23fcfaf502cc05a27d))
+* **dr:** resolve no-UID rooms carrying a stored UID instead of returning nil ([#1467](https://github.com/elanthia-online/lich-5/issues/1467)) ([4ba59f3](https://github.com/elanthia-online/lich-5/commit/4ba59f399ffd906bb5200a285cc73f476bcfbab1))
+
+
+### Refactoring
+
+* **all:** Unify script execution and library loading (04 of 06) ([#1477](https://github.com/elanthia-online/lich-5/issues/1477)) ([9ed425a](https://github.com/elanthia-online/lich-5/commit/9ed425a186ecdb2a6fd33acdfa7d91eefc0cf9f7))
+
 ## [5.19.1](https://github.com/elanthia-online/lich-5/compare/v5.19.0...v5.19.1) (2026-07-20)
 
 
