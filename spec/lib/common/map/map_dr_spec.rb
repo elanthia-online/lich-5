@@ -586,6 +586,22 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         restored
       end
 
+      # These examples reassign @@list, which swaps the array object itself, so
+      # restore both the original object and its contents for later examples.
+      before do
+        @saved_list = map_class.class_variable_get(:@@list)
+        @saved_contents = @saved_list.dup
+        @saved_loaded = map_class.class_variable_get(:@@loaded)
+      end
+
+      after do
+        @saved_list.clear
+        @saved_list.concat(@saved_contents)
+        map_class.class_variable_set(:@@list, @saved_list)
+        map_class.class_variable_set(:@@loaded, @saved_loaded)
+        map_class.clear_tags_cache
+      end
+
       it 'starts from a room whose tags are a plain Array' do
         expect(legacy_list[1].instance_variable_get(:@tags)).to be_an(Array)
         expect(legacy_list[1].instance_variable_get(:@tags)).not_to be_a(Lich::Common::TagList)

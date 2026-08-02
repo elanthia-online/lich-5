@@ -200,6 +200,73 @@ module Lich
           nil
         end
 
+        # Look up a room by id, uid string, or fuzzy title/description text
+        # @param val [Integer, String] room id, "u<uid>", or search text
+        # @return [Object, nil] the matching room
+        def [](val)
+          # One load attempt via the accessor, then work off that array; calling
+          # #list again would retry the load on every lookup when it failed.
+          rooms = list
+          if val.is_a?(Integer) || val =~ /^[0-9]+$/
+            rooms[val.to_i]
+          elsif val =~ /^u(-?\d+)$/i
+            uid_request = ::Regexp.last_match(1).dup.to_i
+            rooms[(ids_from_uid(uid_request)[0]).to_i]
+          else
+            chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
+            chk = /#{Regexp.escape(val.strip)}/i
+            # Title and exact-description matches share one pass; the loose
+            # regex pass only runs when neither found anything. Same precedence
+            # as the three sequential scans this replaces.
+            live = rooms.compact
+            by_title = nil
+            by_desc = nil
+            live.each do |room|
+              if room.title.find { |title| title =~ chk }
+                by_title = room
+                break
+              end
+              by_desc = room if by_desc.nil? && room.description.find { |desc| desc =~ chk }
+            end
+            by_title || by_desc ||
+              live.find { |room| room.description.find { |desc| desc =~ chkre } }
+          end
+        end
+
+        # Load the newest JSON map database, or a specific file
+        # @param filename [String, nil] explicit path, or nil to search DATA_DIR
+        # @return [Boolean] whether a map was loaded
+        def load(filename = nil)
+          file_list = if filename.nil?
+                        Dir.entries(File.join(DATA_DIR, XMLData.game))
+                           .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
+                           .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
+                           .sort
+                           .reverse
+                      else
+                        [filename]
+                      end
+
+          # An explicitly named .dat or .xml would otherwise reach load_json and
+          # raise a parse error rather than saying why it cannot be loaded.
+          unsupported, file_list = file_list.partition { |fn| fn =~ /\.(?:dat|xml)\z/i }
+
+          if file_list.empty?
+            if unsupported.empty?
+              respond '--- Lich: error: no map database found'
+              report_unsupported_map_files(legacy_map_files)
+            else
+              report_unsupported_map_files(unsupported.map { |fn| File.basename(fn) })
+            end
+            return false
+          end
+
+          while (filename = file_list.shift)
+            return true if load_json(filename)
+          end
+          false
+        end
+
         # Class-level dijkstra dispatcher
         def dijkstra(source, destination = nil)
           if source.is_a?(self)
@@ -527,15 +594,13 @@ module Lich
         # @return [Integer, nil] Room ID of nearest tagged room
         def find_nearest_by_tag(tag_name)
           target_list = self.class.rooms_by_tag(tag_name)
+          return @id if target_list.include?(@id)
+
           _, shortest_distances = dijkstra_hashes(target_list)
-          if target_list.include?(@id)
-            @id
-          elsif shortest_distances.nil?
-            nil
-          else
-            target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-            target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
-          end
+          return nil if shortest_distances.nil?
+
+          target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
+          target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
         end
 
         # Find all rooms with a specific tag, sorted by distance

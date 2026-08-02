@@ -459,10 +459,16 @@ RSpec.describe DRCT do
     end
 
     it 'reads targets from the tag index rather than scanning the room list' do
-      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([])
+      # Non-empty so execution runs past the empty-target early return and the
+      # trap stays armed through the rest of the method, not just the top.
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra_hashes).with([100]).and_return([{}, { 100 => 5 }])
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100])
+      allow(Map).to receive(:[]).with(100).and_return(OpenStruct.new(id: 100))
       allow(Map).to receive(:list).and_raise('tag_to_id must not scan Map.list')
 
-      expect(DRCT.tag_to_id('bank')).to be_nil
+      expect(DRCT.tag_to_id('bank')).to eq(100)
     end
 
     it 'does not call exit (returns nil instead)' do
@@ -530,6 +536,13 @@ RSpec.describe DRCT do
                                              .and_return([{}, { 7 => 9.0, 888_000 => 1.0 }])
 
       expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
+    end
+
+    it 'returns nil when pathfinding fails' do
+      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000).and_return(nil)
+
+      expect { DRCT.time_to_room(1, 888_000) }.not_to raise_error
+      expect(DRCT.time_to_room(1, 888_000)).to be_nil
     end
 
     it 'normalizes a String destination to an Integer room id' do

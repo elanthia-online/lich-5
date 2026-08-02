@@ -522,6 +522,15 @@ RSpec.describe Lich::Common::MapBase do
 
         expect(room.find_nearest_by_tag('shop')).to eq(0)
       end
+
+      it 'does not search at all when this room carries the tag' do
+        test_class.test_list[0].tags = ['shop']
+        test_class.reset_tag_index
+
+        room.find_nearest_by_tag('shop')
+
+        expect(room).not_to have_received(:dijkstra_hashes)
+      end
     end
 
     describe 'nearest helpers dispatch' do
@@ -1139,6 +1148,11 @@ RSpec.describe Lich::Common::TagList do
       expect(list).to eq(['shop', 'bank'])
     end
 
+    # compact! and uniq! change nothing on this input and return nil. They still
+    # satisfy the expectation because the interceptor notifies on every call
+    # rather than only on an actual change. If that is ever narrowed to notify
+    # only when the receiver changed, these cases go quiet rather than failing,
+    # so revisit this loop alongside any such optimisation.
     described_class::MUTATORS.each do |mutator|
       it "notifies on ##{mutator}" do
         list = described_class.new(['shop', 'bank'], owner)

@@ -119,34 +119,6 @@ module Lich
         @@list.compact.max_by(&:id).id + 1
       end
 
-      def self.[](val)
-        self.load unless @@loaded
-        if val.is_a?(Integer) || val =~ /^[0-9]+$/
-          @@list[val.to_i]
-        elsif val =~ /^u(-?\d+)$/i
-          uid_request = ::Regexp.last_match(1).dup.to_i
-          @@list[(ids_from_uid(uid_request)[0]).to_i]
-        else
-          chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
-          chk = /#{Regexp.escape(val.strip)}/i
-          # Title and exact-description matches share one pass; the loose
-          # regex pass only runs when neither found anything. Same precedence
-          # as the three sequential scans this replaces.
-          rooms = @@list.compact
-          by_title = nil
-          by_desc = nil
-          rooms.each do |room|
-            if room.title.find { |title| title =~ chk }
-              by_title = room
-              break
-            end
-            by_desc = room if by_desc.nil? && room.description.find { |desc| desc =~ chk }
-          end
-          by_title || by_desc ||
-            rooms.find { |room| room.description.find { |desc| desc =~ chkre } }
-        end
-      end
-
       def self.previous
         @@list[@@previous_room_id]
       end
@@ -439,37 +411,6 @@ module Lich
           GC.start
         end
         true
-      end
-
-      def self.load(filename = nil)
-        file_list = if filename.nil?
-                      Dir.entries(File.join(DATA_DIR, XMLData.game))
-                         .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
-                         .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                         .sort
-                         .reverse
-                    else
-                      [filename]
-                    end
-
-        # An explicitly named .dat or .xml would otherwise reach load_json and
-        # raise a parse error rather than saying why it cannot be loaded.
-        unsupported, file_list = file_list.partition { |fn| fn =~ /\.(?:dat|xml)\z/i }
-
-        if file_list.empty?
-          if unsupported.empty?
-            respond '--- Lich: error: no map database found'
-            report_unsupported_map_files(legacy_map_files)
-          else
-            report_unsupported_map_files(unsupported.map { |fn| File.basename(fn) })
-          end
-          return false
-        end
-
-        while (filename = file_list.shift)
-          return true if load_json(filename)
-        end
-        false
       end
 
       def self.load_json(filename = nil)

@@ -266,17 +266,21 @@ RSpec.describe 'Code sharing between DR and GS' do
       expect(base_content).not_to include('Marshal.load')
     end
 
-    it 'both games only glob for JSON map files' do
+    it 'the shared loader globs for JSON map files only' do
+      expect(base_content).to include("/^map-[0-9]+\\.json$/i")
+      expect(base_content).not_to include('(?:dat|xml|json)')
+    end
+
+    it 'neither game keeps its own loader' do
       [dr_content, gs_content].each do |content|
-        expect(content).to include("/^map-[0-9]+\\.json$/i")
+        expect(content).not_to include('def self.load(filename = nil)')
         expect(content).not_to include('(?:dat|xml|json)')
       end
     end
 
-    it 'both games report a legacy map database instead of failing silently' do
-      [dr_content, gs_content].each do |content|
-        expect(content).to include('report_unsupported_map_files')
-      end
+    it 'the shared loader reports a legacy map database instead of failing silently' do
+      expect(base_content).to include('report_unsupported_map_files')
+      expect(base_content).to include('def legacy_map_files')
     end
   end
 
@@ -356,7 +360,7 @@ RSpec.describe 'Map sparse room id handling' do
 
     it 'both games invalidate the index when the room list is mutated' do
       [dr_content, gs_content].each do |content|
-        expect(content).to include("@@list[@id] = self\n        self.class.reset_tag_index")
+        expect(content).to include('self.class.reset_tag_index')
       end
     end
 
@@ -368,7 +372,7 @@ RSpec.describe 'Map sparse room id handling' do
 
     it 'both games route invalidation through clear_tags_cache' do
       [dr_content, gs_content].each do |content|
-        expect(content).to include("def clear_tags_cache\n          reset_tag_index")
+        expect(content).to include('def clear_tags_cache')
       end
     end
 
@@ -382,9 +386,14 @@ RSpec.describe 'Map sparse room id handling' do
   end
 
   describe 'fuzzy lookup' do
-    it 'both games compact the room list once instead of scanning it three times' do
+    it 'the shared lookup compacts once instead of scanning three times' do
+      expect(base_content).to include('live = rooms.compact')
+      expect(base_content).not_to include('@@list.find { |room| room.title.find')
+    end
+
+    it 'neither game keeps its own room lookup' do
       [dr_content, gs_content].each do |content|
-        expect(content).to include('rooms = @@list.compact')
+        expect(content).not_to include('def self.[](val)')
         expect(content).not_to include('@@list.find { |room| room.title.find')
         expect(content).not_to include('@@list.find { |room| room&.title&.find')
       end

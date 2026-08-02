@@ -880,10 +880,21 @@ end
 
 class Room
   class << self
+    # Production calls Room.current.dijkstra_hashes(target_list) with an
+    # argument, and an OpenStruct attribute reader takes none. Define real
+    # methods so an example that forgets to stub gets an empty result rather
+    # than an ArgumentError.
+    def room_double
+      double = OpenStruct.new(tags: [], id: 1234)
+      def double.dijkstra(*_args) = [nil, {}]
+      def double.dijkstra_hashes(*_args) = [{}, {}]
+      double
+    end
+
     attr_writer :current
 
     def current
-      @current ||= OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}], dijkstra_hashes: [{}, {}])
+      @current ||= room_double
     end
 
     def id
@@ -891,7 +902,7 @@ class Room
     end
 
     def [](_key)
-      OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}], dijkstra_hashes: [{}, {}])
+      room_double
     end
   end
 end unless defined?(Room)

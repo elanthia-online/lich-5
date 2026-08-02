@@ -380,6 +380,8 @@ module Lich
         # early when the destination compares as an Integer.
         destination = destination.to_i
         _previous, shortest_paths = Map.dijkstra_hashes(origin, destination)
+        return nil if shortest_paths.nil?
+
         shortest_paths[destination]
       end
 
