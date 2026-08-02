@@ -38,6 +38,9 @@ RSpec.shared_examples 'a game Map class' do |game|
   after do
     FileUtils.rm_rf(map_dir)
     map_class.class_variable_get(:@@list).clear
+    # The loading examples deliberately set this false; restore it so the flag
+    # does not leak into whatever example runs next.
+    map_class.class_variable_set(:@@loaded, true)
     map_class.clear_tags_cache
   end
 

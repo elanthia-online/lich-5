@@ -35,6 +35,10 @@ RSpec.describe 'GemStone Map implementation' do
 
   before do
     MapLoader.use(:gs)
+    # Mark the map loaded so nothing here falls through to a real Map.load,
+    # which would read DATA_DIR from the filesystem. Without this the examples
+    # only pass when an earlier one happens to have left @@loaded true.
+    map_class.class_variable_set(:@@loaded, true)
     map_class.class_variable_get(:@@list).clear
     map_class.clear_tags_cache
   end
