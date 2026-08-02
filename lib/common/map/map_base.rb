@@ -585,7 +585,15 @@ module Lich
           return nil unless previous[destination]
 
           path = [destination]
-          path.push(previous[path[-1]]) until previous[path[-1]] == @id
+          until previous[path[-1]] == @id
+            step = previous[path[-1]]
+            # A chain that never reaches this room is not a usable path. The
+            # hash yields nil for a missing predecessor, so without this the
+            # loop would append nil forever.
+            return nil if step.nil?
+
+            path.push(step)
+          end
           path.reverse
         end
 

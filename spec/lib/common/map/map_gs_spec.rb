@@ -286,10 +286,17 @@ RSpec.describe 'Code sharing between DR and GS' do
 
   describe 'common file operations' do
     # Methods defined in game-specific files
-    %w[load load_json].each do |method|
+    %w[load_json].each do |method|
       it "both define self.#{method}" do
         expect(dr_content).to include("def self.#{method}")
         expect(gs_content).to include("def self.#{method}")
+      end
+    end
+
+    it 'the shared module owns load, not the game files' do
+      expect(base_content).to include('def load(filename = nil)')
+      [dr_content, gs_content].each do |content|
+        expect(content).not_to include('def self.load(')
       end
     end
 

@@ -477,6 +477,17 @@ RSpec.describe DRCT do
       result = DRCT.tag_to_id('bank')
       expect(result).to be_nil
     end
+
+    it 'reports and returns nil when pathfinding fails' do
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra_hashes).and_return(nil)
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12])
+      allow(Lich::Messaging).to receive(:msg)
+
+      expect(DRCT.tag_to_id('bank')).to be_nil
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Pathfinding failed/)
+    end
   end
 
   # --- retreat -------------------------------------------------------
@@ -508,57 +519,6 @@ RSpec.describe DRCT do
   end
 
   # --- reverse_path --------------------------------------------------
-
-  describe 'when pathfinding fails' do
-    it 'tag_to_id reports and returns nil' do
-      current = OpenStruct.new(id: 1)
-      allow(current).to receive(:dijkstra_hashes).and_return(nil)
-      allow(Room).to receive(:current).and_return(current)
-      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12])
-      allow(Lich::Messaging).to receive(:msg)
-
-      expect(DRCT.tag_to_id('bank')).to be_nil
-      expect(Lich::Messaging).to have_received(:msg).with('bold', /Pathfinding failed/)
-    end
-
-    it 'sort_destinations hands back the requested list' do
-      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
-      allow(Map).to receive(:dijkstra_hashes).with(1).and_return(nil)
-
-      expect(DRCT.sort_destinations([7, 888_000])).to eq([7, 888_000])
-    end
-  end
-
-  describe 'sparse room id handling' do
-    it 'sorts destinations with widely separated ids' do
-      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
-      allow(Map).to receive(:dijkstra_hashes).with(1)
-                                             .and_return([{}, { 7 => 9.0, 888_000 => 1.0 }])
-
-      expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
-    end
-
-    it 'returns nil when pathfinding fails' do
-      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000).and_return(nil)
-
-      expect { DRCT.time_to_room(1, 888_000) }.not_to raise_error
-      expect(DRCT.time_to_room(1, 888_000)).to be_nil
-    end
-
-    it 'normalizes a String destination to an Integer room id' do
-      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
-                                             .and_return([{}, { 888_000 => 12.5 }])
-
-      expect(DRCT.time_to_room(1, '888000')).to eq(12.5)
-    end
-
-    it 'reports time to a very high room id' do
-      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
-                                             .and_return([{}, { 888_000 => 12.5 }])
-
-      expect(DRCT.time_to_room(1, 888_000)).to eq(12.5)
-    end
-  end
 
   describe '.reverse_path' do
     it 'reverses a simple north-east path' do
@@ -637,6 +597,21 @@ RSpec.describe DRCT do
       result = DRCT.sort_destinations([100, 200])
       expect(result).to eq([100])
     end
+
+    it 'sorts destinations with widely separated room ids' do
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra_hashes).with(1)
+                                             .and_return([{}, { 7 => 9.0, 888_000 => 1.0 }])
+
+      expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
+    end
+
+    it 'hands back the requested list when pathfinding fails' do
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra_hashes).with(1).and_return(nil)
+
+      expect(DRCT.sort_destinations([7, 888_000])).to eq([7, 888_000])
+    end
   end
 
   # --- time_to_room --------------------------------------------------
@@ -650,6 +625,27 @@ RSpec.describe DRCT do
     it 'returns nil for unreachable destination' do
       allow(Map).to receive(:dijkstra_hashes).with(100, 999).and_return([nil, {}])
       expect(described_class.time_to_room(100, 999)).to be_nil
+    end
+
+    it 'reports time to a very high room id' do
+      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
+                                             .and_return([{}, { 888_000 => 12.5 }])
+
+      expect(DRCT.time_to_room(1, 888_000)).to eq(12.5)
+    end
+
+    it 'normalizes a String destination to an Integer room id' do
+      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000)
+                                             .and_return([{}, { 888_000 => 12.5 }])
+
+      expect(DRCT.time_to_room(1, '888000')).to eq(12.5)
+    end
+
+    it 'returns nil without raising when pathfinding fails' do
+      allow(Map).to receive(:dijkstra_hashes).with(1, 888_000).and_return(nil)
+
+      expect { DRCT.time_to_room(1, 888_000) }.not_to raise_error
+      expect(DRCT.time_to_room(1, 888_000)).to be_nil
     end
   end
 

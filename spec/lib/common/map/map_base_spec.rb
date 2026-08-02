@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'timeout'
 require 'json'
 
 # Mock StringProc for testing
@@ -481,6 +482,28 @@ RSpec.describe Lich::Common::MapBase do
         allow(room).to receive(:dijkstra_hashes).and_return(nil)
 
         expect(room.dijkstra).to be_nil
+      end
+    end
+
+    describe 'when the predecessor chain is broken' do
+      let(:room) { test_class.test_list[0] }
+
+      it 'returns nil instead of walking forever' do
+        # Room 2's predecessor is 99, which has no entry of its own, so the walk
+        # can never reach @id. The hash yields nil for the missing key, where the
+        # old array form raised. Timeout so a regression fails the example rather
+        # than hanging the suite.
+        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 99 }, { 2 => 1.0 }])
+
+        result = Timeout.timeout(2) { room.path_to(2) }
+
+        expect(result).to be_nil
+      end
+
+      it 'still reconstructs a chain that reaches this room' do
+        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 1, 1 => 0 }, { 2 => 2.0 }])
+
+        expect(Timeout.timeout(2) { room.path_to(2) }).to eq([1, 2])
       end
     end
 

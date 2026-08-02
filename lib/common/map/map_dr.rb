@@ -467,9 +467,6 @@ module Lich
           end
         end
       end
-
-      # @deprecated Use load_json instead. XML format is deprecated and will be removed in a future version.
-      # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
     end
 
     class Room < Map
