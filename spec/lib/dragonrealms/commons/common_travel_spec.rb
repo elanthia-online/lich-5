@@ -10,7 +10,9 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 RSpec.describe DRCT do
   before(:each) do
     Lich::Messaging.clear_messages!
-    allow(Room).to receive(:current).and_return(OpenStruct.new(id: 19_073, dijkstra_hashes: [{}, {}]))
+    # Room.room_double defines real methods, so dijkstra_hashes accepts the
+    # target list production passes it rather than raising ArgumentError.
+    allow(Room).to receive(:current).and_return(Room.room_double(id: 19_073))
   end
 
   # --- Constants -----------------------------------------------------

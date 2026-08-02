@@ -158,6 +158,164 @@ RSpec.describe 'GemStone Map implementation' do
   end
 
   describe '.current_or_new' do
+    let(:script) do
+      double('Script', want_downstream: false, 'want_downstream=': nil, 'ignore_pause=': nil)
+    end
+
+    # Room 0 keeps the list dense: load_uids has no nil guard and depends on
+    # Lich's NilClass patch, which spec_helper does not apply.
+    def seed_room(tags: [], uid: [], title: '[Town Square]', description: 'A plaza.')
+      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: north'])
+      room = map_class.new(1, [title], [description], ['Obvious paths: north'],
+                           [], nil, nil, nil, {}, {}, nil, nil, tags)
+      room.uid = uid
+      map_class.load_uids
+      room
+    end
+
+    before do
+      allow(Script).to receive(:current).and_return(script)
+      allow(map_class).to receive(:waitrt?)
+      allow(map_class).to receive(:dothistimeout)
+        .and_return('You carefully survey your surroundings and guess that your current location is Test or somewhere close to it.')
+      allow(XMLData).to receive(:room_count).and_return(1)
+      allow(XMLData).to receive(:room_exits_string).and_return('Obvious paths: north')
+    end
+
+    # The live uid maps straight to room 1, so the room is resolved without
+    # matching on text and the newly seen title and description are merged in.
+    context 'when the live uid already maps to a room' do
+      before do
+        allow(XMLData).to receive_messages(room_id: 500,
+                                           room_title: '[Town Square, North]',
+                                           room_description: 'A wider plaza.')
+      end
+
+      it 'returns the room matching the current uid' do
+        seed_room(uid: [500])
+
+        expect(map_class.current_or_new.id).to eq(1)
+      end
+
+      it 'unshifts a newly seen title onto an ordinary room' do
+        seed_room(uid: [500])
+        map_class.current_or_new
+
+        expect(map_class[1].title).to eq(['[Town Square, North]', '[Town Square]'])
+      end
+
+      it 'unshifts a newly seen description onto an ordinary room' do
+        seed_room(uid: [500])
+        map_class.current_or_new
+
+        expect(map_class[1].description).to eq(['A wider plaza.', 'A plaza.'])
+      end
+
+      it 'replaces rather than accumulates for meta:map:latest-only' do
+        seed_room(uid: [500], tags: ['meta:map:latest-only'])
+        map_class.current_or_new
+
+        expect(map_class[1].title).to eq(['[Town Square, North]'])
+        expect(map_class[1].description).to eq(['A wider plaza.'])
+      end
+
+      it 'replaces rather than accumulates for meta:playershop' do
+        seed_room(uid: [500], tags: ['meta:playershop'])
+        map_class.current_or_new
+
+        expect(map_class[1].title).to eq(['[Town Square, North]'])
+      end
+    end
+
+    # No room carries the live uid, so resolution falls through to matching the
+    # live reading against the stored title, description and exits.
+    context 'when the room is resolved by matching the live reading' do
+      before do
+        allow(XMLData).to receive_messages(room_title: '[Town Square]',
+                                           room_description: 'A plaza.')
+      end
+
+      it 'resolves the matching room rather than creating one' do
+        seed_room
+        allow(XMLData).to receive(:room_id).and_return(500)
+
+        expect(map_class.current_or_new.id).to eq(1)
+        expect(map_class.class_variable_get(:@@list).compact.map(&:id)).to eq([0, 1])
+      end
+
+      it 'records the newly seen uid on the resolved room' do
+        room = seed_room
+        allow(XMLData).to receive(:room_id).and_return(500)
+        expect(room.uid).to be_empty # the uid is genuinely new
+
+        map_class.current_or_new
+
+        expect(map_class[1].uid).to include(500)
+      end
+
+      it 'makes the new uid resolvable afterwards' do
+        seed_room
+        allow(XMLData).to receive(:room_id).and_return(500)
+        map_class.current_or_new
+
+        expect(map_class.ids_from_uid(500)).to eq([1])
+      end
+
+      it 'does not record a room id above the 4_294_967_296 threshold' do
+        seed_room
+        allow(XMLData).to receive(:room_id).and_return(4_294_967_297)
+
+        resolved = map_class.current_or_new
+
+        expect(resolved.id).to eq(1)
+        expect(resolved.uid).not_to include(4_294_967_297)
+      end
+
+      it 'refuses to add a second uid to a single-uid room' do
+        seed_room(uid: [999])
+        allow(XMLData).to receive(:room_id).and_return(500)
+
+        resolved = map_class.current_or_new
+
+        expect(resolved.id).not_to eq(1)
+        expect(map_class[1].uid).to eq([999])
+      end
+
+      it 'allows a second uid when the room is tagged meta:map:multi-uid' do
+        seed_room(uid: [999], tags: ['meta:map:multi-uid'])
+        allow(XMLData).to receive(:room_id).and_return(500)
+
+        resolved = map_class.current_or_new
+
+        expect(resolved.id).to eq(1)
+        expect(map_class[1].uid).to contain_exactly(999, 500)
+      end
+    end
+  end
+
+  # The only source-level block left in this file. check_peer_tag is a proc local
+  # to .match_current rather than a callable method, and reaching it needs a
+  # DownstreamHook round trip plus a peer command response. The peer tag matching
+  # itself is covered behaviourally under .match_fuzzy above; what remains here is
+  # the squelching plumbing. Convert once a DownstreamHook harness exists.
+  describe '.match_current peer tag handling (source-level)' do
+    let(:gs_map_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
+
+    it 'extracts peer direction from tag' do
+      expect(gs_map_content).to include('peer_direction')
+    end
+
+    it 'handles set desc on prefix' do
+      expect(gs_map_content).to include('set desc on;')
+    end
+
+    it 'uses DownstreamHook for squelching' do
+      expect(gs_map_content).to include('DownstreamHook')
+      expect(gs_map_content).to include('squelch-peer')
+    end
+  end
+
+  describe '.current_or_new' do
     let(:script) { double('Script', want_downstream: false, 'want_downstream=': nil) }
 
     # Room 0 keeps the list dense: load_uids has no nil guard and depends on

@@ -68,6 +68,9 @@ RSpec.configure do |config|
     # Core game state
     XMLData.reset if defined?(XMLData) && XMLData.respond_to?(:reset)
     Script.current = nil if defined?(Script)
+    # Room.current memoizes its double, so clear it or one example's room
+    # identity leaks into the next.
+    Room.current = nil if defined?(Room) && Room.respond_to?(:current=)
     $_SERVERBUFFER_&.clear
     $_CLIENTBUFFER_&.clear
     $_LASTUPSTREAM_ = nil
@@ -919,8 +922,11 @@ class Room
     # argument, and an OpenStruct attribute reader takes none. Define real
     # methods so an example that forgets to stub gets an empty result rather
     # than an ArgumentError.
-    def room_double
-      double = OpenStruct.new(tags: [], id: 1234)
+    # @param id [Integer] room id the double should report
+    # @return [OpenStruct] a Room stand-in whose pathfinding methods accept the
+    #   arguments production passes, unlike a bare OpenStruct attribute
+    def room_double(id: 1234)
+      double = OpenStruct.new(tags: [], id: id)
       def double.dijkstra(*_args) = [nil, {}]
       def double.dijkstra_hashes(*_args) = [{}, {}]
       double
