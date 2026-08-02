@@ -70,8 +70,10 @@ module Lich
     end
 
     # An Array of tag names that tells its owning Map class to drop the tag
-    # index whenever it is mutated, so Map.rooms_by_tag cannot go stale behind
-    # a caller's back. Reads are plain Array reads with no added indirection.
+    # index whenever the list is structurally mutated. Stored names are frozen
+    # copies, so renaming a tag in place raises rather than silently leaving the
+    # index describing the old name. Reads are plain Array reads with no added
+    # indirection.
     class TagList < Array
       # Array mutators that do not end in a bang. This is a closed set, unlike
       # the bang methods, which are derived below so that a mutator added by a
@@ -101,9 +103,29 @@ module Lich
       MUTATORS.each do |name|
         define_method(name) do |*args, &block|
           result = super(*args, &block)
+          freeze_contents
           @owner.reset_tag_index if @owner.respond_to?(:reset_tag_index)
           result
         end
+      end
+
+      private
+
+      # Replace any unfrozen name with a frozen copy. Without this a caller
+      # could do tags.first.replace('bank'), which changes the tag without
+      # touching the list and so never reaches the interceptor above. Copies
+      # rather than freezing in place, so the caller's own strings are left
+      # alone. Uses Array's writer directly to avoid re-entering the
+      # interceptor.
+      # @return [nil]
+      def freeze_contents
+        writer = Array.instance_method(:[]=).bind(self)
+        each_with_index do |tag, index|
+          next unless tag.is_a?(String) && !tag.frozen?
+
+          writer.call(index, tag.dup.freeze)
+        end
+        nil
       end
     end
 
@@ -148,17 +170,26 @@ module Lich
         # Tag name => Array of room ids. Private: callers must go through
         # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.
         # @return [Hash{String => Array<Integer>}]
+        # Rebuild attempts before giving up on caching and returning a fresh read.
+        TAG_INDEX_BUILD_ATTEMPTS = 3
+
         def tag_index
           self.load unless loaded?
-          cached = @tag_index
-          return cached unless cached.nil?
+          TAG_INDEX_BUILD_ATTEMPTS.times do
+            cached = @tag_index
+            return cached unless cached.nil?
 
-          generation = tag_index_generation
-          built = build_tag_index
-          # Discard the build if the index was invalidated while it was running,
-          # so a concurrent tag change cannot be clobbered by a stale rebuild.
-          @tag_index = built if generation == tag_index_generation
-          built
+            generation = tag_index_generation
+            built = build_tag_index
+            # Invalidated while the build was running. Neither cache it nor hand
+            # it back, since it already describes an older set of tags; try again.
+            next unless generation == tag_index_generation
+
+            return @tag_index = built
+          end
+          # Losing the race repeatedly means tags are changing faster than the
+          # index can settle. Answer from a fresh read rather than caching it.
+          build_tag_index
         end
 
         # @return [Integer]
@@ -585,13 +616,17 @@ module Lich
           return nil unless previous[destination]
 
           path = [destination]
+          seen = { destination => true }
           until previous[path[-1]] == @id
             step = previous[path[-1]]
             # A chain that never reaches this room is not a usable path. The
-            # hash yields nil for a missing predecessor, so without this the
-            # loop would append nil forever.
-            return nil if step.nil?
+            # hash yields nil for a missing predecessor, and a chain that
+            # revisits a room is a cycle; either would loop forever. Dijkstra
+            # should not produce either, but path_to is a public entry point and
+            # dijkstra_hashes is overridable.
+            return nil if step.nil? || seen[step]
 
+            seen[step] = true
             path.push(step)
           end
           path.reverse

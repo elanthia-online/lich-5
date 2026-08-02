@@ -3,6 +3,7 @@
 require_relative '../../../spec_helper'
 require 'json'
 require 'fileutils'
+require_relative 'game_map_shared_examples'
 
 # Mock StringProc
 class StringProc
@@ -87,10 +88,14 @@ end
 def put(cmd); end
 
 # Load the DR map
-require 'common/map/map_dr'
+MapLoader.use(:dr)
 
 RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
+  it_behaves_like 'a game Map class', :dr
+
   let(:map_class) { Lich::Common::Map }
+
+  before { MapLoader.use(:dr) }
 
   before(:each) do
     # Clear room registry via the public API
@@ -377,302 +382,6 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
       end
     end
 
-    describe '.rooms_by_tag' do
-      before do
-        map_class.class_variable_set(:@@loaded, true) # see NOTE above
-        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-        map_class.new(4, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop', 'bank'])
-        map_class.new(2, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [])
-      end
-
-      it 'returns ids of rooms carrying the tag in ascending order' do
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
-      end
-
-      it 'returns an empty array for an unknown tag' do
-        expect(map_class.rooms_by_tag('nonexistent')).to eq([])
-      end
-
-      it 'skips nil holes in the room list' do
-        expect(map_class.class_variable_get(:@@list)[3]).to be_nil
-
-        expect(map_class.rooms_by_tag('bank')).to eq([4])
-      end
-
-      it 'is not corrupted by a caller mutating the result' do
-        map_class.rooms_by_tag('shop').clear
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
-      end
-    end
-
-    describe 'tag index invalidation' do
-      before do
-        map_class.class_variable_set(:@@loaded, true) # see NOTE above
-        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-        map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, [])
-        map_class.rooms_by_tag('shop') # prime the memo
-      end
-
-      it 'picks up a tag appended in place' do
-        map_class[2].tags << 'shop'
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
-      end
-
-      it 'picks up a tag deleted in place' do
-        map_class[1].tags.delete('shop')
-
-        expect(map_class.rooms_by_tag('shop')).to eq([])
-      end
-
-      it 'picks up a whole tag list assignment' do
-        map_class[2].tags = ['shop', 'bank']
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
-        expect(map_class.rooms_by_tag('bank')).to eq([2])
-      end
-
-      it 'picks up an in place clear' do
-        map_class[1].tags.clear
-
-        expect(map_class.rooms_by_tag('shop')).to eq([])
-      end
-
-      it 'picks up a newly constructed tagged room' do
-        map_class.new(3, ['C'], ['c'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 3])
-      end
-
-      it 'picks up a room replaced at an existing id' do
-        map_class.new(2, ['B'], ['b'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1, 2])
-      end
-
-      it 'is reflected in .tags as well' do
-        map_class[2].tags << 'inn'
-
-        expect(map_class.tags).to include('inn')
-      end
-
-      it 'wraps room tags in a TagList' do
-        expect(map_class[1].tags).to be_a(Lich::Common::TagList)
-      end
-
-      it 'keeps room tags comparable to a plain Array' do
-        expect(map_class[1].tags).to eq(['shop'])
-      end
-
-      it 'rebuilds after clear_tags_cache drops a populated cache' do
-        allow(map_class).to receive(:build_tag_index).and_call_original
-        map_class.rooms_by_tag('shop') # cache is already primed by the before block
-
-        map_class.clear_tags_cache
-        map_class.rooms_by_tag('shop')
-
-        expect(map_class).to have_received(:build_tag_index).once
-      end
-
-      it 'does not rebuild while the cache is valid' do
-        allow(map_class).to receive(:build_tag_index).and_call_original
-
-        3.times { map_class.rooms_by_tag('shop') }
-
-        expect(map_class).not_to have_received(:build_tag_index)
-      end
-    end
-
-    describe 'JSON-only map loading' do
-      # Stub the game so the map directory is unique to these examples and
-      # cannot pick up files another spec left in DATA_DIR.
-      let(:game) { 'rspec-maploader' }
-      let(:map_dir) { File.join(DATA_DIR, game) }
-
-      before do
-        # These examples clear the shared room list, so snapshot it and put it
-        # back afterwards rather than leaving later examples with an empty map.
-        @saved_list = map_class.class_variable_get(:@@list).dup
-        @saved_loaded = map_class.class_variable_get(:@@loaded)
-
-        allow(XMLData).to receive(:game).and_return(game)
-        FileUtils.rm_rf(map_dir)
-        FileUtils.mkdir_p(map_dir)
-        map_class.class_variable_set(:@@loaded, false)
-        map_class.class_variable_get(:@@list).clear
-        allow(map_class).to receive(:respond)
-      end
-
-      after do
-        FileUtils.rm_rf(map_dir)
-        restored = map_class.class_variable_get(:@@list)
-        restored.clear
-        restored.concat(@saved_list)
-        map_class.class_variable_set(:@@loaded, @saved_loaded)
-        map_class.clear_tags_cache
-      end
-
-      it 'refuses to load a .dat map database' do
-        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
-
-        expect(map_class.load).to be false
-      end
-
-      it 'refuses to load an .xml map database' do
-        File.write(File.join(map_dir, 'map-1.xml'), '<map></map>')
-
-        expect(map_class.load).to be false
-      end
-
-      it 'explains that the format is unsupported rather than only reporting none found' do
-        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
-        map_class.load
-
-        expect(map_class).to have_received(:respond).with(/no longer supported/)
-      end
-
-      it 'names the legacy files it found' do
-        File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
-        File.write(File.join(map_dir, 'map.xml'), '<map></map>')
-        map_class.load
-
-        expect(map_class).to have_received(:respond).with(/map-1\.dat, map\.xml/)
-      end
-
-      it 'refuses an explicitly named .dat path without raising' do
-        path = File.join(map_dir, 'map-1.dat')
-        File.binwrite(path, Marshal.dump([]))
-
-        expect { map_class.load(path) }.not_to raise_error
-      end
-
-      it 'returns false for an explicitly named legacy path' do
-        path = File.join(map_dir, 'map-1.dat')
-        File.binwrite(path, Marshal.dump([]))
-
-        expect(map_class.load(path)).to be false
-      end
-
-      it 'names the explicitly requested legacy file' do
-        path = File.join(map_dir, 'map-1.dat')
-        File.binwrite(path, Marshal.dump([]))
-        map_class.load(path)
-
-        expect(map_class).to have_received(:respond).with(/no longer supported: map-1\.dat/)
-      end
-
-      it 'stays quiet about legacy formats when the directory has none' do
-        map_class.load
-
-        expect(map_class).not_to have_received(:respond).with(/no longer supported/)
-      end
-
-      it 'still reports when no map database is present at all' do
-        map_class.load
-
-        expect(map_class).to have_received(:respond).with(/no map database found/)
-      end
-    end
-
-    describe 'tag normalization on list assignment' do
-      # Marshal skips the constructor, so a room restored that way carries a
-      # plain Array in @tags rather than a TagList. Rebuild that shape here.
-      let(:legacy_list) do
-        map_class.class_variable_set(:@@loaded, true) # see NOTE above
-        map_class.new(1, ['A'], ['a'], ['path'], [], nil, nil, nil, {}, {}, nil, nil, ['shop'])
-        restored = Marshal.load(Marshal.dump(map_class.class_variable_get(:@@list)))
-        restored[1].instance_variable_set(:@tags, ['shop'])
-        restored
-      end
-
-      # These examples reassign @@list, which swaps the array object itself, so
-      # restore both the original object and its contents for later examples.
-      before do
-        @saved_list = map_class.class_variable_get(:@@list)
-        @saved_contents = @saved_list.dup
-        @saved_loaded = map_class.class_variable_get(:@@loaded)
-      end
-
-      after do
-        @saved_list.clear
-        @saved_list.concat(@saved_contents)
-        map_class.class_variable_set(:@@list, @saved_list)
-        map_class.class_variable_set(:@@loaded, @saved_loaded)
-        map_class.clear_tags_cache
-      end
-
-      it 'starts from a room whose tags are a plain Array' do
-        expect(legacy_list[1].instance_variable_get(:@tags)).to be_an(Array)
-        expect(legacy_list[1].instance_variable_get(:@tags)).not_to be_a(Lich::Common::TagList)
-      end
-
-      it 'rewraps tags when the list is assigned' do
-        map_class.list = legacy_list
-
-        expect(map_class[1].tags).to be_a(Lich::Common::TagList)
-      end
-
-      it 'still indexes the loaded tags' do
-        map_class.list = legacy_list
-
-        expect(map_class.rooms_by_tag('shop')).to eq([1])
-      end
-
-      it 'invalidates on an in place tag change after a legacy load' do
-        map_class.list = legacy_list
-        map_class.rooms_by_tag('shop') # prime the cache
-
-        map_class[1].tags << 'bank'
-
-        expect(map_class.rooms_by_tag('bank')).to eq([1])
-      end
-
-      it 'drops a cache carried over from the previous map' do
-        map_class.list = legacy_list
-        map_class.rooms_by_tag('shop') # prime against the loaded list
-
-        map_class.list = []
-
-        expect(map_class.rooms_by_tag('shop')).to eq([])
-      end
-    end
-
-    describe '.[] fuzzy lookup precedence' do
-      before do
-        map_class.class_variable_set(:@@loaded, true) # see NOTE above
-        map_class.new(1, ['[Market Row]'],   ['Stalls line the muddy street.'], ['path'])
-        map_class.new(4, ['[Quiet Lane]'],   ['Marble counters gleam here.'],   ['path'])
-        map_class.new(6, ['[Bank Lobby]'],   ['Stalls line the far wall.'],     ['path'])
-      end
-
-      it 'prefers a title match over an earlier description match' do
-        expect(map_class['[Bank Lobby]'].id).to eq(6)
-      end
-
-      it 'falls back to an exact description match when no title matches' do
-        expect(map_class['Marble counters gleam'].id).to eq(4)
-      end
-
-      it 'returns the first room when several descriptions match' do
-        expect(map_class['Stalls line'].id).to eq(1)
-      end
-
-      it 'falls back to the loose regex form last' do
-        expect(map_class['Stalls line...muddy street'].id).to eq(1)
-      end
-
-      it 'returns nil when nothing matches' do
-        expect(map_class['no such room anywhere']).to be_nil
-      end
-
-      it 'skips nil holes without raising' do
-        expect(map_class.class_variable_get(:@@list)[3]).to be_nil
-
-        expect { map_class['no such room anywhere'] }.not_to raise_error
-      end
-    end
-
     describe '.clear' do
       before do
         map_class.class_variable_set(:@@loaded, true) # see NOTE above
@@ -913,6 +622,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 end
 
 RSpec.describe Lich::Common::Room, 'DragonRealms' do
+  before { MapLoader.use(:dr) }
   it 'inherits from Map' do
     expect(Lich::Common::Room.superclass).to eq(Lich::Common::Map)
   end
@@ -937,6 +647,8 @@ end
 # title/description/paths match is trusted regardless of any stored UID.
 RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
   let(:map_class) { Lich::Common::Map }
+
+  before { MapLoader.use(:dr) }
 
   # Build and register a room. Ids are kept dense from 0 by every caller so the
   # @@list.find / load_uids iterations in the matchers never trip over nil holes.

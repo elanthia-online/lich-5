@@ -1,118 +1,144 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'fileutils'
+require_relative 'game_map_shared_examples'
 
-# Since we need a separate namespace for GS tests (to avoid conflicts with DR),
-# we'll test the GS-specific features by checking the source file structure
-# and mocking the unique behavior
-
-# This spec tests GS-specific features:
-# - Map.get_location
-# - meta:map:latest-only, meta:playershop tags
-# - peer tag checking
-# - unique_loot handling
-# - Map.locations and Map.images caches
-
-RSpec.describe 'GemStone Map Implementation' do
-  let(:gs_map_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
-
-  describe 'GS-specific methods' do
-    it 'defines get_location method' do
-      expect(gs_map_content).to include('def self.get_location')
+# The shared spec_helper XMLData module does not declare every room field the
+# GemStone matchers read. Add them idempotently, the same way map_dr_spec does,
+# so the specs below can drive them by plain assignment.
+if defined?(XMLData) && XMLData.is_a?(Module)
+  module XMLData
+    class << self
+      attr_accessor :room_exits_string, :room_count, :room_window_disabled
     end
+  end
+end
 
-    it 'defines locations method' do
-      expect(gs_map_content).to include('def self.locations')
-    end
+# =============================================================================
+# GemStone Map implementation
+# =============================================================================
+# map_gs.rb and map_dr.rb both define Lich::Common::Map, so MapLoader.use swaps
+# the loaded class rather than letting the two collide. See spec_helper.
+#
+# A handful of examples below still assert against the source text. Those cover
+# GemStone-only game interaction (peer tag squelching, current_or_new meta tags,
+# get_location's command and responses) that needs DownstreamHook and command
+# round-trip mocking to exercise properly. They are marked and want converting
+# in their own change; everything else here is behavioural.
+RSpec.describe 'GemStone Map implementation' do
+  let(:map_class) { MapLoader.use(:gs) }
+  let(:room) do
+    map_class.class_variable_set(:@@loaded, true)
+    map_class.new(1, ['[Room]'], ['desc'], ['Obvious paths: north'])
+  end
 
-    it 'defines images method' do
-      expect(gs_map_content).to include('def self.images')
-    end
+  before do
+    MapLoader.use(:gs)
+    map_class.class_variable_get(:@@list).clear
+    map_class.clear_tags_cache
+  end
 
-    it 'handles meta:map:latest-only tags in current_or_new' do
-      expect(gs_map_content).to include('meta:map:latest-only')
-    end
-
-    it 'handles meta:playershop tags in current_or_new' do
-      expect(gs_map_content).to include('meta:playershop')
-    end
-
-    it 'handles meta:map:multi-uid tags' do
-      expect(gs_map_content).to include('meta:map:multi-uid')
-    end
-
-    it 'includes peer tag checking logic' do
-      expect(gs_map_content).to include('check_peer_tag')
-      expect(gs_map_content).to include('peer [a-z]+')
-    end
-
-    it 'handles unique_loot checking' do
-      expect(gs_map_content).to include('unique_loot')
-      expect(gs_map_content).to include('GameObj.loot')
-    end
-
-    it 'uses large UID threshold (4_294_967_296)' do
-      expect(gs_map_content).to include('4_294_967_296')
+  describe 'GemStone-only class methods' do
+    %i[get_location locations images current_or_new].each do |method|
+      it "responds to .#{method}" do
+        expect(map_class).to respond_to(method)
+      end
     end
   end
 
   describe 'class structure' do
-    it 'includes MapBase module' do
-      expect(gs_map_content).to include('include MapBase')
-    end
-
-    it 'includes Enumerable' do
-      expect(gs_map_content).to include('include Enumerable')
-    end
-
-    it 'defines Room subclass' do
-      expect(gs_map_content).to include('class Room < Map')
+    it 'includes Enumerable, which DragonRealms does not' do
+      expect(map_class.ancestors).to include(Enumerable)
     end
   end
 
   describe 'class variables' do
-    it 'defines @@images cache' do
-      expect(gs_map_content).to include('@@images')
-    end
-
-    it 'defines @@locations cache' do
-      expect(gs_map_content).to include('@@locations')
-    end
-
-    it 'defines @@fuzzy_room_id' do
-      expect(gs_map_content).to include('@@fuzzy_room_id')
+    %i[@@images @@locations @@fuzzy_room_id].each do |name|
+      it "defines #{name}" do
+        expect(map_class.class_variables).to include(name)
+      end
     end
   end
 
   describe 'attribute differences from DR' do
-    it 'does NOT define room_objects attribute' do
-      # GS doesn't have room_objects
-      expect(gs_map_content).not_to include(':room_objects')
+    it 'does not expose room_objects, which is DragonRealms only' do
+      expect(room).not_to respond_to(:room_objects)
     end
 
-    it 'has outside? method via MapBase' do
-      # outside? is now in MapBase, not directly in GS
-      base_content = File.read(File.expand_path('../../../../lib/common/map/map_base.rb', __dir__))
-      expect(base_content).to include('def outside?')
+    it 'takes outside? from MapBase' do
+      expect(room.method(:outside?).owner).to eq(Lich::Common::MapBase::InstanceMethods)
     end
   end
 
-  describe 'get_location method' do
-    it 'sends location command to game' do
-      expect(gs_map_content).to include("'location', 15")
+  describe '.get_location' do
+    let(:script) { double('Script', want_downstream: false, 'want_downstream=': nil) }
+
+    before do
+      # XMLData in the spec environment is a bare module, so the room counter
+      # get_location compares against has to be stubbed in.
+      allow(XMLData).to receive(:room_count).and_return(1)
+      map_class.class_variable_set(:@@current_location_count, nil)
+      allow(Script).to receive(:current).and_return(script)
+      allow(map_class).to receive(:waitrt?)
     end
 
-    it 'parses location response' do
-      expect(gs_map_content).to include('You carefully survey your surroundings')
+    it 'asks the game for the location' do
+      allow(map_class).to receive(:dothistimeout).and_return('You carefully survey your surroundings and guess that your current location is Wehnimer\'s Landing or somewhere close to it.')
+
+      map_class.get_location
+
+      expect(map_class).to have_received(:dothistimeout).with('location', 15, kind_of(Regexp))
     end
 
-    it 'handles error responses' do
-      expect(gs_map_content).to include("can't do that while submerged")
-      expect(gs_map_content).to include('pitch darkness')
+    it 'extracts the location name from a successful survey' do
+      allow(map_class).to receive(:dothistimeout).and_return('You carefully survey your surroundings and guess that your current location is Wehnimer\'s Landing or somewhere close to it.')
+
+      expect(map_class.get_location).to eq("Wehnimer's Landing")
+    end
+
+    it 'returns false when submerged' do
+      allow(map_class).to receive(:dothistimeout).and_return("You can't do that while submerged under water.")
+
+      expect(map_class.get_location).to be false
+    end
+
+    it 'returns false in pitch darkness' do
+      allow(map_class).to receive(:dothistimeout).and_return("Not in pitch darkness you don't.")
+
+      expect(map_class.get_location).to be false
+    end
+
+    it 'returns false when the survey fails' do
+      allow(map_class).to receive(:dothistimeout)
+        .and_return('You carefully survey your surroundings but are unable to guess your current location.')
+
+      expect(map_class.get_location).to be false
+    end
+
+    it 'caches the answer for the same room count' do
+      allow(map_class).to receive(:dothistimeout).and_return('You carefully survey your surroundings and guess that your current location is Icemule Trace or somewhere close to it.')
+
+      2.times { map_class.get_location }
+
+      expect(map_class).to have_received(:dothistimeout).once
+    end
+
+    it 'returns nil when no script is running' do
+      allow(Script).to receive(:current).and_return(nil)
+
+      expect(map_class.get_location).to be_nil
     end
   end
 
-  describe 'peer tag checking' do
+  # The only source-level block left in this file. check_peer_tag is a proc local
+  # to .match_current rather than a callable method, and reaching it needs a
+  # DownstreamHook round trip plus a peer command response. The peer tag matching
+  # itself is covered behaviourally under .match_fuzzy above; what remains here is
+  # the squelching plumbing. Convert once a DownstreamHook harness exists.
+  describe '.match_current peer tag handling (source-level)' do
+    let(:gs_map_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
+
     it 'extracts peer direction from tag' do
       expect(gs_map_content).to include('peer_direction')
     end
@@ -127,287 +153,185 @@ RSpec.describe 'GemStone Map Implementation' do
     end
   end
 
-  describe 'current_or_new meta tag handling' do
-    it 'checks for meta:map:latest-only or meta:playershop' do
-      expect(gs_map_content).to include("room.tags & %w[meta:map:latest-only meta:playershop]")
+  describe '.current_or_new' do
+    let(:script) { double('Script', want_downstream: false, 'want_downstream=': nil) }
+
+    # Room 0 keeps the list dense: load_uids has no nil guard and depends on
+    # Lich's NilClass patch, which spec_helper does not apply.
+    def seed_room(tags: [], uid: [500])
+      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: north'])
+      room = map_class.new(1, ['[Town Square]'], ['A plaza.'], ['Obvious paths: north'],
+                           [], nil, nil, nil, {}, {}, nil, nil, tags)
+      room.uid = uid
+      map_class.load_uids
+      room
     end
 
-    it 'uses unshift for normal rooms' do
-      expect(gs_map_content).to include('room.title.unshift')
-      expect(gs_map_content).to include('room.description.unshift')
-      expect(gs_map_content).to include('room.paths.unshift')
+    before do
+      allow(Script).to receive(:current).and_return(script)
+      allow(map_class).to receive(:waitrt?)
+      allow(map_class).to receive(:dothistimeout)
+        .and_return('You carefully survey your surroundings and guess that your current location is Test or somewhere close to it.')
+      allow(XMLData).to receive_messages(room_count: 1, room_id: 500,
+                                         room_title: '[Town Square, North]',
+                                         room_description: 'A wider plaza.',
+                                         room_exits_string: 'Obvious paths: north')
     end
 
-    it 'replaces values for latest-only rooms' do
-      expect(gs_map_content).to include('room.title = [XMLData.room_title]')
-      expect(gs_map_content).to include('room.description = [XMLData.room_description.strip]')
-    end
-  end
+    it 'returns the room matching the current uid' do
+      seed_room
 
-  describe 'match_fuzzy peer tag rejection' do
-    it 'returns nil for rooms requiring peer check' do
-      expect(gs_map_content).to include('room.tags.any? { |tag| tag =~')
-    end
-  end
-end
-
-RSpec.describe 'outside? method game-agnostic behavior' do
-  let(:base_content) { File.read(File.expand_path('../../../../lib/common/map/map_base.rb', __dir__)) }
-
-  it 'checks for "Obvious paths:" for outdoor detection' do
-    expect(base_content).to include('Obvious paths:')
-  end
-
-  it 'works for both GS and DR exit formats' do
-    # Both games use the same pattern:
-    # - "Obvious paths:" for outdoor
-    # - "Obvious exits:" for indoor
-    expect(base_content).to include('@paths.last =~ /^Obvious paths:/')
-  end
-
-  it 'returns boolean true or false' do
-    expect(base_content).to include('? true : false')
-  end
-
-  it 'handles nil paths gracefully' do
-    expect(base_content).to include('return false if @paths.nil?')
-  end
-
-  it 'handles empty paths gracefully' do
-    expect(base_content).to include('@paths.empty?')
-  end
-end
-
-RSpec.describe 'Code sharing between DR and GS' do
-  let(:base_content) { File.read(File.expand_path('../../../../lib/common/map/map_base.rb', __dir__)) }
-  let(:dr_content) { File.read(File.expand_path('../../../../lib/common/map/map_dr.rb', __dir__)) }
-  let(:gs_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
-
-  describe 'shared in MapBase' do
-    it 'contains MinHeap implementation' do
-      expect(base_content).to include('class MinHeap')
-      expect(base_content).to include('def push(priority, value)')
-      expect(base_content).to include('def pop')
-      expect(base_content).to include('bubble_up')
-      expect(base_content).to include('bubble_down')
+      expect(map_class.current_or_new.id).to eq(1)
     end
 
-    it 'contains dijkstra algorithm' do
-      expect(base_content).to include('def dijkstra(destination = nil)')
-      expect(base_content).to include('pq = MinHeap.new')
-      expect(base_content).to include('shortest_distances_hash')
-      expect(base_content).to include('previous_hash')
+    it 'unshifts a newly seen title onto an ordinary room' do
+      seed_room
+      map_class.current_or_new
+
+      expect(map_class[1].title).to eq(['[Town Square, North]', '[Town Square]'])
     end
 
-    it 'contains path_to method' do
-      expect(base_content).to include('def path_to(destination)')
+    it 'unshifts a newly seen description onto an ordinary room' do
+      seed_room
+      map_class.current_or_new
+
+      expect(map_class[1].description).to eq(['A wider plaza.', 'A plaza.'])
     end
 
-    it 'contains find_nearest methods' do
-      expect(base_content).to include('def find_nearest_by_tag')
-      expect(base_content).to include('def find_all_nearest_by_tag')
-      expect(base_content).to include('def find_nearest(target_list)')
+    it 'replaces rather than accumulates for meta:map:latest-only' do
+      seed_room(tags: ['meta:map:latest-only'])
+      map_class.current_or_new
+
+      expect(map_class[1].title).to eq(['[Town Square, North]'])
+      expect(map_class[1].description).to eq(['A wider plaza.'])
     end
 
-    it 'contains estimate_time method' do
-      expect(base_content).to include('def estimate_time(array)')
+    it 'replaces rather than accumulates for meta:playershop' do
+      seed_room(tags: ['meta:playershop'])
+      map_class.current_or_new
+
+      expect(map_class[1].title).to eq(['[Town Square, North]'])
     end
 
-    it 'contains deprecated method stubs' do
-      expect(base_content).to include('def desc')
-      expect(base_content).to include('def map_name')
-      expect(base_content).to include('def geo')
+    it 'records a newly seen uid on the room' do
+      seed_room(uid: [500])
+      allow(XMLData).to receive(:room_id).and_return(500)
+      map_class.current_or_new
+
+      expect(map_class[1].uid).to include(500)
     end
 
-    it 'contains to_json method' do
-      expect(base_content).to include('def to_json')
+    it 'ignores room ids above the 4_294_967_296 threshold' do
+      seed_room
+      allow(XMLData).to receive(:room_id).and_return(4_294_967_297)
+      map_class.current_or_new
+
+      expect(map_class[1].uid).not_to include(4_294_967_297)
     end
   end
 
-  describe 'both implementations require map_base' do
-    it 'DR requires map_base' do
-      expect(dr_content).to include("require_relative 'map_base'")
+  describe '.match_fuzzy' do
+    # Mirrors the build_room/live_room helpers map_dr_spec uses.
+    def build_room(id, title:, description:, exits:, tags: [])
+      map_class.new(id, [title], [description], [exits], [],
+                    nil, nil, nil, {}, {}, nil, nil, tags)
     end
 
-    it 'GS requires map_base' do
-      expect(gs_content).to include("require_relative 'map_base'")
-    end
-  end
-
-  describe 'both implementations include MapBase' do
-    it 'DR includes MapBase' do
-      expect(dr_content).to include('include MapBase')
+    def live_room(title:, description:, exits:, room_count: 1)
+      XMLData.room_title = title
+      XMLData.room_description = description
+      XMLData.room_exits_string = exits
+      XMLData.room_count = room_count
     end
 
-    it 'GS includes MapBase' do
-      expect(gs_content).to include('include MapBase')
-    end
-  end
+    before { map_class.class_variable_set(:@@fuzzy_room_count, -1) }
 
-  describe 'common class method accessors' do
-    %w[loaded? list uids clear_tags_cache mark_loaded synchronize_load].each do |method|
-      it "both define #{method}" do
-        expect(dr_content).to include("def #{method}")
-        expect(gs_content).to include("def #{method}")
-      end
-    end
-  end
+    it 'resolves a room whose title, description and exits all match' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north')
+      live_room(title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north')
 
-  describe 'legacy map formats' do
-    it 'neither game defines the removed .dat or .xml loaders' do
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('def self.load_xml')
-        expect(content).not_to include('def self.save_xml')
-      end
+      expect(map_class.match_fuzzy).to eq(0)
     end
 
-    it 'base module no longer defines load_dat' do
-      expect(base_content).not_to include('def load_dat')
-      expect(base_content).not_to include('Marshal.load')
+    it 'returns nil when nothing matches' do
+      build_room(0, title: 'Town Square', description: 'A wide plaza.', exits: 'Obvious paths: north')
+      live_room(title: 'Elsewhere', description: 'Nowhere.', exits: 'Obvious paths: south')
+
+      expect(map_class.match_fuzzy).to be_nil
     end
 
-    it 'the shared loader globs for JSON map files only' do
-      expect(base_content).to include("/^map-[0-9]+\\.json$/i")
-      expect(base_content).not_to include('(?:dat|xml|json)')
+    it 'rejects a room carrying a peer disambiguation tag' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.',
+                    exits: 'Obvious paths: down', tags: ['peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down')
+
+      expect(map_class.match_fuzzy).to be_nil
     end
 
-    it 'neither game keeps its own loader' do
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('def self.load(filename = nil)')
-        expect(content).not_to include('(?:dat|xml|json)')
-      end
+    it 'rejects a peer tag carrying the set desc on prefix' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.',
+                    exits: 'Obvious paths: down', tags: ['set desc on; peer down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down')
+
+      expect(map_class.match_fuzzy).to be_nil
     end
 
-    it 'the shared loader reports a legacy map database instead of failing silently' do
-      expect(base_content).to include('report_unsupported_map_files')
-      expect(base_content).to include('def legacy_map_files')
-    end
-  end
+    it 'accepts a room whose tags only look peer-like' do
+      build_room(0, title: 'Foggy Ledge', description: 'A narrow ledge.',
+                    exits: 'Obvious paths: down', tags: ['peers down =~ /a chasm/'])
+      live_room(title: 'Foggy Ledge', description: 'A narrow ledge.', exits: 'Obvious paths: down')
 
-  describe 'common file operations' do
-    # Methods defined in game-specific files
-    %w[load_json].each do |method|
-      it "both define self.#{method}" do
-        expect(dr_content).to include("def self.#{method}")
-        expect(gs_content).to include("def self.#{method}")
-      end
+      expect(map_class.match_fuzzy).to eq(0)
     end
 
-    it 'the shared module owns load, not the game files' do
-      expect(base_content).to include('def load(filename = nil)')
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('def self.load(')
-      end
+    it 'rejects a room whose unique_loot is not on the ground' do
+      allow(GameObj).to receive(:loot).and_return([])
+      room = build_room(0, title: 'Vault', description: 'Shelves.', exits: 'Obvious paths: out')
+      room.unique_loot = ['a brass key']
+      live_room(title: 'Vault', description: 'Shelves.', exits: 'Obvious paths: out')
+
+      expect(map_class.match_fuzzy).to be_nil
     end
 
-    # Methods moved to map_base.rb (shared via MapBase module)
-    %w[save_json].each do |method|
-      it "base module defines #{method}" do
-        base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
-        expect(base_content).to include("def #{method}")
-      end
+    it 'accepts a room whose unique_loot is present' do
+      allow(GameObj).to receive(:loot).and_return([double('Item', name: 'a brass key')])
+      room = build_room(0, title: 'Vault', description: 'Shelves.', exits: 'Obvious paths: out')
+      room.unique_loot = ['a brass key']
+      live_room(title: 'Vault', description: 'Shelves.', exits: 'Obvious paths: out')
+
+      expect(map_class.match_fuzzy).to eq(0)
     end
 
-    it 'base module aliases save to save_json' do
-      base_content = File.read(File.join(__dir__, '../../../../lib/common/map/map_base.rb'))
-      expect(base_content).to include('alias_method :save, :save_json')
+    it 'matches through fog regardless of the recorded exits' do
+      build_room(0, title: 'Misty Path', description: 'Grey all around.', exits: 'Obvious paths: north')
+      live_room(title: 'Misty Path', description: 'Grey all around.',
+                exits: 'Obvious paths: obscured by a thick fog')
+
+      expect(map_class.match_fuzzy).to eq(0)
     end
   end
 end
 
-RSpec.describe 'Map sparse room id handling' do
-  let(:base_content) { File.read(File.expand_path('../../../../lib/common/map/map_base.rb', __dir__)) }
-  let(:dr_content) { File.read(File.expand_path('../../../../lib/common/map/map_dr.rb', __dir__)) }
-  let(:gs_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
+# =============================================================================
+# GemStone Map runtime behaviour
+# =============================================================================
+RSpec.describe 'GemStone Map runtime behaviour' do
+  it_behaves_like 'a game Map class', :gs
 
-  describe 'hash returning dijkstra' do
-    it 'base module defines both the instance and class level variants' do
-      expect(base_content).to include('def dijkstra_hashes(destination = nil)')
-      expect(base_content).to include('def dijkstra_hashes(source, destination = nil)')
+  let(:map_class) { MapLoader.use(:gs) }
+
+  before { MapLoader.use(:gs) }
+
+  describe 'the loader put the GemStone class in place' do
+    it 'loaded the GemStone implementation, not the DragonRealms one' do
+      # DragonRealms adds four optional genie parameters. If both files were
+      # loaded into the same class, whichever came last would own #initialize
+      # and this count would change, so this is what proves the swap held.
+      expect(map_class.instance_method(:initialize).parameters.length).to eq(15)
     end
 
-    it 'keeps the array conversion on the public dijkstra' do
-      expect(base_content).to include('Convert hashes back to arrays for backward compatibility')
-    end
-
-    it 'internal callers use the hash variant' do
-      expect(base_content).to include('previous, = dijkstra_hashes(destination)')
-      expect(base_content).to include('_, shortest_distances = dijkstra_hashes(target_list)')
-      expect(base_content).not_to include('self.class.dijkstra_hashes(@id')
-    end
-
-    it 'neither game overrides the pathfinding methods' do
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('def dijkstra')
-        expect(content).not_to include('def path_to')
-        expect(content).not_to include('def find_nearest')
-      end
-    end
-  end
-
-  describe 'tag index' do
-    it 'base module defines the index and its accessors' do
-      expect(base_content).to include('class TagList < Array')
-      expect(base_content).to include('def tag_index')
-      expect(base_content).to include('def rooms_by_tag(tag_name)')
-      expect(base_content).to include('def reset_tag_index')
-      expect(base_content).to include('def build_tag_index')
-    end
-
-    it 'the tag finders read the index instead of scanning the room list' do
-      expect(base_content).to include('target_list = self.class.rooms_by_tag(tag_name)')
-      expect(base_content).not_to include('target_list.push(room.id) if room.tags.include?')
-    end
-
-    it 'base module keeps the cache private behind query methods' do
-      expect(base_content).to include('private :tag_index, :tag_index_generation, :build_tag_index')
-      expect(base_content).to include('def rooms_by_tag(tag_name)')
-      expect(base_content).to include('def tag_names')
-    end
-
-    it 'both games invalidate the index when the room list is mutated' do
-      [dr_content, gs_content].each do |content|
-        expect(content).to include('self.class.reset_tag_index')
-      end
-    end
-
-    it 'both games retire the separate tag name cache' do
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('@@tags')
-      end
-    end
-
-    it 'both games route invalidation through clear_tags_cache' do
-      [dr_content, gs_content].each do |content|
-        expect(content).to include('def clear_tags_cache')
-      end
-    end
-
-    it 'both games wrap room tags in a TagList with an invalidating writer' do
-      [dr_content, gs_content].each do |content|
-        expect(content).to include('@tags = TagList.new(tags, self.class)')
-        expect(content).to include('def tags=(value)')
-        expect(content).not_to include(':image_coords, :tags,')
-      end
-    end
-  end
-
-  describe 'fuzzy lookup' do
-    it 'the shared lookup compacts once instead of scanning three times' do
-      expect(base_content).to include('live = rooms.compact')
-      expect(base_content).not_to include('@@list.find { |room| room.title.find')
-    end
-
-    it 'neither game keeps its own room lookup' do
-      [dr_content, gs_content].each do |content|
-        expect(content).not_to include('def self.[](val)')
-        expect(content).not_to include('@@list.find { |room| room.title.find')
-        expect(content).not_to include('@@list.find { |room| room&.title&.find')
-      end
-    end
-
-    it 'base module compacts before building the tag index' do
-      expect(base_content).to include('list.compact.each do |room|')
+    it 'exposes the GemStone-only helpers' do
+      expect(map_class).to respond_to(:current_or_new)
     end
   end
 end

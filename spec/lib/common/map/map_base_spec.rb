@@ -500,6 +500,12 @@ RSpec.describe Lich::Common::MapBase do
         expect(result).to be_nil
       end
 
+      it 'returns nil on a cyclic chain instead of walking forever' do
+        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 3, 3 => 2 }, { 2 => 1.0 }])
+
+        expect(Timeout.timeout(2) { room.path_to(2) }).to be_nil
+      end
+
       it 'still reconstructs a chain that reaches this room' do
         allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 1, 1 => 0 }, { 2 => 2.0 }])
 
@@ -727,6 +733,23 @@ RSpec.describe Lich::Common::MapBase do
         test_class.rooms_by_tag('shop') << 999
 
         expect(test_class.rooms_by_tag('shop')).to eq([0])
+      end
+
+      it 'does not hand the racing caller its own stale build' do
+        test_class.test_list[1] = test_class.new(1, tags: ['shop'])
+        fired = false
+        original = test_class.method(:build_tag_index)
+        allow(test_class).to receive(:build_tag_index) do
+          result = original.call
+          unless fired
+            fired = true # a concurrent tag change lands mid-build
+            test_class.test_list[2] = test_class.new(2, tags: ['shop'])
+            test_class.reset_tag_index
+          end
+          result
+        end
+
+        expect(test_class.rooms_by_tag('shop')).to eq([0, 1, 2])
       end
 
       it 'discards a rebuild that raced an invalidation' do
@@ -1196,6 +1219,44 @@ RSpec.describe Lich::Common::TagList do
         else list.public_send(mutator)
         end
       end
+    end
+  end
+
+  describe 'stored tag names' do
+    let(:owner) { double('MapClass', reset_tag_index: nil) }
+
+    it 'freezes names added at construction' do
+      # +'shop' is an unfrozen copy; this file sets frozen_string_literal, so a
+      # bare literal would already be frozen and prove nothing.
+      expect(described_class.new([+'shop'], owner).first).to be_frozen
+    end
+
+    it 'freezes names added later' do
+      list = described_class.new([], owner)
+      list << +'bank'
+
+      expect(list.first).to be_frozen
+    end
+
+    it 'raises rather than letting a name be renamed in place' do
+      list = described_class.new([+'shop'], owner)
+
+      expect { list.first.replace('bank') }.to raise_error(FrozenError)
+    end
+
+    it 'leaves the caller\'s own string unfrozen' do
+      original = +'shop'
+      described_class.new([original], owner)
+
+      expect(original).not_to be_frozen
+    end
+
+    it 'still compares equal to a plain Array of the same names' do
+      expect(described_class.new(['shop'], owner)).to eq(['shop'])
+    end
+
+    it 'tolerates non-string entries' do
+      expect { described_class.new([:shop], owner) }.not_to raise_error
     end
   end
 

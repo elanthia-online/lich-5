@@ -1,0 +1,614 @@
+# frozen_string_literal: true
+
+# Shared examples, not a spec file. RSpec's default pattern is
+# spec/**/*_spec.rb, so this is never auto-loaded or run on its own; the two
+# game specs require it explicitly. It lives here rather than in spec_helper
+# because spec_helper is for infrastructure, and these are test bodies. It is
+# not in map_base_spec.rb either, since running a single game spec would then
+# fail to find the group.
+#
+# Requires MapLoader and the game mocks from spec_helper, which both callers
+# have already loaded.
+
+# =============================================================================
+# Shared behaviour every game Map class must exhibit
+# =============================================================================
+# Room lookup, the tag index, tag storage, pathfinding, outside? and JSON map
+# loading all live in MapBase, so GemStone and DragonRealms must behave
+# identically for them. Running one group against both games means a divergence
+# fails for the game that drifted, which parallel copies in each spec file
+# cannot guarantee.
+#
+# Usage: it_behaves_like 'a game Map class', :gs
+RSpec.shared_examples 'a game Map class' do |game|
+  let(:map_class) { MapLoader.use(game) }
+  let(:map_game) { "rspec-#{game}" }
+  let(:map_dir) { File.join(DATA_DIR, map_game) }
+
+  before do
+    MapLoader.use(game)
+    allow(XMLData).to receive(:game).and_return(map_game)
+    map_class.class_variable_set(:@@loaded, true)
+    map_class.class_variable_get(:@@list).clear
+    map_class.class_variable_set(:@@current_room_id, nil)
+    map_class.class_variable_set(:@@previous_room_id, nil)
+    map_class.clear_tags_cache
+  end
+
+  after do
+    FileUtils.rm_rf(map_dir)
+    map_class.class_variable_get(:@@list).clear
+    map_class.clear_tags_cache
+  end
+
+  # The first 15 constructor parameters are identical in both games.
+  def shared_room(id, title:, description:, paths: ['Obvious paths: north'], tags: [], uid: [])
+    map_class.new(id, [title], [description], paths, uid,
+                  nil, nil, nil, {}, {}, nil, nil, tags)
+  end
+
+  describe 'room lookup' do
+    before do
+      shared_room(1, title: '[Market Row]', description: 'Stalls line the muddy street.', tags: ['shop'])
+      shared_room(4, title: '[Quiet Lane]', description: 'Marble counters gleam here.')
+      shared_room(6, title: '[Bank Lobby]', description: 'Stalls line the far wall.', tags: ['bank'])
+    end
+
+    it 'finds a room by integer id' do
+      expect(map_class[6].id).to eq(6)
+    end
+
+    it 'finds a room by numeric string' do
+      expect(map_class['4'].id).to eq(4)
+    end
+
+    it 'finds a room by uid' do
+      # Dense on purpose: load_uids has no nil guard and relies on Lich's
+      # NilClass patch, which spec_helper does not apply.
+      map_class.class_variable_get(:@@list).clear
+      (0..2).each { |id| shared_room(id, title: "[R#{id}]", description: "d#{id}") }
+      map_class[1].uid = [9001]
+      map_class.load_uids
+
+      expect(map_class['u9001'].id).to eq(1)
+    end
+
+    it 'finds a room by exact title' do
+      expect(map_class['[Bank Lobby]'].id).to eq(6)
+    end
+
+    it 'prefers a title match over an earlier description match' do
+      expect(map_class['[Quiet Lane]'].id).to eq(4)
+    end
+
+    it 'falls back to an exact description match' do
+      expect(map_class['Marble counters'].id).to eq(4)
+    end
+
+    it 'returns the first room when several descriptions match' do
+      expect(map_class['Stalls line'].id).to eq(1)
+    end
+
+    it 'falls back to the loose regex form last' do
+      expect(map_class['Stalls line...muddy street'].id).to eq(1)
+    end
+
+    it 'returns nil when nothing matches' do
+      expect(map_class['zzz nothing zzz']).to be_nil
+    end
+
+    it 'walks past nil holes without raising' do
+      expect(map_class.class_variable_get(:@@list)[5]).to be_nil
+      expect { map_class['zzz nothing zzz'] }.not_to raise_error
+    end
+  end
+
+  describe 'tag index' do
+    before do
+      shared_room(1, title: '[One]', description: 'first', tags: ['shop'])
+      shared_room(4, title: '[Four]', description: 'fourth')
+      shared_room(6, title: '[Six]', description: 'sixth', tags: ['bank'])
+    end
+
+    it 'reports the tag names present' do
+      expect(map_class.tags.sort).to eq(%w[bank shop])
+    end
+
+    it 'returns the room ids carrying a tag' do
+      expect(map_class.rooms_by_tag('shop')).to eq([1])
+    end
+
+    it 'returns ids of rooms carrying the tag in ascending order' do
+      shared_room(2, title: '[Two]', description: 'second', tags: ['shop'])
+      shared_room(0, title: '[Zero]', description: 'zeroth', tags: ['shop'])
+
+      expect(map_class.rooms_by_tag('shop')).to eq([0, 1, 2])
+    end
+
+    it 'returns an empty list for an unknown tag' do
+      expect(map_class.rooms_by_tag('nope')).to eq([])
+    end
+
+    it 'hands back a copy a caller cannot corrupt' do
+      map_class.rooms_by_tag('shop').clear
+
+      expect(map_class.rooms_by_tag('shop')).to eq([1])
+    end
+
+    it 'keeps the cache off the public surface' do
+      expect(map_class).not_to respond_to(:tag_index)
+    end
+
+    it 'picks up a tag appended in place' do
+      map_class[4].tags << 'shop'
+
+      expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
+    end
+
+    it 'picks up a tag deleted in place' do
+      map_class[1].tags.delete('shop')
+
+      expect(map_class.rooms_by_tag('shop')).to eq([])
+    end
+
+    it 'picks up a whole list assignment' do
+      map_class[4].tags = %w[shop inn]
+
+      expect(map_class.rooms_by_tag('inn')).to eq([4])
+    end
+
+    it 'picks up an in place clear' do
+      map_class[1].tags.clear
+
+      expect(map_class.rooms_by_tag('shop')).to eq([])
+    end
+
+    it 'is reflected in .tags as well' do
+      map_class[4].tags << 'inn'
+
+      expect(map_class.tags).to include('inn')
+    end
+
+    it 'picks up a newly constructed room' do
+      map_class.rooms_by_tag('shop') # prime the cache
+      shared_room(8, title: '[Eight]', description: 'eighth', tags: ['shop'])
+
+      expect(map_class.rooms_by_tag('shop')).to eq([1, 8])
+    end
+
+    it 'picks up a room replaced at an existing id' do
+      map_class.rooms_by_tag('shop') # prime the cache
+      shared_room(4, title: '[Four]', description: 'fourth', tags: ['shop'])
+
+      expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
+    end
+
+    it 'rebuilds after clear_tags_cache' do
+      map_class.rooms_by_tag('shop') # prime, so the spy only sees the rebuild
+      allow(map_class).to receive(:build_tag_index).and_call_original
+
+      map_class.clear_tags_cache
+      map_class.rooms_by_tag('shop')
+
+      expect(map_class).to have_received(:build_tag_index).once
+    end
+
+    it 'does not rebuild while the cache is valid' do
+      map_class.rooms_by_tag('shop') # prime
+      allow(map_class).to receive(:build_tag_index).and_call_original
+
+      3.times { map_class.rooms_by_tag('shop') }
+
+      expect(map_class).not_to have_received(:build_tag_index)
+    end
+  end
+
+  describe 'tag storage' do
+    before { shared_room(1, title: '[One]', description: 'first', tags: [+'shop']) }
+
+    it 'wraps room tags in a TagList' do
+      expect(map_class[1].tags).to be_a(Lich::Common::TagList)
+    end
+
+    it 'keeps them comparable to a plain Array' do
+      expect(map_class[1].tags).to eq(['shop'])
+    end
+
+    it 'freezes the stored names' do
+      expect(map_class[1].tags.first).to be_frozen
+    end
+
+    it 'raises rather than allowing a rename in place' do
+      expect { map_class[1].tags.first.replace('bank') }.to raise_error(FrozenError)
+    end
+
+    # Marshal skips the constructor, so a room restored that way carries a plain
+    # Array in @tags rather than a TagList. Rebuild that shape here.
+    let(:legacy_list) do
+      restored = Marshal.load(Marshal.dump(map_class.class_variable_get(:@@list)))
+      restored.compact.each { |room| room.instance_variable_set(:@tags, ['shop']) }
+      restored
+    end
+
+    it 'starts from a room whose tags are a plain Array' do
+      expect(legacy_list.compact.first.instance_variable_get(:@tags)).to be_an(Array)
+      expect(legacy_list.compact.first.instance_variable_get(:@tags)).not_to be_a(Lich::Common::TagList)
+    end
+
+    it 'rewraps plain Array tags assigned through list=' do
+      map_class.list = legacy_list
+
+      expect(map_class[1].tags).to be_a(Lich::Common::TagList)
+    end
+
+    it 'still indexes the loaded tags' do
+      map_class.list = legacy_list
+
+      expect(map_class.rooms_by_tag('shop')).to eq([1])
+    end
+
+    it 'invalidates on an in place tag change after the assignment' do
+      map_class.list = legacy_list
+      map_class.rooms_by_tag('shop') # prime the cache
+
+      map_class[1].tags << 'bank'
+
+      expect(map_class.rooms_by_tag('bank')).to eq([1])
+    end
+
+    it 'drops a cache carried over from the previous map' do
+      map_class.list = legacy_list
+      map_class.rooms_by_tag('shop') # prime against the loaded list
+
+      map_class.list = []
+
+      expect(map_class.rooms_by_tag('shop')).to eq([])
+    end
+  end
+
+  describe 'outside?' do
+    def room_with_paths(paths)
+      shared_room(1, title: '[Room]', description: 'desc', paths: paths)
+    end
+
+    it 'is outside when the last path line reads Obvious paths' do
+      expect(room_with_paths(['Obvious paths: north, south'])).to be_outside
+    end
+
+    it 'is not outside when the last path line reads Obvious exits' do
+      expect(room_with_paths(['Obvious exits: north, south'])).not_to be_outside
+    end
+
+    it 'reads the last entry, not the first' do
+      expect(room_with_paths(['Obvious paths: north', 'Obvious exits: south'])).not_to be_outside
+    end
+
+    it 'is inside whenever it is not outside' do
+      expect(room_with_paths(['Obvious exits: north'])).to be_inside
+    end
+
+    it 'returns false for nil paths' do
+      expect(room_with_paths(nil).outside?).to be false
+    end
+
+    it 'returns false for empty paths' do
+      expect(room_with_paths([]).outside?).to be false
+    end
+
+    it 'returns an actual boolean rather than a match offset' do
+      expect(room_with_paths(['Obvious paths: north']).outside?).to be(true)
+    end
+  end
+
+  describe 'pathfinding' do
+    before do
+      shared_room(1, title: '[One]', description: 'first', tags: ['shop'])
+      shared_room(2, title: '[Two]', description: 'second')
+      map_class[1].wayto['2'] = 'north'
+      map_class[1].timeto['2'] = 0.5
+      map_class[2].wayto['1'] = 'south'
+      map_class[2].timeto['1'] = 0.5
+    end
+
+    it 'reconstructs a path' do
+      expect(map_class[1].path_to(2)).to eq([2])
+    end
+
+    it 'keeps dijkstra returning two Arrays' do
+      expect(map_class[1].dijkstra.map(&:class)).to eq([Array, Array])
+    end
+
+    it 'returns hashes from dijkstra_hashes' do
+      expect(map_class[1].dijkstra_hashes.map(&:class)).to eq([Hash, Hash])
+    end
+
+    it 'keys the hashes only by rooms it reached' do
+      _, distances = map_class[1].dijkstra_hashes
+
+      expect(distances.keys.sort).to eq([1, 2])
+    end
+
+    it 'finds the nearest room carrying a tag' do
+      expect(map_class[2].find_nearest_by_tag('shop')).to eq(1)
+    end
+
+    it 'returns the room itself when it already carries the tag' do
+      expect(map_class[1].find_nearest_by_tag('shop')).to eq(1)
+    end
+  end
+
+  describe 'shared implementation ownership' do
+    it 'takes load from MapBase rather than the game class' do
+      expect(map_class.method(:load).owner).to eq(Lich::Common::MapBase::ClassMethods)
+    end
+
+    it 'takes room lookup from MapBase rather than the game class' do
+      expect(map_class.method(:[]).owner).to eq(Lich::Common::MapBase::ClassMethods)
+    end
+
+    it 'takes the pathfinding methods from MapBase' do
+      room = shared_room(1, title: '[One]', description: 'first')
+
+      expect(room.method(:path_to).owner).to eq(Lich::Common::MapBase::InstanceMethods)
+      expect(room.method(:dijkstra).owner).to eq(Lich::Common::MapBase::InstanceMethods)
+      expect(room.method(:find_nearest_by_tag).owner).to eq(Lich::Common::MapBase::InstanceMethods)
+    end
+
+    %i[save_json estimate_time rooms_by_tag tag_names reset_tag_index
+       normalize_tag_lists legacy_map_files report_unsupported_map_files].each do |method|
+      it "takes .#{method} from MapBase" do
+        expect(map_class.method(method).owner).to eq(Lich::Common::MapBase::ClassMethods)
+      end
+    end
+
+    it 'aliases save to save_json' do
+      expect(map_class.method(:save)).to eq(map_class.method(:save_json))
+    end
+
+    it 'no longer responds to the removed legacy loaders' do
+      expect(map_class).not_to respond_to(:load_dat)
+      expect(map_class).not_to respond_to(:load_xml)
+      expect(map_class).not_to respond_to(:save_xml)
+    end
+
+    it 'includes MapBase' do
+      expect(map_class.ancestors).to include(Lich::Common::MapBase)
+    end
+
+    it 'defines Room as a subclass of Map' do
+      expect(Lich::Common::Room.superclass).to eq(map_class)
+    end
+
+    %i[loaded? list uids clear_tags_cache mark_loaded synchronize_load load_json].each do |method|
+      it "the game class responds to .#{method}" do
+        expect(map_class).to respond_to(method)
+      end
+    end
+
+    %i[dijkstra dijkstra_hashes path_to find_nearest find_nearest_by_tag
+       find_all_nearest_by_tag to_json].each do |method|
+      it "provides ##{method} to the game class" do
+        room = shared_room(1, title: '[One]', description: 'first')
+
+        expect(room.method(method).owner).to eq(Lich::Common::MapBase::InstanceMethods)
+      end
+    end
+
+    %i[desc map_name geo].each do |method|
+      it "keeps the deprecated ##{method} stub" do
+        expect(shared_room(1, title: '[One]', description: 'first')).to respond_to(method)
+      end
+    end
+
+    it 'provides MinHeap' do
+      expect(Lich::Common::MinHeap).to be_a(Class)
+    end
+  end
+
+  # These are byte-identical in both game files, so they belong here rather than
+  # being covered for one game and not the other.
+  describe 'room bookkeeping identical in both games' do
+    describe '.get_free_id' do
+      it 'returns one past the highest room id' do
+        shared_room(1, title: '[A]', description: 'a')
+        shared_room(5, title: '[B]', description: 'b')
+        shared_room(3, title: '[C]', description: 'c')
+
+        expect(map_class.get_free_id).to eq(6)
+      end
+
+      it 'skips gaps rather than reusing them' do
+        shared_room(0, title: '[A]', description: 'a')
+        shared_room(9, title: '[B]', description: 'b')
+
+        expect(map_class.get_free_id).to eq(10)
+      end
+    end
+
+    describe '.previous_uid' do
+      it 'reports the uid the game last navigated from' do
+        allow(XMLData).to receive(:previous_nav_rm).and_return(4242)
+
+        expect(map_class.previous_uid).to eq(4242)
+      end
+    end
+
+    describe '.set_current' do
+      before { shared_room(1, title: '[A]', description: 'a') }
+
+      it 'returns the room for the id it was given' do
+        expect(map_class.set_current(1).id).to eq(1)
+      end
+
+      it 'returns nil for a nil id' do
+        expect(map_class.set_current(nil)).to be_nil
+      end
+
+      it 'remembers the room it moved away from' do
+        map_class.set_current(1)
+        shared_room(2, title: '[B]', description: 'b')
+        map_class.set_current(2)
+
+        expect(map_class.previous.id).to eq(1)
+      end
+
+      it 'does not record a previous room when the id is unchanged' do
+        map_class.set_current(1)
+        map_class.set_current(1)
+
+        expect(map_class.class_variable_get(:@@previous_room_id)).to be_nil
+      end
+    end
+
+    describe '.set_fuzzy' do
+      before { shared_room(1, title: '[A]', description: 'a') }
+
+      it 'returns the room for the id it was given' do
+        expect(map_class.set_fuzzy(1).id).to eq(1)
+      end
+
+      it 'returns nil for a nil id' do
+        expect(map_class.set_fuzzy(nil)).to be_nil
+      end
+
+      it 'leaves the previous room alone when handed nil' do
+        map_class.set_fuzzy(1)
+        shared_room(2, title: '[B]', description: 'b')
+        map_class.set_fuzzy(2)
+        before_nil = map_class.class_variable_get(:@@previous_room_id)
+
+        map_class.set_fuzzy(nil)
+
+        expect(map_class.class_variable_get(:@@previous_room_id)).to eq(before_nil)
+      end
+    end
+
+    describe '.match_no_uid' do
+      before { shared_room(1, title: '[A]', description: 'a') }
+
+      it 'matches against the running script when there is one' do
+        allow(Script).to receive(:current).and_return(double('Script'))
+        allow(map_class).to receive(:match_current).and_return(1)
+
+        expect(map_class.match_no_uid.id).to eq(1)
+      end
+
+      it 'falls back to fuzzy matching with no script' do
+        allow(Script).to receive(:current).and_return(nil)
+        allow(map_class).to receive(:match_fuzzy).and_return(1)
+
+        expect(map_class.match_no_uid.id).to eq(1)
+      end
+
+      it 'does not fuzzy match while a script is running' do
+        allow(Script).to receive(:current).and_return(double('Script'))
+        allow(map_class).to receive(:match_current).and_return(1)
+        allow(map_class).to receive(:match_fuzzy)
+
+        map_class.match_no_uid
+
+        expect(map_class).not_to have_received(:match_fuzzy)
+      end
+    end
+
+    describe '.match_multi_ids' do
+      before do
+        shared_room(1, title: '[A]', description: 'a')
+        shared_room(2, title: '[B]', description: 'b')
+        shared_room(3, title: '[C]', description: 'c')
+        map_class[1].wayto['2'] = 'north'
+        map_class.set_current(1)
+      end
+
+      it 'picks the single candidate reachable from the current room' do
+        expect(map_class.match_multi_ids([2, 3])).to eq(2)
+      end
+
+      it 'returns nil when no candidate is reachable' do
+        expect(map_class.match_multi_ids([3])).to be_nil
+      end
+
+      it 'returns nil when more than one candidate is reachable' do
+        map_class[1].wayto['3'] = 'south'
+
+        expect(map_class.match_multi_ids([2, 3])).to be_nil
+      end
+    end
+  end
+
+  describe 'JSON-only map loading' do
+    before do
+      FileUtils.mkdir_p(map_dir)
+      map_class.class_variable_set(:@@loaded, false)
+      allow(map_class).to receive(:respond)
+    end
+
+    it 'refuses a directory holding only legacy formats' do
+      File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+      File.write(File.join(map_dir, 'map.xml'), '<map></map>')
+
+      expect(map_class.load).to be false
+    end
+
+    it 'refuses a .dat map database' do
+      File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+
+      expect(map_class.load).to be false
+    end
+
+    it 'refuses an .xml map database' do
+      File.write(File.join(map_dir, 'map-1.xml'), '<map></map>')
+
+      expect(map_class.load).to be false
+    end
+
+    it 'names the legacy files it found' do
+      File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+      File.write(File.join(map_dir, 'map.xml'), '<map></map>')
+      map_class.load
+
+      expect(map_class).to have_received(:respond).with(/map-1\.dat, map\.xml/)
+    end
+
+    it 'explains that the format is unsupported' do
+      File.binwrite(File.join(map_dir, 'map-1.dat'), Marshal.dump([]))
+      map_class.load
+
+      expect(map_class).to have_received(:respond).with(/no longer supported/)
+    end
+
+    it 'refuses an explicitly named legacy path without raising' do
+      path = File.join(map_dir, 'map-1.dat')
+      File.binwrite(path, Marshal.dump([]))
+
+      expect { map_class.load(path) }.not_to raise_error
+    end
+
+    it 'returns false for an explicitly named legacy path' do
+      path = File.join(map_dir, 'map-1.dat')
+      File.binwrite(path, Marshal.dump([]))
+
+      expect(map_class.load(path)).to be false
+    end
+
+    it 'names the explicitly requested legacy file' do
+      path = File.join(map_dir, 'map-1.dat')
+      File.binwrite(path, Marshal.dump([]))
+      map_class.load(path)
+
+      expect(map_class).to have_received(:respond).with(/no longer supported: map-1\.dat/)
+    end
+
+    it 'stays quiet about legacy formats when there are none' do
+      map_class.load
+
+      expect(map_class).not_to have_received(:respond).with(/no longer supported/)
+    end
+
+    it 'still reports when no map database is present at all' do
+      map_class.load
+
+      expect(map_class).to have_received(:respond).with(/no map database found/)
+    end
+  end
+end

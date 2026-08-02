@@ -874,6 +874,41 @@ end
 # end
 
 # =============================================================================
+# =============================================================================
+# Game Map class loader
+# =============================================================================
+# map_gs.rb and map_dr.rb both define Lich::Common::Map. Requiring both in one
+# process reopens the same class, so whichever loads last owns every method they
+# both define, including #initialize. That would leave each game's specs at the
+# mercy of the order RSpec happens to load spec files in.
+#
+# Map specs call MapLoader.use to get the class they need. Swapping costs about
+# 2 ms and only happens when the other game is currently loaded, so calling this
+# from a plain before hook is cheap. The map files are required lazily so specs
+# that never touch the map are unaffected.
+module MapLoader
+  MAP_DIR = File.expand_path('../lib/common/map', __dir__)
+
+  class << self
+    # @param game [Symbol] :gs or :dr
+    # @return [Class] Lich::Common::Map for that game
+    def use(game)
+      require 'common/map/map_base'
+      return ::Lich::Common::Map if @loaded == game
+
+      %i[Room Map].each do |const|
+        ::Lich::Common.send(:remove_const, const) if ::Lich::Common.const_defined?(const, false)
+      end
+      Kernel.load File.join(MAP_DIR, "map_#{game}.rb")
+      @loaded = game
+      ::Lich::Common::Map
+    end
+
+    # @return [Symbol, nil] the game currently loaded
+    attr_reader :loaded
+  end
+end
+
 # Room and Map Mocks
 # =============================================================================
 # Navigation infrastructure. Provides minimal implementation for testing.
