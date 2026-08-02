@@ -484,6 +484,46 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
+    describe 'when the search itself fails' do
+      # dijkstra_hashes returns nil from its rescue branch. Without guards the
+      # callers index that nil, which only survives in production because Lich
+      # patches NilClass#method_missing.
+      let(:room) { test_class.test_list[0] }
+
+      before do
+        test_class.test_list[2].tags = ['shop']
+        test_class.reset_tag_index
+        allow(room).to receive(:dijkstra_hashes).and_return(nil)
+      end
+
+      it 'path_to returns nil instead of raising' do
+        expect { room.path_to(3) }.not_to raise_error
+        expect(room.path_to(3)).to be_nil
+      end
+
+      it 'find_nearest_by_tag returns nil instead of raising' do
+        expect { room.find_nearest_by_tag('shop') }.not_to raise_error
+        expect(room.find_nearest_by_tag('shop')).to be_nil
+      end
+
+      it 'find_all_nearest_by_tag returns an empty list instead of raising' do
+        expect { room.find_all_nearest_by_tag('shop') }.not_to raise_error
+        expect(room.find_all_nearest_by_tag('shop')).to eq([])
+      end
+
+      it 'find_nearest returns nil instead of raising' do
+        expect { room.find_nearest([2, 3]) }.not_to raise_error
+        expect(room.find_nearest([2, 3])).to be_nil
+      end
+
+      it 'still short-circuits find_nearest_by_tag when this room carries the tag' do
+        test_class.test_list[0].tags = ['shop']
+        test_class.reset_tag_index
+
+        expect(room.find_nearest_by_tag('shop')).to eq(0)
+      end
+    end
+
     describe 'nearest helpers dispatch' do
       before do
         test_class.test_list[2].tags = ['shop']

@@ -503,6 +503,26 @@ RSpec.describe DRCT do
 
   # --- reverse_path --------------------------------------------------
 
+  describe 'when pathfinding fails' do
+    it 'tag_to_id reports and returns nil' do
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra_hashes).and_return(nil)
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12])
+      allow(Lich::Messaging).to receive(:msg)
+
+      expect(DRCT.tag_to_id('bank')).to be_nil
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Pathfinding failed/)
+    end
+
+    it 'sort_destinations hands back the requested list' do
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra_hashes).with(1).and_return(nil)
+
+      expect(DRCT.sort_destinations([7, 888_000])).to eq([7, 888_000])
+    end
+  end
+
   describe 'sparse room id handling' do
     it 'sorts destinations with widely separated ids' do
       allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))

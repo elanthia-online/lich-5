@@ -177,19 +177,25 @@ module Lich
 
         private :tag_index, :tag_index_generation, :build_tag_index
 
+        # Legacy map files sitting in the data directory, basenames only
+        # @return [Array<String>]
+        def legacy_map_files
+          directory = File.join(DATA_DIR, XMLData.game)
+          return [] unless Dir.exist?(directory)
+
+          Dir.entries(directory).grep(/^map(?:-[0-9]+)?\.(?:dat|xml)$/i).sort
+        end
+
         # Explain why an old map database no longer loads. The Marshal (.dat) and
         # XML formats were deprecated for years and support has been removed, so
         # "no map database found" on its own would be misleading for anyone whose
         # data directory still holds one.
+        # @param files [Array<String>] legacy file names to name in the message
         # @return [nil]
-        def report_legacy_map_files
-          directory = File.join(DATA_DIR, XMLData.game)
-          return unless Dir.exist?(directory)
+        def report_unsupported_map_files(files)
+          return if files.empty?
 
-          legacy = Dir.entries(directory).grep(/^map(?:-[0-9]+)?\.(?:dat|xml)$/i).sort
-          return if legacy.empty?
-
-          respond "--- Lich: found map data in a format that is no longer supported: #{legacy.join(', ')}"
+          respond "--- Lich: found map data in a format that is no longer supported: #{files.sort.join(', ')}"
           respond '--- Lich: download the current JSON map database to continue.'
           nil
         end
@@ -507,6 +513,8 @@ module Lich
           self.class.load unless self.class.loaded?
           destination = destination.to_i
           previous, = dijkstra_hashes(destination)
+          # dijkstra_hashes returns nil when the search itself failed.
+          return nil if previous.nil?
           return nil unless previous[destination]
 
           path = [destination]
@@ -522,6 +530,8 @@ module Lich
           _, shortest_distances = dijkstra_hashes(target_list)
           if target_list.include?(@id)
             @id
+          elsif shortest_distances.nil?
+            nil
           else
             target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
             target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
@@ -534,6 +544,8 @@ module Lich
         def find_all_nearest_by_tag(tag_name)
           target_list = self.class.rooms_by_tag(tag_name)
           _, shortest_distances = dijkstra_hashes
+          return [] if shortest_distances.nil?
+
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
           target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
         end
@@ -547,6 +559,8 @@ module Lich
             @id
           else
             _, shortest_distances = dijkstra_hashes(target_list)
+            return nil if shortest_distances.nil?
+
             valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
             valid_rooms.min_by { |room_num| shortest_distances[room_num] }
           end

@@ -452,9 +452,17 @@ module Lich
                       [filename]
                     end
 
+        # An explicitly named .dat or .xml would otherwise reach load_json and
+        # raise a parse error rather than saying why it cannot be loaded.
+        unsupported, file_list = file_list.partition { |fn| fn =~ /\.(?:dat|xml)\z/i }
+
         if file_list.empty?
-          respond '--- Lich: error: no map database found'
-          report_legacy_map_files
+          if unsupported.empty?
+            respond '--- Lich: error: no map database found'
+            report_unsupported_map_files(legacy_map_files)
+          else
+            report_unsupported_map_files(unsupported.map { |fn| File.basename(fn) })
+          end
           return false
         end
 

@@ -275,7 +275,7 @@ RSpec.describe 'Code sharing between DR and GS' do
 
     it 'both games report a legacy map database instead of failing silently' do
       [dr_content, gs_content].each do |content|
-        expect(content).to include('report_legacy_map_files')
+        expect(content).to include('report_unsupported_map_files')
       end
     end
   end

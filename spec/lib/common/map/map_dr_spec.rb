@@ -540,6 +540,28 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
         expect(map_class).to have_received(:respond).with(/map-1\.dat, map\.xml/)
       end
 
+      it 'refuses an explicitly named .dat path without raising' do
+        path = File.join(map_dir, 'map-1.dat')
+        File.binwrite(path, Marshal.dump([]))
+
+        expect { map_class.load(path) }.not_to raise_error
+      end
+
+      it 'returns false for an explicitly named legacy path' do
+        path = File.join(map_dir, 'map-1.dat')
+        File.binwrite(path, Marshal.dump([]))
+
+        expect(map_class.load(path)).to be false
+      end
+
+      it 'names the explicitly requested legacy file' do
+        path = File.join(map_dir, 'map-1.dat')
+        File.binwrite(path, Marshal.dump([]))
+        map_class.load(path)
+
+        expect(map_class).to have_received(:respond).with(/no longer supported: map-1\.dat/)
+      end
+
       it 'stays quiet about legacy formats when the directory has none' do
         map_class.load
 

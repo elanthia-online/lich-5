@@ -284,6 +284,11 @@ module Lich
           return start_room
         end
         _previous, shortest_distances = Room.current.dijkstra_hashes(target_list)
+        if shortest_distances.nil?
+          Lich::Messaging.msg('bold', "DRCT: Pathfinding failed while looking for a '#{target}' tag.")
+          return nil
+        end
+
         target_list.delete_if { |room_id| shortest_distances[room_id].nil? }
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: Couldn't find a path from here to any room with a '#{target}' tag.")
@@ -358,6 +363,9 @@ module Lich
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
         _previous, shortest_distances = Map.dijkstra_hashes(Room.current.id)
+        # Pathfinding failed; hand back what was asked for rather than nothing.
+        return target_list if shortest_distances.nil?
+
         target_list.delete_if { |room_num| shortest_distances[room_num].nil? && room_num != Room.current.id }
         target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
       end
