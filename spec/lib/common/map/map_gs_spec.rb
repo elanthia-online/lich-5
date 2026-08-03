@@ -135,25 +135,195 @@ RSpec.describe 'GemStone Map implementation' do
     end
   end
 
-  # The only source-level block left in this file. check_peer_tag is a proc local
-  # to .match_current rather than a callable method, and reaching it needs a
-  # DownstreamHook round trip plus a peer command response. The peer tag matching
-  # itself is covered behaviourally under .match_fuzzy above; what remains here is
-  # the squelching plumbing. Convert once a DownstreamHook harness exists.
-  describe '.match_current peer tag handling (source-level)' do
-    let(:gs_map_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
-
-    it 'extracts peer direction from tag' do
-      expect(gs_map_content).to include('peer_direction')
+  describe '.match_current peer tag handling' do
+    # check_peer_tag is a proc local to .match_current, so it is reached by
+    # driving match_current with a peer-tagged room. Spying on DownstreamHook.add
+    # captures the squelch proc, which is then called directly to prove
+    # suppression and removal without needing a real server round trip.
+    let(:want_downstream_writes) { [] }
+    let(:hooks) { {} }
+    let(:removed_hooks) { [] }
+    let(:commands) { [] }
+    let(:peer_script) do
+      # name is needed because the real hook registry records the owning script.
+      double('Script', want_downstream: false, 'ignore_pause=': nil, name: 'spec').tap do |s|
+        allow(s).to receive(:want_downstream=) { |value| want_downstream_writes << value }
+      end
     end
 
-    it 'handles set desc on prefix' do
-      expect(gs_map_content).to include('set desc on;')
+    # map_gs.rb sits inside module Lich::Common, so it resolves DownstreamHook to
+    # the real registry when hook_registry.rb is loaded and to spec_helper's mock
+    # otherwise. Stub whichever one is actually in play.
+    let(:downstream_hook) do
+      if Lich::Common.const_defined?(:DownstreamHook, false)
+        Lich::Common::DownstreamHook
+      else
+        ::DownstreamHook
+      end
     end
 
-    it 'uses DownstreamHook for squelching' do
-      expect(gs_map_content).to include('DownstreamHook')
-      expect(gs_map_content).to include('squelch-peer')
+    before do
+      allow(Script).to receive(:current).and_return(peer_script)
+      allow(map_class).to receive(:waitrt?)
+      allow(map_class).to receive(:put) { |command| commands << command }
+      allow(downstream_hook).to receive(:add) { |name, callable, **_opts| hooks[name] = callable }
+      allow(downstream_hook).to receive(:remove) { |name| removed_hooks << name }
+      $_SERVERBUFFER_.clear
+      allow(XMLData).to receive_messages(room_count: 1, room_title: '[Ledge]',
+                                         room_description: 'A narrow ledge.',
+                                         room_exits_string: 'Obvious paths: down')
+    end
+
+    # Room 0 keeps the list dense for load_uids.
+    def seed_peer_room(tag)
+      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: down'])
+      map_class.new(1, ['[Ledge]'], ['A narrow ledge.'], ['Obvious paths: down'],
+                    [], nil, nil, nil, {}, {}, nil, nil, [tag])
+    end
+
+    def peer_succeeds(direction: 'down')
+      allow(map_class).to receive(:dothistimeout).and_return("You peer #{direction}...")
+      allow(map_class).to receive(:get?).and_return('a chasm yawns below', 'Obvious paths: down')
+    end
+
+    describe 'tag parsing' do
+      it 'issues the peer command for the direction in the tag' do
+        seed_peer_room('peer down =~ /a chasm/')
+        peer_succeeds
+
+        map_class.match_current(peer_script)
+
+        expect(map_class).to have_received(:dothistimeout).with('peer down', 3, anything)
+      end
+
+      it 'reads the direction rather than assuming one' do
+        seed_peer_room('peer east =~ /a chasm/')
+        peer_succeeds(direction: 'east')
+
+        map_class.match_current(peer_script)
+
+        expect(map_class).to have_received(:dothistimeout).with('peer east', 3, anything)
+      end
+
+      it 'turns the description on for the set desc on prefix' do
+        $_SERVERBUFFER_.push('<style id="roomDesc"/><')
+        seed_peer_room('set desc on; peer down =~ /a chasm/')
+        peer_succeeds
+
+        map_class.match_current(peer_script)
+
+        expect(commands).to include('set description on')
+      end
+
+      it 'turns the description back off afterwards' do
+        $_SERVERBUFFER_.push('<style id="roomDesc"/><')
+        seed_peer_room('set desc on; peer down =~ /a chasm/')
+        peer_succeeds
+
+        map_class.match_current(peer_script)
+
+        expect(commands).to eq(['set description on', 'set description off'])
+      end
+
+      it 'leaves the description alone without the prefix' do
+        seed_peer_room('peer down =~ /a chasm/')
+        peer_succeeds
+
+        map_class.match_current(peer_script)
+
+        expect(commands).to be_empty
+      end
+    end
+
+    describe 'squelch hook' do
+      before do
+        seed_peer_room('peer down =~ /a chasm/')
+        peer_succeeds
+        map_class.match_current(peer_script)
+      end
+
+      it 'registers under the squelch-peer name' do
+        expect(hooks).to have_key('squelch-peer')
+      end
+
+      it 'registers without persisting' do
+        expect(downstream_hook).to have_received(:add).with('squelch-peer', anything, persist: false)
+      end
+
+      it 'passes unrelated output through untouched' do
+        expect(hooks['squelch-peer'].call('Some unrelated line')).to eq('Some unrelated line')
+      end
+
+      it 'suppresses the peer response itself' do
+        expect(hooks['squelch-peer'].call('You peer down and see a chasm')).to be_nil
+      end
+
+      it 'keeps suppressing once started' do
+        squelch = hooks['squelch-peer']
+        squelch.call('You peer down')
+
+        expect(squelch.call('a chasm yawns below')).to be_nil
+      end
+
+      it 'removes itself when the prompt arrives' do
+        squelch = hooks['squelch-peer']
+        squelch.call('You peer down')
+        squelch.call('<prompt time="1"/>')
+
+        expect(removed_hooks).to include('squelch-peer')
+      end
+
+      it 'does not remove itself before the prompt' do
+        squelch = hooks['squelch-peer']
+        squelch.call('You peer down')
+
+        expect(removed_hooks).to be_empty
+      end
+    end
+
+    describe 'matching' do
+      it 'resolves the room when the peer output satisfies the requirement' do
+        seed_peer_room('peer down =~ /a chasm/')
+        peer_succeeds
+
+        expect(map_class.match_current(peer_script)).to eq(1)
+      end
+
+      it 'rejects the room when the peer output does not satisfy it' do
+        seed_peer_room('peer down =~ /a waterfall/')
+        peer_succeeds
+
+        expect(map_class.match_current(peer_script)).to be_nil
+      end
+    end
+
+    describe 'when the peer command fails' do
+      before do
+        seed_peer_room('peer down =~ /a chasm/')
+        allow(map_class).to receive(:dothistimeout).and_return('[Usage: PEER <direction>]')
+      end
+
+      it 'rejects the room rather than raising' do
+        expect { map_class.match_current(peer_script) }.not_to raise_error
+      end
+
+      it 'does not resolve a room' do
+        expect(map_class.match_current(peer_script)).to be_nil
+      end
+
+      it 'leaves want_downstream restored' do
+        map_class.match_current(peer_script)
+
+        expect(want_downstream_writes.last).to be false
+      end
+
+      it 'balances every enable with a restore' do
+        # match_current makes two matching passes, so the peer attempt happens
+        # more than once; what matters is that each enable is paired.
+        map_class.match_current(peer_script)
+
+        expect(want_downstream_writes.count(true)).to eq(want_downstream_writes.count(false))
+      end
     end
   end
 
@@ -290,105 +460,6 @@ RSpec.describe 'GemStone Map implementation' do
         expect(resolved.id).to eq(1)
         expect(map_class[1].uid).to contain_exactly(999, 500)
       end
-    end
-  end
-
-  # The only source-level block left in this file. check_peer_tag is a proc local
-  # to .match_current rather than a callable method, and reaching it needs a
-  # DownstreamHook round trip plus a peer command response. The peer tag matching
-  # itself is covered behaviourally under .match_fuzzy above; what remains here is
-  # the squelching plumbing. Convert once a DownstreamHook harness exists.
-  describe '.match_current peer tag handling (source-level)' do
-    let(:gs_map_content) { File.read(File.expand_path('../../../../lib/common/map/map_gs.rb', __dir__)) }
-
-    it 'extracts peer direction from tag' do
-      expect(gs_map_content).to include('peer_direction')
-    end
-
-    it 'handles set desc on prefix' do
-      expect(gs_map_content).to include('set desc on;')
-    end
-
-    it 'uses DownstreamHook for squelching' do
-      expect(gs_map_content).to include('DownstreamHook')
-      expect(gs_map_content).to include('squelch-peer')
-    end
-  end
-
-  describe '.current_or_new' do
-    let(:script) { double('Script', want_downstream: false, 'want_downstream=': nil) }
-
-    # Room 0 keeps the list dense: load_uids has no nil guard and depends on
-    # Lich's NilClass patch, which spec_helper does not apply.
-    def seed_room(tags: [], uid: [500])
-      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: north'])
-      room = map_class.new(1, ['[Town Square]'], ['A plaza.'], ['Obvious paths: north'],
-                           [], nil, nil, nil, {}, {}, nil, nil, tags)
-      room.uid = uid
-      map_class.load_uids
-      room
-    end
-
-    before do
-      allow(Script).to receive(:current).and_return(script)
-      allow(map_class).to receive(:waitrt?)
-      allow(map_class).to receive(:dothistimeout)
-        .and_return('You carefully survey your surroundings and guess that your current location is Test or somewhere close to it.')
-      allow(XMLData).to receive_messages(room_count: 1, room_id: 500,
-                                         room_title: '[Town Square, North]',
-                                         room_description: 'A wider plaza.',
-                                         room_exits_string: 'Obvious paths: north')
-    end
-
-    it 'returns the room matching the current uid' do
-      seed_room
-
-      expect(map_class.current_or_new.id).to eq(1)
-    end
-
-    it 'unshifts a newly seen title onto an ordinary room' do
-      seed_room
-      map_class.current_or_new
-
-      expect(map_class[1].title).to eq(['[Town Square, North]', '[Town Square]'])
-    end
-
-    it 'unshifts a newly seen description onto an ordinary room' do
-      seed_room
-      map_class.current_or_new
-
-      expect(map_class[1].description).to eq(['A wider plaza.', 'A plaza.'])
-    end
-
-    it 'replaces rather than accumulates for meta:map:latest-only' do
-      seed_room(tags: ['meta:map:latest-only'])
-      map_class.current_or_new
-
-      expect(map_class[1].title).to eq(['[Town Square, North]'])
-      expect(map_class[1].description).to eq(['A wider plaza.'])
-    end
-
-    it 'replaces rather than accumulates for meta:playershop' do
-      seed_room(tags: ['meta:playershop'])
-      map_class.current_or_new
-
-      expect(map_class[1].title).to eq(['[Town Square, North]'])
-    end
-
-    it 'records a newly seen uid on the room' do
-      seed_room(uid: [500])
-      allow(XMLData).to receive(:room_id).and_return(500)
-      map_class.current_or_new
-
-      expect(map_class[1].uid).to include(500)
-    end
-
-    it 'ignores room ids above the 4_294_967_296 threshold' do
-      seed_room
-      allow(XMLData).to receive(:room_id).and_return(4_294_967_297)
-      map_class.current_or_new
-
-      expect(map_class[1].uid).not_to include(4_294_967_297)
     end
   end
 

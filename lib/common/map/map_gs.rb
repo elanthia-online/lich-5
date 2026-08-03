@@ -279,7 +279,11 @@ module Lich
                   end
                   script.want_downstream = save_want_downstream
                 end
-                good = peer_history[peer_room_count][peer_direction][need_desc].any? { |line| line =~ /#{peer_requirement}/ }
+                # Nil when the peer command failed or timed out, so nothing was
+                # recorded. Treat that as no match rather than relying on the
+                # NilClass patch to make nil.any? return a falsy nil.
+                peer_lines = peer_history[peer_room_count][peer_direction][need_desc]
+                good = peer_lines.is_a?(Array) && peer_lines.any? { |line| line =~ /#{peer_requirement}/ }
               else
                 good = true
               end
