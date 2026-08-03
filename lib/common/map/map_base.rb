@@ -287,6 +287,19 @@ module Lich
 
         private :tag_index, :tag_index_generation, :build_tag_index
 
+        # JSON map databases in the data directory, newest first
+        # @return [Array<String>] full paths, empty when the directory is absent
+        def json_map_files
+          directory = File.join(DATA_DIR, XMLData.game)
+          return [] unless Dir.exist?(directory)
+
+          Dir.entries(directory)
+             .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
+             .collect { |fn| File.join(directory, fn) }
+             .sort
+             .reverse
+        end
+
         # Legacy map files sitting in the data directory, basenames only
         # @return [Array<String>]
         def legacy_map_files
@@ -347,15 +360,7 @@ module Lich
         # @param filename [String, nil] explicit path, or nil to search DATA_DIR
         # @return [Boolean] whether a map was loaded
         def load(filename = nil)
-          file_list = if filename.nil?
-                        Dir.entries(File.join(DATA_DIR, XMLData.game))
-                           .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
-                           .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                           .sort
-                           .reverse
-                      else
-                        [filename]
-                      end
+          file_list = filename.nil? ? json_map_files : [filename]
 
           # An explicitly named .dat or .xml would otherwise reach load_json and
           # raise a parse error rather than saying why it cannot be loaded.

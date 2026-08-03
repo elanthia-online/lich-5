@@ -650,8 +650,9 @@ RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
 
   before { MapLoader.use(:dr) }
 
-  # Build and register a room. Ids are kept dense from 0 by every caller so the
-  # @@list.find / load_uids iterations in the matchers never trip over nil holes.
+  # Build and register a room. Ids are kept dense from 0 by every caller because
+  # the @@list.find iterations in the matchers do not skip nil holes. load_uids
+  # compacts, so it no longer requires this.
   def build_room(id, title:, description:, exits:, uid: [], tags: [])
     map_class.new(id, [title], [description], [exits], uid,
                   nil, nil, nil, {}, {}, nil, nil, tags)

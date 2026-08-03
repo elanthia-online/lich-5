@@ -75,8 +75,8 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     it 'indexes uids across a sparse list without raising' do
-      # The list here has holes at 0, 2, 3 and 5. load_uids skips them rather
-      # than depending on the NilClass patch, which spec_helper does not apply.
+      # The list here has holes at 0, 2, 3 and 5. load_uids compacts, so indexing
+      # uids across a sparse map does not depend on Lich's NilClass patch.
       expect(map_class.class_variable_get(:@@list)[3]).to be_nil
       map_class[1].uid = [9001]
       map_class[6].uid = [9002]
@@ -681,14 +681,36 @@ RSpec.shared_examples 'a game Map class' do |game|
       end
 
       it 'leaves no rooms behind from the file it abandoned' do
-        # The newest file registers a room, then breaks part way through.
+        # Parses, registers room 500, then fails on the next entry: wayto is a
+        # String, so .keys raises after the nil defaults have been applied.
+        # A truncated file would fail before registering anything and so would
+        # not exercise the partial cleanup.
         File.write(File.join(map_dir, 'map-2.json'),
-                   "[#{JSON.dump(json_room(500))}, {\"id\": 501, \"wayto\": null}]")
+                   "[#{JSON.dump(json_room(500))}, #{JSON.dump('id' => 501, 'wayto' => 'not a hash')}]")
         write_map([json_room(1)])
         map_class.load
 
         expect(map_class[500]).to be_nil
         expect(map_class.class_variable_get(:@@list).compact.map(&:id)).to eq([1])
+      end
+
+      it 'falls back when the newest database is truncated' do
+        File.write(File.join(map_dir, 'map-2.json'), '[{"id": 500, "title": ["[Room 500]"]')
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[1].id).to eq(1)
+      end
+
+      it 'tolerates null wayto and timeto rather than treating them as corrupt' do
+        File.write(File.join(map_dir, 'map-1.json'),
+                   "[#{JSON.dump('id' => 1, 'title' => ['[R1]'], 'description' => ['d'],
+                                 'paths' => ['Obvious paths: north'], 'wayto' => nil,
+                                 'timeto' => nil)}]")
+
+        expect(map_class.load).to be true
+        expect(map_class[1].wayto).to eq({})
+        expect(map_class[1].timeto).to eq({})
       end
 
       it 'returns false when every candidate is malformed' do
@@ -767,6 +789,15 @@ RSpec.shared_examples 'a game Map class' do |game|
       map_class.load
 
       expect(map_class).not_to have_received(:respond).with(/no longer supported/)
+    end
+
+    it 'reports rather than raising when the data directory does not exist' do
+      FileUtils.rm_rf(map_dir)
+
+      result = nil
+      expect { result = map_class.load }.not_to raise_error
+      expect(result).to be false
+      expect(map_class).to have_received(:respond).with(/no map database found/)
     end
 
     it 'still reports when no map database is present at all' do

@@ -406,6 +406,9 @@ module Lich
             begin
               File.open(filename) do |f|
                 JSON.parse(f.read).each do |room|
+                  # Defaulted before the loops below read .keys on them.
+                  room['wayto'] ||= {}
+                  room['timeto'] ||= {}
                   room['wayto'].keys.each do |k|
                     if room['wayto'][k][0..2] == ';e '
                       room['wayto'][k] = StringProc.new(room['wayto'][k][3..])
