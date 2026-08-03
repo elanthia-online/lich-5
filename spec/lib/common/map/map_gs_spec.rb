@@ -168,10 +168,9 @@ RSpec.describe 'GemStone Map implementation' do
                                          room_exits_string: 'Obvious paths: down')
     end
 
-    # Room 0 keeps the list dense. load_uids compacts now, but match_current
-    # still iterates @@list without skipping holes, so a gap would raise there.
+    # Deliberately sparse: nothing here seeds room 0, so the matchers have to
+    # walk a hole to reach room 1.
     def seed_peer_room(tag)
-      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: down'])
       map_class.new(1, ['[Ledge]'], ['A narrow ledge.'], ['Obvious paths: down'],
                     [], nil, nil, nil, {}, {}, nil, nil, [tag])
     end
@@ -375,11 +374,9 @@ RSpec.describe 'GemStone Map implementation' do
       double('Script', want_downstream: false, 'want_downstream=': nil, 'ignore_pause=': nil)
     end
 
-    # Room 0 keeps the list dense. load_uids compacts now, but the match_current
-    # matchers this path goes through still iterate @@list without skipping
-    # holes, so a gap would raise there.
+    # Deliberately sparse: nothing here seeds room 0, so both the uid path and
+    # the match_current matchers have to walk a hole to reach room 1.
     def seed_room(tags: [], uid: [], title: '[Town Square]', description: 'A plaza.')
-      map_class.new(0, ['[Start]'], ['start'], ['Obvious paths: north'])
       room = map_class.new(1, [title], [description], ['Obvious paths: north'],
                            [], nil, nil, nil, {}, {}, nil, nil, tags)
       room.uid = uid
@@ -454,7 +451,7 @@ RSpec.describe 'GemStone Map implementation' do
         allow(XMLData).to receive(:room_id).and_return(500)
 
         expect(map_class.current_or_new.id).to eq(1)
-        expect(map_class.class_variable_get(:@@list).compact.map(&:id)).to eq([0, 1])
+        expect(map_class.class_variable_get(:@@list).compact.map(&:id)).to eq([1])
       end
 
       it 'records the newly seen uid on the resolved room' do

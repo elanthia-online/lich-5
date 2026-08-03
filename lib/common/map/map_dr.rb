@@ -98,6 +98,12 @@ module Lich
           @@list
         end
 
+        # The backing array without triggering a load. Only for use inside the
+        # load path, where #list would re-enter the load mutex and deadlock.
+        def raw_list
+          @@list
+        end
+
         def list=(value)
           @@list = value
           normalize_tag_lists(value)
@@ -221,7 +227,9 @@ module Lich
               @@current_room_count = XMLData.room_count
               foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
               room = @@list.find do |r|
-                r.title.include?(XMLData.room_title) &&
+                # Skip nil holes without relying on Lich's NilClass patch.
+                r &&
+                  r.title.include?(XMLData.room_title) &&
                   r.description.include?(XMLData.room_description.strip) &&
                   (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
               end
@@ -233,7 +241,9 @@ module Lich
                 redo unless @@current_room_count == XMLData.room_count
                 desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
                 room = @@list.find do |r|
-                  r.title.include?(XMLData.room_title) &&
+                  # Skip nil holes without relying on Lich's NilClass patch.
+                  r &&
+                    r.title.include?(XMLData.room_title) &&
                     (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
                     (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
                 end
@@ -269,7 +279,9 @@ module Lich
           loop do
             foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
             room = @@list.find do |r|
-              r.title.include?(XMLData.room_title) &&
+              # Skip nil holes without relying on Lich's NilClass patch.
+              r &&
+                r.title.include?(XMLData.room_title) &&
                 r.description.include?(XMLData.room_description.strip) &&
                 (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
             end
@@ -282,7 +294,9 @@ module Lich
               redo unless @@fuzzy_room_count == XMLData.room_count
               desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
               room = @@list.find do |r|
-                r.title.include?(XMLData.room_title) &&
+                # Skip nil holes without relying on Lich's NilClass patch.
+                r &&
+                  r.title.include?(XMLData.room_title) &&
                   (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
                   (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
               end
@@ -381,72 +395,23 @@ module Lich
         true
       end
 
-      def self.load_json(filename = nil)
-        @@load_mutex.synchronize do
-          return true if @@loaded
+      # Construct a room from a parsed JSON hash
+      # @param room [Hash]
+      # @return [Map] the registered room
+      def self.room_from_json(room)
+        new(
+          room['id'], room['title'], room['description'], room['paths'],
+          room['uid'], room['location'], room['climate'], room['terrain'],
+          room['wayto'], room['timeto'], room['image'], room['image_coords'],
+          room['tags'], room['check_location'], room['unique_loot'],
+          nil, # _room_objects
+          room['genie_id'], room['genie_zone'], room['genie_pos']
+        )
+      end
 
-          file_list = if filename
-                        [filename]
-                      else
-                        Dir.entries(File.join(DATA_DIR, XMLData.game))
-                           .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
-                           .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                           .sort
-                           .reverse
-                      end
-
-          if file_list.empty?
-            respond '--- Lich: error: no map database found'
-            return false
-          end
-
-          while (filename = file_list.shift)
-            next unless File.exist?(filename)
-
-            begin
-              File.open(filename) do |f|
-                JSON.parse(f.read).each do |room|
-                  # Defaulted before the loops below read .keys on them.
-                  room['wayto'] ||= {}
-                  room['timeto'] ||= {}
-                  room['wayto'].keys.each do |k|
-                    if room['wayto'][k][0..2] == ';e '
-                      room['wayto'][k] = StringProc.new(room['wayto'][k][3..])
-                    end
-                  end
-                  room['timeto'].keys.each do |k|
-                    if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
-                      room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
-                    end
-                  end
-                  room['tags'] ||= []
-                  room['uid'] ||= []
-                  new(
-                    room['id'], room['title'], room['description'], room['paths'],
-                    room['uid'], room['location'], room['climate'], room['terrain'],
-                    room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                    room['tags'], room['check_location'], room['unique_loot'],
-                    nil, # _room_objects
-                    room['genie_id'], room['genie_zone'], room['genie_pos']
-                  )
-                end
-              end
-            rescue StandardError => e
-              # A corrupt or unreadable database must not abort the load or
-              # leave a half-built map behind. Report it, drop whatever was
-              # registered, and let the caller try an older candidate.
-              respond "--- Lich: error: failed to load #{filename}: #{e.message}"
-              @@list.clear
-              clear_tags_cache
-              next
-            end
-            clear_tags_cache
-            respond "--- Map loaded #{filename}"
-            @@loaded = true
-            load_uids
-            return true
-          end
-        end
+      # @return [String] announced once a database has loaded
+      def self.map_loaded_message(filename)
+        "--- Map loaded #{filename}"
       end
     end
 

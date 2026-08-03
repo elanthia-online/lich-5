@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'timeout'
 
 # Shared examples, not a spec file. RSpec's default pattern is
 # spec/**/*_spec.rb, so this is never auto-loaded or run on its own; the two
@@ -85,6 +86,11 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(map_class['u9002'].id).to eq(6)
     end
 
+    it 'returns nil for an unknown uid rather than room 0' do
+      # nil.to_i is 0, so the uid branch used to hand back whatever sat at index 0.
+      expect(map_class['u999999']).to be_nil
+    end
+
     it 'finds a room by exact title' do
       expect(map_class['[Bank Lobby]'].id).to eq(6)
     end
@@ -145,6 +151,47 @@ RSpec.shared_examples 'a game Map class' do |game|
       map_class.rooms_by_tag('shop').clear
 
       expect(map_class.rooms_by_tag('shop')).to eq([1])
+    end
+
+    describe 'shared with the Room subclass' do
+      # Room subclasses Map and inherits these class methods. The cache lives on
+      # class-instance variables, which subclasses do not share, so without a
+      # single owner a query through Room memoises a second cache that Map's
+      # invalidations never reach.
+      let(:room_class) { Lich::Common::Room }
+
+      it 'answers the same tag names through either class' do
+        expect(room_class.tags.sort).to eq(map_class.tags.sort)
+      end
+
+      it 'answers the same room ids through either class' do
+        expect(room_class.rooms_by_tag('shop')).to eq(map_class.rooms_by_tag('shop'))
+      end
+
+      it 'sees a mutation made after priming through Room' do
+        room_class.tags # prime through the subclass
+        map_class[1].tags = ['bank']
+
+        expect(room_class.tags).to include('bank')
+      end
+
+      it 'drops the old tag from the Room view too' do
+        room_class.tags # prime through the subclass
+        map_class[1].tags = ['bank']
+
+        expect(room_class.rooms_by_tag('shop')).to eq([])
+      end
+
+      it 'sees an in place append made after priming through Room' do
+        room_class.rooms_by_tag('shop') # prime through the subclass
+        map_class[4].tags << 'shop'
+
+        expect(room_class.rooms_by_tag('shop')).to eq([1, 4])
+      end
+
+      it 'resolves both classes to the same cache host' do
+        expect(room_class.send(:tag_cache_host)).to equal(map_class)
+      end
     end
 
     it 'keeps the cache off the public surface' do
@@ -384,7 +431,8 @@ RSpec.shared_examples 'a game Map class' do |game|
     %i[save_json estimate_time rooms_by_tag tag_names reset_tag_index
        normalize_tag_lists legacy_map_files report_unsupported_map_files
        get_free_id tags previous_uid match_no_uid match_multi_ids
-       set_current set_fuzzy].each do |method|
+       set_current set_fuzzy load_json parse_map_json json_map_files
+       validate_room_json!].each do |method|
       it "takes .#{method} from MapBase" do
         expect(map_class.method(method).owner).to eq(Lich::Common::MapBase::ClassMethods)
       end
@@ -418,7 +466,8 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(Lich::Common::Room.superclass).to eq(map_class)
     end
 
-    %i[loaded? list uids clear_tags_cache mark_loaded synchronize_load load_json].each do |method|
+    %i[loaded? list raw_list uids clear_tags_cache mark_loaded synchronize_load
+       room_from_json map_loaded_message].each do |method|
       it "the game class responds to .#{method}" do
         expect(map_class).to respond_to(method)
       end
@@ -713,6 +762,52 @@ RSpec.shared_examples 'a game Map class' do |game|
         expect(map_class[1].timeto).to eq({})
       end
 
+      it 'rejects a database whose room has no paths' do
+        File.write(File.join(map_dir, 'map-2.json'),
+                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'description' => ['d'] }]))
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[5]).to be_nil
+      end
+
+      it 'rejects a database whose room has no title' do
+        File.write(File.join(map_dir, 'map-2.json'),
+                   JSON.dump([{ 'id' => 5, 'description' => ['d'], 'paths' => ['Obvious paths: north'] }]))
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[5]).to be_nil
+      end
+
+      it 'rejects a database whose room has no description' do
+        File.write(File.join(map_dir, 'map-2.json'),
+                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'paths' => ['Obvious paths: north'] }]))
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[5]).to be_nil
+      end
+
+      it 'rejects a database whose room id is not an Integer' do
+        File.write(File.join(map_dir, 'map-2.json'),
+                   JSON.dump([{ 'id' => 'five', 'title' => ['[R5]'], 'description' => ['d'],
+                                'paths' => ['Obvious paths: north'] }]))
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[1].id).to eq(1)
+      end
+
+      it 'names the field that was missing' do
+        File.write(File.join(map_dir, 'map-2.json'),
+                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'description' => ['d'] }]))
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/room 5 has no paths/)
+      end
+
       it 'returns false when every candidate is malformed' do
         File.write(File.join(map_dir, 'map-1.json'), 'not json')
         File.write(File.join(map_dir, 'map-2.json'), 'also not json')
@@ -789,6 +884,18 @@ RSpec.shared_examples 'a game Map class' do |game|
       map_class.load
 
       expect(map_class).not_to have_received(:respond).with(/no longer supported/)
+    end
+
+    it 'recovers from an unusable candidate without deadlocking on the load mutex' do
+      # The rescue path runs with the load mutex held, so it must not reach for
+      # anything that re-enters it.
+      File.write(File.join(map_dir, 'map-2.json'), 'not json')
+      File.write(File.join(map_dir, 'map-1.json'),
+                 JSON.dump([{ 'id' => 1, 'title' => ['[R1]'], 'description' => ['d'],
+                              'paths' => ['Obvious paths: north'], 'wayto' => {}, 'timeto' => {} }]))
+
+      expect { Timeout.timeout(5) { map_class.load } }.not_to raise_error
+      expect(map_class[1].id).to eq(1)
     end
 
     it 'reports rather than raising when the data directory does not exist' do

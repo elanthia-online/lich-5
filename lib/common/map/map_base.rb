@@ -139,6 +139,12 @@ module Lich
       def self.included(base)
         base.extend(ClassMethods)
         base.include(InstanceMethods)
+        # The tag cache lives on class-instance variables, which subclasses do
+        # not share. Room subclasses Map and inherits these class methods, so
+        # without a single owner a query through Room would memoize a second
+        # cache that Map's invalidations never reach. Mark the includer as owner
+        # and resolve to it from any subclass, see #tag_cache_host.
+        base.instance_variable_set(:@tag_cache_owner, true)
       end
 
       # Class methods shared across all Map implementations
@@ -239,31 +245,49 @@ module Lich
         # Rebuild attempts before giving up on caching the result.
         TAG_INDEX_BUILD_ATTEMPTS = 3
 
+        # Serialises publishing the memo against invalidating it. Only ever held
+        # across a couple of assignments, never across a build or a load, so it
+        # cannot invert the ordering against the load mutex.
+        TAG_INDEX_MUTEX = Mutex.new
+
+        # The single class that owns the tag cache. Map is the owner; Room, which
+        # subclasses it, resolves to Map so both see one cache.
+        # @return [Class]
+        def tag_cache_host
+          @tag_cache_host ||= begin
+            klass = self
+            klass = klass.superclass until klass.instance_variable_defined?(:@tag_cache_owner)
+            klass
+          end
+        end
+
         # @return [Hash{String => Array<Integer>}] tag name => room ids
         def tag_index
           # No explicit load here: build_tag_index reads through #list, which
           # loads when needed. Loading here as well made a single Map.tags call
           # attempt the load twice, doubling the failure message.
+          host = tag_cache_host
           TAG_INDEX_BUILD_ATTEMPTS.times do
-            cached = @tag_index
+            cached = host.instance_variable_get(:@tag_index)
             return cached unless cached.nil?
 
             # Build outside the mutex. build_tag_index reads through #list, which
-            # can take the load mutex, and taking the two in that order here would
-            # invert the ordering every other path uses.
+            # can take the load mutex, and taking the two in that order here
+            # would invert the ordering every other path uses.
             generation = tag_index_generation
             built = build_tag_index
 
-            # Publish, then re-check. Checking before assigning is not enough:
-            # an invalidation landing between the two would be overwritten and
-            # the stale index left published. Assigning first and verifying
-            # after means any intervening reset is caught here and undone, which
-            # holds whichever order the two threads interleave in. Generations
-            # only ever increase, so a captured value can never match again.
-            @tag_index = built
-            return built if generation == tag_index_generation
+            published = TAG_INDEX_MUTEX.synchronize do
+              # Validate and publish as one step, and never publish a value that
+              # failed validation. Publishing first and undoing afterwards would
+              # let another reader take the cached fast path and consume the
+              # stale index before the undo landed.
+              next false unless generation == tag_index_generation
 
-            @tag_index = nil
+              host.instance_variable_set(:@tag_index, built)
+              true
+            end
+            return built if published
           end
           # Tags are changing faster than the index can settle. Answer from this
           # build without caching it. It reflects a recent state, not necessarily
@@ -273,7 +297,7 @@ module Lich
 
         # @return [Integer]
         def tag_index_generation
-          @tag_index_generation ||= 0
+          tag_cache_host.instance_variable_get(:@tag_index_generation) || 0
         end
 
         # @return [Hash{String => Array<Integer>}]
@@ -285,7 +309,91 @@ module Lich
           index
         end
 
-        private :tag_index, :tag_index_generation, :build_tag_index
+        private :tag_index, :tag_index_generation, :build_tag_index, :tag_cache_host
+
+        # Load the newest usable JSON map database, falling back to older
+        # candidates when one is unreadable. The two game classes differ only in
+        # how a parsed room is constructed and what they announce, so those are
+        # hooks: #room_from_json and #map_loaded_message.
+        # @param filename [String, nil] a specific database, or nil to search
+        # @return [Boolean] true once a database loaded
+        def load_json(filename = nil)
+          synchronize_load do
+            return true if loaded?
+
+            file_list = filename ? [filename] : json_map_files
+            if file_list.empty?
+              respond '--- Lich: error: no map database found'
+              return false
+            end
+
+            while (filename = file_list.shift)
+              next unless File.exist?(filename)
+              next unless parse_map_json(filename)
+
+              clear_tags_cache
+              respond map_loaded_message(filename)
+              mark_loaded
+              load_uids
+              return true
+            end
+            false
+          end
+        end
+
+        # @param filename [String] database to read
+        # @return [Boolean] false when the file was unusable
+        def parse_map_json(filename)
+          File.open(filename) do |f|
+            JSON.parse(f.read).each do |room|
+              validate_room_json!(room, filename)
+              # Defaulted before the loops below read .keys on them.
+              room['wayto'] ||= {}
+              room['timeto'] ||= {}
+              room['tags'] ||= []
+              room['uid'] ||= []
+              room['wayto'].keys.each do |k|
+                room['wayto'][k] = StringProc.new(room['wayto'][k][3..]) if room['wayto'][k][0..2] == ';e '
+              end
+              room['timeto'].keys.each do |k|
+                if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
+                  room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
+                end
+              end
+              room_from_json(room)
+            end
+          end
+          true
+        rescue StandardError => e
+          # A corrupt or unreadable database must not abort the load or leave a
+          # half-built map behind. Report it, drop whatever was registered, and
+          # let the caller try an older candidate. raw_list because the load
+          # mutex is held and #list would re-enter it.
+          respond "--- Lich: error: failed to load #{filename}: #{e.message}"
+          raw_list.clear
+          clear_tags_cache
+          false
+        end
+
+        # Fields a room needs to be usable. A database missing any of them loads
+        # without complaint and then fails later at lookup or matching time, so
+        # reject the file and let the caller fall back to an older one. tags, uid,
+        # wayto and timeto are genuinely optional and are defaulted instead.
+        # @param room [Hash] one parsed room
+        # @param filename [String] database being read, for the message
+        # @raise [RuntimeError] when a required field is missing or the wrong type
+        # @return [nil]
+        def validate_room_json!(room, filename)
+          id = room['id']
+          raise "#{File.basename(filename)}: room id is not an Integer: #{id.inspect}" unless id.is_a?(Integer)
+
+          %w[title description paths].each do |field|
+            next if room[field].is_a?(Array)
+
+            raise "#{File.basename(filename)}: room #{id} has no #{field}"
+          end
+          nil
+        end
 
         # JSON map databases in the data directory, newest first
         # @return [Array<String>] full paths, empty when the directory is absent
@@ -334,7 +442,9 @@ module Lich
             rooms[val.to_i]
           elsif val =~ /^u(-?\d+)$/i
             uid_request = ::Regexp.last_match(1).dup.to_i
-            rooms[(ids_from_uid(uid_request)[0]).to_i]
+            # nil.to_i is 0, so an unknown uid used to resolve to room 0.
+            id = ids_from_uid(uid_request)[0]
+            id.nil? ? nil : rooms[id.to_i]
           else
             chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
             chk = /#{Regexp.escape(val.strip)}/i
@@ -422,11 +532,15 @@ module Lich
         # Drop the tag memo. Call after mutating any room's tags in place.
         # @return [nil]
         def reset_tag_index
-          # Deliberately lock-free: this runs once per room construction, so a
-          # mutex here measurably slows a full map load. Publication tolerates
-          # interleaving with it, see #tag_index.
-          @tag_index_generation = tag_index_generation + 1
-          @tag_index = nil
+          host = tag_cache_host
+          TAG_INDEX_MUTEX.synchronize do
+            # Under the same mutex as publication: bumping the generation outside
+            # it could land between a publisher's validation and its assignment.
+            host.instance_variable_set(:@tag_index_generation,
+                                       (host.instance_variable_get(:@tag_index_generation) || 0) + 1)
+            host.instance_variable_set(:@tag_index, nil)
+          end
+          nil
         end
 
         # Re-wrap plain Array tags as TagList. Rooms that reach the list without
