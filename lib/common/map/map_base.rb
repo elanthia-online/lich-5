@@ -180,7 +180,8 @@ module Lich
 
         # Narrow a set of candidate ids to the one reachable from the current room
         # @param ids [Array] candidate room ids
-        # @return [Object, nil] the single reachable id, or nil if not exactly one
+        # @return [Integer, nil] the single reachable id, or nil unless exactly
+        #   one candidate is reachable from the current room
         def match_multi_ids(ids)
           matches = ids.find_all { |s| list[current_room_id].wayto.keys.include?(s.to_s) }
           return matches[0] if matches.size == 1
@@ -234,26 +235,39 @@ module Lich
 
         # Tag name => Array of room ids. Private: callers must go through
         # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.
-        # @return [Hash{String => Array<Integer>}]
-        # Rebuild attempts before giving up on caching and returning a fresh read.
+        #
+        # Rebuild attempts before giving up on caching the result.
         TAG_INDEX_BUILD_ATTEMPTS = 3
 
+        # @return [Hash{String => Array<Integer>}] tag name => room ids
         def tag_index
-          self.load unless loaded?
+          # No explicit load here: build_tag_index reads through #list, which
+          # loads when needed. Loading here as well made a single Map.tags call
+          # attempt the load twice, doubling the failure message.
           TAG_INDEX_BUILD_ATTEMPTS.times do
             cached = @tag_index
             return cached unless cached.nil?
 
+            # Build outside the mutex. build_tag_index reads through #list, which
+            # can take the load mutex, and taking the two in that order here would
+            # invert the ordering every other path uses.
             generation = tag_index_generation
             built = build_tag_index
-            # Invalidated while the build was running. Neither cache it nor hand
-            # it back, since it already describes an older set of tags; try again.
-            next unless generation == tag_index_generation
 
-            return @tag_index = built
+            # Publish, then re-check. Checking before assigning is not enough:
+            # an invalidation landing between the two would be overwritten and
+            # the stale index left published. Assigning first and verifying
+            # after means any intervening reset is caught here and undone, which
+            # holds whichever order the two threads interleave in. Generations
+            # only ever increase, so a captured value can never match again.
+            @tag_index = built
+            return built if generation == tag_index_generation
+
+            @tag_index = nil
           end
-          # Losing the race repeatedly means tags are changing faster than the
-          # index can settle. Answer from a fresh read rather than caching it.
+          # Tags are changing faster than the index can settle. Answer from this
+          # build without caching it. It reflects a recent state, not necessarily
+          # the current one.
           build_tag_index
         end
 
@@ -403,12 +417,16 @@ module Lich
         # Drop the tag memo. Call after mutating any room's tags in place.
         # @return [nil]
         def reset_tag_index
+          # Deliberately lock-free: this runs once per room construction, so a
+          # mutex here measurably slows a full map load. Publication tolerates
+          # interleaving with it, see #tag_index.
           @tag_index_generation = tag_index_generation + 1
           @tag_index = nil
         end
 
-        # Re-wrap plain Array tags as TagList. Rooms restored by Marshal skip the
-        # constructor, so their tags cannot invalidate the index on mutation.
+        # Re-wrap plain Array tags as TagList. Rooms that reach the list without
+        # going through the constructor, such as a caller assigning a list it
+        # built itself, otherwise hold tags that cannot invalidate the index.
         #
         # Callers inside a load must pass the rooms explicitly, because the #list
         # accessor triggers #load when the map is not yet loaded, and #load holds
@@ -528,6 +546,15 @@ module Lich
 
       # Instance methods for Room/Map objects
       module InstanceMethods
+        # Replace this room's tags and drop the tag index
+        # @param value [Array, nil] new tag names
+        # @return [nil] Ruby ignores a writer's return value, so `room.tags = x`
+        #   evaluates to x regardless of what this returns
+        def tags=(value)
+          @tags = TagList.new(value, self.class)
+          self.class.reset_tag_index
+        end
+
         # Convert room to integer (room ID)
         def to_i
           @id

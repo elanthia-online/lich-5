@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 # Shared examples, not a spec file. RSpec's default pattern is
 # spec/**/*_spec.rb, so this is never auto-loaded or run on its own; the two
 # game specs require it explicitly. It lives here rather than in spec_helper
@@ -66,14 +68,21 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     it 'finds a room by uid' do
-      # Dense on purpose: load_uids has no nil guard and relies on Lich's
-      # NilClass patch, which spec_helper does not apply.
-      map_class.class_variable_get(:@@list).clear
-      (0..2).each { |id| shared_room(id, title: "[R#{id}]", description: "d#{id}") }
-      map_class[1].uid = [9001]
+      map_class[4].uid = [9001]
       map_class.load_uids
 
-      expect(map_class['u9001'].id).to eq(1)
+      expect(map_class['u9001'].id).to eq(4)
+    end
+
+    it 'indexes uids across a sparse list without raising' do
+      # The list here has holes at 0, 2, 3 and 5. load_uids skips them rather
+      # than depending on the NilClass patch, which spec_helper does not apply.
+      expect(map_class.class_variable_get(:@@list)[3]).to be_nil
+      map_class[1].uid = [9001]
+      map_class[6].uid = [9002]
+
+      expect { map_class.load_uids }.not_to raise_error
+      expect(map_class['u9002'].id).to eq(6)
     end
 
     it 'finds a room by exact title' do
@@ -184,6 +193,21 @@ RSpec.shared_examples 'a game Map class' do |game|
       shared_room(4, title: '[Four]', description: 'fourth', tags: ['shop'])
 
       expect(map_class.rooms_by_tag('shop')).to eq([1, 4])
+    end
+
+    it 'stays consistent while reads and invalidations run concurrently' do
+      # A stress check, not proof: the interleaving #tag_index guards against is
+      # a few instructions wide and not reliably reachable from a test, so this
+      # catches gross corruption rather than the specific window. The ordering
+      # argument for that window is spelled out at #tag_index.
+      expected = map_class.rooms_by_tag('shop')
+      readers = 4.times.map do
+        Thread.new { 40.times { map_class.rooms_by_tag('shop') } }
+      end
+      writer = Thread.new { 40.times { map_class.reset_tag_index } }
+      (readers + [writer]).each(&:join)
+
+      expect(map_class.rooms_by_tag('shop')).to eq(expected)
     end
 
     it 'rebuilds after clear_tags_cache' do
@@ -568,6 +592,119 @@ RSpec.shared_examples 'a game Map class' do |game|
       FileUtils.mkdir_p(map_dir)
       map_class.class_variable_set(:@@loaded, false)
       allow(map_class).to receive(:respond)
+      # load_json names the running script when it reports success.
+      allow(Script).to receive(:current).and_return(double('Script', name: 'spec'))
+    end
+
+    # Successful loading had no coverage: the examples below only exercised the
+    # missing-database and legacy-format paths.
+    describe 'a valid JSON database' do
+      def write_map(rooms)
+        File.write(File.join(map_dir, 'map-1.json'), JSON.dump(rooms))
+      end
+
+      def json_room(id, uid: [], tags: [])
+        { 'id' => id, 'title' => ["[Room #{id}]"], 'description' => ["Room #{id} description."],
+          'paths' => ['Obvious paths: north'], 'uid' => uid, 'tags' => tags,
+          'wayto' => {}, 'timeto' => {} }
+      end
+
+      it 'loads a dense map' do
+        write_map([json_room(0), json_room(1)])
+
+        expect(map_class.load).to be true
+      end
+
+      it 'loads a sparse map, ids far apart' do
+        write_map([json_room(1), json_room(900)])
+
+        expect(map_class.load).to be true
+      end
+
+      it 'marks the map loaded' do
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class.loaded?).to be true
+      end
+
+      it 'makes the rooms findable by id' do
+        write_map([json_room(1), json_room(900)])
+        map_class.load
+
+        expect(map_class[900].id).to eq(900)
+      end
+
+      it 'indexes uids from a sparse map' do
+        write_map([json_room(1, uid: [4242]), json_room(900)])
+        map_class.load
+
+        expect(map_class['u4242'].id).to eq(1)
+      end
+
+      it 'wraps loaded tags in a TagList' do
+        write_map([json_room(1, tags: ['shop'])])
+        map_class.load
+
+        expect(map_class[1].tags).to be_a(Lich::Common::TagList)
+      end
+
+      it 'indexes loaded tags' do
+        write_map([json_room(1, tags: ['shop']), json_room(900, tags: ['shop'])])
+        map_class.load
+
+        expect(map_class.rooms_by_tag('shop')).to eq([1, 900])
+      end
+
+      it 'finds a room by title after loading' do
+        write_map([json_room(7)])
+        map_class.load
+
+        expect(map_class['[Room 7]'].id).to eq(7)
+      end
+
+      it 'falls back to an older database when the newest is malformed' do
+        # load reads the highest-numbered file first.
+        File.write(File.join(map_dir, 'map-2.json'), 'not json at all')
+        write_map([json_room(1)])
+
+        expect(map_class.load).to be true
+        expect(map_class[1].id).to eq(1)
+      end
+
+      it 'reports the file it could not load' do
+        File.write(File.join(map_dir, 'map-2.json'), 'not json at all')
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/failed to load .*map-2\.json/)
+      end
+
+      it 'leaves no rooms behind from the file it abandoned' do
+        # The newest file registers a room, then breaks part way through.
+        File.write(File.join(map_dir, 'map-2.json'),
+                   "[#{JSON.dump(json_room(500))}, {\"id\": 501, \"wayto\": null}]")
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class[500]).to be_nil
+        expect(map_class.class_variable_get(:@@list).compact.map(&:id)).to eq([1])
+      end
+
+      it 'returns false when every candidate is malformed' do
+        File.write(File.join(map_dir, 'map-1.json'), 'not json')
+        File.write(File.join(map_dir, 'map-2.json'), 'also not json')
+
+        expect(map_class.load).to be false
+      end
+
+      it 'does not mark the map loaded when every candidate is malformed' do
+        File.write(File.join(map_dir, 'map-1.json'), 'not json')
+
+        map_class.load
+
+        expect(map_class.loaded?).to be false
+      end
     end
 
     it 'refuses a directory holding only legacy formats' do

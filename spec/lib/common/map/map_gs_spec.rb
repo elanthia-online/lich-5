@@ -269,6 +269,8 @@ RSpec.describe 'GemStone Map implementation' do
 
       it 'does not remove itself before the prompt' do
         squelch = hooks['squelch-peer']
+        removed_hooks.clear # the command scope already removed it on the way out
+
         squelch.call('You peer down')
 
         expect(removed_hooks).to be_empty
@@ -288,6 +290,52 @@ RSpec.describe 'GemStone Map implementation' do
         peer_succeeds
 
         expect(map_class.match_current(peer_script)).to be_nil
+      end
+    end
+
+    describe 'command scope cleanup' do
+      before { seed_peer_room('peer down =~ /a chasm/') }
+
+      it 'removes the hook after a successful command' do
+        peer_succeeds
+        map_class.match_current(peer_script)
+
+        expect(removed_hooks).to include('squelch-peer')
+      end
+
+      it 'removes the hook after a usage error' do
+        allow(map_class).to receive(:dothistimeout).and_return('[Usage: PEER <direction>]')
+        map_class.match_current(peer_script)
+
+        expect(removed_hooks).to include('squelch-peer')
+      end
+
+      it 'removes the hook after a timeout' do
+        allow(map_class).to receive(:dothistimeout).and_return(nil)
+        map_class.match_current(peer_script)
+
+        expect(removed_hooks).to include('squelch-peer')
+      end
+
+      it 'removes the hook when the command raises' do
+        allow(map_class).to receive(:dothistimeout).and_raise('peer blew up')
+
+        expect { map_class.match_current(peer_script) }.to raise_error('peer blew up')
+        expect(removed_hooks).to include('squelch-peer')
+      end
+
+      it 'restores want_downstream when the command raises' do
+        allow(map_class).to receive(:dothistimeout).and_raise('peer blew up')
+
+        expect { map_class.match_current(peer_script) }.to raise_error('peer blew up')
+        expect(want_downstream_writes.last).to be false
+      end
+
+      it 'removes the hook exactly once per attempt' do
+        peer_succeeds
+        map_class.match_current(peer_script)
+
+        expect(removed_hooks.count('squelch-peer')).to eq(want_downstream_writes.count(true))
       end
     end
 

@@ -34,14 +34,6 @@ module Lich
       # @return [TagList] mutation-aware list of this room's tags
       attr_reader :tags
 
-      # Replace this room's tags and drop the tag index
-      # @param value [Array, nil] new tag names
-      # @return [Array, nil] the assigned value, per Ruby writer semantics
-      def tags=(value)
-        @tags = TagList.new(value, self.class)
-        self.class.reset_tag_index
-      end
-
       def initialize(id, title, description, paths, uid = [], location = nil,
                      climate = nil, terrain = nil, wayto = {}, timeto = {},
                      image = nil, image_coords = nil, tags = [], check_location = nil,
@@ -204,7 +196,6 @@ module Lich
                     end
                   end
                   save_want_downstream = script.want_downstream
-                  script.want_downstream = true
                   squelch_started = false
                   squelch_proc = proc do |server_string|
                     if squelch_started
@@ -217,27 +208,36 @@ module Lich
                       server_string
                     end
                   end
-                  DownstreamHook.add('squelch-peer', squelch_proc, persist: false) # scoped to this peer command
-                  result = dothistimeout "peer #{peer_direction}", 3, /^You peer|^\[Usage: PEER/
-                  if result =~ /^You peer/
-                    peer_results = []
-                    5.times do
-                      line = get?
-                      if line
-                        peer_results.push line
-                        break if line =~ /^Obvious/
+                  begin
+                    script.want_downstream = true
+                    DownstreamHook.add('squelch-peer', squelch_proc, persist: false)
+                    result = dothistimeout "peer #{peer_direction}", 3, /^You peer|^\[Usage: PEER/
+                    if result =~ /^You peer/
+                      peer_results = []
+                      5.times do
+                        line = get?
+                        if line
+                          peer_results.push line
+                          break if line =~ /^Obvious/
+                        end
+                      end
+                      if XMLData.room_count == peer_room_count
+                        if need_desc
+                          peer_history[peer_room_count][peer_direction][true] = peer_results
+                          peer_history[peer_room_count][peer_direction][false] = peer_results
+                        else
+                          peer_history[peer_room_count][peer_direction][false] = peer_results
+                        end
                       end
                     end
-                    if XMLData.room_count == peer_room_count
-                      if need_desc
-                        peer_history[peer_room_count][peer_direction][true] = peer_results
-                        peer_history[peer_room_count][peer_direction][false] = peer_results
-                      else
-                        peer_history[peer_room_count][peer_direction][false] = peer_results
-                      end
-                    end
+                  ensure
+                    # persist: false only cleans up when the owning script dies, so
+                    # a usage error, timeout or exception would otherwise leave the
+                    # hook registered globally. Remove it unconditionally, and put
+                    # want_downstream back even if the command raised.
+                    DownstreamHook.remove('squelch-peer')
+                    script.want_downstream = save_want_downstream
                   end
-                  script.want_downstream = save_want_downstream
                 end
                 # Nil when the peer command failed or timed out, so nothing was
                 # recorded. Treat that as no match rather than relying on the
@@ -463,7 +463,9 @@ module Lich
       def self.load_uids
         self.load unless @@loaded
         @@uids.clear
-        @@list.each do |r|
+        # compact rather than relying on Lich's NilClass patch to make r.uid on a
+        # hole return nil; a sparse map should not need that to load.
+        @@list.compact.each do |r|
           r.uid.each { |u| uids_add(u, r.id) }
         end
       end
@@ -502,31 +504,41 @@ module Lich
           while (filename = file_list.shift)
             next unless File.exist?(filename)
 
-            File.open(filename) do |f|
-              JSON.parse(f.read).each do |room|
-                room['wayto'].keys.each do |k|
-                  if room['wayto'][k][0..2] == ';e '
-                    room['wayto'][k] = StringProc.new(room['wayto'][k][3..])
+            begin
+              File.open(filename) do |f|
+                JSON.parse(f.read).each do |room|
+                  room['wayto'].keys.each do |k|
+                    if room['wayto'][k][0..2] == ';e '
+                      room['wayto'][k] = StringProc.new(room['wayto'][k][3..])
+                    end
                   end
-                end
-                room['timeto'].keys.each do |k|
-                  if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
-                    room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
+                  room['timeto'].keys.each do |k|
+                    if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
+                      room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
+                    end
                   end
+                  room['wayto'] ||= {}
+                  room['timeto'] ||= {}
+                  room['title'] ||= []
+                  room['description'] ||= []
+                  room['tags'] ||= []
+                  room['uid'] ||= []
+                  new(
+                    room['id'], room['title'], room['description'], room['paths'],
+                    room['uid'], room['location'], room['climate'], room['terrain'],
+                    room['wayto'], room['timeto'], room['image'], room['image_coords'],
+                    room['tags'], room['check_location'], room['unique_loot']
+                  )
                 end
-                room['wayto'] ||= {}
-                room['timeto'] ||= {}
-                room['title'] ||= []
-                room['description'] ||= []
-                room['tags'] ||= []
-                room['uid'] ||= []
-                new(
-                  room['id'], room['title'], room['description'], room['paths'],
-                  room['uid'], room['location'], room['climate'], room['terrain'],
-                  room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                  room['tags'], room['check_location'], room['unique_loot']
-                )
               end
+            rescue StandardError => e
+              # A corrupt or unreadable database must not abort the load or
+              # leave a half-built map behind. Report it, drop whatever was
+              # registered, and let the caller try an older candidate.
+              respond "--- Lich: error: failed to load #{filename}: #{e.message}"
+              @@list.clear
+              clear_tags_cache
+              next
             end
             clear_tags_cache
             respond "--- #{Script.current.name} Map loaded #{filename}"
