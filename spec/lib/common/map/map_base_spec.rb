@@ -421,7 +421,7 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
-    describe '#dijkstra_hashes' do
+    describe '#dijkstra' do
       it 'returns hashes keyed by room id rather than arrays' do
         previous, distances = test_class.test_list[0].dijkstra_hashes
 
@@ -453,14 +453,14 @@ RSpec.describe Lich::Common::MapBase do
     end
 
     describe '#dijkstra return contract' do
-      it 'still returns two Arrays for backward compatibility' do
+      it 'returns two Hashes' do
         previous, distances = test_class.test_list[0].dijkstra
 
-        expect(previous).to be_a(Array)
-        expect(distances).to be_a(Array)
+        expect(previous).to be_a(Hash)
+        expect(distances).to be_a(Hash)
       end
 
-      it 'indexes the arrays by room id' do
+      it 'keys them by room id, so indexed access is unchanged' do
         _, distances = test_class.test_list[0].dijkstra
 
         expect(distances[0]).to eq(0)
@@ -468,18 +468,23 @@ RSpec.describe Lich::Common::MapBase do
         expect(distances[2]).to eq(2)
       end
 
-      it 'sizes the arrays to the highest room id reached' do
+      it 'answers to the transitional dijkstra_hashes name' do
+        expect(test_class.test_list[0].dijkstra_hashes).to eq(test_class.test_list[0].dijkstra)
+      end
+
+      it 'holds only the rooms it reached, not every slot up to the highest id' do
         test_class.test_list[7] = test_class.new(7, wayto: { '0' => 'south' }, timeto: { '0' => 0.1 })
         test_class.test_list[0].wayto['7'] = 'north'
         test_class.test_list[0].timeto['7'] = 0.1
         _, distances = test_class.test_list[0].dijkstra
 
-        expect(distances.length).to eq(8)
+        # The Array form was sized 8 here, one past the highest id reached.
+        expect(distances.keys).to contain_exactly(0, 1, 2, 3, 7)
       end
 
       it 'returns nil when the search raises' do
         room = test_class.test_list[0]
-        allow(room).to receive(:dijkstra_hashes).and_return(nil)
+        allow(room).to receive(:dijkstra).and_return(nil)
 
         expect(room.dijkstra).to be_nil
       end
@@ -493,7 +498,7 @@ RSpec.describe Lich::Common::MapBase do
         # can never reach @id. The hash yields nil for the missing key, where the
         # old array form raised. Timeout so a regression fails the example rather
         # than hanging the suite.
-        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 99 }, { 2 => 1.0 }])
+        allow(room).to receive(:dijkstra).and_return([{ 2 => 99 }, { 2 => 1.0 }])
 
         result = Timeout.timeout(2) { room.path_to(2) }
 
@@ -501,20 +506,20 @@ RSpec.describe Lich::Common::MapBase do
       end
 
       it 'returns nil on a cyclic chain instead of walking forever' do
-        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 3, 3 => 2 }, { 2 => 1.0 }])
+        allow(room).to receive(:dijkstra).and_return([{ 2 => 3, 3 => 2 }, { 2 => 1.0 }])
 
         expect(Timeout.timeout(2) { room.path_to(2) }).to be_nil
       end
 
       it 'still reconstructs a chain that reaches this room' do
-        allow(room).to receive(:dijkstra_hashes).and_return([{ 2 => 1, 1 => 0 }, { 2 => 2.0 }])
+        allow(room).to receive(:dijkstra).and_return([{ 2 => 1, 1 => 0 }, { 2 => 2.0 }])
 
         expect(Timeout.timeout(2) { room.path_to(2) }).to eq([1, 2])
       end
     end
 
     describe 'when the search itself fails' do
-      # dijkstra_hashes returns nil from its rescue branch. Without guards the
+      # dijkstra returns nil from its rescue branch. Without guards the
       # callers index that nil, which only survives in production because Lich
       # patches NilClass#method_missing.
       let(:room) { test_class.test_list[0] }
@@ -522,7 +527,7 @@ RSpec.describe Lich::Common::MapBase do
       before do
         test_class.test_list[2].tags = ['shop']
         test_class.reset_tag_index
-        allow(room).to receive(:dijkstra_hashes).and_return(nil)
+        allow(room).to receive(:dijkstra).and_return(nil)
       end
 
       it 'path_to returns nil instead of raising' do
@@ -558,7 +563,7 @@ RSpec.describe Lich::Common::MapBase do
 
         room.find_nearest_by_tag('shop')
 
-        expect(room).not_to have_received(:dijkstra_hashes)
+        expect(room).not_to have_received(:dijkstra)
       end
     end
 
@@ -568,37 +573,37 @@ RSpec.describe Lich::Common::MapBase do
         test_class.reset_tag_index
       end
 
-      it 'calls dijkstra_hashes on the room itself, so overrides are honoured' do
+      it 'calls dijkstra on the room itself, so overrides are honoured' do
         room = test_class.test_list[0]
-        allow(room).to receive(:dijkstra_hashes).and_return([{}, { 2 => 0.25 }])
+        allow(room).to receive(:dijkstra).and_return([{}, { 2 => 0.25 }])
 
         expect(room.find_nearest_by_tag('shop')).to eq(2)
-        expect(room).to have_received(:dijkstra_hashes)
+        expect(room).to have_received(:dijkstra)
       end
 
       it 'does not dispatch find_nearest_by_tag through the class' do
         room = test_class.test_list[0]
-        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+        allow(test_class).to receive(:dijkstra).and_raise('must not dispatch via the class')
 
         expect { room.find_nearest_by_tag('shop') }.not_to raise_error
       end
 
       it 'does not dispatch find_all_nearest_by_tag through the class' do
         room = test_class.test_list[0]
-        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+        allow(test_class).to receive(:dijkstra).and_raise('must not dispatch via the class')
 
         expect { room.find_all_nearest_by_tag('shop') }.not_to raise_error
       end
 
       it 'does not dispatch find_nearest through the class' do
         room = test_class.test_list[0]
-        allow(test_class).to receive(:dijkstra_hashes).and_raise('must not dispatch via the class')
+        allow(test_class).to receive(:dijkstra).and_raise('must not dispatch via the class')
 
         expect { room.find_nearest([2, 3]) }.not_to raise_error
       end
 
       it 'keeps the class level dispatcher available for external callers' do
-        previous, distances = test_class.dijkstra_hashes(0)
+        previous, distances = test_class.dijkstra(0)
 
         expect(previous).to be_a(Hash)
         expect(distances[2]).to eq(2)
@@ -816,14 +821,14 @@ RSpec.describe Lich::Common::MapBase do
       end
 
       it 'accepts a room instance as the source' do
-        previous, distances = test_class.dijkstra_hashes(test_class.test_list[0])
+        previous, distances = test_class.dijkstra(test_class.test_list[0])
 
         expect(previous).to be_a(Hash)
         expect(distances[1]).to be_within(0.001).of(0.5)
       end
 
       it 'accepts a room id as the source' do
-        _, distances = test_class.dijkstra_hashes(0)
+        _, distances = test_class.dijkstra(0)
 
         expect(distances[1]).to be_within(0.001).of(0.5)
       end
@@ -831,7 +836,7 @@ RSpec.describe Lich::Common::MapBase do
       it 'returns nil for an invalid source room' do
         allow(test_class).to receive(:echo)
 
-        expect(test_class.dijkstra_hashes(999)).to be_nil
+        expect(test_class.dijkstra(999)).to be_nil
       end
     end
 

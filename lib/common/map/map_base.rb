@@ -508,6 +508,9 @@ module Lich
         end
 
         # Class-level dijkstra dispatcher
+        # @param source [Integer, String, Object] room, room id or lookup string
+        # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
+        # @return [Array<Hash>, nil] see Room#dijkstra
         def dijkstra(source, destination = nil)
           if source.is_a?(self)
             source.dijkstra(destination)
@@ -519,17 +522,8 @@ module Lich
           end
         end
 
-        # Class-level dispatcher for the hash-returning variant of #dijkstra
-        def dijkstra_hashes(source, destination = nil)
-          if source.is_a?(self)
-            source.dijkstra_hashes(destination)
-          elsif (room = self[source])
-            room.dijkstra_hashes(destination)
-          else
-            echo 'Map.dijkstra: error: invalid source room'
-            nil
-          end
-        end
+        # Kept so callers written against the transitional name keep working.
+        alias dijkstra_hashes dijkstra
 
         # Tag names present anywhere in the room list, in room id order
         # @return [Array<String>]
@@ -748,30 +742,20 @@ module Lich
           JSON.pretty_generate(mapjson)
         end
 
-        # Run Dijkstra's algorithm from this room
+        # Run Dijkstra's algorithm from this room.
+        #
+        # Returns Hashes keyed by room id. These were Arrays indexed by room id
+        # until 5.20.0: the conversion allocated two Arrays sized by the highest
+        # room id reached, which dominated the cost on a sparse map and gained
+        # nothing, since every caller only ever indexes by room id. Access is
+        # unchanged - previous[id] and distances[id] read the same either way,
+        # and an unreached room still yields nil. #size and #length now count the
+        # rooms actually reached rather than the highest id plus one, and
+        # iteration yields pairs rather than slots.
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
-        # @return [Array, nil] [previous, distances] as Arrays indexed by room id
+        # @return [Array<Hash>, nil] [previous, distances] keyed by room id, or
+        #   nil when the search failed
         def dijkstra(destination = nil)
-          previous_hash, shortest_distances_hash = dijkstra_hashes(destination)
-          return nil if previous_hash.nil?
-
-          # Convert hashes back to arrays for backward compatibility
-          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
-          previous = Array.new(max_room_id + 1)
-          shortest_distances = Array.new(max_room_id + 1)
-
-          previous_hash.each { |key, value| previous[key] = value }
-          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
-
-          [previous, shortest_distances]
-        end
-
-        # Same search as #dijkstra, returning the raw hashes keyed by room id.
-        # Internal callers use this so nothing allocates arrays sized by the
-        # highest room id in the database.
-        # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
-        # @return [Array, nil] [previous_hash, distances_hash], or nil on error
-        def dijkstra_hashes(destination = nil)
           self.class.load unless self.class.loaded?
           source = @id
           visited = {}
@@ -830,14 +814,17 @@ module Lich
           nil
         end
 
+        # Kept so callers written against the transitional name keep working.
+        alias dijkstra_hashes dijkstra
+
         # Find path from this room to destination
         # @param destination [Integer] Target room ID
         # @return [Array<Integer>, nil] Array of room IDs representing rooms to traverse (excluding source, including destination)
         def path_to(destination)
           self.class.load unless self.class.loaded?
           destination = destination.to_i
-          previous, = dijkstra_hashes(destination)
-          # dijkstra_hashes returns nil when the search itself failed.
+          previous, = dijkstra(destination)
+          # dijkstra returns nil when the search itself failed.
           return nil if previous.nil?
           return nil unless previous[destination]
 
@@ -849,7 +836,7 @@ module Lich
             # hash yields nil for a missing predecessor, and a chain that
             # revisits a room is a cycle; either would loop forever. Dijkstra
             # should not produce either, but path_to is a public entry point and
-            # dijkstra_hashes is overridable.
+            # dijkstra is overridable.
             return nil if step.nil? || seen[step]
 
             seen[step] = true
@@ -865,7 +852,7 @@ module Lich
           target_list = self.class.rooms_by_tag(tag_name)
           return @id if target_list.include?(@id)
 
-          _, shortest_distances = dijkstra_hashes(target_list)
+          _, shortest_distances = dijkstra(target_list)
           return nil if shortest_distances.nil?
 
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
@@ -877,7 +864,7 @@ module Lich
         # @return [Array<Integer>] Room IDs sorted by distance
         def find_all_nearest_by_tag(tag_name)
           target_list = self.class.rooms_by_tag(tag_name)
-          _, shortest_distances = dijkstra_hashes
+          _, shortest_distances = dijkstra
           return [] if shortest_distances.nil?
 
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
@@ -892,7 +879,7 @@ module Lich
           if target_list.include?(@id)
             @id
           else
-            _, shortest_distances = dijkstra_hashes(target_list)
+            _, shortest_distances = dijkstra(target_list)
             return nil if shortest_distances.nil?
 
             valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }

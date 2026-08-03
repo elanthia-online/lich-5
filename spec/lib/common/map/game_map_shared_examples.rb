@@ -391,16 +391,37 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(map_class[1].path_to(2)).to eq([2])
     end
 
-    it 'keeps dijkstra returning two Arrays' do
-      expect(map_class[1].dijkstra.map(&:class)).to eq([Array, Array])
+    it 'returns two Hashes keyed by room id' do
+      expect(map_class[1].dijkstra.map(&:class)).to eq([Hash, Hash])
     end
 
-    it 'returns hashes from dijkstra_hashes' do
+    it 'answers to the transitional dijkstra_hashes name as well' do
       expect(map_class[1].dijkstra_hashes.map(&:class)).to eq([Hash, Hash])
     end
 
+    it 'reads the same by room id either way' do
+      previous, distances = map_class[1].dijkstra(2)
+
+      expect(distances[2]).to eq(0.5)
+      expect(previous[2]).to eq(1)
+    end
+
+    it 'yields nil for a room it never reached' do
+      _, distances = map_class[1].dijkstra
+
+      expect(distances[999_999]).to be_nil
+    end
+
+    it 'sizes the result by rooms reached, not by highest id' do
+      # This is the one observable change: the Array form was sized by the
+      # highest id reached, so #size was highest-id-plus-one.
+      _, distances = map_class[1].dijkstra
+
+      expect(distances.size).to eq(2)
+    end
+
     it 'keys the hashes only by rooms it reached' do
-      _, distances = map_class[1].dijkstra_hashes
+      _, distances = map_class[1].dijkstra
 
       expect(distances.keys.sort).to eq([1, 2])
     end

@@ -927,7 +927,7 @@ end
 
 class Room
   class << self
-    # Production calls Room.current.dijkstra_hashes(target_list) with an
+    # Production calls Room.current.dijkstra(target_list) with an
     # argument, and an OpenStruct attribute reader takes none. Define real
     # methods so an example that forgets to stub gets an empty result rather
     # than an ArgumentError.
@@ -936,7 +936,7 @@ class Room
     #   arguments production passes, unlike a bare OpenStruct attribute
     def room_double(id: 1234)
       double = OpenStruct.new(tags: [], id: id)
-      def double.dijkstra(*_args) = [nil, {}]
+      def double.dijkstra(*_args) = [{}, {}]
       def double.dijkstra_hashes(*_args) = [{}, {}]
       double
     end

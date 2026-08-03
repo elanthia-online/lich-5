@@ -283,7 +283,7 @@ module Lich
           Lich::Messaging.msg('plain', "DRCT: You're already here.")
           return start_room
         end
-        _previous, shortest_distances = Room.current.dijkstra_hashes(target_list)
+        _previous, shortest_distances = Room.current.dijkstra(target_list)
         if shortest_distances.nil?
           Lich::Messaging.msg('bold', "DRCT: Pathfinding failed while looking for a '#{target}' tag.")
           return nil
@@ -362,7 +362,7 @@ module Lich
 
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
-        _previous, shortest_distances = Map.dijkstra_hashes(Room.current.id)
+        _previous, shortest_distances = Map.dijkstra(Room.current.id)
         # Pathfinding failed; hand back what was asked for rather than nothing.
         return target_list if shortest_distances.nil?
 
@@ -382,7 +382,7 @@ module Lich
         # Results are keyed by Integer room id, and dijkstra only terminates
         # early when the destination compares as an Integer.
         destination = destination.to_i
-        _previous, shortest_paths = Map.dijkstra_hashes(origin, destination)
+        _previous, shortest_paths = Map.dijkstra(origin, destination)
         return nil if shortest_paths.nil?
 
         shortest_paths[destination]
