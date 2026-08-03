@@ -275,7 +275,9 @@ RSpec.describe Lich::Gemstone::GameInstance do
       alt_string = +"[Test Room] (123)"
 
       result = game_instance.modify_room_display(alt_string)
-      expect(result).to include(" - 1234]") # why 1234?
+      # The lichid comes from Room["u123"], and the spec_helper stand-in maps a
+      # uid lookup to the same number, so 123 is the uid in alt_string above.
+      expect(result).to include(" - 123]")
     end
   end
 end
@@ -479,7 +481,8 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
       XMLData.game = 'GS'
       Lich.display_lichid = true
       Lich.display_roomid_location = 'line' # suppresses DR title injection; must not affect GS
-      expect(gs.modify_room_display(+'[Test Room] (123)')).to include(' - 1234]')
+      # Room["u123"] in the spec_helper stand-in reports 123, the uid above.
+      expect(gs.modify_room_display(+'[Test Room] (123)')).to include(' - 123]')
     end
   end
 end

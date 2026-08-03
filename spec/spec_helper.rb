@@ -906,7 +906,7 @@ module MapLoader
     # @return [Class] Lich::Common::Map for that game
     def use(game)
       require 'common/map/map_base'
-      return ::Lich::Common::Map if @loaded == game
+      return ::Lich::Common::Map if @loaded == game && map_constants_present?
 
       %i[Room Map].each do |const|
         ::Lich::Common.send(:remove_const, const) if ::Lich::Common.const_defined?(const, false)
@@ -918,6 +918,17 @@ module MapLoader
 
     # @return [Symbol, nil] the game currently loaded
     attr_reader :loaded
+
+    private
+
+    # @loaded is only set after a successful load, so a load that raises part
+    # way through leaves it pointing at a game whose constants have already been
+    # removed. Check them before trusting the cache, or the next call for that
+    # game reports an uninitialized constant instead of just reloading.
+    # @return [Boolean]
+    def map_constants_present?
+      %i[Map Room].all? { |const| ::Lich::Common.const_defined?(const, false) }
+    end
   end
 end
 
@@ -951,8 +962,23 @@ class Room
       1234
     end
 
-    def [](_key)
-      room_double
+    # Resolve the key the way production would, so a lookup keeps its identity
+    # instead of always reporting the default. Integer and numeric-string keys
+    # are the room id; a "u1234" key is a uid lookup, and this stand-in maps a
+    # uid to the same number rather than inventing an unrelated id.
+    def [](key)
+      room_double(id: mock_room_id(key))
+    end
+
+    # @param key [Integer, String] room id, numeric string, uid or title
+    # @return [Integer] id the stand-in should report
+    def mock_room_id(key)
+      case key
+      when Integer then key
+      when /\Au(-?\d+)\z/i then Regexp.last_match(1).to_i
+      when /\A-?\d+\z/ then key.to_i
+      else 1234
+      end
     end
   end
 end unless defined?(Room)
@@ -976,7 +1002,7 @@ class Map
     end
 
     def dijkstra(_id, _target = nil)
-      [nil, {}]
+      [{}, {}]
     end
 
     def dijkstra_hashes(_id, _target = nil)
