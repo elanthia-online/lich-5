@@ -71,6 +71,15 @@ RSpec.configure do |config|
     # Room.current memoizes its double, so clear it or one example's room
     # identity leaks into the next.
     Room.current = nil if defined?(Room) && Room.respond_to?(:current=)
+    # The map specs add these XMLData fields themselves, so XMLData.reset does
+    # not know about them and a value assigned in one example survives into the
+    # next. A stale room_window_disabled is the dangerous one: it makes the
+    # matchers skip their description check without failing anything.
+    if defined?(XMLData) && XMLData.respond_to?(:room_window_disabled=)
+      XMLData.room_window_disabled = false
+      XMLData.room_exits_string = nil
+      XMLData.room_count = nil
+    end
     $_SERVERBUFFER_&.clear
     $_CLIENTBUFFER_&.clear
     $_LASTUPSTREAM_ = nil
