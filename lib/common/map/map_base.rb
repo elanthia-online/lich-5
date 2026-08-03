@@ -89,6 +89,11 @@ module Lich
         NON_BANG_MUTATORS
       ).uniq.freeze
 
+      # Array's own writer, used to replace entries without re-entering the
+      # interceptor. Held unbound so nothing is allocated per mutation.
+      ARRAY_WRITER = Array.instance_method(:[]=)
+      private_constant :ARRAY_WRITER
+
       # @param contents [Array, nil] initial tag names
       # @param owner [Class, nil] Map class notified on mutation
       def initialize(contents = nil, owner = nil)
@@ -119,11 +124,10 @@ module Lich
       # interceptor.
       # @return [nil]
       def freeze_contents
-        writer = Array.instance_method(:[]=).bind(self)
         each_with_index do |tag, index|
           next unless tag.is_a?(String) && !tag.frozen?
 
-          writer.call(index, tag.dup.freeze)
+          ARRAY_WRITER.bind_call(self, index, tag.dup.freeze)
         end
         nil
       end
@@ -140,10 +144,15 @@ module Lich
       # Class methods shared across all Map implementations
       module ClassMethods
         # Get the next available room ID
-        # @return [Integer] one past the highest room id in use
+        # @return [Integer] one past the highest room id in use, or 1 when the
+        #   map holds no rooms
         def get_free_id
-          rooms = list
-          rooms.compact.max_by(&:id).id + 1
+          rooms = list.compact
+          # An empty map yields 1, which is what nil.id + 1 produced via Lich's
+          # NilClass patch. Stating it means this no longer depends on that.
+          return 1 if rooms.empty?
+
+          rooms.max_by(&:id).id + 1
         end
 
         # Tag names present anywhere in the room list

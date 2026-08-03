@@ -608,6 +608,17 @@ RSpec.describe DRCT do
       expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
     end
 
+    it 'sorts without raising when the current room has no distance' do
+      # Defensive: dijkstra seeds the source at 0, so this state is not reachable
+      # through Map.dijkstra_hashes. The delete_if keeps the current room
+      # regardless, so the comparator must tolerate a missing distance.
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra_hashes).with(1).and_return([{}, { 7 => 2.0 }])
+
+      expect { DRCT.sort_destinations([1, 7]) }.not_to raise_error
+      expect(DRCT.sort_destinations([1, 7])).to eq([7, 1])
+    end
+
     it 'hands back the requested list when pathfinding fails' do
       allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
       allow(Map).to receive(:dijkstra_hashes).with(1).and_return(nil)

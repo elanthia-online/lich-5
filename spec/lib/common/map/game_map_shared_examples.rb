@@ -438,6 +438,18 @@ RSpec.shared_examples 'a game Map class' do |game|
 
         expect(map_class.get_free_id).to eq(10)
       end
+
+      it 'returns 1 for an empty map rather than raising' do
+        expect(map_class.class_variable_get(:@@list).compact).to be_empty
+
+        expect(map_class.get_free_id).to eq(1)
+      end
+
+      it 'ignores nil holes when finding the highest id' do
+        shared_room(3, title: '[A]', description: 'a')
+
+        expect(map_class.get_free_id).to eq(4)
+      end
     end
 
     describe '.previous_uid' do

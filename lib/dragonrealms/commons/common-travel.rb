@@ -367,7 +367,10 @@ module Lich
         return target_list if shortest_distances.nil?
 
         target_list.delete_if { |room_num| shortest_distances[room_num].nil? && room_num != Room.current.id }
-        target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
+        # The current room is kept above even without a distance, so sort on a
+        # fallback rather than handing nil to the comparator. dijkstra seeds the
+        # source at 0, so this is defensive rather than a live case.
+        target_list.sort_by { |room_num| shortest_distances[room_num] || Float::INFINITY }
       end
 
       def find_sorted_empty_room(search_rooms, idle_room, predicate = nil)

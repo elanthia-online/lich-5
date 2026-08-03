@@ -20,12 +20,6 @@ end
 # =============================================================================
 # map_gs.rb and map_dr.rb both define Lich::Common::Map, so MapLoader.use swaps
 # the loaded class rather than letting the two collide. See spec_helper.
-#
-# A handful of examples below still assert against the source text. Those cover
-# GemStone-only game interaction (peer tag squelching, current_or_new meta tags,
-# get_location's command and responses) that needs DownstreamHook and command
-# round-trip mocking to exercise properly. They are marked and want converting
-# in their own change; everything else here is behavioural.
 RSpec.describe 'GemStone Map implementation' do
   let(:map_class) { MapLoader.use(:gs) }
   let(:room) do
