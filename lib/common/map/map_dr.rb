@@ -78,6 +78,25 @@ module Lich
 
       # Class method accessors
       class << self
+        # Accessors for the room-navigation state, matching GemStone, so the
+        # shared MapBase implementations can reach it without touching class
+        # variables directly.
+        def current_room_id
+          @@current_room_id
+        end
+
+        def current_room_id=(id)
+          @@current_room_id = id
+        end
+
+        def previous_room_id
+          @@previous_room_id
+        end
+
+        def previous_room_id=(id)
+          @@previous_room_id = id
+        end
+
         def loaded?
           @@loaded
         end
@@ -114,17 +133,8 @@ module Lich
         @@list.find { |r| r&.genie_zone == zone_id.to_s && r&.genie_id == node_id.to_s }
       end
 
-      def self.get_free_id
-        self.load unless @@loaded
-        @@list.compact.max_by(&:id).id + 1
-      end
-
       def self.previous
         @@list[@@previous_room_id]
-      end
-
-      def self.previous_uid
-        XMLData.previous_nav_rm
       end
 
       def self.current
@@ -141,22 +151,6 @@ module Lich
           return set_current(id)
         end
         match_no_uid
-      end
-
-      def self.match_no_uid
-        if (script = Script.current)
-          set_current(match_current(script))
-        else
-          set_fuzzy(match_fuzzy)
-        end
-      end
-
-      def self.set_fuzzy(id)
-        @@previous_room_id = @@current_room_id if !id.nil? && id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
       end
 
       # Pattern identifying a room whose disambiguation depends on a manual
@@ -365,21 +359,6 @@ module Lich
         set_current(id)
       end
 
-      def self.set_current(id)
-        @@previous_room_id = @@current_room_id if id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
-      end
-
-      def self.match_multi_ids(ids)
-        matches = ids.find_all { |s| @@list[@@current_room_id].wayto.keys.include?(s.to_s) }
-        return matches[0] if matches.size == 1
-
-        nil
-      end
-
       def self.load_uids
         self.load unless @@loaded
         @@uids.clear
@@ -392,11 +371,6 @@ module Lich
             end
           end
         end
-      end
-
-      def self.tags
-        self.load unless @@loaded
-        tag_names
       end
 
       def self.ids_from_uid(n)
@@ -470,13 +444,6 @@ module Lich
     end
 
     class Room < Map
-      def self.method_missing(*args)
-        super
-      end
-
-      def self.respond_to_missing?(*args)
-        super
-      end
     end
   end
 end

@@ -130,11 +130,6 @@ module Lich
         @@fuzzy_room_id
       end
 
-      def self.get_free_id
-        self.load unless @@loaded
-        @@list.compact.max_by(&:id).id + 1
-      end
-
       # GS-specific: Get location using in-game 'location' command
       def self.get_location
         unless XMLData.room_count == @@current_location_count
@@ -166,10 +161,6 @@ module Lich
         @@list[@@previous_room_id]
       end
 
-      def self.previous_uid
-        XMLData.previous_nav_rm
-      end
-
       def self.current
         self.load unless @@loaded
         if Script.current
@@ -185,37 +176,6 @@ module Lich
           return set_current(id)
         end
         match_no_uid
-      end
-
-      def self.set_current(id)
-        @@previous_room_id = @@current_room_id if id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
-      end
-
-      def self.set_fuzzy(id)
-        @@previous_room_id = @@current_room_id if !id.nil? && id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
-      end
-
-      def self.match_multi_ids(ids)
-        matches = ids.find_all { |s| @@list[@@current_room_id].wayto.keys.include?(s.to_s) }
-        return matches[0] if matches.size == 1
-
-        nil
-      end
-
-      def self.match_no_uid
-        if (script = Script.current)
-          set_current(match_current(script))
-        else
-          set_fuzzy(match_fuzzy)
-        end
       end
 
       # GS-specific: match_current with peer tag checking
@@ -492,11 +452,6 @@ module Lich
         @@images.dup
       end
 
-      def self.tags
-        self.load unless @@loaded
-        tag_names
-      end
-
       def self.uids_clear
         @@uids.clear
       end
@@ -584,13 +539,6 @@ module Lich
     end
 
     class Room < Map
-      def self.method_missing(*args)
-        super
-      end
-
-      def self.respond_to_missing?(*args)
-        super
-      end
     end
   end
 end

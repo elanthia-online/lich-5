@@ -140,9 +140,65 @@ module Lich
       # Class methods shared across all Map implementations
       module ClassMethods
         # Get the next available room ID
+        # @return [Integer] one past the highest room id in use
         def get_free_id
-          self.load unless loaded?
-          list.compact.max_by(&:id).id + 1
+          rooms = list
+          rooms.compact.max_by(&:id).id + 1
+        end
+
+        # Tag names present anywhere in the room list
+        # @return [Array<String>]
+        def tags
+          tag_names
+        end
+
+        # The uid the game last navigated away from
+        # @return [Integer, nil]
+        def previous_uid
+          XMLData.previous_nav_rm
+        end
+
+        # Resolve the current room when the game gave no usable uid. Delegates to
+        # the game-specific matchers.
+        # @return [Object, nil] the resolved room
+        def match_no_uid
+          if (script = Script.current)
+            set_current(match_current(script))
+          else
+            set_fuzzy(match_fuzzy)
+          end
+        end
+
+        # Narrow a set of candidate ids to the one reachable from the current room
+        # @param ids [Array] candidate room ids
+        # @return [Object, nil] the single reachable id, or nil if not exactly one
+        def match_multi_ids(ids)
+          matches = ids.find_all { |s| list[current_room_id].wayto.keys.include?(s.to_s) }
+          return matches[0] if matches.size == 1
+
+          nil
+        end
+
+        # Record the room the game moved to, remembering the one it left
+        # @param id [Integer, nil] the new current room id
+        # @return [Object, nil] the room, or nil when given nil
+        def set_current(id)
+          self.previous_room_id = current_room_id if id != current_room_id
+          self.current_room_id = id
+          return nil if id.nil?
+
+          list[id]
+        end
+
+        # As #set_current, but a nil id leaves the previous room untouched
+        # @param id [Integer, nil] the fuzzily matched room id
+        # @return [Object, nil] the room, or nil when given nil
+        def set_fuzzy(id)
+          self.previous_room_id = current_room_id if !id.nil? && id != current_room_id
+          self.current_room_id = id
+          return nil if id.nil?
+
+          list[id]
         end
 
         # Estimate total travel time for a path

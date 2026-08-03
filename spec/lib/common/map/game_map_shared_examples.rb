@@ -358,7 +358,9 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     %i[save_json estimate_time rooms_by_tag tag_names reset_tag_index
-       normalize_tag_lists legacy_map_files report_unsupported_map_files].each do |method|
+       normalize_tag_lists legacy_map_files report_unsupported_map_files
+       get_free_id tags previous_uid match_no_uid match_multi_ids
+       set_current set_fuzzy].each do |method|
       it "takes .#{method} from MapBase" do
         expect(map_class.method(method).owner).to eq(Lich::Common::MapBase::ClassMethods)
       end
@@ -366,6 +368,16 @@ RSpec.shared_examples 'a game Map class' do |game|
 
     it 'aliases save to save_json' do
       expect(map_class.method(:save)).to eq(map_class.method(:save_json))
+    end
+
+    it 'exposes the room-navigation accessors the shared code needs' do
+      %i[current_room_id current_room_id= previous_room_id previous_room_id=].each do |accessor|
+        expect(map_class).to respond_to(accessor)
+      end
+    end
+
+    it 'leaves the Room shim as a plain subclass' do
+      expect(Lich::Common::Room.singleton_methods(false)).to be_empty
     end
 
     it 'no longer responds to the removed legacy loaders' do
