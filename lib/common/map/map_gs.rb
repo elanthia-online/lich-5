@@ -54,7 +54,10 @@ module Lich
         @check_location = check_location
         @unique_loot = unique_loot
         @@list[@id] = self
-        self.class.reset_tag_index
+        # Skipped during a bulk load: @@loaded is false throughout, load_json
+        # clears the cache when it finishes, and any tag query while unloaded
+        # goes through #list, which loads first. Saves one mutex per room.
+        self.class.reset_tag_index if @@loaded
       end
 
       # Class method accessors required by MapBase
@@ -508,11 +511,6 @@ module Lich
           room['wayto'], room['timeto'], room['image'], room['image_coords'],
           room['tags'], room['check_location'], room['unique_loot']
         )
-      end
-
-      # @return [String] announced once a database has loaded
-      def self.map_loaded_message(filename)
-        "--- #{Script.current.name} Map loaded #{filename}"
       end
     end
 

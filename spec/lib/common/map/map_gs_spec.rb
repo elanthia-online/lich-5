@@ -34,6 +34,10 @@ RSpec.describe 'GemStone Map implementation' do
     # only pass when an earlier one happens to have left @@loaded true.
     map_class.class_variable_set(:@@loaded, true)
     map_class.class_variable_get(:@@list).clear
+    # get_location memoises, so clear it or an example inherits a cached
+    # location and skips the lookup path entirely.
+    map_class.class_variable_set(:@@current_location, nil)
+    map_class.class_variable_set(:@@current_location_count, nil)
     map_class.clear_tags_cache
   end
 

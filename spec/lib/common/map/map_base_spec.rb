@@ -1222,6 +1222,32 @@ RSpec.describe Lich::Common::TagList do
     end
   end
 
+  describe 'blockless mutators' do
+    let(:owner) { double('MapClass') }
+
+    before { allow(owner).to receive(:reset_tag_index) }
+
+    it 'returns an Enumerator without mutating yet' do
+      list = described_class.new([+'a', +'b'], owner)
+
+      expect(list.delete_if).to be_a(Enumerator)
+      expect(list.to_a).to eq(%w[a b])
+    end
+
+    it 'notifies the owner eagerly, before the enumerator is driven' do
+      described_class.new([+'a'], owner).delete_if
+
+      expect(owner).to have_received(:reset_tag_index)
+    end
+
+    it 'mutates once the enumerator is driven, which is why notifying early is safe' do
+      list = described_class.new([+'a', +'b'], owner)
+      list.delete_if.each { |v| v.start_with?('a') }
+
+      expect(list.to_a).to eq(['b'])
+    end
+  end
+
   describe 'stored tag names' do
     let(:owner) { double('MapClass', reset_tag_index: nil) }
 

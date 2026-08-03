@@ -57,7 +57,10 @@ module Lich
         @genie_zone = genie_zone
         @genie_pos = genie_pos
         @@list[@id] = self
-        self.class.reset_tag_index
+        # Skipped during a bulk load: @@loaded is false throughout, load_json
+        # clears the cache when it finishes, and any tag query while unloaded
+        # goes through #list, which loads first. Saves one mutex per room.
+        self.class.reset_tag_index if @@loaded
       end
 
       def to_s
@@ -407,11 +410,6 @@ module Lich
           nil, # _room_objects
           room['genie_id'], room['genie_zone'], room['genie_pos']
         )
-      end
-
-      # @return [String] announced once a database has loaded
-      def self.map_loaded_message(filename)
-        "--- Map loaded #{filename}"
       end
     end
 

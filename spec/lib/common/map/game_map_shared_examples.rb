@@ -87,7 +87,10 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     it 'returns nil for an unknown uid rather than room 0' do
-      # nil.to_i is 0, so the uid branch used to hand back whatever sat at index 0.
+      # nil.to_i is 0, so the uid branch used to hand back whatever sat at index
+      # 0. Room 0 has to exist for that to be observable.
+      shared_room(0, title: '[Zero]', description: 'zeroth')
+
       expect(map_class['u999999']).to be_nil
     end
 
@@ -432,7 +435,7 @@ RSpec.shared_examples 'a game Map class' do |game|
        normalize_tag_lists legacy_map_files report_unsupported_map_files
        get_free_id tags previous_uid match_no_uid match_multi_ids
        set_current set_fuzzy load_json parse_map_json json_map_files
-       validate_room_json!].each do |method|
+       validate_room_json! map_loaded_message].each do |method|
       it "takes .#{method} from MapBase" do
         expect(map_class.method(method).owner).to eq(Lich::Common::MapBase::ClassMethods)
       end
@@ -467,7 +470,7 @@ RSpec.shared_examples 'a game Map class' do |game|
     end
 
     %i[loaded? list raw_list uids clear_tags_cache mark_loaded synchronize_load
-       room_from_json map_loaded_message].each do |method|
+       room_from_json].each do |method|
       it "the game class responds to .#{method}" do
         expect(map_class).to respond_to(method)
       end
@@ -670,6 +673,30 @@ RSpec.shared_examples 'a game Map class' do |game|
         expect(map_class.load).to be true
       end
 
+      it 'names the script that triggered the load' do
+        allow(Script).to receive(:current).and_return(double('Script', name: 'go2'))
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/go2 Map loaded/)
+      end
+
+      it 'omits the name when no script is running' do
+        allow(Script).to receive(:current).and_return(nil)
+        write_map([json_room(1)])
+        map_class.load
+
+        expect(map_class).to have_received(:respond).with(/^--- Map loaded/)
+      end
+
+      it 'loads with no script running' do
+        allow(Script).to receive(:current).and_return(nil)
+        write_map([json_room(1)])
+
+        expect { map_class.load }.not_to raise_error
+        expect(map_class[1].id).to eq(1)
+      end
+
       it 'marks the map loaded' do
         write_map([json_room(1)])
         map_class.load
@@ -730,10 +757,10 @@ RSpec.shared_examples 'a game Map class' do |game|
       end
 
       it 'leaves no rooms behind from the file it abandoned' do
-        # Parses, registers room 500, then fails on the next entry: wayto is a
-        # String, so .keys raises after the nil defaults have been applied.
-        # A truncated file would fail before registering anything and so would
-        # not exercise the partial cleanup.
+        # Parses, registers room 500, then fails on room 501: wayto is a String,
+        # so .keys raises after the defaults have been applied. Failing mid-file
+        # is the point; a truncated file would fail before anything was
+        # registered and so would not exercise the partial cleanup.
         File.write(File.join(map_dir, 'map-2.json'),
                    "[#{JSON.dump(json_room(500))}, #{JSON.dump('id' => 501, 'wayto' => 'not a hash')}]")
         write_map([json_room(1)])
@@ -762,50 +789,52 @@ RSpec.shared_examples 'a game Map class' do |game|
         expect(map_class[1].timeto).to eq({})
       end
 
-      it 'rejects a database whose room has no paths' do
-        File.write(File.join(map_dir, 'map-2.json'),
-                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'description' => ['d'] }]))
-        write_map([json_room(1)])
+      # The shipped mapdb has rooms with no description or paths, such as the
+      # fog transitions, so these must load rather than being rejected.
+      it 'loads a room with no description' do
+        File.write(File.join(map_dir, 'map-1.json'),
+                   JSON.dump([{ 'id' => 12_099, 'title' => ['[Lost in an Ethereal Fog]'],
+                                'wayto' => { '24029' => 'east' }, 'timeto' => { '24029' => 120 },
+                                'tags' => ['no-auto-map'], 'uid' => [4_562_100] }]))
 
         expect(map_class.load).to be true
-        expect(map_class[5]).to be_nil
+        expect(map_class[12_099].description).to eq([])
       end
 
-      it 'rejects a database whose room has no title' do
-        File.write(File.join(map_dir, 'map-2.json'),
-                   JSON.dump([{ 'id' => 5, 'description' => ['d'], 'paths' => ['Obvious paths: north'] }]))
-        write_map([json_room(1)])
+      it 'loads a room with no paths' do
+        File.write(File.join(map_dir, 'map-1.json'),
+                   JSON.dump([{ 'id' => 12_099, 'title' => ['[Lost in an Ethereal Fog]'] }]))
 
         expect(map_class.load).to be true
-        expect(map_class[5]).to be_nil
+        expect(map_class[12_099].paths).to eq([])
       end
 
-      it 'rejects a database whose room has no description' do
-        File.write(File.join(map_dir, 'map-2.json'),
-                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'paths' => ['Obvious paths: north'] }]))
-        write_map([json_room(1)])
+      it 'keeps such a room usable' do
+        File.write(File.join(map_dir, 'map-1.json'),
+                   JSON.dump([{ 'id' => 12_099, 'title' => ['[Lost in an Ethereal Fog]'],
+                                'uid' => [4_562_100] }]))
+        map_class.load
 
-        expect(map_class.load).to be true
-        expect(map_class[5]).to be_nil
+        expect(map_class['u4562100'].id).to eq(12_099)
+        expect(map_class[12_099].outside?).to be false
       end
 
       it 'rejects a database whose room id is not an Integer' do
         File.write(File.join(map_dir, 'map-2.json'),
-                   JSON.dump([{ 'id' => 'five', 'title' => ['[R5]'], 'description' => ['d'],
-                                'paths' => ['Obvious paths: north'] }]))
+                   JSON.dump([{ 'id' => 'five', 'title' => ['[R5]'] }]))
         write_map([json_room(1)])
 
         expect(map_class.load).to be true
         expect(map_class[1].id).to eq(1)
       end
 
-      it 'names the field that was missing' do
+      it 'names the id it could not use' do
         File.write(File.join(map_dir, 'map-2.json'),
-                   JSON.dump([{ 'id' => 5, 'title' => ['[R5]'], 'description' => ['d'] }]))
+                   JSON.dump([{ 'id' => 'five', 'title' => ['[R5]'] }]))
         write_map([json_room(1)])
         map_class.load
 
-        expect(map_class).to have_received(:respond).with(/room 5 has no paths/)
+        expect(map_class).to have_received(:respond).with(/room id is not an Integer/)
       end
 
       it 'returns false when every candidate is malformed' do

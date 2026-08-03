@@ -105,6 +105,10 @@ module Lich
         @owner = owner
       end
 
+      # Invalidation is eager, including for a blockless call that returns an
+      # Enumerator without mutating yet. That is deliberate: driving such an
+      # enumerator later does mutate, so deferring would leave the index stale.
+      # An extra rebuild is cheap; a missed one is not.
       MUTATORS.each do |name|
         define_method(name) do |*args, &block|
           result = super(*args, &block)
@@ -348,6 +352,10 @@ module Lich
             JSON.parse(f.read).each do |room|
               validate_room_json!(room, filename)
               # Defaulted before the loops below read .keys on them.
+              # Every field except the id is optional in a real mapdb.
+              room['title'] ||= []
+              room['description'] ||= []
+              room['paths'] ||= []
               room['wayto'] ||= {}
               room['timeto'] ||= {}
               room['tags'] ||= []
@@ -375,24 +383,31 @@ module Lich
           false
         end
 
-        # Fields a room needs to be usable. A database missing any of them loads
-        # without complaint and then fails later at lookup or matching time, so
-        # reject the file and let the caller fall back to an older one. tags, uid,
-        # wayto and timeto are genuinely optional and are defaulted instead.
+        # Announced once a database has loaded. Names the script that triggered
+        # the load when there is one; a load can also happen with no script
+        # running, and nil.name only survived via Lich's NilClass patch.
+        # @param filename [String] database that was loaded
+        # @return [String]
+        def map_loaded_message(filename)
+          name = Script.current&.name
+          name ? "--- #{name} Map loaded #{filename}" : "--- Map loaded #{filename}"
+        end
+
+        # The id is the only field a room cannot do without: it indexes the room
+        # into the backing array, and a non-Integer would raise there with a
+        # message that says nothing about the database. Everything else is
+        # optional and defaulted in #parse_map_json - the shipped mapdb has rooms
+        # with no description or paths, such as the fog transitions, so requiring
+        # those fields would reject a valid database outright.
         # @param room [Hash] one parsed room
         # @param filename [String] database being read, for the message
-        # @raise [RuntimeError] when a required field is missing or the wrong type
+        # @raise [RuntimeError] when the id is missing or not an Integer
         # @return [nil]
         def validate_room_json!(room, filename)
           id = room['id']
-          raise "#{File.basename(filename)}: room id is not an Integer: #{id.inspect}" unless id.is_a?(Integer)
+          return nil if id.is_a?(Integer)
 
-          %w[title description paths].each do |field|
-            next if room[field].is_a?(Array)
-
-            raise "#{File.basename(filename)}: room #{id} has no #{field}"
-          end
-          nil
+          raise "#{File.basename(filename)}: room id is not an Integer: #{id.inspect}"
         end
 
         # JSON map databases in the data directory, newest first
