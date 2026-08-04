@@ -635,6 +635,83 @@ RSpec.shared_examples 'a game Map class' do |game|
       end
     end
 
+    # These paths used to lean on Lich's NilClass patch, which the spec
+    # environment does not load, so they raised here and behaved differently in
+    # production. They now say what they mean.
+    describe 'missing rooms on the negative paths' do
+      it 'match_multi_ids returns nil when the current room id is stale' do
+        shared_room(1, title: '[A]', description: 'a')
+        map_class.current_room_id = 9999
+
+        expect(map_class.match_multi_ids([1])).to be_nil
+      end
+
+      it 'match_multi_ids returns nil when the current room id is nil' do
+        shared_room(1, title: '[A]', description: 'a')
+        map_class.current_room_id = nil
+
+        expect(map_class.match_multi_ids([1])).to be_nil
+      end
+
+      it 'estimate_time applies the default for a room that is gone' do
+        shared_room(1, title: '[A]', description: 'a')
+
+        # 0.2 per hop is the historical default when no timeto is found.
+        expect(map_class.estimate_time([1, 7777, 1])).to be_within(0.001).of(0.4)
+      end
+
+      it 'estimate_time does not raise on a path naming a missing room' do
+        shared_room(1, title: '[A]', description: 'a')
+
+        expect { map_class.estimate_time([1, 7777]) }.not_to raise_error
+      end
+
+      it 'dijkstra skips a dangling wayto edge rather than losing the search' do
+        room = shared_room(1, title: '[A]', description: 'a')
+        room.wayto['4242'] = 'go'
+        room.timeto['4242'] = 0.5
+
+        previous, distances = map_class[1].dijkstra
+
+        expect(previous).to be_a(Hash)
+        expect(distances[1]).to eq(0)
+      end
+
+      it 'dijkstra still reaches the rooms that do exist alongside a dangling edge' do
+        first = shared_room(1, title: '[A]', description: 'a')
+        shared_room(2, title: '[B]', description: 'b')
+        first.wayto['2'] = 'north'
+        first.timeto['2'] = 0.5
+        first.wayto['4242'] = 'go'
+        first.timeto['4242'] = 0.5
+
+        _, distances = map_class[1].dijkstra
+
+        expect(distances[2]).to eq(0.5)
+        # The dangling id still gets a distance, because the weight comes from
+        # the source room's timeto; it is only skipped when it cannot be
+        # dereferenced to continue the search.
+        expect(distances[4242]).to eq(0.5)
+      end
+
+      it 'save_json succeeds on an empty map' do
+        path = File.join(map_dir, 'saved.json')
+        FileUtils.mkdir_p(map_dir)
+
+        expect { map_class.save_json(path) }.not_to raise_error
+      end
+
+      it 'save_json does not reload when the map is empty' do
+        path = File.join(map_dir, 'saved.json')
+        FileUtils.mkdir_p(map_dir)
+        allow(map_class).to receive(:reload)
+
+        map_class.save_json(path)
+
+        expect(map_class).not_to have_received(:reload)
+      end
+    end
+
     describe '.match_multi_ids' do
       before do
         shared_room(1, title: '[A]', description: 'a')

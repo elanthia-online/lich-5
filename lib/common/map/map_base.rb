@@ -193,7 +193,16 @@ module Lich
         # @return [Integer, nil] the single reachable id, or nil unless exactly
         #   one candidate is reachable from the current room
         def match_multi_ids(ids)
-          matches = ids.find_all { |s| list[current_room_id].wayto.keys.include?(s.to_s) }
+          # current_room_id can be nil, stale, or point at a hole. Under Lich's
+          # NilClass patch a nil id made Array#[] hand back the whole room list
+          # and the subsequent .wayto then yielded nil, so the result was no
+          # matches either way. Check before indexing rather than relying on it.
+          return nil if current_room_id.nil?
+
+          current = list[current_room_id]
+          return nil if current.nil?
+
+          matches = ids.find_all { |s| current.wayto.keys.include?(s.to_s) }
           return matches[0] if matches.size == 1
 
           nil
@@ -233,7 +242,11 @@ module Lich
           time = 0.0
           until array.length < 2
             room = array.shift
-            t = self[room].timeto[array.first.to_s]
+            # A path can name a room that is gone. Under the NilClass patch the
+            # lookup yielded nil and the 0.2 default below applied; keep that
+            # without relying on the patch.
+            current = self[room]
+            t = current.nil? ? nil : current.timeto[array.first.to_s]
             if t
               time += t.is_a?(StringProc) ? t.call.to_f : t.to_f
             else
@@ -626,8 +639,11 @@ module Lich
           end
           File.open(filename, 'wb:UTF-8') { |file| file.write(to_json) }
           respond "#{filename} saved"
-          # Reload if map index appears corrupted
-          reload if self[-1].id != self[self[-1].id].id
+          # Reload if the map index appears corrupted: the last entry's id should
+          # index back to itself. Nothing to check when the map holds no rooms,
+          # where self[-1] is nil and only the NilClass patch made this pass.
+          last = list.compact.last
+          reload if !last.nil? && self[last.id]&.id != last.id
         end
 
         alias_method :save, :save_json
@@ -785,14 +801,20 @@ module Lich
 
             visited[v] = true
 
-            self.class.list[v].wayto.keys.each do |adj_room|
+            # A wayto edge can name a room that is gone. Under the NilClass
+            # patch the enumeration was simply skipped; without it the raise
+            # would be rescued below and lose the whole search.
+            room = self.class.list[v]
+            next if room.nil?
+
+            room.wayto.keys.each do |adj_room|
               adj_room_i = adj_room.to_i
               next if visited[adj_room_i]
 
-              edge_weight = if self.class.list[v].timeto[adj_room].is_a?(StringProc)
-                              self.class.list[v].timeto[adj_room].call
+              edge_weight = if room.timeto[adj_room].is_a?(StringProc)
+                              room.timeto[adj_room].call
                             else
-                              self.class.list[v].timeto[adj_room]
+                              room.timeto[adj_room]
                             end
 
               next unless edge_weight

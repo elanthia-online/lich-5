@@ -181,13 +181,15 @@ module Lich
         return false if target_room.nil?
 
         room_num = target_room.to_i
-        return true if room_num == Room.current.id
+        # Room.current is nil when the room could not be resolved. Under Lich's
+        # NilClass patch nil.id yielded nil, so the comparison simply failed.
+        return true if room_num == Room.current&.id
 
         DRC.fix_standing
 
-        if Room.current.id.nil?
+        if Room.current&.id.nil?
           Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}")
-          rooms = Map.list.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
+          rooms = Map.list.compact.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
           if rooms.empty? || rooms.length > 1
             Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
             return false
