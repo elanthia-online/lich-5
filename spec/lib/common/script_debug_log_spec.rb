@@ -145,13 +145,13 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       expect(contents_of(script)).to match(/XML \s+<pushBold\/>a kobold<popBold\/>/)
     end
 
-    it 'records stripped downstream lines' do
+    it 'does not log stripped downstream lines, which the XML channel already carries' do
       script = build_script('bigshot')
       script.debug_log = true
 
       Lich::Common::Script.new_downstream('You see a kobold.')
 
-      expect(contents_of(script)).to match(/GAME\s+You see a kobold\./)
+      expect(contents_of(script)).not_to include('You see a kobold.')
     end
 
     it 'records client input typed while the script runs' do
@@ -176,7 +176,7 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       script = build_script('bigshot')
       script.debug_log = true
 
-      Lich::Common::Script.new_downstream('You see a kobold.')
+      Lich::Common::Script.new_downstream_xml('You see a kobold.')
 
       expect(contents_of(script)).to match(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /)
     end
@@ -186,9 +186,9 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       script.debug_log = true
       before_lines = contents_of(script).lines.length
 
-      described_class.broadcast(:downstream, nil)
-      described_class.broadcast(:downstream, '')
-      described_class.broadcast(:downstream, "\r\n")
+      described_class.broadcast(:downstream_xml, nil)
+      described_class.broadcast(:downstream_xml, '')
+      described_class.broadcast(:downstream_xml, "\r\n")
 
       expect(contents_of(script).lines.length).to eq(before_lines)
     end
@@ -284,7 +284,7 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
 
       bigshot.debug_log = true
       eloot.debug_log = true
-      Lich::Common::Script.new_downstream('You see a kobold.')
+      Lich::Common::Script.new_downstream_xml('You see a kobold.')
 
       expect(bigshot.debug_log_path).not_to eq(eloot.debug_log_path)
       expect(contents_of(bigshot)).to include('You see a kobold.')
@@ -298,7 +298,7 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       eloot.debug_log = true
 
       eloot.debug_log = false
-      Lich::Common::Script.new_downstream('You see a rolton.')
+      Lich::Common::Script.new_downstream_xml('You see a rolton.')
 
       expect(bigshot.debug_log?).to be true
       expect(contents_of(bigshot)).to include('You see a rolton.')
@@ -413,7 +413,7 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       writer = described_class.for(script)
       writer.instance_variable_get(:@io).close
 
-      expect { Lich::Common::Script.new_downstream('You see a kobold.') }.not_to raise_error
+      expect { Lich::Common::Script.new_downstream_xml('You see a kobold.') }.not_to raise_error
       expect(writer.open?).to be false
     end
   end

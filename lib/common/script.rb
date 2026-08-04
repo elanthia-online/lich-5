@@ -1383,7 +1383,6 @@ module Lich
       end
 
       def Script.new_downstream(line)
-        ScriptDebugLog.broadcast(:downstream, line) if ScriptDebugLog.active?
         __running_snapshot.each { |script|
           script.downstream_buffer.push(line.chomp) if script.want_downstream
           unless script.watchfor.empty?
@@ -2754,7 +2753,7 @@ module Lich
       # flushes and closes the file. Idempotent in both directions.
       #
       # @param enabled [Boolean] true to open a log, false to close it
-      # @return [Boolean] the value assigned
+      # @return [Object] the value assigned (Ruby setter semantics)
       # @see #debug_msg
       def debug_log=(enabled)
         if enabled
@@ -2762,7 +2761,6 @@ module Lich
         else
           ScriptDebugLog.close_for(self)
         end
-        enabled ? true : false
       end
 
       # Whether this script currently has a debug log open.

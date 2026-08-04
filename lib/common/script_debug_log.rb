@@ -9,11 +9,15 @@ module Lich
     #
     # Scripts opt in with +Script.current.debug_log = true+ and push their own
     # breadcrumbs with +Script.current.debug_msg("...")+. While a log is open the
-    # script's file also receives the four data channels Script already fans out
-    # (see {Script.new_downstream_xml}, {Script.new_downstream},
-    # {Script.new_upstream} and {Script.new_script_output}), so a script no longer
-    # needs to register its own Up/DownstreamHooks or run capture threads to get
-    # a transcript.
+    # script's file also receives the data channels Script already fans out (see
+    # {Script.new_downstream_xml}, {Script.new_upstream} and
+    # {Script.new_script_output}), so a script no longer needs to register its own
+    # Up/DownstreamHooks or run capture threads to get a transcript.
+    #
+    # The stripped downstream stream ({Script.new_downstream}) is deliberately not
+    # captured: it is derived from the same server payload the raw XML channel
+    # already records, so logging both would put every game line in the file
+    # twice.
     #
     # Files land at:
     #   LOG_DIR/debug/<game>-<character>/<script>/<YYYYmmdd-HHMMSS>.log
@@ -35,7 +39,6 @@ module Lich
       # line up. MSG is a script's own debug_msg output.
       CHANNELS = {
         :downstream_xml => 'XML ',
-        :downstream     => 'GAME',
         :upstream       => 'YOU ',
         :script_output  => 'OUT ',
         :message        => 'MSG '
@@ -50,7 +53,7 @@ module Lich
       # Per-run files kept per script directory, unless overridden via
       # ScriptDebugLog.retained_runs=. Script-level retention only; Lich's own
       # debug log retention is a separate concern and is not consulted.
-      DEFAULT_RETAINED_RUNS = 20
+      DEFAULT_RETAINED_RUNS = 50
 
       # Keyed by identity: the registry is scoped to specific live Script
       # objects, and compare_by_identity says so without hashing object_ids.
