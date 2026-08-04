@@ -68,6 +68,18 @@ RSpec.configure do |config|
     # Core game state
     XMLData.reset if defined?(XMLData) && XMLData.respond_to?(:reset)
     Script.current = nil if defined?(Script)
+    # Room.current memoizes its double, so clear it or one example's room
+    # identity leaks into the next.
+    Room.current = nil if defined?(Room) && Room.respond_to?(:current=)
+    # The map specs add these XMLData fields themselves, so XMLData.reset does
+    # not know about them and a value assigned in one example survives into the
+    # next. A stale room_window_disabled is the dangerous one: it makes the
+    # matchers skip their description check without failing anything.
+    if defined?(XMLData) && XMLData.respond_to?(:room_window_disabled=)
+      XMLData.room_window_disabled = false
+      XMLData.room_exits_string = nil
+      XMLData.room_count = nil
+    end
     $_SERVERBUFFER_&.clear
     $_CLIENTBUFFER_&.clear
     $_LASTUPSTREAM_ = nil
@@ -874,24 +886,99 @@ end
 # end
 
 # =============================================================================
+# =============================================================================
+# Game Map class loader
+# =============================================================================
+# map_gs.rb and map_dr.rb both define Lich::Common::Map. Requiring both in one
+# process reopens the same class, so whichever loads last owns every method they
+# both define, including #initialize. That would leave each game's specs at the
+# mercy of the order RSpec happens to load spec files in.
+#
+# Map specs call MapLoader.use to get the class they need. Swapping costs about
+# 2 ms and only happens when the other game is currently loaded, so calling this
+# from a plain before hook is cheap. The map files are required lazily so specs
+# that never touch the map are unaffected.
+module MapLoader
+  MAP_DIR = File.expand_path('../lib/common/map', __dir__)
+
+  class << self
+    # @param game [Symbol] :gs or :dr
+    # @return [Class] Lich::Common::Map for that game
+    def use(game)
+      require 'common/map/map_base'
+      return ::Lich::Common::Map if @loaded == game && map_constants_present?
+
+      %i[Room Map].each do |const|
+        ::Lich::Common.send(:remove_const, const) if ::Lich::Common.const_defined?(const, false)
+      end
+      Kernel.load File.join(MAP_DIR, "map_#{game}.rb")
+      @loaded = game
+      ::Lich::Common::Map
+    end
+
+    # @return [Symbol, nil] the game currently loaded
+    attr_reader :loaded
+
+    private
+
+    # @loaded is only set after a successful load, so a load that raises part
+    # way through leaves it pointing at a game whose constants have already been
+    # removed. Check them before trusting the cache, or the next call for that
+    # game reports an uninitialized constant instead of just reloading.
+    # @return [Boolean]
+    def map_constants_present?
+      %i[Map Room].all? { |const| ::Lich::Common.const_defined?(const, false) }
+    end
+  end
+end
+
 # Room and Map Mocks
 # =============================================================================
 # Navigation infrastructure. Provides minimal implementation for testing.
 
 class Room
   class << self
+    # Production calls Room.current.dijkstra(target_list) with an
+    # argument, and an OpenStruct attribute reader takes none. Define real
+    # methods so an example that forgets to stub gets an empty result rather
+    # than an ArgumentError.
+    # @param id [Integer] room id the double should report
+    # @return [OpenStruct] a Room stand-in whose pathfinding methods accept the
+    #   arguments production passes, unlike a bare OpenStruct attribute
+    def room_double(id: 1234)
+      double = OpenStruct.new(tags: [], id: id)
+      def double.dijkstra(*_args) = [{}, {}]
+      def double.dijkstra_hashes(*_args) = [{}, {}]
+      double
+    end
+
     attr_writer :current
 
     def current
-      @current ||= OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+      @current ||= room_double
     end
 
     def id
       1234
     end
 
-    def [](_key)
-      OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+    # Resolve the key the way production would, so a lookup keeps its identity
+    # instead of always reporting the default. Integer and numeric-string keys
+    # are the room id; a "u1234" key is a uid lookup, and this stand-in maps a
+    # uid to the same number rather than inventing an unrelated id.
+    def [](key)
+      room_double(id: mock_room_id(key))
+    end
+
+    # @param key [Integer, String] room id, numeric string, uid or title
+    # @return [Integer] id the stand-in should report
+    def mock_room_id(key)
+      case key
+      when Integer then key
+      when /\Au(-?\d+)\z/i then Regexp.last_match(1).to_i
+      when /\A-?\d+\z/ then key.to_i
+      else 1234
+      end
     end
   end
 end unless defined?(Room)
@@ -915,7 +1002,15 @@ class Map
     end
 
     def dijkstra(_id, _target = nil)
-      [nil, {}]
+      [{}, {}]
+    end
+
+    def dijkstra_hashes(_id, _target = nil)
+      [{}, {}]
+    end
+
+    def rooms_by_tag(_tag_name)
+      []
     end
 
     def findpath(_room, _target)
