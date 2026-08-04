@@ -9,6 +9,7 @@
 
 require 'weakref'
 require_relative 'script_death'
+require_relative 'script_debug_log'
 
 module Lich
   module Common
@@ -1368,18 +1369,21 @@ module Lich
       end
 
       def Script.new_downstream_xml(line)
+        ScriptDebugLog.broadcast(:downstream_xml, line) if ScriptDebugLog.active?
         for script in __running_snapshot
           script.downstream_buffer.push(line.chomp) if script.want_downstream_xml
         end
       end
 
       def Script.new_upstream(line)
+        ScriptDebugLog.broadcast(:upstream, line) if ScriptDebugLog.active?
         for script in __running_snapshot
           script.upstream_buffer.push(line.chomp) if script.want_upstream
         end
       end
 
       def Script.new_downstream(line)
+        ScriptDebugLog.broadcast(:downstream, line) if ScriptDebugLog.active?
         __running_snapshot.each { |script|
           script.downstream_buffer.push(line.chomp) if script.want_downstream
           unless script.watchfor.empty?
@@ -1423,6 +1427,7 @@ module Lich
       end
 
       def Script.new_script_output(line)
+        ScriptDebugLog.broadcast(:script_output, line) if ScriptDebugLog.active?
         for script in __running_snapshot
           script.downstream_buffer.push(line.chomp) if script.want_script_output
         end
@@ -2738,6 +2743,73 @@ module Lich
 
       def to_s
         @name
+      end
+
+      # Turns this script's debug log on or off.
+      #
+      # While on, the script gets its own file under
+      # +LOG_DIR/debug/<game>-<character>/<script>/+ containing the raw
+      # downstream XML, the stripped downstream lines, client input, script
+      # output, and anything the script passes to {#debug_msg}. Turning it off
+      # flushes and closes the file. Idempotent in both directions.
+      #
+      # @param enabled [Boolean] true to open a log, false to close it
+      # @return [Boolean] the value assigned
+      # @see #debug_msg
+      def debug_log=(enabled)
+        if enabled
+          ScriptDebugLog.open_for(self)
+        else
+          ScriptDebugLog.close_for(self)
+        end
+        enabled ? true : false
+      end
+
+      # Whether this script currently has a debug log open.
+      #
+      # @return [Boolean]
+      def debug_log?
+        !ScriptDebugLog.for(self).nil?
+      end
+
+      # Path of this script's current debug log.
+      #
+      # @return [String, nil] the path, or nil when logging is off
+      def debug_log_path
+        ScriptDebugLog.for(self)&.path
+      end
+
+      # Directory this script's debug logs are written to, whether or not one is
+      # currently open. Useful for telling the user where transcripts will land
+      # after toggling the setting but before the next run opens a file.
+      #
+      # @return [String] the directory
+      def debug_log_dir
+        ScriptDebugLog.directory_for(self)
+      end
+
+      # Records a debug message: to the log file when {#debug_log?}, otherwise
+      # to the screen via +echo+.
+      #
+      # Messages written to the file are flushed immediately, so tailing the
+      # file shows them without waiting on the buffered stream channels.
+      #
+      # Pass +to_screen: false+ when the caller already handles its own screen
+      # output and only wants the file copy; the message is then dropped rather
+      # than echoed while logging is off.
+      #
+      # @param message [String] the message to record
+      # @param to_screen [Boolean] echo to screen when no log is open
+      # @return [nil]
+      # @see #debug_log=
+      def debug_msg(message, to_screen: true)
+        writer = ScriptDebugLog.for(self)
+        if writer
+          writer.write(:message, message)
+        elsif to_screen
+          echo(message)
+        end
+        nil
       end
 
       def gets(timeout = nil)
