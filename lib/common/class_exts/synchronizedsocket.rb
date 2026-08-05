@@ -13,6 +13,16 @@ module Lich
     # 2. Closes the delegate socket (unblocking any blocked readers)
     # 3. Logs the error via +Lich.log+
     #
+    # A +WriteQueueOverflow+ additionally dumps every still-pending write to
+    # +Lich.log+, so a stalled frontend can be diagnosed from the queue contents
+    # rather than from the summary line alone.
+    #
+    # When the pending-write budget is exhausted the queue is first compacted by
+    # discarding the oldest prompt-delimited groups; the session only ends if
+    # compaction cannot free space. Compaction drops display data the parser has
+    # already consumed, so a slow frontend costs a gap in its scrollback rather
+    # than the whole session.
+    #
     # Subsequent writes short-circuit without touching the delegate.
     # Reads still delegate via +method_missing+ so lifecycle threads
     # can detect the closed socket through normal +IOError+ propagation.
@@ -34,7 +44,20 @@ module Lich
       ].freeze
 
       WRITER_INIT_MUTEX = Mutex.new
-      DEFAULT_WRITE_QUEUE_CAPACITY = 2_048
+      DEFAULT_WRITE_QUEUE_CAPACITY = 4_096
+      # Number of trailing prompt-delimited groups retained when the write queue
+      # is compacted. A +<prompt>+ clears the stream stack, so a group boundary
+      # is a point where stream nesting is balanced and older output can be
+      # discarded without orphaning a pushStream in the frontend.
+      OVERFLOW_KEEP_PROMPT_GROUPS = 10
+      # Items injected ahead of the retained groups on compaction: the replayed
+      # resync prompt and the client-visible notice. Kept in sync with
+      # +drop_preamble+, which never returns more than this many items.
+      DROP_PREAMBLE_SIZE = 2
+      PROMPT_TAG = /<prompt\b/i
+      # Per-argument byte cap applied when dumping pending writes after an
+      # overflow. Longer payloads are truncated with their full byte size noted.
+      OVERFLOW_DUMP_MAX_BYTES_PER_ARG = 1_024
       ROLES = %i[primary detachable].freeze
       ATTACHMENT_STREAM_SENTINEL = Object.new.freeze
 
@@ -254,9 +277,154 @@ module Lich
       end
 
       def ensure_pending_capacity!
-        return if @write_queue.length + @deferred_main_stream.length < @write_queue_capacity
+        return if pending_length < @write_queue_capacity
+
+        compact_write_queue!
+        return if pending_length < @write_queue_capacity
 
         raise WriteQueueOverflow, "pending frontend writes exceeded #{@write_queue_capacity}"
+      end
+
+      # @api private
+      # @return [Integer] queued writes plus deferred main-stream writes
+      def pending_length
+        @write_queue.length + @deferred_main_stream.length
+      end
+
+      # Discards the oldest prompt-delimited groups from the write queue.
+      #
+      # Cutting at a +<prompt>+ boundary is what makes this safe: a prompt
+      # clears the stream stack, so the retained tail cannot begin inside an
+      # unbalanced pushStream and leave the frontend with an orphaned window.
+      #
+      # Only display data is discarded. The parser has already consumed every
+      # dropped record, so game state, GameObj, and Map are unaffected -- the
+      # frontend simply shows a gap instead of the session ending.
+      #
+      # Writes after the final prompt form a trailing group that is always
+      # retained, and any +:stop+ sentinel is preserved so the writer thread
+      # cannot be left blocked.
+      #
+      # Two items are injected ahead of the retained groups. First the prompt
+      # that terminated the last dropped group is replayed: the writer thread
+      # was blocked mid-write, so the frontend may still hold an open stream,
+      # and a prompt returns it to main-window context. Then a plain-text
+      # notice, which would otherwise be swallowed by that open stream.
+      #
+      # @api private
+      # @return [Boolean] whether anything was dropped
+      def compact_write_queue!
+        return false unless @write_queue.is_a?(SizedQueue)
+
+        stops, groups = grouped_pending_writes
+        if groups.length <= OVERFLOW_KEEP_PROMPT_GROUPS
+          requeue_writes(groups, stops)
+          return false
+        end
+
+        kept = retained_groups(groups)
+        dropped = groups[0...-kept.length]
+        total_writes = groups.sum(&:length)
+        dropped_writes = total_writes - kept.sum(&:length)
+        requeue_writes(kept, stops, drop_preamble(dropped, dropped_writes))
+        Lich.log "warning: client socket write queue reached #{@write_queue_capacity}; dropped " \
+                 "#{dropped_writes} of #{total_writes} pending display writes " \
+                 "(#{dropped.length} prompt groups, role=#{@role})"
+        true
+      rescue StandardError => e
+        log_writer_error('write queue compaction', e)
+        false
+      end
+
+      # Selects the trailing groups to retain.
+      #
+      # Bounded by +OVERFLOW_KEEP_PROMPT_GROUPS+ and, separately, by the space
+      # left once the injected preamble and the write that triggered compaction
+      # are accounted for. Without the second bound a small capacity or large
+      # groups could leave the queue full again and end the session anyway.
+      #
+      # The newest group is always retained even if it alone exceeds the budget:
+      # showing the most recent output beats showing none.
+      #
+      # @api private
+      # @return [Array<Array>] retained groups, oldest first
+      def retained_groups(groups)
+        budget = @write_queue_capacity - DROP_PREAMBLE_SIZE - 1
+        kept = []
+        total = 0
+        groups.reverse_each do |group|
+          break if kept.length >= OVERFLOW_KEEP_PROMPT_GROUPS
+          break if kept.any? && total + group.length > budget
+
+          kept.unshift(group)
+          total += group.length
+        end
+        kept
+      end
+
+      # Builds the resync prompt and client-visible notice for a compaction.
+      #
+      # Every dropped group is prompt-terminated (the trailing partial group is
+      # always retained), so the last item of the last dropped group is a
+      # reliable resync point.
+      #
+      # The notice deliberately contains no XML-special characters, so it needs
+      # no entity encoding and this class needs no knowledge of the frontend
+      # dialect.
+      #
+      # @api private
+      # @return [Array<Array>] queue items to enqueue before the retained groups
+      def drop_preamble(dropped, dropped_writes)
+        preamble = []
+        resync = dropped.last&.last
+        preamble << resync if resync
+        preamble << [:write, ["--- Lich: frontend fell behind; dropped #{dropped_writes} " \
+                              "lines of display output ---\r\n"], nil]
+        preamble
+      end
+
+      # Drains the queue and splits it into prompt-terminated groups.
+      #
+      # @api private
+      # @return [Array(Array, Array<Array>)] stop sentinels and write groups
+      def grouped_pending_writes
+        stops = []
+        groups = []
+        current = []
+        drain_write_queue_items.each do |item|
+          if item.first == :stop
+            stops << item
+            next
+          end
+
+          current << item
+          next unless prompt_boundary?(item)
+
+          groups << current
+          current = []
+        end
+        groups << current unless current.empty?
+        [stops, groups]
+      end
+
+      # @api private
+      # @return [Boolean] whether the item ends a prompt group
+      def prompt_boundary?(item)
+        Array(item[1]).any? { |arg| PROMPT_TAG.match?(arg.to_s) }
+      end
+
+      # Requeues surviving writes in order.
+      #
+      # +note_stream_xml!+ is deliberately not re-run on these items:
+      # +@stream_stack+ models the stream state at the *tail* of the queue, and
+      # the tail is unchanged by compaction. Re-scanning would corrupt it.
+      #
+      # @api private
+      # @return [void]
+      def requeue_writes(groups, stops, preamble = [])
+        preamble.each { |item| @write_queue.push(item, true) }
+        groups.each { |group| group.each { |item| @write_queue.push(item, true) } }
+        stops.each { |item| @write_queue.push(item, true) }
       end
 
       def enqueue_item_locked(item)
@@ -309,6 +477,82 @@ module Lich
         else
           Lich.log "error: #{message}"
         end
+        log_pending_writes if error.is_a?(WriteQueueOverflow)
+      end
+
+      # Drains and logs every still-pending write after a queue overflow.
+      #
+      # +SizedQueue+ has no non-destructive peek, so the queue is drained in
+      # order to be inspected. That is safe here because the socket has already
+      # been marked dead and the delegate closed, which makes the drained
+      # entries undeliverable either way.
+      #
+      # The dump is emitted as a single +Lich.log+ call so it stays contiguous
+      # in the log and does not stall the calling parser thread with thousands
+      # of separate file writes.
+      #
+      # Two writes are necessarily absent from the dump: the one the writer
+      # thread is currently blocked on (the writer holds that item, not the
+      # queue), and the one the capacity check just rejected.
+      #
+      # @api private
+      # @return [void]
+      def log_pending_writes
+        queued = drain_write_queue
+        deferred = drain_deferred_main_stream
+        lines = ["error: client socket overflow dump: #{queued.length} queued, #{deferred.length} deferred " \
+                 "(capacity=#{@write_queue_capacity}, role=#{@role})"]
+        queued.each_with_index { |(kind, args), index| lines << "\tqueued[#{index}] #{kind} #{format_pending_args(args)}" }
+        deferred.each_with_index { |args, index| lines << "\tdeferred[#{index}] puts #{format_pending_args(args)}" }
+        Lich.log lines.join("\n")
+      rescue StandardError => e
+        log_writer_error('pending write dump', e)
+      end
+
+      # @api private
+      # @return [Array<Array(Symbol, Array, Proc)>] raw drained queue items, FIFO
+      def drain_write_queue_items
+        return [] unless @write_queue.is_a?(SizedQueue)
+
+        drained = []
+        begin
+          loop { drained << @write_queue.pop(true) }
+        rescue ThreadError
+          nil
+        end
+        drained
+      end
+
+      # @api private
+      # @return [Array<Array(Symbol, Array)>] drained queue entries in FIFO order
+      def drain_write_queue
+        drain_write_queue_items.filter_map { |kind, args, _block| [kind, args] unless kind == :stop }
+      end
+
+      # @api private
+      # @return [Array<Array>] drained deferred main-stream argument lists
+      def drain_deferred_main_stream
+        return [] unless @stream_mutex.is_a?(Mutex) && @deferred_main_stream.is_a?(Array)
+
+        @stream_mutex.synchronize { @deferred_main_stream.shift(@deferred_main_stream.length) }
+      end
+
+      # @api private
+      # @return [String] log-safe rendering of one queued write's arguments
+      def format_pending_args(args)
+        Array(args).map { |arg| dump_for_log(arg) }.join(' ')
+      end
+
+      # Renders a payload as an escaped, ASCII-only, single-line literal so
+      # embedded newlines and control bytes cannot corrupt the log.
+      #
+      # @api private
+      # @return [String]
+      def dump_for_log(arg)
+        text = arg.to_s
+        return text.scrub.dump if text.bytesize <= OVERFLOW_DUMP_MAX_BYTES_PER_ARG
+
+        "#{text.byteslice(0, OVERFLOW_DUMP_MAX_BYTES_PER_ARG).scrub.dump}...(#{text.bytesize} bytes total)"
       end
     end
   end
