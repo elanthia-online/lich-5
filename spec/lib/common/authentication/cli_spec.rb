@@ -55,6 +55,106 @@ RSpec.describe Lich::Common::Authentication::CLI do
     FileUtils.rm_rf(data_dir) if File.exist?(data_dir)
   end
 
+  describe '.resolve_saved_target' do
+    let(:yaml_data) do
+      {
+        'accounts'        => {
+          'TESTACCOUNT' => {
+            'password'   => 'opaque-encrypted-password',
+            'characters' => [
+              {
+                'char_name'     => 'Tsetem',
+                'game_code'     => 'GS3',
+                'frontend'      => 'saga',
+                'custom_launch' => nil
+              }
+            ]
+          }
+        },
+        'encryption_mode' => 'enhanced'
+      }
+    end
+
+    before do
+      allow(Lich).to receive(:log)
+      File.write(yaml_file, yaml_data.to_yaml)
+    end
+
+    it 'returns a frozen password-free Saga target from saved metadata' do
+      target = described_class.resolve_saved_target(
+        'tsetem',
+        game_code: 'GS3',
+        frontend: 'saga',
+        data_dir: data_dir
+      )
+
+      expect(target).to eq(
+        account: 'TESTACCOUNT',
+        character: 'Tsetem',
+        game_code: 'GS3',
+        frontend: 'saga',
+        custom_launch: nil
+      )
+      expect(target).to be_frozen
+      expect(target).not_to have_key(:password)
+    end
+
+    it 'does not request Lich password access, decrypt, or authenticate' do
+      expect(Lich::Common::Authentication::CLIPassword).not_to receive(:validate_master_password_available)
+      expect(Lich::Common::Authentication::EntryStore).not_to receive(:decrypt_password)
+      expect(Lich::Common::Authentication).not_to receive(:authenticate)
+
+      described_class.resolve_saved_target('Tsetem', frontend: 'saga', data_dir: data_dir)
+    end
+
+    it 'supports legacy saved entries that carry user_id' do
+      legacy_data = [
+        {
+          'user_id'   => 'LEGACYACCOUNT',
+          'password'  => 'unused',
+          'char_name' => 'Tsetem',
+          'game_code' => 'GS3',
+          'frontend'  => 'saga'
+        }
+      ]
+      File.write(yaml_file, legacy_data.to_yaml)
+
+      target = described_class.resolve_saved_target('Tsetem', data_dir: data_dir)
+
+      expect(target[:account]).to eq('LEGACYACCOUNT')
+      expect(target).not_to have_key(:password)
+    end
+
+    it 'returns nil and logs when no saved character matches' do
+      result = described_class.resolve_saved_target('Other', data_dir: data_dir)
+
+      expect(result).to be_nil
+      expect(Lich).to have_received(:log).with(/No matching character found/)
+    end
+
+    it 'returns nil when required launch metadata is incomplete' do
+      yaml_data['accounts'].delete('TESTACCOUNT')
+      yaml_data['accounts'][''] = {
+        'password'   => 'unused',
+        'characters' => [
+          { 'char_name' => 'Tsetem', 'game_code' => 'GS3', 'frontend' => 'saga' }
+        ]
+      }
+      File.write(yaml_file, yaml_data.to_yaml)
+
+      result = described_class.resolve_saved_target('Tsetem', data_dir: data_dir)
+
+      expect(result).to be_nil
+      expect(Lich).to have_received(:log).with(/missing required Saga launch data: account/)
+    end
+
+    it 'raises for a blank caller-supplied character name' do
+      expect {
+        described_class.resolve_saved_target('  ', data_dir: data_dir)
+      }.to raise_error(ArgumentError, 'Character name is required')
+    end
+  end
+
   describe '.execute_new_character' do
     before do
       allow(Lich).to receive(:log)

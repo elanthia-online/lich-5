@@ -1,4 +1,5 @@
 require 'fiddle'
+require 'open3'
 require 'rbconfig'
 require_relative 'gtk_compaction'
 
@@ -662,22 +663,25 @@ module Lich
         def get_process_memory_windows
           # Method 1: Try GetProcessMemoryInfo via PSAPI (most reliable, no console)
           begin
-            return get_memory_via_psapi
-          rescue => e
+            memory = get_memory_via_psapi
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "GetProcessMemoryInfo failed: #{e.message}" if @verbose
           end
 
           # Method 2: Try WMI via WIN32OLE (no console, but slower)
           begin
-            return get_memory_via_wmi
-          rescue => e
+            memory = get_memory_via_wmi
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "WMI failed: #{e.message}" if @verbose
           end
 
           # Method 3: PowerShell with hidden window (last resort)
           begin
-            return get_memory_via_powershell
-          rescue => e
+            memory = get_memory_via_powershell
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "PowerShell failed: #{e.message}" if @verbose
           end
 
@@ -767,11 +771,19 @@ module Lich
           # Use PowerShell with hidden window as last resort
           script = "(Get-Process -Id #{Process.pid}).WorkingSet64"
 
-          # Use PowerShell with WindowStyle Hidden to prevent console window
-          output = `powershell.exe -WindowStyle Hidden -NoProfile -Command "#{script}" 2>NUL`
+          # Use argv form so Ruby launches PowerShell directly instead of
+          # inserting a visible cmd.exe process around the hidden fallback.
+          output, _error, status = Open3.capture3(
+            'powershell.exe',
+            '-WindowStyle', 'Hidden',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command', script
+          )
 
-          if output && !output.empty?
-            return output.strip.to_f / (1024.0 * 1024.0)
+          value = output.strip
+          if status.success? && value.match?(/\A\d+\z/)
+            return value.to_f / (1024.0 * 1024.0)
           end
 
           nil
