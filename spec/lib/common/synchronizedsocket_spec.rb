@@ -502,6 +502,208 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       release_write << true if release_write
       bounded&.close rescue nil
     end
+
+    it 'dumps the still-pending queued writes to Lich.log on overflow' do
+      write_started = Queue.new
+      release_write = Queue.new
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message.to_s }
+      bounded = described_class.new(delegate, role: :detachable, write_queue_capacity: 2)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+
+      bounded.write('blocked')
+      write_started.pop
+      bounded.write("first pending\r\n")
+      bounded.write('second pending')
+      bounded.write('rejected')
+
+      dump = logged.find { |message| message.include?('overflow dump') }
+      expect(dump).to include('2 queued, 0 deferred (capacity=2, role=detachable)')
+      expect(dump).to include('queued[0] write "first pending\\r\\n"')
+      expect(dump).to include('queued[1] write "second pending"')
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
+    end
+
+    it 'dumps deferred main-stream writes and truncates oversized payloads' do
+      write_started = Queue.new
+      release_write = Queue.new
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message.to_s }
+      oversized = 'x' * (described_class::OVERFLOW_DUMP_MAX_BYTES_PER_ARG + 10)
+      bounded = described_class.new(delegate, role: :detachable, write_queue_capacity: 2)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+      allow(delegate).to receive(:puts)
+
+      bounded.write('<pushStream id="thoughts"/>')
+      write_started.pop
+      expect(bounded.puts_main_stream('deferred line')).to be true
+      bounded.write(oversized)
+      bounded.write('rejected')
+
+      dump = logged.find { |message| message.include?('overflow dump') }
+      expect(dump).to include('1 queued, 1 deferred (capacity=2, role=detachable)')
+      expect(dump).to include('deferred[0] puts "deferred line"')
+      expect(dump).to include("...(#{oversized.bytesize} bytes total)")
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
+    end
+
+    it 'does not dump pending writes for ordinary fatal write errors' do
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message.to_s }
+      allow(delegate).to receive(:write).and_raise(Errno::EPIPE)
+
+      socket.write('boom')
+
+      eventually { expect(socket.alive?).to be false }
+      expect(logged.any? { |message| message.include?('overflow dump') }).to be false
+    end
+  end
+
+  describe 'write queue compaction' do
+    let(:keep) { described_class::OVERFLOW_KEEP_PROMPT_GROUPS }
+
+    # Blocks the writer thread on its first write so the queue accumulates,
+    # then fills the queue with `groups` prompt-terminated groups of one
+    # write each. Returns the socket and the release gate.
+    def stalled_socket_with_groups(groups, capacity:)
+      write_started = Queue.new
+      release_write = Queue.new
+      bounded = described_class.new(delegate, role: :primary, write_queue_capacity: capacity)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+      bounded.write('blocker')
+      write_started.pop
+      groups.times { |i| bounded.write("line#{i}<prompt time=\"#{i}\">&gt;</prompt>") }
+      [bounded, release_write]
+    end
+
+    it 'drops the oldest prompt groups instead of killing the session' do
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message.to_s }
+      bounded, release = stalled_socket_with_groups(keep + 2, capacity: keep + 2)
+
+      # This write would previously have overflowed and ended the session.
+      bounded.write('survivor<prompt time="99">&gt;</prompt>')
+
+      expect(bounded.alive?).to be true
+      expect(Lich::Common::ShutdownCoordinator.current).to be_nil
+      compaction = logged.find { |m| m.include?('dropped') && m.include?('prompt groups') }
+      expect(compaction).to include("write queue reached #{keep + 2}")
+      expect(compaction).to include('role=primary')
+    ensure
+      release << true if release
+      bounded&.close rescue nil
+    end
+
+    it 'retains the newest groups and discards the oldest' do
+      written = []
+      allow(delegate).to receive(:puts) { |arg| written << arg.to_s }
+      bounded, release = stalled_socket_with_groups(keep + 3, capacity: keep + 3)
+      bounded.write('newest<prompt time="99">&gt;</prompt>')
+      release << true
+
+      # Let the writer drain what survived compaction.
+      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
+      eventually(timeout: 2) { expect(written.any? { |w| w.include?('newest') }).to be true }
+      expect(written.any? { |w| w.include?('line0') }).to be false
+    ensure
+      release << true if release
+      bounded&.close rescue nil
+    end
+
+    it 'still ends the session when there are too few prompt groups to compact' do
+      write_started = Queue.new
+      release_write = Queue.new
+      bounded = described_class.new(delegate, role: :detachable, write_queue_capacity: 3)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+
+      # No prompts anywhere, so there is exactly one group and nothing to drop.
+      bounded.write('blocker')
+      write_started.pop
+      3.times { |i| bounded.write("nopromptline#{i}") }
+      bounded.write('overflows')
+
+      expect(bounded.alive?).to be false
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
+    end
+
+    it 'defaults to a 4096 write capacity' do
+      expect(described_class::DEFAULT_WRITE_QUEUE_CAPACITY).to eq(4_096)
+    end
+
+    it 'injects a client-visible notice reporting how many lines were dropped' do
+      written = []
+      bounded, release = stalled_socket_with_groups(keep + 3, capacity: keep + 3)
+      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
+      bounded.write('newest<prompt time="99">&gt;</prompt>')
+      release << true
+
+      eventually(timeout: 2) { expect(written.any? { |w| w.include?('fell behind') }).to be true }
+      notice = written.find { |w| w.include?('fell behind') }
+      expect(notice).to match(/dropped \d+ lines of display output/)
+      # No XML-special characters, so no frontend-specific encoding is needed.
+      expect(notice).not_to match(/[<>&]/)
+    ensure
+      release << true if release
+      bounded&.close rescue nil
+    end
+
+    it 'replays a prompt before the notice so it cannot land in an open stream' do
+      written = []
+      bounded, release = stalled_socket_with_groups(keep + 3, capacity: keep + 3)
+      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
+      bounded.write('newest<prompt time="99">&gt;</prompt>')
+      release << true
+
+      eventually(timeout: 2) { expect(written.any? { |w| w.include?('fell behind') }).to be true }
+      notice_at = written.index { |w| w.include?('fell behind') }
+      expect(notice_at).to be > 0
+      expect(written[notice_at - 1]).to match(/<prompt\b/)
+    ensure
+      release << true if release
+      bounded&.close rescue nil
+    end
+
+    it 'does not notify when nothing was dropped' do
+      written = []
+      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
+      socket.write("only line<prompt time=\"1\">&gt;</prompt>")
+
+      eventually { expect(written).not_to be_empty }
+      expect(written.any? { |w| w.include?('fell behind') }).to be false
+    end
+
+    # Regression: the injected preamble consumes queue budget. If retention
+    # ignores it, a tight capacity leaves the queue full after compaction and
+    # the session dies anyway (this spec failed before retained_groups existed).
+    it 'leaves room for the preamble at a capacity barely above the keep count' do
+      capacity = keep + 2
+      bounded, release = stalled_socket_with_groups(keep + 2, capacity: capacity)
+      bounded.write('survivor<prompt time="99">&gt;</prompt>')
+
+      expect(bounded.alive?).to be true
+      expect(bounded.instance_variable_get(:@write_queue).length).to be <= capacity
+    ensure
+      release << true if release
+      bounded&.close rescue nil
+    end
   end
 
   # ===========================================================================
