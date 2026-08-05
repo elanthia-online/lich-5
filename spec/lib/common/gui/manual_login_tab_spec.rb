@@ -510,5 +510,25 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
         )
       )
     end
+
+    it 'favorites the exact Custom Launch variant that was saved' do
+      custom_launch = '/opt/warlock --port %port% --key %key%'
+      tab.instance_variable_set(:@make_favorite_option, double(active?: true))
+      tab.instance_variable_set(:@custom_launch_entry, double(child: double(text: custom_launch)))
+      allow(custom_launch_option).to receive(:active?).and_return(true)
+      allow(Lich::Common::GUI::LoginTabUtils).to receive(:custom_launch?).and_return(true)
+      allow(Lich::Common::GUI::FavoritesManager).to receive(:add_favorite).and_return(true)
+
+      @play_handler.call
+
+      expect(Lich::Common::GUI::FavoritesManager).to have_received(:add_favorite).with(
+        '/tmp/test-data',
+        'TESTACCOUNT',
+        'Tsetem',
+        'GS3',
+        'stormfront',
+        custom_launch
+      )
+    end
   end
 end

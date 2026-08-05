@@ -2,6 +2,7 @@
 # this needs work to break up and improve 2024-06-13
 
 require 'shellwords'
+require_relative '../common/process_launcher'
 require_relative 'reconnect_command'
 
 reconnect_if_wanted = proc {
@@ -423,12 +424,7 @@ reconnect_if_wanted = proc {
         end
 
         frontend_pid = if native_saga_launch
-                         if saga_plan.argv.one?
-                           executable = saga_plan.argv.first
-                           spawn(saga_plan.environment, [executable, File.basename(executable)])
-                         else
-                           spawn(saga_plan.environment, *saga_plan.argv)
-                         end
+                         Lich::Common::ProcessLauncher.call(saga_plan.environment, saga_plan.argv)
                        else
                          spawn(launcher_cmd)
                        end

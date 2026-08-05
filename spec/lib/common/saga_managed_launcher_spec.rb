@@ -37,6 +37,23 @@ RSpec.describe Lich::Common::SagaManagedLauncher do
     )
   end
 
+  it 'executes the default process boundary and detaches the child' do
+    allow(plan_builder).to receive(:saga_managed_login_plan).and_return(plan)
+    allow(Lich::Common::ProcessLauncher).to receive(:call)
+      .with(plan.environment, plan.argv).and_return(12_345)
+    allow(Process).to receive(:detach).with(12_345)
+
+    result = described_class.launch(
+      account: 'TESTACCOUNT',
+      character: 'Tsetem',
+      game_code: 'GS3',
+      plan_builder: plan_builder
+    )
+
+    expect(result).to eq(ok: true, pid: 12_345)
+    expect(Process).to have_received(:detach).with(12_345)
+  end
+
   it 'returns an unavailable result without attempting a process launch' do
     allow(plan_builder).to receive(:saga_managed_login_plan)
       .and_raise(Lich::Common::FrontendLauncher::UnavailableError, 'Saga was not found')

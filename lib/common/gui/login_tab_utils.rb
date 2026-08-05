@@ -3,6 +3,7 @@
 require_relative '../authentication/gui'
 require_relative '../front-end'
 require_relative '../frontend_locator'
+require_relative '../saga_launch_policy'
 require_relative '../saga_managed_launcher'
 
 module Lich
@@ -100,7 +101,16 @@ module Lich
 
               button.tooltip_text = nil
 
-              if saga_managed_login?(login_info)
+              if SagaLaunchPolicy.custom_launch_conflict?(
+                frontend: login_info[:frontend],
+                custom_launch: login_info[:custom_launch]
+              )
+                Lich.msgbox(
+                  message: SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT,
+                  icon: :error
+                )
+                next true
+              elsif saga_managed_login?(login_info)
                 button.sensitive = false
                 result = SagaManagedLauncher.launch(
                   account: login_info[:user_id],
@@ -136,7 +146,7 @@ module Lich
         # Returns whether a saved entry should use Saga's own authentication
         # and Via-Lich process launch instead of Lich's game-key handoff.
         #
-        # Explicit Custom Launch entries preserve their existing behavior.
+        # Callers reject Saga/Custom Launch conflicts before this predicate.
         #
         # @param login_info [Hash]
         # @return [Boolean]

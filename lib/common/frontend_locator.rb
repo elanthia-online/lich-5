@@ -69,6 +69,8 @@ module Lich
         def compatibility_location(frontend_id)
           resolution = resolve(frontend_id)
           resolution && File.dirname(resolution.executable_path)
+        rescue ArgumentError
+          nil
         end
 
         private

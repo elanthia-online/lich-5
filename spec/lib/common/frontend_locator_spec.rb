@@ -544,4 +544,8 @@ RSpec.describe Lich::Common::FrontendLocator do
 
     expect(described_class.compatibility_location('stormfront')).to eq('/frontends')
   end
+
+  it 'preserves nil for an unknown Lich.seek frontend' do
+    expect(described_class.compatibility_location('unknown')).to be_nil
+  end
 end

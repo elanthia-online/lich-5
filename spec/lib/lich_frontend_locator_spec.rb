@@ -27,6 +27,16 @@ RSpec.describe 'Lich.seek frontend locator compatibility' do
     expect(output).to eq('/located/stormfront')
   end
 
+  it 'preserves nil for an unknown frontend rejected by the locator' do
+    output = run_lich(<<~RUBY)
+      require 'common/front-end'
+      require 'common/frontend_locator'
+      print Lich.seek('unknown').inspect
+    RUBY
+
+    expect(output).to eq('nil')
+  end
+
   it 'retains the legacy global fallback before the locator is loaded' do
     output = run_lich(<<~RUBY)
       $wiz_fe_loc = '/legacy/wizard'

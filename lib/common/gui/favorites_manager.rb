@@ -232,12 +232,20 @@ module Lich
                 entry[:user_id] == favorite[:user_id] &&
                   entry[:char_name] == favorite[:char_name] &&
                   entry[:game_code] == favorite[:game_code] &&
-                  (favorite[:frontend].nil? || entry[:frontend] == favorite[:frontend])
+                  (favorite[:frontend].nil? || entry[:frontend] == favorite[:frontend]) &&
+                  entry[:custom_launch] == favorite[:custom_launch]
               end
 
               unless character_exists
                 # Remove orphaned favorite
-                if remove_favorite(data_dir, favorite[:user_id], favorite[:char_name], favorite[:game_code], favorite[:frontend])
+                if remove_favorite(
+                  data_dir,
+                  favorite[:user_id],
+                  favorite[:char_name],
+                  favorite[:game_code],
+                  favorite[:frontend],
+                  favorite[:custom_launch]
+                )
                   cleaned_count += 1
                   frontend_info = favorite[:frontend] ? " (#{favorite[:frontend]})" : ""
                   Lich.log "info: Removed orphaned favorite: #{favorite[:char_name]} (#{favorite[:game_code]})#{frontend_info} from #{favorite[:user_id]}"

@@ -89,9 +89,8 @@ RSpec.describe Lich::Common::SagaManagedLogin do
   end
 
   {
-    'headless login'         => { headless: true },
-    'explicit Custom Launch' => { custom_launch: 'my saga command' },
-    'character generator'    => { character: 'NEW' }
+    'headless login'      => { headless: true },
+    'character generator' => { character: 'NEW' }
   }.each do |label, overrides|
     it "preserves Lich's existing path for #{label}" do
       expect(target_resolver).not_to receive(:resolve_saved_target)
@@ -102,13 +101,23 @@ RSpec.describe Lich::Common::SagaManagedLogin do
     end
   end
 
-  it 'preserves Lich authentication if the selected entry has a Custom Launch' do
+  it 'rejects an explicit Saga Custom Launch before resolving saved metadata' do
+    expect(target_resolver).not_to receive(:resolve_saved_target)
+
+    decision = decision_for(custom_launch: 'my saga command')
+
+    expect(decision.action).to eq(:error)
+    expect(decision.error).to eq(Lich::Common::SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT)
+  end
+
+  it 'rejects a saved Saga entry with a Custom Launch' do
     allow(target_resolver).to receive(:resolve_saved_target)
       .and_return(target.merge(custom_launch: '/Applications/Saga.app/Contents/MacOS/Saga'))
 
     decision = decision_for
 
-    expect(decision.action).to eq(:passthrough)
+    expect(decision.action).to eq(:error)
+    expect(decision.error).to eq(Lich::Common::SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT)
   end
 
   it 'does not swallow a target resolver exception' do

@@ -2,14 +2,16 @@
 
 require_relative 'authentication/cli'
 require_relative 'front-end'
+require_relative 'saga_launch_policy'
 require_relative 'saga_managed_launcher'
 
 module Lich
   module Common
     # Routes saved CLI/TUI login intent to Saga when Saga owns authentication.
     #
-    # Headless, character-generator, and explicit Custom Launch requests remain
-    # on Lich's existing authentication path.
+    # Headless and character-generator requests remain on Lich's existing
+    # authentication path. Saga and Custom Launch are incompatible ownership
+    # requests and fail before authentication.
     module SagaManagedLogin
       Decision = Struct.new(:action, :target, :error, keyword_init: true) do
         def initialize(action:, target: nil, error: nil)
@@ -39,6 +41,10 @@ module Lich
           data_dir: nil,
           target_resolver: Authentication::CLI
         )
+          if SagaLaunchPolicy.custom_launch_conflict?(frontend: frontend, custom_launch: custom_launch)
+            return decision(:error, error: SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT)
+          end
+
           return decision(:passthrough) if headless
           return decision(:passthrough) if custom_launch?(custom_launch)
           return decision(:passthrough) if character.to_s.match?(Authentication::LoginHelpers::NEW_CHARACTER_LOGIN)
@@ -56,6 +62,10 @@ module Lich
             return decision(:error, error: "No saved Saga entry matched #{character}") if saga?(frontend)
 
             return decision(:passthrough)
+          end
+
+          if SagaLaunchPolicy.custom_launch_conflict?(frontend: target[:frontend], custom_launch: target[:custom_launch])
+            return decision(:error, error: SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT)
           end
 
           return decision(:passthrough) if custom_launch?(target[:custom_launch])

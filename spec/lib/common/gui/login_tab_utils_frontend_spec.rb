@@ -178,22 +178,23 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
       expect(button.sensitive).to be true
     end
 
-    it 'preserves Lich authentication for an explicit Saga Custom Launch' do
+    it 'rejects an explicit Saga Custom Launch before authentication' do
       login_info[:frontend] = 'saga'
       login_info[:custom_launch] = '/Applications/Saga.app/Contents/MacOS/Saga'
       allow(described_class).to receive(:launchable_frontend?).and_return(true)
       allow(Lich::Common::SagaManagedLauncher).to receive(:launch)
       allow(Lich::Common::Authentication::GUI).to receive(:authenticate_and_launch)
+      allow(Lich).to receive(:msgbox)
 
       callback = proc {}
       described_class.setup_play_button_handler(button, login_info, callback)
       button.handler.call(button, event)
 
       expect(Lich::Common::SagaManagedLauncher).not_to have_received(:launch)
-      expect(Lich::Common::Authentication::GUI).to have_received(:authenticate_and_launch).with(
-        button: button,
-        login_info: login_info,
-        on_success: callback
+      expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)
+      expect(Lich).to have_received(:msgbox).with(
+        message: Lich::Common::SagaLaunchPolicy::CUSTOM_LAUNCH_CONFLICT,
+        icon: :error
       )
     end
   end

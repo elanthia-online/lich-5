@@ -572,7 +572,14 @@ module Lich
               if @make_favorite_option.active? && save_success
                 begin
                   # Add character to favorites with precise frontend matching - use normalized values
-                  favorite_success = FavoritesManager.add_favorite(@data_dir, normalized_account, normalized_character, selected_iter[0], frontend)
+                  favorite_success = FavoritesManager.add_favorite(
+                    @data_dir,
+                    normalized_account,
+                    normalized_character,
+                    selected_iter[0],
+                    frontend,
+                    custom_launch
+                  )
 
                   if favorite_success
                     # Single optimized cache refresh after favorite marking

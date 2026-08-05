@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'frontend_launcher'
+require_relative 'process_launcher'
 
 module Lich
   module Common
@@ -44,7 +45,7 @@ module Lich
         private
 
         def spawn_detached(environment, argv)
-          pid = spawn(environment, *argv)
+          pid = ProcessLauncher.call(environment, argv)
           Process.detach(pid)
           pid
         end
