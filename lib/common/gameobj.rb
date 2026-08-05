@@ -247,10 +247,28 @@ module Lich
       # Returns the current status string of this object, or +nil+ if present
       # but unstated, or +"gone"+ if not found in any registry.
       #
+      # The published status maps are consulted first, then the staging maps.
+      # That order is deliberate: while a refresh is in flight a reader must
+      # still see the previous complete snapshot (see the staging notes above),
+      # so a staged value must never shadow a published one. The staging maps
+      # are only a fallback for an object that has no published entry at all,
+      # which would otherwise be reported as +"gone"+ despite being mid-refresh.
+      #
+      # Note that a dedupe hit in +find_or_create+ means a staged object and its
+      # published counterpart are frequently the *same* instance, so this method
+      # cannot distinguish which of the two a caller holds. Callers that need
+      # the in-flight value (i.e. the parser) must track it themselves and write
+      # through +#status=+ rather than reading it back through here.
+      #
+      # The +"gone"+ sentinel is a frozen literal and must not be mutated in
+      # place; build a new String from it instead.
+      #
       # @return [String, nil]
       def status
         return @@npc_status[@id] if @@npc_status.key?(@id)
         return @@pc_status[@id]  if @@pc_status.key?(@id)
+        return @@staging_npc_status[@id] if @@staging_npc_status&.key?(@id)
+        return @@staging_pc_status[@id]  if @@staging_pc_status&.key?(@id)
 
         present_in_any_registry? ? nil : 'gone'
       end
@@ -1167,21 +1185,34 @@ module Lich
         end
       end
 
-      # Returns +true+ if this object's ID is found in any active registry.
+      # Returns +true+ if this object's ID is found in any active registry,
+      # published or staged.
+      #
+      # Staged pools count as present: an object accumulating in a refresh that
+      # has not committed yet is in flight, not +"gone"+.
       #
       # @return [Boolean]
       def present_in_any_registry?
-        all_flat_registries.any? { |obj| obj.id == @id } ||
-          @@contents.values.any? { |list| list.any? { |obj| obj.id == @id } }
+        return true if all_flat_registries.any? { |obj| obj.id == @id }
+
+        [@@contents, @@staging_contents].any? do |contents|
+          contents.values.any? { |list| list.any? { |obj| obj.id == @id } }
+        end
       end
 
       # Returns all flat (non-container) registries combined with hands as a
-      # single array for iteration.
+      # single array for iteration. Covers both the published registries and any
+      # staging buffers currently in flight; a +nil+ staging buffer splats to
+      # nothing, so this is safe when no refresh is open.
       #
       # @return [Array<GameObj>]
       def all_flat_registries
-        [*@@loot, *@@inv, *@@reserve, *@@room_desc,
+        [*@@loot, *@@inv, *@@reserve, *@@room_desc, *@@npcs, *@@pcs,
          *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
+         *@@staging_loot, *@@staging_inv, *@@staging_reserve, *@@staging_room_desc,
+         *@@staging_npcs, *@@staging_pcs,
+         *@@staging_fam_loot, *@@staging_fam_npcs, *@@staging_fam_pcs,
+         *@@staging_fam_room_desc,
          @@right_hand, @@left_hand].compact
       end
 
