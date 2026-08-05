@@ -951,7 +951,7 @@ RSpec.describe Lich::Common::GameObj do
         expect(departed.status).to eq('gone')
       end
 
-      it 'reports staged status again after an abandoned refresh is discarded' do
+      it 'reports gone once an abandoned refresh is discarded' do
         described_class.begin_room_players
         staged = described_class.new_pc('-31', 'dwarf', 'a dwarf', 'sitting')
         described_class.discard_staged_refreshes

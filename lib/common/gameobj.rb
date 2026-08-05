@@ -1185,34 +1185,21 @@ module Lich
         end
       end
 
-      # Returns +true+ if this object's ID is found in any active registry,
-      # published or staged.
-      #
-      # Staged pools count as present: an object accumulating in a refresh that
-      # has not committed yet is in flight, not +"gone"+.
+      # Returns +true+ if this object's ID is found in any active registry.
       #
       # @return [Boolean]
       def present_in_any_registry?
-        return true if all_flat_registries.any? { |obj| obj.id == @id }
-
-        [@@contents, @@staging_contents].any? do |contents|
-          contents.values.any? { |list| list.any? { |obj| obj.id == @id } }
-        end
+        all_flat_registries.any? { |obj| obj.id == @id } ||
+          @@contents.values.any? { |list| list.any? { |obj| obj.id == @id } }
       end
 
       # Returns all flat (non-container) registries combined with hands as a
-      # single array for iteration. Covers both the published registries and any
-      # staging buffers currently in flight; a +nil+ staging buffer splats to
-      # nothing, so this is safe when no refresh is open.
+      # single array for iteration.
       #
       # @return [Array<GameObj>]
       def all_flat_registries
-        [*@@loot, *@@inv, *@@reserve, *@@room_desc, *@@npcs, *@@pcs,
+        [*@@loot, *@@inv, *@@reserve, *@@room_desc,
          *@@fam_loot, *@@fam_npcs, *@@fam_pcs, *@@fam_room_desc,
-         *@@staging_loot, *@@staging_inv, *@@staging_reserve, *@@staging_room_desc,
-         *@@staging_npcs, *@@staging_pcs,
-         *@@staging_fam_loot, *@@staging_fam_npcs, *@@staging_fam_pcs,
-         *@@staging_fam_room_desc,
          @@right_hand, @@left_hand].compact
       end
 
