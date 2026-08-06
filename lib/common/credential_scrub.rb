@@ -7,8 +7,10 @@ module Lich
     # Lich keeps startup credentials where a running script can read them:
     # +@launch_data+ and +@argv_options+ are instance variables on the top-level
     # +main+ object, and +ARGV+ is a global constant. All three outlive login, so
-    # the single-use eaccess key and the reusable account password stay readable
-    # for the rest of the session.
+    # both the eaccess key and the account password stay readable for the rest of
+    # the session. Both are live credentials: the key is not single-use and stays
+    # valid for some period after issue, so a key read hours into a session may
+    # still be usable.
     #
     # Values are overwritten in place rather than reassigned because other
     # objects hold references to the same Array, Hash, and String instances (the
@@ -24,7 +26,7 @@ module Lich
       # Replacement text for a redacted value.
       REDACTED = '[scrubbed]'
 
-      # launch_data entry holding the single-use eaccess key.
+      # launch_data entry holding the eaccess key.
       LAUNCH_DATA_SECRET = /\AKEY=/i
 
       # argv entries of the form --flag=secret. Deliberately excludes
@@ -81,14 +83,9 @@ module Lich
 
           OPTION_SECRET_KEYS.select do |key|
             value = options[key]
-            next false unless value.is_a?(String) && value != REDACTED
+            next false unless value.is_a?(String)
 
-            begin
-              options[key] = REDACTED
-              true
-            rescue FrozenError
-              false
-            end
+            overwrite(options, key, REDACTED)
           end
         end
 
@@ -123,8 +120,9 @@ module Lich
 
         private
 
-        # Rewrites container[index], mutating the existing String when possible so
-        # that other holders of that String also lose the secret.
+        # Rewrites container[key], mutating the existing String when possible so
+        # that other holders of that String also lose the secret. Works for both
+        # Array indices and Hash keys.
         #
         # @return [Boolean] true when the value changed
         def overwrite(container, index, value)

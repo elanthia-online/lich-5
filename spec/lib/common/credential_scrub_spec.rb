@@ -135,6 +135,22 @@ RSpec.describe Lich::Common::CredentialScrub do
       expect(pipeline_reference[:password]).to eq('[scrubbed]')
     end
 
+    it 'mutates the password String itself so other holders of it lose the secret' do
+      password = String.new('hunter2')
+      options = { password: password }
+
+      described_class.scrub_options!(options)
+
+      expect(password).to eq('[scrubbed]')
+    end
+
+    it 'falls back to key assignment when the password String is frozen' do
+      options = { password: 'hunter2'.freeze }
+
+      expect(described_class.scrub_options!(options)).to eq([:password])
+      expect(options[:password]).to eq('[scrubbed]')
+    end
+
     it 'is idempotent' do
       options = { password: 'hunter2' }
       described_class.scrub_options!(options)
@@ -148,6 +164,43 @@ RSpec.describe Lich::Common::CredentialScrub do
 
     it 'tolerates nil' do
       expect(described_class.scrub_options!(nil)).to eq([])
+    end
+  end
+
+  describe 'argv snapshot aliasing' do
+    # main.rb snapshots argv before scrubbing so reconnect can re-exec with the
+    # real credentials. Whether an in-place scrub can reach that snapshot depends
+    # on whether the argument Strings are frozen, which is an interpreter detail
+    # rather than something to rely on, so main.rb copies element-wise. These
+    # examples pin both halves of that reasoning.
+
+    it 'reaches a shallow Array#dup snapshot when the arguments are mutable' do
+      argv = ['--login', String.new('--password=hunter2'), '--reconnect']
+      shallow_snapshot = argv.dup
+
+      described_class.scrub_argv!(argv)
+
+      expect(shallow_snapshot[1]).to eq('--password=[scrubbed]')
+    end
+
+    it 'cannot reach an element-wise snapshot of mutable arguments' do
+      argv = ['--login', String.new('--password=hunter2'), '--reconnect']
+      snapshot = argv.map(&:dup)
+
+      described_class.scrub_argv!(argv)
+
+      expect(argv[1]).to eq('--password=[scrubbed]')
+      expect(snapshot[1]).to eq('--password=hunter2')
+    end
+
+    it 'cannot reach an element-wise snapshot of frozen arguments' do
+      argv = ['--login', '--password=hunter2'.freeze, '--reconnect']
+      snapshot = argv.map(&:dup)
+
+      described_class.scrub_argv!(argv)
+
+      expect(argv[1]).to eq('--password=[scrubbed]')
+      expect(snapshot[1]).to eq('--password=hunter2')
     end
   end
 

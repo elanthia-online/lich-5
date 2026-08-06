@@ -2,11 +2,14 @@
 # this needs work to break up and improve 2024-06-13
 
 # Reconnect re-execs this process and has to pass the real --password= through,
-# so snapshot argv before the post-login scrub redacts it in place. A local in a
-# required file is not reachable from a script binding the way ARGV and the
-# top-level instance variables are, so the snapshot does not reopen the hole the
-# scrub closes.
-original_argv = ARGV.dup
+# so snapshot argv before the post-login scrub redacts it in place. The copy is
+# element-wise on purpose: whether an in-place scrub can reach a shallow ARGV.dup
+# depends on whether the interpreter freezes argument Strings (it does on 3.2,
+# which makes the scrub fall back to slot assignment), and that is not a detail to
+# rest a credential invariant on. A local in a required file is not reachable from
+# a script binding the way ARGV and the top-level instance variables are, so the
+# snapshot does not reopen the hole the scrub closes.
+original_argv = ARGV.map(&:dup)
 
 reconnect_if_wanted = proc {
   explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
@@ -695,9 +698,12 @@ reconnect_if_wanted = proc {
         end
       end
 
-      # Every branch above has either sent the login key or handed that job to the
-      # frontend, so drop this thread's reference to it. Same thread as the sends
-      # above, so there is no race on the shared local.
+      # game_key is a local captured from the enclosing @main_thread block, so this
+      # clears the only binding rather than a reference private to this thread.
+      # Still race-free: every branch above has either sent the login key or handed
+      # that job to the frontend, and the --without-frontend thread that also sends
+      # it is created in the mutually exclusive branch of the surrounding
+      # conditional, so no other reader can still be pending.
       game_key = nil
 
       begin
