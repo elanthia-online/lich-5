@@ -1,12 +1,22 @@
 # Carve out for later carving and refining - main_thread and reconnect
 # this needs work to break up and improve 2024-06-13
 
+# Reconnect re-execs this process and has to pass the real --password= through,
+# so snapshot argv before the post-login scrub redacts it in place. The copy is
+# element-wise on purpose: whether an in-place scrub can reach a shallow ARGV.dup
+# depends on whether the interpreter freezes argument Strings (it does on 3.2,
+# which makes the scrub fall back to slot assignment), and that is not a detail to
+# rest a credential invariant on. A local in a required file is not reachable from
+# a script binding the way ARGV and the top-level instance variables are, so the
+# snapshot does not reopen the hole the scrub closes.
+original_argv = ARGV.map(&:dup)
+
 reconnect_if_wanted = proc {
   explicit_shutdown = Lich::Common::ShutdownCoordinator.orderly_user_exit?
   explicit_exit_buffered = $_CLIENTBUFFER_.any? { |cmd| Lich::Common::ShutdownIntent.user_exit_command?(cmd) }
 
-  if ARGV.include?('--reconnect') and ARGV.include?('--login') and not explicit_shutdown and not explicit_exit_buffered
-    if (reconnect_arg = ARGV.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
+  if original_argv.include?('--reconnect') and original_argv.include?('--login') and not explicit_shutdown and not explicit_exit_buffered
+    if (reconnect_arg = original_argv.find { |arg| arg =~ /^\-\-reconnect\-delay=[0-9]+(?:\+[0-9]+)?$/ })
       reconnect_arg =~ /^\-\-reconnect\-delay=([0-9]+)(\+[0-9]+)?/
       reconnect_delay = $1.to_i
       reconnect_step = $2.to_i
@@ -26,7 +36,7 @@ reconnect_if_wanted = proc {
       args = ['ruby']
     end
     args.push $PROGRAM_NAME.slice(/[^\\\/]+$/)
-    args.concat ARGV
+    args.concat original_argv
     args.push '--reconnected' unless args.include?('--reconnected')
     if reconnect_step > 0
       args.delete(reconnect_arg)
@@ -49,6 +59,9 @@ reconnect_if_wanted = proc {
   @launch_data = nil
   require File.join(LIB_DIR, 'common', 'authentication', 'eaccess.rb')
   require File.join(LIB_DIR, 'common', 'account.rb')
+  # Post-login credential redaction; loads here because the credentials it
+  # scrubs (@launch_data, @argv_options, ARGV) are owned by main runtime startup.
+  require File.join(LIB_DIR, 'common', 'credential_scrub.rb')
   # PipeIO is only consumed here (--pipe mode client adapter), so it loads with
   # main rather than from lich.rbw's top-level require chain -- that chain also
   # runs during self-update against older lib snapshots where pipe_io.rb may not
@@ -339,6 +352,10 @@ reconnect_if_wanted = proc {
           sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         end
         File.open(sal_filename, 'w') { |f| f.puts @launch_data }
+        # Backstop only. The removals below run on both the connected and the
+        # timeout path, but an exception in between would otherwise leave the
+        # eaccess key sitting in TEMP_DIR.
+        at_exit { Lich::Common::CredentialScrub.shred_file(sal_filename) }
         launcher_cmd = launcher_cmd.sub('%1', sal_filename)
         launcher_cmd = launcher_cmd.tr('/', "\\") if (RUBY_PLATFORM =~ /mingw|win/i) and (RUBY_PLATFORM !~ /darwin/i)
       end
@@ -364,9 +381,7 @@ reconnect_if_wanted = proc {
         #        else
         Lich.msgbox(:message => "error: timeout waiting for client to connect", :icon => :error)
         #        end
-        if sal_filename
-          File.delete(sal_filename) # rescue() # rubocop complaint, but is it even necessary?
-        end
+        Lich::Common::CredentialScrub.shred_file(sal_filename) if sal_filename
         listener.close # rescue() # rubocop complaint, but is it even necessary?
         $_CLIENT_.close # rescue() # rubocop complaint, but is it even necessary?
         reconnect_if_wanted.call
@@ -379,9 +394,7 @@ reconnect_if_wanted = proc {
       #      end
       Lich.log 'info: connected'
       listener.close rescue nil
-      if sal_filename
-        File.delete(sal_filename) rescue nil
-      end
+      Lich::Common::CredentialScrub.shred_file(sal_filename) if sal_filename
     end
     gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
@@ -523,6 +536,15 @@ reconnect_if_wanted = proc {
     exit
   end
 
+  # Every connection path above is done with the startup credentials by here, so
+  # redact them before any script can run. @launch_data and @argv_options are
+  # instance variables on the top-level object and ARGV is a global constant, all
+  # three readable from a script binding for the rest of the session. Flags are
+  # preserved, only values are overwritten, so the ARGV checks below still work.
+  Lich::Common::CredentialScrub.scrub_launch_data!(@launch_data)
+  Lich::Common::CredentialScrub.scrub_argv!(ARGV)
+  Lich::Common::CredentialScrub.scrub_options!(@argv_options)
+
   listener = nil
 
   undef :exit!
@@ -578,6 +600,7 @@ reconnect_if_wanted = proc {
       $login_time = Time.now
 
       if $offline_mode
+        game_key = nil
         next nil
       elsif Frontend.supports_gsl?
         #
@@ -674,6 +697,14 @@ reconnect_if_wanted = proc {
           Game._puts(client_string)
         end
       end
+
+      # game_key is a local captured from the enclosing @main_thread block, so this
+      # clears the only binding rather than a reference private to this thread.
+      # Still race-free: every branch above has either sent the login key or handed
+      # that job to the frontend, and the --without-frontend thread that also sends
+      # it is created in the mutually exclusive branch of the surrounding
+      # conditional, so no other reader can still be pending.
+      game_key = nil
 
       begin
         while (client_string = $_CLIENT_.gets)
