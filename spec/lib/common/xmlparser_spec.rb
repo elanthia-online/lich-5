@@ -559,5 +559,35 @@ RSpec.describe Lich::Common::XMLParser do
       expect { feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - "/>)) }.not_to raise_error
       expect(parser.room_title).to eq('[[Catacombs, Labyrinth]]')
     end
+
+    # show_room_id records whether the game itself displayed the RealID this arrival (a subtitle
+    # "(uid)"/"(**)" marker == ShowRoomID ON). It is what lets the outbound room-name/subtitle
+    # rewrite preserve the game's choice GS-style rather than second-guessing the flag.
+    describe 'show_room_id (did the game display the RealID this arrival?)' do
+      it 'defaults false before any room subtitle is seen' do
+        expect(parser.show_room_id).to be false
+      end
+
+      it 'is true when a ShowRoomID-on subtitle carries a numeric uid marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)"/>))
+        expect(parser.show_room_id).to be true
+      end
+
+      it 'is true for a ShowRoomID-on no-uid room showing the "(**)" marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Dark Cave] (**)"/>))
+        expect(parser.show_room_id).to be true
+      end
+
+      it 'is false when a ShowRoomID-off subtitle has no marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks]"/>))
+        expect(parser.show_room_id).to be false
+      end
+
+      it 'clears a stale true when the next arrival turns ShowRoomID off' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Lit Room] (230008)"/>))
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Dark Cave]"/>))
+        expect(parser.show_room_id).to be false
+      end
+    end
   end
 end
