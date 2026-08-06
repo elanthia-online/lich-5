@@ -58,6 +58,10 @@ module Lich
       # Per-argument byte cap applied when dumping pending writes after an
       # overflow. Longer payloads are truncated with their full byte size noted.
       OVERFLOW_DUMP_MAX_BYTES_PER_ARG = 1_024
+      # Leading and trailing entries emitted per section by the overflow dump.
+      # Bounds a single log record at roughly 400 entries per section instead of
+      # the full queue capacity.
+      OVERFLOW_DUMP_EDGE_ENTRIES = 200
       ROLES = %i[primary detachable].freeze
       ATTACHMENT_STREAM_SENTINEL = Object.new.freeze
 
@@ -318,7 +322,7 @@ module Lich
 
         stops, groups = grouped_pending_writes
         if groups.length <= OVERFLOW_KEEP_PROMPT_GROUPS
-          requeue_writes(groups, stops)
+          report_unrequeued(requeue_writes(groups, stops))
           return false
         end
 
@@ -326,14 +330,24 @@ module Lich
         dropped = groups[0...-kept.length]
         total_writes = groups.sum(&:length)
         dropped_writes = total_writes - kept.sum(&:length)
-        requeue_writes(kept, stops, drop_preamble(dropped, dropped_writes))
-        Lich.log "warning: client socket write queue reached #{@write_queue_capacity}; dropped " \
-                 "#{dropped_writes} of #{total_writes} pending display writes " \
-                 "(#{dropped.length} prompt groups, role=#{@role})"
+        unrequeued = requeue_writes(kept, stops, drop_preamble(dropped, dropped_writes))
+        message = "warning: client socket write queue reached #{@write_queue_capacity}; dropped " \
+                  "#{dropped_writes} of #{total_writes} pending display writes " \
+                  "(#{dropped.length} prompt groups, role=#{@role})"
+        message += "; #{unrequeued} retained writes could not be requeued" if unrequeued.positive?
+        Lich.log message
         true
       rescue StandardError => e
         log_writer_error('write queue compaction', e)
         false
+      end
+
+      # @api private
+      # @return [void]
+      def report_unrequeued(unrequeued)
+        return unless unrequeued.positive?
+
+        Lich.log "error: client socket requeue lost #{unrequeued} pending writes (role=#{@role})"
       end
 
       # Selects the trailing groups to retain.
@@ -419,12 +433,22 @@ module Lich
       # +@stream_stack+ models the stream state at the *tail* of the queue, and
       # the tail is unchanged by compaction. Re-scanning would corrupt it.
       #
+      # Pushes are non-blocking. The retention budget in +retained_groups+ is
+      # sized so the queue cannot refill here, but that guarantee lives in
+      # another method; if it is ever broken, report how many writes were lost
+      # rather than aborting compaction with a generic error and silently
+      # discarding the remainder.
+      #
       # @api private
-      # @return [void]
+      # @return [Integer] number of items that could not be requeued
       def requeue_writes(groups, stops, preamble = [])
-        preamble.each { |item| @write_queue.push(item, true) }
-        groups.each { |group| group.each { |item| @write_queue.push(item, true) } }
-        stops.each { |item| @write_queue.push(item, true) }
+        items = preamble + groups.flatten(1) + stops
+        items.each_with_index do |item, index|
+          @write_queue.push(item, true)
+        rescue ThreadError
+          return items.length - index
+        end
+        0
       end
 
       def enqueue_item_locked(item)
@@ -502,11 +526,34 @@ module Lich
         deferred = drain_deferred_main_stream
         lines = ["error: client socket overflow dump: #{queued.length} queued, #{deferred.length} deferred " \
                  "(capacity=#{@write_queue_capacity}, role=#{@role})"]
-        queued.each_with_index { |(kind, args), index| lines << "\tqueued[#{index}] #{kind} #{format_pending_args(args)}" }
-        deferred.each_with_index { |args, index| lines << "\tdeferred[#{index}] puts #{format_pending_args(args)}" }
+        lines.concat(dump_section('queued', queued) { |(kind, args)| "#{kind} #{format_pending_args(args)}" })
+        lines.concat(dump_section('deferred', deferred) { |args| "puts #{format_pending_args(args)}" })
         Lich.log lines.join("\n")
       rescue StandardError => e
         log_writer_error('pending write dump', e)
+      end
+
+      # Renders one dump section, bounded to the leading and trailing
+      # +OVERFLOW_DUMP_EDGE_ENTRIES+ entries with a count of what was omitted.
+      #
+      # At the default capacity an unbounded dump approaches several megabytes
+      # in a single log record. The head shows what started the flood and the
+      # tail shows what was in flight when the socket died, which is what the
+      # dump is actually read for.
+      #
+      # @api private
+      # @return [Array<String>]
+      def dump_section(label, entries)
+        edge = OVERFLOW_DUMP_EDGE_ENTRIES
+        omitted = entries.length - (edge * 2)
+        lines = []
+        entries.each_with_index do |entry, index|
+          lines << "\t... #{omitted} #{label} entries omitted ..." if omitted.positive? && index == edge
+          next if omitted.positive? && index >= edge && index < entries.length - edge
+
+          lines << "\t#{label}[#{index}] #{yield(entry)}"
+        end
+        lines
       end
 
       # @api private
@@ -526,7 +573,26 @@ module Lich
       # @api private
       # @return [Array<Array(Symbol, Array)>] drained queue entries in FIFO order
       def drain_write_queue
-        drain_write_queue_items.filter_map { |kind, args, _block| [kind, args] unless kind == :stop }
+        drained = drain_write_queue_items
+        requeue_stop_sentinel(drained)
+        drained.filter_map { |kind, args, _block| [kind, args] unless kind == :stop }
+      end
+
+      # Re-arms the writer thread's exit signal after a destructive drain.
+      #
+      # +compact_write_queue!+ preserves stop sentinels for the same reason: a
+      # discarded +:stop+ can leave a writer blocked in +pop+ with nothing left
+      # to wake it. The queue is empty at this point so the push cannot fail,
+      # but a lost exit signal is worse than a redundant rescue.
+      #
+      # @api private
+      # @return [void]
+      def requeue_stop_sentinel(drained)
+        return unless drained.any? { |item| item.first == :stop }
+
+        @write_queue.push([:stop, [], nil], true)
+      rescue ThreadError
+        nil
       end
 
       # @api private

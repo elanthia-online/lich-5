@@ -612,10 +612,12 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       allow(delegate).to receive(:puts) { |arg| written << arg.to_s }
       bounded, release = stalled_socket_with_groups(keep + 3, capacity: keep + 3)
       bounded.write('newest<prompt time="99">&gt;</prompt>')
+
+      # Recorder must be installed before the writer is unblocked, or early
+      # writes are consumed by the stall stub and never observed.
+      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
       release << true
 
-      # Let the writer drain what survived compaction.
-      allow(delegate).to receive(:write) { |arg| written << arg.to_s }
       eventually(timeout: 2) { expect(written.any? { |w| w.include?('newest') }).to be true }
       expect(written.any? { |w| w.include?('line0') }).to be false
     ensure
@@ -703,6 +705,58 @@ RSpec.describe Lich::Common::SynchronizedSocket do
     ensure
       release << true if release
       bounded&.close rescue nil
+    end
+
+    # requeue_writes is reached only from compaction, where the retention budget
+    # makes a full queue unreachable. This exercises the defensive path directly
+    # so a future change to that budget surfaces as a counted loss rather than a
+    # generic compaction error with silently discarded writes.
+    it 'reports how many writes could not be requeued' do
+      bounded = described_class.new(delegate, write_queue_capacity: 4)
+      bounded.instance_variable_set(:@write_queue, SizedQueue.new(4))
+      oversized = Array.new(6) { |i| [:write, ["item#{i}"], nil] }
+
+      lost = bounded.send(:requeue_writes, [oversized], [])
+
+      expect(lost).to eq(2)
+      expect(bounded.instance_variable_get(:@write_queue).length).to eq(4)
+    end
+
+    it 'preserves the stop sentinel across the diagnostic drain' do
+      bounded = described_class.new(delegate, write_queue_capacity: 8)
+      queue = SizedQueue.new(8)
+      bounded.instance_variable_set(:@write_queue, queue)
+      queue.push([:write, ['payload'], nil], true)
+      queue.push([:stop, [], nil], true)
+
+      drained = bounded.send(:drain_write_queue)
+
+      expect(drained).to eq([[:write, ['payload']]])
+      expect(queue.length).to eq(1)
+      expect(queue.pop(true)).to eq([:stop, [], nil])
+    end
+
+    it 'bounds the overflow dump and reports how many entries were omitted' do
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message.to_s }
+      edge = described_class::OVERFLOW_DUMP_EDGE_ENTRIES
+      total = (edge * 2) + 25
+      bounded = described_class.new(delegate, write_queue_capacity: total + 1)
+      queue = SizedQueue.new(total + 1)
+      bounded.instance_variable_set(:@write_queue, queue)
+      bounded.instance_variable_set(:@stream_mutex, Mutex.new)
+      bounded.instance_variable_set(:@deferred_main_stream, [])
+      total.times { |i| queue.push([:write, ["entry#{i}"], nil], true) }
+
+      bounded.send(:log_pending_writes)
+
+      dump = logged.find { |m| m.include?('overflow dump') }
+      expect(dump).to include("#{total} queued, 0 deferred")
+      expect(dump).to include('... 25 queued entries omitted ...')
+      expect(dump).to include('queued[0] write')
+      expect(dump).to include("queued[#{total - 1}] write")
+      expect(dump).not_to include("queued[#{edge}] write")
+      expect(dump.lines.length).to eq((edge * 2) + 2) # header + 400 entries + marker
     end
   end
 
