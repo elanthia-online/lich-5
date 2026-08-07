@@ -565,12 +565,25 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.run_child('child')).to equal(child)
     end
 
-    it 'applies an explicit Script.run_child timeout' do
+    it 'tears down and raises when the Script.run_child timeout expires' do
       child = build_script('child')
       allow(script_class).to receive(:start_child).with('child').and_return(child)
       expect(child).to receive(:join).with(0.25).and_return(nil)
+      expect(child).to receive(:kill_sync)
 
-      expect(script_class.run_child('child', :timeout => 0.25)).to be_nil
+      expect {
+        script_class.run_child('child', :timeout => 0.25)
+      }.to raise_error(script_class::TimeoutError) { |error|
+        expect(error.script).to equal(child)
+      }
+    end
+
+    it 'raises when a Script.run_child child cannot be started' do
+      allow(script_class).to receive(:start_child).with('child').and_return(nil)
+
+      expect {
+        script_class.run_child('child')
+      }.to raise_error(script_class::StartError, /script failed to start: child/)
     end
 
     it 'rejects a negative Script.run_child timeout before starting the child' do
@@ -1073,11 +1086,13 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       expect(script_class.run_child('worker')).to equal(child)
     end
 
-    it 'returns nil when run_child teardown times out' do
-      child = instance_double(script_class, :join => nil)
+    it 'tears down and raises when run_child teardown times out' do
+      child = instance_double(script_class, :join => nil, :name => 'worker')
+      allow(child).to receive(:kill_sync)
       allow(script_class).to receive(:start_child).with('worker').and_return(child)
 
-      expect(script_class.run_child('worker')).to be_nil
+      expect { script_class.run_child('worker') }.to raise_error(script_class::TimeoutError)
+      expect(child).to have_received(:kill_sync)
     end
 
     it 'waits for exit handlers in kill_sync' do
