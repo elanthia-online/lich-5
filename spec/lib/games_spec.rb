@@ -201,7 +201,7 @@ RSpec.describe Lich::GameBase::GameInstance do
       expect { game_instance.handle_atmospherics("test") }.to raise_error(NotImplementedError)
       expect { game_instance.get_documentation_url }.to raise_error(NotImplementedError)
       expect { game_instance.process_game_specific_data("test") }.to raise_error(NotImplementedError)
-      expect { game_instance.modify_room_display("test", nil, nil) }.to raise_error(NotImplementedError)
+      expect { game_instance.modify_room_display("test") }.to raise_error(NotImplementedError)
       expect { game_instance.process_room_display("test") }.to raise_error(NotImplementedError)
     end
   end
@@ -497,10 +497,12 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
     end
   end
 
-  # The room-window subtitle (the window title bar) is a title surface too, so it must read
-  # identically to the room-name line #modify_room_display rewrites. The subtitle is rebuilt
-  # from the (always UID-free) XMLData.room_title, so the preserved game RealID is synthesized
-  # from XMLData.room_id and gated on XMLData.show_room_id (the game's ShowRoomID flag state).
+  # The room-window subtitle (the window title bar) is a title surface too. Lich's own id/UID
+  # rides it for every placement, and the game-supplied RealID is re-appended whenever the game
+  # displayed it (ShowRoomID on) - independent of ";display roomid", which governs only where
+  # Lich's id goes. The subtitle is rebuilt from the (always UID-free) XMLData.room_title, so
+  # the RealID is synthesized from the authoritative nav UID (XMLData.room_id) and gated on
+  # XMLData.show_room_id (the game's ShowRoomID flag state).
   describe '#process_room_display (room-window subtitle parity)' do
     before do
       allow(Frontend).to receive(:supports_room_window?).and_return(true)
@@ -548,6 +550,34 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
       room_name = dr.modify_room_display(+'[Test Room] (230008)')
       subtitle = dr.process_room_display(+'PROMPT')[/subtitle=" - (?<title>.*?)"/, :title]
       expect(subtitle).to eq(room_name)
+    end
+
+    it 'shows the game RealID in the window title for the "line" placement (default DR path)' do
+      # ";display roomid line" places Lich's id in the below-room line, but the game RealID still
+      # belongs in the window title when ShowRoomID is on: the game shows it there regardless of
+      # where Lich puts its own id, and it already rides the room-name line for this placement.
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (230008)"))
+    end
+
+    it 'shows the game RealID in the window title for the nil (unset) placement' do
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = nil
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (230008)"))
+    end
+
+    it 'synthesizes the window-title RealID from the authoritative nav UID, not any room-name literal' do
+      # nav (XMLData.room_id) is the primary UID source for every game (see the <nav> handler);
+      # the subtitle is rebuilt from the UID-free room_title, so it must follow nav. Force nav to
+      # a value no room-name literal here carries and confirm the window title reports nav.
+      XMLData.show_room_id = true
+      XMLData.room_id = 999999
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (999999)"))
     end
   end
 
