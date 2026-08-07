@@ -199,7 +199,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #process_game_specific_data"
         end
 
-        def modify_room_display(alt_string, uid_from_string, lichid_from_uid_string)
+        def modify_room_display(alt_string)
           raise NotImplementedError, "#{self.class} must implement #modify_room_display"
         end
 
@@ -1458,21 +1458,26 @@ module Lich
       # Rewrites the room-name line (the "<style id=\"roomName\" />[Title]" chunk) on its way
       # to the client. Two independent concerns:
       #   1. When the player wants the room id/UID in the title (";display roomid title|both"),
-      #      strip any RealID the game appended (present only under the ShowRoomID flag) and
-      #      inject Lich's configured id/UID, so the name reads e.g.
-      #      "[Town Square - 1234 - (u230008)]".
+      #      inject Lich's configured id/UID before the closing bracket. The game-supplied
+      #      RealID (present only under the ShowRoomID flag) is preserved GemStone-style so
+      #      ";display lichid" alone reads "[Town Square - 1234] (230008)" - matching how
+      #      Lich::Gemstone::GameInstance#modify_room_display already behaves. It is stripped
+      #      only when Lich is rendering its own UID instead ({#suppress_game_realid?}), so a
+      #      ";display uid" title reads "[Town Square - 1234 - (u230008)]" with no duplicate.
       #   2. Otherwise preserve the historical behavior of hiding the game's inline RealID when
       #      the player asked to (";display uid" or ";display flaguid").
       # Edits only this outbound client string; XMLData (and therefore scripts) are untouched,
       # because process_xml_data has already parsed the inbound stream before this runs.
       # @param alt_string [String] the outbound room-name server string, modified in place
       # @return [String] the rewritten string
+      # @see #suppress_game_realid?
+      # @see Lich::Gemstone::GameInstance#modify_room_display
       def modify_room_display(alt_string)
         if room_id_in_title?
-          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+          alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" } if suppress_game_realid?
           room_number = room_number_display
           alt_string.sub!(']') { " - #{room_number}]" } unless room_number.empty?
-        elsif Lich.display_uid == true || Lich.hide_uid_flag == true
+        elsif suppress_game_realid?
           alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
         end
 
@@ -1482,9 +1487,17 @@ module Lich
       # Prepends the shared exit / StringProc lines, then renders the optional DragonRealms
       # room id/UID. The "Room Number:" line below the room appears for the "line" and "both"
       # placements (honoring the mono toggle). The room-window subtitle (room-window front-ends
-      # only) reflects the id/UID for every placement, since the window title bar is itself a
-      # title surface. The inline room-name injection for the "title"/"both" placements is
-      # handled separately in #modify_room_display.
+      # only) reflects Lich's id/UID for every placement, since the window title bar is itself a
+      # title surface. It also re-appends the game-supplied RealID ({#synthesized_realid_suffix})
+      # whenever the game displayed it (ShowRoomID ON) - independent of ";display roomid", which
+      # governs only where Lich's own id is placed, not whether the game's RealID is shown. So a
+      # ShowRoomID-on room shows the RealID in the window title under every placement, matching
+      # the game's own behavior and the RealID the game already leaves on the room-name line for
+      # the "line"/nil placements. The RealID is synthesized from the authoritative nav UID
+      # (XMLData.room_id) rather than copied from the inbound string, because the subtitle is
+      # rebuilt from the (UID-free) XMLData.room_title; for a complete arrival nav and the
+      # room-name literal agree, so the two surfaces read identically. The inline room-name
+      # injection for the "title"/"both" placements is handled separately in #modify_room_display.
       # @param alt_string [String] the server string being rewritten
       # @return [String] the rewritten server string
       def process_room_display(alt_string)
@@ -1496,8 +1509,9 @@ module Lich
             alt_string = "#{room_styled("Room Number: #{room_number}")}\r\n#{alt_string}"
           end
           if Frontend.supports_room_window?
-            alt_string = "<streamWindow id='main' title='Story' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop'/>\r\n#{alt_string}"
-            alt_string = "<streamWindow id='room' title='Room' subtitle=\" - [#{XMLData.room_title[2..-3]} - #{room_number}]\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
+            subtitle = " - [#{XMLData.room_title[2..-3]} - #{room_number}]#{synthesized_realid_suffix}"
+            alt_string = "<streamWindow id='main' title='Story' subtitle=\"#{subtitle}\" location='center' target='drop'/>\r\n#{alt_string}"
+            alt_string = "<streamWindow id='room' title='Room' subtitle=\"#{subtitle}\" location='center' target='drop' ifClosed='' resident='true'/>#{alt_string}"
           end
         end
 
@@ -1509,7 +1523,7 @@ module Lich
       # Builds the DragonRealms room id / RealID string chosen via ";display lichid" and
       # ";display uid", e.g. "1234 - (u230008)", "1234", or "(u230008)". The lich id is omitted
       # (rather than raising) when the current room is unmapped, and the UID renders as "(**)"
-      # for a no-UID room (XMLData.room_id == 0). Shared by #modify_room_display (title
+      # for a no-UID room (XMLData.room_id.zero?). Shared by #modify_room_display (title
       # injection) and #process_room_display (below-room line and window subtitle) so the two
       # never drift in format.
       # @return [String] the formatted id/UID, or "" when there is nothing to show
@@ -1519,7 +1533,7 @@ module Lich
           current = Map.current
           segments << current.id.to_s if current
         end
-        segments << (XMLData.room_id == 0 ? "(**)" : "(u#{XMLData.room_id})") if Lich.display_uid
+        segments << (XMLData.room_id.zero? ? "(**)" : "(u#{XMLData.room_id})") if Lich.display_uid
         segments.join(" - ")
       end
 
@@ -1535,6 +1549,38 @@ module Lich
       def room_id_in_line?
         location = Lich.display_roomid_location
         location.nil? || %w[line both].include?(location)
+      end
+
+      # Whether Lich should strip the game-supplied inline RealID from the room name instead of
+      # preserving it. True when Lich renders its own UID ("(u230008)") via ";display uid" - so
+      # keeping the game RealID too would duplicate it - or when the player asked to hide it via
+      # ";display flaguid" (hide_uid_flag). When false, the game RealID is left intact so
+      # ";display lichid" reads "[Room - 1234] (230008)", matching GemStone.
+      # @return [Boolean]
+      # @see #modify_room_display
+      def suppress_game_realid?
+        Lich.display_uid == true || Lich.hide_uid_flag == true
+      end
+
+      # The RealID suffix to append to a reconstructed title (the room-window subtitle) so it
+      # shows the same game RealID #modify_room_display preserves on the room-name line. The
+      # subtitle is rebuilt from XMLData.room_title (which is always UID-free), so the marker is
+      # synthesized here from the authoritative nav UID (XMLData.room_id) rather than copied from
+      # the inbound string - <nav rm=.../> is the primary UID source for every game (see the nav
+      # handler in XMLParser), the same source GemStone derives its ";display uid" marker from.
+      # For a complete arrival nav and the room-name literal agree, so the two surfaces match;
+      # nav wins only in the late/absent/stale-subtitle edge case #1491 introduced it to handle,
+      # where it is the correct value. Empty unless the game actually displayed the RealID this
+      # arrival (ShowRoomID ON, tracked by {XMLData#show_room_id}) and Lich is preserving rather
+      # than replacing it ({#suppress_game_realid?}). Renders "(**)" for a ShowRoomID-on room
+      # that has no UID (room_id 0), mirroring the game's own no-UID marker.
+      # @return [String] " (230008)", " (**)", or "" (nothing to append)
+      # @see #process_room_display
+      # @see #suppress_game_realid?
+      def synthesized_realid_suffix
+        return '' if suppress_game_realid? || !XMLData.show_room_id
+
+        " (#{XMLData.room_id.zero? ? '**' : XMLData.room_id})"
       end
     end
 
