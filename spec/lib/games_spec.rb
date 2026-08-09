@@ -99,6 +99,22 @@ RSpec.describe Lich::GameBase do
       expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
     end
 
+    it 'records remote EOF when the game reader receives it' do
+      begin
+        described_class.initialize_buffers
+        allow(described_class).to receive(:read_server_string).and_return(nil)
+        allow(described_class).to receive(:record_shutdown_reason)
+
+        described_class.start_socket_reader_thread
+        described_class.reader_thread.join(1)
+
+        expect(described_class.remote_eof?).to be(true)
+      ensure
+        described_class.reader_thread&.kill
+        described_class.initialize_buffers
+      end
+    end
+
     it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
       error = Errno::ECONNRESET.new
       error.set_backtrace(['games.rb:1'])
@@ -1067,7 +1083,7 @@ RSpec.describe Lich::GameBase::Game do
 
     it 'writes to the socket' do
       allow(mock_socket).to receive(:puts)
-      described_class.send(:_puts, 'test')
+      expect(described_class.send(:_puts, 'test')).to be(true)
       expect(mock_socket).to have_received(:puts).with('test')
     end
 

@@ -405,6 +405,7 @@ module Lich
           @last_recv = nil
           @thread = nil
           @reader_thread = nil
+          @remote_eof = false
           @server_queue = SizedQueue.new(SERVER_QUEUE_CAPACITY)
           reset_server_queue_stats!
           @buffer = Lich::Common::SharedBuffer.new
@@ -436,6 +437,7 @@ module Lich
         #   {.open_with_timeout} to bound how long the connect may block.
         # @see .open_with_timeout
         def open(host, port)
+          @remote_eof = false
           @socket = TCPSocket.open(host, port)
 
           # Configure socket with error handling
@@ -530,6 +532,11 @@ module Lich
           @socket.nil? || @socket.closed?
         end
 
+        # @return [Boolean] whether the game server closed its side of the socket
+        def remote_eof?
+          @remote_eof == true
+        end
+
         def reset_server_queue_stats!
           @server_queue_enqueued = 0
           @server_queue_dequeued = 0
@@ -621,11 +628,12 @@ module Lich
         # so callers (scripts) are not killed by a broken server link.
         #
         # @param str [String] the raw command to send upstream
-        # @return [nil] on connection error
+        # @return [true, nil] true when written; nil on connection error
         def _puts(str)
           @mutex.synchronize do
             @socket.puts(str)
           end
+          true
         rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
           Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
           nil
@@ -743,6 +751,7 @@ module Lich
 
                   # Break if socket closed (gets returns nil)
                   if server_string.nil?
+                    @remote_eof = true
                     record_shutdown_reason(:game_eof, source: :game_reader)
                     break
                   end
