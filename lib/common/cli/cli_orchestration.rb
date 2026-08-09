@@ -26,6 +26,10 @@ module Lich
               handle_change_account_password
             when /^--add-account$/, /^-aa$/
               handle_add_account
+            when /^--refresh-characters$/, /^-rc$/
+              handle_refresh_characters
+            when /^--add-character$/, /^-ac$/
+              handle_add_character
             when /^--change-master-password$/, /^-cmp$/
               handle_change_master_password
             when /^--recover-master-password$/, /^-rmp$/
@@ -113,6 +117,47 @@ module Lich
 
           frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
           exit Lich::Common::Authentication::CLIPassword.add_account(account, password, frontend)
+        end
+
+        def self.handle_refresh_characters
+          idx = ARGV.index { |a| a =~ /^--refresh-characters$|^-rc$/ }
+          account = ARGV[idx + 1]
+          password = ARGV[idx + 2]
+
+          if account.nil? || password.nil?
+            lich_script = File.join(LICH_DIR, 'lich.rbw')
+            $stdout.puts 'error: Missing required arguments'
+            $stdout.puts "Usage: ruby #{lich_script} --refresh-characters ACCOUNT PASSWORD [--frontend FRONTEND]"
+            $stdout.puts "   or: ruby #{lich_script} -rc ACCOUNT PASSWORD [--frontend FRONTEND]"
+            exit 1
+          end
+
+          frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
+          exit Lich::Common::Authentication::CLIPassword.refresh_characters(account, password, frontend)
+        end
+
+        def self.handle_add_character
+          idx = ARGV.index { |a| a =~ /^--add-character$|^-ac$/ }
+          account = ARGV[idx + 1]
+          char_name = ARGV[idx + 2]
+
+          if account.nil? || char_name.nil?
+            lich_script = File.join(LICH_DIR, 'lich.rbw')
+            $stdout.puts 'error: Missing required arguments'
+            $stdout.puts "Usage: ruby #{lich_script} --add-character ACCOUNT CHAR_NAME [--game-code CODE] [--frontend FRONTEND]"
+            $stdout.puts "   or: ruby #{lich_script} -ac ACCOUNT CHAR_NAME [--game-code CODE] [--frontend FRONTEND]"
+            exit 1
+          end
+
+          game_code = ARGV[ARGV.index('--game-code') + 1] if ARGV.include?('--game-code')
+          frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
+
+          exit Lich::Common::Authentication::CLIPassword.add_character(
+            account,
+            char_name,
+            game_code: game_code || 'DR',
+            frontend: frontend
+          )
         end
 
         def self.handle_change_master_password

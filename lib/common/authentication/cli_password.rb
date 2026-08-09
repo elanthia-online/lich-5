@@ -4,6 +4,7 @@ require 'yaml'
 require_relative 'entry_store'
 require_relative '../gui/utilities'
 require_relative '../gui/account_manager'
+require_relative '../gui/game_selection'
 require_relative 'authenticator'
 
 module Lich
@@ -188,6 +189,145 @@ module Lich
             # CRITICAL: Only log e.message, NEVER log password values
             puts "error: #{e.message}"
             Lich.log "error: CLI add account failed for '#{account}': #{e.message}"
+            1
+          end
+        end
+
+        # Re-fetches an account's character list from the game servers and merges it
+        # into entry.yaml. Existing characters and their metadata (favorites, custom
+        # launch config) are preserved by AccountManager.add_or_update_account's merge
+        # behavior; only new/changed characters get added.
+        # Mirrors add_account's authentication flow, but requires the account to
+        # already exist (the opposite of add_account's guard).
+        #
+        # @param account [String] Account username
+        # @param password [String] Account password
+        # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @return [Integer] Exit code (0=success, 1=save error, 2=account not found, 3=auth failed)
+        def self.refresh_characters(account, password, frontend = nil)
+          account = account.upcase
+
+          data_dir = DATA_DIR
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+
+          begin
+            unless File.exist?(yaml_file)
+              puts "error: Account '#{account}' not found"
+              Lich.log "error: CLI refresh characters failed - entry.yaml not found"
+              return 2
+            end
+
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+            unless yaml_data['accounts'] && yaml_data['accounts'][account]
+              puts "error: Account '#{account}' not found"
+              Lich.log "error: CLI refresh characters failed - account '#{account}' not found"
+              return 2
+            end
+
+            Lich.log "info: Refreshing characters for account '#{account}' via CLI"
+
+            # Authenticate with game servers to fetch characters (like GUI does)
+            puts "Authenticating with game servers..."
+            Lich.log "info: Authenticating account '#{account}' with game servers"
+            auth_data = Lich::Common::Authentication.authenticate(
+              account: account,
+              password: password,
+              legacy: true
+            )
+
+            unless auth_data && auth_data.is_a?(Array) && !auth_data.empty?
+              puts "error: Authentication failed or no characters found"
+              Lich.log "error: CLI refresh characters failed - game server authentication failed for '#{account}'"
+              return 3
+            end
+
+            Lich.log "info: Authentication successful - found #{auth_data.length} character(s)"
+
+            # Determine frontend
+            selected_frontend = if frontend
+                                  Lich.log "info: Using provided frontend: #{frontend}"
+                                  frontend
+                                else
+                                  predominant = determine_predominant_frontend(yaml_file)
+                                  if predominant
+                                    puts "Using predominant frontend: #{predominant}"
+                                    Lich.log "info: Using predominant frontend: #{predominant}"
+                                    predominant
+                                  else
+                                    prompt_for_frontend
+                                  end
+                                end
+
+            # Convert authentication data to character list
+            character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(
+              auth_data,
+              selected_frontend || 'stormfront'
+            )
+
+            # Merge into existing account using AccountManager (preserves other data)
+            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, character_list)
+              puts "success: Characters refreshed for account '#{account}' (#{character_list.length} found)"
+              Lich.log "info: Characters refreshed successfully for account '#{account}' (#{character_list.length} found)"
+              if selected_frontend.nil? || selected_frontend.empty?
+                puts "note: Frontend not set - use GUI to configure or rerun with --frontend"
+                Lich.log "warning: No frontend set for account '#{account}'"
+              end
+              0
+            else
+              puts "error: Failed to save characters"
+              Lich.log "error: CLI refresh characters failed - could not save account '#{account}'"
+              1
+            end
+          rescue StandardError => e
+            # CRITICAL: Only log e.message, NEVER log password values
+            puts "error: #{e.message}"
+            Lich.log "error: CLI refresh characters failed for '#{account}': #{e.message}"
+            1
+          end
+        end
+
+        # Adds a single character to an existing account's entry.yaml record, with no
+        # server round-trip. Thin CLI wrapper around AccountManager.add_character (the
+        # same method the GUI's "Add Character" tab calls) - duplicate detection and
+        # account-not-found messaging live there, not here.
+        #
+        # @param account [String] Account username
+        # @param char_name [String] Character name
+        # @param game_code [String] Game code (default 'DR' - DragonRealms)
+        # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @return [Integer] Exit code (0=success, 1=failure)
+        def self.add_character(account, char_name, game_code: 'DR', frontend: nil)
+          account = account.upcase
+
+          data_dir = DATA_DIR
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+
+          begin
+            selected_frontend = frontend || determine_predominant_frontend(yaml_file) || 'stormfront'
+
+            character_data = {
+              char_name: char_name,
+              game_code: game_code,
+              game_name: Lich::Common::GUI::GameSelection.get_game_name(game_code),
+              frontend: selected_frontend,
+              custom_launch: nil,
+              custom_launch_dir: nil
+            }
+
+            result = Lich::Common::GUI::AccountManager.add_character(data_dir, account, character_data)
+
+            if result[:success]
+              puts "success: #{result[:message]}"
+              Lich.log "info: CLI add character succeeded for '#{account}': #{result[:message]}"
+              0
+            else
+              puts "error: #{result[:message]}"
+              Lich.log "error: CLI add character failed for '#{account}': #{result[:message]}"
+              1
+            end
+          rescue StandardError => e
+            puts "error: #{e.message}"
+            Lich.log "error: CLI add character failed for '#{account}': #{e.message}"
             1
           end
         end

@@ -2,8 +2,12 @@
 
 require 'rspec'
 require 'tempfile'
+require 'tmpdir'
 require 'yaml'
 require 'fileutils'
+
+# Define DATA_DIR before requiring source files
+DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
 
 # Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
 # before any source files are required
@@ -330,6 +334,214 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         .and_return(false)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
+      expect(exit_code).to eq(1)
+    end
+  end
+
+  describe '.refresh_characters' do
+    before do
+      yaml_data = {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => {
+          'DOUG' => {
+            'password'   => 'password',
+            'characters' => [
+              { 'char_name' => 'Oldchar', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+            ]
+          }
+        }
+      }
+      File.write(yaml_file, YAML.dump(yaml_data))
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:validate_master_password_available).and_return(true)
+    end
+
+    it 'returns 2 when account not found' do
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('NONEXISTENT', 'password')
+      expect(exit_code).to eq(2)
+    end
+
+    it 'returns 2 when yaml file does not exist' do
+      File.delete(yaml_file)
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      expect(exit_code).to eq(2)
+    end
+
+    it 'authenticates with game servers' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+        .and_return(true)
+
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+
+      expect(Lich::Common::Authentication).to have_received(:authenticate).with(
+        account: 'DOUG',
+        password: 'password',
+        legacy: true
+      )
+    end
+
+    it 'returns 3 when authentication fails' do
+      allow(Lich::Common::Authentication).to receive(:authenticate).and_return(nil)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      expect(exit_code).to eq(3)
+    end
+
+    it 'returns 3 when no characters found' do
+      allow(Lich::Common::Authentication).to receive(:authenticate).and_return([])
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      expect(exit_code).to eq(3)
+    end
+
+    it 'merges fetched characters into existing account via AccountManager.add_or_update_account' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+
+      expect(exit_code).to eq(0)
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account).with(
+        anything, 'DOUG', 'password', anything
+      )
+    end
+
+    it 'passes explicit frontend to convert_auth_data_to_characters' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'avalon')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'avalon')
+    end
+
+    it 'falls back to predominant frontend when none provided' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      # DOUG's only existing character uses 'wizard', so that's the predominant frontend
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'wizard')
+    end
+
+    it 'returns 1 when AccountManager.add_or_update_account fails' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(false)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+      expect(exit_code).to eq(1)
+    end
+  end
+
+  describe '.add_character' do
+    before do
+      yaml_data = {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => {
+          'DOUG' => {
+            'password'   => 'password',
+            'characters' => [
+              { 'char_name' => 'Oldchar', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+            ]
+          }
+        }
+      }
+      File.write(yaml_file, YAML.dump(yaml_data))
+    end
+
+    it 'calls AccountManager.add_character with the given char_name and default game_code' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: "Character 'Newchar' added successfully." })
+
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(char_name: 'Newchar', game_code: 'DR')
+      )
+    end
+
+    it 'uses an explicit game_code when provided' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'GS3')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(game_code: 'GS3')
+      )
+    end
+
+    it 'uses an explicit frontend when provided' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', frontend: 'avalon')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(frontend: 'avalon')
+      )
+    end
+
+    it 'falls back to the predominant frontend when none provided' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      # DOUG's only existing character uses 'wizard', so that's the predominant frontend
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(frontend: 'wizard')
+      )
+    end
+
+    it 'falls back to stormfront when no frontend is provided or determinable' do
+      File.write(yaml_file, YAML.dump('encryption_mode' => 'plaintext', 'accounts' => { 'DOUG' => { 'password' => 'password' } }))
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        anything, 'DOUG', hash_including(frontend: 'stormfront')
+      )
+    end
+
+    it 'returns 0 on success' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+      expect(exit_code).to eq(0)
+    end
+
+    it 'returns 1 and surfaces the message when AccountManager.add_character fails (e.g. duplicate)' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: false, message: "Character 'Newchar' already exists for DR (wizard) with this launch configuration. Duplicates are not allowed." })
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
+      expect(exit_code).to eq(1)
+    end
+
+    it 'returns 1 and surfaces the message when the account does not exist' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: false, message: "Account 'NONEXISTENT' not found. Please add the account first." })
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('NONEXISTENT', 'Newchar')
+      expect(exit_code).to eq(1)
+    end
+
+    it 'returns 1 when yaml file is malformed' do
+      File.write(yaml_file, "not: valid: yaml: [")
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
       expect(exit_code).to eq(1)
     end
   end

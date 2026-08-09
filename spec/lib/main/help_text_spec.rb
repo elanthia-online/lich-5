@@ -22,6 +22,13 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--save')
     end
 
+    it 'documents the refresh-characters and add-character account commands' do
+      output = described_class.render('accounts')
+
+      expect(output).to include('--refresh-characters ACCOUNT PASSWORD')
+      expect(output).to include('--add-character ACCOUNT CHAR_NAME')
+    end
+
     it 'maps diagnostics requests to automation help' do
       output = described_class.render('diagnostics')
 
