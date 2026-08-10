@@ -6,6 +6,8 @@ require_relative '../authentication/cli_password'
 require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
+require_relative '../authentication/login_helpers'
+require_relative 'cli_option_validator'
 
 module Lich
   module Common
@@ -124,15 +126,21 @@ module Lich
           account = ARGV[idx + 1]
           password = ARGV[idx + 2]
 
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --refresh-characters ACCOUNT PASSWORD [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -rc ACCOUNT PASSWORD [--frontend FRONTEND]"
+
           if account.nil? || password.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
             $stdout.puts 'error: Missing required arguments'
-            $stdout.puts "Usage: ruby #{lich_script} --refresh-characters ACCOUNT PASSWORD [--frontend FRONTEND]"
-            $stdout.puts "   or: ruby #{lich_script} -rc ACCOUNT PASSWORD [--frontend FRONTEND]"
+            $stdout.puts usage
             exit 1
           end
 
-          frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
+          frontend = CliOptionValidator.extract_flag_value(
+            '--frontend',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+          )
           exit Lich::Common::Authentication::CLIPassword.refresh_characters(account, password, frontend)
         end
 
