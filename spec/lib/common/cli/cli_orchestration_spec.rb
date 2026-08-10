@@ -60,4 +60,39 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:refresh_characters)
     end
   end
+
+  describe '.handle_add_character' do
+    before do
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:add_character).and_return(0)
+    end
+
+    it 'passes explicit valid --game-code and --frontend through' do
+      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', 'GS3', '--frontend', 'avalon'])
+
+      expect { described_class.handle_add_character }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:add_character)
+        .with('DOUG', 'Newchar', game_code: 'GS3', frontend: 'avalon')
+    end
+
+    it 'exits 1 without adding a character when --game-code is omitted' do
+      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar'])
+
+      expect { described_class.handle_add_character }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_character)
+    end
+
+    it 'exits 1 without adding a character when --game-code is not a recognized code' do
+      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', 'ZZ'])
+
+      expect { described_class.handle_add_character }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_character)
+    end
+
+    it 'exits 1 without adding a character when --frontend is not a recognized frontend' do
+      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', 'DR', '--frontend', 'bogus'])
+
+      expect { described_class.handle_add_character }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_character)
+    end
+  end
 end

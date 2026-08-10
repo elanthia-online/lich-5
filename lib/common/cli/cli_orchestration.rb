@@ -149,21 +149,37 @@ module Lich
           account = ARGV[idx + 1]
           char_name = ARGV[idx + 2]
 
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -ac ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]"
+
           if account.nil? || char_name.nil?
-            lich_script = File.join(LICH_DIR, 'lich.rbw')
             $stdout.puts 'error: Missing required arguments'
-            $stdout.puts "Usage: ruby #{lich_script} --add-character ACCOUNT CHAR_NAME [--game-code CODE] [--frontend FRONTEND]"
-            $stdout.puts "   or: ruby #{lich_script} -ac ACCOUNT CHAR_NAME [--game-code CODE] [--frontend FRONTEND]"
+            $stdout.puts usage
             exit 1
           end
 
-          game_code = ARGV[ARGV.index('--game-code') + 1] if ARGV.include?('--game-code')
-          frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
+          game_code = CliOptionValidator.extract_flag_value(
+            '--game-code',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES
+          )
+          if game_code.nil?
+            $stdout.puts 'error: --game-code is required'
+            $stdout.puts usage
+            exit 1
+          end
+
+          frontend = CliOptionValidator.extract_flag_value(
+            '--frontend',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+          )
 
           exit Lich::Common::Authentication::CLIPassword.add_character(
             account,
             char_name,
-            game_code: game_code || 'DR',
+            game_code: game_code,
             frontend: frontend
           )
         end
