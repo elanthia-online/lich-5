@@ -316,8 +316,8 @@ module Lich
         else
           # for MUs check list of required buffs against list of active spells and their durations/recast
           buff_list.each do |spell, data|
-            # ignore spells which don't recast (ignite, etf, etc.)
-            next if data['recast'] < 0
+            # ignore spells which don't recast (ignite, etf, etc.) but not cyclics
+            next if data['recast'] < 0 && !data['cyclic']
             # if any buff is not in the active spells, or whose duration is less than recast, need to buff
             return true if !DRSpells.active_spells.key?(spell) || DRSpells.active_spells[spell] <= (data['recast'] ? data['recast'] : 1)
           end
