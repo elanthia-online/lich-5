@@ -154,7 +154,7 @@ module Lich
                                   frontend
                                 else
                                   # Check predominant frontend in YAML, or prompt
-                                  predominant = determine_predominant_frontend(yaml_file)
+                                  predominant = determine_predominant_frontend(yaml_file, account)
                                   if predominant
                                     puts "Using predominant frontend: #{predominant}"
                                     Lich.log "info: Using predominant frontend: #{predominant}"
@@ -248,7 +248,7 @@ module Lich
                                   Lich.log "info: Using provided frontend: #{frontend}"
                                   frontend
                                 else
-                                  predominant = determine_predominant_frontend(yaml_file)
+                                  predominant = determine_predominant_frontend(yaml_file, account)
                                   if predominant
                                     puts "Using predominant frontend: #{predominant}"
                                     Lich.log "info: Using predominant frontend: #{predominant}"
@@ -303,7 +303,7 @@ module Lich
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           begin
-            selected_frontend = frontend || determine_predominant_frontend(yaml_file) || 'stormfront'
+            selected_frontend = frontend || determine_predominant_frontend(yaml_file, account) || 'stormfront'
 
             character_data = {
               char_name: char_name,
@@ -456,24 +456,24 @@ module Lich
         end
 
         # @api private
-        # Determines predominant frontend from existing YAML accounts
+        # Determines the predominant frontend among a single account's existing
+        # characters. Scoped to one account so a multi-account entry.yaml doesn't
+        # leak another account's frontend preference into this one.
         #
         # @param yaml_file [String] Path to entry.yaml
+        # @param account [String] Account username (already upcased) to scope the count to
         # @return [String, nil] Predominant frontend or nil
-        def self.determine_predominant_frontend(yaml_file)
+        def self.determine_predominant_frontend(yaml_file, account)
           return nil unless File.exist?(yaml_file)
 
           yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
-          return nil unless yaml_data['accounts']
+          account_data = yaml_data['accounts'] && yaml_data['accounts'][account]
+          return nil unless account_data && account_data['characters']
 
           frontend_counts = Hash.new(0)
-          yaml_data['accounts'].each do |_username, account_data|
-            next unless account_data['characters']
-
-            account_data['characters'].each do |char|
-              fe = char['frontend']
-              frontend_counts[fe] += 1 if fe && !fe.empty?
-            end
+          account_data['characters'].each do |char|
+            fe = char['frontend']
+            frontend_counts[fe] += 1 if fe && !fe.empty?
           end
 
           return nil if frontend_counts.empty?

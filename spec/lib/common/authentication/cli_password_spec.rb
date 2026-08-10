@@ -546,6 +546,61 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
   end
 
+  describe '.determine_predominant_frontend' do
+    before do
+      yaml_data = {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => {
+          'ACCOUNTA' => {
+            'password'   => 'password',
+            'characters' => [
+              { 'char_name' => 'Achar1', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' },
+              { 'char_name' => 'Achar2', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' },
+              { 'char_name' => 'Achar3', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'wizard' }
+            ]
+          },
+          'ACCOUNTB' => {
+            'password'   => 'password',
+            'characters' => [
+              { 'char_name' => 'Bchar1', 'game_code' => 'DR', 'game_name' => 'DragonRealms', 'frontend' => 'avalon' }
+            ]
+          }
+        }
+      }
+      File.write(yaml_file, YAML.dump(yaml_data))
+    end
+
+    it 'only counts the target account characters, not other accounts sharing the yaml file' do
+      result = Lich::Common::Authentication::CLIPassword.determine_predominant_frontend(yaml_file, 'ACCOUNTB')
+      expect(result).to eq('avalon')
+    end
+
+    it 'still finds the predominant frontend for an account with multiple characters' do
+      result = Lich::Common::Authentication::CLIPassword.determine_predominant_frontend(yaml_file, 'ACCOUNTA')
+      expect(result).to eq('wizard')
+    end
+
+    it 'returns nil when the target account has no characters' do
+      yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+      yaml_data['accounts']['ACCOUNTC'] = { 'password' => 'password' }
+      File.write(yaml_file, YAML.dump(yaml_data))
+
+      result = Lich::Common::Authentication::CLIPassword.determine_predominant_frontend(yaml_file, 'ACCOUNTC')
+      expect(result).to be_nil
+    end
+
+    it 'returns nil when the target account does not exist' do
+      result = Lich::Common::Authentication::CLIPassword.determine_predominant_frontend(yaml_file, 'NONEXISTENT')
+      expect(result).to be_nil
+    end
+
+    it 'returns nil when the yaml file does not exist' do
+      File.delete(yaml_file)
+      result = Lich::Common::Authentication::CLIPassword.determine_predominant_frontend(yaml_file, 'ACCOUNTA')
+      expect(result).to be_nil
+    end
+  end
+
   describe '.change_master_password' do
     before do
       yaml_data = {
