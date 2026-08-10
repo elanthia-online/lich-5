@@ -332,6 +332,7 @@ module Lich
           entry
             .sub(/(an|some|a(?: piece of)?)\s/, '')
             .sub(/\slabeled with.*/, '')
+            .sub(/large midnight-blue scale torn with symbols/, 'midnight-blue scale')
             .sub(/icy blue vellum scroll/, 'icy scroll')
             .sub(/green vellum scroll/, 'green scroll')
             .sub(/fetid antelope vellum/, 'antelope vellum')
