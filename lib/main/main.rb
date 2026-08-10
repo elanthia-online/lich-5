@@ -75,8 +75,11 @@ reconnect_if_wanted = proc {
   # so the later arm during teardown is a no-op. Both the primary and detachable
   # frontend exit paths route through Lich::Main::UserExitDispatch so neither can
   # run the hang-prone inline drain without the watchdog armed.
-  run_orderly_user_shutdown = proc { |source: :primary_frontend|
-    Lich::Main::UserExitDispatch.run_orderly_user_shutdown(source: source)
+  run_orderly_user_shutdown = proc { |source: :primary_frontend, server_exit_command:|
+    Lich::Main::UserExitDispatch.run_orderly_user_shutdown(
+      source: source,
+      server_exit_command: server_exit_command
+    )
   }
 
   run_best_effort_shutdown_cleanup = proc {
@@ -683,7 +686,7 @@ reconnect_if_wanted = proc {
             client_string = fb_to_sf(client_string)
           end
           if Lich::Common::ShutdownIntent.user_exit_command?(client_string)
-            run_orderly_user_shutdown.call
+            run_orderly_user_shutdown.call(server_exit_command: client_string)
             break
           end
           # Lich.log(client_string)
