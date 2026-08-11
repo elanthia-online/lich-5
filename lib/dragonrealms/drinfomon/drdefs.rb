@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     # Pattern constants for room/NPC parsing
@@ -47,10 +49,14 @@ module Lich
       # Gelapod replacement pattern
       GELAPOD = "<pushBold/>a domesticated gelapod<popBold/>".freeze
       GELAPOD_REPLACEMENT = 'domesticated gelapod'.freeze
-      # Creature name normalization patterns (creatures with variant descriptions)
-      ALFAR_WARRIOR_PATTERN = /.*alfar warrior.*/.freeze
-      SINEWY_LEOPARD_PATTERN = /.*sinewy leopard.*/.freeze
-      LESSER_NAGA_PATTERN = /.*lesser naga.*/.freeze
+      # Canonical creature names whose variant descriptions should collapse to
+      # the bare name (e.g. "a savage alfar warrior" -> "alfar warrior"). Any
+      # room-object string containing one of these is reduced to it. Players
+      # extend this list via the +custom_creature_normalizations+ setting; see
+      # {Lich::DragonRealms#normalize_creature_names}.
+      #
+      # @return [Array<String>] canonical creature names
+      CREATURE_NORMALIZATIONS = ['alfar warrior', 'sinewy leopard', 'lesser naga'].freeze
     end
 
     # Converts an amount and denomination to copper.
@@ -181,15 +187,28 @@ module Lich
       add_ordinals_to_duplicates(normalized_npcs)
     end
 
-    # Normalizes creature names that have variant descriptions.
-    # Maps "a sinewy leopard that..." to just "sinewy leopard".
-    # @param text [String] Text containing creature description
-    # @return [String] Text with normalized creature name
+    # Normalizes creature names that have variant descriptions, collapsing any
+    # string that contains a canonical name to just that name (e.g. "a sinewy
+    # leopard that is prowling" -> "sinewy leopard").
+    #
+    # The canonical list is {DRDefsPattern::CREATURE_NORMALIZATIONS} merged with
+    # the player's +custom_creature_normalizations+ setting, so a player can
+    # teach Lich about their own problematic creature/pet descriptions without a
+    # Lich release. The merged list is memoized; see
+    # {Lich::DragonRealms::CustomSubstitutions}.
+    #
+    # This runs on the hot NPC-parsing path ({find_npcs} fires on every room
+    # update), so it uses a plain substring check rather than compiling a regex
+    # per name per call.
+    #
+    # @param text [String] text containing a creature description
+    # @return [String] the canonical name if +text+ contains one, else +text+
+    # @example
+    #   normalize_creature_names('a massive sinewy leopard') #=> 'sinewy leopard'
+    # @see CustomSubstitutions.resolve
     def normalize_creature_names(text)
-      text
-        .sub(DRDefsPattern::ALFAR_WARRIOR_PATTERN, 'alfar warrior')
-        .sub(DRDefsPattern::SINEWY_LEOPARD_PATTERN, 'sinewy leopard')
-        .sub(DRDefsPattern::LESSER_NAGA_PATTERN, 'lesser naga')
+      names = CustomSubstitutions.resolve(:custom_creature_normalizations, DRDefsPattern::CREATURE_NORMALIZATIONS, type: :names)
+      names.reduce(text) { |current, name| current.include?(name) ? name : current }
     end
 
     # Removes pushBold/popBold XML tags from text.
