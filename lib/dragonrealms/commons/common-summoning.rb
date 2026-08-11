@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRCS
@@ -123,11 +125,14 @@ module Lich
             # aren't recognized for shaping summoned elemental weapons, and the error message
             # itself is misleading. Breaking, turning, pulling, pushing work fine with custom adj.
             unless summoned_weapon.nil?
-              adj = settings&.summoned_weapons_adjective || ''
-              retry_result = DRC.bput("shape my #{summoned_weapon.sub(adj, '')} to #{skill}", *WM_SHAPE_FAILURES)
+              # Strip whichever custom adjective is on the weapon so the game
+              # recognizes the base weapon for shaping.
+              present_adjective = custom_summoned_weapon_adjectives(settings).find { |adjective| summoned_weapon.include?(adjective) }
+              base_weapon = present_adjective ? summoned_weapon.sub(present_adjective, '') : summoned_weapon
+              retry_result = DRC.bput("shape my #{base_weapon} to #{skill}", *WM_SHAPE_FAILURES)
               if retry_result == LACK_CHARGE
                 summon_admittance
-                DRC.bput("shape my #{summoned_weapon.sub(adj, '')} to #{skill}", *WM_SHAPE_FAILURES)
+                DRC.bput("shape my #{base_weapon} to #{skill}", *WM_SHAPE_FAILURES)
               end
             end
           end
@@ -139,16 +144,35 @@ module Lich
         waitrt?
       end
 
+      # Player-defined summoned-weapon adjectives (e.g. from Books of Binding
+      # tomes), merged and validated. Combines the plural
+      # +custom_summoned_weapons_adjectives+ list with the legacy singular
+      # +summoned_weapons_adjective+ setting (kept for backward compatibility).
+      # The built-in {WM_ELEMENT_ADJECTIVES} are NOT included here -- callers add
+      # those where needed.
+      #
+      # @param settings [OpenStruct, nil] user settings (for the legacy key)
+      # @return [Array<String>] validated custom adjectives
+      # @see CustomSubstitutions.resolve
+      def custom_summoned_weapon_adjectives(settings = nil)
+        # dup: never mutate CustomSubstitutions' memoized array when adding legacy.
+        adjectives = CustomSubstitutions.resolve(:custom_summoned_weapons_adjectives, [], type: :names).dup
+        legacy = settings&.summoned_weapons_adjective
+        adjectives << legacy if legacy.is_a?(String) && !legacy.empty? && !adjectives.include?(legacy)
+        adjectives
+      end
+
       # Returns what kind of summoned weapon you're holding.
       # Will be the <adj> <noun> like 'red-hot moonblade' or 'electric sword'.
+      # Recognizes {WM_ELEMENT_ADJECTIVES} plus any player-defined adjectives
+      # ({custom_summoned_weapon_adjectives}).
       def identify_summoned_weapon(settings = nil)
         if DRStats.moon_mage?
           return DRC.right_hand if DRCMM.is_moon_weapon?(DRC.right_hand)
           return DRC.left_hand  if DRCMM.is_moon_weapon?(DRC.left_hand)
         elsif DRStats.warrior_mage?
-          custom_adjective = settings&.summoned_weapons_adjective ? "#{settings.summoned_weapons_adjective}|" : ''
-          adjectives = WM_ELEMENT_ADJECTIVES.join('|')
-          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)(?:(?:#{custom_adjective}#{adjectives}) [\w\s\-]+) that you are holding\.$/
+          adjectives = (WM_ELEMENT_ADJECTIVES + custom_summoned_weapon_adjectives(settings)).map { |adjective| Regexp.escape(adjective) }.join('|')
+          weapon_regex = /^You tap (?:a|an|some)(?:[\w\s\-]+)(?:(?:#{adjectives}) [\w\s\-]+) that you are holding\.$/
           # For a two-worded weapon like 'short sword' the only way to know
           # which element it was summoned with is by tapping it. That's the only
           # way we can infer if it's a summoned sword or a regular one.

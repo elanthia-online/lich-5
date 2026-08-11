@@ -16,6 +16,44 @@ DRCS = Lich::DragonRealms::DRCS unless defined?(DRCS)
 RSpec.describe Lich::DragonRealms::DRCS do
   before(:each) do
     Lich::Messaging.clear_messages!
+    # Rebuild memoized custom-adjective lists between examples.
+    Lich::DragonRealms::CustomSubstitutions.reset!
+  end
+
+  # --- custom_summoned_weapon_adjectives ------------------------------
+
+  describe '.custom_summoned_weapon_adjectives' do
+    def stub_adjective_settings(value)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: value))
+    end
+
+    it 'returns an empty list when nothing is configured' do
+      expect(described_class.custom_summoned_weapon_adjectives).to eq([])
+    end
+
+    it 'includes the plural custom list from settings' do
+      stub_adjective_settings(%w[flamewreathed frostbound])
+      expect(described_class.custom_summoned_weapon_adjectives).to eq(%w[flamewreathed frostbound])
+    end
+
+    it 'includes the legacy singular summoned_weapons_adjective setting' do
+      expect(described_class.custom_summoned_weapon_adjectives(OpenStruct.new(summoned_weapons_adjective: 'stormforged')))
+        .to include('stormforged')
+    end
+
+    it 'does not duplicate the legacy value when it is also in the plural list' do
+      stub_adjective_settings(['stormforged'])
+      expect(described_class.custom_summoned_weapon_adjectives(OpenStruct.new(summoned_weapons_adjective: 'stormforged')))
+        .to eq(['stormforged'])
+    end
+
+    it 'skips a malformed plural entry and warns' do
+      stub_adjective_settings([42])
+      expect(described_class.custom_summoned_weapon_adjectives).to eq([])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_summoned_weapons_adjectives[0] skipped')
+    end
   end
 
   # --- Constants ------------------------------------------------------
@@ -269,6 +307,21 @@ RSpec.describe Lich::DragonRealms::DRCS do
         allow(DRC).to receive(:right_hand).and_return('icy halberd')
         allow(DRCI).to receive(:tap).with('icy halberd').and_return('You tap an icy halberd that you are holding.')
         expect(described_class.identify_summoned_weapon).to eq('icy halberd')
+      end
+
+      it 'identifies a weapon with a player-added custom adjective (plural setting)' do
+        allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+          .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: ['flamewreathed']))
+        allow(DRC).to receive(:right_hand).and_return('flamewreathed sword')
+        allow(DRCI).to receive(:tap).with('flamewreathed sword').and_return('You tap a flamewreathed sword that you are holding.')
+        expect(described_class.identify_summoned_weapon).to eq('flamewreathed sword')
+      end
+
+      it 'still recognizes the legacy singular summoned_weapons_adjective setting' do
+        allow(DRC).to receive(:right_hand).and_return('frostbound sword')
+        allow(DRCI).to receive(:tap).with('frostbound sword').and_return('You tap a frostbound sword that you are holding.')
+        settings = OpenStruct.new(summoned_weapons_adjective: 'frostbound')
+        expect(described_class.identify_summoned_weapon(settings)).to eq('frostbound sword')
       end
 
       it 'handles custom adjective from settings' do
