@@ -142,7 +142,7 @@ module Lich
 
           Commands:
             --add-account ACCOUNT PASSWORD
-            --refresh-characters ACCOUNT PASSWORD [--frontend FRONTEND]
+            --refresh-characters ACCOUNT [--frontend FRONTEND]
             --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD
             --change-master-password OLDPASSWORD [NEWPASSWORD]
@@ -157,7 +157,7 @@ module Lich
 
           Examples:
             lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront
-            lich --refresh-characters MYACCOUNT MYPASSWORD
+            lich --refresh-characters MYACCOUNT
             lich --add-character MYACCOUNT NewCharName --game-code DR
             lich --change-account-password MYACCOUNT NEWPASSWORD
             lich --convert-entries enhanced
