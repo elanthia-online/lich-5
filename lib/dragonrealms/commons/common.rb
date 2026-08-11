@@ -319,14 +319,41 @@ module Lich
         list.strip.split(/(?:,|(?:, |\s)?and\s?)(?:\s?<pushBold\/>\s?)?(?=\s\ba\b|\s\ban\b|\s\bsome\b|\s\bthe\b)/i).reject(&:empty?)
       end
 
-      # Take a game formated list of boxes "a reinforced wooden strongbox and a plain ironwood crate"
-      # And return an array ["wooden strongbox", "ironwood crate"]
+      # Post-match box name rewrites (applied via gsub after a box is matched).
+      # "ironwood" -> "iron" because the game parser wants the shortened noun.
+      # Players extend this via the +custom_box_substitutions+ setting; see
+      # {box_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_BOX_SUBSTITUTIONS = [%w[ironwood iron]].freeze
+
+      # Take a game formatted list of boxes "a reinforced wooden strongbox and a
+      # plain ironwood crate" and return ["wooden strongbox", "iron crate"].
+      #
+      # The recognized wood and container words are {BOX_WOODS} and
+      # {BOX_CONTAINERS} merged with the player's +custom_box_woods+ /
+      # +custom_box_containers+ settings, so a player can teach Lich about a box
+      # material or container it does not yet know without a Lich release. The
+      # global +$box_regex+ (built from the same defaults) is left untouched for
+      # third-party scripts. Post-match rewrites come from
+      # {DEFAULT_BOX_SUBSTITUTIONS} merged with +custom_box_substitutions+.
+      #
+      # @param list [String] game-formatted box list (e.g. from rummage /B)
+      # @return [Array<String>] gettable box adjective+noun names
+      # @example
+      #   box_list_to_adj_and_noun('an ironwood crate') #=> ['iron crate']
+      # @see CustomSubstitutions.resolve
+      # @see #scroll_list_to_adj_and_noun
       def box_list_to_adj_and_noun(list)
+        woods = CustomSubstitutions.resolve(:custom_box_woods, BOX_WOODS, type: :names)
+        containers = CustomSubstitutions.resolve(:custom_box_containers, BOX_CONTAINERS, type: :names)
+        substitutions = CustomSubstitutions.resolve(:custom_box_substitutions, DEFAULT_BOX_SUBSTITUTIONS, type: :pairs)
+        box_regex = /((?:#{woods.map { |wood| Regexp.escape(wood) }.join('|')}) (?:#{containers.map { |container| Regexp.escape(container) }.join('|')}))/
         list.strip
-            .split($box_regex)
+            .split(box_regex)
             .reject(&:empty?)
-            .select { |item| item =~ $box_regex }
-            .map { |box| box.gsub('ironwood', 'iron') } # make all ironwood into iron because "the parser"
+            .select { |item| item =~ box_regex }
+            .map { |box| substitutions.reduce(box) { |current, (from, to)| current.gsub(from, to) } }
       end
 
       # Item-specific scroll rewrites applied *before* {SCROLL_KEYWORD_COLLAPSE}.

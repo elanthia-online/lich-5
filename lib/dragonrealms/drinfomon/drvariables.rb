@@ -319,7 +319,17 @@ module Lich
       'ninety'    => 90
     }.freeze
 
-    BOX_REGEX = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/.freeze
+    # Box wood/material adjectives recognized in rummaged box lists. Players
+    # extend this via the +custom_box_woods+ setting; see
+    # {Lich::DragonRealms::DRC.box_list_to_adj_and_noun}.
+    BOX_WOODS = %w[brass copper deobar driftwood iron ironwood mahogany oaken pine steel wooden].freeze
+    # Box container nouns recognized in rummaged box lists. Players extend this
+    # via the +custom_box_containers+ setting.
+    BOX_CONTAINERS = %w[box caddy casket chest coffer crate skippet strongbox trunk].freeze
+    # Recognizes "<wood> <container>" box descriptions. Built from {BOX_WOODS}
+    # and {BOX_CONTAINERS} so both remain a single source of truth; kept as a
+    # global ($box_regex) for third-party scripts.
+    BOX_REGEX = /((?:#{BOX_WOODS.join('|')}) (?:#{BOX_CONTAINERS.join('|')}))/.freeze
 
     MANA_MAP = {
       'weak'       => %w[dim glowing bright].freeze,
