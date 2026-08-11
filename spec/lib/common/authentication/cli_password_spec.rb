@@ -461,6 +461,18 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'stormfront')
     end
+
+    it 'returns 3 and does not save when conversion drops all characters (defensive guard)' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_return([])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+
+      expect(exit_code).to eq(3)
+      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_or_update_account)
+    end
   end
 
   describe '.add_character' do

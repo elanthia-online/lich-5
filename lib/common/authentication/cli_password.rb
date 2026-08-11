@@ -266,6 +266,17 @@ module Lich
               selected_frontend || 'stormfront'
             )
 
+            # Defensive guard: auth_data was already confirmed non-empty above, and on the
+            # only production path here (EAccess.auth's legacy branch) every entry carries
+            # char_name/game_name/game_code, so this can't currently happen. Guards against
+            # convert_auth_data_to_characters's filter (or the auth path) changing later and
+            # silently reporting "success (0 found)".
+            if character_list.empty?
+              puts "error: No valid characters found after conversion"
+              Lich.log "error: CLI refresh characters failed - conversion produced no characters for '#{account}'"
+              return 3
+            end
+
             # Merge into existing account using AccountManager (preserves other data)
             if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, character_list)
               puts "success: Characters refreshed for account '#{account}' (#{character_list.length} found)"
