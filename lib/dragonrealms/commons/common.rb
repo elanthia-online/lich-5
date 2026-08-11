@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRC
@@ -327,32 +329,76 @@ module Lich
             .map { |box| box.gsub('ironwood', 'iron') } # make all ironwood into iron because "the parser"
       end
 
+      # Item-specific scroll rewrites applied *before* {SCROLL_KEYWORD_COLLAPSE}.
+      # These full game descriptions contain keywords the collapse would
+      # otherwise mangle (e.g. "icy blue vellum scroll" -> "icy scroll", not
+      # "icy blue vellum"), or must be caught before the collapse can run.
+      # Order matters and is preserved. Players extend this list via the
+      # +custom_scroll_substitutions+ setting; see
+      # {scroll_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_PRE = [
+        ['large midnight-blue scale torn with symbols', 'midnight-blue scale'],
+        ['icy blue vellum scroll', 'icy scroll'],
+        ['green vellum scroll', 'green scroll'],
+        ['fetid antelope vellum', 'antelope vellum'],
+        ['papyrus roll', 'papyrus.roll'],
+        ['pallid red scroll', 'pallid scroll']
+      ].freeze
+
+      # Adjective-pair scroll rewrites applied *after* {SCROLL_KEYWORD_COLLAPSE},
+      # reducing already-collapsed forms (e.g. "stormy grey" -> "stormy"). Order
+      # matters and is preserved. Not player-extensible (these operate on the
+      # collapsed noun, not the raw description).
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_POST = [
+        ['crumpled paper', 'crumpled'],
+        ['pale ricepaper', 'pale'],
+        ['stormy grey', 'stormy'],
+        ['mossy green', 'mossy'],
+        ['dark purple', 'dark'],
+        ['vibrant red', 'vibrant'],
+        ['bright green', 'bright'],
+        ['icy blue', 'blue'],
+        ['pearl-white silk', 'silk'],
+        ['ghostly white', 'white'],
+        ['crinkled violet', 'crinkled'],
+        ['drawing paper', 'drawing']
+      ].freeze
+
+      # Structural collapse: reduce "<adj> <keyword> <flavor...>" to "<adj>
+      # <keyword>" by keeping the noun keyword and dropping trailing flavor.
+      # Sandwiched between the pre and post substitution passes.
+      #
+      # @return [Regexp]
+      SCROLL_KEYWORD_COLLAPSE = /\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/.freeze
+
+      # Converts a game rummage scroll list into gettable adjective+noun forms.
+      #
+      # Pipeline per entry: strip the leading article, strip "labeled with...",
+      # apply the pre-collapse literal substitutions ({DEFAULT_SCROLL_SUBSTITUTIONS_PRE}
+      # merged with the player's +custom_scroll_substitutions+), apply the
+      # {SCROLL_KEYWORD_COLLAPSE}, then apply the post-collapse substitutions
+      # ({DEFAULT_SCROLL_SUBSTITUTIONS_POST}).
+      #
+      # @param list [String] game-formatted scroll list (e.g. from rummage /SC)
+      # @return [Array<String>] gettable scroll names
+      # @example
+      #   scroll_list_to_adj_and_noun(' an icy blue parchment') #=> ['blue parchment']
+      # @see CustomSubstitutions.resolve
+      # @see #box_list_to_adj_and_noun
       def scroll_list_to_adj_and_noun(list)
-        list_to_array(list).map { |entry|
-          entry
-            .sub(/(an|some|a(?: piece of)?)\s/, '')
-            .sub(/\slabeled with.*/, '')
-            .sub(/large midnight-blue scale torn with symbols/, 'midnight-blue scale')
-            .sub(/icy blue vellum scroll/, 'icy scroll')
-            .sub(/green vellum scroll/, 'green scroll')
-            .sub(/fetid antelope vellum/, 'antelope vellum')
-            .sub(/papyrus roll/, 'papyrus.roll')
-            .sub(/pallid red scroll/, 'pallid scroll')
-            .sub(/\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/, ' \1')
-            .sub(/crumpled paper/, 'crumpled')
-            .sub(/pale ricepaper/, 'pale')
-            .sub(/stormy grey/, 'stormy')
-            .sub(/mossy green/, 'mossy')
-            .sub(/dark purple/, 'dark')
-            .sub(/vibrant red/, 'vibrant')
-            .sub(/bright green/, 'bright')
-            .sub(/icy blue/, 'blue')
-            .sub(/pearl-white silk/, 'silk')
-            .sub(/ghostly white/, 'white')
-            .sub(/crinkled violet/, 'crinkled')
-            .sub(/drawing paper/, 'drawing')
-            .strip
-        }
+        pre_substitutions = CustomSubstitutions.resolve(:custom_scroll_substitutions, DEFAULT_SCROLL_SUBSTITUTIONS_PRE, type: :pairs)
+        list_to_array(list).map do |entry|
+          without_article = entry
+                            .sub(/(an|some|a(?: piece of)?)\s/, '')
+                            .sub(/\slabeled with.*/, '')
+          with_pre = pre_substitutions.reduce(without_article) { |text, (from, to)| text.sub(from, to) }
+          collapsed = with_pre.sub(SCROLL_KEYWORD_COLLAPSE, ' \1')
+          DEFAULT_SCROLL_SUBSTITUTIONS_POST.reduce(collapsed) { |text, (from, to)| text.sub(from, to) }.strip
+        end
       end
 
       # Take a game formatted list "an arrow, silver coins and a deobar strongbox"
