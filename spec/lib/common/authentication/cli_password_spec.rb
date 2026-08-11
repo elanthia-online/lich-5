@@ -356,23 +356,23 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 2 when account not found' do
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('NONEXISTENT', 'password')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('NONEXISTENT')
       expect(exit_code).to eq(2)
     end
 
     it 'returns 2 when yaml file does not exist' do
       File.delete(yaml_file)
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
       expect(exit_code).to eq(2)
     end
 
-    it 'authenticates with game servers' do
+    it 'decrypts the stored plaintext password and authenticates with it' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
-      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
 
       expect(Lich::Common::Authentication).to have_received(:authenticate).with(
         account: 'DOUG',
@@ -381,17 +381,42 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       )
     end
 
+    it 'decrypts using the account entry.yaml encryption_mode' do
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+        .and_return(true)
+      allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_call_original
+
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+      expect(Lich::Common::Authentication::EntryStore).to have_received(:decrypt_password).with(
+        'password', mode: :plaintext, account_name: 'DOUG'
+      )
+    end
+
+    it 'returns 4 and does not authenticate when the stored password cannot be decrypted' do
+      allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password)
+        .and_raise(StandardError, 'Master password not found in Keychain - cannot decrypt')
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
+
+      expect(exit_code).to eq(4)
+      expect(Lich::Common::Authentication).not_to have_received(:authenticate)
+    end
+
     it 'returns 3 when authentication fails' do
       allow(Lich::Common::Authentication).to receive(:authenticate).and_return(nil)
 
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
       expect(exit_code).to eq(3)
     end
 
     it 'returns 3 when no characters found' do
       allow(Lich::Common::Authentication).to receive(:authenticate).and_return([])
 
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
       expect(exit_code).to eq(3)
     end
 
@@ -400,7 +425,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
 
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
 
       expect(exit_code).to eq(0)
       expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account).with(
@@ -414,7 +439,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
       allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
-      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'avalon')
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'avalon')
 
       expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'avalon')
     end
@@ -426,7 +451,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
       # DOUG's only existing character uses 'wizard', so that's the predominant frontend
-      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
 
       expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'wizard')
     end
@@ -436,7 +461,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(false)
 
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
       expect(exit_code).to eq(1)
     end
 
@@ -456,7 +481,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
       expect {
-        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
       }.to output(/note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it/).to_stdout
 
       expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'stormfront')
@@ -468,7 +493,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_return([])
       allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
 
-      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
+      exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
 
       expect(exit_code).to eq(3)
       expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_or_update_account)
