@@ -200,13 +200,14 @@ module Lich
         # char_name + game_code + frontend + custom_launch) is left untouched, not
         # updated.
         # Mirrors add_account's authentication flow, but requires the account to
-        # already exist (the opposite of add_account's guard).
+        # already exist (the opposite of add_account's guard), and authenticates using
+        # the account's already-stored password (decrypted here) instead of a
+        # CLI-supplied one, so the password never appears in shell history or `ps`.
         #
         # @param account [String] Account username
-        # @param password [String] Account password
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
-        # @return [Integer] Exit code (0=success, 1=save error, 2=account not found, 3=auth failed)
-        def self.refresh_characters(account, password, frontend = nil)
+        # @return [Integer] Exit code (0=success, 1=save error, 2=account not found, 3=auth failed, 4=decrypt failed)
+        def self.refresh_characters(account, frontend = nil)
           account = account.upcase
 
           data_dir = DATA_DIR
@@ -227,6 +228,20 @@ module Lich
             end
 
             Lich.log "info: Refreshing characters for account '#{account}' via CLI"
+
+            encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
+            begin
+              password = Lich::Common::Authentication::EntryStore.decrypt_password(
+                yaml_data['accounts'][account]['password'],
+                mode: encryption_mode,
+                account_name: account
+              )
+            rescue StandardError => e
+              # CRITICAL: Only log e.message, NEVER log password values
+              puts "error: Failed to decrypt stored password: #{e.message}"
+              Lich.log "error: CLI refresh characters failed - could not decrypt stored password for '#{account}': #{e.message}"
+              return 4
+            end
 
             # Authenticate with game servers to fetch characters (like GUI does)
             puts "Authenticating with game servers..."
