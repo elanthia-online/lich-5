@@ -208,7 +208,10 @@ module Lich
     # @see CustomSubstitutions.resolve
     def normalize_creature_names(text)
       names = CustomSubstitutions.resolve(:custom_creature_normalizations, DRDefsPattern::CREATURE_NORMALIZATIONS, type: :names)
-      names.reduce(text) { |current, name| current.include?(name) ? name : current }
+      # Longest match against the ORIGINAL text, not a fold over the accumulator:
+      # folding would let a later name that is a substring of an earlier match's
+      # replacement (e.g. 'war yak' after 'grumpy war yak') re-collapse it.
+      names.select { |name| text.include?(name) }.max_by(&:length) || text
     end
 
     # Removes pushBold/popBold XML tags from text.

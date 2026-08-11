@@ -850,6 +850,18 @@ RSpec.describe Lich::DragonRealms do
       expect(warning).not_to be_nil
       expect(warning[:message]).to include('expected a non-empty string')
     end
+
+    it 'keeps the most specific name when one entry is a substring of another' do
+      # Regardless of list order, the longest containing name wins -- a generic
+      # alias must not re-collapse a more specific one.
+      [['grumpy war yak', 'war yak'], ['war yak', 'grumpy war yak']].each do |ordering|
+        Lich::DragonRealms::CustomSubstitutions.reset!
+        allow(Lich::DragonRealms::CustomSubstitutions)
+          .to receive(:get_settings)
+          .and_return(OpenStruct.new(custom_creature_normalizations: ordering))
+        expect(helper.normalize_creature_names('a grumpy war yak that is charging')).to eq('grumpy war yak')
+      end
+    end
   end
 
   describe '#remove_html_tags' do
