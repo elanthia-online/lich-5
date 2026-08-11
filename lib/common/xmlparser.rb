@@ -44,6 +44,7 @@ module Lich
         @obj_name = nil
         @obj_after_name = nil
         @pc = nil
+        @pc_status = nil
         @last_obj = nil
         @last_npc = nil
         @in_stream = false
@@ -1095,9 +1096,14 @@ module Lich
               if @active_tags.include?('a')
                 if @obj_exist.to_s.start_with?('-')
                   @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                  # Track the status we just staged for this pc. The annotation
+                  # branch below appends to this instead of reading it back
+                  # through GameObj#status, which cannot see the in-flight value.
+                  @pc_status = @player_status
                   @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
                 else
                   @pc = nil
+                  @pc_status = nil
                 end
                 @player_status = nil
                 @player_title = nil
@@ -1136,12 +1142,9 @@ module Lich
                   GameObj.commit_room_players
                 else
                   if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
-                    if @pc.status
-                      @pc.status.concat " #{$1}"
-                    else
-                      @pc.status = $1
-                    end
-                    @pc.status.concat " #{$2}" if $2
+                    @pc_status = @pc_status ? "#{@pc_status} #{$1}" : $1
+                    @pc_status = "#{@pc_status} #{$2}" if $2
+                    @pc.status = @pc_status
                   end
                   if text_string =~ /(?:^Also here: |, )(?:a )?([a-z\s]+)?([\w\s\-!\?',]+)?$/
                     @player_status = ($1.strip.gsub('the body of', 'dead')) if $1
