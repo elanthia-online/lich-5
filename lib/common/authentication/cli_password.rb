@@ -269,8 +269,8 @@ module Lich
               puts "success: Characters refreshed for account '#{account}' (#{character_list.length} found)"
               Lich.log "info: Characters refreshed successfully for account '#{account}' (#{character_list.length} found)"
               if selected_frontend.nil? || selected_frontend.empty?
-                puts "note: Frontend not set - use GUI to configure or rerun with --frontend"
-                Lich.log "warning: No frontend set for account '#{account}'"
+                puts "note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it"
+                Lich.log "warning: No frontend selected for account '#{account}' - characters stored with frontend defaulted to stormfront"
               end
               0
             else

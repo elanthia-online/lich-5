@@ -439,6 +439,28 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password', 'wizard')
       expect(exit_code).to eq(1)
     end
+
+    it 'accurately reports the stormfront default when no frontend is selected' do
+      yaml_data = {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => {
+          'DOUG' => { 'password' => 'password', 'characters' => [] }
+        }
+      }
+      File.write(yaml_file, YAML.dump(yaml_data))
+
+      allow(Lich::Common::Authentication).to receive(:authenticate)
+        .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_for_frontend).and_return(nil)
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+
+      expect {
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'password')
+      }.to output(/note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it/).to_stdout
+
+      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'stormfront')
+    end
   end
 
   describe '.add_character' do
