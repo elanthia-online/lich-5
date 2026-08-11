@@ -10,6 +10,7 @@ require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
+require_relative 'gui/frontend_selector'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
 require_relative 'gui/manual_login_tab'
@@ -306,7 +307,8 @@ module Lich
             login_info[:user_id],
             login_info[:char_name],
             login_info[:game_code],
-            login_info[:frontend]
+            login_info[:frontend],
+            login_info[:custom_launch]
           )
             # Reload entry_data from updated YAML to stay in sync
             begin
@@ -327,6 +329,9 @@ module Lich
         },
         on_add_character: ->(character:, instance:, frontend:) {
           # Handle adding a character
+        },
+        on_error: ->(message) {
+          @msgbox.call(message)
         },
         on_theme_change: ->(state) {
           # Update theme state for all components
@@ -621,7 +626,11 @@ module Lich
     # @param login_context [Hash, nil] Optional launch context from GUI tabs
     # @return [void]
     def handle_play_action(launch_data, login_context = nil)
-      if use_persistent_launcher?(login_context)
+      if managed_launch_completed?(login_context)
+        # Saga has already launched and owns authentication. Single-launch mode
+        # only needs to close; persistent mode remains available for more starts.
+        close_launcher_window unless @persistent_launcher_mode
+      elsif use_persistent_launcher?(login_context)
         # Persistent mode: launch child session, keep the launcher window active.
         if login_context.is_a?(Hash) && !login_context.key?(:dark_mode)
           # Propagate the current launcher theme state into detached child startup.
@@ -644,8 +653,17 @@ module Lich
       end
     end
 
+    # Returns whether the frontend session was launched before this lifecycle
+    # callback. Such launches must never be sent through SessionLauncher again.
+    #
+    # @param login_context [Hash, nil]
+    # @return [Boolean]
+    def managed_launch_completed?(login_context)
+      login_context.is_a?(Hash) && login_context[:managed_launch_completed] == true
+    end
+
     # Returns true only for saved-entry launches while persistent mode is enabled.
-    # Manual login path does not include account credentials in context.
+    # A manual login qualifies only after its requested saved entry was written.
     #
     # @param login_context [Hash, nil]
     # @return [Boolean]
@@ -661,7 +679,8 @@ module Lich
     # @param login_context [Hash]
     # @return [Boolean]
     def saved_entry_context?(login_context)
-      login_context.key?(:user_id) && login_context.key?(:password)
+      login_context[:saved_entry] == true ||
+        (login_context.key?(:user_id) && login_context.key?(:password))
     end
 
     # Saves entry data if needed
