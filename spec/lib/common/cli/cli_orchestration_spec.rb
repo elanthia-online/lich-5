@@ -24,37 +24,44 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     end
 
     it 'passes an explicit valid --frontend through' do
-      stub_const('ARGV', ['--refresh-characters', 'DOUG', 'password', '--frontend', 'wizard'])
+      stub_const('ARGV', ['--refresh-characters', 'DOUG', '--frontend', 'wizard'])
 
       expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).to have_received(:refresh_characters)
-        .with('DOUG', 'password', 'wizard')
+        .with('DOUG', 'wizard')
     end
 
     it 'passes nil when --frontend is omitted' do
-      stub_const('ARGV', ['--refresh-characters', 'DOUG', 'password'])
+      stub_const('ARGV', ['--refresh-characters', 'DOUG'])
 
       expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).to have_received(:refresh_characters)
-        .with('DOUG', 'password', nil)
+        .with('DOUG', nil)
     end
 
     it 'exits 1 without authenticating when --frontend has no value' do
-      stub_const('ARGV', ['--refresh-characters', 'DOUG', 'password', '--frontend'])
+      stub_const('ARGV', ['--refresh-characters', 'DOUG', '--frontend'])
 
       expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:refresh_characters)
     end
 
     it 'exits 1 without authenticating when --frontend is followed by another flag' do
-      stub_const('ARGV', ['--refresh-characters', 'DOUG', 'password', '--frontend', '--other-flag'])
+      stub_const('ARGV', ['--refresh-characters', 'DOUG', '--frontend', '--other-flag'])
 
       expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:refresh_characters)
     end
 
     it 'exits 1 without authenticating when --frontend is not a recognized frontend' do
-      stub_const('ARGV', ['--refresh-characters', 'DOUG', 'password', '--frontend', 'bogus'])
+      stub_const('ARGV', ['--refresh-characters', 'DOUG', '--frontend', 'bogus'])
+
+      expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:refresh_characters)
+    end
+
+    it 'exits 1 without authenticating when ACCOUNT is missing' do
+      stub_const('ARGV', ['--refresh-characters'])
 
       expect { described_class.handle_refresh_characters }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:refresh_characters)

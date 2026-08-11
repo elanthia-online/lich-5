@@ -124,13 +124,12 @@ module Lich
         def self.handle_refresh_characters
           idx = ARGV.index { |a| a =~ /^--refresh-characters$|^-rc$/ }
           account = ARGV[idx + 1]
-          password = ARGV[idx + 2]
 
           lich_script = File.join(LICH_DIR, 'lich.rbw')
-          usage = "Usage: ruby #{lich_script} --refresh-characters ACCOUNT PASSWORD [--frontend FRONTEND]\n" \
-                  "   or: ruby #{lich_script} -rc ACCOUNT PASSWORD [--frontend FRONTEND]"
+          usage = "Usage: ruby #{lich_script} --refresh-characters ACCOUNT [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -rc ACCOUNT [--frontend FRONTEND]"
 
-          if account.nil? || password.nil?
+          if account.nil?
             $stdout.puts 'error: Missing required arguments'
             $stdout.puts usage
             exit 1
@@ -141,7 +140,7 @@ module Lich
             usage: usage,
             valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
           )
-          exit Lich::Common::Authentication::CLIPassword.refresh_characters(account, password, frontend)
+          exit Lich::Common::Authentication::CLIPassword.refresh_characters(account, frontend)
         end
 
         def self.handle_add_character
