@@ -659,6 +659,12 @@ module Lich
             # closing tag of their own. No-op when no container refresh is open.
             GameObj.commit_all_containers
 
+            # Also the commit point for 'room players': GS can send an empty
+            # placeholder compDef and the real populated component as two
+            # separate tag closes within the same burst (see the comment at
+            # the tag_end dispatch above). No-op when no refresh is open.
+            GameObj.commit_room_players
+
             if @dr_active_spell_tracking
               @dr_active_spell_tracking = false
               @dr_active_spells_slivers = false
@@ -1287,11 +1293,23 @@ module Lich
           end
           # Commit a staged room component when it closes. @active_ids.last is
           # the component's own id at this point (inner <a> ids already popped).
+          #
+          # 'room players' is deliberately excluded here: GS sends an empty
+          # <compDef id='room players'></compDef> placeholder immediately after
+          # <nav>, followed moments later by the real <component id='room
+          # players'> with the "Also here: ..." roster. Committing on each
+          # tag's own close publishes the placeholder's empty staged array
+          # first, so GameObj.pcs reads nil for the full duration of parsing
+          # the real component right behind it -- a wider, guaranteed-empty
+          # window than the brief clear pre-staging (#1370) had. Deferring to
+          # the next <prompt> (see below), the same close signal already used
+          # for container commits, collapses the placeholder+real pair into a
+          # single publish of whichever staged state was current when the
+          # command burst ended.
           if (name == 'component') or (name == 'compDef')
             case @active_ids.last
-            when 'room objs'    then GameObj.commit_room_objs
-            when 'room players' then GameObj.commit_room_players
-            when 'room desc'    then GameObj.commit_room_desc
+            when 'room objs' then GameObj.commit_room_objs
+            when 'room desc' then GameObj.commit_room_desc
             end
           end
           @last_tag = @active_tags.pop

@@ -331,7 +331,7 @@ RSpec.describe Lich::Common::XMLParser do
     end
 
     describe "'room players' component refresh (GS)" do
-      it 'swaps the pc list atomically on close' do
+      it 'keeps the previous pc list visible until the next prompt commits it' do
         gameobj.new_pc('-1', 'elf', 'an elf', 'standing')
 
         parser.tag_start('component', { 'id' => 'room players' }) # begin_room_players
@@ -341,8 +341,67 @@ RSpec.describe Lich::Common::XMLParser do
 
         expect(gameobj.pcs.map(&:id)).to eq(['-1'])
 
-        parser.tag_end('component') # commit_room_players
+        # The component's own close no longer commits (see tag_end); the
+        # previous room's roster is still what readers see here.
+        parser.tag_end('component')
+        expect(gameobj.pcs.map(&:id)).to eq(['-1'])
+
+        parser.tag_start('prompt', { 'time' => '1' }) # commit_room_players
+        parser.tag_end('prompt')
         expect(gameobj.pcs.map(&:id)).to eq(['-2'])
+      end
+
+      # Regression test for the bug reported against #1370: GS sends an empty
+      # <compDef id='room players'></compDef> placeholder immediately after
+      # <nav>, then the real populated <component id='room players'> moments
+      # later. Committing each tag's own close (the pre-fix behavior)
+      # published the placeholder's empty array first, so GameObj.pcs read
+      # nil for the entire duration of parsing the real component right
+      # behind it -- a caller polling GameObj.pcs (e.g. checkpcs) in that
+      # window saw an empty room even though the previous roster, or the
+      # incoming one, was never actually gone.
+      it 'does not publish an empty roster between the nav placeholder and the real component' do
+        gameobj.new_pc('-1', 'elf', 'an elf', 'standing') # previous room's roster
+
+        # <compDef id='room players'></compDef> -- empty placeholder right after <nav>
+        parser.tag_start('compDef', { 'id' => 'room players' })
+        parser.tag_end('compDef')
+
+        # Previously-published roster must still be visible: the placeholder
+        # must not have committed an empty array.
+        expect(gameobj.pcs.map(&:id)).to eq(['-1'])
+
+        # <component id='room players'>Also here: ...</component> -- real roster
+        parser.tag_start('component', { 'id' => 'room players' })
+        parser.tag_start('a', { 'exist' => '-2', 'noun' => 'dwarf' })
+        parser.text('a dwarf')
+        parser.tag_end('a')
+        parser.tag_start('a', { 'exist' => '-3', 'noun' => 'gnome' })
+        parser.text('a gnome')
+        parser.tag_end('a')
+        parser.tag_end('component')
+
+        # Still not committed -- previous roster remains visible, not nil,
+        # all the way through the real component's own close.
+        expect(gameobj.pcs.map(&:id)).to eq(['-1'])
+
+        parser.tag_start('prompt', { 'time' => '1' }) # commit_room_players
+        parser.tag_end('prompt')
+
+        expect(gameobj.pcs.map(&:id)).to eq(%w[-2 -3])
+      end
+
+      it 'publishes a genuinely empty room at the next prompt when no one else is there' do
+        gameobj.new_pc('-1', 'elf', 'an elf', 'standing')
+
+        parser.tag_start('compDef', { 'id' => 'room players' })
+        parser.tag_end('compDef')
+        expect(gameobj.pcs.map(&:id)).to eq(['-1'])
+
+        parser.tag_start('prompt', { 'time' => '1' })
+        parser.tag_end('prompt')
+
+        expect(gameobj.pcs).to be_nil
       end
     end
 
