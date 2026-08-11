@@ -118,6 +118,66 @@ RSpec.describe Lich::Common::CredentialScrub do
     end
   end
 
+  describe '.redact_argv' do
+    it 'masks the password value while preserving the flag prefix' do
+      argv = ['--login', '--password=hunter2', '--without-frontend']
+
+      expect(described_class.redact_argv(argv)).to eq(
+        ['--login', '--password=[scrubbed]', '--without-frontend']
+      )
+    end
+
+    it 'masks master-password as well' do
+      expect(described_class.redact_argv(['--master-password=vault'])).to eq(['--master-password=[scrubbed]'])
+    end
+
+    it 'leaves the account identifier alone' do
+      argv = ['--account=myaccount', '--password=hunter2']
+
+      expect(described_class.redact_argv(argv)).to eq(['--account=myaccount', '--password=[scrubbed]'])
+    end
+
+    it 'does not mutate the input array or its String elements' do
+      # This is the whole point of the method: reconnect passes the same argv
+      # to exec() right after logging it, so the real password must survive.
+      password_arg = String.new('--password=hunter2')
+      argv = ['--login', password_arg]
+
+      result = described_class.redact_argv(argv)
+
+      expect(result).to eq(['--login', '--password=[scrubbed]'])
+      expect(argv).to eq(['--login', '--password=hunter2'])
+      expect(password_arg).to eq('--password=hunter2')
+    end
+
+    it 'returns a different array object than the one passed in' do
+      argv = ['--password=hunter2']
+
+      expect(described_class.redact_argv(argv)).not_to equal(argv)
+    end
+
+    it 'does not mask a flag that carries no value' do
+      expect(described_class.redact_argv(['--password='])).to eq(['--password='])
+    end
+
+    it 'passes through non-secret entries unchanged' do
+      argv = ['--reconnect', '--login', '--reconnect-delay=60']
+
+      expect(described_class.redact_argv(argv)).to eq(argv)
+    end
+
+    it 'tolerates non-String entries in argv' do
+      argv = [:not_a_string, '--password=hunter2']
+
+      expect(described_class.redact_argv(argv)).to eq([:not_a_string, '--password=[scrubbed]'])
+    end
+
+    it 'returns an empty array for nil or non-Array input' do
+      expect(described_class.redact_argv(nil)).to eq([])
+      expect(described_class.redact_argv('--password=hunter2')).to eq([])
+    end
+  end
+
   describe '.scrub_options!' do
     it 'redacts the password value in place' do
       options = { password: 'hunter2', account: 'myaccount', sal: 'C:\\game.sal' }

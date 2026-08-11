@@ -74,6 +74,31 @@ module Lich
           scrubbed
         end
 
+        # Returns a copy of argv with secret values masked, without touching the
+        # input. Use this where the real argv must still be used for its
+        # original purpose (e.g. exec) but a redacted form is needed for
+        # something incidental to that purpose, such as a log line.
+        #
+        # Unlike {scrub_argv!}, this never mutates: reconnect logs its exec
+        # argv while also passing the same, unredacted array to +exec+, so an
+        # in-place scrub here would strip the real password before the process
+        # replacement that needs it.
+        #
+        # @param argv [Array<String>, nil] argument vector to redact
+        # @return [Array<String>] a new array; entries that don't match
+        #   {ARGV_SECRET} are unchanged. Returns an empty array for nil or
+        #   non-Array input.
+        def redact_argv(argv)
+          return [] unless argv.is_a?(Array)
+
+          argv.map do |arg|
+            next arg unless arg.is_a?(String)
+
+            match = ARGV_SECRET.match(arg)
+            match.nil? ? arg : "#{match[1]}#{REDACTED}"
+          end
+        end
+
         # Overwrites secret values in an options hash in place.
         #
         # @param options [Hash, nil] the argv options hash

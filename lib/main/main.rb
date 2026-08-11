@@ -44,7 +44,10 @@ reconnect_if_wanted = proc {
       reconnect_delay: reconnect_delay,
       reconnect_step: reconnect_step
     )
-    Lich.log "info: reconnect exec: #{args.join(' ')}"
+    # args carries the real --password= value through to exec below, so the
+    # log line must redact a copy rather than the array itself -- CredentialScrub
+    # only ships mutating scrub_argv!, which would strip the password exec needs.
+    Lich.log "info: reconnect exec: #{Lich::Common::CredentialScrub.redact_argv(args).join(' ')}"
     exec(*args)
   end
 }
