@@ -150,4 +150,46 @@ RSpec.describe Lich::Main::ReconnectCommand do
       }.to raise_error(ArgumentError, 'argv must be an Array')
     end
   end
+
+  describe '.log_line' do
+    it 'masks the password while leaving everything else as-is' do
+      args = ['ruby', 'lich.rbw', '--login', '--password=hunter2', '--reconnected']
+
+      expect(described_class.log_line(args)).to eq(
+        'ruby lich.rbw --login --password=[scrubbed] --reconnected'
+      )
+    end
+
+    it 'does not mutate the argv it is given' do
+      # main.rb logs this string and execs the same array on the very next
+      # line, so building the log message must never touch the real argv.
+      args = ['ruby', 'lich.rbw', '--login', '--password=hunter2']
+
+      described_class.log_line(args)
+
+      expect(args).to include('--password=hunter2')
+    end
+
+    it 'reflects exactly what exec would receive, chained the way main.rb chains them' do
+      # Exercises the same two calls main.rb makes back to back -- build the
+      # exec argv, then render its log line -- with nothing stubbed in
+      # between, so a regression in either method or in how they compose
+      # would fail here.
+      args = described_class.build(
+        argv: ['--reconnect', '--login', '--password=hunter2'],
+        program: 'lich.rbw',
+        ruby_executable: 'ruby',
+        reconnect_arg: nil,
+        reconnect_delay: 60,
+        reconnect_step: 0
+      )
+
+      log_line = described_class.log_line(args)
+
+      expect(log_line).to eq('ruby lich.rbw --reconnect --login --password=[scrubbed] --reconnected')
+      # The array build() returned -- the one exec(*args) would actually
+      # receive -- still carries the real password after log_line ran.
+      expect(args).to include('--password=hunter2')
+    end
+  end
 end

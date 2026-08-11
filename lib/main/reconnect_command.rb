@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../common/ruby_executable'
+require_relative '../common/credential_scrub'
 
 module Lich
   module Main
@@ -50,6 +51,20 @@ module Lich
           args << "--reconnect-delay=#{delay + step}+#{step}"
         end
         args
+      end
+
+      # Renders exec argv as a log-safe string, masking credential-bearing
+      # entries.
+      #
+      # Pairs with {.build}: main.rb calls that method, logs this one, then
+      # execs the same, unredacted array on the next line. Keeping both here
+      # means a change to either stays covered by the same spec file, instead
+      # of the pairing only existing at the main.rb call site.
+      #
+      # @param args [Array<String>] argv as returned by {.build}
+      # @return [String] space-joined argv with secret values masked
+      def self.log_line(args)
+        Lich::Common::CredentialScrub.redact_argv(args).join(' ')
       end
     end
   end
