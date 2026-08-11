@@ -196,7 +196,9 @@ module Lich
         # Re-fetches an account's character list from the game servers and merges it
         # into entry.yaml. Existing characters and their metadata (favorites, custom
         # launch config) are preserved by AccountManager.add_or_update_account's merge
-        # behavior; only new/changed characters get added.
+        # behavior; only new characters get added - an existing matching record (same
+        # char_name + game_code + frontend + custom_launch) is left untouched, not
+        # updated.
         # Mirrors add_account's authentication flow, but requires the account to
         # already exist (the opposite of add_account's guard).
         #
