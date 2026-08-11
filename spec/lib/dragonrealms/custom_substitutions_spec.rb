@@ -150,6 +150,14 @@ RSpec.describe Lich::DragonRealms::CustomSubstitutions do
       expect(compiled.first.source).to eq('Encircling')
       expect(compiled.first.casefold?).to be(true)
     end
+
+    it 'warns about non-ASCII in a pre-compiled Regexp but still keeps it' do
+      non_ascii = Regexp.new("na" + [0xEF].pack('U') + "ve") # non-ASCII source, ASCII spec
+      stub_settings(:custom_regexes, [non_ascii])
+      compiled = described_class.resolve(:custom_regexes, [], type: :regexes)
+      expect(compiled.first).to be_a(Regexp)
+      expect(last_messages).to include('contains non-ASCII characters')
+    end
   end
 
   describe '.apply_regexes' do

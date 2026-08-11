@@ -47,6 +47,18 @@ module Lich
       # - +:regexes+ -- regular-expression Strings (or pre-compiled Regexps)
       SUPPORTED_TYPES = %i[pairs names regexes].freeze
 
+      # Guards the shared caches below. {resolve}/{apply_regexes} are public
+      # utility methods any number of concurrently-running scripts (each on its
+      # own Thread) can call on shared game text, so the memo must not be
+      # populated by two threads at once. Mirrors the +@@mutex+ idiom used by
+      # {GameObj} and {DRExpMonitor}.
+      @lock = Mutex.new
+      # Memoized merged lists, keyed by settings key. See {resolve}.
+      @cache = {}
+      # Regex sources already reported as timing out, so each is reported at
+      # most once. See {apply_regexes}.
+      @reported_timeouts = []
+
       class << self
         # Returns +defaults+ merged with the validated user additions found at
         # +key+ in the player's settings, deduplicated and memoized.
@@ -65,8 +77,9 @@ module Lich
         def resolve(key, defaults, type:)
           raise ArgumentError, "unsupported type #{type.inspect}" unless SUPPORTED_TYPES.include?(type)
 
-          @cache ||= {}
-          @cache[key] ||= (Array(defaults) + validated_additions(key, type)).uniq
+          # Double-checked: no lock on the warm path (the common case on hot
+          # parse paths), lock only to populate a missing key.
+          @cache[key] || @lock.synchronize { @cache[key] ||= (Array(defaults) + validated_additions(key, type)).uniq }
         end
 
         # Clears the memoized merged lists (and the per-pattern timeout-report
@@ -76,8 +89,10 @@ module Lich
         # @return [void]
         # @see #resolve
         def reset!
-          @cache = {}
-          @reported_timeouts = nil
+          @lock.synchronize do
+            @cache = {}
+            @reported_timeouts = []
+          end
         end
 
         # Folds +patterns+ over +text+ as successive +String#sub(pattern, '')+
@@ -200,7 +215,10 @@ module Lich
         #
         # @return [Regexp, nil] a timeout-bounded pattern, or nil if rejected
         def validate_regex(entry, key, index)
-          return timeout_bounded(entry.source, entry.options, key, index) if entry.is_a?(Regexp)
+          if entry.is_a?(Regexp)
+            warn_non_ascii(entry.source, key, index)
+            return timeout_bounded(entry.source, entry.options, key, index)
+          end
 
           unless entry.is_a?(String) && !entry.empty?
             report("#{key}[#{index}] skipped -- expected a regular expression string, got #{entry.inspect}. This entry will not be applied.")
@@ -263,10 +281,15 @@ module Lich
         # @param pattern [Regexp] the pattern that timed out
         # @return [void]
         def report_timeout(pattern)
-          @reported_timeouts ||= []
-          return if @reported_timeouts.include?(pattern.source)
+          # Guard only the dedup set; do the messaging I/O outside the lock.
+          first_time = @lock.synchronize do
+            next false if @reported_timeouts.include?(pattern.source)
 
-          @reported_timeouts << pattern.source
+            @reported_timeouts << pattern.source
+            true
+          end
+          return unless first_time
+
           report("a custom regular expression #{pattern.source.inspect} took too long (over #{REGEX_TIMEOUT_SECONDS}s) and was skipped for this text. Consider simplifying it.")
         end
       end
