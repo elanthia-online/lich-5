@@ -379,6 +379,17 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(result[:frontend]).to eq('wizard')
     end
 
+    it 'uses canonical frontend aliases when ranking matches' do
+      result = described_class.select_best_fit(
+        char_data_sets: [char_data_sets[1], char_data_sets[0]],
+        requested_character: 'Testchar',
+        requested_instance: 'GS3',
+        requested_fe: 'wrayth'
+      )
+
+      expect(result[:frontend]).to eq('stormfront')
+    end
+
     it 'returns nil for invalid game instance' do
       result = described_class.select_best_fit(
         char_data_sets: char_data_sets,
@@ -480,6 +491,22 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(frontend).to eq('frostbite')
       expect(custom_launch).to eq(:__unset)
     end
+
+    it 'parses Saga as a frontend selector' do
+      instance, frontend, custom_launch = described_class.resolve_login_args(['--GS3', '--saga'])
+      expect(instance).to eq('GS3')
+      expect(frontend).to eq('saga')
+      expect(custom_launch).to eq(:__unset)
+    end
+
+    it 'parses the canonical long-form Saga frontend selector' do
+      instance, frontend, custom_launch = described_class.resolve_login_args(
+        ['--GS3', '--frontend=saga']
+      )
+      expect(instance).to eq('GS3')
+      expect(frontend).to eq('saga')
+      expect(custom_launch).to eq(:__unset)
+    end
   end
 
   describe '.resolve_lookup_frontend' do
@@ -530,6 +557,28 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       # Assuming lich_version_at_least?(5, 12, 0) returns true in test environment
       result = described_class.format_launch_flag('GS3')
       expect(result).to match(/--G?S?3?/i)
+    end
+  end
+
+  describe '.spawn_login' do
+    it 'uses the shared checked Ruby executable for a child CLI login' do
+      allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/checked/ruby')
+      allow(Process).to receive(:spawn).and_return(12_345)
+      waiter = double('process waiter')
+      allow(Process).to receive(:detach).with(12_345).and_return(waiter)
+
+      result = described_class.spawn_login(
+        { char_name: 'Tsetem', game_code: 'GS3' },
+        lich_path: '/lich/lich.rbw'
+      )
+
+      expect(result).to equal(waiter)
+      expect(Process).to have_received(:spawn).with(
+        '/checked/ruby',
+        '/lich/lich.rbw',
+        '--login',
+        'Tsetem'
+      )
     end
   end
 end

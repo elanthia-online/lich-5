@@ -253,8 +253,9 @@ module Lich
         # @param char_name [String] Character name
         # @param game_code [String] Game code
         # @param frontend [String] Frontend identifier (optional for backward compatibility)
+        # @param custom_launch [String, nil, Symbol] Exact custom launch command, or :__unset for legacy matching
         # @return [Boolean] True if operation was successful
-        def self.remove_character(data_dir, username, char_name, game_code, frontend = nil)
+        def self.remove_character(data_dir, username, char_name, game_code, frontend = nil, custom_launch = :__unset)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           # Load existing data
@@ -278,13 +279,15 @@ module Lich
 
             characters.reject! do |char|
               matches_basic = char['char_name'] == normalized_char_name && char['game_code'] == game_code
+              matches_custom_launch = custom_launch == :__unset ||
+                                      char['custom_launch'].to_s.strip == custom_launch.to_s.strip
 
               if frontend.nil?
                 # Backward compatibility: if no frontend specified, match any frontend
-                matches_basic
+                matches_basic && matches_custom_launch
               else
                 # Frontend precision: must match exact frontend
-                matches_basic && char['frontend'] == frontend
+                matches_basic && char['frontend'] == frontend && matches_custom_launch
               end
             end
 

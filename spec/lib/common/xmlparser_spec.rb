@@ -403,6 +403,81 @@ RSpec.describe Lich::Common::XMLParser do
 
         expect(gameobj.pcs).to be_nil
       end
+
+      # The annotation arrives in a later text callback, after </a>, while the
+      # refresh is still open. The staged pc has no published status entry, so
+      # reading it back through GameObj#status used to yield the frozen 'gone'
+      # sentinel and raise FrozenError on the in-place append.
+      def feed_pc(exist, noun, name)
+        parser.tag_start('a', { 'exist' => exist, 'noun' => noun })
+        parser.text(name)
+        parser.tag_end('a')
+      end
+
+      # NOTE: 'room players' commit is now deferred to <prompt> (see above),
+      # so a status check that used to read correctly right after
+      # tag_end('component') now reads through the stale, still-published
+      # @@pcs -- GameObj#[] and #status never see the staged pc until commit.
+      # Each spec below adds the same <prompt> close the other GS specs in
+      # this block use, so the assertion reads the committed value. The
+      # annotation logic under test (the in-place @pc.status= write while
+      # still staged) is unchanged from before this PR.
+      it 'annotates a newly staged pc without mutating the gone sentinel' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+
+        expect { parser.text(' who is sitting.') }.not_to raise_error
+
+        parser.tag_end('component')
+        parser.tag_start('prompt', { 'time' => '1' }) # commit_room_players
+        parser.tag_end('prompt')
+        expect(gameobj['-2'].status).to eq('sitting')
+      end
+
+      it 'replaces rather than appends to the previously published status' do
+        gameobj.new_pc('-2', 'dwarf', 'a dwarf', 'standing')
+
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+        parser.tag_start('prompt', { 'time' => '1' })
+        parser.tag_end('prompt')
+
+        expect(gameobj['-2'].status).to eq('sitting')
+      end
+
+      it 'accepts the parenthetical form and combines both captures' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' (kneeling) (hidden)')
+        parser.tag_end('component')
+        parser.tag_start('prompt', { 'time' => '1' })
+        parser.tag_end('prompt')
+
+        expect(gameobj['-2'].status).to eq('kneeling hidden')
+      end
+
+      it 'appends the annotation onto a status carried in from the name prefix' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        parser.instance_variable_set(:@player_status, 'dead')
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+        parser.tag_start('prompt', { 'time' => '1' })
+        parser.tag_end('prompt')
+
+        expect(gameobj['-2'].status).to eq('dead sitting')
+      end
+
+      it 'does not annotate once the pc reference has been cleared' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('99', 'dwarf', 'a dwarf') # non-negative exist -> @pc = nil
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+
+        expect(gameobj.pcs).to be_nil
+      end
     end
 
     describe "'room players' DR 'Also here' rebuild" do

@@ -181,13 +181,15 @@ module Lich
         return false if target_room.nil?
 
         room_num = target_room.to_i
-        return true if room_num == Room.current.id
+        # Room.current is nil when the room could not be resolved. Under Lich's
+        # NilClass patch nil.id yielded nil, so the comparison simply failed.
+        return true if room_num == Room.current&.id
 
         DRC.fix_standing
 
-        if Room.current.id.nil?
+        if Room.current&.id.nil?
           Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}")
-          rooms = Map.list.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
+          rooms = Map.list.compact.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
           if rooms.empty? || rooms.length > 1
             Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
             return false
@@ -272,7 +274,7 @@ module Lich
 
       def tag_to_id(target)
         start_room = Room.current.id
-        target_list = Map.list.find_all { |room| room.tags.include?(target) }.collect { |room| room.id }
+        target_list = Map.rooms_by_tag(target)
 
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: No go2 targets matching '#{target}' found.")
@@ -284,6 +286,11 @@ module Lich
           return start_room
         end
         _previous, shortest_distances = Room.current.dijkstra(target_list)
+        if shortest_distances.nil?
+          Lich::Messaging.msg('bold', "DRCT: Pathfinding failed while looking for a '#{target}' tag.")
+          return nil
+        end
+
         target_list.delete_if { |room_id| shortest_distances[room_id].nil? }
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: Couldn't find a path from here to any room with a '#{target}' tag.")
@@ -358,8 +365,14 @@ module Lich
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
         _previous, shortest_distances = Map.dijkstra(Room.current.id)
+        # Pathfinding failed; hand back what was asked for rather than nothing.
+        return target_list if shortest_distances.nil?
+
         target_list.delete_if { |room_num| shortest_distances[room_num].nil? && room_num != Room.current.id }
-        target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
+        # The current room is kept above even without a distance, so sort on a
+        # fallback rather than handing nil to the comparator. dijkstra seeds the
+        # source at 0, so this is defensive rather than a live case.
+        target_list.sort_by { |room_num| shortest_distances[room_num] || Float::INFINITY }
       end
 
       def find_sorted_empty_room(search_rooms, idle_room, predicate = nil)
@@ -368,7 +381,12 @@ module Lich
       end
 
       def time_to_room(origin, destination)
+        # Results are keyed by Integer room id, and dijkstra only terminates
+        # early when the destination compares as an Integer.
+        destination = destination.to_i
         _previous, shortest_paths = Map.dijkstra(origin, destination)
+        return nil if shortest_paths.nil?
+
         shortest_paths[destination]
       end
 

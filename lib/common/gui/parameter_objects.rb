@@ -18,7 +18,7 @@ module Lich
         # @option params [String] :char_name Character name
         # @option params [String] :game_code Game code
         # @option params [String] :game_name Game name
-        # @option params [String] :frontend Frontend to use (stormfront, wizard, avalon)
+        # @option params [String] :frontend Stable frontend identifier
         # @option params [String] :custom_launch Custom launch command
         # @option params [String] :custom_launch_dir Custom launch directory
         # @option params [Boolean] :is_favorite Whether character is marked as favorite

@@ -209,6 +209,34 @@ RSpec.describe 'EntryStore Favorites' do
       expect(character['favorite_added']).to be_nil
     end
 
+    it 'unfavorites only the entry with the matching custom launch command' do
+      paired_data = sample_yaml_data
+      paired_data['accounts']['TESTUSER']['characters'] = [
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => nil, 'is_favorite' => true,
+          'favorite_order' => 1, 'favorite_added' => '2026-01-01 12:00:00'
+        },
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => '/opt/warlock', 'is_favorite' => true,
+          'favorite_order' => 2, 'favorite_added' => '2026-01-02 12:00:00'
+        }
+      ]
+      File.write(yaml_file, YAML.dump(paired_data))
+
+      result = Lich::Common::Authentication::EntryStore.remove_favorite(
+        data_dir, 'TESTUSER', 'Warlock', 'GS3', 'stormfront', '/opt/warlock'
+      )
+
+      expect(result).to eq(true)
+      characters = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+                       .dig('accounts', 'TESTUSER', 'characters')
+      standard, custom = characters
+      expect(standard['is_favorite']).to eq(true)
+      expect(custom['is_favorite']).to eq(false)
+    end
+
     it 'returns true if character was not a favorite' do
       result = Lich::Common::Authentication::EntryStore.remove_favorite(
         data_dir, 'TESTUSER', 'TestChar1', 'GS3', 'stormfront'
@@ -319,6 +347,53 @@ RSpec.describe 'EntryStore Favorites' do
       expect(result.length).to eq(2)
       expect(result.first[:char_name]).to eq('AnotherChar') # order 1
       expect(result.last[:char_name]).to eq('TestChar1')    # order 2
+    end
+
+    it 'includes custom launch identity for precise favorite operations' do
+      data = sample_yaml_data
+      character = data['accounts']['ANOTHERUSER']['characters'].first
+      character['custom_launch'] = '/opt/warlock'
+      File.write(yaml_file, YAML.dump(data))
+
+      result = Lich::Common::Authentication::EntryStore.get_favorites(data_dir)
+
+      expect(result.first[:custom_launch]).to eq('/opt/warlock')
+    end
+  end
+
+  describe '.reorder_favorites' do
+    it 'reorders only the entry with the matching custom launch command' do
+      data = sample_yaml_data
+      data['accounts']['TESTUSER']['characters'] = [
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => nil, 'is_favorite' => true,
+          'favorite_order' => 1
+        },
+        {
+          'char_name' => 'Warlock', 'game_code' => 'GS3', 'game_name' => 'GemStone IV',
+          'frontend' => 'stormfront', 'custom_launch' => '/opt/warlock', 'is_favorite' => true,
+          'favorite_order' => 2
+        }
+      ]
+      File.write(yaml_file, YAML.dump(data))
+
+      result = Lich::Common::Authentication::EntryStore.reorder_favorites(
+        data_dir,
+        [
+          {
+            username: 'TESTUSER', char_name: 'Warlock', game_code: 'GS3',
+            frontend: 'stormfront', custom_launch: '/opt/warlock'
+          }
+        ]
+      )
+
+      expect(result).to eq(true)
+      characters = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+                       .dig('accounts', 'TESTUSER', 'characters')
+      standard, custom = characters
+      expect(standard['favorite_order']).to eq(1)
+      expect(custom['favorite_order']).to eq(1)
     end
   end
 
