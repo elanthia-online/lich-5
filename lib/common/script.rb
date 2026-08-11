@@ -348,6 +348,21 @@ module Lich
 
       class JumpError < StandardError; end
       class LibraryJoinTimeout < LoadError; end
+
+      # Raised when a script cannot be started (shutdown in progress,
+      # duplicate name, or launch failure).
+      class StartError < StandardError; end
+
+      # Raised when a supervised script outlives its timeout. The script has
+      # already been torn down (kill_sync) by the time this raises.
+      class TimeoutError < StandardError
+        attr_reader :script
+
+        def initialize(script)
+          @script = script
+          super("script timed out: #{script.name}")
+        end
+      end
       JUMP = JumpError.exception('JUMP')
       JUMP_ERROR = JumpError.exception('JUMP_ERROR')
 
@@ -966,16 +981,29 @@ module Lich
 
       # Starts a child script and waits for it to finish.
       #
+      # The returned script has always terminated: inspect
+      # {#completed_successfully?} / {#exit_error} to distinguish success from
+      # a crash. Startup refusal and timeout raise instead of overloading the
+      # return value, and a timed-out child is torn down before the raise, so
+      # no unsupervised child ever survives this call.
+      #
       # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
-      # @return [Script, nil] the completed child, or nil on startup failure or timeout
+      # @return [Script] the terminated child
       # @raise [ArgumentError] when the timeout is negative, before the child starts
+      # @raise [StartError] when the child cannot be started
+      # @raise [TimeoutError] when the child outlives the timeout, after its teardown
       def Script.run_child(*args, timeout: nil)
         raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
 
         child = Script.start_child(*args)
-        return nil unless child
+        unless child
+          name = args.first.is_a?(Hash) ? args.first[:name] : args.first
+          raise StartError, "script failed to start: #{name}"
+        end
+        return child if child.join(timeout)
 
-        child.join(timeout) ? child : nil
+        child.kill_sync
+        raise TimeoutError.new(child)
       end
 
       # Marks the current script as hidden and protected from kill-all and
@@ -1162,7 +1190,7 @@ module Lich
             else
               reloaders = @@reloading_libraries[library]
               reloaders&.delete(reload_token)
-              @@reloading_libraries.delete(library) if reloaders&.empty?
+              @@reloading_libraries.delete(library) if reloaders && reloaders.empty?
             end
           end
         rescue LoadError => e
@@ -1170,7 +1198,7 @@ module Lich
           @@library_mutex.synchronize do
             reloaders = @@reloading_libraries[library]
             reloaders&.delete(reload_token)
-            @@reloading_libraries.delete(library) if reloaders&.empty?
+            @@reloading_libraries.delete(library) if reloaders && reloaders.empty?
           end
           Lich.log("error: failed to reload script library #{library}: #{e.message}")
         end

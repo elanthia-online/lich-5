@@ -99,6 +99,22 @@ RSpec.describe Lich::GameBase do
       expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
     end
 
+    it 'records remote EOF when the game reader receives it' do
+      begin
+        described_class.initialize_buffers
+        allow(described_class).to receive(:read_server_string).and_return(nil)
+        allow(described_class).to receive(:record_shutdown_reason)
+
+        described_class.start_socket_reader_thread
+        described_class.reader_thread.join(1)
+
+        expect(described_class.remote_eof?).to be(true)
+      ensure
+        described_class.reader_thread&.kill
+        described_class.initialize_buffers
+      end
+    end
+
     it 'handles connection reset as a recognized fatal disruption without a backtrace log' do
       error = Errno::ECONNRESET.new
       error.set_backtrace(['games.rb:1'])
@@ -201,7 +217,7 @@ RSpec.describe Lich::GameBase::GameInstance do
       expect { game_instance.handle_atmospherics("test") }.to raise_error(NotImplementedError)
       expect { game_instance.get_documentation_url }.to raise_error(NotImplementedError)
       expect { game_instance.process_game_specific_data("test") }.to raise_error(NotImplementedError)
-      expect { game_instance.modify_room_display("test", nil, nil) }.to raise_error(NotImplementedError)
+      expect { game_instance.modify_room_display("test") }.to raise_error(NotImplementedError)
       expect { game_instance.process_room_display("test") }.to raise_error(NotImplementedError)
     end
   end
@@ -275,7 +291,9 @@ RSpec.describe Lich::Gemstone::GameInstance do
       alt_string = +"[Test Room] (123)"
 
       result = game_instance.modify_room_display(alt_string)
-      expect(result).to include(" - 1234]") # why 1234?
+      # The lichid comes from Room["u123"], and the spec_helper stand-in maps a
+      # uid lookup to the same number, so 123 is the uid in alt_string above.
+      expect(result).to include(" - 123]")
     end
   end
 end
@@ -406,10 +424,33 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
       expect(dr.modify_room_display(+'[Test Room]')).to eq('[Test Room - (**)]')
     end
 
-    it 'strips a game-supplied RealID before injecting, leaving no duplicate' do
+    it 'preserves a game-supplied RealID GemStone-style when only lichid is on' do
       Lich.display_lichid = true
       Lich.display_roomid_location = 'title'
+      # ";display lichid" alone must read like GemStone: lich id inside the bracket,
+      # the game's RealID left untouched after it - not stripped.
+      expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room - 1234] (230008)')
+    end
+
+    it 'strips the game RealID before injecting when display_uid is also on (no duplicate)' do
+      Lich.display_lichid = true
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'title'
+      # With Lich rendering its own "(u230008)", keeping the game RealID too would duplicate it.
+      expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room - 1234 - (u230008)]')
+    end
+
+    it 'strips the game RealID when hide_uid_flag is set (player asked to hide it)' do
+      Lich.display_lichid = true
+      Lich.hide_uid_flag = true
+      Lich.display_roomid_location = 'title'
       expect(dr.modify_room_display(+'[Test Room] (230008)')).to eq('[Test Room - 1234]')
+    end
+
+    it 'preserves a game (**) no-uid marker when only lichid is on' do
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.modify_room_display(+'[Test Room] (**)')).to eq('[Test Room - 1234] (**)')
     end
 
     it 'injects nothing (and does not raise) when the room is unmapped and only lichid is on' do
@@ -474,12 +515,97 @@ RSpec.describe 'DragonRealms room-id placement (games.rb)' do
     end
   end
 
+  # The room-window subtitle (the window title bar) is a title surface too. Lich's own id/UID
+  # rides it for every placement, and the game-supplied RealID is re-appended whenever the game
+  # displayed it (ShowRoomID on) - independent of ";display roomid", which governs only where
+  # Lich's id goes. The subtitle is rebuilt from the (always UID-free) XMLData.room_title, so
+  # the RealID is synthesized from the authoritative nav UID (XMLData.room_id) and gated on
+  # XMLData.show_room_id (the game's ShowRoomID flag state).
+  describe '#process_room_display (room-window subtitle parity)' do
+    before do
+      allow(Frontend).to receive(:supports_room_window?).and_return(true)
+      # The parser double-brackets DR room_title (e.g. "[[Test Room]]"); process_room_display
+      # slices [2..-3] to recover the bare name, so mirror that exact shape here.
+      XMLData.room_title = '[[Test Room]]'
+    end
+
+    it 'appends the preserved RealID to the window title when ShowRoomID is on and only lichid is set' do
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (230008)"))
+    end
+
+    it 'omits the RealID from the window title when ShowRoomID is off (nothing for the game to preserve)' do
+      XMLData.show_room_id = false
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234]"))
+    end
+
+    it 'renders (**) in the window title for a no-uid room the game is displaying' do
+      XMLData.show_room_id = true
+      XMLData.room_id = 0
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (**)"))
+    end
+
+    it 'does not double the RealID when display_uid renders its own uid' do
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_uid = true
+      Lich.display_roomid_location = 'title'
+      # Lich manages the uid, so the game RealID is suppressed - the subtitle carries the
+      # "(u230008)" form once, with no trailing "(230008)".
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234 - (u230008)]"))
+    end
+
+    it 'keeps the window title and the room-name line byte-identical (GS parity, lichid only)' do
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      room_name = dr.modify_room_display(+'[Test Room] (230008)')
+      subtitle = dr.process_room_display(+'PROMPT')[/subtitle=" - (?<title>.*?)"/, :title]
+      expect(subtitle).to eq(room_name)
+    end
+
+    it 'shows the game RealID in the window title for the "line" placement (default DR path)' do
+      # ";display roomid line" places Lich's id in the below-room line, but the game RealID still
+      # belongs in the window title when ShowRoomID is on: the game shows it there regardless of
+      # where Lich puts its own id, and it already rides the room-name line for this placement.
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'line'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (230008)"))
+    end
+
+    it 'shows the game RealID in the window title for the nil (unset) placement' do
+      XMLData.show_room_id = true
+      Lich.display_lichid = true
+      Lich.display_roomid_location = nil
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (230008)"))
+    end
+
+    it 'synthesizes the window-title RealID from the authoritative nav UID, not any room-name literal' do
+      # nav (XMLData.room_id) is the primary UID source for every game (see the <nav> handler);
+      # the subtitle is rebuilt from the UID-free room_title, so it must follow nav. Force nav to
+      # a value no room-name literal here carries and confirm the window title reports nav.
+      XMLData.show_room_id = true
+      XMLData.room_id = 999999
+      Lich.display_lichid = true
+      Lich.display_roomid_location = 'title'
+      expect(dr.process_room_display(+'PROMPT')).to include(%(subtitle=" - [Test Room - 1234] (999999)"))
+    end
+  end
+
   describe 'GemStone is unaffected by the DR placement setting' do
     it 'GS #modify_room_display ignores display_roomid_location' do
       XMLData.game = 'GS'
       Lich.display_lichid = true
       Lich.display_roomid_location = 'line' # suppresses DR title injection; must not affect GS
-      expect(gs.modify_room_display(+'[Test Room] (123)')).to include(' - 1234]')
+      # Room["u123"] in the spec_helper stand-in reports 123, the uid above.
+      expect(gs.modify_room_display(+'[Test Room] (123)')).to include(' - 123]')
     end
   end
 end
@@ -1067,7 +1193,7 @@ RSpec.describe Lich::GameBase::Game do
 
     it 'writes to the socket' do
       allow(mock_socket).to receive(:puts)
-      described_class.send(:_puts, 'test')
+      expect(described_class.send(:_puts, 'test')).to be(true)
       expect(mock_socket).to have_received(:puts).with('test')
     end
 

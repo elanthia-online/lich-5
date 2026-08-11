@@ -61,6 +61,15 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
       end
     end
 
+    context 'with saga frontend' do
+      it 'modifies game to SAGA' do
+        result = described_class.prepare(auth_data, 'saga')
+
+        expect(result).to include('GAME=SAGA')
+        expect(result).not_to include('GAME=STORM')
+      end
+    end
+
     context 'with suks frontend' do
       it 'modifies launch data for suks' do
         result = described_class.prepare(auth_data, 'suks')
