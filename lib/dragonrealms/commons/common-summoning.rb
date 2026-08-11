@@ -125,10 +125,7 @@ module Lich
             # aren't recognized for shaping summoned elemental weapons, and the error message
             # itself is misleading. Breaking, turning, pulling, pushing work fine with custom adj.
             unless summoned_weapon.nil?
-              # Strip whichever custom adjective is on the weapon so the game
-              # recognizes the base weapon for shaping.
-              present_adjective = custom_summoned_weapon_adjectives(settings).find { |adjective| summoned_weapon.include?(adjective) }
-              base_weapon = present_adjective ? summoned_weapon.sub(present_adjective, '') : summoned_weapon
+              base_weapon = base_summoned_weapon(summoned_weapon, settings)
               retry_result = DRC.bput("shape my #{base_weapon} to #{skill}", *WM_SHAPE_FAILURES)
               if retry_result == LACK_CHARGE
                 summon_admittance
@@ -160,6 +157,23 @@ module Lich
         legacy = settings&.summoned_weapons_adjective
         adjectives << legacy if legacy.is_a?(String) && !legacy.empty? && !adjectives.include?(legacy)
         adjectives
+      end
+
+      # Strips the summoned weapon's custom element adjective so the game
+      # recognizes the base weapon for shaping (custom Books-of-Binding
+      # adjectives aren't accepted by SHAPE).
+      #
+      # Picks the LONGEST matching adjective, not the first: with a substring
+      # pair like ['flame', 'flamewreathed'] a first-match would strip 'flame'
+      # from "flamewreathed sword" and leave a bogus "wreathed sword".
+      #
+      # @param summoned_weapon [String] the held weapon's <adj> <noun>
+      # @param settings [OpenStruct, nil] user settings (for the legacy key)
+      # @return [String] the weapon with its custom adjective removed (if any)
+      # @see #custom_summoned_weapon_adjectives
+      def base_summoned_weapon(summoned_weapon, settings = nil)
+        present = custom_summoned_weapon_adjectives(settings).select { |adjective| summoned_weapon.include?(adjective) }.max_by(&:length)
+        present ? summoned_weapon.sub(present, '') : summoned_weapon
       end
 
       # Returns what kind of summoned weapon you're holding.

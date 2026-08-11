@@ -56,6 +56,35 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
+  # --- base_summoned_weapon (adjective stripping) ---------------------
+
+  describe '.base_summoned_weapon' do
+    def stub_adjectives(value)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: value))
+    end
+
+    it 'strips a single custom adjective' do
+      stub_adjectives(['flamewreathed'])
+      expect(described_class.base_summoned_weapon('flamewreathed sword')).to eq(' sword')
+    end
+
+    it 'strips the longest adjective when one is a substring of another' do
+      # ['flame','flamewreathed'] must strip 'flamewreathed', not 'flame' (which
+      # would leave a bogus "wreathed sword").
+      [%w[flame flamewreathed], %w[flamewreathed flame]].each do |ordering|
+        Lich::DragonRealms::CustomSubstitutions.reset!
+        stub_adjectives(ordering)
+        expect(described_class.base_summoned_weapon('flamewreathed sword')).to eq(' sword')
+      end
+    end
+
+    it 'returns the weapon unchanged when no custom adjective matches' do
+      stub_adjectives(['frostbound'])
+      expect(described_class.base_summoned_weapon('electric sword')).to eq('electric sword')
+    end
+  end
+
   # --- Constants ------------------------------------------------------
 
   describe 'constants' do
