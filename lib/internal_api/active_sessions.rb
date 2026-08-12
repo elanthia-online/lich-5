@@ -73,11 +73,19 @@ module Lich
 
       # Indicates whether the active sessions API is enabled.
       #
-      # Until feature-flag plumbing is present in core, this API remains safely
-      # dormant and returns empty snapshots.
+      # An explicit --active-session-dir=PATH CLI flag implies opt-in for this
+      # process only -- passing a coordination directory is a clear enough
+      # signal of intent that requiring the persisted feature_flag:
+      # active_sessions_api row too would just be friction. This never writes
+      # to lich_settings; removing the flag on a later launch reverts to
+      # whatever the persisted flag says (false by default).
+      #
+      # Until feature-flag plumbing is present in core, this API otherwise
+      # remains safely dormant and returns empty snapshots.
       #
       # @return [Boolean]
       def self.enabled?
+        return true if defined?(ACTIVE_SESSION_DIR) && !ACTIVE_SESSION_DIR.to_s.empty?
         return false unless defined?(Lich::Common::FeatureFlags)
 
         Lich::Common::FeatureFlags.enabled?(FEATURE_FLAG)

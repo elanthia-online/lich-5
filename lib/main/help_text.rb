@@ -183,6 +183,12 @@ module Lich
             each character uses a separate --temp-dir, pass a shared
             --active-session-dir=PATH so all characters coordinate through one
             directory instead of isolated per-character ones.
+
+            Passing --active-session-dir=PATH also enables the active sessions
+            service for that launch, even if it isn't persistently enabled.
+            This is a per-launch opt-in only -- it writes nothing to disk, and
+            omitting the flag on a later launch reverts to the persisted
+            setting (disabled by default).
         TEXT
       end
 
