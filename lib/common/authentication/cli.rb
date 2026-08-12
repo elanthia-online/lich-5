@@ -17,7 +17,7 @@ module Lich
         # Executes CLI login flow for a specified character
         #
         # @param character_name [String] Character name to login with
-        # @param game_code [String, nil] Game code/instance (GS3, GS4, DR, etc.)
+        # @param game_code [String, nil] Game code/instance (GS3, GST, DR, etc.)
         # @param frontend [String, nil] Frontend type (stormfront, avalon, wizard)
         # @param custom_launch [String, nil] Custom launch filter (if provided, frontend is ignored for matching)
         # @param data_dir [String] Directory containing saved login entries
@@ -127,7 +127,7 @@ module Lich
             return nil
           end
 
-          unless game_code && LoginHelpers::VALID_GAME_CODES.include?(game_code.to_s)
+          unless game_code && LoginHelpers.valid_game_code?(game_code.to_s)
             Lich.log "error: A valid game code is required for new character creation (e.g. --dr, --gemstone). Got: #{game_code.inspect}"
             return nil
           end

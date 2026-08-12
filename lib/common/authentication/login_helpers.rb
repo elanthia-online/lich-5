@@ -13,8 +13,17 @@ module Lich
         # Load up / require gem 'os' for operating system detection work
         Lich::Util.install_gem_requirements({ 'os' => true })
 
-        # Valid game codes
-        VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
+        # Game codes accepted for login and character creation.
+        VALID_GAME_CODES = %w[GS3 GST GSF DR DRX DRT DRF].freeze
+
+        # Returns whether a game code is accepted for login and character creation.
+        # Callers remain responsible for any input normalization they require.
+        #
+        # @param game_code [String, nil] game instance code
+        # @return [Boolean]
+        def self.valid_game_code?(game_code)
+          VALID_GAME_CODES.include?(game_code)
+        end
 
         # CLI login name that requests the character generator instead of
         # selecting an existing character (e.g. `--login NEW`). This is a
@@ -58,6 +67,8 @@ module Lich
           detachable-client reconnect-delay game wine wine-prefix
         ].freeze
 
+        # Legacy realm and name mappings intentionally retain retired codes for
+        # persisted-entry normalization. VALID_GAME_CODES governs login validity.
         # Game code to realm mappings
         GAME_CODE_TO_REALM = {
           'GSX' => 'platinum',
@@ -370,7 +381,7 @@ module Lich
 
           # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
           if requested_instance != :__unset
-            if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
+            if requested_instance.nil? || !valid_game_code?(requested_instance)
               Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}" if Lich.respond_to?(:log)
               messaging_msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
 
@@ -444,14 +455,14 @@ module Lich
             resolved_instance ||= 'DRF'
           end
 
-          # Check for direct instance codes (GS3, GS4, GST, GSX, etc.).
+          # Check for direct instance codes (GS3, GST, GSF, DR, etc.).
           # Non-instance flags are ignored so CLI modifiers do not force invalid-instance
           # handling when the user did not request an explicit instance.
           if resolved_instance.nil?
             argv.each do |arg|
               next unless arg.start_with?('--')
               flag = arg.sub('--', '').downcase
-              if VALID_GAME_CODES.include?(flag.upcase)
+              if valid_game_code?(flag.upcase)
                 instance_flags_seen = true
                 resolved_instance = flag.upcase
                 break
@@ -463,7 +474,7 @@ module Lich
             end
           end
 
-          return resolved_instance unless resolved_instance.nil?
+          return resolved_instance if valid_game_code?(resolved_instance)
           return :__unset unless instance_flags_seen
           nil
         end
@@ -499,13 +510,12 @@ module Lich
         # Parses Lich CLI args to determine game instance, frontend, and custom launch filter.
         #
         # Returns [instance, frontend, custom_launch] (all may be nil or :__unset).
-        # Invalid game codes are not rejected here; call site can choose to validate
-        # against VALID_GAME_CODES.
+        # Invalid game codes resolve to nil through the canonical game-code validator.
         #
         # Examples:
-        #   --gemstone --platinum        -> ['GSX', :__unset, :__unset]
+        #   --gemstone --shattered       -> ['GSF', :__unset, :__unset]
         #   --dragonrealms --fallen      -> ['DRF', :__unset, :__unset]
-        #   --GS4 --wizard               -> ['GS3', 'wizard', :__unset]
+        #   --GST --wizard               -> ['GST', 'wizard', :__unset]
         #   --GS3 --custom-launch=warlock -> ['GS3', :__unset, 'warlock']
         #
         # @param argv [Array<String>] e.g. ARGV
@@ -525,9 +535,11 @@ module Lich
           end
 
           messaging_msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
-          messaging_msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
           Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}" if Lich.respond_to?(:log)
-          Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}" if Lich.respond_to?(:log)
+          unless instance.nil?
+            messaging_msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
+            Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}" if Lich.respond_to?(:log)
+          end
 
           [instance, frontend, custom_launch]
         end

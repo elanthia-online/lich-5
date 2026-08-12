@@ -41,8 +41,8 @@ require_relative '../../../../lib/common/authentication/login_helpers'
 
 RSpec.describe Lich::Common::Authentication::LoginHelpers do
   describe 'constants' do
-    it 'defines VALID_GAME_CODES' do
-      expect(described_class::VALID_GAME_CODES).to include('GS3', 'DR', 'GSX', 'DRX')
+    it 'defines the complete accepted game-code set' do
+      expect(described_class::VALID_GAME_CODES).to eq(%w[GS3 GST GSF DR DRX DRT DRF])
     end
 
     it 'defines VALID_FRONTENDS' do
@@ -64,6 +64,20 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'defines GAME_CODE_TO_NAME mappings' do
       expect(described_class::GAME_CODE_TO_NAME['GS3']).to eq('GemStone IV')
       expect(described_class::GAME_CODE_TO_NAME['DR']).to eq('DragonRealms')
+    end
+  end
+
+  describe '.valid_game_code?' do
+    it 'accepts every canonical GemStone and DragonRealms game code' do
+      described_class::VALID_GAME_CODES.each do |game_code|
+        expect(described_class.valid_game_code?(game_code)).to be(true), game_code
+      end
+    end
+
+    it 'rejects retired, invented, blank, and non-normalized game codes' do
+      ['GSX', 'GS4', 'BOGUS', 'gs3', '', nil].each do |game_code|
+        expect(described_class.valid_game_code?(game_code)).to be(false), game_code.inspect
+      end
     end
   end
 
@@ -323,7 +337,7 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       [
         { char_name: 'Testchar', game_code: 'GS3', frontend: 'stormfront' },
         { char_name: 'Testchar', game_code: 'GS3', frontend: 'wizard' },
-        { char_name: 'Testchar', game_code: 'GSX', frontend: 'stormfront' }
+        { char_name: 'Testchar', game_code: 'GSF', frontend: 'stormfront' }
       ]
     end
 
@@ -364,9 +378,9 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       result = described_class.select_best_fit(
         char_data_sets: char_data_sets,
         requested_character: 'Testchar',
-        requested_instance: 'GSX'
+        requested_instance: 'GSF'
       )
-      expect(result[:game_code]).to eq('GSX')
+      expect(result[:game_code]).to eq('GSF')
     end
 
     it 'prefers frontend match when specified' do
@@ -413,8 +427,8 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--gemstone', '--test'])).to eq('GST')
     end
 
-    it 'returns GSX for --gemstone --platinum' do
-      expect(described_class.resolve_instance(['--gemstone', '--platinum'])).to eq('GSX')
+    it 'rejects the retired GemStone Platinum selector' do
+      expect(described_class.resolve_instance(['--gemstone', '--platinum'])).to be_nil
     end
 
     it 'returns DR for --dragonrealms' do
@@ -431,6 +445,11 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
 
     it 'returns direct game code for --GS3' do
       expect(described_class.resolve_instance(['--GS3'])).to eq('GS3')
+    end
+
+    it 'rejects retired and nonexistent direct GemStone game codes' do
+      expect(described_class.resolve_instance(['--GSX'])).to be_nil
+      expect(described_class.resolve_instance(['--GS4'])).to be_nil
     end
 
     it 'returns :__unset when no instance flags present' do
@@ -506,6 +525,16 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(instance).to eq('GS3')
       expect(frontend).to eq('saga')
       expect(custom_launch).to eq(:__unset)
+    end
+
+    it 'does not report an invalid game code as a resolved instance' do
+      allow(Lich).to receive(:log)
+
+      result = described_class.resolve_login_args(['--login', 'Tsetem', '--GS4'])
+
+      expect(result).to eq([nil, :__unset, :__unset])
+      expect(Lich).not_to have_received(:log).with(/Resolved instance/)
+      expect(Lich::Messaging).not_to have_received(:msg).with('debug', /Resolved instance/)
     end
   end
 
