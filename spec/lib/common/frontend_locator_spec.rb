@@ -397,6 +397,28 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
+  it 'accepts a Wine frontend override without requiring a Unix execute bit' do
+    Dir.mktmpdir do |directory|
+      wrayth = File.join(directory, 'Wrayth.exe')
+      File.write(wrayth, 'PE executable')
+      FileUtils.chmod(0o644, wrayth)
+      locator = described_class.new(
+        platform_key: :linux,
+        environment: { 'PATH' => '' },
+        wine: Module.new
+      )
+
+      expect(File.executable?(wrayth)).to be(false)
+      expect(locator.resolve('stormfront', override: wrayth)).to eq(
+        described_class::Resolution.new(
+          frontend_id: 'stormfront',
+          executable_path: File.realpath(wrayth),
+          source: :override
+        )
+      )
+    end
+  end
+
   it 'does not consult ambient Wine when the injected provider is nil' do
     stub_const('Wine', Module.new)
     locator = described_class.new(
