@@ -16,7 +16,8 @@ module Lich
         { option: 'maps', key: :map_dir, constant: :MAP_DIR },
         { option: 'logs', key: :log_dir, constant: :LOG_DIR },
         { option: 'backup', key: :backup_dir, constant: :BACKUP_DIR },
-        { option: 'lib', key: :lib_dir, constant: :LIB_DIR }
+        { option: 'lib', key: :lib_dir, constant: :LIB_DIR },
+        { option: 'active-session-dir', key: :active_session_dir, constant: :ACTIVE_SESSION_DIR }
       ].freeze
 
       class << self
@@ -26,7 +27,8 @@ module Lich
         # @param launch_context [Hash, nil] Optional context keys:
         #   :char_name, :game_code, :frontend, :custom_launch, :dark_mode
         #   and optional directory overrides (:home_dir, :data_dir, :script_dir,
-        #   :temp_dir, :map_dir, :log_dir, :backup_dir, :lib_dir).
+        #   :temp_dir, :map_dir, :log_dir, :backup_dir, :lib_dir,
+        #   :active_session_dir).
         # @return [Hash] Structured result:
         #   - success: { ok: true, pid: Integer }
         #   - failure: { ok: false, error: String }
@@ -177,6 +179,14 @@ module Lich
           if option_name == 'home'
             return Object.const_defined?(:LICH_DIR) ? File.expand_path(Object.const_get(:LICH_DIR).to_s) : nil
           end
+
+          # active-session-dir has no constants.rb default of its own (see
+          # ActiveSessions.coordination_dir): an unset child falls back to its
+          # own TEMP_DIR, not to this process's ACTIVE_SESSION_DIR. There is no
+          # default here to compare against, so never suppress this flag --
+          # doing so would silently drop it whenever the requested value
+          # happens to match the parent's own coordination dir.
+          return nil if option_name == 'active-session-dir'
 
           home_override = context[:home_dir]
           if !home_override.to_s.empty?

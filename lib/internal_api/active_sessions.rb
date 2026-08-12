@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'fileutils'
 require 'json'
 require 'securerandom'
 require 'tmpdir'
@@ -402,6 +403,12 @@ module Lich
       # @note The caller must hold {@mutex}.
       # @return [Boolean] true when the lock was acquired by this process
       def self.acquire_ownership_lock
+        # coordination_dir has no boot-time mkdir the way TEMP_DIR does (see
+        # lib/init.rb) -- ACTIVE_SESSION_DIR in particular may point at a path
+        # that has never been created. Without this, File.open below raises
+        # Errno::ENOENT, which the rescue clause quietly turns into "service
+        # unavailable" with no actionable trace for the caller.
+        FileUtils.mkdir_p(coordination_dir)
         file = File.open(lock_path, File::RDWR | File::CREAT, 0o600)
         if file.flock(File::LOCK_EX | File::LOCK_NB)
           @lock_file = file
@@ -440,8 +447,16 @@ module Lich
       # Returns the base directory shared by local coordination files
       # (the discovery record and the ownership lock).
       #
+      # Prefers an explicit ACTIVE_SESSION_DIR override (set via the
+      # --active-session-dir=PATH CLI flag) so coordination can be pointed at a
+      # directory shared across characters independently of TEMP_DIR, which is
+      # often overridden per-character to separate debug logs. Falls back to
+      # today's behavior -- TEMP_DIR, or Dir.tmpdir -- when unset.
+      #
       # @return [String]
       def self.coordination_dir
+        return ACTIVE_SESSION_DIR if defined?(ACTIVE_SESSION_DIR) && !ACTIVE_SESSION_DIR.to_s.empty?
+
         defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir
       end
       private_class_method :coordination_dir

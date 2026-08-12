@@ -56,6 +56,44 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
     JSON.parse(File.read(discovery_file), symbolize_names: true)
   end
 
+  describe '.coordination_dir' do
+    it 'falls back to TEMP_DIR when ACTIVE_SESSION_DIR is unset' do
+      expect(described_class.send(:coordination_dir)).to eq(temp_dir)
+    end
+
+    it 'uses ACTIVE_SESSION_DIR instead of TEMP_DIR when explicitly set' do
+      active_session_dir = Dir.mktmpdir('active-session-dir-spec')
+
+      begin
+        stub_const('ACTIVE_SESSION_DIR', active_session_dir)
+
+        expect(described_class.send(:coordination_dir)).to eq(active_session_dir)
+        expect(described_class.send(:lock_path)).to eq(File.join(active_session_dir, 'lich-active-sessions.lock'))
+        expect(described_class.send(:discovery_path)).to eq(File.join(active_session_dir, 'lich-active-sessions.json'))
+      ensure
+        FileUtils.rm_rf(active_session_dir)
+      end
+    end
+  end
+
+  describe '.acquire_ownership_lock' do
+    it 'creates a missing coordination_dir before opening the lock file' do
+      base_dir = Dir.mktmpdir('active-session-dir-missing-spec')
+      nested_dir = File.join(base_dir, 'nested', 'coordination')
+
+      begin
+        stub_const('ACTIVE_SESSION_DIR', nested_dir)
+        expect(File.directory?(nested_dir)).to be(false)
+
+        expect(described_class.send(:acquire_ownership_lock)).to be(true)
+
+        expect(File.directory?(nested_dir)).to be(true)
+      ensure
+        FileUtils.rm_rf(base_dir)
+      end
+    end
+  end
+
   describe 'ownership election' do
     it 'acquires the lock, binds an ephemeral port, and publishes it in discovery' do
       dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
