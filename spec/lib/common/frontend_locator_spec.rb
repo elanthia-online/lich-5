@@ -369,13 +369,16 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
-  it 'converts Wine registry directories before executable discovery' do
+  it 'discovers a Wine frontend without requiring a Unix execute bit' do
     Dir.mktmpdir do |prefix|
-      wrayth = executable(File.join(prefix, 'drive_c', 'Simutronics', 'Wrayth.exe'))
+      wrayth = File.join(prefix, 'drive_c', 'Simutronics', 'Wrayth.exe')
+      FileUtils.mkdir_p(File.dirname(wrayth))
+      File.write(wrayth, 'PE executable')
+      FileUtils.chmod(0o644, wrayth)
       wine = Module.new
       wine.const_set(:PREFIX, prefix)
       wine.define_singleton_method(:registry_gets) do |key|
-        key.include?('STORM32') ? 'C:\\Simutronics' : nil
+        key == 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Simutronics\\STORM32\\Directory' ? 'C:\\Simutronics' : nil
       end
       stub_const('Wine', wine)
       locator = described_class.new(
