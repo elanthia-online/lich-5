@@ -441,8 +441,25 @@ module Lich
         remove_flavor_text(long_name).strip.scan(/[a-z\-']+$/i).first
       end
 
+      # Strips descriptive flavor text ("... adorned with ...") from an item
+      # name, leaving the gettable noun phrase.
+      #
+      # Applies the built-in {FLAVOR_TEXT_PATTERN} first, then any player-defined
+      # +custom_flavor_text_patterns+ (regular expressions) for flavor the
+      # built-in pattern misses -- letting a player strip a new flavor phrasing
+      # without a Lich release. User patterns are compiled with a per-pattern
+      # timeout and validated/guarded by {CustomSubstitutions}; an invalid or
+      # runaway pattern is reported and skipped, never raising here.
+      #
+      # @param item [String] the item long name
+      # @return [String] the item name with flavor text removed
+      # @example
+      #   remove_flavor_text('a sword adorned with rubies of deep crimson') #=> 'a sword'
+      # @see CustomSubstitutions.resolve
+      # @see CustomSubstitutions.apply_regexes
       def remove_flavor_text(item)
-        item.sub(FLAVOR_TEXT_PATTERN, '')
+        custom_patterns = CustomSubstitutions.resolve(:custom_flavor_text_patterns, [], type: :regexes)
+        CustomSubstitutions.apply_regexes(item.sub(FLAVOR_TEXT_PATTERN, ''), custom_patterns)
       end
 
       # Items class. Name is the noun of the object. Leather/metal boolean. Is the item worn (defaults to true). Does it hinder lockpicking? (false)

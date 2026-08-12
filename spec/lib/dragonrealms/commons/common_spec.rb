@@ -103,10 +103,30 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.remove_flavor_text' do
+    def stub_flavor_patterns(patterns)
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_flavor_text_patterns: patterns))
+    end
+
     it('returns item unchanged when no flavor text') { expect(described_class.remove_flavor_text('a sword')).to eq('a sword') }
     it('strips "adorned with" flavor text') { expect(described_class.remove_flavor_text('a sword adorned with rubies of deep crimson')).to eq('a sword') }
     it('strips "decorated with" flavor text') { expect(described_class.remove_flavor_text('a shield decorated with a golden crest')).to eq('a shield') }
     it('strips "carved with" flavor text') { expect(described_class.remove_flavor_text('a staff carved with runes of ancient design')).to eq('a staff') }
+
+    it 'strips flavor the built-in pattern misses using a player-added pattern' do
+      # A marker the built-in FLAVOR_TEXT_PATTERN does not touch, so this isolates
+      # the user-pattern path.
+      stub_flavor_patterns(['\s?::.*'])
+      expect(described_class.remove_flavor_text('a sword ::soulbound::')).to eq('a sword')
+    end
+
+    it 'still applies the built-in pattern when a user pattern is invalid, and warns' do
+      stub_flavor_patterns(['(unclosed'])
+      expect(described_class.remove_flavor_text('a sword adorned with rubies of deep crimson')).to eq('a sword')
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_flavor_text_patterns[0] skipped')
+    end
   end
 
   describe '.box_list_to_adj_and_noun' do
