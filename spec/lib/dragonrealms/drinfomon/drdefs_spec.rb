@@ -811,6 +811,13 @@ RSpec.describe Lich::DragonRealms do
   end
 
   describe '#normalize_creature_names' do
+    before(:each) do
+      # Rebuild the memoized merged list so a per-example get_settings stub does
+      # not leak into other examples (see CustomSubstitutions.reset!).
+      Lich::DragonRealms::CustomSubstitutions.reset!
+      Lich::Messaging.clear_messages!
+    end
+
     it 'normalizes alfar warrior variants' do
       expect(helper.normalize_creature_names('a savage alfar warrior')).to eq('alfar warrior')
     end
@@ -825,6 +832,35 @@ RSpec.describe Lich::DragonRealms do
 
     it 'leaves other creatures unchanged' do
       expect(helper.normalize_creature_names('goblin')).to eq('goblin')
+    end
+
+    it 'normalizes a player-added creature from settings' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_creature_normalizations: ['grumpy war yak']))
+      expect(helper.normalize_creature_names('a grumpy war yak that is charging')).to eq('grumpy war yak')
+    end
+
+    it 'skips a malformed user entry, warns, and keeps the built-in defaults' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_creature_normalizations: [42]))
+      expect(helper.normalize_creature_names('a savage alfar warrior')).to eq('alfar warrior')
+      warning = Lich::Messaging.messages.find { |m| m[:message].include?('custom_creature_normalizations[0] skipped') }
+      expect(warning).not_to be_nil
+      expect(warning[:message]).to include('expected a non-empty string')
+    end
+
+    it 'keeps the most specific name when one entry is a substring of another' do
+      # Regardless of list order, the longest containing name wins -- a generic
+      # alias must not re-collapse a more specific one.
+      [['grumpy war yak', 'war yak'], ['war yak', 'grumpy war yak']].each do |ordering|
+        Lich::DragonRealms::CustomSubstitutions.reset!
+        allow(Lich::DragonRealms::CustomSubstitutions)
+          .to receive(:get_settings)
+          .and_return(OpenStruct.new(custom_creature_normalizations: ordering))
+        expect(helper.normalize_creature_names('a grumpy war yak that is charging')).to eq('grumpy war yak')
+      end
     end
   end
 
