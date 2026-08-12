@@ -498,6 +498,112 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       expect(exit_code).to eq(3)
       expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_or_update_account)
     end
+
+    # These exercise the real persistence path instead of stubbing
+    # add_or_update_account, because the merge semantics being asserted here live in
+    # the interaction between the two: add_or_update_account treats
+    # char_name+game_code+frontend+custom_launch as the identity of a character, so a
+    # refresh that rewrites frontend or drops custom_launch appends duplicates rather
+    # than matching what is already stored.
+    context 'when merging into stored characters' do
+      def stored_characters
+        YAML.load_file(yaml_file)['accounts']['DOUG']['characters']
+      end
+
+      def stub_server_characters(*names)
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return(
+          names.map { |n| { char_name: n, game_code: 'DR', game_name: 'DragonRealms' } }
+        )
+      end
+
+      before do
+        File.write(yaml_file, YAML.dump(
+                                'encryption_mode' => 'plaintext',
+                                'accounts'        => {
+                                  'DOUG' => {
+                                    'password'   => 'password',
+                                    'characters' => [
+                                      { 'char_name' => 'Alpha', 'game_code' => 'DR', 'game_name' => 'DragonRealms',
+                                        'frontend' => 'genie', 'custom_launch' => 'genie.exe', 'custom_launch_dir' => '/opt/genie',
+                                        'favorite' => true },
+                                      { 'char_name' => 'Beta', 'game_code' => 'DR', 'game_name' => 'DragonRealms',
+                                        'frontend' => 'avalon', 'custom_launch' => nil, 'custom_launch_dir' => nil }
+                                    ]
+                                  }
+                                }
+                              ))
+      end
+
+      it 'does not duplicate a stored character whose frontend differs from the selected one' do
+        stub_server_characters('Alpha', 'Beta')
+
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+        expect(stored_characters.map { |c| c['char_name'] }).to contain_exactly('Alpha', 'Beta')
+      end
+
+      it 'does not duplicate a stored character that has a custom launch' do
+        stub_server_characters('Alpha')
+
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'genie')
+
+        alpha = stored_characters.select { |c| c['char_name'] == 'Alpha' }
+        expect(alpha.length).to eq(1)
+        expect(alpha.first['custom_launch']).to eq('genie.exe')
+      end
+
+      it 'leaves stored frontend, launch, and favorite metadata untouched' do
+        stub_server_characters('Alpha', 'Beta')
+
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+        alpha = stored_characters.find { |c| c['char_name'] == 'Alpha' }
+        expect(alpha).to include(
+          'frontend' => 'genie', 'custom_launch' => 'genie.exe',
+          'custom_launch_dir' => '/opt/genie', 'favorite' => true
+        )
+        expect(stored_characters.find { |c| c['char_name'] == 'Beta' }['frontend']).to eq('avalon')
+      end
+
+      it 'appends only characters the server reports that are not already stored' do
+        stub_server_characters('Alpha', 'Beta', 'Gamma')
+
+        exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+        expect(exit_code).to eq(0)
+        expect(stored_characters.map { |c| c['char_name'] }).to contain_exactly('Alpha', 'Beta', 'Gamma')
+        expect(stored_characters.find { |c| c['char_name'] == 'Gamma' }['frontend']).to eq('wizard')
+      end
+
+      it 'treats the same character name under a different game code as new' do
+        allow(Lich::Common::Authentication).to receive(:authenticate).and_return(
+          [{ char_name: 'Alpha', game_code: 'DRF', game_name: 'DragonRealms Fallen' }]
+        )
+
+        Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+        expect(stored_characters.map { |c| c.values_at('char_name', 'game_code') })
+          .to contain_exactly(%w[Alpha DR], %w[Beta DR], %w[Alpha DRF])
+      end
+
+      it 'reports how many characters were added rather than how many the server returned' do
+        stub_server_characters('Alpha', 'Beta', 'Gamma')
+
+        expect {
+          Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+        }.to output(/1 added, 3 found/).to_stdout
+      end
+
+      it 'returns 0 without rewriting entry.yaml when the server reports no new characters' do
+        stub_server_characters('Alpha', 'Beta')
+        before_contents = File.read(yaml_file)
+
+        exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
+
+        expect(exit_code).to eq(0)
+        expect(File.read(yaml_file)).to eq(before_contents)
+      end
+    end
   end
 
   describe '.add_character' do

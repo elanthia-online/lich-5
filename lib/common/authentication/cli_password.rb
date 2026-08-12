@@ -194,11 +194,12 @@ module Lich
         end
 
         # Re-fetches an account's character list from the game servers and merges it
-        # into entry.yaml. Existing characters and their metadata (favorites, custom
-        # launch config) are preserved by AccountManager.add_or_update_account's merge
-        # behavior; only new characters get added - an existing matching record (same
-        # char_name + game_code + frontend + custom_launch) is left untouched, not
-        # updated.
+        # into entry.yaml. Only characters the account does not already have stored are
+        # appended, each with the selected frontend; every stored record for a character
+        # the account already has - including its frontend, custom launch config, and
+        # favorite flag, and including several records for the same character - is left
+        # exactly as it was. Re-running a refresh that finds nothing new is therefore a
+        # no-op that doesn't rewrite entry.yaml at all.
         # Mirrors add_account's authentication flow, but requires the account to
         # already exist (the opposite of add_account's guard), and authenticates using
         # the account's already-stored password (decrypted here) instead of a
@@ -292,10 +293,28 @@ module Lich
               return 3
             end
 
+            # Keep only characters the server reports that aren't already stored. A stored
+            # character is the user's own record - they chose its frontend, custom launch,
+            # and favorite flag - so a refresh must not restate it. add_or_update_account
+            # keys character identity on char_name+game_code+frontend+custom_launch, and
+            # every record built here carries the one selected frontend and a nil custom
+            # launch, so handing it a stored character under any other frontend or launch
+            # config would append a second entry rather than match the existing one.
+            new_characters = reject_stored_characters(
+              character_list,
+              yaml_data['accounts'][account]['characters']
+            )
+
+            if new_characters.empty?
+              puts "success: Characters refreshed for account '#{account}' (no new characters, #{character_list.length} found)"
+              Lich.log "info: Characters refreshed for account '#{account}' - no new characters (#{character_list.length} found)"
+              return 0
+            end
+
             # Merge into existing account using AccountManager (preserves other data)
-            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, character_list)
-              puts "success: Characters refreshed for account '#{account}' (#{character_list.length} found)"
-              Lich.log "info: Characters refreshed successfully for account '#{account}' (#{character_list.length} found)"
+            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, new_characters)
+              puts "success: Characters refreshed for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
+              Lich.log "info: Characters refreshed successfully for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
               if selected_frontend.nil? || selected_frontend.empty?
                 puts "note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it"
                 Lich.log "warning: No frontend selected for account '#{account}' - characters stored with frontend defaulted to stormfront"
@@ -481,6 +500,36 @@ module Lich
             Lich.log "error: CLI change master password failed: #{e.message}"
             1
           end
+        end
+
+        # @api private
+        # Drops any freshly-fetched character already represented in the account's
+        # stored records, so a refresh only ever appends genuinely new characters.
+        #
+        # Identity here is char_name + game_code, deliberately coarser than the
+        # char_name + game_code + frontend + custom_launch that add_or_update_account
+        # uses. A single character legitimately has several stored records - one per
+        # frontend or custom launch config the user set up - and all of them describe
+        # a character the server has already told us about, so any of them is enough
+        # to consider it known.
+        #
+        # @param fetched [Array<Hash>] characters built from the auth response (symbol keys)
+        # @param stored [Array<Hash>, nil] the account's entry.yaml characters (string keys)
+        # @return [Array<Hash>] the subset of fetched not already present in stored
+        def self.reject_stored_characters(fetched, stored)
+          known = (stored || []).map { |char| [normalize_char_name(char['char_name']), char['game_code']] }
+
+          fetched.reject { |char| known.include?([normalize_char_name(char[:char_name]), char[:game_code]]) }
+        end
+
+        # @api private
+        # Normalizes a character name to the form add_or_update_account persists, so
+        # names compare equal regardless of the casing the server or entry.yaml used.
+        #
+        # @param name [String, nil] Character name
+        # @return [String] Normalized name
+        def self.normalize_char_name(name)
+          name.to_s.strip.split.map(&:capitalize).join(' ')
         end
 
         # @api private

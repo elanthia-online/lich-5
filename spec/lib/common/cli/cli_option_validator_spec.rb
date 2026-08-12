@@ -58,4 +58,31 @@ RSpec.describe Lich::Common::CLI::CliOptionValidator do
       }.to raise_error(SystemExit)
     end
   end
+
+  describe '.require_positional' do
+    it 'returns the value when it is an ordinary argument' do
+      expect(described_class.require_positional('DOUG', name: 'ACCOUNT', usage: 'usage')).to eq('DOUG')
+    end
+
+    it 'exits 1 when the value is missing' do
+      expect { described_class.require_positional(nil, name: 'ACCOUNT', usage: 'usage') }.to raise_error(SystemExit)
+    end
+
+    it 'exits 1 when a following option has been read as the value' do
+      expect {
+        described_class.require_positional('--game-code', name: 'CHAR_NAME', usage: 'usage')
+      }.to raise_error(SystemExit)
+    end
+
+    it 'exits 1 for a short option too' do
+      expect { described_class.require_positional('-ac', name: 'ACCOUNT', usage: 'usage') }.to raise_error(SystemExit)
+    end
+
+    it 'names the expected argument in the error message' do
+      expect { described_class.require_positional('--game-code', name: 'CHAR_NAME', usage: 'usage') }
+        .to raise_error(SystemExit)
+
+      expect($stdout.string).to include("error: Expected CHAR_NAME, got option '--game-code'")
+    end
+  end
 end

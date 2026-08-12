@@ -7,6 +7,7 @@ require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
 require_relative '../authentication/login_helpers'
+require_relative '../gui/game_selection'
 require_relative 'cli_option_validator'
 
 module Lich
@@ -129,11 +130,7 @@ module Lich
           usage = "Usage: ruby #{lich_script} --refresh-characters ACCOUNT [--frontend FRONTEND]\n" \
                   "   or: ruby #{lich_script} -rc ACCOUNT [--frontend FRONTEND]"
 
-          if account.nil?
-            $stdout.puts 'error: Missing required arguments'
-            $stdout.puts usage
-            exit 1
-          end
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
 
           frontend = CliOptionValidator.extract_flag_value(
             '--frontend',
@@ -152,16 +149,13 @@ module Lich
           usage = "Usage: ruby #{lich_script} --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]\n" \
                   "   or: ruby #{lich_script} -ac ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]"
 
-          if account.nil? || char_name.nil?
-            $stdout.puts 'error: Missing required arguments'
-            $stdout.puts usage
-            exit 1
-          end
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+          char_name = CliOptionValidator.require_positional(char_name, name: 'CHAR_NAME', usage: usage)
 
           game_code = CliOptionValidator.extract_flag_value(
             '--game-code',
             usage: usage,
-            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES
+            valid_values: Lich::Common::GUI::GameSelection::PERSISTABLE_GAME_CODES
           )
           if game_code.nil?
             $stdout.puts 'error: --game-code is required'

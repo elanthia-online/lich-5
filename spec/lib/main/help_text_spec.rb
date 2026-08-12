@@ -3,6 +3,7 @@
 require 'rspec'
 
 require_relative '../../../lib/main/help_text'
+require_relative '../../../lib/common/gui/game_selection'
 
 RSpec.describe Lich::Main::HelpText do
   describe '.render' do
@@ -27,6 +28,14 @@ RSpec.describe Lich::Main::HelpText do
 
       expect(output).to include('--refresh-characters ACCOUNT [--frontend FRONTEND]')
       expect(output).to include('--add-character ACCOUNT CHAR_NAME')
+    end
+
+    it 'lists every game code --game-code accepts' do
+      output = described_class.render('accounts')
+
+      Lich::Common::GUI::GameSelection::GAME_MAPPING.each do |code, name|
+        expect(output).to match(/\b#{code}\s+#{Regexp.escape(name)}/)
+      end
     end
 
     it 'maps diagnostics requests to automation help' do
