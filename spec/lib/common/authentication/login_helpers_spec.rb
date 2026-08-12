@@ -47,6 +47,7 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
 
     it 'defines VALID_FRONTENDS' do
       expect(described_class::VALID_FRONTENDS).to include('stormfront', 'wizard', 'avalon', 'genie', 'frostbite', 'wrayth')
+      expect(described_class::VALID_FRONTENDS).not_to include('suks')
     end
 
     it 'defines VALID_REALMS' do
@@ -181,6 +182,7 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
 
     it 'does not match invalid frontends' do
       expect('--invalid'.match(described_class::FRONTEND_PATTERN)).to be_nil
+      expect('--suks'.match(described_class::FRONTEND_PATTERN)).to be_nil
     end
   end
 
@@ -475,6 +477,12 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'ignores non-instance frontend modifiers that do not imply game instance' do
       expect(described_class.resolve_instance(['--genie'])).to eq(:__unset)
       expect(described_class.resolve_instance(['--frostbite'])).to eq(:__unset)
+    end
+
+    it 'ignores the CLI-only SUKS flag without treating it as a frontend selector' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--suks'])).to eq(:__unset)
+      expect(described_class.resolve_login_args(['--login', 'Tsetem', '--suks']))
+        .to eq([:__unset, :__unset, :__unset])
     end
 
     it 'returns nil for unknown option-like flags (probable invalid instance intent)' do

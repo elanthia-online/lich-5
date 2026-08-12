@@ -55,7 +55,7 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend headless reconnect reconnected save
-          genie frostbite wrayth saga
+          genie frostbite wrayth saga suks
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
