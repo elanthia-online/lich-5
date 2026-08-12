@@ -707,6 +707,65 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       bounded&.close rescue nil
     end
 
+    # Regression: compact_write_queue! used to refuse to compact whenever
+    # groups.length <= OVERFLOW_KEEP_PROMPT_GROUPS, treating that retention
+    # cap as a precondition for compacting at all rather than a ceiling on
+    # what's kept. A handful of large prompt groups can still fill a small
+    # queue and provide safe drop boundaries -- this failed before the fix
+    # (session ended even though two of the four groups could safely be
+    # dropped).
+    it 'compacts a tight queue even when far fewer groups exist than the retention cap' do
+      write_started = Queue.new
+      release_write = Queue.new
+      bounded = described_class.new(delegate, role: :primary, write_queue_capacity: 8)
+      allow(delegate).to receive(:write) do
+        write_started << true
+        release_write.pop
+      end
+      bounded.write('blocker')
+      write_started.pop
+
+      # Four two-write prompt groups exactly fill an 8-capacity queue, well
+      # under OVERFLOW_KEEP_PROMPT_GROUPS (10).
+      4.times do |i|
+        bounded.write("group#{i}line1")
+        bounded.write("group#{i}line2<prompt time=\"#{i}\">&gt;</prompt>")
+      end
+
+      # This write would previously have overflowed and ended the session
+      # even though compaction had room to drop groups.
+      bounded.write('survivor<prompt time="99">&gt;</prompt>')
+
+      expect(bounded.alive?).to be true
+      expect(Lich::Common::ShutdownCoordinator.current).to be_nil
+    ensure
+      release_write << true if release_write
+      bounded&.close rescue nil
+    end
+
+    # Regression: retained_groups sized its budget only against
+    # write_queue_capacity, ignoring @deferred_main_stream even though
+    # ensure_pending_capacity! counts write_queue.length + deferred writes as
+    # a single pending total. Compaction could report success while
+    # pending_length stayed pinned at capacity, so the very next capacity
+    # check overflowed anyway. This asserts the real invariant (pending
+    # writes fall below capacity after a successful compaction) rather than
+    # an implementation-detail count, and fails before the fix because
+    # pending_length lands exactly at capacity instead of under it.
+    it 'reserves budget for already-deferred main-stream writes during compaction' do
+      capacity = 12
+      bounded = described_class.new(delegate, write_queue_capacity: capacity)
+      bounded.send(:ensure_writer_state)
+      queue = bounded.instance_variable_get(:@write_queue)
+      11.times { |i| queue.push([:write, ["line#{i}<prompt time=\"#{i}\">&gt;</prompt>"], nil], true) }
+      bounded.instance_variable_set(:@deferred_main_stream, ['pending main-stream write'])
+
+      expect(bounded.send(:compact_write_queue!)).to be true
+
+      pending_length = queue.length + bounded.instance_variable_get(:@deferred_main_stream).length
+      expect(pending_length).to be < capacity
+    end
+
     # requeue_writes is reached only from compaction, where the retention budget
     # makes a full queue unreachable. This exercises the defensive path directly
     # so a future change to that budget surfaces as a counted loss rather than a

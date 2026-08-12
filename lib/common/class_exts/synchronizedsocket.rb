@@ -321,12 +321,12 @@ module Lich
         return false unless @write_queue.is_a?(SizedQueue)
 
         stops, groups = grouped_pending_writes
-        if groups.length <= OVERFLOW_KEEP_PROMPT_GROUPS
+        kept = retained_groups(groups)
+        if kept.length == groups.length
           report_unrequeued(requeue_writes(groups, stops))
           return false
         end
 
-        kept = retained_groups(groups)
         dropped = groups[0...-kept.length]
         total_writes = groups.sum(&:length)
         dropped_writes = total_writes - kept.sum(&:length)
@@ -353,9 +353,14 @@ module Lich
       # Selects the trailing groups to retain.
       #
       # Bounded by +OVERFLOW_KEEP_PROMPT_GROUPS+ and, separately, by the space
-      # left once the injected preamble and the write that triggered compaction
-      # are accounted for. Without the second bound a small capacity or large
-      # groups could leave the queue full again and end the session anyway.
+      # left once the injected preamble, the write that triggered compaction,
+      # and any already-queued deferred main-stream writes are accounted for.
+      # +ensure_pending_capacity!+ counts +@deferred_main_stream+ toward
+      # capacity, so the retained queue must reserve room for it too --
+      # otherwise compaction can report success while leaving pending_length
+      # unchanged, and the very next capacity check fails anyway. Without the
+      # budget bound at all, a small capacity or large groups could leave the
+      # queue full again and end the session anyway.
       #
       # The newest group is always retained even if it alone exceeds the budget:
       # showing the most recent output beats showing none.
@@ -363,7 +368,7 @@ module Lich
       # @api private
       # @return [Array<Array>] retained groups, oldest first
       def retained_groups(groups)
-        budget = @write_queue_capacity - DROP_PREAMBLE_SIZE - 1
+        budget = @write_queue_capacity - DROP_PREAMBLE_SIZE - 1 - @deferred_main_stream.length
         kept = []
         total = 0
         groups.reverse_each do |group|
