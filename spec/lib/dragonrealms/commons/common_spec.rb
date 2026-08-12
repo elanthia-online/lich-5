@@ -45,6 +45,9 @@ DRC = Lich::DragonRealms::DRC unless defined?(DRC)
 RSpec.describe Lich::DragonRealms::DRC do
   before(:each) do
     Lich::Messaging.clear_messages!
+    # Rebuild memoized custom-substitution lists so a stub in one example does
+    # not leak its merged list into the next (see CustomSubstitutions.reset!).
+    Lich::DragonRealms::CustomSubstitutions.reset!
     # Stub GameObj with a temporary mock if not already defined by other specs
     stub_const('GameObj', DRC_MOCK_GAME_OBJ) unless defined?(::GameObj)
   end
@@ -104,10 +107,53 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.scroll_list_to_adj_and_noun' do
+    # Lets an example supply user additions the way get_settings would.
+    def stub_scroll_settings(additions)
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_scroll_substitutions: additions))
+    end
+
     it('removes article from single scroll') { expect(described_class.scroll_list_to_adj_and_noun(' a blue scroll')).to eq(['blue scroll']) }
     it('removes label text') { expect(described_class.scroll_list_to_adj_and_noun(' a blue scroll labeled with runes')).to eq(['blue scroll']) }
     it('converts papyrus roll to papyrus.roll') { expect(described_class.scroll_list_to_adj_and_noun(' a papyrus roll')).to eq(['papyrus.roll']) }
     it('simplifies icy blue to blue') { expect(described_class.scroll_list_to_adj_and_noun(' an icy blue parchment')).to eq(['blue parchment']) }
+
+    it 'reduces the built-in symbol-torn scale scroll to its gettable noun' do
+      expect(described_class.scroll_list_to_adj_and_noun(' a large midnight-blue scale torn with symbols'))
+        .to eq(['midnight-blue scale'])
+    end
+
+    it 'applies a user-added scroll substitution from settings' do
+      stub_scroll_settings([['weird prismatic scroll of doom', 'doom scroll']])
+      expect(described_class.scroll_list_to_adj_and_noun(' a weird prismatic scroll of doom'))
+        .to eq(['doom scroll'])
+    end
+
+    it 'applies a user addition before the keyword-collapse would mangle it' do
+      # Without a pre-collapse rewrite, "aqua blue vellum scroll" collapses on
+      # the "vellum" keyword to "aqua blue vellum"; the user rule fixes it.
+      stub_scroll_settings([['aqua blue vellum scroll', 'aqua scroll']])
+      expect(described_class.scroll_list_to_adj_and_noun(' an aqua blue vellum scroll'))
+        .to eq(['aqua scroll'])
+    end
+
+    it 'skips a malformed user entry, warns, and still applies the defaults' do
+      stub_scroll_settings([['only one element']])
+      expect(described_class.scroll_list_to_adj_and_noun(' a papyrus roll')).to eq(['papyrus.roll'])
+      warning = Lich::Messaging.messages.find { |m| m[:message].include?('custom_scroll_substitutions[0] skipped') }
+      expect(warning).not_to be_nil
+      expect(warning[:message]).to include('expected a [from, to] pair')
+    end
+
+    it 'falls back to defaults when the settings value is not a list' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_scroll_substitutions: 'not-a-list'))
+      expect(described_class.scroll_list_to_adj_and_noun(' an icy blue parchment')).to eq(['blue parchment'])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_scroll_substitutions ignored')
+    end
   end
 
   describe '.text2num' do
