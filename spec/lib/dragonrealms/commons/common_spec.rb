@@ -38,6 +38,15 @@ $ENC_MAP = {
 $box_regex = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/ unless defined?($box_regex)
 $fake_stormfront = false unless defined?($fake_stormfront)
 
+# Box vocabulary constants normally provided by drvariables.rb (not loaded here);
+# box_list_to_adj_and_noun builds its match regex from these.
+module Lich
+  module DragonRealms
+    BOX_WOODS = %w[brass copper deobar driftwood iron ironwood mahogany oaken pine steel wooden].freeze unless defined?(BOX_WOODS)
+    BOX_CONTAINERS = %w[box caddy casket chest coffer crate skippet strongbox trunk].freeze unless defined?(BOX_CONTAINERS)
+  end
+end
+
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 DRC = Lich::DragonRealms::DRC unless defined?(DRC)
@@ -101,9 +110,34 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.box_list_to_adj_and_noun' do
+    def stub_box_settings(**values)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings).and_return(OpenStruct.new(values))
+    end
+
     it('parses a single box') { expect(described_class.box_list_to_adj_and_noun('a wooden strongbox')).to eq(['wooden strongbox']) }
     it('converts ironwood to iron') { expect(described_class.box_list_to_adj_and_noun('an ironwood crate')).to eq(['iron crate']) }
     it('returns empty array for empty string') { expect(described_class.box_list_to_adj_and_noun('')).to eq([]) }
+
+    it 'recognizes a player-added box wood' do
+      stub_box_settings(custom_box_woods: ['faenor'])
+      expect(described_class.box_list_to_adj_and_noun('a polished faenor chest')).to eq(['faenor chest'])
+    end
+
+    it 'recognizes a player-added box container' do
+      stub_box_settings(custom_box_containers: ['reliquary'])
+      expect(described_class.box_list_to_adj_and_noun('a battered steel reliquary')).to eq(['steel reliquary'])
+    end
+
+    it 'applies a player-added box substitution to a recognized box' do
+      stub_box_settings(custom_box_woods: ['faenor'], custom_box_substitutions: [%w[faenor faewood]])
+      expect(described_class.box_list_to_adj_and_noun('a polished faenor chest')).to eq(['faewood chest'])
+    end
+
+    it 'still parses built-in boxes when a custom wood entry is malformed' do
+      stub_box_settings(custom_box_woods: [123])
+      expect(described_class.box_list_to_adj_and_noun('an ironwood crate')).to eq(['iron crate'])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join).to include('custom_box_woods[0] skipped')
+    end
   end
 
   describe '.scroll_list_to_adj_and_noun' do
