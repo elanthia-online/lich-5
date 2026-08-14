@@ -43,7 +43,8 @@ module Lich
             AttackDef.new(:stone_fist, [/The ground beneath you rumbles, then erupts in a shower of rubble that coalesces in to a large hand with slender fingers in mid-air./].freeze),
             AttackDef.new(:sunburst, [/The dazzling solar blaze flashes before (?<target>[^!]+)!/].freeze),
             AttackDef.new(:tangleweed, [
-              /The (?<weed>.+?) lashes out violently at (?<target>[^,]+), dragging .+? to the ground!/,
+              # "to the ground!" and "to the floor!" are both live variants
+              /The (?<weed>.+?) lashes out violently at (?<target>[^,]+), dragging .+? to the (?:ground|floor)!/,
               /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the ground\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
