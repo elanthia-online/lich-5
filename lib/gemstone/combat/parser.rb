@@ -25,9 +25,9 @@ module Lich
         class << self
           # Parse attack initiation
           def parse_attack(line)
-            return nil unless attack_detector.match?(line)
+            return nil unless Definitions::Attacks::ATTACK_DETECTOR.match?(line)
 
-            attack_lookup.each do |pattern, name|
+            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
               if (match = pattern.match(line))
                 target_info = extract_target_from_match(match) || extract_target_from_line(line)
                 return {
@@ -63,6 +63,10 @@ module Lich
 
           # Extract creature target (must be wrapped in bold tags)
           def extract_creature_target(line)
+            # Cheap gate: the wrapper pattern can't match without the bold tag,
+            # and the substring check avoids two regexes on most lines
+            return nil unless line.include?('<pushBold/>')
+
             # Check if line contains a bolded link
             bold_match = BOLD_WRAPPER_PATTERN.match(line)
             return nil unless bold_match
@@ -107,23 +111,6 @@ module Lich
             # ONLY accept bolded creatures as targets
             # Non-bolded links are equipment, objects, or other non-combatants
             extract_creature_target(line)
-          end
-
-          private
-
-          # Lazy-loaded pattern lookups for performance
-          def attack_lookup
-            @attack_lookup ||= Definitions::Attacks::ATTACK_LOOKUP
-          end
-
-          def attack_detector
-            @attack_detector ||= Definitions::Attacks::ATTACK_DETECTOR
-          end
-
-          # Clear cached patterns when settings change
-          def reset_cache!
-            @attack_lookup = nil
-            @attack_detector = nil
           end
         end
       end

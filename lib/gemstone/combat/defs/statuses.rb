@@ -124,6 +124,10 @@ module Lich
 
           # Parse status effect from line
           def self.parse(line)
+            # Fast rejection with the compiled union before the linear scan;
+            # non-matching lines (the vast majority) cost one regex, not N.
+            return nil unless STATUS_DETECTOR.match?(line)
+
             ALL_LOOKUP.each do |pattern, name, action|
               if (match = pattern.match(line))
                 result = {
