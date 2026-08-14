@@ -25,7 +25,7 @@ module Lich
         class << self
           # Parse attack initiation
           def parse_attack(line)
-            return nil unless Definitions::Attacks::ATTACK_DETECTOR.match?(line)
+            return nil if Definitions::Attacks.rejects?(line)
 
             Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
               if (match = pattern.match(line))

@@ -5,6 +5,8 @@
 # Converted from ctparser/AttackDefs.rb to Lich::Gemstone::Combat namespace
 #
 
+require_relative 'pattern_gate'
+
 module Lich
   module Gemstone
     module Combat
@@ -93,8 +95,19 @@ module Lich
             attack_def.patterns.compact.map { |pattern| [pattern, attack_def.name] }
           end.freeze
 
-          # Compiled regex for fast detection
+          # Compiled regex for fast detection. NOTE: costs ~0.5ms per
+          # non-matching line (unanchored `.+?` alternatives); kept for
+          # compatibility but the literal gate below is what the parser uses.
           ATTACK_DETECTOR = Regexp.union(ATTACK_LOOKUP.map(&:first)).freeze
+
+          # Literal-substring gate (~7us/line): a line can only match an
+          # attack pattern if it contains that pattern's longest literal.
+          ATTACK_GATE, ATTACK_ALWAYS_SCAN = PatternGate.build(ATTACK_LOOKUP.map(&:first))
+
+          # True when the line cannot match any attack pattern
+          def self.rejects?(line)
+            PatternGate.rejects?(ATTACK_GATE, ATTACK_ALWAYS_SCAN, line)
+          end
         end
       end
     end
