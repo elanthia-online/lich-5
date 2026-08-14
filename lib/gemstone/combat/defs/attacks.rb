@@ -5,6 +5,8 @@
 # Converted from ctparser/AttackDefs.rb to Lich::Gemstone::Combat namespace
 #
 
+require_relative 'pattern_gate'
+
 module Lich
   module Gemstone
     module Combat
@@ -41,7 +43,8 @@ module Lich
             AttackDef.new(:stone_fist, [/The ground beneath you rumbles, then erupts in a shower of rubble that coalesces in to a large hand with slender fingers in mid-air./].freeze),
             AttackDef.new(:sunburst, [/The dazzling solar blaze flashes before (?<target>[^!]+)!/].freeze),
             AttackDef.new(:tangleweed, [
-              /The (?<weed>.+?) lashes out violently at (?<target>[^,]+), dragging .+? to the ground!/,
+              # "to the ground!" and "to the floor!" are both live variants
+              /The (?<weed>.+?) lashes out violently at (?<target>[^,]+), dragging .+? to the (?:ground|floor)!/,
               /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the ground\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
@@ -93,8 +96,19 @@ module Lich
             attack_def.patterns.compact.map { |pattern| [pattern, attack_def.name] }
           end.freeze
 
-          # Compiled regex for fast detection
+          # Compiled regex for fast detection. NOTE: costs ~0.5ms per
+          # non-matching line (unanchored `.+?` alternatives); kept for
+          # compatibility but the literal gate below is what the parser uses.
           ATTACK_DETECTOR = Regexp.union(ATTACK_LOOKUP.map(&:first)).freeze
+
+          # Literal-substring gate (~7us/line): a line can only match an
+          # attack pattern if it contains that pattern's longest literal.
+          ATTACK_GATE, ATTACK_ALWAYS_SCAN = PatternGate.build(ATTACK_LOOKUP.map(&:first))
+
+          # True when the line cannot match any attack pattern
+          def self.rejects?(line)
+            PatternGate.rejects?(ATTACK_GATE, ATTACK_ALWAYS_SCAN, line)
+          end
         end
       end
     end
