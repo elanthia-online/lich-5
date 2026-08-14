@@ -36,6 +36,11 @@ RSpec.describe Lich::Common::Inventory do
 
   before do
     allow(Lich).to receive(:log)
+    # The type/sellable bridge pools identity via GameObj.index_or_create, so
+    # isolate GameObj's shared index and classification cache between examples.
+    %i[@@index @@type_cache].each do |cv|
+      Lich::Common::GameObj.class_variable_get(cv).clear if Lich::Common::GameObj.class_variable_defined?(cv)
+    end
     described_class.reset!
   end
 
@@ -263,6 +268,35 @@ RSpec.describe Lich::Common::Inventory do
         expect(Lich::Common::GameObj['999001']).to be_nil
         # ...yet Inventory still classifies it from its own noun/name.
         expect(described_class['999001'].type).to include('weapon')
+      end
+    end
+
+    it 'classifies via full_name using the long description' do
+      # 'ancient runescored' appears ONLY in the long, and this type entry keys
+      # solely on full_name. Classification succeeds only because the bridge
+      # feeds the long-derived name (with the article split into before_name so
+      # GameObj#full_name reconstructs the whole phrase) -- the short "an amulet"
+      # would never match.
+      Dir.mktmpdir do |dir|
+        file = File.join(dir, 'gameobj-data.xml')
+        File.write(file, <<~XML)
+          <data>
+            <type name="relic">
+              <full_name>ancient runescored</full_name>
+            </type>
+          </data>
+        XML
+        stub_const('DATA_DIR', dir)
+        Lich::Common::GameObj.load_data(file)
+
+        described_class.observe(
+          "<inventoryManager id='imx' room='1'>" \
+          "<i id='888001' loc='worn,player' name=\"an,,amulet\" " \
+          "long=\"an ancient runescored amulet\" weight='1'/>" \
+          "</inventoryManager>"
+        )
+
+        expect(described_class['888001'].type).to include('relic')
       end
     end
   end

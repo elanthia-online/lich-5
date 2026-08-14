@@ -84,6 +84,10 @@ module Lich
       # a pocket or in a weight-nullifying eddy). Container load is read from the
       # wire via {#in_encum} when present, else summed from direct children.
       class Item
+        # Leading article peeled into +before_name+ for the GameObj bridge so
+        # {GameObj#full_name} reconstructs the whole phrase (matches the classic
+        # inv stream's before/name split).
+        LEADING_ARTICLE = /\A(an?|some|the)\s+/i
         # @return [String] the exist id (game object id) as a string
         attr_reader :id
 
@@ -256,8 +260,8 @@ module Lich
         end
 
         # Type classification (e.g. "weapon,edged"), derived from this item's own
-        # noun/name via a transient {GameObj} -- NOT +GameObj[id]+, which is nil
-        # for delta items in unopened containers.
+        # noun/name via {#bridge_gameobj} -- NOT +GameObj[id]+, which is nil for
+        # delta items in unopened containers.
         #
         # @return [String, nil] comma-joined type tags, or nil if none match
         # @example
@@ -267,7 +271,7 @@ module Lich
         end
 
         # Sellable classification, derived like {#type} from the item's own
-        # noun/name via a transient {GameObj}.
+        # noun/name via {#bridge_gameobj}.
         #
         # @return [String, nil] comma-joined sellable tags, or nil if none match
         # @example
@@ -304,13 +308,41 @@ module Lich
 
         private
 
-        # A transient, unregistered {GameObj} carrying this item's noun/name, used
-        # only to borrow {GameObj#type}/{GameObj#sellable} classification.
+        # A pooled {GameObj} carrying this item's identity, used only to borrow
+        # {GameObj#type}/{GameObj#sellable} classification.
+        #
+        # Built with {GameObj.index_or_create} (never a bare {GameObj.new}), so it
+        # reuses an existing instance for the same +id|noun|name+ and joins the
+        # shared identity index and its TTL. It is deliberately NOT pushed into any
+        # registry, so Inventory stays a non-writer of GameObj's query surfaces
+        # (+GameObj[]+ still won't resolve a delta item). The name fed to the
+        # matchers is the full descriptive name (the item's {#long} when present)
+        # with the leading article split into +before_name+, so {GameObj#full_name}
+        # reconstructs the whole phrase and classification matches as it would for
+        # a live GameObj.
         #
         # @return [GameObj]
         # @api private
         def bridge_gameobj
-          @bridge_gameobj ||= GameObj.new(@id, @noun, @name)
+          @bridge_gameobj ||= begin
+            before, name = bridge_name_parts
+            GameObj.index_or_create(@id, @noun, name, before)
+          end
+        end
+
+        # Splits the full descriptive name for {#bridge_gameobj}: prefer {#long},
+        # else the assembled short {#name}, then peel a leading a/an/some/the into
+        # +before_name+.
+        #
+        # @return [Array(String, nil), Array(String, String)] before_name, name
+        # @api private
+        def bridge_name_parts
+          source = @long && !@long.empty? ? @long : @name
+          if (match = source.match(LEADING_ARTICLE))
+            [match[1], source.sub(LEADING_ARTICLE, '')]
+          else
+            [nil, source]
+          end
         end
       end
 
