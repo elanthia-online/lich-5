@@ -36,7 +36,9 @@ module Lich
               /The earth cracks beneath (?<target>[^,]+), releasing a column of frigid air!/,
               /Icy stalagmites burst from the ground beneath (?<target>[^!]+)!/
             ].freeze),
-            AttackDef.new(:ewave, [/(?:An?|Some) (?<target>.+?) is buffeted by the \w+ ethereal waves(?: and is knocked to the ground)?\./].freeze),
+            # "formless black waves"/"formless black sphere" are the dark-variant
+            # messagings of the same spell family (found in session logs)
+            AttackDef.new(:ewave, [/(?:An?|Some) (?<target>.+?) is buffeted by the (?:\w+ ethereal waves|formless black (?:waves|sphere))(?: and is knocked to the ground)?\./].freeze),
             AttackDef.new(:natures_fury, [/The surroundings advance upon (?<target>.+?) with relentless fury!/].freeze),
             AttackDef.new(:searing_light, [/The radiant burst of light engulfs (?<target>[^!]+)!/].freeze),
             AttackDef.new(:spikethorn, [/Dozens of long thorns suddenly grow out from the ground underneath (?<target>[^!]+)!/].freeze),

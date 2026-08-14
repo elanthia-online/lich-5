@@ -38,6 +38,22 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:target][:id]).to eq(452440152)
     end
 
+    it 'matches the classic ewave messaging' do
+      line = "#{bolded(98732276, 'shield-maiden', 'A brawny gigas shield-maiden')} is buffeted by the churning ethereal waves and is knocked to the ground."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:ewave)
+    end
+
+    it 'matches the dark ewave variants found in 2026 logs (waves and sphere)' do
+      ['formless black waves', 'formless black sphere'].each do |phrase|
+        line = "#{bolded(98732276, 'shield-maiden', 'A brawny gigas shield-maiden')} is buffeted by the #{phrase} and is knocked to the ground."
+        result = described_class.parse_attack(line)
+        expect(result).not_to be_nil, "expected match for #{phrase}"
+        expect(result[:name]).to eq(:ewave)
+      end
+    end
+
     it 'does not claim ambient spell messaging with no caster attribution' do
       # "Bloodstained light" fires identically for ANY caster's spell (seen
       # after both "Dicate gestures at..." and "You gesture at..." in logs),
