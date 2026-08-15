@@ -271,6 +271,57 @@ RSpec.describe Lich::Common::Inventory do
       end
     end
 
+    # Wire->GameObj field mappings supplied by the GameObj author (mrhoribu).
+    # Simu wraps the core noun phrase in $_..._$; text after it is after_name,
+    # the leading article is dropped (before_name nil).
+    describe 'wire-to-GameObj name/before/after mapping' do
+      def bridge_for(item_xml)
+        described_class.observe("<inventoryManager id='imx' room='1'>#{item_xml}</inventoryManager>")
+        described_class[item_xml[/id='(\d+)'/, 1]].send(:bridge_gameobj)
+      end
+
+      it 'splits a $_ core name and trailing descriptor into name and after_name' do
+        gobj = bridge_for(
+          "<i id='165666521' loc='righthand,player' name=\"a gnarled,rowan,crook\" " \
+          "long=\"a $_gnarled rowan crook$_ wound with knotted yarn\" weight='2'/>"
+        )
+        expect(gobj.noun).to eq('crook')
+        expect(gobj.name).to eq('gnarled rowan crook')
+        expect(gobj.before_name).to be_nil
+        expect(gobj.after_name).to eq('wound with knotted yarn')
+      end
+
+      it 'keeps a second $_ trailing descriptor as after_name' do
+        gobj = bridge_for(
+          "<i id='165666522' loc='worn,player' name=\"a voluminous,mist tartan,cloak\" " \
+          "long=\"a $_voluminous mist tartan cloak$_ lined in silver-tipped aquerne\" weight='5' in_max='2500'/>"
+        )
+        expect(gobj.name).to eq('voluminous mist tartan cloak')
+        expect(gobj.after_name).to eq('lined in silver-tipped aquerne')
+      end
+
+      it 'drops the leading article and leaves after_name nil when long has no markers' do
+        gobj = bridge_for(
+          "<i id='165666628' loc='worn,player' name=\"a tooled,leather coin,bag\" " \
+          "long=\"a tooled leather drawstring coin bag\" weight='1'/>"
+        )
+        expect(gobj.noun).to eq('bag')
+        expect(gobj.name).to eq('tooled leather drawstring coin bag')
+        expect(gobj.before_name).to be_nil
+        expect(gobj.after_name).to be_nil
+      end
+
+      it 'strips $_ highlight markers from the item long description' do
+        described_class.observe(
+          "<inventoryManager id='imx' room='1'>" \
+          "<i id='165666521' loc='righthand,player' name=\"a gnarled,rowan,crook\" " \
+          "long=\"a $_gnarled rowan crook$_ wound with knotted yarn\" weight='2'/>" \
+          "</inventoryManager>"
+        )
+        expect(described_class['165666521'].long).to eq('a gnarled rowan crook wound with knotted yarn')
+      end
+    end
+
     it 'classifies via full_name using the long description' do
       # 'ancient runescored' appears ONLY in the long, and this type entry keys
       # solely on full_name. Classification succeeds only because the bridge

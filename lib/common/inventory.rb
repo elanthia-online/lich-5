@@ -84,10 +84,15 @@ module Lich
       # a pocket or in a weight-nullifying eddy). Container load is read from the
       # wire via {#in_encum} when present, else summed from direct children.
       class Item
-        # Leading article peeled into +before_name+ for the GameObj bridge so
-        # {GameObj#full_name} reconstructs the whole phrase (matches the classic
-        # inv stream's before/name split).
+        # Leading article dropped from the GameObj bridge name (per the GameObj
+        # author's guidance, +before_name+ stays nil so it does not collide with
+        # the DR get-command context stored there).
         LEADING_ARTICLE = /\A(an?|some|the)\s+/i
+
+        # Simu highlight markers that wrap the core noun phrase inside +long+
+        # (e.g. +a $_gnarled rowan crook$_ wound with knotted yarn+): the text
+        # between the markers is the name, the text after them is the descriptor.
+        NAME_MARKER = /\$_(.*?)\$_/
         # @return [String] the exist id (game object id) as a string
         attr_reader :id
 
@@ -103,8 +108,17 @@ module Lich
         # @return [String] assembled short display name (e.g. "a scuffed pack")
         attr_reader :name
 
-        # @return [String, nil] the long description, entity-decoded, or nil
-        attr_reader :long
+        # The long description, entity-decoded and with Simu's +$_+ highlight
+        # markers removed (they wrap the core name on the wire; see {NAME_MARKER}).
+        #
+        # @return [String, nil]
+        # @example
+        #   Inventory['165666521'].long #=> "a gnarled rowan crook wound with knotted yarn"
+        def long
+          return @long if @long.nil?
+
+          @long.gsub('$_', '')
+        end
 
         # @return [String, nil] the +loc+ relation: "worn", "in", "on", "room"
         attr_reader :relation
@@ -315,34 +329,41 @@ module Lich
         # reuses an existing instance for the same +id|noun|name+ and joins the
         # shared identity index and its TTL. It is deliberately NOT pushed into any
         # registry, so Inventory stays a non-writer of GameObj's query surfaces
-        # (+GameObj[]+ still won't resolve a delta item). The name fed to the
-        # matchers is the full descriptive name (the item's {#long} when present)
-        # with the leading article split into +before_name+, so {GameObj#full_name}
-        # reconstructs the whole phrase and classification matches as it would for
-        # a live GameObj.
+        # (+GameObj[]+ still won't resolve a delta item). The name/before/after fed
+        # to it mirror the classic inv stream (see {#descriptive_parts}), so
+        # {GameObj#full_name} reconstructs the whole phrase and classification
+        # matches as it would for a live GameObj.
         #
         # @return [GameObj]
         # @api private
         def bridge_gameobj
           @bridge_gameobj ||= begin
-            before, name = bridge_name_parts
-            GameObj.index_or_create(@id, @noun, name, before)
+            before, name, after = descriptive_parts
+            GameObj.index_or_create(@id, @noun, name, before, after)
           end
         end
 
-        # Splits the full descriptive name for {#bridge_gameobj}: prefer {#long},
-        # else the assembled short {#name}, then peel a leading a/an/some/the into
-        # +before_name+.
+        # Derives +[before_name, name, after_name]+ for {#bridge_gameobj} from the
+        # raw {#long} (or the assembled short {#name} when +long+ is absent), to
+        # match how the classic inv stream fills a GameObj:
+        # - Simu wraps the core noun phrase in +$_..._$+ ({NAME_MARKER}); the text
+        #   between the markers is the name, the text after them is +after_name+.
+        # - the leading article is dropped and +before_name+ stays nil (per the
+        #   GameObj author's guidance).
         #
-        # @return [Array(String, nil), Array(String, String)] before_name, name
+        # @return [Array(nil, String, String), Array(nil, String, nil)] before, name, after
         # @api private
-        def bridge_name_parts
+        def descriptive_parts
           source = @long && !@long.empty? ? @long : @name
-          if (match = source.match(LEADING_ARTICLE))
-            [match[1], source.sub(LEADING_ARTICLE, '')]
+          if (match = source.match(NAME_MARKER))
+            name  = match[1]
+            after = source[match.end(0)..].to_s.strip
           else
-            [nil, source]
+            name  = source
+            after = ''
           end
+          name = name.sub(LEADING_ARTICLE, '').strip
+          [nil, name, after.empty? ? nil : after]
         end
       end
 
