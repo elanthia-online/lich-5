@@ -28,13 +28,33 @@ module Lich
     # It does NOT track later get/put/loot/hand changes. Call {.refresh} when you
     # need current data, and judge staleness from {.last_updated} / {.age}.
     #
+    # ## GameObj integration
+    #
+    # Each observed snapshot is also mirrored into GameObj by exist id, keyed on
+    # the item's +loc+ relation, so GameObj-native queries reflect the whole tree:
+    #
+    # | +loc+ relation | GameObj home |
+    # |----------------|--------------|
+    # | +in,{id}+ / +on,{id}+ | +GameObj.contents[{id}]+ (even for unopened containers) |
+    # | +worn,player+ | +GameObj.inv+ |
+    # | +righthand,player+ / +lefthand,player+ | +GameObj.right_hand+ / +GameObj.left_hand+ |
+    # | +atfeet,player+ / +room+ | +GameObj.loot+ |
+    #
+    # The classic +<inv>+/+<container>+ stream still owns these registries live;
+    # Inventory only fills the gaps (chiefly unopened-container contents) and its
+    # writes for fast-changing slots (hands, worn) are transient -- the classic
+    # stream's next update replaces them. So GameObj stays live-authoritative and
+    # gains the extended-feed tree for free.
+    #
     # ## Threading
     #
-    # {.observe} is a passive, read-only tap driven from the game PARSER thread;
-    # it never sends upstream and never raises. {.refresh} runs on the CALLER
-    # (script) thread and sends the load verb itself. Never call {.refresh} from a
-    # Downstream/Upstream hook proc -- it blocks waiting for {.observe} to run on
-    # the parser thread and would stall the client pipeline.
+    # {.observe} is a passive tap driven from the game PARSER thread: it never
+    # mutates the downstream wire, never sends upstream, and never raises (it does
+    # write GameObj on that same parser thread, alongside the classic parser).
+    # {.refresh} runs on the CALLER (script) thread and sends the load verb itself.
+    # Never call {.refresh} from a Downstream/Upstream hook proc -- it blocks
+    # waiting for {.observe} to run on the parser thread and would stall the client
+    # pipeline.
     #
     # @example Find an item anywhere and read its container's free weight
     #   snap = Inventory.refresh
@@ -199,14 +219,36 @@ module Lich
           locked?
         end
 
-        # @return [Boolean] whether the item is worn on the player
+        # @return [Boolean] whether the item is worn on the player (relation
+        #   +worn+ -- NOT merely parent +player+, which also covers hands/feet)
         def worn?
-          @parent_id == 'player'
+          @relation == 'worn'
         end
 
-        # @return [Boolean] whether the item is on the ground in the room
+        # @return [Boolean] whether the item is in the player's right hand
+        def in_right_hand?
+          @relation == 'righthand'
+        end
+
+        # @return [Boolean] whether the item is in the player's left hand
+        def in_left_hand?
+          @relation == 'lefthand'
+        end
+
+        # @return [Boolean] whether the item is held in either hand
+        def held?
+          in_right_hand? || in_left_hand?
+        end
+
+        # @return [Boolean] whether the item is on the ground at the player's feet
+        def at_feet?
+          @relation == 'atfeet'
+        end
+
+        # @return [Boolean] whether the item is on the ground in the room (shared;
+        #   the feed lists the whole room's ground loot, not only the player's)
         def in_room?
-          @relation == 'room' || @parent_id == 'room'
+          @relation == 'room'
         end
 
         # Direct children, optionally filtered by relation. An opaque (locked)
@@ -274,8 +316,7 @@ module Lich
         end
 
         # Type classification (e.g. "weapon,edged"), derived from this item's own
-        # noun/name via {#bridge_gameobj} -- NOT +GameObj[id]+, which is nil for
-        # delta items in unopened containers.
+        # noun/name via its backing {GameObj} (see {#bridge_gameobj}).
         #
         # @return [String, nil] comma-joined type tags, or nil if none match
         # @example
@@ -320,24 +361,77 @@ module Lich
           @children.freeze
         end
 
+        # Registers this item into the matching GameObj registry based on its loc
+        # relation, so GameObj-native queries (+GameObj.contents+, +GameObj.inv+,
+        # +GameObj.right_hand+, +GameObj.loot+) reflect the extended-feed tree. The
+        # returned object is also reused for {#type}/{#sellable}. Called once per
+        # item when a snapshot is committed; see {Lich::Common::Inventory} for the
+        # relation->registry mapping and its staleness caveats.
+        #
+        # @return [GameObj]
+        # @api private
+        def register_gameobj
+          before, name, after = descriptive_parts
+          @gameobj =
+            case @relation
+            when 'righthand'       then GameObj.new_right_hand(@id, @noun, name)
+            when 'lefthand'        then GameObj.new_left_hand(@id, @noun, name)
+            when 'room', 'atfeet'  then GameObj.new_loot(@id, @noun, name)
+            when 'in', 'on'        then GameObj.new_inv(@id, @noun, name, @parent_id, before, after)
+            when 'worn'            then register_worn(name, before, after)
+            else GameObj.index_or_create(@id, @noun, name, before, after)
+            end
+          backfill_names(@gameobj, before, after)
+        end
+
         private
 
-        # A pooled {GameObj} carrying this item's identity, used only to borrow
-        # {GameObj#type}/{GameObj#sellable} classification.
+        # Backfills +before_name+/+after_name+ on a registered GameObj when the
+        # constructor did not carry them (the hand/loot constructors take only a
+        # name), so classification via {GameObj#full_name} still sees the whole
+        # descriptor. Only fills when currently nil, never overwriting the classic
+        # stream's values.
         #
-        # Built with {GameObj.index_or_create} (never a bare {GameObj.new}), so it
-        # reuses an existing instance for the same +id|noun|name+ and joins the
-        # shared identity index and its TTL. It is deliberately NOT pushed into any
-        # registry, so Inventory stays a non-writer of GameObj's query surfaces
-        # (+GameObj[]+ still won't resolve a delta item). The name/before/after fed
-        # to it mirror the classic inv stream (see {#descriptive_parts}), so
-        # {GameObj#full_name} reconstructs the whole phrase and classification
-        # matches as it would for a live GameObj.
+        # @param gameobj [GameObj]
+        # @param before [String, nil]
+        # @param after [String, nil]
+        # @return [GameObj]
+        # @api private
+        def backfill_names(gameobj, before, after)
+          gameobj.before_name = before if gameobj.before_name.nil? && !before.nil?
+          gameobj.after_name  = after  if gameobj.after_name.nil?  && !after.nil?
+          gameobj
+        end
+
+        # Registers a worn item into +@@inv+, deduped by exist id so it does not
+        # duplicate an entry the classic stream already published under a slightly
+        # different name. (Any surviving entry is transient anyway -- the classic
+        # inv refresh wholesale-replaces +@@inv+.)
+        #
+        # @param name [String]
+        # @param before [String, nil]
+        # @param after [String, nil]
+        # @return [GameObj]
+        # @api private
+        def register_worn(name, before, after)
+          existing = GameObj.inv&.find { |obj| obj.id == @id }
+          return existing if existing
+
+          GameObj.new_inv(@id, @noun, name, nil, before, after)
+        end
+
+        # The {GameObj} backing this item's classification. Normally the object
+        # {#register_gameobj} placed in a registry; if this item was never
+        # registered (e.g. an unrecognized relation, or a snapshot queried before
+        # commit), it falls back to a pooled {GameObj.index_or_create} instance
+        # (never a bare {GameObj.new}). The name/before/after mirror the classic
+        # inv stream (see {#descriptive_parts}) so {GameObj#full_name} reconstructs
+        # the whole phrase and classification matches a live GameObj.
         #
         # @return [GameObj]
         # @api private
         def bridge_gameobj
-          @bridge_gameobj ||= begin
+          @gameobj ||= begin
             before, name, after = descriptive_parts
             GameObj.index_or_create(@id, @noun, name, before, after)
           end
@@ -381,11 +475,14 @@ module Lich
         # @param room_id [String, nil] envelope room id
         # @api private
         def initialize(items:, room_id:)
-          @items    = items.freeze
-          @room_id  = room_id
-          @worn     = items.values.select(&:worn?).freeze
-          @room     = items.values.select(&:in_room?).freeze
-          @built_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          @items      = items.freeze
+          @room_id    = room_id
+          @worn       = items.values.select(&:worn?).freeze
+          @room       = items.values.select(&:in_room?).freeze
+          @at_feet    = items.values.select(&:at_feet?).freeze
+          @right_hand = items.values.find(&:in_right_hand?)
+          @left_hand  = items.values.find(&:in_left_hand?)
+          @built_at   = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           @last_updated = Time.now
           freeze
         end
@@ -435,22 +532,39 @@ module Lich
           all.select(&:container?)
         end
 
-        # @return [Array<Item>] items worn on the player (top-level carried)
+        # @return [Array<Item>] items worn on the player
         def worn
           @worn
         end
 
-        # @return [Array<Item>] items on the ground in the room
+        # @return [Item, nil] the item in the player's right hand
+        def right_hand
+          @right_hand
+        end
+
+        # @return [Item, nil] the item in the player's left hand
+        def left_hand
+          @left_hand
+        end
+
+        # @return [Array<Item>] items on the ground at the player's feet
+        def at_feet
+          @at_feet
+        end
+
+        # @return [Array<Item>] items on the ground in the room (shared room loot,
+        #   not necessarily the player's -- the feed lists every observer's droppings)
         def room
           @room
         end
 
         # Total carried encumbrance in pounds: the recursive {Item#total_weight}
-        # of every worn item (with the +in_encum+ short-circuit).
+        # (with the +in_encum+ short-circuit) of everything worn AND held. Ground
+        # items ({#room}/{#at_feet}) are excluded -- they are not carried.
         #
         # @return [Integer]
         def total_weight
-          @worn.sum(&:total_weight)
+          (@worn + [@right_hand, @left_hand].compact).sum(&:total_weight)
         end
 
         # Seconds elapsed since the snapshot was built (monotonic).
@@ -554,14 +668,15 @@ module Lich
 
       class << self
         # Passively taps a server line: if it is a COMPLETE initial
-        # +inventoryManager+ response, absorb it as the new snapshot; otherwise
-        # keep the prior snapshot. Always returns the input unchanged and NEVER
-        # raises (an uncaught error here would kill the game parser thread and
-        # drop the player's session), and never sends upstream.
+        # +inventoryManager+ response, absorb it as the new snapshot and mirror it
+        # into the GameObj registries (see the GameObj integration section on
+        # {Inventory}); otherwise keep the prior snapshot. Always returns the input
+        # unchanged and NEVER raises (an uncaught error here would kill the game
+        # parser thread and drop the player's session), and never sends upstream.
         #
         # Fails closed on: an Ox parse error, a line that does not structurally
         # close, a continuation/paginated response, or a zero-item PASSIVE
-        # response over a non-empty snapshot.
+        # response over a non-empty snapshot (no snapshot swap, no GameObj writes).
         #
         # @param server_string [String] a raw line from the game server
         # @return [String] +server_string+, unchanged
@@ -669,7 +784,22 @@ module Lich
           @snapshot ? @snapshot.worn : []
         end
 
-        # @return [Array<Item>] room (ground) items in the current snapshot
+        # @return [Item, nil] the item in the player's right hand
+        def right_hand
+          @snapshot && @snapshot.right_hand
+        end
+
+        # @return [Item, nil] the item in the player's left hand
+        def left_hand
+          @snapshot && @snapshot.left_hand
+        end
+
+        # @return [Array<Item>] items at the player's feet in the current snapshot
+        def at_feet
+          @snapshot ? @snapshot.at_feet : []
+        end
+
+        # @return [Array<Item>] shared room-ground items in the current snapshot
         def room
           @snapshot ? @snapshot.room : []
         end
@@ -887,9 +1017,9 @@ module Lich
         end
 
         # Commits a completed snapshot under the mutex: the feed is now known
-        # present; swap the snapshot in atomically LAST, except a zero-item
-        # PASSIVE response must not clobber a non-empty snapshot; then signal any
-        # {.refresh} waiting on this id.
+        # present; populate the GameObj registries and swap the snapshot in
+        # atomically LAST, except a zero-item PASSIVE response must not clobber a
+        # non-empty snapshot; then signal any {.refresh} waiting on this id.
         #
         # @param handler [Handler]
         # @param snapshot [Snapshot]
@@ -904,11 +1034,22 @@ module Lich
             if snapshot.all.empty? && !solicited && @snapshot && !@snapshot.all.empty?
               log("Inventory: ignoring empty passive inventoryManager response (id=#{id})")
             else
+              register_with_gameobj(snapshot)
               @snapshot = snapshot
             end
 
             deliver_locked(id, snapshot)
           end
+        end
+
+        # Registers every item of an accepted snapshot into GameObj (see
+        # {Item#register_gameobj} and {Lich::Common::Inventory} for the mapping).
+        #
+        # @param snapshot [Snapshot]
+        # @return [void]
+        # @api private
+        def register_with_gameobj(snapshot)
+          snapshot.all.each(&:register_gameobj)
         end
 
         # Handles an incomplete/continuation response: keep the prior snapshot and

@@ -36,11 +36,14 @@ RSpec.describe Lich::Common::Inventory do
 
   before do
     allow(Lich).to receive(:log)
-    # The type/sellable bridge pools identity via GameObj.index_or_create, so
-    # isolate GameObj's shared index and classification cache between examples.
-    %i[@@index @@type_cache].each do |cv|
-      Lich::Common::GameObj.class_variable_get(cv).clear if Lich::Common::GameObj.class_variable_defined?(cv)
+    # Inventory now mirrors snapshots into GameObj's registries, so isolate all of
+    # GameObj's shared state between examples (mirrors gameobj_spec.rb).
+    g = Lich::Common::GameObj
+    %i[@@inv @@loot @@contents @@room_desc @@npcs @@pcs @@index @@type_cache].each do |cv|
+      g.class_variable_get(cv).clear if g.class_variable_defined?(cv)
     end
+    g.class_variable_set(:@@right_hand, nil)
+    g.class_variable_set(:@@left_hand, nil)
     described_class.reset!
   end
 
@@ -250,7 +253,7 @@ RSpec.describe Lich::Common::Inventory do
       XML
     end
 
-    it 'classifies an item that is absent from every GameObj registry' do
+    it 'registers a delta item into GameObj and classifies it from its own noun/name' do
       Dir.mktmpdir do |dir|
         file = File.join(dir, 'gameobj-data.xml')
         File.write(file, type_data)
@@ -264,9 +267,11 @@ RSpec.describe Lich::Common::Inventory do
           "</inventoryManager>"
         )
 
-        # The item is not registered anywhere in GameObj...
-        expect(Lich::Common::GameObj['999001']).to be_nil
-        # ...yet Inventory still classifies it from its own noun/name.
+        # The delta item (in an unopened container) is now mirrored into GameObj's
+        # @@contents, so GameObj[id] resolves it...
+        expect(Lich::Common::GameObj['999001']).not_to be_nil
+        expect(Lich::Common::GameObj.containers['999000'].map(&:id)).to include('999001')
+        # ...and Inventory classifies it from its own noun/name.
         expect(described_class['999001'].type).to include('weapon')
       end
     end
@@ -349,6 +354,106 @@ RSpec.describe Lich::Common::Inventory do
 
         expect(described_class['888001'].type).to include('relic')
       end
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Relation-based buckets across the full DR vocabulary (real captured items:
+  # skate in right hand, rapier in left hand, jade bowl at feet, lollipop on the
+  # shared room ground, a worn pack).
+  # ---------------------------------------------------------------------------
+  describe 'location buckets' do
+    let(:mixed_locations) do
+      "<inventoryManager id='imq' room='230008'>" \
+      "<i id='41032122' loc='righthand,player' name=\"some,ice,skates\" " \
+      "long=\"some powdery blue jaguar-pelt ice skates with watered steel blades\" weight='5'/>" \
+      "<i id='41032123' loc='lefthand,player' name=\"a,bronze,rapier\" weight='22'/>" \
+      "<i id='41032124' loc='atfeet,player' name=\"a large,jade,bowl\" " \
+      "long=\"a large jade bowl painted with lilac blossoms\" weight='20' in_max='1000'/>" \
+      "<i id='41032121' loc='room' name=\"an enormous,Albreda,lollipop\" " \
+      "long=\"an enormous slate Albreda lollipop covered in iridescent sugar crystals\" weight='1'/>" \
+      "<i id='99001' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000'/>" \
+      "</inventoryManager>"
+    end
+
+    before { described_class.observe(mixed_locations) }
+
+    it 'puts only worn-relation items in the worn bucket (not hands or feet)' do
+      expect(described_class.worn.map(&:id)).to eq(['99001'])
+    end
+
+    it 'exposes the right- and left-hand items' do
+      expect(described_class.right_hand.id).to eq('41032122')
+      expect(described_class.left_hand.id).to eq('41032123')
+    end
+
+    it 'does not treat a held item as worn' do
+      skate = described_class['41032122']
+      expect(skate).to be_in_right_hand
+      expect(skate).to be_held
+      expect(skate).not_to be_worn
+    end
+
+    it 'separates at-feet items from shared room-ground items' do
+      expect(described_class.at_feet.map(&:id)).to eq(['41032124'])
+      expect(described_class.room.map(&:id)).to eq(['41032121'])
+      expect(described_class['41032124']).to be_at_feet
+      expect(described_class['41032121']).to be_in_room
+    end
+
+    it 'counts held items in carried weight but not ground items' do
+      # worn pack 10 + right-hand skate 5 + left-hand rapier 22 = 37; the jade
+      # bowl (at feet) and lollipop (room ground) are not carried.
+      expect(described_class.total_weight).to eq(37)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # GameObj mirror (Full integration): each relation lands in its GameObj home.
+  # ---------------------------------------------------------------------------
+  describe 'GameObj registry mirroring' do
+    let(:game_obj) { Lich::Common::GameObj }
+
+    before do
+      described_class.observe(
+        "<inventoryManager id='img' room='1'>" \
+        "<i id='70001' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000'/>" \
+        "<i id='70002' loc='in,70001' name=\"a,steel,dagger\" weight='5'/>" \
+        "<i id='70003' loc='righthand,player' name=\"a,bronze,rapier\" weight='22'/>" \
+        "<i id='70004' loc='lefthand,player' name=\"a,wooden,shield\" weight='30'/>" \
+        "<i id='70005' loc='room' name=\"a,steel,bar\" weight='20'/>" \
+        "<i id='70006' loc='atfeet,player' name=\"a,jade,bowl\" weight='20' in_max='1000'/>" \
+        "</inventoryManager>"
+      )
+    end
+
+    it 'nests in/on children under GameObj.contents (the real GameObj gap)' do
+      expect(game_obj.containers['70001'].map(&:id)).to eq(['70002'])
+    end
+
+    it 'places worn items in GameObj.inv' do
+      expect(game_obj.inv.map(&:id)).to include('70001')
+    end
+
+    it 'sets the hand slots via GameObj.right_hand / left_hand' do
+      expect(game_obj.right_hand.id).to eq('70003')
+      expect(game_obj.left_hand.id).to eq('70004')
+    end
+
+    it 'places ground items (room and at-feet) in GameObj.loot' do
+      loot_ids = game_obj.loot.map(&:id)
+      expect(loot_ids).to include('70005', '70006')
+    end
+
+    it 'does not duplicate a worn item the classic stream already registered' do
+      # Classic stream registered this exist id first, under a different name.
+      game_obj.new_inv('80001', 'pack', 'a punka leather pack')
+      described_class.observe(
+        "<inventoryManager id='img2' room='1'>" \
+        "<i id='80001' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000'/>" \
+        "</inventoryManager>"
+      )
+      expect(game_obj.inv.count { |o| o.id == '80001' }).to eq(1)
     end
   end
 
