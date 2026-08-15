@@ -440,9 +440,15 @@ RSpec.describe Lich::Common::Inventory do
       expect(game_obj.left_hand.id).to eq('70004')
     end
 
-    it 'places ground items (room and at-feet) in GameObj.loot' do
-      loot_ids = game_obj.loot.map(&:id)
-      expect(loot_ids).to include('70005', '70006')
+    it 'places off-character room-floor items in GameObj.loot' do
+      expect(game_obj.loot.map(&:id)).to include('70005')
+    end
+
+    it 'does not put on-character at-feet items in GameObj.loot' do
+      # atfeet is at the player's own feet, not off-character room loot, so it is
+      # kept out of @@loot -- surfaced only via Inventory#at_feet.
+      expect(game_obj.loot.to_a.map(&:id)).not_to include('70006')
+      expect(described_class.at_feet.map(&:id)).to eq(['70006'])
     end
 
     it 'does not duplicate a worn item the classic stream already registered' do

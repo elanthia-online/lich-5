@@ -38,7 +38,8 @@ module Lich
     # | +in,{id}+ / +on,{id}+ | +GameObj.contents[{id}]+ (even for unopened containers) |
     # | +worn,player+ | +GameObj.inv+ |
     # | +righthand,player+ / +lefthand,player+ | +GameObj.right_hand+ / +GameObj.left_hand+ |
-    # | +atfeet,player+ / +room+ | +GameObj.loot+ |
+    # | +room+ | +GameObj.loot+ (off-character room floor) |
+    # | +atfeet,player+ | identity only -- on-character, so not +@@loot+; see {.at_feet} |
     #
     # The classic +<inv>+/+<container>+ stream still owns these registries live;
     # Inventory only fills the gaps (chiefly unopened-container contents) and its
@@ -374,11 +375,14 @@ module Lich
           before, name, after = descriptive_parts
           @gameobj =
             case @relation
-            when 'righthand'       then GameObj.new_right_hand(@id, @noun, name)
-            when 'lefthand'        then GameObj.new_left_hand(@id, @noun, name)
-            when 'room', 'atfeet'  then GameObj.new_loot(@id, @noun, name)
-            when 'in', 'on'        then GameObj.new_inv(@id, @noun, name, @parent_id, before, after)
-            when 'worn'            then register_worn(name, before, after)
+            when 'righthand' then GameObj.new_right_hand(@id, @noun, name)
+            when 'lefthand'  then GameObj.new_left_hand(@id, @noun, name)
+            when 'room'      then GameObj.new_loot(@id, @noun, name)
+            when 'in', 'on'  then GameObj.new_inv(@id, @noun, name, @parent_id, before, after)
+            when 'worn'      then register_worn(name, before, after)
+            # 'atfeet' is on-character (at the player's own feet), NOT off-character
+            # room loot, so it is deliberately NOT written to @@loot -- only pooled
+            # for identity/classification and surfaced via Inventory#at_feet.
             else GameObj.index_or_create(@id, @noun, name, before, after)
             end
           backfill_names(@gameobj, before, after)
