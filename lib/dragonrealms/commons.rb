@@ -1,3 +1,4 @@
+require_relative "./commons/command-broker"
 require_relative "./commons/common"
 require_relative "./commons/common-validation"
 require_relative "./commons/common-items"
