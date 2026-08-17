@@ -730,6 +730,15 @@ RSpec.describe Lich::DragonRealms::DRC do
       described_class.bput('swing sword', 'You swing your sword')
       expect(Lich::DragonRealms::Broker).to have_received(:start_watchdog!).twice
     end
+
+    it 'bypasses the lease entirely when the broker is disabled' do
+      allow(Lich::DragonRealms::Broker).to receive(:enabled?).and_return(false)
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive)
+      result = described_class.bput('swing sword', 'You swing your sword')
+      expect(result).to eq('You swing your sword')
+      expect(described_class).to have_received(:put).with('swing sword')
+      expect(Lich::DragonRealms::Broker).not_to have_received(:exclusive)
+    end
   end
 
   describe '.fix_standing' do

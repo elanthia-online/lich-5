@@ -240,6 +240,67 @@ RSpec.describe Lich::DragonRealms::Broker do
     end
   end
 
+  describe 'instrumentation' do
+    it 'starts with zeroed counters' do
+      expect(broker.stats).to include(acquires: 0, contended: 0, reentrant: 0, timeouts: 0, releases: 0)
+    end
+
+    it 'records an uncontended acquire and its hold time' do
+      broker.exclusive { :ok }
+      s = broker.stats
+      expect(s[:acquires]).to eq(1)
+      expect(s[:contended]).to eq(0)
+      expect(s[:releases]).to eq(1)
+      expect(s[:wait_max]).to be >= 0
+      expect(s[:hold_max]).to be >= 0
+    end
+
+    it 'counts reentrant acquisitions separately from real ones' do
+      broker.exclusive { broker.exclusive { :inner } }
+      s = broker.stats
+      expect(s[:acquires]).to eq(1)
+      expect(s[:reentrant]).to eq(1)
+      expect(s[:releases]).to eq(1)
+    end
+
+    it 'counts a lease-acquisition timeout' do
+      thread, gate = live_holder
+      hold_lease_with(thread)
+      allow(broker).to receive(:now).and_return(0.0, 100.0)
+
+      broker.exclusive(timeout: 30) { :never }
+
+      expect(broker.stats[:timeouts]).to eq(1)
+    ensure
+      gate << :go
+      thread.join
+    end
+
+    it 'reset_stats! zeroes the counters' do
+      broker.exclusive { :ok }
+      broker.reset_stats!
+      expect(broker.stats[:acquires]).to eq(0)
+    end
+
+    it 'renders a one-line report' do
+      broker.exclusive { :ok }
+      expect(broker.stats_report).to match(/DRC Broker: 1 acquires/)
+    end
+  end
+
+  describe 'kill-switch / A-B toggle' do
+    after { described_class.enabled = true }
+
+    it 'defaults to enabled' do
+      expect(described_class.enabled?).to be true
+    end
+
+    it 'reports disabled once turned off' do
+      described_class.enabled = false
+      expect(described_class.enabled?).to be false
+    end
+  end
+
   # End-to-end with real threads: exercises the actual ConditionVariable park
   # and broadcast (the stubbed timeout/ordering tests above never wait). Bounded
   # spins/joins so a regression fails fast instead of hanging the suite.
@@ -279,6 +340,9 @@ RSpec.describe Lich::DragonRealms::Broker do
 
       expect([order.pop, order.pop]).to eq(%i[holder_done waiter_ran])
       expect(broker.held?).to be false
+      # The waiter that parked should be recorded as a contended acquire.
+      expect(broker.stats[:contended]).to be >= 1
+      expect(broker.stats[:wait_max]).to be > 0
     end
 
     it 'grants a high-priority waiter ahead of an earlier normal waiter' do

@@ -84,6 +84,28 @@ module Lich
           instance.stop_watchdog!
         end
 
+        # Runtime kill-switch / A-B toggle. When disabled, brokered callers
+        # (bput) send directly without a lease -- so a live session can compare
+        # brokered vs unbrokered latency, and it doubles as an instant revert if
+        # a regression shows up. Defaults to enabled.
+        attr_writer :enabled
+
+        def enabled?
+          @enabled != false
+        end
+
+        def stats
+          instance.stats
+        end
+
+        def reset_stats!
+          instance.reset_stats!
+        end
+
+        def stats_report
+          instance.stats_report
+        end
+
         def exclusive(**opts, &block)
           instance.exclusive(**opts, &block)
         end
@@ -117,6 +139,7 @@ module Lich
         @waiters = []         # [{thread:, priority:, seq:}], grant order via #next_token_locked
         @seq = 0
         @watchdog = nil
+        @stats = new_stats    # aggregate latency/contention counters (cheap, always on)
       end
 
       # Run the block while holding an exclusive lease on the send channel.
@@ -154,6 +177,32 @@ module Lich
       # @return [String, nil] the holder's script name, or nil if free
       def owner_name
         @mutex.synchronize { @holder_name }
+      end
+
+      # A snapshot copy of the aggregate latency/contention counters.
+      #
+      # @return [Hash] :acquires, :contended, :reentrant, :timeouts, :releases,
+      #   :wait_sum, :wait_max, :hold_sum, :hold_max (times in seconds)
+      def stats
+        @mutex.synchronize { @stats.dup }
+      end
+
+      def reset_stats!
+        @mutex.synchronize { @stats = new_stats }
+      end
+
+      # A one-line human-readable summary for eyeballing broker overhead in a
+      # live session (e.g. `;e respond Lich::DragonRealms::Broker.stats_report`).
+      def stats_report
+        s = stats
+        acquires = s[:acquires]
+        avg_wait_ms = acquires.zero? ? 0.0 : (s[:wait_sum] / acquires * 1000)
+        avg_hold_ms = s[:releases].zero? ? 0.0 : (s[:hold_sum] / s[:releases] * 1000)
+        contended_pct = acquires.zero? ? 0.0 : (s[:contended].to_f / acquires * 100)
+        format('DRC Broker: %d acquires (%d reentrant), %.1f%% contended, %d timeouts | ' \
+               'acquire-wait avg %.3fms max %.1fms | hold avg %.1fms max %.1fms',
+               acquires, s[:reentrant], contended_pct, s[:timeouts],
+               avg_wait_ms, s[:wait_max] * 1000, avg_hold_ms, s[:hold_max] * 1000)
       end
 
       # One watchdog pass: reclaim a dead holder's lease, and warn (without
@@ -225,22 +274,30 @@ module Lich
 
           if @owner.equal?(me) # reentrant: already ours
             @depth += 1
+            @stats[:reentrant] += 1
             return true
           end
 
-          deadline = now + timeout
+          start = now
+          deadline = start + timeout
           token = enqueue_waiter_locked(me, priority)
           took = false
+          waited = false
           begin
             until grantable_locked?(token)
               remaining = deadline - now
-              return false if remaining <= 0
+              if remaining <= 0
+                @stats[:timeouts] += 1
+                return false
+              end
 
+              waited = true
               @free.wait(@mutex, remaining)
               reclaim_if_dead_locked
             end
             take_lease_locked(me, name, intent)
             took = true
+            record_acquire_locked(now - start, waited)
             return true
           ensure
             remove_waiter_locked(token)
@@ -265,6 +322,7 @@ module Lich
           @depth -= 1
           return if @depth.positive?
 
+          record_release_locked(now - @acquired_at) if @acquired_at
           log('plain', "DRC: Broker lease released by #{describe_holder}")
           clear_lease_locked
           @free.broadcast
@@ -322,6 +380,26 @@ module Lich
 
       def normalize_priority(priority)
         VALID_PRIORITIES.include?(priority) ? priority : :normal
+      end
+
+      def new_stats
+        { acquires: 0, contended: 0, reentrant: 0, timeouts: 0, releases: 0,
+          wait_sum: 0.0, wait_max: 0.0, hold_sum: 0.0, hold_max: 0.0 }
+      end
+
+      # @param wait [Float] seconds from acquire entry to lease granted
+      # @param waited [Boolean] whether the caller actually parked on the CV
+      def record_acquire_locked(wait, waited)
+        @stats[:acquires] += 1
+        @stats[:contended] += 1 if waited
+        @stats[:wait_sum] += wait
+        @stats[:wait_max] = wait if wait > @stats[:wait_max]
+      end
+
+      def record_release_locked(hold)
+        @stats[:releases] += 1
+        @stats[:hold_sum] += hold
+        @stats[:hold_max] = hold if hold > @stats[:hold_max]
       end
 
       def describe_holder

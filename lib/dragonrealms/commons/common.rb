@@ -110,6 +110,9 @@ module Lich
           echo "bput.matches=#{matches}"
         end
 
+        # Runtime kill-switch / A-B baseline: send directly, no lease.
+        return bput_send(message, matches, options) unless Broker.enabled?
+
         ensure_broker_watchdog
 
         broker_timeout = options['broker_timeout'] || Broker::DEFAULT_TIMEOUT
