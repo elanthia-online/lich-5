@@ -144,7 +144,10 @@ RSpec.describe Lich::DragonRealms::Broker do
       broker.tick_watchdog(warn_after: 90)
 
       expect(broker.held?).to be true
-      expect(messages).to include(a_string_matching(/lease held 1000s by slow -- possible stuck holder/))
+      warning = messages.find { |m| m.include?('possible stuck holder') }
+      expect(warning).to match(/lease held 1000s by slow/)
+      # The holder thread's backtrace is appended so the wedge is diagnosable.
+      expect(warning).to match(/\.rb:\d+/)
     ensure
       gate << :go
       thread.join
@@ -199,6 +202,16 @@ RSpec.describe Lich::DragonRealms::Broker do
       expect(described_class.exclusive(timeout: 5) { :ok }).to eq(:ok)
       expect(described_class.held?).to be false
       expect(described_class.instance).to be(described_class.instance)
+    end
+
+    it 'hands every thread the same instance under concurrent first use' do
+      described_class.reset_instance!
+      ids = Queue.new
+      threads = Array.new(24) { Thread.new { ids << described_class.instance.object_id } }
+      threads.each(&:join)
+      seen = []
+      seen << ids.pop until ids.empty?
+      expect(seen.uniq.length).to eq(1)
     end
   end
 

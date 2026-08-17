@@ -51,16 +51,22 @@ module Lich
 
       VALID_PRIORITIES = %i[high normal].freeze
 
+      # Guards creation/reset of the process-wide default instance so a first-use
+      # race between script threads cannot construct two brokers -- which would
+      # split serialization across two independent leases.
+      CLASS_MUTEX = Mutex.new
+
       class << self
         # The process-wide default broker instance used by the commons. Tests
-        # construct their own with .new and do not touch this.
+        # construct their own with .new and do not touch this. Double-checked so
+        # the hot path stays lock-free once initialized.
         def instance
-          @instance ||= new
+          @instance || CLASS_MUTEX.synchronize { @instance ||= new }
         end
 
         # Test/lifecycle hook: drop the memoized default instance.
         def reset_instance!
-          @instance = nil
+          CLASS_MUTEX.synchronize { @instance = nil }
         end
 
         def exclusive(**opts, &block)
@@ -151,7 +157,7 @@ module Lich
           break if @warned_age && (age - @warned_age) < warn_after
 
           @warned_age = age
-          log('bold', "DRC: Broker lease held #{age.round}s by #{describe_holder} -- possible stuck holder")
+          log('bold', "DRC: Broker lease held #{age.round}s by #{describe_holder} -- possible stuck holder#{holder_backtrace}")
         end
       end
 
@@ -288,6 +294,17 @@ module Lich
 
       def describe_holder
         @intent ? "#{@holder_name} (#{@intent})" : @holder_name.to_s
+      end
+
+      # A bounded snapshot of the holder thread's stack, appended to the stuck-
+      # holder warning so an operator can see where it is wedged. Empty when
+      # unavailable (e.g. the holder just died). Runs under @mutex, so it never
+      # races the holder into a nil @owner.
+      def holder_backtrace
+        frames = Array(@owner&.backtrace).first(15)
+        return '' if frames.empty?
+
+        "\n    #{frames.join("\n    ")}"
       end
 
       # Monotonic clock so deadlines/ages are immune to wall-clock jumps.
