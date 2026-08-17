@@ -104,15 +104,40 @@ module Lich
         options['timeout'] ||= 15
         options['ignore_rt'] ||= false
 
-        timeout = options['timeout']
-        ignore_rt = options['ignore_rt']
-        suppress = options['suppress_no_match']
-
         if options['debug']
           echo "bput.message=#{message}"
           echo "bput.options=#{options}"
           echo "bput.matches=#{matches}"
         end
+
+        ensure_broker_watchdog
+
+        broker_timeout = options['broker_timeout'] || Broker::DEFAULT_TIMEOUT
+        priority = (options['priority'] || :normal).to_sym
+
+        # Hold the command lease across the whole send-and-match cycle so no peer
+        # script can inject a command mid-sequence. Reentrant, so a bput inside a
+        # caller's own Broker.exclusive block just bumps the depth.
+        result = Broker.exclusive(timeout: broker_timeout, intent: "bput #{message}", priority: priority) do
+          bput_send(message, matches, options)
+        end
+        return result unless result == :broker_timeout
+
+        # The command lease was busy past broker_timeout. Degrade to an
+        # unbrokered send so bput never silently drops a command (Stage-1
+        # coexistence escape hatch); the send may interleave with the current
+        # holder, exactly as it would have before the broker existed.
+        Lich::Messaging.msg("bold", "DRC: Command lease busy after #{broker_timeout}s; sending '#{message}' unbrokered")
+        bput_send(message, matches, options)
+      end
+
+      # The core send-and-match loop, run while holding the command lease (or
+      # directly on the degrade path). Waits for RT, sends the command, and
+      # returns the first matching capture, or '' on match timeout.
+      def bput_send(message, matches, options)
+        timeout = options['timeout']
+        ignore_rt = options['ignore_rt']
+        suppress = options['suppress_no_match']
 
         waitrt? unless ignore_rt
         log = []
@@ -204,6 +229,18 @@ module Lich
         end
 
         ''
+      end
+
+      # Start the broker watchdog lazily on the first bput. Keyed on the broker
+      # instance (not a boolean) so a Broker.reset_instance! swap re-arms the
+      # watchdog on the next bput instead of being skipped forever. Broker.instance
+      # is lock-free once initialized, so the hot path stays cheap.
+      def ensure_broker_watchdog
+        broker = Broker.instance
+        return if @broker_watchdog_instance.equal?(broker)
+
+        @broker_watchdog_instance = broker
+        Broker.start_watchdog!
       end
 
       def verify_script(script_names)

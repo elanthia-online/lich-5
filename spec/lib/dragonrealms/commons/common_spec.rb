@@ -48,6 +48,7 @@ module Lich
 end
 
 # Load production code
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'command-broker.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 DRC = Lich::DragonRealms::DRC unless defined?(DRC)
 
@@ -635,6 +636,11 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:clear)
       allow(described_class).to receive(:put)
       allow(described_class).to receive(:pause)
+      # Run the block transparently so these specs exercise the send/match
+      # logic without engaging the real lease (and its grant/release logging).
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive) { |**_opts, &blk| blk.call }
+      allow(Lich::DragonRealms::Broker).to receive(:start_watchdog!)
+      described_class.instance_variable_set(:@broker_watchdog_instance, nil)
     end
 
     it 'returns matching string when response matches' do
@@ -657,6 +663,72 @@ RSpec.describe Lich::DragonRealms::DRC do
     it 'converts string patterns to case-insensitive regex' do
       allow(described_class).to receive(:get?).and_return('you swing your SWORD')
       expect(described_class.bput('swing sword', 'You swing your sword')).to eq('you swing your SWORD')
+    end
+  end
+
+  describe '.bput broker integration' do
+    before do
+      allow(described_class).to receive(:waitrt?)
+      allow(described_class).to receive(:clear)
+      allow(described_class).to receive(:put)
+      allow(described_class).to receive(:pause)
+      allow(described_class).to receive(:get?).and_return('You swing your sword')
+      allow(Lich::DragonRealms::Broker).to receive(:start_watchdog!)
+      described_class.instance_variable_set(:@broker_watchdog_instance, nil)
+    end
+
+    # Capture the lease options while running the block transparently.
+    def stub_broker_capturing(store)
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive) do |**opts, &blk|
+        store.replace(opts)
+        blk.call
+      end
+    end
+
+    it 'wraps the send in the command lease with an intent and default priority' do
+      opts = {}
+      stub_broker_capturing(opts)
+      expect(described_class.bput('swing sword', 'You swing your sword')).to eq('You swing your sword')
+      expect(opts).to include(intent: 'bput swing sword', priority: :normal)
+    end
+
+    it 'passes an overridden broker_timeout and priority through to the lease' do
+      opts = {}
+      stub_broker_capturing(opts)
+      allow(described_class).to receive(:get?).and_return('You gesture')
+      described_class.bput('cast', { 'broker_timeout' => 5, 'priority' => :high }, 'You gesture')
+      expect(opts).to include(timeout: 5, priority: :high)
+    end
+
+    it 'still sends the command (degraded, unbrokered) when the lease times out' do
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive).and_return(:broker_timeout)
+      result = described_class.bput('swing sword', 'You swing your sword')
+      expect(described_class).to have_received(:put).with('swing sword')
+      expect(result).to eq('You swing your sword')
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('Command lease busy')
+    end
+
+    it 'does not confuse a real empty-string match result with a lease timeout' do
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive) { |**_opts, &blk| blk.call }
+      allow(described_class).to receive(:get?).and_return(nil)
+      # bput_send returns '' on match timeout; it must be returned as-is.
+      expect(described_class.bput('test', { 'timeout' => 0.1 }, 'no match')).to eq('')
+    end
+
+    it 'starts the watchdog once, lazily, on first bput' do
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive) { |**_opts, &blk| blk.call }
+      described_class.bput('swing sword', 'You swing your sword')
+      described_class.bput('swing sword', 'You swing your sword')
+      expect(Lich::DragonRealms::Broker).to have_received(:start_watchdog!).once
+    end
+
+    it 're-arms the watchdog after Broker.reset_instance! swaps the singleton' do
+      allow(Lich::DragonRealms::Broker).to receive(:exclusive) { |**_opts, &blk| blk.call }
+      described_class.bput('swing sword', 'You swing your sword')
+      Lich::DragonRealms::Broker.reset_instance!
+      described_class.bput('swing sword', 'You swing your sword')
+      expect(Lich::DragonRealms::Broker).to have_received(:start_watchdog!).twice
     end
   end
 

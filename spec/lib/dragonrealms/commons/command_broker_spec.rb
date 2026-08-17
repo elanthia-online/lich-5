@@ -215,6 +215,31 @@ RSpec.describe Lich::DragonRealms::Broker do
     end
   end
 
+  describe 'watchdog lifecycle' do
+    it 'starts idempotently and stops cleanly' do
+      t1 = broker.start_watchdog!(interval: 60)
+      t2 = broker.start_watchdog!(interval: 60)
+      expect(t1).to be(t2)
+      expect(t1.alive?).to be true
+
+      broker.stop_watchdog!
+      expect(t1.alive?).to be false
+    end
+
+    it 'is a no-op to stop when never started' do
+      expect { broker.stop_watchdog! }.not_to raise_error
+    end
+
+    it 'reset_instance! stops the singleton watchdog thread' do
+      described_class.instance.start_watchdog!(interval: 60)
+      thread = described_class.instance.instance_variable_get(:@watchdog)
+      expect(thread.alive?).to be true
+
+      described_class.reset_instance!
+      expect(thread.alive?).to be false
+    end
+  end
+
   # End-to-end with real threads: exercises the actual ConditionVariable park
   # and broadcast (the stubbed timeout/ordering tests above never wait). Bounded
   # spins/joins so a regression fails fast instead of hanging the suite.

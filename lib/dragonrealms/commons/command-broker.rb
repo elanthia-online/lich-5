@@ -64,9 +64,24 @@ module Lich
           @instance || CLASS_MUTEX.synchronize { @instance ||= new }
         end
 
-        # Test/lifecycle hook: drop the memoized default instance.
+        # Test/lifecycle hook: stop the default instance's watchdog and drop it.
+        # Swap under the class mutex, then stop the watchdog outside it so the
+        # thread join can't block a concurrent #instance caller.
         def reset_instance!
-          CLASS_MUTEX.synchronize { @instance = nil }
+          old = CLASS_MUTEX.synchronize do
+            instance = @instance
+            @instance = nil
+            instance
+          end
+          old&.stop_watchdog!
+        end
+
+        def start_watchdog!(**opts)
+          instance.start_watchdog!(**opts)
+        end
+
+        def stop_watchdog!
+          instance.stop_watchdog!
         end
 
         def exclusive(**opts, &block)
@@ -161,13 +176,16 @@ module Lich
         end
       end
 
-      # Start the background watchdog thread (idempotent). Not called at load;
-      # the bput integration (a later PR) starts it once at runtime.
+      # Start the background watchdog thread (idempotent). Started once at
+      # runtime by the bput integration; never at load. The thread is a plain
+      # background thread (the interpreter reaps it on exit) and is named for
+      # diagnosability; use #stop_watchdog! for an orderly stop.
       def start_watchdog!(interval: WATCHDOG_INTERVAL)
         @mutex.synchronize do
           return @watchdog if @watchdog&.alive?
 
           @watchdog = Thread.new do
+            Thread.current.name = 'dr-command-broker-watchdog' if Thread.current.respond_to?(:name=)
             loop do
               sleep interval
               begin
@@ -178,6 +196,20 @@ module Lich
             end
           end
         end
+      end
+
+      # Stop the watchdog thread if running. Safe to call when not started.
+      def stop_watchdog!
+        thread = @mutex.synchronize do
+          t = @watchdog
+          @watchdog = nil
+          t
+        end
+        return unless thread
+
+        thread.kill
+        thread.join(1)
+        nil
       end
 
       private
