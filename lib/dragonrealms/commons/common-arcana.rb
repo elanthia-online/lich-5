@@ -385,11 +385,12 @@ module Lich
       # @param runestone_tm [Boolean] target after invoking the runestone
       # @param custom_prep_message [String, nil] a per-spell prep message to also accept (see {#with_custom_messages})
       # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
+      # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
       # @param retries [Integer] remaining retries for the transient "slips away" case
       # @return [String, false] the matched prep message, or false on failure
-      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, retries: PREPARE_MAX_RETRIES)
+      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
-        spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message)
+        spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
 
         DRC.bput('prepare symbiosis', 'You recall the exact details of the', 'But you\'ve already prepared', 'Please don\'t do that here') if symbiosis
         if runestone_name.nil?
@@ -404,7 +405,7 @@ module Lich
             return false
           end
           pause 1
-          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep_message, custom_invoke_message: custom_invoke_message, retries: retries - 1)
+          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep_message, custom_invoke_message: custom_invoke_message, custom_spell_prep: custom_spell_prep, retries: retries - 1)
         when 'Something in the area interferes with your spell preparations', 'You shouldn\'t disrupt the area right now', 'You have no idea how to cast that spell', 'You have yet to receive any training in the magical arts', 'Please don\'t do that here', 'You cannot use the tattoo while maintaining the effort to stay hidden'
           DRC.bput('release symbiosis', 'You release the', 'But you haven\'t') if symbiosis
           return false
@@ -447,7 +448,7 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'] || settings['custom_spell_prep'], custom_invoke_message: data['custom_invoke_message'])
+        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
 
         prepare_time = Time.now
         find_focus(data['focus'], data['worn_focus'], data['tied_focus'], data['sheathed_focus'])
@@ -875,7 +876,7 @@ module Lich
         DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
         DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'] || settings['custom_spell_prep'], custom_invoke_message: data['custom_invoke_message'])
+        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
 
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
         prepare_time = Time.now
@@ -1018,7 +1019,7 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'] || settings['custom_spell_prep'], custom_invoke_message: data['custom_invoke_message'])
+        prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
       end
 
       def crafting_magic_routine(settings)

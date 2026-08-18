@@ -432,14 +432,30 @@ RSpec.describe Lich::DragonRealms::DRCA do
       expect(captured_prep).to eq('PER SPELL PREP')
     end
 
-    it 'cast_spell falls back to settings.custom_spell_prep when the spell has no custom_prep_message' do
+    it 'cast_spell passes the global custom_spell_prep to prepare? as the validated fallback' do
       data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0 }
-      captured_prep = nil
-      allow(DRCA).to receive(:prepare?) { |*args, **_kwargs| captured_prep = args[7]; 'You begin to' }
+      captured = nil
+      allow(DRCA).to receive(:prepare?) { |*_args, **kwargs| captured = kwargs[:custom_spell_prep]; 'You begin to' }
       allow(DRCA).to receive(:cast?).and_return(true)
       allow(DRCA).to receive(:find_charge_invoke_stow)
       DRCA.cast_spell(data, cast_spell_settings)
-      expect(captured_prep).to eq('GLOBAL PREP FALLBACK')
+      expect(captured).to eq('GLOBAL PREP FALLBACK')
+    end
+
+    # Regression (CodeRabbit P2): a blank/invalid per-spell message must NOT
+    # suppress a valid global custom_spell_prep. They are validated independently.
+    it 'still applies a valid global custom_spell_prep when the per-spell message is blank' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, '   ', custom_spell_prep: 'Valid global prep')
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'Valid global prep' }).to be true
+    end
+
+    it 'still applies a valid global custom_spell_prep when the per-spell message is invalid regex' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'bad(', custom_spell_prep: 'Valid global prep')
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'Valid global prep' }).to be true
     end
 
     it 'appends a valid custom_cast_message as a case-insensitive pattern' do
