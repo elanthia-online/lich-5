@@ -236,6 +236,281 @@ RSpec.describe Lich::DragonRealms::DRCA do
   end
 
   # ----------------------------------------------
+  # adversarial: the shared guard that compiles player-supplied messages. Hostile
+  # inputs must be dropped (nil), never crash and never compile to // (which would
+  # match every line and corrupt bput).
+  # ----------------------------------------------
+  describe '#custom_message_pattern (shared guard)' do
+    it 'drops nil' do
+      expect(DRCA.custom_message_pattern(nil)).to be_nil
+    end
+
+    it 'drops non-string types (number, array, hash, boolean) rather than crashing' do
+      [42, ['a message'], { 'from' => 'to' }, true].each do |hostile|
+        expect(DRCA.custom_message_pattern(hostile)).to be_nil
+      end
+    end
+
+    it 'drops empty and whitespace-only strings so they cannot compile to //' do
+      ['', '   ', "\t", "\n ", " \t\n "].each do |blank|
+        expect(DRCA.custom_message_pattern(blank)).to be_nil
+      end
+    end
+
+    it 'drops invalid regular expressions instead of raising' do
+      ['oops(', 'a[b', '*repeat', '(?<broken'].each do |malformed|
+        expect { DRCA.custom_message_pattern(malformed) }.not_to raise_error
+        expect(DRCA.custom_message_pattern(malformed)).to be_nil
+      end
+    end
+
+    it 'compiles a valid message case-insensitively' do
+      pattern = DRCA.custom_message_pattern('Your Focus Hums')
+      expect(pattern).to be_a(Regexp)
+      expect('your focus hums loudly').to match(pattern)
+      expect('YOUR FOCUS HUMS').to match(pattern)
+    end
+
+    it 'trims surrounding whitespace so an accidental yaml space still matches' do
+      pattern = DRCA.custom_message_pattern("   You murmur   ")
+      expect(pattern.source).to eq('You murmur')
+      expect('You murmur an incantation').to match(pattern)
+    end
+
+    it 'preserves regex metacharacters supplied by the player' do
+      pattern = DRCA.custom_message_pattern('You (cup|wave) your (left|right) hand')
+      expect('You cup your left hand').to match(pattern)
+      expect('You wave your right hand').to match(pattern)
+    end
+  end
+
+  # ----------------------------------------------
+  # adversarial: the merge helper. A mix of valid/invalid/hostile customs must
+  # yield base + only-the-valid patterns, in order, without mutating the base.
+  # ----------------------------------------------
+  describe '#with_custom_messages (merge helper)' do
+    it 'appends only the valid custom patterns, in order, after the base list' do
+      result = DRCA.with_custom_messages(['base one', 'base two'], 'first', '', 'bad(', nil, 42, 'second')
+      expect(result[0, 2]).to eq(['base one', 'base two'])
+      customs = result[2..]
+      expect(customs).to all(be_a(Regexp))
+      expect(customs.map(&:source)).to eq(%w[first second])
+    end
+
+    it 'returns the base list unchanged when no custom message is valid' do
+      expect(DRCA.with_custom_messages(['only base'], nil, '', '   ', 5)).to eq(['only base'])
+    end
+
+    it 'does not mutate the base list it was given' do
+      base = ['do not touch']
+      DRCA.with_custom_messages(base, 'added')
+      expect(base).to eq(['do not touch'])
+    end
+
+    it 'keeps a custom that duplicates a built-in (dedup is left to config validation)' do
+      result = DRCA.with_custom_messages(['You gesture'], 'You gesture')
+      expect(result[0]).to eq('You gesture')
+      expect(result[1]).to be_a(Regexp)
+      expect(result[1].source).to eq('You gesture')
+    end
+  end
+
+  # ----------------------------------------------
+  # custom invoke message: per-character custom_invoke_message (single), appended
+  # to the built-in list by #invoke_messages (dropped if blank/invalid)
+  # ----------------------------------------------
+  describe 'custom invoke message (custom_invoke_message key)' do
+    it 'returns just the built-in list when no custom message is set' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+      expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    it 'appends a valid custom_invoke_message as a case-insensitive pattern' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: 'Your artifact hums'))
+      result = DRCA.invoke_messages
+      expect(result).to include('Your cambrinth absorbs') # built-in string preserved
+      pattern = result.find { |m| m.is_a?(Regexp) && m.source == 'Your artifact hums' }
+      expect(pattern).not_to be_nil
+      expect(pattern.options & Regexp::IGNORECASE).not_to eq(0) # matches like the built-ins
+    end
+
+    it 'drops a blank custom_invoke_message so it cannot compile to // (match anything)' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: '   '))
+      expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    it 'drops a malformed-regex custom_invoke_message instead of raising in bput' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: 'bad(regex'))
+      expect { DRCA.invoke_messages }.not_to raise_error
+      expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    it 'merges the per-character setting and a per-spell custom invoke message' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: 'Your focus hums'))
+      result = DRCA.invoke_messages('The runestone flares')
+      expect(result.any? { |m| m.is_a?(Regexp) && m.source == 'Your focus hums' }).to be true
+      expect(result.any? { |m| m.is_a?(Regexp) && m.source == 'The runestone flares' }).to be true
+    end
+
+    it 'drops a list given under the singular key (it is a single string) rather than misapplying it' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: %w[one two]))
+      expect(DRCA.invoke_messages).to eq(get_data('spells').invoke_messages)
+    end
+
+    # End-to-end: exercise invoke / prepare? through the REAL invoke_messages
+    # (no stubbing the method under test), proving the configured message reaches bput.
+    it 'invoke feeds the real merged messages (built-ins + per-character setting) to bput' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: 'Your artifact hums'))
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^invoke my cambrinth/, anything, 'Invoke what?') { |_cmd, matches, _fallback| captured = matches; 'Your cambrinth absorbs' }
+      DRCA.invoke('cambrinth', nil, nil)
+      expect(captured).to include('Invoke what?') # a built-in invoke message
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'Your artifact hums' }).to be true
+    end
+
+    it 'runestone prepare feeds the real merged messages (built-ins + per-character + per-spell) to bput' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new(custom_invoke_message: 'Your artifact hums'))
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare my rune/, anything) { |_cmd, matches| captured = matches; 'Your cambrinth absorbs' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, 'rune', false, nil, custom_invoke_message: 'The runestone flares')
+      expect(captured).to include('Invoke what?') # built-in
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'Your artifact hums' }).to be true # per-character
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'The runestone flares' }).to be true # per-spell
+    end
+  end
+
+  # ----------------------------------------------
+  # per-spell custom_prep_message / custom_cast_message / custom_invoke_message keys
+  # (declared in a spell's waggle entry): validated and appended to the built-in
+  # prep / cast / invoke messages by prepare? / cast?
+  # ----------------------------------------------
+  describe 'per-spell custom_prep_message / custom_cast_message / custom_invoke_message keys' do
+    let(:cast_spell_settings) do
+      OpenStruct.new(
+        cambrinth_items: [{ 'name' => nil }],
+        cambrinth: 'armband',
+        cambrinth_cap: 50,
+        stored_cambrinth: false,
+        use_harness_when_arcana_locked: false,
+        dedicated_camb_use: nil,
+        cambrinth_invoke_exact_amount: nil,
+        custom_spell_prep: 'GLOBAL PREP FALLBACK'
+      )
+    end
+
+    it 'appends a valid custom_prep_message as a case-insensitive pattern' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'You murmur an incantation')
+      expect(captured).to include('You begin to') # built-in prep message still present
+      pattern = captured.find { |m| m.is_a?(Regexp) && m.source == 'You murmur an incantation' }
+      expect(pattern).not_to be_nil
+      expect(pattern.options & Regexp::IGNORECASE).not_to eq(0)
+    end
+
+    it 'drops a blank custom_prep_message instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, '   ')
+      expect(captured).to eq(get_data('spells').prep_messages)
+    end
+
+    it 'drops a malformed-regex custom_prep_message instead of crashing' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      expect { DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, 'oops(') }.not_to raise_error
+      expect(captured).to eq(get_data('spells').prep_messages)
+    end
+
+    it 'cast_spell sources custom_prep_message from the spell data' do
+      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'custom_prep_message' => 'PER SPELL PREP' }
+      captured_prep = nil
+      allow(DRCA).to receive(:prepare?) { |*args, **_kwargs| captured_prep = args[7]; 'You begin to' }
+      allow(DRCA).to receive(:cast?).and_return(true)
+      allow(DRCA).to receive(:find_charge_invoke_stow)
+      DRCA.cast_spell(data, cast_spell_settings)
+      expect(captured_prep).to eq('PER SPELL PREP')
+    end
+
+    it 'cast_spell falls back to settings.custom_spell_prep when the spell has no custom_prep_message' do
+      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0 }
+      captured_prep = nil
+      allow(DRCA).to receive(:prepare?) { |*args, **_kwargs| captured_prep = args[7]; 'You begin to' }
+      allow(DRCA).to receive(:cast?).and_return(true)
+      allow(DRCA).to receive(:find_charge_invoke_stow)
+      DRCA.cast_spell(data, cast_spell_settings)
+      expect(captured_prep).to eq('GLOBAL PREP FALLBACK')
+    end
+
+    it 'appends a valid custom_cast_message as a case-insensitive pattern' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      DRCA.cast?('cast', false, [], [], 'A rare shimmer surrounds you')
+      expect(captured).to include('You gesture') # built-in cast message still present
+      pattern = captured.find { |m| m.is_a?(Regexp) && m.source == 'A rare shimmer surrounds you' }
+      expect(pattern).not_to be_nil
+      expect(pattern.options & Regexp::IGNORECASE).not_to eq(0)
+    end
+
+    it 'drops a blank custom_cast_message instead of matching every line' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      DRCA.cast?('cast', false, [], [], '   ')
+      expect(captured).to eq(get_data('spells').cast_messages)
+    end
+
+    it 'drops a malformed-regex custom_cast_message instead of crashing' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      expect { DRCA.cast?('cast', false, [], [], 'oops(') }.not_to raise_error
+      expect(captured).to eq(get_data('spells').cast_messages)
+    end
+
+    it 'cast_spell sources custom_cast_message from the spell data' do
+      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'custom_cast_message' => 'PER SPELL CAST' }
+      captured_cast = nil
+      allow(DRCA).to receive(:prepare?).and_return('You begin to')
+      allow(DRCA).to receive(:cast?) { |*args| captured_cast = args[4]; true }
+      allow(DRCA).to receive(:find_charge_invoke_stow)
+      DRCA.cast_spell(data, cast_spell_settings)
+      expect(captured_cast).to eq('PER SPELL CAST')
+    end
+
+    it 'cast_spell sources custom_invoke_message from the spell data' do
+      data = { 'abbrev' => 'fb', 'mana' => 10, 'cambrinth' => [5], 'prep_time' => 0, 'custom_invoke_message' => 'PER SPELL INVOKE' }
+      captured = nil
+      allow(DRCA).to receive(:prepare?) { |*_args, **kwargs| captured = kwargs[:custom_invoke_message]; 'You begin to' }
+      allow(DRCA).to receive(:cast?).and_return(true)
+      allow(DRCA).to receive(:find_charge_invoke_stow)
+      DRCA.cast_spell(data, cast_spell_settings)
+      expect(captured).to eq('PER SPELL INVOKE')
+    end
+
+    it 'ignores a non-string custom_prep_message without crashing prepare?' do
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare fireball/, anything) { |_cmd, matches| captured = matches; 'You begin to' }
+      expect { DRCA.prepare?('fireball', 10, false, 'prepare', false, nil, false, 42) }.not_to raise_error
+      expect(captured).to eq(get_data('spells').prep_messages)
+    end
+
+    it 'ignores a non-string custom_cast_message without crashing cast?' do
+      captured = nil
+      allow(DRC).to receive(:bput).with('cast', anything) { |_cmd, matches| captured = matches; 'You gesture' }
+      expect { DRCA.cast?('cast', false, [], [], %w[not a string]) }.not_to raise_error
+      expect(captured).to eq(get_data('spells').cast_messages)
+    end
+
+    it 'for a runestone spell, applies custom_invoke_message but ignores custom_prep_message' do
+      allow(DRCA).to receive(:get_settings).and_return(OpenStruct.new)
+      captured = nil
+      allow(DRC).to receive(:bput).with(/^prepare my rune/, anything) { |_cmd, matches| captured = matches; 'Your cambrinth absorbs' }
+      DRCA.prepare?('fireball', 10, false, 'prepare', false, 'rune', false, 'PREP IS INERT HERE', custom_invoke_message: 'The runestone flares')
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'The runestone flares' }).to be true
+      expect(captured.any? { |m| m.is_a?(Regexp) && m.source == 'PREP IS INERT HERE' }).to be false
+    end
+  end
+
+  # ----------------------------------------------
   # spell_preparing / spell_prepared? / spell_preparing?
   # ----------------------------------------------
   describe '.spell_preparing' do
