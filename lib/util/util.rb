@@ -88,11 +88,25 @@ module Lich
     # single regex) so a future confirmed case -- e.g. pushBold/popBold or
     # pushStream/popStream -- can be added as its own entry without touching
     # the filtering logic below. Keep each pattern anchored to a single
-    # self-closing `<tag .../>` so a scan can't accidentally absorb
-    # surrounding text.
+    # self-closing `<tag .../>`, with no capturing groups (String#scan
+    # returns captured subgroups instead of full matches when a pattern has
+    # any, which would silently change what preserve_quiet_state_tags
+    # returns), so a scan can't accidentally absorb surrounding text or
+    # change shape.
     QUIET_STATE_TAGS = [
       /<output class="[^"]*"\s*\/>/ # mono/formatting state toggle
     ].freeze
+
+    # Combines QUIET_STATE_TAGS into a single alternation, scanned once per
+    # chunk. Scanning each pattern separately and concatenating the results
+    # (the original approach) groups matches by pattern rather than by where
+    # they actually appear -- invisible with a single pattern, but as soon as
+    # a second entry is added, two tags from different patterns on the same
+    # chunk would come back in pattern order instead of source order, which
+    # matters when the tags are an open/close pair. A single combined scan
+    # preserves the chunk's real left-to-right order regardless of how many
+    # patterns are registered.
+    QUIET_STATE_TAG_PATTERN = Regexp.union(QUIET_STATE_TAGS).freeze
 
     # Pulls any QUIET_STATE_TAGS matches out of a chunk that quiet: true is
     # about to drop, so callers can forward just the tags instead of the
@@ -103,7 +117,7 @@ module Lich
     #   appeared, or nil if none were found (signals DownstreamHook to drop
     #   the chunk entirely, same as before this method existed).
     def self.preserve_quiet_state_tags(chunk)
-      tags = QUIET_STATE_TAGS.flat_map { |pattern| chunk.to_s.scan(pattern) }
+      tags = chunk.to_s.scan(QUIET_STATE_TAG_PATTERN)
       tags.empty? ? nil : tags.join
     end
 

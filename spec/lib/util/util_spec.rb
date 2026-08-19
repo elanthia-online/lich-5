@@ -44,6 +44,25 @@ RSpec.describe Lich::Util do
       expect(described_class.preserve_quiet_state_tags(chunk))
         .to eq('<output class="mono"/><output class=""/>')
     end
+
+    it 'preserves the chunk\'s real left-to-right order across two distinct patterns' do
+      # QUIET_STATE_TAGS only has one confirmed entry today, so this
+      # regression case stubs in a second, unrelated pattern for the
+      # duration of this example to exercise the multi-pattern path before
+      # a real second entry ever lands. Scanning each pattern separately and
+      # concatenating the results groups matches by pattern rather than by
+      # position -- invisible with one pattern, but wrong the moment a
+      # second one is added and both fire on the same chunk, which matters
+      # for tags that are an open/close pair.
+      stub_const(
+        'Lich::Util::QUIET_STATE_TAG_PATTERN',
+        Regexp.union(/<output class="[^"]*"\s*\/>/, /<popBold\s*\/>/)
+      )
+      chunk = %(<output class="mono"/>text<popBold/>more<output class=""/>)
+
+      expect(described_class.preserve_quiet_state_tags(chunk))
+        .to eq('<output class="mono"/><popBold/><output class=""/>')
+    end
   end
 
   describe '.issue_command with quiet: true' do
