@@ -3,13 +3,6 @@
 require 'rspec'
 require 'timeout'
 require_relative '../../../lib/common/downstreamhook'
-# Production boot (lich.rbw) does `include Lich::Common` at the top level,
-# which is how the bare `DownstreamHook.add`/`.remove` calls inside
-# Lich::Util.issue_command resolve to Lich::Common::DownstreamHook. Mirror
-# just that constant lookup here, before spec_helper loads, so its own
-# top-level DownstreamHook mock (guarded by `unless defined?`) steps aside
-# for the real class instead of shadowing it.
-DownstreamHook = Lich::Common::DownstreamHook unless defined?(DownstreamHook)
 require_relative '../../../lib/util/util.rb'
 require_relative '../../spec_helper'
 
@@ -57,6 +50,20 @@ RSpec.describe Lich::Util do
     let(:captured_proc) { {} }
 
     before do
+      # issue_command's source calls the bare top-level constant
+      # `DownstreamHook` unqualified (production relies on `include
+      # Lich::Common` at boot for that to resolve to
+      # Lich::Common::DownstreamHook). spec_helper.rb separately defines its
+      # own lightweight top-level `DownstreamHook` mock (add/remove-less,
+      # `unless defined?` guarded) for specs that don't need real hook
+      # behavior. Which one wins the bare `DownstreamHook` name in a full
+      # suite run depends on file load order across the whole spec/
+      # directory, which this file does not control -- so rather than fight
+      # that at load time, stub_const rebinds the constant just for the
+      # examples in this block and restores whatever was there afterward,
+      # independent of load order.
+      stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+
       # Capture the proc issue_command registers so it can be driven
       # directly with synthetic bundled chunks.
       allow(DownstreamHook).to receive(:add).and_wrap_original do |original, name, action, **kwargs|
