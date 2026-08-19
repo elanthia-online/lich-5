@@ -73,6 +73,40 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
+    # Self-closing tags that toggle persistent client display state (as
+    # opposed to e.g. <prompt>, which self-heals on the next prompt). The raw
+    # server chunk handed to a DownstreamHook proc is not split on line
+    # boundaries, so the server is free to bundle one of these onto the same
+    # chunk as text that quiet: true is about to drop. Silently discarding
+    # that chunk would discard the tag with it -- e.g. dropping a trailing
+    # mono-closing <output class=""/> that rode in on the same chunk as the
+    # <prompt> a quiet-filtered range ends on leaves the frontend stuck in
+    # mono mode until an unrelated, later mono tag happens to close it.
+    #
+    # Only the mono/formatting <output> tag is confirmed to hit this in
+    # practice today. The list is deliberately an array of patterns (not a
+    # single regex) so a future confirmed case -- e.g. pushBold/popBold or
+    # pushStream/popStream -- can be added as its own entry without touching
+    # the filtering logic below. Keep each pattern anchored to a single
+    # self-closing `<tag .../>` so a scan can't accidentally absorb
+    # surrounding text.
+    QUIET_STATE_TAGS = [
+      /<output class="[^"]*"\s*\/>/ # mono/formatting state toggle
+    ].freeze
+
+    # Pulls any QUIET_STATE_TAGS matches out of a chunk that quiet: true is
+    # about to drop, so callers can forward just the tags instead of the
+    # whole chunk.
+    #
+    # @param chunk [String] the raw stream chunk being suppressed.
+    # @return [String, nil] the concatenated tag matches in the order they
+    #   appeared, or nil if none were found (signals DownstreamHook to drop
+    #   the chunk entirely, same as before this method existed).
+    def self.preserve_quiet_state_tags(chunk)
+      tags = QUIET_STATE_TAGS.flat_map { |pattern| chunk.to_s.scan(pattern) }
+      tags.empty? ? nil : tags.join
+    end
+
     # Issues a command to the game and captures output between start and end patterns.
     #
     # @param command [String] The command to send.
@@ -107,13 +141,13 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
                 if quiet && !ignore_end
-                  next(nil)
+                  next(preserve_quiet_state_tags(line))
                 else
                   line
                 end
               else
                 if quiet
-                  next(nil)
+                  next(preserve_quiet_state_tags(line))
                 else
                   line
                 end
@@ -121,7 +155,7 @@ module Lich
             elsif line =~ start_pattern
               filter = true
               if quiet
-                next(nil)
+                next(preserve_quiet_state_tags(line))
               else
                 line
               end
