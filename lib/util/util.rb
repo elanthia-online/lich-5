@@ -112,13 +112,30 @@ module Lich
     # about to drop, so callers can forward just the tags instead of the
     # whole chunk.
     #
+    # The returned string is newline-terminated even though the matched tags
+    # themselves never include one. Every other chunk that reaches this
+    # pipeline is newline/CRLF-terminated as part of the game server's
+    # line-oriented stream framing; a bare, unterminated tag is not a shape
+    # of line this pipeline produced before this method existed. For
+    # sentinel-supporting frontends (currently only Saga -- see
+    # Frontend::ORIGIN_SENTINEL and Game#prefix_origin_sentinel), every
+    # forwarded line gets a leading origin-marker byte that the client is
+    # expected to consume as routing metadata and strip before display. That
+    # worked here once the segment was given the same line termination as
+    # everything else the client already handles; without it, the client had
+    # nothing to delimit an otherwise content-only segment, and the marker
+    # byte fell through to the display as a literal, visible character.
+    #
     # @param chunk [String] the raw stream chunk being suppressed.
-    # @return [String, nil] the concatenated tag matches in the order they
-    #   appeared, or nil if none were found (signals DownstreamHook to drop
-    #   the chunk entirely, same as before this method existed).
+    # @return [String, nil] the concatenated tag matches, in the order they
+    #   appeared, terminated with a newline; or nil if none were found
+    #   (signals DownstreamHook to drop the chunk entirely, same as before
+    #   this method existed).
     def self.preserve_quiet_state_tags(chunk)
       tags = chunk.to_s.scan(QUIET_STATE_TAG_PATTERN)
-      tags.empty? ? nil : tags.join
+      return nil if tags.empty?
+
+      "#{tags.join}\n"
     end
 
     # Issues a command to the game and captures output between start and end patterns.
