@@ -971,6 +971,18 @@ module Lich
       def safe_pause_list
         return false unless $safe_pause_lock.try_lock
 
+        # Pausing is cooperative: a paused script is a live thread that keeps
+        # every mutex it holds (Ruby frees a mutex on thread death, not on
+        # pause). So a script that gets pause_script'd while holding
+        # $safe_pause_lock never releases it, and every peer spins forever on
+        # try_lock -> false. Make the lock-holder immune to pause for as long as
+        # it owns the lock, so this deadlock cannot form. Save the prior value
+        # (and the holder itself) so we restore exactly what was there for a
+        # caller that was already ignoring pauses, e.g. mid-travel.
+        @safe_pause_holder = Script.self
+        @safe_pause_prev_ignore_pause = @safe_pause_holder&.ignore_pause
+        @safe_pause_holder&.ignore_pause = true
+
         paused_script_list = []
         Script.running.find_all { |s| !s.paused? && !s.no_pause_all && s.name != Script.self.name }.each do |s|
           s.pause
@@ -989,6 +1001,11 @@ module Lich
           Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
           Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
         end
+        # Restore the holder's pre-lock pause immunity before releasing the lock,
+        # so we never leave a script permanently unpausable.
+        @safe_pause_holder&.ignore_pause = @safe_pause_prev_ignore_pause
+        @safe_pause_holder = nil
+        @safe_pause_prev_ignore_pause = nil
         $safe_pause_lock.unlock
       end
 
