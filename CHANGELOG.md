@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.20.2](https://github.com/elanthia-online/lich-5/compare/v5.20.1...v5.20.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* **all:** terminate preserved quiet-state tags with a  newline ([#1532](https://github.com/elanthia-online/lich-5/issues/1532)) ([be68052](https://github.com/elanthia-online/lich-5/commit/be68052b8a39c280f1998a3e56233c34e83dab01))
+
 ## [5.20.1](https://github.com/elanthia-online/lich-5/compare/v5.20.0...v5.20.1) (2026-08-20)
 
 
