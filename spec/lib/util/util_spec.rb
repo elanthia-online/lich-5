@@ -35,14 +35,30 @@ RSpec.describe Lich::Util do
     it 'extracts a single bundled mono tag from surrounding text' do
       chunk = %(Some Spell.....................  10:00\n<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
 
-      expect(described_class.preserve_quiet_state_tags(chunk)).to eq('<output class=""/>')
+      expect(described_class.preserve_quiet_state_tags(chunk)).to eq(%(<output class=""/>\n))
     end
 
     it 'extracts every matching tag, in order, when more than one is present' do
       chunk = %(<output class="mono"/>text<output class=""/>)
 
       expect(described_class.preserve_quiet_state_tags(chunk))
-        .to eq('<output class="mono"/><output class=""/>')
+        .to eq(%(<output class="mono"/><output class=""/>\n))
+    end
+
+    it 'terminates the returned tags with a newline, even though the matched tags never include one' do
+      # Every other chunk that reaches this pipeline is newline/CRLF-
+      # terminated (GS4's stream is line-oriented); a preserved-tag string
+      # with no terminator is not a shape of line the pipeline produced
+      # before this method existed. For sentinel-supporting frontends
+      # (currently only Saga), every forwarded line gets a leading
+      # Frontend::ORIGIN_SENTINEL byte the client consumes as routing
+      # metadata and strips before display. An unterminated segment gave
+      # the client nothing to delimit it by, and the sentinel byte fell
+      # through to the display as a literal, visible character instead of
+      # being consumed.
+      chunk = '<output class="mono"/>'
+
+      expect(described_class.preserve_quiet_state_tags(chunk)).to eq(%(<output class="mono"/>\n))
     end
 
     it 'preserves the chunk\'s real left-to-right order across two distinct patterns' do
@@ -61,7 +77,7 @@ RSpec.describe Lich::Util do
       chunk = %(<output class="mono"/>text<popBold/>more<output class=""/>)
 
       expect(described_class.preserve_quiet_state_tags(chunk))
-        .to eq('<output class="mono"/><popBold/><output class=""/>')
+        .to eq(%(<output class="mono"/><popBold/><output class=""/>\n))
     end
   end
 
@@ -143,7 +159,7 @@ RSpec.describe Lich::Util do
       bundled_end_chunk = %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
       forwarded = captured_proc[:action].call(bundled_end_chunk)
 
-      expect(forwarded).to eq('<output class=""/>')
+      expect(forwarded).to eq(%(<output class=""/>\n))
     end
 
     it 'forwards a bundled tag on an intermediate suppressed chunk, not just the end chunk' do
@@ -153,7 +169,7 @@ RSpec.describe Lich::Util do
       mid_range_chunk = %(<output class="mono"/>Some Spell.....................  10:00)
       forwarded = captured_proc[:action].call(mid_range_chunk)
 
-      expect(forwarded).to eq('<output class="mono"/>')
+      expect(forwarded).to eq(%(<output class="mono"/>\n))
     end
 
     it 'does not alter non-quiet behavior (lines are forwarded unchanged)' do
