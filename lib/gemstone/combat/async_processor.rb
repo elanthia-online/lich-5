@@ -1,67 +1,42 @@
 # frozen_string_literal: true
 
 #
-# Async Combat Processor - Thread-safe combat processing for performance
+# Async Combat Processor - single ordered worker thread fed by a Queue
+#
+# The downstream hook calls process_async from the game-stream thread, so
+# enqueueing must never block. A single consumer thread guarantees chunks are
+# processed in arrival order (status add/remove, UCS updates and damage all
+# depend on ordering) and means creature instances are only ever mutated from
+# one thread - no synchronization needed in Creature/CreatureInstance.
 #
 
-require 'concurrent'
 require_relative '../../util/gtk_compaction'
 
 module Lich
   module Gemstone
     module Combat
       class AsyncProcessor
-        def initialize(max_threads = 2)
-          @max_threads = max_threads
-          @active_count = Concurrent::AtomicFixnum.new(0)
-          @thread_pool = []
-          @last_cleanup = Time.now
-          @last_compact = Time.now
+        # max_threads retained for call-site compatibility; processing is
+        # intentionally single-threaded to preserve event ordering.
+        def initialize(_max_threads = 1)
+          @queue = Queue.new
+          @processing = false
+          @chunks_processed = 0
+          @worker = Thread.new { run_loop }
         end
 
+        # Enqueue a chunk; O(1), never blocks the game stream.
         def process_async(chunk)
           return if chunk.empty?
-
-          # Periodic cleanup of dead threads (safety net)
-          cleanup_dead_threads if Time.now - @last_cleanup > 30
-
-          # Wait if at capacity
-          while @active_count.value >= @max_threads
-            sleep(0.01)
-          end
-
-          @active_count.increment
-
-          # Create thread and store reference for self-cleanup
-          thread = Thread.new do
-            begin
-              Thread.current[:start_time] = Time.now
-              Thread.current[:line_count] = chunk.size
-
-              Processor.process(chunk)
-
-              elapsed = Time.now - Thread.current[:start_time]
-              if elapsed > 0.5 && Tracker.debug?
-                respond "[Combat] Processed #{chunk.size} lines in #{elapsed.round(3)}s"
-              end
-            rescue => e
-              respond "[Combat] Processing error: #{e.message}" if Tracker.debug?
-              respond e.backtrace.first(3) if Tracker.debug?
-            ensure
-              @active_count.decrement
-              # Thread cleans itself up from pool when done (use Thread.current to avoid race)
-              @thread_pool.delete(Thread.current)
-            end
-          end
-
-          @thread_pool << thread
-          thread
+          @queue.push(chunk)
+          nil
         end
 
+        # Drain remaining work and stop the worker.
         def shutdown
-          respond "[Combat] Waiting for #{@thread_pool.count(&:alive?)} threads..." if Tracker.debug?
-          @thread_pool.each(&:join)
-          @thread_pool.clear
+          respond "[Combat] Waiting for #{@queue.size} queued chunks..." if Tracker.debug?
+          @queue.push(:shutdown)
+          @worker.join
 
           # Force GC after shutdown to help with memory fragmentation.
           # Compaction is routed through Lich::Util::GtkCompaction, which
@@ -72,43 +47,37 @@ module Lich
 
         def stats
           {
-            active: @active_count.value,
-            total_alive: @thread_pool.count(&:alive?),
-            pool_size: @thread_pool.size, # ACTUAL array size (includes dead threads if not cleaned)
-            dead_threads: @thread_pool.count { |t| !t.alive? }, # Count dead threads still in pool
-            max_threads: @max_threads,
-            processing: @thread_pool.select(&:alive?).map do |thread|
-              {
-                lines: thread[:line_count] || 0,
-                elapsed: thread[:start_time] ? (Time.now - thread[:start_time]).round(2) : 0
-              }
-            end
+            active: @processing ? 1 : 0,
+            queued: @queue.size,
+            total: @chunks_processed,
+            worker_alive: @worker.alive?
           }
         end
 
         private
 
-        # Periodic cleanup of any dead threads (safety net only, threads should self-cleanup)
-        def cleanup_dead_threads
-          dead_count = @thread_pool.count { |t| !t.alive? }
-          # Keep only alive threads (remove dead ones)
-          @thread_pool.select!(&:alive?)
+        def run_loop
+          loop do
+            chunk = @queue.pop
+            break if chunk == :shutdown
 
-          # If we cleaned up dead threads, suggest GC to help with fragmentation
-          if dead_count > 10
-            GC.start
-            respond "[Combat] Cleaned #{dead_count} dead threads, triggered GC" if Tracker.debug?
+            @processing = true
+            started = Time.now
+            begin
+              Processor.process(chunk)
+
+              elapsed = Time.now - started
+              if elapsed > 0.5 && Tracker.debug?
+                respond "[Combat] Processed #{chunk.size} lines in #{elapsed.round(3)}s"
+              end
+            rescue => e
+              respond "[Combat] Processing error: #{e.message}" if Tracker.debug?
+              respond e.backtrace.first(3) if Tracker.debug?
+            ensure
+              @processing = false
+              @chunks_processed += 1
+            end
           end
-
-          # Periodic heap compaction to reduce fragmentation (every hour)
-          if GC.respond_to?(:compact) && (Time.now - @last_compact) > 3600
-            GC.start
-            Lich::Util::GtkCompaction.safe_compact!
-            @last_compact = Time.now
-            respond "[Combat] Triggered hourly GC compaction" if Tracker.debug?
-          end
-
-          @last_cleanup = Time.now
         end
       end
     end
