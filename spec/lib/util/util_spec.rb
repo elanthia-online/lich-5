@@ -47,7 +47,7 @@ RSpec.describe Lich::Util do
 
     it 'terminates the returned tags with a newline, even though the matched tags never include one' do
       # Every other chunk that reaches this pipeline is newline/CRLF-
-      # terminated (GS4's stream is line-oriented); a preserved-tag string
+      # terminated (the game server's stream is line-oriented); a preserved-tag string
       # with no terminator is not a shape of line the pipeline produced
       # before this method existed. For sentinel-supporting frontends
       # (currently only Saga), every forwarded line gets a leading
