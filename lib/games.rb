@@ -1134,12 +1134,20 @@ module Lich
         end
 
         def send_to_client(alt_string)
+          # alt_string has been UTF-8 since read_server_string decoded it for
+          # Lich's own regex/Ox pipeline. Frontends (Wizard, Stormfront,
+          # Wrayth, Saga) expect the original Windows-1252 wire bytes and do
+          # their own decoding -- confirmed directly against Saga's own
+          # decodeCp1252 (Saga_0_7_2_app.asar, out/main/index.js:2859,3029).
+          # Forwarding UTF-8 here instead produces double-decode mojibake
+          # (e.g. a right single quote becomes "\u00E2\u20AC\u2122").
+          wire_bytes = Lich::Common::WireEncoding.encode(alt_string)
           detachable_clients = $_DETACHABLE_CLIENT_REGISTRY_&.snapshot || []
           detachable_clients = [$_DETACHABLE_CLIENT_] if detachable_clients.empty? && $_DETACHABLE_CLIENT_
           if !detachable_clients.empty?
-            detachable_clients.each { |client| client.write(alt_string) if client.alive? }
+            detachable_clients.each { |client| client.write(wire_bytes) if client.alive? }
           elsif $_CLIENT_
-            $_CLIENT_.write(alt_string)
+            $_CLIENT_.write(wire_bytes)
           end
         end
 

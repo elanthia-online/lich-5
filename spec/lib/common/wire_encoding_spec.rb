@@ -44,6 +44,10 @@ RSpec.describe Lich::Common::WireEncoding do
       expect(result.encoding).to eq(Encoding::UTF_8)
       expect(result.valid_encoding?).to be true
     end
+
+    it 'returns nil for nil input, matching IO#gets on disconnect, rather than raising' do
+      expect(described_class.decode(nil)).to be_nil
+    end
   end
 
   describe '.encode' do
@@ -57,6 +61,10 @@ RSpec.describe Lich::Common::WireEncoding do
 
     it 'substitutes ASCII ? for a character with no Windows-1252 representation' do
       expect(described_class.encode("say \u4E2D")).to eq('say ?'.b) # a CJK character # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'returns nil for nil input rather than raising' do
+      expect(described_class.encode(nil)).to be_nil
     end
   end
 

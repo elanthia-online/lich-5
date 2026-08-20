@@ -60,9 +60,13 @@ module Lich
       # straight off TCPSocket#gets regardless of the process's
       # Encoding.default_external.
       #
-      # @param bytes [String] raw bytes as received from the socket
-      # @return [String] a valid UTF-8 string
+      # @param bytes [String, nil] raw bytes as received from the socket
+      # @return [String, nil] a valid UTF-8 string, or nil if +bytes+ is nil
+      #   (mirrors IO#gets, which this typically wraps immediately -- a
+      #   disconnect mid-read is a legitimate nil, not an error to raise on)
       def self.decode(bytes)
+        return nil if bytes.nil?
+
         raw = bytes.b
         codepoints = raw.each_byte.map do |b|
           (b >= 0x80 && b <= 0x9F) ? CP1252_REMAP[b - 0x80] : b
@@ -73,9 +77,11 @@ module Lich
       # Encodes a Ruby string (typically UTF-8, e.g. from a GTK entry) into
       # raw Windows-1252 bytes ready to write to the socket.
       #
-      # @param text [String] any Ruby string
-      # @return [String] ASCII-8BIT bytes
+      # @param text [String, nil] any Ruby string
+      # @return [String, nil] ASCII-8BIT bytes, or nil if +text+ is nil
       def self.encode(text)
+        return nil if text.nil?
+
         bytes = text.codepoints.map do |cp|
           next cp if cp <= 0x7F || (cp >= 0xA0 && cp <= 0xFF)
 
