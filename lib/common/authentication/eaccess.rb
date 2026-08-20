@@ -232,6 +232,35 @@ module Lich
         def self.read(conn)
           conn.sysread(PACKET_SIZE)
         end
+
+        # Bounds how long the full SGE authentication exchange may block.
+        #
+        # {.auth} has no connect or read timeouts of its own -- every step (TCP
+        # connect, TLS handshake, and each K/A/M/F/G/P/C/L round-trip) is a bare
+        # blocking call. An unresponsive SGE backend (e.g. a stalled connect that
+        # never gets a SYN-ACK) hangs the caller indefinitely with no exception
+        # and no log output. This wraps the whole exchange the same way
+        # {Lich::GameBase::Game.open_with_timeout} bounds the game connect.
+        #
+        # @param timeout [Integer, Float] seconds to wait for the full exchange
+        # @param kwargs [Hash] forwarded to {.auth}
+        # @return [Hash, Array] see {.auth}
+        # @raise [RuntimeError] if the exchange does not complete within +timeout+
+        # @raise [StandardError] re-raises whatever {.auth} raises
+        # @see .auth
+        def self.auth_with_timeout(timeout: 30, **kwargs)
+          auth_thread = Thread.new {
+            # report_on_exception off: a failed auth is surfaced by the join below
+            # (which re-raises it), not by an auto-printed thread warning.
+            Thread.current.report_on_exception = false
+            auth(**kwargs)
+          }
+          if auth_thread.join(timeout).nil?
+            auth_thread.kill rescue nil
+            raise "error: timed out authenticating with EAccess after #{timeout}s"
+          end
+          auth_thread.value
+        end
       end
     end
   end

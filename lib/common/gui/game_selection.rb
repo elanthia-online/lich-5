@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
+require_relative '../authentication/login_helpers'
+
 module Lich
   module Common
     module GUI
       # Provides game selection utilities for the Lich GUI login system
       # Implements accurate game selection with proper accessibility support
       module GameSelection
-        # Game code to display name mapping
-        # Maps internal game codes to user-friendly display names
-        GAME_MAPPING = {
+        # User-friendly display names for canonical game codes.
+        GAME_NAMES = {
           'GS3' => 'GemStone IV',
-          'GSX' => 'GemStone IV Platinum',
           'GST' => 'GemStone IV Prime Test',
           'GSF' => 'GemStone IV Shattered',
           'DR'  => 'DragonRealms',
@@ -18,6 +18,11 @@ module Lich
           'DRT' => 'DragonRealms Prime Test',
           'DRF' => 'DragonRealms Fallen'
         }.freeze
+
+        # Game code to display name mapping, derived from the canonical validator.
+        GAME_MAPPING = Authentication::LoginHelpers::VALID_GAME_CODES.to_h do |game_code|
+          [game_code, GAME_NAMES.fetch(game_code)]
+        end.freeze
 
         # Display name to game code mapping (reverse of GAME_MAPPING)
         # Used for converting user-selected display names back to game codes
@@ -37,7 +42,7 @@ module Lich
           end
 
           # Set default selection
-          if current_selection && GAME_MAPPING.key?(current_selection)
+          if Authentication::LoginHelpers.valid_game_code?(current_selection)
             # Set to the provided game code
             index = GAME_MAPPING.keys.index(current_selection)
             combo.active = index if index
@@ -65,7 +70,8 @@ module Lich
           return nil unless combo
 
           selected_text = combo.active_text
-          REVERSE_GAME_MAPPING[selected_text] || 'GS3' # Default to GS3 if not found
+          game_code = REVERSE_GAME_MAPPING[selected_text]
+          Authentication::LoginHelpers.valid_game_code?(game_code) ? game_code : 'GS3'
         end
 
         # Gets the game name for a game code
@@ -74,7 +80,9 @@ module Lich
         # @param game_code [String] Game code
         # @return [String] Display name for the game
         def self.get_game_name(game_code)
-          GAME_MAPPING[game_code] || 'Unknown'
+          return 'Unknown' unless Authentication::LoginHelpers.valid_game_code?(game_code)
+
+          GAME_MAPPING.fetch(game_code)
         end
 
         # Updates an existing combo box with the current game options
@@ -97,7 +105,7 @@ module Lich
           end
 
           # Set selection
-          if current_selection && GAME_MAPPING.key?(current_selection)
+          if Authentication::LoginHelpers.valid_game_code?(current_selection)
             # Set to the provided game code
             index = GAME_MAPPING.keys.index(current_selection)
             combo.active = index if index
