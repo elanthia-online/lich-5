@@ -36,6 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.verify.outputs.tag }}
+      release_id: ${{ steps.verify.outputs.release_id }}
     steps:
       - name: Verify draft release exists for tag
         id: verify
@@ -45,21 +46,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          
+          # Query all repository releases to find the one matching our tag
+          release_info=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+            --jq ".[] | select(.tag_name == \"$TAG\") | {draft: .draft, id: .id}")
+          
+          if [ -z "$release_info" ]; then
+            echo "::error::Release '$TAG' was not found as a draft or published release."
+            exit 1
+          fi
+
+          draft=$(echo "$release_info" | jq -r '.draft')
+          release_id=$(echo "$release_info" | jq -r '.id')
+
           if [ "$draft" != "true" ]; then
             echo "::error::Release '$TAG' exists but is not a draft. Refusing to clobber assets on a published release."
             exit 1
           fi
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
   build_archives:
     needs: release_guard
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout target tag
+      - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          ref: ${{ needs.release_guard.outputs.tag }}
+          ref: ${{ github.ref_name }} # Checks out current branch since draft tags don't exist in git history yet
           fetch-depth: 0
 
       - name: Create core Lich-5 package
@@ -101,11 +116,12 @@ jobs:
       - name: Upload archives to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release_guard.outputs.tag }}
+          RELEASE_ID: ${{ needs.release_guard.outputs.release_id }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "$TAG" lich-5.tar.gz lich-5.zip --clobber --repo "$GITHUB_REPOSITORY"
+          # Using RELEASE_ID instead of TAG allows gh to bypass the missing git reference check
+          gh release upload "$RELEASE_ID" lich-5.tar.gz lich-5.zip --clobber --repo "$GITHUB_REPOSITORY"
 
   build_installer:
     needs: [release_guard, build_archives]
@@ -125,11 +141,13 @@ jobs:
       - name: Upload installer to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.release_guard.outputs.tag }}
+          RELEASE_ID: ${{ needs.release_guard.outputs.release_id }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "$TAG" Ruby4Lich5.exe --clobber --repo "$GITHUB_REPOSITORY"
+          # Using RELEASE_ID instead of TAG allows gh to bypass the missing git reference check
+          gh release upload "$RELEASE_ID" Ruby4Lich5.exe --clobber --repo "$GITHUB_REPOSITORY"
+
   summary:
     needs: [release_guard, build_archives, build_installer]
     if: ${{ always() }}
