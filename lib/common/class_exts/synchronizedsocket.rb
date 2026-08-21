@@ -165,6 +165,23 @@ module Lich
 
       private
 
+      # Encodes a single write-queue argument to Windows-1252, recursing
+      # into Arrays (matching IO#puts's own flattening semantics) so a
+      # String nested at any depth still gets encoded. Non-String,
+      # non-Array values (nil, integers, objects relying on #to_s inside
+      # the real IO#puts call, etc.) pass through untouched -- only
+      # WireEncoding.encode's contract (String or nil) is honored here.
+      def encode_wire_arg(arg)
+        case arg
+        when Array
+          arg.map { |element| encode_wire_arg(element) }
+        when String
+          Lich::Common::WireEncoding.encode(arg)
+        else
+          arg
+        end
+      end
+
       def ensure_writer_state
         return if @write_queue.is_a?(SizedQueue) && @stream_mutex &&
                   @deferred_main_stream.is_a?(Array) && @stream_stack.is_a?(Array)
@@ -211,7 +228,13 @@ module Lich
               # send_to_client, detachable_client_send_init, and any
               # future caller) is what actually closes this class of bug
               # for good rather than one call site at a time.
-              wire_args = args.map { |arg| arg.is_a?(String) ? Lich::Common::WireEncoding.encode(arg) : arg }
+              #
+              # IO#puts flattens nested Arrays (puts(["a", ["b", "c"]])
+              # writes three lines), so a caller could legally pass one
+              # here too -- encode_wire_arg recurses into Arrays rather
+              # than only checking top-level arguments, so a String
+              # nested inside an Array can't silently skip encoding.
+              wire_args = args.map { |arg| encode_wire_arg(arg) }
 
               case kind
               when :puts

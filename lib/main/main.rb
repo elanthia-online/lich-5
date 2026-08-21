@@ -4,6 +4,7 @@
 require 'shellwords'
 require_relative '../common/process_launcher'
 require_relative '../common/wire_encoding'
+require_relative '../common/client_line_reader'
 require_relative 'reconnect_command'
 # Reconnect re-execs this process and has to pass the real --password= through,
 # so snapshot argv before the post-login scrub redacts it in place. The copy is
@@ -697,7 +698,7 @@ reconnect_if_wanted = proc {
         #
         # send the login key
         #
-        client_string = Lich::Common::WireEncoding.decode($_CLIENT_.gets)
+        client_string = Lich::Common::ClientLineReader.read($_CLIENT_)
         Game._puts(client_string)
         #
         # take the version string from the client, ignore it, and ask the server for xml
@@ -713,7 +714,7 @@ reconnect_if_wanted = proc {
         #
         # send the login key
         #
-        client_string = Lich::Common::WireEncoding.decode($_CLIENT_.gets)
+        client_string = Lich::Common::ClientLineReader.read($_CLIENT_)
         client_string = fb_to_sf(client_string)
         Game._puts(client_string)
         #
@@ -781,9 +782,9 @@ reconnect_if_wanted = proc {
         UpstreamHook.add('inventory_boxes_toggle', inv_toggle_proc, persist: true) # engine display toggle
 
         unless $offline_mode
-          client_string = Lich::Common::WireEncoding.decode($_CLIENT_.gets)
+          client_string = Lich::Common::ClientLineReader.read($_CLIENT_)
           Game._puts(client_string)
-          client_string = Lich::Common::WireEncoding.decode($_CLIENT_.gets)
+          client_string = Lich::Common::ClientLineReader.read($_CLIENT_)
           $_CLIENTBUFFER_.push(client_string.dup)
           Game._puts(client_string)
         end
@@ -798,13 +799,14 @@ reconnect_if_wanted = proc {
       game_key = nil
 
       begin
-        while (client_string = $_CLIENT_.gets)
-          # $_CLIENT_.gets is a raw frontend socket read, same as the game
-          # socket's @socket.gets -- the bytes need decoding before any
-          # regex touches them (do_client matches against client_string
-          # directly) and before Game._puts's own encode step, which
-          # expects genuinely-decoded Unicode text, not raw wire bytes.
-          client_string = Lich::Common::WireEncoding.decode(client_string)
+        while (client_string = Lich::Common::ClientLineReader.read($_CLIENT_))
+          # ClientLineReader.read wraps $_CLIENT_.gets (a raw frontend
+          # socket read, same as the game socket's @socket.gets) with an
+          # immediate WireEncoding.decode -- the bytes need decoding
+          # before any regex touches them (do_client matches against
+          # client_string directly) and before Game._puts's own encode
+          # step, which expects genuinely-decoded Unicode text, not raw
+          # wire bytes.
           if Frontend.supports_gsl?
             client_string = "#{$cmd_prefix}#{client_string}"
           elsif Frontend.client.eql?('frostbite')

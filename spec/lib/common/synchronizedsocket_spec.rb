@@ -405,6 +405,28 @@ RSpec.describe Lich::Common::SynchronizedSocket do
       socket.puts
       eventually { expect(delegate).to have_received(:puts).with(no_args) }
     end
+
+    it 'encodes a String nested inside an Array argument (regression: previously only checked top-level args)' do
+      # IO#puts flattens nested Arrays (puts(["a", ["b", "c"]]) writes
+      # three separate lines) -- a String buried inside one must not
+      # silently skip encoding just because the top-level argument is an
+      # Array rather than a String.
+      allow(delegate).to receive(:puts)
+      socket.puts(["chest\u2019s lid", ["nested\u2019 line"]]) # rubocop:disable Custom/AsciiOnlySource
+      eventually do
+        expect(delegate).to have_received(:puts).with(["chest\x92s lid".b, ["nested\x92 line".b]]) # rubocop:disable Custom/AsciiOnlySource
+      end
+    end
+
+    it 'preserves Array structure and non-String elements while encoding String leaves' do
+      allow(delegate).to receive(:puts)
+      socket.puts(["chest\u2019s lid", 42, nil, ["deep\u2019 nesting", ["deeper\u2019 still"]]]) # rubocop:disable Custom/AsciiOnlySource
+      eventually do
+        expect(delegate).to have_received(:puts).with(
+          ["chest\x92s lid".b, 42, nil, ["deep\x92 nesting".b, ["deeper\x92 still".b]]] # rubocop:disable Custom/AsciiOnlySource
+        )
+      end
+    end
   end
 
   # ===========================================================================
