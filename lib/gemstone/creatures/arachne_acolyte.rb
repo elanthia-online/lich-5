@@ -77,7 +77,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: (67..72),
-    mje_td: 67,
+    mje_td: (67..72),
     mne_td: 73,
     mjs_td: 76,
     mns_td: 66,

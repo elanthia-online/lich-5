@@ -89,7 +89,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: (49..59),
+    mje_td: (44..59),
     mne_td: (44..59),
     mjs_td: nil,
     mns_td: nil,
