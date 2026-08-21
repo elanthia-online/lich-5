@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/patchwork_flesh_monstrosity",
   picture: "",
-  level: 97,
+  level: 98,
   family: "Chimeric",
   type: "Biped",
   undead: true,
@@ -25,6 +25,9 @@
       name: "Sanctum",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4216, count: 2, uid_ranges: [[4216001, 4216049]] }
   ],
   attack_attributes: {
     physical_attacks: [

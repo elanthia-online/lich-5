@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/sidewinder",
   picture: "",
-  level: 96,
+  level: 98,
   family: "Reptilian",
   type: "Ophidian",
   undead: false,
@@ -25,6 +25,9 @@
       name: "Sanctum",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4216, count: 1, uid_ranges: [[4216141, 4216148]] }
   ],
   attack_attributes: {
     physical_attacks: [

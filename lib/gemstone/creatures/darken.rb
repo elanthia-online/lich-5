@@ -26,6 +26,9 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 13027, count: 4, uid_ranges: [[13027003, 13027083]] }
+  ],
   attack_attributes: {
     physical_attacks: [],
     bolt_spells: [],

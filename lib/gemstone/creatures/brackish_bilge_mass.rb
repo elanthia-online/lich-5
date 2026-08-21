@@ -19,6 +19,9 @@
   height: nil,
   size: "",
   areas: [],
+  spawns: [
+    { zone: 7150, count: 1, uid_ranges: [[7150501, 7150535]] }
+  ],
   attack_attributes: {
     physical_attacks: [],
     bolt_spells: [],
