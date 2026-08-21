@@ -70,7 +70,7 @@
     ran_td: (81..90),
     sor_td: (84..87),
     wiz_td: nil,
-    mje_td: (87..96),
+    mje_td: 96,
     mne_td: (88..97),
     mjs_td: (78..90),
     mns_td: (78..90),

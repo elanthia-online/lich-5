@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 120,
+  max_hp: 127,
   speed: nil,
   height: nil,
   size: "",
@@ -73,10 +73,10 @@
   defense_attributes: {
     asg: "17",
     immunities: [],
-    melee: 75,
-    ranged: nil,
-    bolt: 52,
-    udf: nil,
+    melee: (57..156),
+    ranged: (49..52),
+    bolt: (49..52),
+    udf: 167,
     bar_td: nil,
     cle_td: 42,
     emp_td: nil,

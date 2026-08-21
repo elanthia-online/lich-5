@@ -70,10 +70,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: 297,
     ranged: nil,
     bolt: 309,
-    udf: nil,
+    udf: 309,
     bar_td: nil,
     cle_td: 159,
     emp_td: nil,

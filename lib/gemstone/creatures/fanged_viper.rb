@@ -47,7 +47,7 @@
     asg: "5N",
     immunities: [],
     melee: 37,
-    ranged: nil,
+    ranged: 33,
     bolt: 33,
     udf: 51,
     bar_td: 12,

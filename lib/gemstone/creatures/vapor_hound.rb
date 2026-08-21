@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 210,
+  max_hp: 211,
   speed: nil,
   height: nil,
   size: "",
@@ -65,7 +65,7 @@
     ran_td: nil,
     sor_td: 104,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 106,
     mne_td: 107,
     mjs_td: 101,
     mns_td: 101,

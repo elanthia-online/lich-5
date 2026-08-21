@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 300,
+  max_hp: 308,
   speed: nil,
   height: nil,
   size: "",
@@ -51,7 +51,7 @@
   defense_attributes: {
     asg: "9",
     immunities: [],
-    melee: nil,
+    melee: (225..330),
     ranged: nil,
     bolt: (199..204),
     udf: nil,

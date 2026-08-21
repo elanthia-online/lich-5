@@ -17,7 +17,7 @@
     "Element-based"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 307,
   speed: nil,
   height: nil,
   size: "",
@@ -52,7 +52,7 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: nil,
+    melee: (226..492),
     ranged: nil,
     bolt: nil,
     udf: 264,
@@ -63,7 +63,7 @@
     ran_td: nil,
     sor_td: 185,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 196,
     mne_td: 195,
     mjs_td: nil,
     mns_td: 150,

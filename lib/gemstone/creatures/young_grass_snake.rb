@@ -57,7 +57,7 @@
     ran_td: 3,
     sor_td: 3,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 3,
     mne_td: 3,
     mjs_td: 3,
     mns_td: 3,

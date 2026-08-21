@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 278,
   speed: nil,
   height: nil,
   size: "",
@@ -53,7 +53,7 @@
     melee: (242..319),
     ranged: nil,
     bolt: (188..234),
-    udf: nil,
+    udf: 259,
     bar_td: 127,
     cle_td: nil,
     emp_td: (140..190),
