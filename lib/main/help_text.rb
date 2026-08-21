@@ -144,6 +144,8 @@ module Lich
 
           Commands:
             --add-account ACCOUNT PASSWORD
+            --refresh-characters ACCOUNT [--frontend FRONTEND]
+            --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD
             --change-master-password OLDPASSWORD [NEWPASSWORD]
             --recover-master-password [NEWPASSWORD]
@@ -155,8 +157,16 @@ module Lich
             standard
             enhanced
 
+          Game codes (--game-code):
+            GS3  GemStone IV              DR   DragonRealms
+            GSX  GemStone IV Platinum     DRX  DragonRealms Platinum
+            GST  GemStone IV Prime Test   DRT  DragonRealms Prime Test
+            GSF  GemStone IV Shattered    DRF  DragonRealms Fallen
+
           Examples:
             lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront
+            lich --refresh-characters MYACCOUNT
+            lich --add-character MYACCOUNT NewCharName --game-code DR
             lich --change-account-password MYACCOUNT NEWPASSWORD
             lich --convert-entries enhanced
             lich --change-encryption-mode enhanced --master-password SECRET

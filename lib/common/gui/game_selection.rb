@@ -28,6 +28,15 @@ module Lich
         # Used for converting user-selected display names back to game codes
         REVERSE_GAME_MAPPING = GAME_MAPPING.invert.freeze
 
+        # Game codes that may be written to a character's entry.yaml record.
+        #
+        # Deliberately narrower than Authentication::LoginHelpers::VALID_GAME_CODES,
+        # which additionally accepts GS4 - a code the game stream reports at runtime
+        # (instance='GS4') but that no game entry is stored under; persisting it would
+        # yield a record whose game_name is 'Unknown'. Anything selectable in the GUI's
+        # game combo, and only that, is storable here.
+        PERSISTABLE_GAME_CODES = GAME_MAPPING.keys.freeze
+
         # Creates an accessible game selection combo box
         # Builds a dropdown with all available games and proper accessibility support
         #

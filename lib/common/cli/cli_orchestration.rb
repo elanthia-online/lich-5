@@ -6,6 +6,9 @@ require_relative '../authentication/cli_password'
 require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
+require_relative '../authentication/login_helpers'
+require_relative '../gui/game_selection'
+require_relative 'cli_option_validator'
 
 module Lich
   module Common
@@ -26,6 +29,10 @@ module Lich
               handle_change_account_password
             when /^--add-account$/, /^-aa$/
               handle_add_account
+            when /^--refresh-characters$/, /^-rc$/
+              handle_refresh_characters
+            when /^--add-character$/, /^-ac$/
+              handle_add_character
             when /^--change-master-password$/, /^-cmp$/
               handle_change_master_password
             when /^--recover-master-password$/, /^-rmp$/
@@ -113,6 +120,61 @@ module Lich
 
           frontend = ARGV[ARGV.index('--frontend') + 1] if ARGV.include?('--frontend')
           exit Lich::Common::Authentication::CLIPassword.add_account(account, password, frontend)
+        end
+
+        def self.handle_refresh_characters
+          idx = ARGV.index { |a| a =~ /^--refresh-characters$|^-rc$/ }
+          account = ARGV[idx + 1]
+
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --refresh-characters ACCOUNT [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -rc ACCOUNT [--frontend FRONTEND]"
+
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+
+          frontend = CliOptionValidator.extract_flag_value(
+            '--frontend',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+          )
+          exit Lich::Common::Authentication::CLIPassword.refresh_characters(account, frontend)
+        end
+
+        def self.handle_add_character
+          idx = ARGV.index { |a| a =~ /^--add-character$|^-ac$/ }
+          account = ARGV[idx + 1]
+          char_name = ARGV[idx + 2]
+
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]\n" \
+                  "   or: ruby #{lich_script} -ac ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]"
+
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+          char_name = CliOptionValidator.require_positional(char_name, name: 'CHAR_NAME', usage: usage)
+
+          game_code = CliOptionValidator.extract_flag_value(
+            '--game-code',
+            usage: usage,
+            valid_values: Lich::Common::GUI::GameSelection::PERSISTABLE_GAME_CODES
+          )
+          if game_code.nil?
+            $stdout.puts 'error: --game-code is required'
+            $stdout.puts usage
+            exit 1
+          end
+
+          frontend = CliOptionValidator.extract_flag_value(
+            '--frontend',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_FRONTENDS
+          )
+
+          exit Lich::Common::Authentication::CLIPassword.add_character(
+            account,
+            char_name,
+            game_code: game_code,
+            frontend: frontend
+          )
         end
 
         def self.handle_change_master_password

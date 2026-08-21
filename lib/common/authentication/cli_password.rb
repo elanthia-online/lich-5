@@ -4,6 +4,7 @@ require 'yaml'
 require_relative 'entry_store'
 require_relative '../gui/utilities'
 require_relative '../gui/account_manager'
+require_relative '../gui/game_selection'
 require_relative 'authenticator'
 
 module Lich
@@ -153,7 +154,7 @@ module Lich
                                   frontend
                                 else
                                   # Check predominant frontend in YAML, or prompt
-                                  predominant = determine_predominant_frontend(yaml_file)
+                                  predominant = determine_predominant_frontend(yaml_file, account)
                                   if predominant
                                     puts "Using predominant frontend: #{predominant}"
                                     Lich.log "info: Using predominant frontend: #{predominant}"
@@ -188,6 +189,192 @@ module Lich
             # CRITICAL: Only log e.message, NEVER log password values
             puts "error: #{e.message}"
             Lich.log "error: CLI add account failed for '#{account}': #{e.message}"
+            1
+          end
+        end
+
+        # Re-fetches an account's character list from the game servers and merges it
+        # into entry.yaml. Only characters the account does not already have stored are
+        # appended, each with the selected frontend; every stored record for a character
+        # the account already has - including its frontend, custom launch config, and
+        # favorite flag, and including several records for the same character - is left
+        # exactly as it was. Re-running a refresh that finds nothing new is therefore a
+        # no-op that doesn't rewrite entry.yaml at all.
+        # Mirrors add_account's authentication flow, but requires the account to
+        # already exist (the opposite of add_account's guard), and authenticates using
+        # the account's already-stored password (decrypted here) instead of a
+        # CLI-supplied one, so the password never appears in shell history or `ps`.
+        #
+        # @param account [String] Account username
+        # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @return [Integer] Exit code (0=success, 1=save error, 2=account not found, 3=auth failed, 4=decrypt failed)
+        def self.refresh_characters(account, frontend = nil)
+          account = account.upcase
+
+          data_dir = DATA_DIR
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+
+          begin
+            unless File.exist?(yaml_file)
+              puts "error: Account '#{account}' not found"
+              Lich.log "error: CLI refresh characters failed - entry.yaml not found"
+              return 2
+            end
+
+            yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+            unless yaml_data['accounts'] && yaml_data['accounts'][account]
+              puts "error: Account '#{account}' not found"
+              Lich.log "error: CLI refresh characters failed - account '#{account}' not found"
+              return 2
+            end
+
+            Lich.log "info: Refreshing characters for account '#{account}' via CLI"
+
+            encryption_mode = (yaml_data['encryption_mode'] || 'plaintext').to_sym
+            begin
+              password = Lich::Common::Authentication::EntryStore.decrypt_password(
+                yaml_data['accounts'][account]['password'],
+                mode: encryption_mode,
+                account_name: account
+              )
+            rescue StandardError => e
+              # CRITICAL: Only log e.message, NEVER log password values
+              puts "error: Failed to decrypt stored password: #{e.message}"
+              Lich.log "error: CLI refresh characters failed - could not decrypt stored password for '#{account}': #{e.message}"
+              return 4
+            end
+
+            # Authenticate with game servers to fetch characters (like GUI does)
+            puts "Authenticating with game servers..."
+            Lich.log "info: Authenticating account '#{account}' with game servers"
+            auth_data = Lich::Common::Authentication.authenticate(
+              account: account,
+              password: password,
+              legacy: true
+            )
+
+            unless auth_data && auth_data.is_a?(Array) && !auth_data.empty?
+              puts "error: Authentication failed or no characters found"
+              Lich.log "error: CLI refresh characters failed - game server authentication failed for '#{account}'"
+              return 3
+            end
+
+            Lich.log "info: Authentication successful - found #{auth_data.length} character(s)"
+
+            # Determine frontend
+            selected_frontend = if frontend
+                                  Lich.log "info: Using provided frontend: #{frontend}"
+                                  frontend
+                                else
+                                  predominant = determine_predominant_frontend(yaml_file, account)
+                                  if predominant
+                                    puts "Using predominant frontend: #{predominant}"
+                                    Lich.log "info: Using predominant frontend: #{predominant}"
+                                    predominant
+                                  else
+                                    prompt_for_frontend
+                                  end
+                                end
+
+            # Convert authentication data to character list
+            character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(
+              auth_data,
+              selected_frontend || 'stormfront'
+            )
+
+            # Defensive guard: auth_data was already confirmed non-empty above, and on the
+            # only production path here (EAccess.auth's legacy branch) every entry carries
+            # char_name/game_name/game_code, so this can't currently happen. Guards against
+            # convert_auth_data_to_characters's filter (or the auth path) changing later and
+            # silently reporting "success (0 found)".
+            if character_list.empty?
+              puts "error: No valid characters found after conversion"
+              Lich.log "error: CLI refresh characters failed - conversion produced no characters for '#{account}'"
+              return 3
+            end
+
+            # Keep only characters the server reports that aren't already stored. A stored
+            # character is the user's own record - they chose its frontend, custom launch,
+            # and favorite flag - so a refresh must not restate it. add_or_update_account
+            # keys character identity on char_name+game_code+frontend+custom_launch, and
+            # every record built here carries the one selected frontend and a nil custom
+            # launch, so handing it a stored character under any other frontend or launch
+            # config would append a second entry rather than match the existing one.
+            new_characters = reject_stored_characters(
+              character_list,
+              yaml_data['accounts'][account]['characters']
+            )
+
+            if new_characters.empty?
+              puts "success: Characters refreshed for account '#{account}' (no new characters, #{character_list.length} found)"
+              Lich.log "info: Characters refreshed for account '#{account}' - no new characters (#{character_list.length} found)"
+              return 0
+            end
+
+            # Merge into existing account using AccountManager (preserves other data)
+            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, new_characters)
+              puts "success: Characters refreshed for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
+              Lich.log "info: Characters refreshed successfully for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
+              if selected_frontend.nil? || selected_frontend.empty?
+                puts "note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it"
+                Lich.log "warning: No frontend selected for account '#{account}' - characters stored with frontend defaulted to stormfront"
+              end
+              0
+            else
+              puts "error: Failed to save characters"
+              Lich.log "error: CLI refresh characters failed - could not save account '#{account}'"
+              1
+            end
+          rescue StandardError => e
+            # CRITICAL: Only log e.message, NEVER log password values
+            puts "error: #{e.message}"
+            Lich.log "error: CLI refresh characters failed for '#{account}': #{e.message}"
+            1
+          end
+        end
+
+        # Adds a single character to an existing account's entry.yaml record, with no
+        # server round-trip. Thin CLI wrapper around AccountManager.add_character (the
+        # same method the GUI's "Add Character" tab calls) - duplicate detection and
+        # account-not-found messaging live there, not here.
+        #
+        # @param account [String] Account username
+        # @param char_name [String] Character name
+        # @param game_code [String] Game code (default 'DR' - DragonRealms)
+        # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
+        # @return [Integer] Exit code (0=success, 1=failure)
+        def self.add_character(account, char_name, game_code: 'DR', frontend: nil)
+          account = account.upcase
+
+          data_dir = DATA_DIR
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+
+          begin
+            selected_frontend = frontend || determine_predominant_frontend(yaml_file, account) || 'stormfront'
+
+            character_data = {
+              char_name: char_name,
+              game_code: game_code,
+              game_name: Lich::Common::GUI::GameSelection.get_game_name(game_code),
+              frontend: selected_frontend,
+              custom_launch: nil,
+              custom_launch_dir: nil
+            }
+
+            result = Lich::Common::GUI::AccountManager.add_character(data_dir, account, character_data)
+
+            if result[:success]
+              puts "success: #{result[:message]}"
+              Lich.log "info: CLI add character succeeded for '#{account}': #{result[:message]}"
+              0
+            else
+              puts "error: #{result[:message]}"
+              Lich.log "error: CLI add character failed for '#{account}': #{result[:message]}"
+              1
+            end
+          rescue StandardError => e
+            puts "error: #{e.message}"
+            Lich.log "error: CLI add character failed for '#{account}': #{e.message}"
             1
           end
         end
@@ -316,24 +503,54 @@ module Lich
         end
 
         # @api private
-        # Determines predominant frontend from existing YAML accounts
+        # Drops any freshly-fetched character already represented in the account's
+        # stored records, so a refresh only ever appends genuinely new characters.
+        #
+        # Identity here is char_name + game_code, deliberately coarser than the
+        # char_name + game_code + frontend + custom_launch that add_or_update_account
+        # uses. A single character legitimately has several stored records - one per
+        # frontend or custom launch config the user set up - and all of them describe
+        # a character the server has already told us about, so any of them is enough
+        # to consider it known.
+        #
+        # @param fetched [Array<Hash>] characters built from the auth response (symbol keys)
+        # @param stored [Array<Hash>, nil] the account's entry.yaml characters (string keys)
+        # @return [Array<Hash>] the subset of fetched not already present in stored
+        def self.reject_stored_characters(fetched, stored)
+          known = (stored || []).map { |char| [normalize_char_name(char['char_name']), char['game_code']] }
+
+          fetched.reject { |char| known.include?([normalize_char_name(char[:char_name]), char[:game_code]]) }
+        end
+
+        # @api private
+        # Normalizes a character name to the form add_or_update_account persists, so
+        # names compare equal regardless of the casing the server or entry.yaml used.
+        #
+        # @param name [String, nil] Character name
+        # @return [String] Normalized name
+        def self.normalize_char_name(name)
+          name.to_s.strip.split.map(&:capitalize).join(' ')
+        end
+
+        # @api private
+        # Determines the predominant frontend among a single account's existing
+        # characters. Scoped to one account so a multi-account entry.yaml doesn't
+        # leak another account's frontend preference into this one.
         #
         # @param yaml_file [String] Path to entry.yaml
+        # @param account [String] Account username (already upcased) to scope the count to
         # @return [String, nil] Predominant frontend or nil
-        def self.determine_predominant_frontend(yaml_file)
+        def self.determine_predominant_frontend(yaml_file, account)
           return nil unless File.exist?(yaml_file)
 
           yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
-          return nil unless yaml_data['accounts']
+          account_data = yaml_data['accounts'] && yaml_data['accounts'][account]
+          return nil unless account_data && account_data['characters']
 
           frontend_counts = Hash.new(0)
-          yaml_data['accounts'].each do |_username, account_data|
-            next unless account_data['characters']
-
-            account_data['characters'].each do |char|
-              fe = char['frontend']
-              frontend_counts[fe] += 1 if fe && !fe.empty?
-            end
+          account_data['characters'].each do |char|
+            fe = char['frontend']
+            frontend_counts[fe] += 1 if fe && !fe.empty?
           end
 
           return nil if frontend_counts.empty?

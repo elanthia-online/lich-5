@@ -3,6 +3,7 @@
 require 'rspec'
 
 require_relative '../../../lib/main/help_text'
+require_relative '../../../lib/common/gui/game_selection'
 
 RSpec.describe Lich::Main::HelpText do
   describe '.render' do
@@ -22,6 +23,21 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--save')
       expect(output).to include('Native saved Saga entries use Saga-managed Via Lich login')
       expect(output).to include('require the matching account credentials to be saved in Saga.')
+    end
+
+    it 'documents the refresh-characters and add-character account commands' do
+      output = described_class.render('accounts')
+
+      expect(output).to include('--refresh-characters ACCOUNT [--frontend FRONTEND]')
+      expect(output).to include('--add-character ACCOUNT CHAR_NAME')
+    end
+
+    it 'lists every game code --game-code accepts' do
+      output = described_class.render('accounts')
+
+      Lich::Common::GUI::GameSelection::GAME_MAPPING.each do |code, name|
+        expect(output).to match(/\b#{code}\s+#{Regexp.escape(name)}/)
+      end
     end
 
     it 'maps diagnostics requests to automation help' do
