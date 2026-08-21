@@ -63,7 +63,7 @@
   defense_attributes: {
     asg: "6",
     immunities: [],
-    melee: nil,
+    melee: (166..219),
     ranged: nil,
     bolt: nil,
     udf: nil,
@@ -74,7 +74,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 89,
     mne_td: 78,
     mjs_td: nil,
     mns_td: nil,

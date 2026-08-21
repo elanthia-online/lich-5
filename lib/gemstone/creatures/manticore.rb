@@ -57,10 +57,10 @@
   defense_attributes: {
     asg: "7N",
     immunities: [],
-    melee: 40,
+    melee: (35..40),
     ranged: (27..30),
     bolt: 27,
-    udf: nil,
+    udf: 74,
     bar_td: 27,
     cle_td: 27,
     emp_td: 27,

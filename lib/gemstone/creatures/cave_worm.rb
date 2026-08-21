@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 100,
+  max_hp: 120,
   speed: nil,
   height: nil,
   size: "",
@@ -59,10 +59,10 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: (90..146),
-    ranged: nil,
-    bolt: 58,
-    udf: nil,
+    melee: (63..146),
+    ranged: (50..81),
+    bolt: (50..81),
+    udf: 137,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,

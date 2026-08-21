@@ -53,10 +53,10 @@
     immunities: [
       "Fire"
     ],
-    melee: 102,
-    ranged: nil,
-    bolt: 86,
-    udf: nil,
+    melee: (97..115),
+    ranged: (72..101),
+    bolt: (72..101),
+    udf: 121,
     bar_td: 42,
     cle_td: 48,
     emp_td: nil,

@@ -18,7 +18,7 @@
     "Element-based"
   ],
   bcs: true,
-  max_hp: 160,
+  max_hp: 174,
   speed: "10 sec",
   height: nil,
   size: "",
@@ -58,10 +58,10 @@
     immunities: [
       "Fire"
     ],
-    melee: "96 to 146",
-    ranged: nil,
-    bolt: "85 to 91",
-    udf: 124,
+    melee: (113..155),
+    ranged: (83..101),
+    bolt: (83..101),
+    udf: 175,
     bar_td: 54,
     cle_td: 54,
     emp_td: 54,
