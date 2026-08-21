@@ -163,6 +163,61 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'forwards an explicit active_session_dir override' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        active_session_dir: '/tmp/shared-active-sessions'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'still forwards active_session_dir even when it matches this process own constant' do
+    # active-session-dir has no constants.rb default the way DATA_DIR/SCRIPT_DIR
+    # do, so a spawned child cannot re-derive the parent's ACTIVE_SESSION_DIR on
+    # its own -- unlike the other path flags, "matches the current value" must
+    # never be treated as "the child would get this anyway" and suppressed.
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('ACTIVE_SESSION_DIR', '/tmp/shared-active-sessions')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        active_session_dir: '/tmp/shared-active-sessions'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
   it 'uses per-launch home_dir for chdir when provided in launch_context' do
     launch_data_with_name = launch_data + ['CHARACTER=Tsetem']
 

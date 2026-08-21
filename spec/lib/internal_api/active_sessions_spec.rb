@@ -4,6 +4,7 @@ require 'fileutils'
 require 'tmpdir'
 
 require_relative '../../spec_helper'
+require_relative '../../../lib/common/feature_flags'
 require_relative '../../../lib/internal_api/active_sessions'
 
 RSpec.describe Lich::InternalAPI::ActiveSessions do
@@ -54,6 +55,78 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
   # @return [Hash]
   def read_discovery
     JSON.parse(File.read(discovery_file), symbolize_names: true)
+  end
+
+  describe '.coordination_dir' do
+    it 'falls back to TEMP_DIR when ACTIVE_SESSION_DIR is unset' do
+      expect(described_class.send(:coordination_dir)).to eq(temp_dir)
+    end
+
+    it 'uses ACTIVE_SESSION_DIR instead of TEMP_DIR when explicitly set' do
+      active_session_dir = Dir.mktmpdir('active-session-dir-spec')
+
+      begin
+        stub_const('ACTIVE_SESSION_DIR', active_session_dir)
+
+        expect(described_class.send(:coordination_dir)).to eq(active_session_dir)
+        expect(described_class.send(:lock_path)).to eq(File.join(active_session_dir, 'lich-active-sessions.lock'))
+        expect(described_class.send(:discovery_path)).to eq(File.join(active_session_dir, 'lich-active-sessions.json'))
+      ensure
+        FileUtils.rm_rf(active_session_dir)
+      end
+    end
+  end
+
+  describe '.enabled?' do
+    before do
+      # The file-level `before` above stubs .enabled? to always return true so
+      # every other example doesn't have to think about the feature flag --
+      # restore the real implementation to actually test it here.
+      allow(described_class).to receive(:enabled?).and_call_original
+    end
+
+    it 'is true when ACTIVE_SESSION_DIR is set, even if the persisted flag is off' do
+      stub_const('ACTIVE_SESSION_DIR', temp_dir)
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?).and_return(false)
+
+      expect(described_class.enabled?).to be(true)
+      expect(Lich::Common::FeatureFlags).not_to have_received(:enabled?)
+    end
+
+    it 'does not persist anything when ACTIVE_SESSION_DIR implies opt-in' do
+      stub_const('ACTIVE_SESSION_DIR', temp_dir)
+      expect(Lich::Common::FeatureFlags).not_to receive(:set)
+
+      described_class.enabled?
+    end
+
+    it 'falls back to the persisted feature flag when ACTIVE_SESSION_DIR is unset' do
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?)
+        .with(described_class::FEATURE_FLAG).and_return(true)
+      expect(described_class.enabled?).to be(true)
+
+      allow(Lich::Common::FeatureFlags).to receive(:enabled?)
+        .with(described_class::FEATURE_FLAG).and_return(false)
+      expect(described_class.enabled?).to be(false)
+    end
+  end
+
+  describe '.acquire_ownership_lock' do
+    it 'creates a missing coordination_dir before opening the lock file' do
+      base_dir = Dir.mktmpdir('active-session-dir-missing-spec')
+      nested_dir = File.join(base_dir, 'nested', 'coordination')
+
+      begin
+        stub_const('ACTIVE_SESSION_DIR', nested_dir)
+        expect(File.directory?(nested_dir)).to be(false)
+
+        expect(described_class.send(:acquire_ownership_lock)).to be(true)
+
+        expect(File.directory?(nested_dir)).to be(true)
+      ensure
+        FileUtils.rm_rf(base_dir)
+      end
+    end
   end
 
   describe 'ownership election' do

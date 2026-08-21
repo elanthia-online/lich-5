@@ -177,6 +177,18 @@ module Lich
           Examples:
             lich --active-sessions
             lich --session-info Mychar
+
+          Notes:
+            Active session discovery coordinates through TEMP_DIR by default. If
+            each character uses a separate --temp-dir, pass a shared
+            --active-session-dir=PATH so all characters coordinate through one
+            directory instead of isolated per-character ones.
+
+            Passing --active-session-dir=PATH also enables the active sessions
+            service for that launch, even if it isn't persistently enabled.
+            This is a per-launch opt-in only -- it writes nothing to disk, and
+            omitting the flag on a later launch reverts to the persisted
+            setting (disabled by default).
         TEXT
       end
 
@@ -198,10 +210,12 @@ module Lich
             --lib-dir=PATH
             --hosts-dir=PATH
             --hosts-file=PATH
+            --active-session-dir=PATH
 
           Examples:
             lich --script-dir=/my/scripts
             lich --data-dir=/my/data --temp-dir=/tmp/lich
+            lich --temp-dir=/tmp/lich-Mychar --active-session-dir=/tmp/lich-sessions
         TEXT
       end
 
