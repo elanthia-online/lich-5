@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 # encoding: US-ASCII
 
-######
+#######
 # Lich - https://github.com/elanthia-online/lich-5
 # Licensed under BSD 3-Clause License (see LICENSE file)
-######
+#######
 
 # process ARGV for constants before loading constants.rb: issue #304
 for arg in ARGV
@@ -67,6 +67,8 @@ require 'zlib'
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
 require File.join(LIB_DIR, 'common', 'front-end.rb')
+require File.join(LIB_DIR, 'common', 'frontend_locator.rb')
+require File.join(LIB_DIR, 'common', 'frontend_launcher.rb')
 require File.join(LIB_DIR, 'internal_api', 'active_sessions.rb')
 require File.join(LIB_DIR, 'api', 'active_sessions.rb')
 require File.join(LIB_DIR, 'update.rb')

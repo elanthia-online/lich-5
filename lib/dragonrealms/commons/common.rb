@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRC
@@ -317,41 +319,113 @@ module Lich
         list.strip.split(/(?:,|(?:, |\s)?and\s?)(?:\s?<pushBold\/>\s?)?(?=\s\ba\b|\s\ban\b|\s\bsome\b|\s\bthe\b)/i).reject(&:empty?)
       end
 
-      # Take a game formated list of boxes "a reinforced wooden strongbox and a plain ironwood crate"
-      # And return an array ["wooden strongbox", "ironwood crate"]
+      # Post-match box name rewrites (applied via gsub after a box is matched).
+      # "ironwood" -> "iron" because the game parser wants the shortened noun.
+      # Players extend this via the +custom_box_substitutions+ setting; see
+      # {box_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_BOX_SUBSTITUTIONS = [%w[ironwood iron]].freeze
+
+      # Take a game formatted list of boxes "a reinforced wooden strongbox and a
+      # plain ironwood crate" and return ["wooden strongbox", "iron crate"].
+      #
+      # The recognized wood and container words are {BOX_WOODS} and
+      # {BOX_CONTAINERS} merged with the player's +custom_box_woods+ /
+      # +custom_box_containers+ settings, so a player can teach Lich about a box
+      # material or container it does not yet know without a Lich release. The
+      # global +$box_regex+ (built from the same defaults) is left untouched for
+      # third-party scripts. Post-match rewrites come from
+      # {DEFAULT_BOX_SUBSTITUTIONS} merged with +custom_box_substitutions+.
+      #
+      # @param list [String] game-formatted box list (e.g. from rummage /B)
+      # @return [Array<String>] gettable box adjective+noun names
+      # @example
+      #   box_list_to_adj_and_noun('an ironwood crate') #=> ['iron crate']
+      # @see CustomSubstitutions.resolve
+      # @see #scroll_list_to_adj_and_noun
       def box_list_to_adj_and_noun(list)
+        woods = CustomSubstitutions.resolve(:custom_box_woods, BOX_WOODS, type: :names)
+        containers = CustomSubstitutions.resolve(:custom_box_containers, BOX_CONTAINERS, type: :names)
+        substitutions = CustomSubstitutions.resolve(:custom_box_substitutions, DEFAULT_BOX_SUBSTITUTIONS, type: :pairs)
+        box_regex = /((?:#{woods.map { |wood| Regexp.escape(wood) }.join('|')}) (?:#{containers.map { |container| Regexp.escape(container) }.join('|')}))/
         list.strip
-            .split($box_regex)
+            .split(box_regex)
             .reject(&:empty?)
-            .select { |item| item =~ $box_regex }
-            .map { |box| box.gsub('ironwood', 'iron') } # make all ironwood into iron because "the parser"
+            .select { |item| item =~ box_regex }
+            .map { |box| substitutions.reduce(box) { |current, (from, to)| current.gsub(from, to) } }
       end
 
+      # Item-specific scroll rewrites applied *before* {SCROLL_KEYWORD_COLLAPSE}.
+      # These full game descriptions contain keywords the collapse would
+      # otherwise mangle (e.g. "icy blue vellum scroll" -> "icy scroll", not
+      # "icy blue vellum"), or must be caught before the collapse can run.
+      # Order matters and is preserved. Players extend this list via the
+      # +custom_scroll_substitutions+ setting; see
+      # {scroll_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_PRE = [
+        ['large midnight-blue scale torn with symbols', 'midnight-blue scale'],
+        ['icy blue vellum scroll', 'icy scroll'],
+        ['green vellum scroll', 'green scroll'],
+        ['fetid antelope vellum', 'antelope vellum'],
+        ['papyrus roll', 'papyrus.roll'],
+        ['pallid red scroll', 'pallid scroll']
+      ].freeze
+
+      # Adjective-pair scroll rewrites applied *after* {SCROLL_KEYWORD_COLLAPSE},
+      # reducing already-collapsed forms (e.g. "stormy grey" -> "stormy"). Order
+      # matters and is preserved. Not player-extensible (these operate on the
+      # collapsed noun, not the raw description).
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_POST = [
+        ['crumpled paper', 'crumpled'],
+        ['pale ricepaper', 'pale'],
+        ['stormy grey', 'stormy'],
+        ['mossy green', 'mossy'],
+        ['dark purple', 'dark'],
+        ['vibrant red', 'vibrant'],
+        ['bright green', 'bright'],
+        ['icy blue', 'blue'],
+        ['pearl-white silk', 'silk'],
+        ['ghostly white', 'white'],
+        ['crinkled violet', 'crinkled'],
+        ['drawing paper', 'drawing']
+      ].freeze
+
+      # Structural collapse: reduce "<adj> <keyword> <flavor...>" to "<adj>
+      # <keyword>" by keeping the noun keyword and dropping trailing flavor.
+      # Sandwiched between the pre and post substitution passes.
+      #
+      # @return [Regexp]
+      SCROLL_KEYWORD_COLLAPSE = /\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/.freeze
+
+      # Converts a game rummage scroll list into gettable adjective+noun forms.
+      #
+      # Pipeline per entry: strip the leading article, strip "labeled with...",
+      # apply the pre-collapse literal substitutions ({DEFAULT_SCROLL_SUBSTITUTIONS_PRE}
+      # merged with the player's +custom_scroll_substitutions+), apply the
+      # {SCROLL_KEYWORD_COLLAPSE}, then apply the post-collapse substitutions
+      # ({DEFAULT_SCROLL_SUBSTITUTIONS_POST}).
+      #
+      # @param list [String] game-formatted scroll list (e.g. from rummage /SC)
+      # @return [Array<String>] gettable scroll names
+      # @example
+      #   scroll_list_to_adj_and_noun(' an icy blue parchment') #=> ['blue parchment']
+      # @see CustomSubstitutions.resolve
+      # @see #box_list_to_adj_and_noun
       def scroll_list_to_adj_and_noun(list)
-        list_to_array(list).map { |entry|
-          entry
-            .sub(/(an|some|a(?: piece of)?)\s/, '')
-            .sub(/\slabeled with.*/, '')
-            .sub(/icy blue vellum scroll/, 'icy scroll')
-            .sub(/green vellum scroll/, 'green scroll')
-            .sub(/fetid antelope vellum/, 'antelope vellum')
-            .sub(/papyrus roll/, 'papyrus.roll')
-            .sub(/pallid red scroll/, 'pallid scroll')
-            .sub(/\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/, ' \1')
-            .sub(/crumpled paper/, 'crumpled')
-            .sub(/pale ricepaper/, 'pale')
-            .sub(/stormy grey/, 'stormy')
-            .sub(/mossy green/, 'mossy')
-            .sub(/dark purple/, 'dark')
-            .sub(/vibrant red/, 'vibrant')
-            .sub(/bright green/, 'bright')
-            .sub(/icy blue/, 'blue')
-            .sub(/pearl-white silk/, 'silk')
-            .sub(/ghostly white/, 'white')
-            .sub(/crinkled violet/, 'crinkled')
-            .sub(/drawing paper/, 'drawing')
-            .strip
-        }
+        pre_substitutions = CustomSubstitutions.resolve(:custom_scroll_substitutions, DEFAULT_SCROLL_SUBSTITUTIONS_PRE, type: :pairs)
+        list_to_array(list).map do |entry|
+          without_article = entry
+                            .sub(/(an|some|a(?: piece of)?)\s/, '')
+                            .sub(/\slabeled with.*/, '')
+          with_pre = pre_substitutions.reduce(without_article) { |text, (from, to)| text.sub(from, to) }
+          collapsed = with_pre.sub(SCROLL_KEYWORD_COLLAPSE, ' \1')
+          DEFAULT_SCROLL_SUBSTITUTIONS_POST.reduce(collapsed) { |text, (from, to)| text.sub(from, to) }.strip
+        end
       end
 
       # Take a game formatted list "an arrow, silver coins and a deobar strongbox"
@@ -367,8 +441,25 @@ module Lich
         remove_flavor_text(long_name).strip.scan(/[a-z\-']+$/i).first
       end
 
+      # Strips descriptive flavor text ("... adorned with ...") from an item
+      # name, leaving the gettable noun phrase.
+      #
+      # Applies the built-in {FLAVOR_TEXT_PATTERN} first, then any player-defined
+      # +custom_flavor_text_patterns+ (regular expressions) for flavor the
+      # built-in pattern misses -- letting a player strip a new flavor phrasing
+      # without a Lich release. User patterns are compiled with a per-pattern
+      # timeout and validated/guarded by {CustomSubstitutions}; an invalid or
+      # runaway pattern is reported and skipped, never raising here.
+      #
+      # @param item [String] the item long name
+      # @return [String] the item name with flavor text removed
+      # @example
+      #   remove_flavor_text('a sword adorned with rubies of deep crimson') #=> 'a sword'
+      # @see CustomSubstitutions.resolve
+      # @see CustomSubstitutions.apply_regexes
       def remove_flavor_text(item)
-        item.sub(FLAVOR_TEXT_PATTERN, '')
+        custom_patterns = CustomSubstitutions.resolve(:custom_flavor_text_patterns, [], type: :regexes)
+        CustomSubstitutions.apply_regexes(item.sub(FLAVOR_TEXT_PATTERN, ''), custom_patterns)
       end
 
       # Items class. Name is the noun of the object. Leather/metal boolean. Is the item worn (defaults to true). Does it hinder lockpicking? (false)
@@ -880,6 +971,18 @@ module Lich
       def safe_pause_list
         return false unless $safe_pause_lock.try_lock
 
+        # Pausing is cooperative: a paused script is a live thread that keeps
+        # every mutex it holds (Ruby frees a mutex on thread death, not on
+        # pause). So a script that gets pause_script'd while holding
+        # $safe_pause_lock never releases it, and every peer spins forever on
+        # try_lock -> false. Make the lock-holder immune to pause for as long as
+        # it owns the lock, so this deadlock cannot form. Save the prior value
+        # (and the holder itself) so we restore exactly what was there for a
+        # caller that was already ignoring pauses, e.g. mid-travel.
+        @safe_pause_holder = Script.self
+        @safe_pause_prev_ignore_pause = @safe_pause_holder&.ignore_pause
+        @safe_pause_holder&.ignore_pause = true
+
         paused_script_list = []
         Script.running.find_all { |s| !s.paused? && !s.no_pause_all && s.name != Script.self.name }.each do |s|
           s.pause
@@ -898,6 +1001,11 @@ module Lich
           Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
           Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
         end
+        # Restore the holder's pre-lock pause immunity before releasing the lock,
+        # so we never leave a script permanently unpausable.
+        @safe_pause_holder&.ignore_pause = @safe_pause_prev_ignore_pause
+        @safe_pause_holder = nil
+        @safe_pause_prev_ignore_pause = nil
         $safe_pause_lock.unlock
       end
 

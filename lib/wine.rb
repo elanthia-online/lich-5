@@ -72,7 +72,7 @@ unless $wine_bin.nil?
             end
             lookin = result = false
             File.open(PREFIX + '/system.reg') { |f| f.readlines }.each { |line|
-              if line[0...subkey.length] == subkey
+              if line[0...subkey.length].casecmp?(subkey)
                 lookin = true
               elsif line =~ /^\[/
                 lookin = false

@@ -905,6 +905,68 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
+    describe 'status visibility while a refresh is open' do
+      it 'reports a staged-only object by its staged status rather than gone' do
+        described_class.begin_room_players
+        staged = described_class.new_pc('-31', 'dwarf', 'a dwarf', 'sitting')
+
+        expect(staged.status).to eq('sitting')
+      end
+
+      it 'reports nil, not gone, for a staged object with no status yet' do
+        described_class.begin_room_players
+        staged = described_class.new_pc('-31', 'dwarf', 'a dwarf', nil)
+
+        expect(staged.status).to be_nil
+      end
+
+      it 'keeps the published status visible and does not leak the staged value' do
+        # find_or_create dedupes on id|noun|name, so re-seeing the same pc during
+        # a refresh yields the *same instance* that is still published. A reader
+        # must continue to see the committed snapshot until commit.
+        described_class.new_pc('-30', 'elf', 'an elf', 'standing')
+        published = described_class.pcs.first
+
+        described_class.begin_room_players
+        staged = described_class.new_pc('-30', 'elf', 'an elf', nil)
+
+        expect(staged).to equal(published)
+        expect(published.status).to eq('standing')
+      end
+
+      it 'still reports gone for an object absent from every registry' do
+        described_class.begin_room_players
+        described_class.new_pc('-31', 'dwarf', 'a dwarf', 'sitting')
+
+        expect(described_class.new('-99', 'ghost', 'a ghost').status).to eq('gone')
+      end
+
+      it 'reports gone once a pc is dropped by a committed refresh' do
+        described_class.new_pc('-30', 'elf', 'an elf', 'standing')
+        departed = described_class.pcs.first
+
+        described_class.begin_room_players
+        described_class.commit_room_players
+
+        expect(departed.status).to eq('gone')
+      end
+
+      it 'reports gone once an abandoned refresh is discarded' do
+        described_class.begin_room_players
+        staged = described_class.new_pc('-31', 'dwarf', 'a dwarf', 'sitting')
+        described_class.discard_staged_refreshes
+
+        expect(staged.status).to eq('gone')
+      end
+
+      it 'exposes the gone sentinel frozen so it cannot be mutated in place' do
+        missing = described_class.new('-99', 'ghost', 'a ghost')
+
+        expect(missing.status).to be_frozen
+        expect { missing.status.concat(' away') }.to raise_error(FrozenError)
+      end
+    end
+
     describe 'room desc staging' do
       it 'keeps the previous snapshot visible until commit' do
         described_class.new_room_desc('40', 'statue', 'a statue')

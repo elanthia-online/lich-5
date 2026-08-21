@@ -27,6 +27,8 @@
 # @see DRC Core common module
 # @see EquipmentManager Higher-level gear management
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRCI
@@ -52,7 +54,21 @@ module Lich
       end
 
       ## How to add new trash receptacles https://github.com/elanthia-online/dr-scripts/wiki/Adding-new-trash-receptacles
+      # Default trash-receptacle nouns. Players extend this at runtime via the
+      # +custom_trash_storage+ setting; see {trash_storage} and
+      # {Lich::DragonRealms::CustomSubstitutions}.
       TRASH_STORAGE = %w[arms barrel basin basket bin birdbath bucket chamberpot gloop hole log puddle statue stump tangle tree turtle urn gelapod].freeze
+
+      # Recognized trash-receptacle nouns: the built-in {TRASH_STORAGE} defaults
+      # merged with the player's +custom_trash_storage+ additions. Lets a player
+      # teach {dispose_trash} about a receptacle their town has that Lich does
+      # not yet know, without a Lich release.
+      #
+      # @return [Array<String>] recognized trash-receptacle nouns
+      # @see CustomSubstitutions.resolve
+      def trash_storage
+        CustomSubstitutions.resolve(:custom_trash_storage, TRASH_STORAGE, type: :names)
+      end
 
       DROP_TRASH_SUCCESS_PATTERNS = [
         /^You drop/,
@@ -688,10 +704,11 @@ module Lich
           end
         end
 
+        recognized_trash = trash_storage
         trashcans = DRRoom.room_objs
                           .reject { |obj| obj =~ /azure \w+ tree/ }
                           .map { |long_name| DRC.get_noun(long_name) }
-                          .select { |obj| TRASH_STORAGE.include?(obj) }
+                          .select { |obj| recognized_trash.include?(obj) }
 
         trashcans.each do |trashcan|
           if trashcan == 'gloop'

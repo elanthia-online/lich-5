@@ -17,7 +17,7 @@ module Lich
                   :roundtime_end, :cast_roundtime_end, :last_pulse, :level, :next_level_value,
                   :next_level_text, :society_task, :stow_container_id, :name, :game, :in_stream,
                   :player_id, :prompt, :current_target_ids, :current_target_id, :room_window_disabled,
-                  :dialogs, :room_id, :previous_nav_rm, :concentration, :max_concentration,
+                  :dialogs, :room_id, :previous_nav_rm, :show_room_id, :concentration, :max_concentration,
                   :arrival_pcs, :room_player_hidden, :field_exp, :max_field_exp,
                   :ascension_exp, :exp, :until_next, :fashlonae, :lumnis, :rpa,
                   :room_climate, :room_terrain, :room_weather, :room_bonfire,
@@ -44,6 +44,7 @@ module Lich
         @obj_name = nil
         @obj_after_name = nil
         @pc = nil
+        @pc_status = nil
         @last_obj = nil
         @last_npc = nil
         @in_stream = false
@@ -149,6 +150,14 @@ module Lich
         # ShowRoomID-on subtitle from overwriting an authoritative nav UID in the
         # same arrival (see the streamWindow handler).
         @nav_uid_pending = false
+        # True when the game itself embedded the RealID marker in the room title
+        # this arrival (i.e. the DragonRealms ShowRoomID flag is ON), e.g. the
+        # subtitle " - [Room] (230008)" or the no-UID " - [Room] (**)". Distinct
+        # from a UID merely known via <nav>: it records whether the *game* chose
+        # to display it, so Lich's room-name/subtitle rewrite can preserve that
+        # choice instead of second-guessing the flag (see the DR streamWindow
+        # branch and Lich::DragonRealms::GameInstance#modify_room_display).
+        @show_room_id = false
 
         # Lich::Claim update
         @arrival_pcs = []
@@ -617,6 +626,11 @@ module Lich
                     @room_title = "[#{room[:roomtitle]}]"
                     @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid] && !@nav_uid_pending
                     @nav_uid_pending = false
+                    # Record whether the game displayed the RealID this arrival (a UID
+                    # marker present == ShowRoomID ON) so the outbound room-name/subtitle
+                    # rewrite can preserve that choice GS-style. A marker-less subtitle
+                    # (flag OFF) leaves the previous room's flag stale, so clear it here.
+                    @show_room_id = !room[:uid].nil?
                   end
                 else
                   @room_title = String.new
@@ -1082,9 +1096,14 @@ module Lich
               if @active_tags.include?('a')
                 if @obj_exist.to_s.start_with?('-')
                   @pc = GameObj.new_pc(@obj_exist, @obj_noun, "#{@player_title}#{text_string}", @player_status)
+                  # Track the status we just staged for this pc. The annotation
+                  # branch below appends to this instead of reading it back
+                  # through GameObj#status, which cannot see the in-flight value.
+                  @pc_status = @player_status
                   @arrival_pcs.push(@pc.noun) if (defined?(Lich::Claim) && Lich::Claim::Lock.owned?)
                 else
                   @pc = nil
+                  @pc_status = nil
                 end
                 @player_status = nil
                 @player_title = nil
@@ -1123,12 +1142,9 @@ module Lich
                   GameObj.commit_room_players
                 else
                   if @pc && ((text_string =~ /^ who (?:is|appears) ([\w\s]+)(?:,| and|\.|$)/) || (text_string =~ / \(([\w\s]+)\)(?: \(([\w\s]+)\))?/))
-                    if @pc.status
-                      @pc.status.concat " #{$1}"
-                    else
-                      @pc.status = $1
-                    end
-                    @pc.status.concat " #{$2}" if $2
+                    @pc_status = @pc_status ? "#{@pc_status} #{$1}" : $1
+                    @pc_status = "#{@pc_status} #{$2}" if $2
+                    @pc.status = @pc_status
                   end
                   if text_string =~ /(?:^Also here: |, )(?:a )?([a-z\s]+)?([\w\s\-!\?',]+)?$/
                     @player_status = ($1.strip.gsub('the body of', 'dead')) if $1

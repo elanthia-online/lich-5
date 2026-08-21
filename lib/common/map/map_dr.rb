@@ -13,7 +13,6 @@ module Lich
       @@loaded                   = false
       @@load_mutex               = Mutex.new
       @@list                   ||= []
-      @@tags                   ||= []
       @@current_room_mutex       = Mutex.new
       @@current_room_id        ||= -1
       @@current_room_count     ||= -1
@@ -27,9 +26,12 @@ module Lich
 
       attr_reader :id
       attr_accessor :title, :description, :paths, :location, :climate, :terrain,
-                    :wayto, :timeto, :image, :image_coords, :tags, :check_location,
+                    :wayto, :timeto, :image, :image_coords, :check_location,
                     :unique_loot, :uid, :room_objects,
                     :genie_id, :genie_zone, :genie_pos
+
+      # @return [TagList] mutation-aware list of this room's tags
+      attr_reader :tags
 
       def initialize(id, title, description, paths, uid = [], location = nil,
                      climate = nil, terrain = nil, wayto = {}, timeto = {},
@@ -48,13 +50,17 @@ module Lich
         @timeto = timeto
         @image = image
         @image_coords = image_coords
-        @tags = tags
+        @tags = TagList.new(tags, self.class)
         @check_location = check_location
         @unique_loot = unique_loot
         @genie_id = genie_id
         @genie_zone = genie_zone
         @genie_pos = genie_pos
         @@list[@id] = self
+        # Skipped during a bulk load: @@loaded is false throughout, load_json
+        # clears the cache when it finishes, and any tag query while unloaded
+        # goes through #list, which loads first. Saves one mutex per room.
+        self.class.reset_tag_index if @@loaded
       end
 
       def to_s
@@ -67,6 +73,25 @@ module Lich
 
       # Class method accessors
       class << self
+        # Accessors for the room-navigation state, matching GemStone, so the
+        # shared MapBase implementations can reach it without touching class
+        # variables directly.
+        def current_room_id
+          @@current_room_id
+        end
+
+        def current_room_id=(id)
+          @@current_room_id = id
+        end
+
+        def previous_room_id
+          @@previous_room_id
+        end
+
+        def previous_room_id=(id)
+          @@previous_room_id = id
+        end
+
         def loaded?
           @@loaded
         end
@@ -76,8 +101,15 @@ module Lich
           @@list
         end
 
+        # The backing array without triggering a load. Only for use inside the
+        # load path, where #list would re-enter the load mutex and deadlock.
+        def raw_list
+          @@list
+        end
+
         def list=(value)
           @@list = value
+          normalize_tag_lists(value)
         end
 
         def uids
@@ -85,7 +117,7 @@ module Lich
         end
 
         def clear_tags_cache
-          @@tags.clear
+          reset_tag_index
         end
 
         def mark_loaded
@@ -102,33 +134,8 @@ module Lich
         @@list.find { |r| r&.genie_zone == zone_id.to_s && r&.genie_id == node_id.to_s }
       end
 
-      def self.get_free_id
-        self.load unless @@loaded
-        @@list.compact.max_by(&:id).id + 1
-      end
-
-      def self.[](val)
-        self.load unless @@loaded
-        if val.is_a?(Integer) || val =~ /^[0-9]+$/
-          @@list[val.to_i]
-        elsif val =~ /^u(-?\d+)$/i
-          uid_request = ::Regexp.last_match(1).dup.to_i
-          @@list[(ids_from_uid(uid_request)[0]).to_i]
-        else
-          chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
-          chk = /#{Regexp.escape(val.strip)}/i
-          @@list.find { |room| room&.title&.find { |title| title =~ chk } } ||
-            @@list.find { |room| room&.description&.find { |desc| desc =~ chk } } ||
-            @@list.find { |room| room&.description&.find { |desc| desc =~ chkre } }
-        end
-      end
-
       def self.previous
         @@list[@@previous_room_id]
-      end
-
-      def self.previous_uid
-        XMLData.previous_nav_rm
       end
 
       def self.current
@@ -145,22 +152,6 @@ module Lich
           return set_current(id)
         end
         match_no_uid
-      end
-
-      def self.match_no_uid
-        if (script = Script.current)
-          set_current(match_current(script))
-        else
-          set_fuzzy(match_fuzzy)
-        end
-      end
-
-      def self.set_fuzzy(id)
-        @@previous_room_id = @@current_room_id if !id.nil? && id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
       end
 
       # Pattern identifying a room whose disambiguation depends on a manual
@@ -239,7 +230,9 @@ module Lich
               @@current_room_count = XMLData.room_count
               foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
               room = @@list.find do |r|
-                r.title.include?(XMLData.room_title) &&
+                # Skip nil holes without relying on Lich's NilClass patch.
+                r &&
+                  r.title.include?(XMLData.room_title) &&
                   r.description.include?(XMLData.room_description.strip) &&
                   (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
               end
@@ -251,7 +244,9 @@ module Lich
                 redo unless @@current_room_count == XMLData.room_count
                 desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
                 room = @@list.find do |r|
-                  r.title.include?(XMLData.room_title) &&
+                  # Skip nil holes without relying on Lich's NilClass patch.
+                  r &&
+                    r.title.include?(XMLData.room_title) &&
                     (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
                     (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
                 end
@@ -287,7 +282,9 @@ module Lich
           loop do
             foggy_exits = XMLData.room_exits_string =~ /^Obvious (?:exits|paths): obscured by a thick fog$/
             room = @@list.find do |r|
-              r.title.include?(XMLData.room_title) &&
+              # Skip nil holes without relying on Lich's NilClass patch.
+              r &&
+                r.title.include?(XMLData.room_title) &&
                 r.description.include?(XMLData.room_description.strip) &&
                 (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip))
             end
@@ -300,7 +297,9 @@ module Lich
               redo unless @@fuzzy_room_count == XMLData.room_count
               desc_regex = /#{Regexp.escape(XMLData.room_description.strip.sub(/\.+$/, '')).gsub(/\\\.(?:\\\.\\\.)?/, '|')}/
               room = @@list.find do |r|
-                r.title.include?(XMLData.room_title) &&
+                # Skip nil holes without relying on Lich's NilClass patch.
+                r &&
+                  r.title.include?(XMLData.room_title) &&
                   (foggy_exits || r.paths.include?(XMLData.room_exits_string.strip)) &&
                   (XMLData.room_window_disabled || r.description.any? { |desc| desc =~ desc_regex })
               end
@@ -369,25 +368,12 @@ module Lich
         set_current(id)
       end
 
-      def self.set_current(id)
-        @@previous_room_id = @@current_room_id if id != @@current_room_id
-        @@current_room_id = id
-        return nil if id.nil?
-
-        @@list[id]
-      end
-
-      def self.match_multi_ids(ids)
-        matches = ids.find_all { |s| @@list[@@current_room_id].wayto.keys.include?(s.to_s) }
-        return matches[0] if matches.size == 1
-
-        nil
-      end
-
       def self.load_uids
         self.load unless @@loaded
         @@uids.clear
-        @@list.each do |r|
+        # compact rather than relying on Lich's NilClass patch to make r.uid on a
+        # hole return nil; a sparse map should not need that to load.
+        @@list.compact.each do |r|
           r.uid.each do |u|
             if @@uids[u].nil?
               @@uids[u] = [r.id]
@@ -398,12 +384,6 @@ module Lich
         end
       end
 
-      def self.tags
-        self.load unless @@loaded
-        @@tags = @@list.compact.each_with_object({}) { |r, h| r.tags.each { |t| h[t] = nil unless h.key?(t) } }.keys if @@tags.empty?
-        @@tags.dup
-      end
-
       def self.ids_from_uid(n)
         @@uids[n].nil? || n.zero? ? [] : @@uids[n]
       end
@@ -411,246 +391,29 @@ module Lich
       def self.clear
         @@load_mutex.synchronize do
           @@list.clear
-          @@tags.clear
+          clear_tags_cache
           @@loaded = false
           GC.start
         end
         true
       end
 
-      def self.load(filename = nil)
-        file_list = if filename.nil?
-                      Dir.entries(File.join(DATA_DIR, XMLData.game))
-                         .find_all { |fn| fn =~ /^map-[0-9]+\.(?:dat|xml|json)$/i }
-                         .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                         .sort
-                         .reverse
-                    else
-                      [filename]
-                    end
-
-        if file_list.empty?
-          respond '--- Lich: error: no map database found'
-          return false
-        end
-
-        while (filename = file_list.shift)
-          if filename =~ /\.json$/i
-            return true if load_json(filename)
-          elsif filename =~ /\.xml$/
-            return true if load_xml(filename)
-          elsif load_dat(filename)
-            return true
-          end
-        end
-        false
-      end
-
-      def self.load_json(filename = nil)
-        @@load_mutex.synchronize do
-          return true if @@loaded
-
-          file_list = if filename
-                        [filename]
-                      else
-                        Dir.entries(File.join(DATA_DIR, XMLData.game))
-                           .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
-                           .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                           .sort
-                           .reverse
-                      end
-
-          if file_list.empty?
-            respond '--- Lich: error: no map database found'
-            return false
-          end
-
-          while (filename = file_list.shift)
-            next unless File.exist?(filename)
-
-            File.open(filename) do |f|
-              JSON.parse(f.read).each do |room|
-                room['wayto'].keys.each do |k|
-                  if room['wayto'][k][0..2] == ';e '
-                    room['wayto'][k] = StringProc.new(room['wayto'][k][3..])
-                  end
-                end
-                room['timeto'].keys.each do |k|
-                  if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
-                    room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
-                  end
-                end
-                room['tags'] ||= []
-                room['uid'] ||= []
-                new(
-                  room['id'], room['title'], room['description'], room['paths'],
-                  room['uid'], room['location'], room['climate'], room['terrain'],
-                  room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                  room['tags'], room['check_location'], room['unique_loot'],
-                  nil, # _room_objects
-                  room['genie_id'], room['genie_zone'], room['genie_pos']
-                )
-              end
-            end
-            @@tags.clear
-            respond "--- Map loaded #{filename}"
-            @@loaded = true
-            load_uids
-            return true
-          end
-        end
-      end
-
-      # @deprecated Use load_json instead. XML format is deprecated and will be removed in a future version.
-      def self.load_xml(filename = File.join(DATA_DIR, XMLData.game, 'map.xml'))
-        respond '--- WARNING: Map.load_xml is deprecated. Use Map.load_json instead.'
-        @@load_mutex.synchronize do
-          return true if @@loaded
-
-          unless File.exist?(filename)
-            raise Exception.exception('MapDatabaseError'), "Fatal error: file `#{filename}' does not exist!"
-          end
-
-          missing_end = false
-          current_tag = nil
-          current_attributes = nil
-          room = nil
-          buffer = String.new
-          unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
-
-          tag_start = proc do |element, attributes|
-            current_tag = element
-            current_attributes = attributes
-            if element == 'room'
-              room = {}
-              room['id'] = attributes['id'].to_i
-              room['location'] = attributes['location']
-              room['climate'] = attributes['climate']
-              room['terrain'] = attributes['terrain']
-              room['wayto'] = {}
-              room['timeto'] = {}
-              room['title'] = []
-              room['description'] = []
-              room['paths'] = []
-              room['tags'] = []
-              room['unique_loot'] = []
-              room['uid'] = []
-              room['room_objects'] = []
-            elsif element =~ /^(?:image|tsoran)$/ && attributes['name'] && attributes['x'] && attributes['y'] && attributes['size']
-              room['image'] = attributes['name']
-              room['image_coords'] = [
-                (attributes['x'].to_i - (attributes['size'] / 2.0).round),
-                (attributes['y'].to_i - (attributes['size'] / 2.0).round),
-                (attributes['x'].to_i + (attributes['size'] / 2.0).round),
-                (attributes['y'].to_i + (attributes['size'] / 2.0).round)
-              ]
-            elsif element == 'image' && attributes['name'] && attributes['coords'] && attributes['coords'] =~ /[0-9]+,[0-9]+,[0-9]+,[0-9]+/
-              room['image'] = attributes['name']
-              room['image_coords'] = attributes['coords'].split(',').collect(&:to_i)
-            elsif element == 'map'
-              missing_end = true
-            end
-          end
-
-          text = proc do |text_string|
-            if current_tag == 'tag'
-              room['tags'].push(text_string)
-            elsif current_tag =~ /^(?:title|description|paths|unique_loot|tag|room_objects)$/
-              room[current_tag].push(text_string)
-            elsif current_tag =~ /^(?:uid)$/
-              room[current_tag].push(text_string.to_i)
-            elsif current_tag == 'exit' && current_attributes['target']
-              room['wayto'][current_attributes['target']] = if current_attributes['type'].downcase == 'string'
-                                                              text_string
-                                                            else
-                                                              StringProc.new(text_string)
-                                                            end
-              room['timeto'][current_attributes['target']] = if current_attributes['cost'] =~ /^[0-9.]+$/
-                                                               current_attributes['cost'].to_f
-                                                             elsif current_attributes['cost'].length.positive?
-                                                               StringProc.new(current_attributes['cost'])
-                                                             else
-                                                               0.2
-                                                             end
-            end
-          end
-
-          tag_end = proc do |element|
-            if element == 'room'
-              room['unique_loot'] = nil if room['unique_loot'].empty?
-              room['room_objects'] = nil if room['room_objects'].empty?
-              new(
-                room['id'], room['title'], room['description'], room['paths'],
-                room['uid'], room['location'], room['climate'], room['terrain'],
-                room['wayto'], room['timeto'], room['image'], room['image_coords'],
-                room['tags'], room['check_location'], room['unique_loot'], room['room_objects']
-              )
-            elsif element == 'map'
-              missing_end = false
-            end
-            current_tag = nil
-          end
-
-          begin
-            File.open(filename) do |file|
-              while (line = file.gets)
-                buffer.concat(line)
-                while (str = buffer.slice!(/^<([^>]+)><\/\1>|^[^<]+(?=<)|^<[^<]+>/))
-                  if str[0, 1] == '<'
-                    if str[1, 1] == '/'
-                      element = %r{^</([^\s>/]+)}.match(str).captures.first
-                      tag_end.call(element)
-                    elsif str =~ %r{^<([^>]+)></\1>}
-                      element = ::Regexp.last_match(1)
-                      tag_start.call(element)
-                      text.call('')
-                      tag_end.call(element)
-                    else
-                      element = %r{^<([^\s>/]+)}.match(str).captures.first
-                      attributes = {}
-                      str.scan(/([A-z][A-z0-9_-]*)=(["'])(.*?)\2/).each do |attr|
-                        attributes[attr[0]] = attr[2].gsub(/&(#{unescape.keys.join('|')});/) { unescape[::Regexp.last_match(1)] }
-                      end
-                      tag_start.call(element, attributes)
-                      tag_end.call(element) if str[-2, 1] == '/'
-                    end
-                  else
-                    text.call(str.gsub(/&(#{unescape.keys.join('|')});/) { unescape[::Regexp.last_match(1)] })
-                  end
-                end
-              end
-            end
-
-            if missing_end
-              respond "--- Lich: error: failed to load #{filename}: unexpected end of file"
-              return false
-            end
-
-            @@tags.clear
-            load_uids
-            @@loaded = true
-            true
-          rescue StandardError => e
-            respond "--- Lich: error: failed to load #{filename}: #{e}"
-            false
-          end
-        end
-      end
-
-      # @deprecated Use save_json instead. XML format is deprecated and will be removed in a future version.
-      def self.save_xml(_filename = nil)
-        respond '--- WARNING: Map.save_xml is deprecated. Use Map.save_json instead.'
+      # Construct a room from a parsed JSON hash
+      # @param room [Hash]
+      # @return [Map] the registered room
+      def self.room_from_json(room)
+        new(
+          room['id'], room['title'], room['description'], room['paths'],
+          room['uid'], room['location'], room['climate'], room['terrain'],
+          room['wayto'], room['timeto'], room['image'], room['image_coords'],
+          room['tags'], room['check_location'], room['unique_loot'],
+          nil, # _room_objects
+          room['genie_id'], room['genie_zone'], room['genie_pos']
+        )
       end
     end
 
     class Room < Map
-      def self.method_missing(*args)
-        super
-      end
-
-      def self.respond_to_missing?(*args)
-        super
-      end
     end
   end
 end
