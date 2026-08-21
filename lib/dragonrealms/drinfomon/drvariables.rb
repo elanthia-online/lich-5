@@ -344,7 +344,7 @@ module Lich
     VOL_MAP = {
       'colossal' => 200,
       'gigantic' => 100,
-      'immense' => 50,
+      'immense'  => 50,
       'enormous' => 20,
       'massive'  => 10,
       'huge'     => 5,
