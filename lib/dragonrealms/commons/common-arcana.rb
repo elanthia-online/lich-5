@@ -327,15 +327,76 @@ module Lich
         return false
       end
 
-      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep = nil, retries: PREPARE_MAX_RETRIES)
+      # Compiles a single player-supplied message into a case-insensitive Regexp
+      # for use as a bput pattern, matching how bput treats the built-in string
+      # patterns; leading/trailing whitespace is trimmed so an accidental space in
+      # yaml does not silently break matching. Returns nil -- so the entry is
+      # dropped rather than applied -- when the message is not a String, is
+      # blank/whitespace-only (an empty pattern compiles to //, matching every
+      # line), or is not a valid regular expression (which would otherwise raise
+      # inside bput). Shared guard for every custom_*_message key.
+      #
+      # @param message [String, nil] the player-supplied message
+      # @return [Regexp, nil] a case-insensitive pattern, or nil if not a usable string
+      def custom_message_pattern(message)
+        return nil unless message.is_a?(String)
+
+        stripped = message.strip
+        return nil if stripped.empty?
+
+        Regexp.new(stripped, Regexp::IGNORECASE)
+      rescue RegexpError
+        nil
+      end
+
+      # Appends the player's validated custom message patterns to a built-in
+      # message list. Each custom message is compiled by {#custom_message_pattern}
+      # and silently dropped if blank or invalid. (Duplicate detection is left to
+      # config validation, e.g. validate.lic; a duplicate here is merely redundant.)
+      #
+      # @param base_messages [Array<String>] built-in messages from base-spells.yaml
+      # @param custom_messages [Array<String, nil>] player messages to validate and append
+      # @return [Array<String, Regexp>] the built-in messages followed by the valid custom patterns
+      def with_custom_messages(base_messages, *custom_messages)
+        base_messages + custom_messages.filter_map { |message| custom_message_pattern(message) }
+      end
+
+      # The bput patterns for invoking: the built-in invoke messages plus the
+      # player's custom_invoke_message additions -- the per-character one (their
+      # ritual focus, from settings) and, for a runestone spell, the per-spell one
+      # from the spell's data.
+      #
+      # @param spell_custom_invoke_message [String, nil] a spell's custom_invoke_message (runestone spells)
+      # @return [Array<String, Regexp>] built-in invoke messages plus the valid custom patterns
+      def invoke_messages(spell_custom_invoke_message = nil)
+        with_custom_messages(get_data('spells').invoke_messages, get_settings.custom_invoke_message, spell_custom_invoke_message)
+      end
+
+      # Prepares a spell -- via a normal prep, or by invoking a runestone when
+      # +runestone_name+ is given -- retrying the transient "desire slips away"
+      # case and bailing on hard failures.
+      #
+      # @param abbrev [String, nil] the spell's prep abbreviation; returns false if nil
+      # @param mana [Integer] mana to prepare with
+      # @param symbiosis [Boolean] prepare a symbiosis first, releasing it on failure
+      # @param command [String] the prep command ('prepare', 'prep', 'incant', ...)
+      # @param tattoo_tm [Boolean] target after preparing (tattoo TM)
+      # @param runestone_name [String, nil] a runestone to invoke instead of a normal prep
+      # @param runestone_tm [Boolean] target after invoking the runestone
+      # @param custom_prep_message [String, nil] a per-spell prep message to also accept (see {#with_custom_messages})
+      # @param custom_invoke_message [String, nil] a per-spell invoke message to also accept when preparing via a runestone
+      # @param custom_spell_prep [String, nil] the global prep-message fallback (the custom_spell_prep setting); validated independently of custom_prep_message, so a blank/invalid per-spell value never suppresses a valid global one
+      # @param retries [Integer] remaining retries for the transient "slips away" case
+      # @return [String, false] the matched prep message, or false on failure
+      def prepare?(abbrev, mana, symbiosis = false, command = 'prepare', tattoo_tm = false, runestone_name = nil, runestone_tm = false, custom_prep_message = nil, custom_invoke_message: nil, custom_spell_prep: nil, retries: PREPARE_MAX_RETRIES)
         return false unless abbrev
-        spell_prep_messages = !custom_prep ? get_data('spells').prep_messages : (get_data('spells').prep_messages + [custom_prep])
+        spell_prep_messages = with_custom_messages(get_data('spells').prep_messages, custom_prep_message, custom_spell_prep)
 
         DRC.bput('prepare symbiosis', 'You recall the exact details of the', 'But you\'ve already prepared', 'Please don\'t do that here') if symbiosis
         if runestone_name.nil?
           match = DRC.bput("#{command} #{abbrev} #{mana}", spell_prep_messages)
         else
-          match = DRC.bput("#{command} my #{runestone_name}", get_data('spells').invoke_messages)
+          match = DRC.bput("#{command} my #{runestone_name}", invoke_messages(custom_invoke_message))
         end
         case match
         when 'Your desire to prepare this offensive spell suddenly slips away'
@@ -344,7 +405,7 @@ module Lich
             return false
           end
           pause 1
-          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep, retries: retries - 1)
+          return prepare?(abbrev, mana, symbiosis, command, tattoo_tm, runestone_name, runestone_tm, custom_prep_message, custom_invoke_message: custom_invoke_message, custom_spell_prep: custom_spell_prep, retries: retries - 1)
         when 'Something in the area interferes with your spell preparations', 'You shouldn\'t disrupt the area right now', 'You have no idea how to cast that spell', 'You have yet to receive any training in the magical arts', 'Please don\'t do that here', 'You cannot use the tattoo while maintaining the effort to stay hidden'
           DRC.bput('release symbiosis', 'You release the', 'But you haven\'t') if symbiosis
           return false
@@ -387,7 +448,7 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], settings['custom_spell_prep'])
+        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
 
         prepare_time = Time.now
         find_focus(data['focus'], data['worn_focus'], data['tied_focus'], data['sheathed_focus'])
@@ -402,7 +463,7 @@ module Lich
           waitcastrt?
         end
 
-        return unless cast?(data['cast'], data['symbiosis'], data['before'], data['after'])
+        return unless cast?(data['cast'], data['symbiosis'], data['before'], data['after'], data['custom_cast_message'])
 
         DRC.retreat(settings.ignored_npcs) unless data['skip_retreat']
       end
@@ -439,7 +500,18 @@ module Lich
         @backfired_status || false
       end
 
-      def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], retries: CAST_MAX_RETRIES)
+      # Casts the prepared spell, inferring success from the absence of a failure
+      # flag (see the Flags below), and handling the WM barrage fallback and the
+      # cyclic-too-recent / full-preparation retry cases.
+      #
+      # @param cast_command [String] the cast command ('cast', 'cast at ...', 'incant ...', 'barrage ...')
+      # @param symbiosis [Boolean] whether a symbiosis was prepared (released on failure)
+      # @param before [Array<Hash>] actions ({'message', 'matches'}) to bput before casting
+      # @param after [Array<Hash>] actions to bput after casting
+      # @param custom_cast_message [String, nil] a per-spell cast message to also accept (see {#with_custom_messages})
+      # @param retries [Integer] remaining retries for barrage-fallback / cyclic-too-recent / full-prep
+      # @return [Boolean] true if the spell cast without a failure flag being set
+      def cast?(cast_command = 'cast', symbiosis = false, before = [], after = [], custom_cast_message = nil, retries: CAST_MAX_RETRIES)
         before.each { |action| DRC.bput(action['message'], action['matches']) }
 
         Flags.add('unknown-command', "Please rephrase that command")
@@ -449,7 +521,8 @@ module Lich
         Flags.add('spell-full-prep', /^This pattern may only be cast with full preparation/)
         Flags.add('spell-backfired', /^Your spell .*backfires/)
 
-        case DRC.bput(cast_command || 'cast', get_data('spells').cast_messages)
+        cast_messages = with_custom_messages(get_data('spells').cast_messages, custom_cast_message)
+        case DRC.bput(cast_command || 'cast', cast_messages)
         when /^Your target pattern dissipates/, /^You can't cast that at yourself/, /^You need to specify a body part to consume/, /^There is nothing else to face/
           DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell")
           DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
@@ -460,7 +533,7 @@ module Lich
 
         # Warrior Mage failed to use (or doesn't know) barrage ability. Do regular cast instead.
         if cast_command =~ /\b(barrage)\b/i && (Flags['unknown-command'] || Flags['barrage-fail'])
-          return cast?('cast', symbiosis, [], after, retries: retries - 1) if retries > 0
+          return cast?('cast', symbiosis, [], after, custom_cast_message, retries: retries - 1) if retries > 0
 
           Lich::Messaging.msg("bold", "DRCA: cast? barrage fallback exhausted retries - giving up")
           return false
@@ -473,7 +546,7 @@ module Lich
           end
           pause 1
           Flags.delete('spell-full-prep')
-          return cast?(cast_command, symbiosis, [], after, retries: retries - 1)
+          return cast?(cast_command, symbiosis, [], after, custom_cast_message, retries: retries - 1)
         end
 
         after.each { |action| DRC.bput(action['message'], action['matches']) }
@@ -597,7 +670,7 @@ module Lich
       def invoke(cambrinth, dedicated_camb_use, invoke_amount)
         return unless cambrinth
 
-        result = DRC.bput("invoke my #{cambrinth} #{invoke_amount} #{dedicated_camb_use}".strip, get_data('spells').invoke_messages, 'Invoke what?')
+        result = DRC.bput("invoke my #{cambrinth} #{invoke_amount} #{dedicated_camb_use}".strip, invoke_messages, 'Invoke what?')
         pause
         waitrt?
         case result
@@ -803,7 +876,7 @@ module Lich
         DRC.bput('release spell', 'You let your concentration lapse', "You aren't preparing a spell") unless checkprep == 'None'
         DRC.bput('release mana', 'You release all', "You aren't harnessing any mana")
 
-        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], settings['custom_spell_prep'])
+        return unless prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
 
         DRCI.put_away_item?(data['runestone_name'], settings.runestone_storage) if DRCI.in_hands?(data['runestone_name'])
         prepare_time = Time.now
@@ -824,7 +897,7 @@ module Lich
         end
 
         cast_lifecycle_lambda&.call('pre-cast', data, settings)
-        spell_cast = cast?(data['cast'], data['symbiosis'], data['before'], data['after'])
+        spell_cast = cast?(data['cast'], data['symbiosis'], data['before'], data['after'], data['custom_cast_message'])
         cast_lifecycle_lambda&.call('post-cast', data, settings)
 
         spell_cast
@@ -928,7 +1001,7 @@ module Lich
           charge_cambrinth_items(data, settings)
         end
 
-        cast?(data['cast'], data['symbiosis'], data['before'], data['after'])
+        cast?(data['cast'], data['symbiosis'], data['before'], data['after'], data['custom_cast_message'])
       end
 
       def crafting_prepare_spell(data, settings)
@@ -946,7 +1019,7 @@ module Lich
         command = data['prep'] if data['prep']
         command = data['prep_type'] if data['prep_type']
 
-        prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], settings['custom_spell_prep'])
+        prepare?(data['abbrev'], data['mana'], data['symbiosis'], command, data['tattoo_tm'], data['runestone_name'], data['runestone_tm'], data['custom_prep_message'], custom_invoke_message: data['custom_invoke_message'], custom_spell_prep: settings['custom_spell_prep'])
       end
 
       def crafting_magic_routine(settings)
