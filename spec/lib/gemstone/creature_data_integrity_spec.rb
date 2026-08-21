@@ -22,7 +22,7 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
     %i[
       schema_version name noun url picture level family type undead
       has_blood has_bones muggable boss otherclass bcs max_hp speed height
-      size areas attack_attributes defense_attributes special_other
+      size areas spawns attack_attributes defense_attributes special_other
       abilities alchemy abilities_misc treasure messaging
     ]
   end
@@ -66,6 +66,32 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
 
       extra = data.keys - known_top_level_keys
       offenders[File.basename(path)] = extra unless extra.empty?
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'spawns blocks are well-formed: Integer zone/count, uid_ranges of ordered [lo, hi] pairs' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      spawns = data[:spawns]
+      next if spawns.nil?
+
+      unless spawns.is_a?(Array)
+        offenders << "#{File.basename(path)}: spawns is #{spawns.class}"
+        next
+      end
+      spawns.each do |s|
+        ok = s.is_a?(Hash) &&
+             s[:zone].is_a?(Integer) &&
+             s[:count].is_a?(Integer) && s[:count].positive? &&
+             s[:uid_ranges].is_a?(Array) &&
+             s[:uid_ranges].all? { |r| r.is_a?(Array) && r.size == 2 && r.all?(Integer) && r[0] <= r[1] }
+        offenders << "#{File.basename(path)}: #{s.inspect[0, 80]}" unless ok
+      end
     end
 
     expect(offenders).to be_empty
