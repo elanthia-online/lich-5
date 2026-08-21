@@ -38,6 +38,13 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 18, count: 3, uid_ranges: [[18048, 18058], [18060, 18061], [18065, 18068]] },
+    { zone: 2102, count: 1, uid_ranges: [[2102008, 2102020]] },
+    { zone: 2162, count: 2, uid_ranges: [[2162001, 2162015]] },
+    { zone: 4202, count: 1, uid_ranges: [[4202141, 4202156]] },
+    { zone: 14008, count: 2, uid_ranges: [[14008025, 14008051]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {

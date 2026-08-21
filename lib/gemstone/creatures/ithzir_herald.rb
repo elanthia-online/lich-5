@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/ithzir_herald",
   picture: "",
-  level: 93,
+  level: 92,
   family: "Ithzir",
   type: "Biped",
   undead: false,
@@ -26,6 +26,9 @@
       name: "Old Ta'Faendryl",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 17004, count: 6, uid_ranges: [[17004001, 17004028], [17004031, 17004079], [17004160, 17004168], [17004180, 17004187], [17004190, 17004195]] }
   ],
   attack_attributes: {
     physical_attacks: [

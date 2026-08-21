@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/centaur_ranger",
   picture: "",
-  level: 23,
+  level: 25,
   family: "Centaur",
   type: "Hybrid",
   undead: false,
@@ -25,6 +25,9 @@
       name: "Rambling Meadows",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 14006, count: 1, uid_ranges: [[14006041, 14006046], [14006048, 14006060]] }
   ],
   attack_attributes: {
     physical_attacks: [

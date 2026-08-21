@@ -17,6 +17,9 @@
   speed: nil,
   height: 25,
   size: "huge",
+  spawns: [
+    { zone: 7503, count: 2, uid_ranges: [[7503101, 7503122], [7503126, 7503146]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {
