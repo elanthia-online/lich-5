@@ -41,7 +41,9 @@
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      { name: "poisonous glob of phlegm" }
+    ],
     special_abilities: [
       {
         name: "Poison spit"
