@@ -803,10 +803,13 @@ end
 def wait_until(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or yield
     respond(announce)
   end
-  until yield
+  loop do
+    script&.wait_while_paused!
+    break if yield
     sleep 0.25
   end
   Thread.current.priority = priosave
@@ -815,10 +818,13 @@ end
 def wait_while(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or !yield
     respond(announce)
   end
-  while yield
+  loop do
+    script&.wait_while_paused!
+    break unless yield
     sleep 0.25
   end
   Thread.current.priority = priosave

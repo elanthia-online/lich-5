@@ -1019,18 +1019,26 @@ module Lich
         script
       end
 
-      def Script.current
+      # Resolves the script bound to the current thread, without waiting out
+      # any pause. Used by Script.current and by other checkpoints that need
+      # to know "who's calling" before gating on that caller's pause state.
+      #
+      # @return [Script, nil] the script bound to Thread.current, or nil
+      def Script.__resolve_current
         script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
         script ||= __running_snapshot.find { |candidate| candidate.has_thread?(Thread.current) }
-        if script
-          sleep 0.2 while script.paused? and not script.ignore_pause
-          script
-        else
-          nil
-        end
+        script
+      end
+      private_class_method :__resolve_current
+
+      def Script.current
+        script = __resolve_current
+        script&.wait_while_paused!
+        script
       end
 
       def Script.start(*args)
+        __resolve_current&.wait_while_paused!
         @@elevated_script_start.call(args, nil)
       end
 
@@ -1312,6 +1320,7 @@ module Lich
       private_class_method :__prune_library_waits_locked
 
       def Script.running?(name)
+        __resolve_current&.wait_while_paused!
         __running_snapshot.any? { |i| (i.name =~ /^#{name}$/i) }
       end
 
@@ -1356,6 +1365,8 @@ module Lich
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
 
+        __resolve_current&.wait_while_paused!
+
         running = __running_snapshot
         if (s = (running.find { |i| i.name == name }) || (running.find { |i| i.name =~ /^#{name}$/i }))
           s.killed_externally = true
@@ -1376,6 +1387,8 @@ module Lich
         unless VALID_KILL_CONTEXTS.include?(context)
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
+
+        __resolve_current&.wait_while_paused!
 
         scripts = force ? Script.list : Script.running.reject(&:no_kill_all)
         scripts.each { |script| script.kill(context: context) }
@@ -2739,6 +2752,16 @@ module Lich
 
       def paused?
         @paused
+      end
+
+      # Blocks the calling thread until this script is no longer paused (or
+      # is exempt via ignore_pause). Extracted so every pause checkpoint --
+      # Script.current and any other blocking/mutating call site -- shares
+      # one implementation instead of inlining the sleep loop.
+      #
+      # @return [void]
+      def wait_while_paused!
+        sleep 0.2 while paused? and not ignore_pause
       end
 
       def get_next_label
