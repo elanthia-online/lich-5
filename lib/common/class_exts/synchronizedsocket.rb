@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../wire_encoding'
+
 module Lich
   module Common
     # Thread-safe socket wrapper with write-side resilience.
@@ -198,11 +200,24 @@ module Lich
             @mutex.synchronize do
               return unless alive?
 
+              # Single choke point for every write this class makes,
+              # regardless of which public method (write/puts/
+              # puts_main_stream) queued it. This delegate is always a
+              # frontend-facing socket (Wizard, Stormfront, Wrayth, Saga,
+              # or --pipe) -- see the class comment -- so it always
+              # expects Windows-1252 wire bytes, not whatever encoding a
+              # Ruby string happened to carry. Encoding here, once,
+              # instead of at every call site (respond, _respond,
+              # send_to_client, detachable_client_send_init, and any
+              # future caller) is what actually closes this class of bug
+              # for good rather than one call site at a time.
+              wire_args = args.map { |arg| arg.is_a?(String) ? Lich::Common::WireEncoding.encode(arg) : arg }
+
               case kind
               when :puts
-                @delegate.puts(*args, &block)
+                @delegate.puts(*wire_args, &block)
               when :write
-                @delegate.write(*args, &block)
+                @delegate.write(*wire_args, &block)
               when :stop
                 return
               end

@@ -68,6 +68,44 @@ RSpec.describe Lich::Common::WireEncoding do
     end
   end
 
+  describe 'Wizard marker code points' do
+    # Regression coverage for a real bug: Wizard's legacy binary protocol
+    # markers used to be spliced into strings as raw ASCII-8BIT bytes
+    # (lib/main/main.rb's $link_highlight_start etc., before this fix).
+    # Combining that with real server text broke two ways depending on
+    # the text: raised Encoding::CompatibilityError for non-ASCII text,
+    # or silently mangled the marker byte to "?" for ASCII-only text.
+    # WIZARD_LINK_START etc. are Private Use Area code points precisely
+    # so this combination is always just... valid UTF-8, no special
+    # casing needed at the splice site.
+
+    it 'does not raise when a marker is combined with real non-ASCII text (regression: previously Encoding::CompatibilityError)' do
+      combined = "#{described_class::WIZARD_SPEECH_START}chest\u2019s words#{described_class::WIZARD_SPEECH_END}" # rubocop:disable Custom/AsciiOnlySource
+      expect { described_class.encode(combined) }.not_to raise_error
+    end
+
+    it 'encodes a marker plus non-ASCII text to the correct wire bytes, both marker and text intact' do
+      combined = "#{described_class::WIZARD_SPEECH_START}chest\u2019s words#{described_class::WIZARD_SPEECH_END}" # rubocop:disable Custom/AsciiOnlySource
+      # \x8A = speech start marker byte, \x92 = correctly-transcoded curly
+      # apostrophe, \xA0 = speech end marker byte.
+      expect(described_class.encode(combined)).to eq("\x8Achest\x92s words\xA0".b) # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'preserves the marker byte for ASCII-only text (regression: previously silently became "?")' do
+      combined = "#{described_class::WIZARD_SPEECH_START}hello there#{described_class::WIZARD_SPEECH_END}"
+      result = described_class.encode(combined)
+      expect(result.bytes.first).to eq(0x8A)
+      expect(result.bytes.first).not_to eq(63) # not "?"
+    end
+
+    it 'encodes the link markers to their correct wire bytes' do
+      combined = "#{described_class::WIZARD_LINK_START}a room description#{described_class::WIZARD_LINK_END}"
+      result = described_class.encode(combined)
+      expect(result.bytes.first).to eq(0x87)
+      expect(result.bytes.last).to eq(0xA0)
+    end
+  end
+
   describe 'round-trip' do
     it 'decode(encode(text)) restores common typographic punctuation' do
       original = "chest\u2019s lid opens\u2014slowly\u2026" # rubocop:disable Custom/AsciiOnlySource

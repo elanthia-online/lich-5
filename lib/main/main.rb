@@ -930,10 +930,16 @@ reconnect_if_wanted = proc {
     wait_while { $offline_mode }
 
     if Frontend.client.eql?('wizard')
-      $link_highlight_start = "\207".force_encoding(Encoding::ASCII_8BIT)
-      $link_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
-      $speech_highlight_start = "\212".force_encoding(Encoding::ASCII_8BIT)
-      $speech_highlight_end = "\240".force_encoding(Encoding::ASCII_8BIT)
+      # PUA code points, not raw bytes -- see
+      # Lich::Common::WireEncoding::WIZARD_MARKER_BYTES for why. sf_to_wiz
+      # in global_defs.rb interpolates these directly into server text
+      # (String#sub with real captured game text), which used to raise
+      # Encoding::CompatibilityError the moment that text contained a
+      # genuine non-ASCII character.
+      $link_highlight_start = Lich::Common::WireEncoding::WIZARD_LINK_START
+      $link_highlight_end = Lich::Common::WireEncoding::WIZARD_LINK_END
+      $speech_highlight_start = Lich::Common::WireEncoding::WIZARD_SPEECH_START
+      $speech_highlight_end = Lich::Common::WireEncoding::WIZARD_SPEECH_END
     end
 
     client_thread.priority = 3

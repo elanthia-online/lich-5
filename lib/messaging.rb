@@ -3,6 +3,8 @@ messaging.rb: Core lich file for collection of various messaging Lich capabiliti
 Entries added here should always be accessible from Lich::Messaging.feature namespace.
 =end
 
+require_relative 'common/wire_encoding'
+
 module Lich
   module Messaging
     def self.xml_encode(msg)
@@ -52,10 +54,6 @@ module Lich
       preset_color_before = ""
       preset_color_after = ""
 
-      wizard_color = { "white" => 128, "black" => 129, "dark blue" => 130, "dark green" => 131, "dark teal" => 132,
-        "dark red" => 133, "purple" => 134, "gold" => 135, "light grey" => 136, "blue" => 137,
-        "bright green" => 138, "teal" => 139, "red" => 140, "pink" => 141, "yellow" => 142 }
-
       if Frontend.supports_xml?
         case type
         when "error", "yellow", "bold", "monster", "creature"
@@ -83,14 +81,14 @@ module Lich
           preset_color_before = monsterbold_start
           preset_color_after = (monsterbold_end + " ")
         when "warn", "orange", "gold", "thought"
-          preset_color_before = wizard_color["gold"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_before = Lich::Common::WireEncoding::WIZARD_COLOR_START["gold"]
+          preset_color_after = Lich::Common::WireEncoding::WIZARD_COLOR_END
         when "info", "teal", "whisper"
-          preset_color_before = wizard_color["teal"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_before = Lich::Common::WireEncoding::WIZARD_COLOR_START["teal"]
+          preset_color_after = Lich::Common::WireEncoding::WIZARD_COLOR_END
         when "green", "speech", "debug", "light green"
-          preset_color_before = wizard_color["bright green"].chr.force_encoding(Encoding::ASCII_8BIT)
-          preset_color_after = "\240".force_encoding(Encoding::ASCII_8BIT)
+          preset_color_before = Lich::Common::WireEncoding::WIZARD_COLOR_START["bright green"]
+          preset_color_after = Lich::Common::WireEncoding::WIZARD_COLOR_END
         when "link", "command", "selectedLink", "watching", "roomName"
           preset_color_before = ""
           preset_color_after = ""

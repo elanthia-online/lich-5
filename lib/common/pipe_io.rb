@@ -24,6 +24,17 @@ module Lich
 
       # Client read loop calls this via SynchronizedSocket#method_missing.
       # Returns nil at EOF, which both ends the read loop and marks us closed.
+      #
+      # Contract: returns raw bytes exactly as read from +input+ ($stdin by
+      # default), tagged with whatever Encoding.default_external happens to
+      # be -- the same as a real TCPSocket#gets. This is NOT decoded text;
+      # callers must run it through Lich::Common::WireEncoding.decode
+      # before treating it as Unicode (see the $_CLIENT_.gets call sites in
+      # lib/main/main.rb, which all do this immediately). --pipe mode's
+      # wire contract is the same Windows-1252 as the real socket -- $stdin
+      # is not given any special encoding treatment here, deliberately, so
+      # a --pipe frontend must send/receive the same raw bytes a real
+      # socket-based frontend would.
       def gets(*args)
         line = @input.gets(*args)
         @eof = true if line.nil?

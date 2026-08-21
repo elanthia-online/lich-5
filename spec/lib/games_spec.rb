@@ -1516,6 +1516,34 @@ RSpec.describe Lich::GameBase::Game do
         end
       end
 
+      # -- Wizard markers (regression: CodeRabbit-flagged, sf_to_wiz output) --
+
+      it 'does not raise and correctly re-encodes text containing a Wizard marker plus non-ASCII characters' do
+        # Reproduces sf_to_wiz's actual output shape: a Wizard protocol
+        # marker (Private Use Area code point, see WireEncoding) spliced
+        # directly around real server text that happens to contain a
+        # genuine non-ASCII character. Before this fix, the marker was a
+        # raw ASCII-8BIT byte and this combination raised
+        # Encoding::CompatibilityError as soon as it reached send_to_client.
+        allow(raw_socket).to receive(:write)
+        marker_text = "#{Lich::Common::WireEncoding::WIZARD_SPEECH_START}chest\u2019s words#{Lich::Common::WireEncoding::WIZARD_SPEECH_END}" # rubocop:disable Custom/AsciiOnlySource
+        expect { described_class.send(:send_to_client, marker_text) }.not_to raise_error
+        eventually do
+          expect(raw_socket).to have_received(:write).with("\x8Achest\x92s words\xA0".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+      end
+
+      it 'preserves the Wizard marker byte for ASCII-only marked text' do
+        captured = nil
+        allow(raw_socket).to receive(:write) { |arg| captured = arg }
+        marker_text = "#{Lich::Common::WireEncoding::WIZARD_LINK_START}a room description#{Lich::Common::WireEncoding::WIZARD_LINK_END}"
+        described_class.send(:send_to_client, marker_text)
+        eventually { expect(captured).not_to be_nil }
+        # The marker byte (0x87) must survive, not be replaced with "?" (0x3F).
+        expect(captured.bytes.first).to eq(0x87)
+        expect(captured.bytes.last).to eq(0xA0)
+      end
+
       it 'absorbs Errno::EPIPE without raising' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(raw_socket).to receive(:close)
