@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/direbear",
   picture: "",
-  level: 64,
+  level: 65,
   family: "Bear",
   type: "Quadruped",
   undead: false,
@@ -25,6 +25,10 @@
       name: "Red Forest",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 480, count: 1, uid_ranges: [[480216, 480230]] },
+    { zone: 17006, count: 1, uid_ranges: [[17006216, 17006230]] }
   ],
   attack_attributes: {
     physical_attacks: [

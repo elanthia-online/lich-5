@@ -27,6 +27,17 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 580, count: 1, uid_ranges: [[580026, 580053]] },
+    { zone: 581, count: 1, uid_ranges: [[581026, 581053]] },
+    { zone: 582, count: 1, uid_ranges: [[582026, 582053]] },
+    { zone: 583, count: 1, uid_ranges: [[583026, 583053]] },
+    { zone: 584, count: 1, uid_ranges: [[584026, 584053]] },
+    { zone: 585, count: 1, uid_ranges: [[585026, 585053]] },
+    { zone: 586, count: 1, uid_ranges: [[586026, 586053]] },
+    { zone: 587, count: 1, uid_ranges: [[587026, 587053]] },
+    { zone: 588, count: 1, uid_ranges: [[588026, 588053]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {

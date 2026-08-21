@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 300,
+  max_hp: 308,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Fethayl Bog",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13038, count: 1, uid_ranges: [[13038001, 13038031]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,7 +51,7 @@
   defense_attributes: {
     asg: "9",
     immunities: [],
-    melee: nil,
+    melee: (225..330),
     ranged: nil,
     bolt: (199..204),
     udf: nil,

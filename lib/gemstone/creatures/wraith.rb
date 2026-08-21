@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 130,
+  max_hp: 133,
   speed: nil,
   height: nil,
   size: "",
@@ -34,6 +34,11 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 37, count: 2, uid_ranges: [[37022, 37041]] },
+    { zone: 2138, count: 1, uid_ranges: [[2138123, 2138142]] },
+    { zone: 4124, count: 2, uid_ranges: [[4124007, 4124013], [4124027, 4124036]] }
+  ],
   attack_attributes: {
     physical_attacks: [],
     bolt_spells: [],
@@ -46,10 +51,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (80..151),
+    ranged: (65..78),
+    bolt: (65..78),
+    udf: 166,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -57,7 +62,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 45,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

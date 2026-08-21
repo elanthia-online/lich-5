@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 240,
+  max_hp: 284,
   speed: nil,
   height: nil,
   size: "",
@@ -29,6 +29,11 @@
       name: "Miasmal Forest",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 5003, count: 1, uid_ranges: [[5003039, 5003050]] },
+    { zone: 5004, count: 1, uid_ranges: [[5004035, 5004054]] },
+    { zone: 13036, count: 3, uid_ranges: [[13036201, 13036217], [13036401, 13036414], [13036501, 13036514]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -60,10 +65,10 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: (170..195),
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (182..315),
+    ranged: (195..250),
+    bolt: (195..250),
+    udf: 372,
     bar_td: 133,
     cle_td: (152..155),
     emp_td: 146,
@@ -71,7 +76,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (158..167),
     mne_td: 160,
     mjs_td: nil,
     mns_td: 145,

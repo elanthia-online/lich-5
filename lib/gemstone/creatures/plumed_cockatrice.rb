@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 120,
+  max_hp: 123,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Neartofar Forest",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 14015, count: 1, uid_ranges: [[14015001, 14015020]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -51,10 +54,10 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 111,
+    melee: (126..197),
     ranged: 93,
     bolt: 67,
-    udf: nil,
+    udf: 212,
     bar_td: nil,
     cle_td: 39,
     emp_td: 39,
@@ -62,7 +65,7 @@
     ran_td: 9,
     sor_td: 39,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (39..42),
     mne_td: 39,
     mjs_td: nil,
     mns_td: nil,

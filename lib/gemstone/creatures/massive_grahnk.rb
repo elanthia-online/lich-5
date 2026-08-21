@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 310,
+  max_hp: 321,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Thurfel's Keep",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 7532, count: 2, uid_ranges: [[7532001, 7532033]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: "17",
     immunities: [],
-    melee: 69,
-    ranged: nil,
-    bolt: nil,
-    udf: 123,
+    melee: (64..124),
+    ranged: (38..69),
+    bolt: (38..69),
+    udf: 168,
     bar_td: (54..60),
     cle_td: 60,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: 60,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 60,
     mne_td: 60,
     mjs_td: nil,
     mns_td: 60,

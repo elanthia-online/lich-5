@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 240,
+  max_hp: 247,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Wraithenmist",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13027, count: 4, uid_ranges: [[13027023, 13027086]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -51,10 +54,10 @@
   defense_attributes: {
     asg: "7",
     immunities: [],
-    melee: 266,
-    ranged: nil,
-    bolt: (160..172),
-    udf: nil,
+    melee: (156..271),
+    ranged: (139..185),
+    bolt: (139..185),
+    udf: 319,
     bar_td: 111,
     cle_td: (113..122),
     emp_td: nil,
@@ -62,7 +65,7 @@
     ran_td: nil,
     sor_td: 124,
     wiz_td: 125,
-    mje_td: 125,
+    mje_td: 131,
     mne_td: 127,
     mjs_td: nil,
     mns_td: 117,

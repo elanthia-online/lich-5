@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 210,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Foggy Valley",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4218, count: 1, uid_ranges: [[4218301, 4218325]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -58,10 +61,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (306..324),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 323,
     bar_td: (138..157),
     cle_td: nil,
     emp_td: nil,
@@ -69,7 +72,7 @@
     ran_td: nil,
     sor_td: 170,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 168,
     mne_td: 168,
     mjs_td: nil,
     mns_td: 167,

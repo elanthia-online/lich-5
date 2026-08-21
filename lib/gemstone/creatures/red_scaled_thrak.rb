@@ -17,7 +17,7 @@
     "Element-based"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 307,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,10 @@
       name: "Lava Flows",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 3050, count: 1, uid_ranges: [[3050015, 3050036]] },
+    { zone: 3052, count: 1, uid_ranges: [[3052003, 3052025]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,7 +52,7 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: nil,
+    melee: (226..492),
     ranged: nil,
     bolt: nil,
     udf: 264,
@@ -59,7 +63,7 @@
     ran_td: nil,
     sor_td: 185,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 196,
     mne_td: 195,
     mjs_td: nil,
     mns_td: 150,

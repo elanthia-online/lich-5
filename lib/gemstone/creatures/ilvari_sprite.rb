@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/ilvari_sprite",
   picture: "",
-  level: 73,
+  level: 72,
   family: "Fey",
   type: "Biped",
   undead: false,
@@ -26,6 +26,10 @@
       name: "Red Forest",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 480, count: 1, uid_ranges: [[480231, 480245]] },
+    { zone: 17006, count: 1, uid_ranges: [[17006231, 17006245]] }
   ],
   attack_attributes: {
     physical_attacks: [],

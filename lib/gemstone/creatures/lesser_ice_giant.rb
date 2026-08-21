@@ -17,7 +17,7 @@
     "Element-based"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 391,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Olbin Pass",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4560, count: 1, uid_ranges: [[4560011, 4560036]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: (204..236),
-    ranged: nil,
-    bolt: 218,
-    udf: 239,
+    melee: (259..322),
+    ranged: (226..244),
+    bolt: (226..244),
+    udf: 354,
     bar_td: (133..136),
     cle_td: nil,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: 160,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 162,
     mne_td: (162..165),
     mjs_td: nil,
     mns_td: nil,

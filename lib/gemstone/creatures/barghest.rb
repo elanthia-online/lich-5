@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 316,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Black Moor",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13036, count: 3, uid_ranges: [[13036201, 13036217], [13036301, 13036310], [13036401, 13036414]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -47,10 +50,10 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 179,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (145..250),
+    ranged: (163..176),
+    bolt: (163..176),
+    udf: 272,
     bar_td: 109,
     cle_td: nil,
     emp_td: nil,
@@ -58,7 +61,7 @@
     ran_td: nil,
     sor_td: 128,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (125..134),
     mne_td: 134,
     mjs_td: nil,
     mns_td: 115,

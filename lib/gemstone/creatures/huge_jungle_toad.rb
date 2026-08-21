@@ -24,6 +24,9 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 3218, count: 1, uid_ranges: [[3218017, 3218023], [3218045, 3218048]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {
@@ -38,7 +41,9 @@
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      { name: "poisonous glob of phlegm" }
+    ],
     special_abilities: [
       {
         name: "Poison spit"
@@ -49,10 +54,10 @@
   defense_attributes: {
     asg: "10N",
     immunities: [],
-    melee: 146,
+    melee: (124..157),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 343,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -60,7 +65,7 @@
     ran_td: nil,
     sor_td: 83,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 92,
     mne_td: 86,
     mjs_td: nil,
     mns_td: 80,

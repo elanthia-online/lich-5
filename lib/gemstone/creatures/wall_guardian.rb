@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 140,
+  max_hp: 159,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Thurfel's Keep",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 7531, count: 2, uid_ranges: [[7531001, 7531042]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -43,10 +46,10 @@
   defense_attributes: {
     asg: "16",
     immunities: [],
-    melee: 53,
-    ranged: nil,
-    bolt: 45,
-    udf: (57..161),
+    melee: (62..144),
+    ranged: (61..76),
+    bolt: (61..76),
+    udf: 171,
     bar_td: 27,
     cle_td: 33,
     emp_td: 13,

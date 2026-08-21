@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 300,
+  max_hp: 322,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "The Citadel",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 2100, count: 3, uid_ranges: [[2100002, 2100056]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -63,8 +66,8 @@
   defense_attributes: {
     asg: "various",
     immunities: [],
-    melee: 161,
-    ranged: nil,
+    melee: (147..212),
+    ranged: (149..167),
     bolt: 169,
     udf: 191,
     bar_td: nil,

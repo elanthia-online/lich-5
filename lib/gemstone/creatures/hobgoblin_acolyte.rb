@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 100,
+  max_hp: 104,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Muddy Village",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 7128, count: 1, uid_ranges: [[7128001, 7128030]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -51,10 +54,10 @@
   defense_attributes: {
     asg: "5",
     immunities: [],
-    melee: nil,
-    ranged: nil,
+    melee: (71..79),
+    ranged: 36,
     bolt: "24 to 44",
-    udf: nil,
+    udf: 100,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -62,7 +65,7 @@
     ran_td: nil,
     sor_td: "32 to 39",
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 28,
     mne_td: "28 to 33",
     mjs_td: nil,
     mns_td: "36 to 46",

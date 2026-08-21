@@ -14,7 +14,7 @@
   boss: false,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 143,
   speed: nil,
   height: nil,
   size: "",
@@ -28,6 +28,11 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 3030, count: 3, uid_ranges: [[3030011, 3030023], [3030225, 3030234], [3030250, 3030254]] },
+    { zone: 3050, count: 2, uid_ranges: [[3050008, 3050036]] },
+    { zone: 3052, count: 1, uid_ranges: [[3052001, 3052025]] }
+  ],
   attack_attributes: {
     physical_attacks: [],
     bolt_spells: [],
@@ -40,10 +45,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (139..206),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 242,
     bar_td: 72,
     cle_td: nil,
     emp_td: nil,

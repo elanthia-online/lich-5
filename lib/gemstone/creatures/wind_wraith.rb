@@ -4,7 +4,7 @@
   noun: "",
   url: "https://gswiki.play.net/wind_wraith",
   picture: "",
-  level: 61,
+  level: 63,
   family: "Wraith",
   type: "Biped",
   undead: true,
@@ -26,6 +26,9 @@
       name: "Temple of Luukos",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 3040, count: 1, uid_ranges: [[3040004, 3040015]] }
   ],
   attack_attributes: {
     physical_attacks: [

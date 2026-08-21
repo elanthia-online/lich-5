@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 40,
+  max_hp: 49,
   speed: nil,
   height: nil,
   size: "",
@@ -38,6 +38,12 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 16, count: 1, uid_ranges: [[16001, 16020]] },
+    { zone: 18, count: 1, uid_ranges: [[18003, 18011]] },
+    { zone: 20, count: 1, uid_ranges: [[20001, 20035]] },
+    { zone: 391, count: 3, uid_ranges: [[391001, 391022]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {
@@ -55,10 +61,10 @@
   defense_attributes: {
     asg: "5",
     immunities: [],
-    melee: 54,
-    ranged: nil,
+    melee: (44..68),
+    ranged: -10,
     bolt: 6,
-    udf: 36,
+    udf: 102,
     bar_td: 6,
     cle_td: nil,
     emp_td: nil,

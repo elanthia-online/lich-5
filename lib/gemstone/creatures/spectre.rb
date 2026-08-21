@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 120,
+  max_hp: 127,
   speed: nil,
   height: nil,
   size: "",
@@ -29,6 +29,11 @@
       name: "Vornavian Coast",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 390, count: 2, uid_ranges: [[390002, 390022], [390025, 390048]] },
+    { zone: 4202, count: 1, uid_ranges: [[4202161, 4202180]] },
+    { zone: 14011, count: 1, uid_ranges: [[14011042, 14011054]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -68,10 +73,10 @@
   defense_attributes: {
     asg: "17",
     immunities: [],
-    melee: 75,
-    ranged: nil,
-    bolt: 52,
-    udf: nil,
+    melee: (57..156),
+    ranged: (49..52),
+    bolt: (49..52),
+    udf: 167,
     bar_td: nil,
     cle_td: 42,
     emp_td: nil,

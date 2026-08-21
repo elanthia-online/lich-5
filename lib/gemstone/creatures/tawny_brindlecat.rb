@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 120,
+  max_hp: 144,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Yegharren Plains",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13034, count: 3, uid_ranges: [[13034101, 13034118], [13034201, 13034221], [13034301, 13034309]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -51,10 +54,10 @@
   defense_attributes: {
     asg: "8",
     immunities: [],
-    melee: "71 to 124",
-    ranged: 74,
-    bolt: nil,
-    udf: nil,
+    melee: (88..151),
+    ranged: 97,
+    bolt: 97,
+    udf: 166,
     bar_td: 39,
     cle_td: 39,
     emp_td: 39,
@@ -62,7 +65,7 @@
     ran_td: 39,
     sor_td: 39,
     wiz_td: 39,
-    mje_td: 39,
+    mje_td: (39..45),
     mne_td: 39,
     mjs_td: 39,
     mns_td: 39,

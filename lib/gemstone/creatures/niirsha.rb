@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 190,
+  max_hp: 191,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Lunule Weald",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 14016, count: 2, uid_ranges: [[14016001, 14016038]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: "6N",
     immunities: [],
-    melee: 182,
+    melee: (174..185),
     ranged: 135,
     bolt: (166..173),
-    udf: nil,
+    udf: 222,
     bar_td: 90,
     cle_td: 81,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: (77..88),
     wiz_td: nil,
-    mje_td: (87..89),
+    mje_td: (87..95),
     mne_td: (83..86),
     mjs_td: nil,
     mns_td: nil,

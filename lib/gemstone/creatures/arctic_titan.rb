@@ -17,7 +17,7 @@
     "Elemental family"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 397,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,10 @@
       name: "Glatoph",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 2153, count: 1, uid_ranges: [[2153002, 2153031]] },
+    { zone: 4044, count: 1, uid_ranges: [[4044134, 4044139]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -66,7 +70,7 @@
   defense_attributes: {
     asg: "10",
     immunities: [],
-    melee: nil,
+    melee: 177,
     ranged: 195,
     bolt: 165,
     udf: nil,
@@ -77,7 +81,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 124,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

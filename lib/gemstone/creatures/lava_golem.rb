@@ -17,7 +17,7 @@
     "Element-based"
   ],
   bcs: true,
-  max_hp: 500,
+  max_hp: 527,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,10 @@
       name: "Eye of V'Tull",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 3060, count: 1, uid_ranges: [[3060002, 3060018]] },
+    { zone: 3061, count: 1, uid_ranges: [[3061001, 3061028]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +52,10 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 220,
+    melee: (273..470),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 276,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,

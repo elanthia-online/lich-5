@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 240,
+  max_hp: 268,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Gyldemar Green",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13028, count: 2, uid_ranges: [[13028038, 13028080]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -67,10 +70,10 @@
   defense_attributes: {
     asg: "9",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (261..318),
+    ranged: 273,
+    bolt: 273,
+    udf: 330,
     bar_td: (149..172),
     cle_td: nil,
     emp_td: nil,
@@ -78,7 +81,7 @@
     ran_td: nil,
     sor_td: 193,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 200,
     mne_td: 198,
     mjs_td: nil,
     mns_td: 183,

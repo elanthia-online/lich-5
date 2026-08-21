@@ -14,7 +14,7 @@
   boss: false,
   otherclass: [],
   bcs: true,
-  max_hp: 200,
+  max_hp: 207,
   speed: nil,
   height: nil,
   size: "",
@@ -23,6 +23,9 @@
       name: "Monsoon Jungle",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 3218, count: 3, uid_ranges: [[3218001, 3218046], [3218049, 3218054]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -56,7 +59,7 @@
     ran_td: nil,
     sor_td: 70,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 72,
     mne_td: 72,
     mjs_td: nil,
     mns_td: 68,

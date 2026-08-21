@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 160,
+  max_hp: 167,
   speed: nil,
   height: nil,
   size: "",
@@ -29,6 +29,9 @@
       name: "Hornwort Cavern",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13007, count: 2, uid_ranges: [[13007001, 13007043]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -55,10 +58,10 @@
   defense_attributes: {
     asg: "16N",
     immunities: [],
-    melee: (149..178),
+    melee: (109..209),
     ranged: nil,
     bolt: 147,
-    udf: nil,
+    udf: 167,
     bar_td: 54,
     cle_td: nil,
     emp_td: 54,
@@ -66,7 +69,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: 54,
+    mje_td: (51..54),
     mne_td: 54,
     mjs_td: 54,
     mns_td: 54,

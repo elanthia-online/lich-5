@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 266,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Old Mine Road",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4251, count: 1, uid_ranges: [[4251110, 4251111]] }
   ],
   attack_attributes: {
     physical_attacks: [],
@@ -38,10 +41,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (99..114),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 138,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -49,7 +52,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 72,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

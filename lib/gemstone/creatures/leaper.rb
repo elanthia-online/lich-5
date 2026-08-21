@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 69,
+  max_hp: 88,
   speed: nil,
   height: nil,
   size: "",
@@ -29,6 +29,10 @@
       name: "Icemule Environs",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 67, count: 1, uid_ranges: [[67023, 67033]] },
+    { zone: 4128, count: 1, uid_ranges: [[4128031, 4128040]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -55,10 +59,10 @@
   defense_attributes: {
     asg: "5N",
     immunities: [],
-    melee: (9..29),
-    ranged: nil,
+    melee: (12..29),
+    ranged: 9,
     bolt: 9,
-    udf: (54..77),
+    udf: 80,
     bar_td: 18,
     cle_td: nil,
     emp_td: 16,

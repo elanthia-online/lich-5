@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 399,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Darkstone Castle",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 45, count: 1, uid_ranges: [[45150, 45163]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -47,10 +50,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: 116,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (116..193),
+    ranged: (30..131),
+    bolt: (30..131),
+    udf: 228,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -58,7 +61,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 153,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

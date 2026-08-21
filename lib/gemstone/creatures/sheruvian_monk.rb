@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 311,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "The Broken Lands",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 487, count: 4, uid_ranges: [[487020, 487025], [487030, 487032], [487034, 487043], [487058, 487075]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -47,7 +50,7 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: 265,
+    melee: 340,
     ranged: nil,
     bolt: 260,
     udf: nil,
@@ -58,7 +61,7 @@
     ran_td: nil,
     sor_td: (164..231),
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 172,
     mne_td: 172,
     mjs_td: nil,
     mns_td: 156,

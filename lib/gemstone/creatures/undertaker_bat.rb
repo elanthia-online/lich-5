@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 248,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Troll Burial Grounds",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13011, count: 1, uid_ranges: [[13011009, 13011035]] }
   ],
   attack_attributes: {
     physical_attacks: [

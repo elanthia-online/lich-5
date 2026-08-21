@@ -14,7 +14,7 @@
   boss: false,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 24,
   speed: nil,
   height: nil,
   size: "",
@@ -23,6 +23,9 @@
       name: "Rocky Shoals",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 7127, count: 1, uid_ranges: [[7127001, 7127019]] }
   ],
   attack_attributes: {
     physical_attacks: [],
@@ -36,9 +39,9 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
+    melee: 14,
+    ranged: 12,
+    bolt: 12,
     udf: nil,
     bar_td: nil,
     cle_td: nil,
@@ -47,8 +50,8 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
+    mje_td: 3,
+    mne_td: 3,
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,

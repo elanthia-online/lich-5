@@ -16,7 +16,7 @@
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 205,
+  max_hp: 220,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "The Monastery",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 95, count: 2, uid_ranges: [[95156, 95179]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -68,10 +71,10 @@
   defense_attributes: {
     asg: "8",
     immunities: [],
-    melee: (225..235),
-    ranged: nil,
-    bolt: (100..132),
-    udf: nil,
+    melee: (119..219),
+    ranged: (98..131),
+    bolt: (98..131),
+    udf: 239,
     bar_td: nil,
     cle_td: (76..101),
     emp_td: nil,
@@ -79,7 +82,7 @@
     ran_td: nil,
     sor_td: 107,
     wiz_td: nil,
-    mje_td: 98,
+    mje_td: 103,
     mne_td: 98,
     mjs_td: nil,
     mns_td: nil,

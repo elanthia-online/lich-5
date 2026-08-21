@@ -17,7 +17,7 @@
     "Element-based"
   ],
   bcs: nil,
-  max_hp: 90,
+  max_hp: 91,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Snow Fort",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4129, count: 1, uid_ranges: [[4129100, 4129110]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -49,9 +52,9 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: 0,
+    melee: (10..35),
+    ranged: (-13..0),
+    bolt: (-13..0),
     udf: 24,
     bar_td: 27,
     cle_td: nil,

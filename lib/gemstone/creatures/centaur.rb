@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 265,
   speed: nil,
   height: nil,
   size: "",
@@ -38,6 +38,11 @@
       name: "Rambling Meadows",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4218, count: 1, uid_ranges: [[4218101, 4218121]] },
+    { zone: 13001, count: 2, uid_ranges: [[13001043, 13001079]] },
+    { zone: 14006, count: 1, uid_ranges: [[14006041, 14006046], [14006048, 14006060]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -63,10 +68,10 @@
   defense_attributes: {
     asg: "10",
     immunities: [],
-    melee: nil,
+    melee: (127..233),
     ranged: (125..155),
     bolt: nil,
-    udf: nil,
+    udf: 246,
     bar_td: (69..75),
     cle_td: nil,
     emp_td: nil,
@@ -74,7 +79,7 @@
     ran_td: nil,
     sor_td: 69,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (63..69),
     mne_td: 69,
     mjs_td: nil,
     mns_td: 69,

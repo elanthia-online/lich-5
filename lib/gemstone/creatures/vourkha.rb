@@ -26,6 +26,9 @@
       rooms: []
     }
   ],
+  spawns: [
+    { zone: 13036, count: 3, uid_ranges: [[13036106, 13036120], [13036201, 13036217], [13036301, 13036310]] }
+  ],
   attack_attributes: {
     physical_attacks: [
       {
@@ -56,9 +59,9 @@
   defense_attributes: {
     asg: "7N",
     immunities: [],
-    melee: (151..243),
-    ranged: nil,
-    bolt: (155..163),
+    melee: (186..283),
+    ranged: (145..170),
+    bolt: (145..170),
     udf: 195,
     bar_td: 135,
     cle_td: nil,

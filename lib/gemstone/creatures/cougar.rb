@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 194,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Foggy Valley",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4218, count: 1, uid_ranges: [[4218101, 4218121]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -44,10 +47,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (148..219),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 190,
     bar_td: 66,
     cle_td: nil,
     emp_td: nil,
@@ -55,7 +58,7 @@
     ran_td: nil,
     sor_td: 66,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (60..66),
     mne_td: 66,
     mjs_td: nil,
     mns_td: 66,

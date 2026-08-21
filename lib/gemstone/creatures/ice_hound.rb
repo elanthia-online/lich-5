@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 211,
   speed: nil,
   height: nil,
   size: "",
@@ -33,6 +33,9 @@
       name: "Olbin Pass",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4044, count: 1, uid_ranges: [[4044002, 4044019]] }
   ],
   attack_attributes: {
     physical_attacks: [

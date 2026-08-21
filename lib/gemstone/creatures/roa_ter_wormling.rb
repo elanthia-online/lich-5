@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 222,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Zaerthu Tunnels",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13009, count: 1, uid_ranges: [[13009001, 13009040]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -47,10 +50,10 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 154,
-    ranged: nil,
-    bolt: 157,
-    udf: 134,
+    melee: (136..273),
+    ranged: (140..179),
+    bolt: (140..179),
+    udf: 267,
     bar_td: 78,
     cle_td: 74,
     emp_td: nil,
@@ -58,7 +61,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 81,
     mne_td: 82,
     mjs_td: 73,
     mns_td: 82,

@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 400,
+  max_hp: 407,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Castle Varunar",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4750, count: 2, uid_ranges: [[4750034, 4750039], [4750071, 4750076]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -51,10 +54,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: 213,
-    ranged: 187,
-    bolt: 187,
-    udf: nil,
+    melee: (183..248),
+    ranged: 194,
+    bolt: 194,
+    udf: 220,
     bar_td: nil,
     cle_td: 111,
     emp_td: nil,
@@ -62,7 +65,7 @@
     ran_td: nil,
     sor_td: 114,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 111,
     mne_td: 111,
     mjs_td: nil,
     mns_td: 114,

@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 350,
+  max_hp: 368,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Sorcerer's Isle",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 14202, count: 2, uid_ranges: [[14202001, 14202023]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -55,10 +58,10 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 199,
+    melee: (226..326),
     ranged: 189,
     bolt: 197,
-    udf: nil,
+    udf: 336,
     bar_td: 96,
     cle_td: nil,
     emp_td: nil,
@@ -66,7 +69,7 @@
     ran_td: nil,
     sor_td: 115,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 123,
     mne_td: 120,
     mjs_td: 111,
     mns_td: 111,

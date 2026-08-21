@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 290,
   speed: nil,
   height: nil,
   size: "",
@@ -29,6 +29,10 @@
       name: "Fethayl Bog",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 376, count: 2, uid_ranges: [[376001, 376010], [376015, 376044]] },
+    { zone: 13038, count: 1, uid_ranges: [[13038001, 13038031]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -54,10 +58,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: (255..426),
+    melee: (255..488),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 475,
     bar_td: 161,
     cle_td: 176,
     emp_td: 182,
@@ -65,7 +69,7 @@
     ran_td: 119,
     sor_td: (176..194),
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (196..202),
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

@@ -17,7 +17,7 @@
     "Magical"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 236,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Mraent Caverns",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13008, count: 2, uid_ranges: [[13008001, 13008041]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: "20N",
     immunities: [],
-    melee: 92,
-    ranged: nil,
-    bolt: 98,
-    udf: nil,
+    melee: (106..199),
+    ranged: (71..98),
+    bolt: (71..98),
+    udf: 273,
     bar_td: (87..102),
     cle_td: 98,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: "106 124",
+    mje_td: 115,
     mne_td: "106 124",
     mjs_td: 99,
     mns_td: 99,

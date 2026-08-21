@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 83,
+  max_hp: 90,
   speed: nil,
   height: nil,
   size: "",
@@ -37,6 +37,13 @@
       name: "Vornavian Coast",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 24, count: 1, uid_ranges: [[24001, 24017]] },
+    { zone: 392, count: 1, uid_ranges: [[392001, 392008]] },
+    { zone: 2162, count: 1, uid_ranges: [[2162001, 2162015]] },
+    { zone: 4202, count: 1, uid_ranges: [[4202161, 4202180]] },
+    { zone: 4218, count: 1, uid_ranges: [[4218201, 4218221]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -63,10 +70,10 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 61,
+    melee: (61..137),
     ranged: nil,
     bolt: 48,
-    udf: nil,
+    udf: 145,
     bar_td: 24,
     cle_td: nil,
     emp_td: nil,

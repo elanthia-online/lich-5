@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 210,
+  max_hp: 211,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Stormpeak",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13150, count: 1, uid_ranges: [[13150101, 13150120]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -62,7 +65,7 @@
     ran_td: nil,
     sor_td: 104,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 106,
     mne_td: 107,
     mjs_td: 101,
     mns_td: 101,

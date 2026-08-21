@@ -16,7 +16,7 @@
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 135,
+  max_hp: 140,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,10 @@
       name: "The Graveyard",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 18, count: 2, uid_ranges: [[18029, 18035]] },
+    { zone: 2162, count: 1, uid_ranges: [[2162107, 2162122]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -46,10 +50,10 @@
   defense_attributes: {
     asg: "18",
     immunities: [],
-    melee: (71..137),
+    melee: (64..187),
     ranged: nil,
     bolt: nil,
-    udf: (125..166),
+    udf: 165,
     bar_td: 45,
     cle_td: 45,
     emp_td: 45,

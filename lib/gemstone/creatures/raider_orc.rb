@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 130,
+  max_hp: 138,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Yander's Farm",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 14005, count: 1, uid_ranges: [[14005038, 14005053]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -43,10 +46,10 @@
   defense_attributes: {
     asg: "17",
     immunities: [],
-    melee: 72,
+    melee: (51..134),
     ranged: 44,
-    bolt: nil,
-    udf: 114,
+    bolt: 56,
+    udf: 189,
     bar_td: 30,
     cle_td: nil,
     emp_td: nil,

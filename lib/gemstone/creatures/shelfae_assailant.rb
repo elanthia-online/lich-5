@@ -14,7 +14,7 @@
   boss: false,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 135,
   speed: nil,
   height: nil,
   size: "",
@@ -23,6 +23,9 @@
       name: "Cliffwalk",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 7129, count: 1, uid_ranges: [[7129001, 7129017]] }
   ],
   attack_attributes: {
     physical_attacks: [],
@@ -36,10 +39,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: 25,
+    ranged: 6,
+    bolt: 6,
+    udf: 73,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,

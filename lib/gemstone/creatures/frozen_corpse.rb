@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 299,
   speed: nil,
   height: nil,
   size: "",
@@ -30,6 +30,10 @@
       name: "Nightmare Gorge",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4560, count: 1, uid_ranges: [[4560030, 4560053]] },
+    { zone: 4563, count: 1, uid_ranges: [[4563030, 4563051]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +52,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (212..278),
     ranged: nil,
     bolt: (218..244),
-    udf: nil,
+    udf: 272,
     bar_td: 123,
     cle_td: nil,
     emp_td: nil,
@@ -59,7 +63,7 @@
     ran_td: nil,
     sor_td: 151,
     wiz_td: nil,
-    mje_td: 168,
+    mje_td: (162..168),
     mne_td: 153,
     mjs_td: nil,
     mns_td: nil,

@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: 160,
+  max_hp: 172,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Masked Hills",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13301, count: 2, uid_ranges: [[13301170, 13301191], [13301201, 13301232]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -43,7 +46,7 @@
   defense_attributes: {
     asg: "11N",
     immunities: [],
-    melee: nil,
+    melee: (76..130),
     ranged: nil,
     bolt: nil,
     udf: nil,

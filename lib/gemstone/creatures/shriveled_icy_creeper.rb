@@ -16,7 +16,7 @@
     "corporeal undead"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 478,
   speed: "5-7 RT",
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Frozen Bramble",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4124, count: 1, uid_ranges: [[4124050, 4124062]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -50,10 +53,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (153..356),
     ranged: nil,
     bolt: nil,
-    udf: 230,
+    udf: 317,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -61,7 +64,7 @@
     ran_td: nil,
     sor_td: (194..203),
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: (204..205),
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

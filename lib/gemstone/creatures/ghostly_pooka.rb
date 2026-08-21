@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 260,
+  max_hp: 275,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,10 @@
       name: "Shadow Valley",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 389, count: 4, uid_ranges: [[389001, 389019], [389021, 389027]] },
+    { zone: 2158, count: 1, uid_ranges: [[2158001, 2158020]] }
   ],
   attack_attributes: {
     physical_attacks: [],
@@ -39,10 +43,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (121..268),
+    ranged: (113..142),
+    bolt: (113..142),
+    udf: 329,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -50,7 +54,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 134,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

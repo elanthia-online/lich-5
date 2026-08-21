@@ -16,7 +16,7 @@
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 228,
   speed: nil,
   height: nil,
   size: "",
@@ -25,6 +25,9 @@
       name: "Forgotten Vineyard",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 4225, count: 1, uid_ranges: [[4225003, 4225016]] }
   ],
   attack_attributes: {
     physical_attacks: [],
@@ -42,7 +45,7 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (227..428),
     ranged: nil,
     bolt: nil,
     udf: nil,
@@ -53,7 +56,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 279,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,

@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: 240,
+  max_hp: 274,
   speed: nil,
   height: nil,
   size: "",
@@ -30,6 +30,12 @@
       name: "Miasmal Forest",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 5003, count: 1, uid_ranges: [[5003021, 5003038]] },
+    { zone: 5004, count: 1, uid_ranges: [[5004001, 5004034]] },
+    { zone: 13035, count: 2, uid_ranges: [[13035101, 13035136], [13035201, 13035219]] },
+    { zone: 13036, count: 3, uid_ranges: [[13036201, 13036217], [13036401, 13036414], [13036501, 13036514]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -55,10 +61,10 @@
   defense_attributes: {
     asg: "12",
     immunities: [],
-    melee: nil,
-    ranged: nil,
+    melee: (148..268),
+    ranged: 186,
     bolt: 133,
-    udf: nil,
+    udf: 339,
     bar_td: (110..115),
     cle_td: (100..119),
     emp_td: 110,

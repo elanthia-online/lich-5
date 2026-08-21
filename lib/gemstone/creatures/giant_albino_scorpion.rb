@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 229,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Mraent Caverns",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 13008, count: 2, uid_ranges: [[13008001, 13008041]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 151,
+    melee: (154..219),
     ranged: nil,
     bolt: 146,
-    udf: 143,
+    udf: 207,
     bar_td: 72,
     cle_td: 74,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 81,
     mne_td: 82,
     mjs_td: 76,
     mns_td: 76,

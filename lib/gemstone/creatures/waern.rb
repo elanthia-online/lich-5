@@ -17,7 +17,7 @@
     "Boss"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 312,
   speed: nil,
   height: nil,
   size: "",
@@ -26,6 +26,9 @@
       name: "Bonespear Tower",
       rooms: []
     }
+  ],
+  spawns: [
+    { zone: 319, count: 2, uid_ranges: [[319001, 319015], [319117, 319139]] }
   ],
   attack_attributes: {
     physical_attacks: [
@@ -48,10 +51,10 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
+    melee: (240..328),
     ranged: (248..266),
-    bolt: nil,
-    udf: 276,
+    bolt: 269,
+    udf: 365,
     bar_td: 165,
     cle_td: 180,
     emp_td: nil,
@@ -59,7 +62,7 @@
     ran_td: nil,
     sor_td: (190..199),
     wiz_td: 200,
-    mje_td: 200,
+    mje_td: (200..203),
     mne_td: 199,
     mjs_td: nil,
     mns_td: nil,

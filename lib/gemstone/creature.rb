@@ -12,7 +12,7 @@ module Lich
       @@loaded = false
 
       attr_reader :name, :url, :picture, :level, :family, :type,
-                  :undead, :otherclass, :areas, :bcs, :max_hp,
+                  :undead, :otherclass, :areas, :spawns, :bcs, :max_hp,
                   :speed, :height, :size, :attack_attributes,
                   :defense_attributes, :treasure, :messaging,
                   :special_other, :abilities, :alchemy
@@ -40,6 +40,11 @@ module Lich
         @muggable = data[:muggable]
         @otherclass = data[:otherclass] || []
         @areas = data[:areas] || []
+        # Saga mongen data: [{zone:, count:, uid_ranges: [[lo, hi], ...]},
+        # ...] - count is the number of spawn generators feeding the zone.
+        # Room numbers are GAME UIDs - the stable identifiers - never Lich
+        # mapdb ids; convert with Map.ids_from_uid at the moment of use.
+        @spawns = data[:spawns] || []
         @bcs = data[:bcs]
         @max_hp = data[:max_hp]&.to_i || data[:hitpoints]&.to_i
         @speed = data[:speed]
@@ -154,6 +159,27 @@ module Lich
       def self.all
         load_all unless @@loaded
         @@templates.values.uniq
+      end
+
+      # All game uids this creature spawns at, expanded from the stored
+      # ranges (memoized - ranges stay compact on disk).
+      def spawn_uids
+        @spawn_uids ||= @spawns.flat_map do |s|
+          (s[:uid_ranges] || []).flat_map { |lo, hi| (lo..hi).to_a }
+        end.uniq.sort
+      end
+
+      # Whether the creature spawns at the given game room uid. Checks the
+      # ranges directly, so no expansion cost.
+      def spawns_at_uid?(uid)
+        @spawns.any? do |s|
+          (s[:uid_ranges] || []).any? { |lo, hi| uid >= lo && uid <= hi }
+        end
+      end
+
+      # Templates that spawn at the given game room uid.
+      def self.at_uid(uid)
+        all.select { |t| t.spawns_at_uid?(uid) }
       end
 
       # Returns whether the bestiary template says the creature has blood.
