@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.20.1](https://github.com/elanthia-online/lich-5/compare/v5.20.0...v5.20.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **all:** bound EAccess auth with a timeout so a stalled SGE backend can't hang Lich silently ([#1502](https://github.com/elanthia-online/lich-5/issues/1502)) ([426878d](https://github.com/elanthia-online/lich-5/commit/426878d126c40a7a289282365a000325b628f5ff))
+* **all:** Linux WINE and Wrayth FE detection ([#1517](https://github.com/elanthia-online/lich-5/issues/1517)) ([c735c32](https://github.com/elanthia-online/lich-5/commit/c735c327f1a2648dc1546e5c0f2d5220e1207b3f))
+* **all:** preserve bundled display-state tags on quiet-suppressed chunks ([#1530](https://github.com/elanthia-online/lich-5/issues/1530)) ([28c8828](https://github.com/elanthia-online/lich-5/commit/28c88288d0df05c8d2f663affc64df362c2da461))
+* **all:** update Gemstone game-code validations ([#1518](https://github.com/elanthia-online/lich-5/issues/1518)) ([49f2d7f](https://github.com/elanthia-online/lich-5/commit/49f2d7f33226970508fd4247b798f68bfdb65c5d))
+* **all:** prevent a stray formatting character from appearing in Saga during quiet script output ([1532](https://github.com/elanthia-online/lich-5/pull/1532)) ([be68052](https://github.com/elanthia-online/lich-5/commit/be68052b8a39c280f1998a3e56233c34e83dab01))
+* **dr:** make $safe_pause_lock holder immune to pause ([#1525](https://github.com/elanthia-online/lich-5/issues/1525)) ([517da01](https://github.com/elanthia-online/lich-5/commit/517da016a0ad03eb8a57ab3566b9bd47711f2d20))
+* **gs:** combat module hardening - ordered processing, 22x faster parsing, double-count fix ([#1523](https://github.com/elanthia-online/lich-5/issues/1523)) ([6d8474a](https://github.com/elanthia-online/lich-5/commit/6d8474a610aa54f0bcfb0fdcd151232c44913db2))
+* **gs:** critranks.rb tolerate nil table rows, fix reload!, index patterns … ([#1522](https://github.com/elanthia-online/lich-5/issues/1522)) ([e707ba5](https://github.com/elanthia-online/lich-5/commit/e707ba57ccdaded293b0b4a4948caeb925a069dd))
+
 ## [5.20.0](https://github.com/elanthia-online/lich-5/compare/v5.19.1...v5.20.0) (2026-08-12)
 
 

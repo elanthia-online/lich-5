@@ -161,7 +161,7 @@ module Lich
         candidates.concat(path_candidates(definition).map { |path| [path, :path] })
 
         candidates.each do |path, source|
-          next unless executable?(path)
+          next unless executable?(path, definition)
 
           resolved = resolution(definition, path, source)
           return resolved if resolved
@@ -171,7 +171,7 @@ module Lich
 
       def resolve_override(definition, override)
         path = expand_path(override)
-        unless executable?(path)
+        unless executable?(path, definition)
           raise ArgumentError, "frontend override is not executable: #{override}"
         end
 
@@ -352,11 +352,20 @@ module Lich
         nil
       end
 
-      def executable?(path)
-        !path.to_s.empty? && File.file?(path) && File.executable?(path)
+      def executable?(path, definition)
+        return false if path.to_s.empty? || !File.file?(path)
+
+        wine_managed_executable?(path, definition) || File.executable?(path)
       rescue SystemCallError => e
         log_discovery_error(path, e)
         false
+      end
+
+      def wine_managed_executable?(path, definition)
+        platform_key == :linux &&
+          @wine &&
+          definition.dig(:metadata, :launcher_adapter) == :simutronics &&
+          File.extname(path).casecmp?('.exe')
       end
 
       def resolution(definition, path, source)

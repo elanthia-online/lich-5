@@ -122,6 +122,13 @@ reconnect_if_wanted = proc {
     # semantics, but it should not constrain saved-entry lookup.
     modifiers = ARGV.dup
     requested_instance, requested_fe, requested_custom_launch = Lich::Common::Authentication::LoginHelpers.resolve_login_args(modifiers)
+    if requested_instance.nil?
+      message = "Invalid game code. Valid game codes: #{Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.join(', ')}"
+      STDERR.puts "error: #{message}"
+      Lich.log "error: #{message}"
+      STDERR.flush
+      raise SystemExit.new(1)
+    end
     lookup_frontend = Lich::Common::Authentication::LoginHelpers.resolve_lookup_frontend(requested_fe, ARGV)
     new_character_login = requested_character.match?(Lich::Common::Authentication::LoginHelpers::NEW_CHARACTER_LOGIN)
 
