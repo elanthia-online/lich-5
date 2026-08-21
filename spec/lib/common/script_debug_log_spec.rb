@@ -416,5 +416,19 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       expect { Lich::Common::Script.new_downstream_xml('You see a kobold.') }.not_to raise_error
       expect(writer.open?).to be false
     end
+
+    it 'reports the log as closed and falls back to echo, even though the writer stays registered' do
+      allow(described_class).to receive(:__report)
+      script = build_script('bigshot')
+      script.debug_log = true
+      described_class.for(script).instance_variable_get(:@io).close
+      Lich::Common::Script.new_downstream_xml('You see a kobold.') # trips __disable
+
+      expect(script.debug_log?).to be false
+      expect(script.debug_log_path).to be_nil
+
+      expect(script).to receive(:echo).with('still here')
+      script.debug_msg('still here')
+    end
   end
 end

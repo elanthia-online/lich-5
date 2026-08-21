@@ -2776,9 +2776,9 @@ module Lich
       #
       # While on, the script gets its own file under
       # +LOG_DIR/debug/<game>-<character>/<script>/+ containing the raw
-      # downstream XML, the stripped downstream lines, client input, script
-      # output, and anything the script passes to {#debug_msg}. Turning it off
-      # flushes and closes the file. Idempotent in both directions.
+      # downstream XML, client input, script output, and anything the script
+      # passes to {#debug_msg}. Turning it off flushes and closes the file.
+      # Idempotent in both directions.
       #
       # @param enabled [Boolean] true to open a log, false to close it
       # @return [Object] the value assigned (Ruby setter semantics)
@@ -2793,15 +2793,22 @@ module Lich
 
       # Whether this script currently has a debug log open.
       #
+      # False after a write failure closes the log out from under it, even
+      # though the writer stays registered until {#debug_log=} or script death
+      # deregisters it -- see {ScriptDebugLog#open?}.
+      #
       # @return [Boolean]
       def debug_log?
-        !ScriptDebugLog.for(self).nil?
+        ScriptDebugLog.for(self)&.open? || false
       end
 
       # Path of this script's current debug log.
       #
-      # @return [String, nil] the path, or nil when logging is off
+      # @return [String, nil] the path, or nil when logging is off (including
+      #   when a write failure has closed the file out from under it)
       def debug_log_path
+        return nil unless debug_log?
+
         ScriptDebugLog.for(self)&.path
       end
 
@@ -2830,7 +2837,7 @@ module Lich
       # @see #debug_log=
       def debug_msg(message, to_screen: true)
         writer = ScriptDebugLog.for(self)
-        if writer
+        if writer&.open?
           writer.write(:message, message)
         elsif to_screen
           echo(message)
