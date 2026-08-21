@@ -369,13 +369,16 @@ RSpec.describe Lich::Common::FrontendLocator do
     end
   end
 
-  it 'converts Wine registry directories before executable discovery' do
+  it 'discovers a Wine frontend without requiring a Unix execute bit' do
     Dir.mktmpdir do |prefix|
-      wrayth = executable(File.join(prefix, 'drive_c', 'Simutronics', 'Wrayth.exe'))
+      wrayth = File.join(prefix, 'drive_c', 'Simutronics', 'Wrayth.exe')
+      FileUtils.mkdir_p(File.dirname(wrayth))
+      File.write(wrayth, 'PE executable')
+      FileUtils.chmod(0o644, wrayth)
       wine = Module.new
       wine.const_set(:PREFIX, prefix)
       wine.define_singleton_method(:registry_gets) do |key|
-        key.include?('STORM32') ? 'C:\\Simutronics' : nil
+        key == 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Simutronics\\STORM32\\Directory' ? 'C:\\Simutronics' : nil
       end
       stub_const('Wine', wine)
       locator = described_class.new(
@@ -389,6 +392,28 @@ RSpec.describe Lich::Common::FrontendLocator do
           frontend_id: 'stormfront',
           executable_path: File.realpath(wrayth),
           source: :registry
+        )
+      )
+    end
+  end
+
+  it 'accepts a Wine frontend override without requiring a Unix execute bit' do
+    Dir.mktmpdir do |directory|
+      wrayth = File.join(directory, 'Wrayth.exe')
+      File.write(wrayth, 'PE executable')
+      FileUtils.chmod(0o644, wrayth)
+      locator = described_class.new(
+        platform_key: :linux,
+        environment: { 'PATH' => '' },
+        wine: Module.new
+      )
+
+      expect(File.executable?(wrayth)).to be(false)
+      expect(locator.resolve('stormfront', override: wrayth)).to eq(
+        described_class::Resolution.new(
+          frontend_id: 'stormfront',
+          executable_path: File.realpath(wrayth),
+          source: :override
         )
       )
     end

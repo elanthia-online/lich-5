@@ -36,7 +36,7 @@ module Lich
       def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false, generator: false)
         with_retry do
           if game_code && (character || generator)
-            EAccess.auth(
+            EAccess.auth_with_timeout(
               account: account,
               password: password,
               character: character,
@@ -44,13 +44,13 @@ module Lich
               generator: generator
             )
           elsif legacy
-            EAccess.auth(
+            EAccess.auth_with_timeout(
               account: account,
               password: password,
               legacy: true
             )
           else
-            EAccess.auth(
+            EAccess.auth_with_timeout(
               account: account,
               password: password
             )

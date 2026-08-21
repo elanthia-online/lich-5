@@ -1077,6 +1077,41 @@ RSpec.describe Lich::DragonRealms::DRC do
         end
       end
     end
+
+    # Regression: a script that gets pause_script'd while holding
+    # $safe_pause_lock is a live-but-suspended thread that keeps the mutex, so
+    # every peer deadlocks on try_lock. The holder must be made immune to pause
+    # (ignore_pause) for as long as it owns the lock, then restored.
+    describe 'lock holder pause immunity' do
+      let(:holder) { Script.new.tap { |s| s.name = 'holder'; s.ignore_pause = false } }
+
+      before { allow(Script).to receive(:self).and_return(holder) }
+
+      it 'makes the lock holder immune to pause while it holds the lock' do
+        described_class.safe_pause_list
+        expect(holder.ignore_pause).to be true
+      end
+
+      it 'restores the holder pause setting when the lock is released' do
+        described_class.safe_pause_list
+        described_class.safe_unpause_list(['other'])
+        expect(holder.ignore_pause).to be false
+      end
+
+      it 'restores a pre-existing ignore_pause=true rather than clobbering it' do
+        holder.ignore_pause = true
+        described_class.safe_pause_list
+        expect(holder.ignore_pause).to be true
+        described_class.safe_unpause_list([])
+        expect(holder.ignore_pause).to be true
+      end
+
+      it 'does not grant immunity when the lock cannot be acquired' do
+        $safe_pause_lock.lock
+        expect(described_class.safe_pause_list).to be false
+        expect(holder.ignore_pause).to be false
+      end
+    end
   end
 
   describe '.log_window' do

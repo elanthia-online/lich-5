@@ -604,7 +604,7 @@ end
 # Represents running scripts. Full implementation for testing pause/unpause.
 
 class Script
-  attr_accessor :paused, :no_pause_all, :name
+  attr_accessor :paused, :no_pause_all, :name, :ignore_pause
 
   def paused?
     @paused || false
