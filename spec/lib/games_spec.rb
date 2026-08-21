@@ -11,6 +11,9 @@ require "common/detachable_client_registry"
 require "common/sharedbuffer"
 require "common/shutdown_coordinator"
 require "common/xmlparser"
+require "common/downstreamhook"
+require "common/front-end"
+require "util/util"
 require "games"
 require "gemstone/wounds"
 require "gemstone/scars"
@@ -1557,6 +1560,86 @@ RSpec.describe Lich::GameBase::Game do
         expect { described_class.send(:send_to_client, 'test data') }.not_to raise_error
         eventually { expect(Lich).to have_received(:log).with(/client socket write failed.*closed stream/) }
       end
+    end
+  end
+
+  describe '.process_downstream_hooks with a sentinel-supporting frontend' do
+    # Regression coverage for the reported production bug: a Saga session
+    # (the only frontend with :sentinel) saw a literal, visible 0x1F Unit
+    # Separator character during quiet-suppressed issue_command output.
+    # util_spec.rb confirms Lich::Util.preserve_quiet_state_tags itself
+    # returns a newline-terminated tag; this confirms that value survives
+    # end-to-end through DownstreamHook.run, Game#process_downstream_hooks,
+    # and Game#prefix_origin_sentinel to the actual client write, which is
+    # where the bug actually manifested -- a passing unit test on the
+    # util.rb side alone would not have caught a regression introduced at
+    # this layer (e.g. a future change to prefix_origin_sentinel's line
+    # matching, or to how/when it's invoked).
+    def eventually(timeout: 1)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        begin
+          return yield
+        rescue RSpec::Expectations::ExpectationNotMetError
+          raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+          sleep 0.005
+        end
+      end
+    end
+
+    before do
+      allow(Lich).to receive(:log)
+      # games.rb calls DownstreamHook/Frontend as bare top-level constants
+      # (production relies on `include Lich::Common` at boot for that to
+      # resolve). spec_helper.rb separately defines lightweight top-level
+      # mocks for both, guarded by `unless defined?`, for specs that don't
+      # need real behavior -- neither mock implements .add/.remove
+      # (DownstreamHook) or supports_sentinel? (Frontend). Rebind both to
+      # the real classes for this block, independent of file load order
+      # across the suite (see util_spec.rb for the load-order failure this
+      # protects against).
+      stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+      stub_const('Frontend', Lich::Common::Frontend)
+
+      @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
+      $_DETACHABLE_CLIENT_REGISTRY_ = nil
+      $_DETACHABLE_CLIENT_ = nil
+      $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
+      $frontend = 'saga' # the only registered :sentinel frontend
+    end
+
+    after do
+      $_CLIENT_.close rescue nil
+      $_CLIENT_ = nil
+      $frontend = nil
+      DownstreamHook.remove('spec_quiet_hook')
+    end
+
+    it 'delivers a quiet-preserved tag to the client with the sentinel and terminator intact' do
+      # Mirrors exactly what Lich::Util.issue_command registers for
+      # quiet: true.
+      DownstreamHook.add('spec_quiet_hook', proc { |line| Lich::Util.preserve_quiet_state_tags(line) })
+
+      # The exact bundled chunk from the original bug report: the game
+      # bundles the mono-closing tag onto the same raw chunk as the prompt
+      # a quiet-filtered range ends on.
+      bundled_end_chunk = %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
+
+      described_class.send(:process_downstream_hooks, bundled_end_chunk)
+
+      eventually { expect(@raw_socket).to have_received(:write).with(%(\x1F<output class=""/>\n)) }
+    end
+
+    it 'does not sentinel-prefix the tag for a frontend without the :sentinel capability' do
+      $frontend = 'wrayth' # xml + mono, but no :sentinel
+      DownstreamHook.add('spec_quiet_hook', proc { |line| Lich::Util.preserve_quiet_state_tags(line) })
+
+      bundled_end_chunk = %(<output class=""/>\n<prompt time="1787075465">H&gt;</prompt>)
+
+      described_class.send(:process_downstream_hooks, bundled_end_chunk)
+
+      eventually { expect(@raw_socket).to have_received(:write).with(%(<output class=""/>\n)) }
     end
   end
 end
