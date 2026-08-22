@@ -1200,6 +1200,32 @@ RSpec.describe Lich::GameBase::Game do
       expect(mock_socket).to have_received(:puts).with('test')
     end
 
+    # -- wire encoding (regression: reviewer-flagged P1, upstream corruption) --
+
+    it 'encodes properly-decoded Unicode typographic punctuation back to its single Windows-1252 byte' do
+      allow(mock_socket).to receive(:puts)
+      # This is the contract _puts actually receives in production: text that
+      # has already been decoded (script-authored UTF-8 source, or frontend
+      # input decoded by the $_CLIENT_.gets loop in main.rb before reaching
+      # here) -- not raw undecoded socket bytes.
+      described_class.send(:_puts, "say chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+      expect(mock_socket).to have_received(:puts).with("say chest\x92s lid".b) # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'does not misinterpret a raw undecoded byte as a Unicode code point' do
+      # Regression guard for the exact bug the reviewer caught: if a caller
+      # ever again passes raw, undecoded frontend bytes straight into
+      # _puts (bypassing the decode step in main.rb's client loop), a raw
+      # 0x92 must not silently become "?" or raise. This asserts the
+      # *documented* contract -- _puts assumes properly-decoded input -- by
+      # proving correctly-decoded input for the same visible character
+      # round-trips exactly, in contrast to what raw bytes would do.
+      allow(mock_socket).to receive(:puts)
+      properly_decoded = Lich::Common::WireEncoding.decode("chest\x92s".b) # rubocop:disable Custom/AsciiOnlySource
+      described_class.send(:_puts, properly_decoded)
+      expect(mock_socket).to have_received(:puts).with("chest\x92s".b) # rubocop:disable Custom/AsciiOnlySource
+    end
+
     # -- Errno::EPIPE (pre-existing) ----------------------------------------
 
     context 'when socket raises Errno::EPIPE' do
@@ -1406,6 +1432,32 @@ RSpec.describe Lich::GameBase::Game do
         eventually { expect(second_raw_socket).to have_received(:write).with('test data') }
       end
 
+      # -- wire encoding (regression: reviewer-flagged P1, mojibake to frontends) --
+
+      it 're-encodes decoded UTF-8 text back to Windows-1252 bytes for every fanned-out detachable client' do
+        # Same double-decode mojibake risk as the single-client case, but the
+        # fan-out path writes to each attached client independently, so it
+        # needs its own coverage rather than relying on the non-detachable
+        # branch to prove the encode call is reached at all.
+        allow(raw_socket).to receive(:write)
+        allow(second_raw_socket).to receive(:write)
+        described_class.send(:send_to_client, "chest\u2019s lid opens\u2014slowly") # rubocop:disable Custom/AsciiOnlySource
+        eventually do
+          expect(raw_socket).to have_received(:write).with("chest\x92s lid opens\x97slowly".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+        eventually do
+          expect(second_raw_socket).to have_received(:write).with("chest\x92s lid opens\x97slowly".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+      end
+
+      it 'does not forward raw UTF-8 multi-byte sequences to any fanned-out detachable client' do
+        allow(raw_socket).to receive(:write)
+        allow(second_raw_socket).to receive(:write)
+        described_class.send(:send_to_client, "chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(raw_socket).not_to have_received(:write).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(second_raw_socket).not_to have_received(:write).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
+      end
+
       it 'continues writing to another client when one write fails' do
         allow(raw_socket).to receive(:write).and_raise(Errno::EPIPE)
         allow(second_raw_socket).to receive(:write)
@@ -1437,6 +1489,62 @@ RSpec.describe Lich::GameBase::Game do
         allow(raw_socket).to receive(:write)
         described_class.send(:send_to_client, 'test data')
         eventually { expect(raw_socket).to have_received(:write).with('test data') }
+      end
+
+      # -- wire encoding (regression: reviewer-flagged P1, mojibake to frontends) --
+
+      it 're-encodes decoded UTF-8 text back to Windows-1252 bytes before writing to the client' do
+        # read_server_string decodes to UTF-8 for Lich's own regex/Ox
+        # pipeline; frontends (Wizard, Stormfront, Wrayth, Saga) expect the
+        # original Windows-1252 wire bytes and do their own decoding.
+        # Forwarding the already-decoded UTF-8 string here would double-
+        # decode on the frontend side -- confirmed directly against Saga's
+        # own decodeCp1252 (Saga_0_7_2_app.asar, out/main/index.js).
+        allow(raw_socket).to receive(:write)
+        described_class.send(:send_to_client, "chest\u2019s lid opens\u2014slowly") # rubocop:disable Custom/AsciiOnlySource
+        eventually do
+          expect(raw_socket).to have_received(:write).with("chest\x92s lid opens\x97slowly".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+      end
+
+      it 'does not forward raw UTF-8 multi-byte sequences for typographic punctuation' do
+        # Negative assertion for the specific bug: the 3-byte UTF-8 form of
+        # a curly apostrophe (\xE2\x80\x99) must never reach the wire --
+        # only the single Windows-1252 byte (\x92).
+        allow(raw_socket).to receive(:write)
+        described_class.send(:send_to_client, "chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually do
+          expect(raw_socket).not_to have_received(:write).with("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+          expect(raw_socket).to have_received(:write).with("chest\x92s lid".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+      end
+
+      # -- Wizard markers (regression: CodeRabbit-flagged, sf_to_wiz output) --
+
+      it 'does not raise and correctly re-encodes text containing a Wizard marker plus non-ASCII characters' do
+        # Reproduces sf_to_wiz's actual output shape: a Wizard protocol
+        # marker (Private Use Area code point, see WireEncoding) spliced
+        # directly around real server text that happens to contain a
+        # genuine non-ASCII character. Before this fix, the marker was a
+        # raw ASCII-8BIT byte and this combination raised
+        # Encoding::CompatibilityError as soon as it reached send_to_client.
+        allow(raw_socket).to receive(:write)
+        marker_text = "#{Lich::Common::WireEncoding::WIZARD_SPEECH_START}chest\u2019s words#{Lich::Common::WireEncoding::WIZARD_SPEECH_END}" # rubocop:disable Custom/AsciiOnlySource
+        expect { described_class.send(:send_to_client, marker_text) }.not_to raise_error
+        eventually do
+          expect(raw_socket).to have_received(:write).with("\x8Achest\x92s words\xA0".b) # rubocop:disable Custom/AsciiOnlySource
+        end
+      end
+
+      it 'preserves the Wizard marker byte for ASCII-only marked text' do
+        captured = nil
+        allow(raw_socket).to receive(:write) { |arg| captured = arg }
+        marker_text = "#{Lich::Common::WireEncoding::WIZARD_LINK_START}a room description#{Lich::Common::WireEncoding::WIZARD_LINK_END}"
+        described_class.send(:send_to_client, marker_text)
+        eventually { expect(captured).not_to be_nil }
+        # The marker byte (0x87) must survive, not be replaced with "?" (0x3F).
+        expect(captured.bytes.first).to eq(0x87)
+        expect(captured.bytes.last).to eq(0xA0)
       end
 
       it 'absorbs Errno::EPIPE without raising' do

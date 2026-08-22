@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'common/shutdown_log'
+require_relative 'common/wire_encoding'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -630,8 +631,12 @@ module Lich
         # @param str [String] the raw command to send upstream
         # @return [true, nil] true when written; nil on connection error
         def _puts(str)
+          # str is typically UTF-8 (e.g. from a GTK entry); the wire expects
+          # Windows-1252, so a character like a typed curly apostrophe must
+          # be transcoded to its single Windows-1252 byte here rather than
+          # going out as its multi-byte UTF-8 encoding.
           @mutex.synchronize do
-            @socket.puts(str)
+            @socket.puts(Lich::Common::WireEncoding.encode(str))
           end
           true
         rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
@@ -863,7 +868,16 @@ module Lich
         def read_server_string(read_timeout: READ_TIMEOUT_SECONDS)
           return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
 
-          @socket.gets
+          line = @socket.gets
+          return line if line.nil?
+
+          # The wire is Windows-1252, not whatever Encoding.default_external
+          # happens to resolve to (see Lich::Common::WireEncoding for why).
+          # Decoding here, before the line reaches any regex/gsub (the
+          # XMLCleaner methods below, strip_xml_simple in global_defs.rb,
+          # etc.), is what prevents an ArgumentError on a line that happens
+          # to contain a real high byte.
+          Lich::Common::WireEncoding.decode(line)
         end
 
         # @param timeout_count [Integer] number of consecutive read waits
@@ -1120,6 +1134,19 @@ module Lich
         end
 
         def send_to_client(alt_string)
+          # alt_string is UTF-8 (read_server_string decoded it for Lich's
+          # own regex/Ox pipeline). SynchronizedSocket now encodes to
+          # Windows-1252 centrally, in its writer_loop, immediately before
+          # every write it makes to any frontend-facing socket -- this
+          # method (and every other caller of client.write/.puts/
+          # .puts_main_stream: respond, _respond,
+          # detachable_client_send_init, etc.) intentionally does NOT
+          # encode here anymore. Frontends (Wizard, Stormfront, Wrayth,
+          # Saga) expect the original Windows-1252 wire bytes and do their
+          # own decoding -- confirmed directly against Saga's own
+          # decodeCp1252 (Saga_0_7_2_app.asar, out/main/index.js:2859,3029).
+          # Forwarding UTF-8 instead produces double-decode mojibake (e.g.
+          # a right single quote becomes "\u00E2\u20AC\u2122").
           detachable_clients = $_DETACHABLE_CLIENT_REGISTRY_&.snapshot || []
           detachable_clients = [$_DETACHABLE_CLIENT_] if detachable_clients.empty? && $_DETACHABLE_CLIENT_
           if !detachable_clients.empty?

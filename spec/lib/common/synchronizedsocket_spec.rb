@@ -360,6 +360,113 @@ RSpec.describe Lich::Common::SynchronizedSocket do
   end
 
   # ===========================================================================
+  # wire encoding -- every write to a frontend-facing delegate goes through
+  # Lich::Common::WireEncoding.encode. Regression coverage: this used to be
+  # the caller's job (send_to_client had its own explicit encode call), which
+  # meant callers that forgot (respond, _respond,
+  # detachable_client_send_init, detachable_client_send_player_id) sent raw
+  # UTF-8 to frontends that expect Windows-1252. Centralizing it here closes
+  # every call site, current and future, in one place.
+  # ===========================================================================
+  describe 'wire encoding on write' do
+    it 'encodes a #puts argument containing real non-ASCII text to Windows-1252 before writing' do
+      allow(delegate).to receive(:puts)
+      socket.puts("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+      eventually { expect(delegate).to have_received(:puts).with("chest\x92s lid".b) } # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'encodes a #write argument the same way' do
+      allow(delegate).to receive(:write)
+      socket.write("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+      eventually { expect(delegate).to have_received(:write).with("chest\x92s lid".b) } # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'encodes a #puts_main_stream argument the same way' do
+      allow(delegate).to receive(:puts)
+      socket.puts_main_stream("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+      eventually { expect(delegate).to have_received(:puts).with("chest\x92s lid".b) } # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'does not raise and preserves both marker and text for a Wizard marker plus non-ASCII text' do
+      allow(delegate).to receive(:puts)
+      marker_text = "#{Lich::Common::WireEncoding::WIZARD_SPEECH_START}chest\u2019s words#{Lich::Common::WireEncoding::WIZARD_SPEECH_END}" # rubocop:disable Custom/AsciiOnlySource
+      expect { socket.puts(marker_text) }.not_to raise_error
+      eventually { expect(delegate).to have_received(:puts).with("\x8Achest\x92s words\xA0".b) } # rubocop:disable Custom/AsciiOnlySource
+    end
+
+    it 'leaves plain ASCII byte-identical (only the encoding tag changes)' do
+      allow(delegate).to receive(:puts)
+      socket.puts('hello there')
+      eventually { expect(delegate).to have_received(:puts).with('hello there') }
+    end
+
+    it 'leaves a non-String argument (e.g. nil from a caller with no args) untouched' do
+      allow(delegate).to receive(:puts).with(no_args)
+      socket.puts
+      eventually { expect(delegate).to have_received(:puts).with(no_args) }
+    end
+
+    it 'encodes a String nested inside an Array argument (regression: previously only checked top-level args)' do
+      # IO#puts flattens nested Arrays (puts(["a", ["b", "c"]]) writes
+      # three separate lines) -- a String buried inside one must not
+      # silently skip encoding just because the top-level argument is an
+      # Array rather than a String.
+      allow(delegate).to receive(:puts)
+      socket.puts(["chest\u2019s lid", ["nested\u2019 line"]]) # rubocop:disable Custom/AsciiOnlySource
+      eventually do
+        expect(delegate).to have_received(:puts).with(["chest\x92s lid".b, ["nested\x92 line".b]]) # rubocop:disable Custom/AsciiOnlySource
+      end
+    end
+
+    it 'preserves Array structure and non-String elements while encoding String leaves' do
+      allow(delegate).to receive(:puts)
+      socket.puts(["chest\u2019s lid", 42, nil, ["deep\u2019 nesting", ["deeper\u2019 still"]]]) # rubocop:disable Custom/AsciiOnlySource
+      eventually do
+        expect(delegate).to have_received(:puts).with(
+          ["chest\x92s lid".b, 42, nil, ["deep\x92 nesting".b, ["deeper\x92 still".b]]] # rubocop:disable Custom/AsciiOnlySource
+        )
+      end
+    end
+
+    # Regression: fe-wire-encoding-findings.md. A primary client confirmed
+    # UTF-8-native on this direction (Genie4, Lichborne) must NOT have its
+    # text mangled through the CP1252 table -- it already expects real UTF-8.
+    context 'when the primary frontend is confirmed utf8_output (e.g. Genie4)' do
+      around do |example|
+        original = $frontend
+        $frontend = 'genie'
+        example.run
+        $frontend = original
+      end
+
+      it 'leaves non-ASCII text as real UTF-8 instead of encoding it to Windows-1252' do
+        allow(delegate).to receive(:puts)
+        socket.puts("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(delegate).to have_received(:puts).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
+      end
+    end
+
+    context 'when a detachable client is attached and the primary frontend is utf8_output' do
+      around do |example|
+        original = $frontend
+        $frontend = 'genie'
+        example.run
+        $frontend = original
+      end
+
+      it 'still encodes to Windows-1252 for the detachable client -- no per-connection frontend identity exists for it yet' do
+        allow(delegate).to receive(:puts)
+        detachable = described_class.new(delegate, role: :detachable)
+
+        detachable.puts("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(delegate).to have_received(:puts).with("chest\x92s lid".b) } # rubocop:disable Custom/AsciiOnlySource
+      ensure
+        detachable&.close rescue nil
+      end
+    end
+  end
+
+  # ===========================================================================
   # puts_main_stream -- main-stream write resilience
   # ===========================================================================
   describe '#puts_main_stream' do

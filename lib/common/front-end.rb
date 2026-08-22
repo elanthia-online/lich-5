@@ -245,14 +245,41 @@ module Lich
                  }
                })
 
+      # ProfanityFE forwards whatever bytes its terminal already gave it
+      # (typically UTF-8 on a modern OS) rather than pre-encoding to
+      # Windows-1252 the way the Simu-lineage clients below do -- see
+      # Lich::Common::ClientLineReader, the only reader of this capability.
       register(:profanity,
-               capabilities: %i[xml streams])
+               capabilities: %i[xml streams utf8_input])
 
+      # Genie4 (net6.0) is UTF-8-native both ways -- Encoding.Default is
+      # hardcoded to UTF-8 on .NET Core/5+ regardless of OS locale (an
+      # artifact of the runtime target, not a deliberate design choice, but
+      # the wire behavior is what it is either way). Confirmed symmetric via
+      # source (Encoding.Default.GetBytes/GetString, both directions) and
+      # live probe. See fe-wire-encoding-findings.md.
       register(:genie,
-               capabilities: %i[xml mono])
+               capabilities: %i[xml mono utf8_input utf8_output])
 
+      # Frostbite's frontend-to-Lich direction is hardcoded UTF-8
+      # (QByteArray::toUtf8, unconditional) -- confirmed by source and live
+      # probe, hence utf8_input. Its Lich-to-frontend direction uses Qt's
+      # QString::fromLocal8Bit, which is *system-locale-dependent* (the OS
+      # ANSI codepage on Windows, often UTF-8 on Linux) -- unconfirmed live
+      # in either direction, so utf8_output is deliberately NOT set here;
+      # CP1252 remains the safer default until that's live-tested. See
+      # fe-wire-encoding-findings.md.
       register(:frostbite,
-               capabilities: %i[xml])
+               capabilities: %i[xml utf8_input])
+
+      # Lichborne is not auto-detected/launched by Lich (no discovery/
+      # launcher metadata) -- this entry exists solely so `--frontend=
+      # lichborne` resolves the correct wire capabilities. Confirmed
+      # deliberate and symmetric UTF-8 both ways via source
+      # (socket.setEncoding('utf8') / Node's default write encoding) and
+      # live probe. See fe-wire-encoding-findings.md.
+      register(:lichborne,
+               capabilities: %i[utf8_input utf8_output])
 
       # SUKS has no client socket, so frontend protocol capabilities do not apply.
       register(:suks,
@@ -385,6 +412,31 @@ module Lich
 
       def self.supports_sentinel?(fe = $frontend)
         has_capability?(fe, :sentinel)
+      end
+
+      # Whether +fe+ sends already-UTF-8 frontend input rather than
+      # pre-encoding to Windows-1252 (see Lich::Common::ClientLineReader).
+      # Unregistered/unknown frontends -- including --pipe with no
+      # --frontend given -- default to false (Windows-1252), matching the
+      # legacy Simu-lineage clients' actual wire behavior.
+      def self.utf8_input?(fe = $frontend)
+        has_capability?(fe, :utf8_input)
+      end
+
+      # Whether +fe+ expects already-UTF-8 text from Lich rather than
+      # Windows-1252 wire bytes (see SynchronizedSocket's primary-client
+      # write path). Independent of utf8_input? -- Frostbite is confirmed
+      # UTF-8 on input but NOT confirmed UTF-8 on output (locale-dependent
+      # on Frostbite's end), so the two directions are deliberately separate
+      # capabilities, not one bidirectional flag. Unregistered/unknown
+      # frontends default to false (Windows-1252), matching the legacy
+      # Simu-lineage clients' actual wire behavior. Only applies to the
+      # primary attached frontend -- a detachable client (e.g. Vellum) has
+      # no per-connection frontend identity today; see
+      # fe-wire-encoding-findings.md for why that's a separate, open
+      # problem rather than something this predicate covers.
+      def self.utf8_output?(fe = $frontend)
+        has_capability?(fe, :utf8_output)
       end
 
       # Build the <playerID> re-emit tag for a detachable client (e.g. Saga).

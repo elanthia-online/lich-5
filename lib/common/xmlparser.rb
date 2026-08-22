@@ -350,20 +350,41 @@ module Lich
       # Game.process_xml_data). Ox fires start_element, then attr per attribute,
       # then attrs_done, then text/children, then end_element. Attributes are
       # accumulated and flushed to tag_start (matching the old REXML-style single
-      # tag_start(name, hash) call). The game stream is Windows-1252, so byte
-      # content is tagged with that encoding; names are ASCII.
+      # tag_start(name, hash) call).
       def start_element(name)
         @sax_element = name
         @sax_attributes = {}
       end
 
-      # Values are left in Ox's native encoding rather than retagged: REXML handed
-      # these callbacks UTF-8 (effectively ASCII for the scrubbed game stream), so
-      # force-tagging Windows-1252 was both a divergence from the pre-Ox behavior
-      # and the source of the entity corruption. Ox runs with convert_special:
-      # false, so XmlEntities.decode restores the standard entities here.
+      # Game.process_xml_data (lib/games.rb) decodes the raw wire bytes to real
+      # UTF-8 (Lich::Common::WireEncoding.decode) before handing the line to Ox,
+      # so by the time this callback fires the underlying bytes ARE valid UTF-8
+      # -- Ox (run with convert_special: false) just slices the buffer and tags
+      # the slice ASCII-8BIT rather than carrying the source encoding forward.
+      # That wrong tag is harmless for pure-ASCII content, but for a genuine
+      # multibyte character it makes String#codepoints (used downstream by
+      # WireEncoding.encode for fake tags, e.g. spell/right/left) walk the raw
+      # bytes one at a time instead of the one real codepoint they encode,
+      # corrupting exactly the high-byte characters this module exists to
+      # preserve. Retagging (not transcoding) is correct here: the bytes are
+      # already right, only the label is wrong.
+      def retag_ox_utf8!(str)
+        return str unless str.encoding == Encoding::ASCII_8BIT
+
+        retagged = str.dup.force_encoding(Encoding::UTF_8)
+        return retagged if retagged.valid_encoding?
+
+        # A genuinely malformed/truncated fragment (see check_stream_desync! in
+        # games.rb) -- scrub rather than let an invalid byte sequence propagate
+        # into a regex/gsub downstream and raise.
+        retagged.scrub('?')
+      end
+
+      # Ox hands attribute values back tagged ASCII-8BIT, not UTF-8 -- see
+      # #retag_ox_utf8! for why that tag is wrong and needs correcting here,
+      # before anything (including XmlEntities.decode) touches the bytes.
       def attr(name, value)
-        @sax_attributes[name] = XmlEntities.decode(value)
+        @sax_attributes[name] = XmlEntities.decode(retag_ox_utf8!(value))
       end
 
       def attrs_done
@@ -973,9 +994,10 @@ module Lich
       end
 
       def text(text_string)
-        # Called by Ox once per text node. Decode the standard XML entities (Ox
-        # runs with convert_special: false; see Lich::Common::XmlEntities).
-        text_string = XmlEntities.decode(text_string)
+        # Called by Ox once per text node. Retag before decoding the standard
+        # XML entities (Ox runs with convert_special: false; see
+        # Lich::Common::XmlEntities) -- see #retag_ox_utf8!.
+        text_string = XmlEntities.decode(retag_ox_utf8!(text_string))
         begin
           # fixme: /<stream id="Spells">.*?<\/stream>/m
           # $_CLIENT_.write(text_string) unless ($frontend != 'suks') or (@current_stream =~ /^(?:spellfront|inv|bounty|society)$/) or @active_tags.any? { |tag| tag =~ /^(?:compDef|inv|component|right|left|spell)$/ } or (@active_tags.include?('stream') and @active_ids.include?('Spells')) or (text_string == "\n" and (@last_tag =~ /^(?:popStream|prompt|compDef|dialogData|openDialog|switchQuickBar|component)$/))

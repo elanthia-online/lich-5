@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require_relative '../wire_encoding'
+require_relative '../front-end'
+
 module Lich
   module Common
     # Thread-safe socket wrapper with write-side resilience.
@@ -163,6 +166,52 @@ module Lich
 
       private
 
+      # Encodes a single write-queue argument for the wire, recursing into
+      # Arrays (matching IO#puts's own flattening semantics) so a String
+      # nested at any depth still gets encoded. Non-String, non-Array values
+      # (nil, integers, objects relying on #to_s inside the real IO#puts
+      # call, etc.) pass through untouched.
+      #
+      # Windows-1252 is the default -- correct for the Simu-lineage clients
+      # (Wizard, StormFront/Wrayth, Avalon, Saga) and every other frontend
+      # not confirmed otherwise. For the *primary* client only, a frontend
+      # explicitly confirmed UTF-8-native on this direction (Genie4,
+      # Lichborne -- see Frontend.utf8_output? and
+      # fe-wire-encoding-findings.md) is left as the UTF-8 text it already
+      # is instead of being mangled through the CP1252 table.
+      #
+      # KNOWN INCOMPATIBILITY, accepted rather than fixed here: this does
+      # NOT extend to detachable clients (@role == :detachable). A
+      # detachable connection has no per-connection frontend-identity
+      # mechanism today, unlike the primary client's Frontend.client/
+      # $frontend, so there is no way to know what a given detachable
+      # client expects -- encoding by @role alone here would be guessing.
+      # Every detachable client is therefore CP1252-encoded unconditionally,
+      # same as before this class existed. This is confirmed correct for
+      # Saga, which supports detachable attachment and is CP1252-native. It
+      # is confirmed WRONG for Vellum (github.com/Nisugi/VellumFE), whose
+      # read path is a Rust String -- a hard, type-level UTF-8 guarantee,
+      # not a convention -- so any non-UTF-8 byte written here (e.g. a
+      # script's own CP1252-encoded output, unrelated to the game server)
+      # hard-disconnects it. Fixing this needs a per-connection encoding
+      # declaration for detachable clients that doesn't exist yet; see
+      # fe-wire-encoding-findings.md's open item on this.
+      def encode_wire_arg(arg)
+        case arg
+        when Array
+          arg.map { |element| encode_wire_arg(element) }
+        when String
+          if @role == :primary && Lich::Common::Frontend.utf8_output?
+            text = arg.encoding == Encoding::ASCII_8BIT ? arg.dup.force_encoding(Encoding::UTF_8) : arg
+            text.valid_encoding? ? text : text.scrub('?')
+          else
+            Lich::Common::WireEncoding.encode(arg)
+          end
+        else
+          arg
+        end
+      end
+
       def ensure_writer_state
         return if @write_queue.is_a?(SizedQueue) && @stream_mutex &&
                   @deferred_main_stream.is_a?(Array) && @stream_stack.is_a?(Array)
@@ -198,11 +247,30 @@ module Lich
             @mutex.synchronize do
               return unless alive?
 
+              # Single choke point for every write this class makes,
+              # regardless of which public method (write/puts/
+              # puts_main_stream) queued it. This delegate is always a
+              # frontend-facing socket (Wizard, Stormfront, Wrayth, Saga,
+              # or --pipe) -- see the class comment -- so it always
+              # expects Windows-1252 wire bytes, not whatever encoding a
+              # Ruby string happened to carry. Encoding here, once,
+              # instead of at every call site (respond, _respond,
+              # send_to_client, detachable_client_send_init, and any
+              # future caller) is what actually closes this class of bug
+              # for good rather than one call site at a time.
+              #
+              # IO#puts flattens nested Arrays (puts(["a", ["b", "c"]])
+              # writes three lines), so a caller could legally pass one
+              # here too -- encode_wire_arg recurses into Arrays rather
+              # than only checking top-level arguments, so a String
+              # nested inside an Array can't silently skip encoding.
+              wire_args = args.map { |arg| encode_wire_arg(arg) }
+
               case kind
               when :puts
-                @delegate.puts(*args, &block)
+                @delegate.puts(*wire_args, &block)
               when :write
-                @delegate.write(*args, &block)
+                @delegate.write(*wire_args, &block)
               when :stop
                 return
               end
