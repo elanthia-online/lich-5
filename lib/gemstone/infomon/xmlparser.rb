@@ -56,7 +56,7 @@ module Lich
             /As(?: the)?/,
             /An intangible ripple of pure energy courses through the air as/,
             /A monstrous, too-wide smile spreads across/,
-            /With a final discordant squeal,/,
+            /With a final (?:discordant|silent) squeal,/,
             /A rush of silent thunder explodes outward from/,
             /Rage flickers in/,
             /A plaintive look passes across/,
@@ -75,6 +75,11 @@ module Lich
             /Half-formed arms grasp futilely at empty air and melting mouths work soundlessly as/,
             /Electric blue light pours from/,
             /Acid belches from/,
+            /Upon expiration,/,
+            /Emitting one final squeal,/,
+            /A shocked expression passes over the/,
+            /A shock of disbelief briefly registers on the/,
+            /Freezing in mid-air, the/,
           )
           NpcDeathPostfix = Regexp.union(
             /body as it rises, disappearing into the heavens/,
@@ -487,6 +492,16 @@ module Lich
             /crashes to the floor in a plume of dust/,
             /falls lifeless to the floor with a heavy thump/,
             /screams, shudders one last time and dies/,
+            /vainly struggles to remain standing, then falls to the ground motionless/,
+            /slumps to the ground, the darkly lined tattoos traversing <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> skin lose the luminescence that had seemed to radiate from them/,
+            /grunts and lays still, the life going out of <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> warm brown eyes/,
+            /lets out a harsh denial, the sound violent and agonizing, but <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> cry is cut off along with <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> life/,
+            /lets out a ragged gasp, collapsing to one knee and looking sightlessly to the heavens.  <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:He|She)<\/a><popBold\/> dies with a knowing smile on <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> face/,
+            /emits a rancid cloud from <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> hind end/,
+            /falls over and remains still/,
+            /face before <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls over lifeless/,
+            /face, the expression almost human, before the light leaves <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> eyes and <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> falls over dead/,
+            /suddenly ceases all movement and plunges lifeless to the ground/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix}\s(?:<pushBold\/>)?(?:(?:an?|some|the)\s)?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a><popBold\/>(?:'s)?,?\s#{NpcDeathPostfix}[\.!"]\s?\r?\n?$/
 
