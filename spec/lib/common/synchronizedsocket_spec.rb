@@ -427,6 +427,43 @@ RSpec.describe Lich::Common::SynchronizedSocket do
         )
       end
     end
+
+    # Regression: fe-wire-encoding-findings.md. A primary client confirmed
+    # UTF-8-native on this direction (Genie4, Lichborne) must NOT have its
+    # text mangled through the CP1252 table -- it already expects real UTF-8.
+    context 'when the primary frontend is confirmed utf8_output (e.g. Genie4)' do
+      around do |example|
+        original = $frontend
+        $frontend = 'genie'
+        example.run
+        $frontend = original
+      end
+
+      it 'leaves non-ASCII text as real UTF-8 instead of encoding it to Windows-1252' do
+        allow(delegate).to receive(:puts)
+        socket.puts("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(delegate).to have_received(:puts).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
+      end
+    end
+
+    context 'when a detachable client is attached and the primary frontend is utf8_output' do
+      around do |example|
+        original = $frontend
+        $frontend = 'genie'
+        example.run
+        $frontend = original
+      end
+
+      it 'still encodes to Windows-1252 for the detachable client -- no per-connection frontend identity exists for it yet' do
+        allow(delegate).to receive(:puts)
+        detachable = described_class.new(delegate, role: :detachable)
+
+        detachable.puts("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        eventually { expect(delegate).to have_received(:puts).with("chest\x92s lid".b) } # rubocop:disable Custom/AsciiOnlySource
+      ensure
+        detachable&.close rescue nil
+      end
+    end
   end
 
   # ===========================================================================

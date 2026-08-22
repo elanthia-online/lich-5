@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../wire_encoding'
+require_relative '../front-end'
 
 module Lich
   module Common
@@ -165,18 +166,38 @@ module Lich
 
       private
 
-      # Encodes a single write-queue argument to Windows-1252, recursing
-      # into Arrays (matching IO#puts's own flattening semantics) so a
-      # String nested at any depth still gets encoded. Non-String,
-      # non-Array values (nil, integers, objects relying on #to_s inside
-      # the real IO#puts call, etc.) pass through untouched -- only
-      # WireEncoding.encode's contract (String or nil) is honored here.
+      # Encodes a single write-queue argument for the wire, recursing into
+      # Arrays (matching IO#puts's own flattening semantics) so a String
+      # nested at any depth still gets encoded. Non-String, non-Array values
+      # (nil, integers, objects relying on #to_s inside the real IO#puts
+      # call, etc.) pass through untouched.
+      #
+      # Windows-1252 is the default -- correct for the Simu-lineage clients
+      # (Wizard, StormFront/Wrayth, Avalon, Saga) and every other frontend
+      # not confirmed otherwise. For the *primary* client only, a frontend
+      # explicitly confirmed UTF-8-native on this direction (Genie4,
+      # Lichborne -- see Frontend.utf8_output? and
+      # fe-wire-encoding-findings.md) is left as the UTF-8 text it already
+      # is instead of being mangled through the CP1252 table.
+      #
+      # Deliberately does NOT extend this to detachable clients (@role ==
+      # :detachable): a detachable connection (e.g. Vellum, which hard-
+      # disconnects on a non-UTF-8-valid read) has no per-connection
+      # frontend-identity mechanism today, unlike the primary client's
+      # Frontend.client/$frontend. Encoding here by @role alone would guess
+      # at what a given detachable client expects rather than know it --
+      # see fe-wire-encoding-findings.md's open item on this.
       def encode_wire_arg(arg)
         case arg
         when Array
           arg.map { |element| encode_wire_arg(element) }
         when String
-          Lich::Common::WireEncoding.encode(arg)
+          if @role == :primary && Lich::Common::Frontend.utf8_output?
+            text = arg.encoding == Encoding::ASCII_8BIT ? arg.dup.force_encoding(Encoding::UTF_8) : arg
+            text.valid_encoding? ? text : text.scrub('?')
+          else
+            Lich::Common::WireEncoding.encode(arg)
+          end
         else
           arg
         end
