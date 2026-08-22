@@ -1900,6 +1900,16 @@ The <pushBold/><a exist="12345678" noun="troll">ice troll</a><popBold/> screams 
 The <pushBold/><a exist="12345678" noun="farmhand">rotting farmhand</a><popBold/> wails in terrifying pain one last time and lies still.
 The <pushBold/><a exist="12345678" noun="wight">tomb wight</a><popBold/> screams evilly one last time and goes still.
 The <pushBold/><a exist="12345678" noun="spider">tomb spider's</a><popBold/> body jerks one last time and dies.
+Upon expiration, <pushBold/>a <a exist="12345678" noun="bully">cloud sprite bully</a><popBold/> emits a rancid cloud from <pushBold/><a exist="12345678" noun="bully">her</a><popBold/> hind end.
+Emitting one final squeal, <pushBold/>a <a exist="12345678" noun="tapir">bristly black tapir</a><popBold/> falls over and remains still.
+A shocked expression passes over the <pushBold/><a exist="12345678" noun="feyling">feyling</a><popBold/> face before <pushBold/><a exist="12345678" noun="feyling">she</a><popBold/> falls over lifeless.
+A shock of disbelief briefly registers on the <pushBold/><a exist="12345678" noun="lemur">ring-tail lemur's</a><popBold/> face, the expression almost human, before the light leaves <pushBold/><a exist="12345678" noun="lemur">his</a><popBold/> eyes and <pushBold/><a exist="12345678" noun="lemur">he</a><popBold/> falls over dead.
+Freezing in mid-air, the <pushBold/><a exist="12345678" noun="mosquito">enormous mosquito</a><popBold/> suddenly ceases all movement and plunges lifeless to the ground.
+The <pushBold/><a exist="12345678" noun="seer">Ithzir seer</a><popBold/> vainly struggles to remain standing, then falls to the ground motionless.
+As <pushBold/>a <a exist="12345678" noun="master">darkly inked fetish master</a><popBold/> slumps to the ground, the darkly lined tattoos traversing <pushBold/><a exist="12345678" noun="master">its</a><popBold/> skin lose the luminescence that had seemed to radiate from them.
+<pushBold/>A <a exist="12345678" noun="ape">hulking forest ape</a><popBold/> grunts and lays still, the life going out of <pushBold/><a exist="12345678" noun="ape">her</a><popBold/> warm brown eyes.
+<pushBold/>A <a exist="12345678" noun="meddler">cloud sprite meddler</a><popBold/> lets out a harsh denial, the sound violent and agonizing, but <pushBold/><a exist="12345678" noun="meddler">his</a><popBold/> cry is cut off along with <pushBold/><a exist="12345678" noun="meddler">his</a><popBold/> life.
+<pushBold/>A <a exist="12345678" noun="sentinel">lithe veiled sentinel</a><popBold/> lets out a ragged gasp, collapsing to one knee and looking sightlessly to the heavens.  <pushBold/><a exist="12345678" noun="sentinel">He</a><popBold/> dies with a knowing smile on <pushBold/><a exist="12345678" noun="sentinel">his</a><popBold/> face.
 __DEATH_CORPUS__
 
 CONTROL_CORPUS = <<'__CONTROL_CORPUS__'.freeze
