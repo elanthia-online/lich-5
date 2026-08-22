@@ -180,13 +180,22 @@ module Lich
       # fe-wire-encoding-findings.md) is left as the UTF-8 text it already
       # is instead of being mangled through the CP1252 table.
       #
-      # Deliberately does NOT extend this to detachable clients (@role ==
-      # :detachable): a detachable connection (e.g. Vellum, which hard-
-      # disconnects on a non-UTF-8-valid read) has no per-connection
-      # frontend-identity mechanism today, unlike the primary client's
-      # Frontend.client/$frontend. Encoding here by @role alone would guess
-      # at what a given detachable client expects rather than know it --
-      # see fe-wire-encoding-findings.md's open item on this.
+      # KNOWN INCOMPATIBILITY, accepted rather than fixed here: this does
+      # NOT extend to detachable clients (@role == :detachable). A
+      # detachable connection has no per-connection frontend-identity
+      # mechanism today, unlike the primary client's Frontend.client/
+      # $frontend, so there is no way to know what a given detachable
+      # client expects -- encoding by @role alone here would be guessing.
+      # Every detachable client is therefore CP1252-encoded unconditionally,
+      # same as before this class existed. This is confirmed correct for
+      # Saga, which supports detachable attachment and is CP1252-native. It
+      # is confirmed WRONG for Vellum (github.com/Nisugi/VellumFE), whose
+      # read path is a Rust String -- a hard, type-level UTF-8 guarantee,
+      # not a convention -- so any non-UTF-8 byte written here (e.g. a
+      # script's own CP1252-encoded output, unrelated to the game server)
+      # hard-disconnects it. Fixing this needs a per-connection encoding
+      # declaration for detachable clients that doesn't exist yet; see
+      # fe-wire-encoding-findings.md's open item on this.
       def encode_wire_arg(arg)
         case arg
         when Array
