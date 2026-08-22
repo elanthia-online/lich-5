@@ -51,13 +51,13 @@ RSpec.describe 'Lich::Common::Script pause enforcement' do
     script_class.class_variable_set(:@@stopping, [])
   end
 
-  def build_script(name:, paused: false, ignore_pause: false, no_pause_all: false)
+  def build_script(name:, paused: false, ignore_pause: false, no_pause_all: false, die_with: [])
     script_class.allocate.tap do |script|
       script.instance_variable_set(:@name, name)
       script.instance_variable_set(:@custom, false)
       script.instance_variable_set(:@quiet, true)
       script.instance_variable_set(:@thread_group, thread_group)
-      script.instance_variable_set(:@die_with, [])
+      script.instance_variable_set(:@die_with, die_with)
       script.instance_variable_set(:@paused, paused)
       script.instance_variable_set(:@ignore_pause, ignore_pause)
       script.instance_variable_set(:@no_pause_all, no_pause_all)
@@ -69,6 +69,7 @@ RSpec.describe 'Lich::Common::Script pause enforcement' do
       script.instance_variable_set(:@killer_mutex, Mutex.new)
       script.instance_variable_set(:@killed_externally, false)
       script.instance_variable_set(:@kill_source, nil)
+      allow(script).to receive(:report_errors) { |&blk| blk.call }
     end
   end
 
@@ -204,6 +205,23 @@ RSpec.describe 'Lich::Common::Script pause enforcement' do
 
       expect(kill_thread).not_to be_alive
       expect(target_script).to have_received(:kill)
+    end
+  end
+
+  describe 'a paused script tearing down its own die_with dependents' do
+    it 'does not deadlock cleanup on its own pause state (coderabbit review, PR #1537)' do
+      # If a paused script is killed and has die_with dependents, its cleanup
+      # thread identifies as itself (CLEANUP_SCRIPT_THREAD_KEY), so the
+      # Script.kill checkpoint added for the bigshot fix would otherwise wait
+      # on the script's own pause state -- which nothing will ever clear,
+      # since the script is dying. This must complete promptly instead.
+      parent = build_script(name: 'paused-parent', paused: true, die_with: ['dependent'])
+      dependent = build_script(name: 'dependent')
+      script_class.class_variable_set(:@@running, [parent, dependent])
+
+      expect(Timeout.timeout(2) { parent.kill(context: :shutdown) }).to eq('paused-parent')
+
+      expect(script_class.list).to be_empty
     end
   end
 

@@ -2065,13 +2065,19 @@ module Lich
                 __stop_children(children, context)
                 raise cleanup_group_error if cleanup_group_error
 
+                # Clear pause state before die_with propagation: this cleanup
+                # thread identifies as `self` (CLEANUP_SCRIPT_THREAD_KEY), so
+                # Script.kill's calling-script pause checkpoint would
+                # otherwise wait on a paused script's own teardown to unpause
+                # it -- which never happens, deadlocking cleanup and leaving
+                # die_with dependents unstopped.
+                @paused = false
                 @die_with ||= []
                 __run_cleanup_queue(@die_with) do |script_name|
                   failed = true unless __run_cleanup_callback do
                     Script.kill(script_name, context: context)
                   end
                 end
-                @paused = false
                 @at_exit_procs ||= []
                 __run_cleanup_queue(@at_exit_procs) do |callback|
                   failed = true unless __run_cleanup_callback { callback.call }
