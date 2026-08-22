@@ -157,6 +157,15 @@ module Lich
       def self.encode(text)
         return nil if text.nil?
 
+        # String#codepoints raises ArgumentError on a string with an
+        # invalid byte sequence for its own encoding tag. Game._puts has
+        # no rescue around this call, so an invalid string here would
+        # crash straight through to a script/caller instead of degrading
+        # gracefully the way every other malformed-input path in this
+        # module does (see the fallback byte and the Ox retag/scrub in
+        # XMLParser). Scrub rather than propagate.
+        text = text.scrub('?') unless text.valid_encoding?
+
         bytes = text.codepoints.map do |cp|
           next WIZARD_MARKER_BYTES[cp] if WIZARD_MARKER_BYTES.key?(cp)
           next cp if cp <= 0x7F || (cp >= 0xA0 && cp <= 0xFF)

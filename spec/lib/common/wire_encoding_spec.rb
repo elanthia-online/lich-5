@@ -66,6 +66,13 @@ RSpec.describe Lich::Common::WireEncoding do
     it 'returns nil for nil input rather than raising' do
       expect(described_class.encode(nil)).to be_nil
     end
+
+    it 'scrubs an invalidly-tagged string rather than raising (regression: String#codepoints raises ArgumentError on invalid encoding, and Game._puts has no rescue around this call)' do
+      invalid = "abc\x92def".dup.force_encoding(Encoding::UTF_8) # rubocop:disable Custom/AsciiOnlySource
+      expect(invalid.valid_encoding?).to be false
+      expect { described_class.encode(invalid) }.not_to raise_error
+      expect(described_class.encode(invalid)).to eq('abc?def'.b)
+    end
   end
 
   describe 'Wizard marker code points' do

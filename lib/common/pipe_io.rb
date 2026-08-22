@@ -18,6 +18,17 @@ module Lich
       def initialize(input: $stdin, output: $stdout)
         @input  = input
         @output = output
+        # Force binary mode so #gets returns the exact bytes written to the
+        # pipe, tagged ASCII-8BIT, regardless of Encoding.default_external/
+        # default_internal -- without this, an internal_encoding configured
+        # anywhere in the process (Encoding.default_internal, -E, etc.)
+        # would make Ruby's IO layer itself transcode on read, which could
+        # corrupt or invalidate a genuine Windows-1252 high byte before it
+        # ever reaches WireEncoding.decode. binmode makes the "raw bytes,
+        # no transcoding, ever" contract below actually true rather than
+        # merely true by coincidence of how the process happens to be
+        # configured today.
+        @input.binmode if @input.respond_to?(:binmode)
         @output.sync = true # pipes must flush downstream output immediately
         @eof = false
       end
@@ -26,16 +37,15 @@ module Lich
       # Returns nil at EOF, which both ends the read loop and marks us closed.
       #
       # Contract: returns raw bytes exactly as read from +input+ ($stdin by
-      # default), tagged with whatever Encoding.default_external happens to
-      # be -- the same as a real TCPSocket#gets. This is NOT decoded text;
-      # every $_CLIENT_.gets call site in lib/main/main.rb reads through
+      # default), tagged ASCII-8BIT (see #initialize's binmode) -- the same
+      # as a real TCPSocket#gets. This is NOT decoded text; every
+      # $_CLIENT_.gets call site in lib/main/main.rb reads through
       # Lich::Common::ClientLineReader.read, never #gets directly, which
       # decodes it before anything treats it as Unicode. --pipe mode's wire
       # contract is Windows-1252 by default, the same as a real socket-based
-      # frontend -- $stdin is not given any special encoding treatment
-      # here, deliberately. A --pipe launcher that wants to send already-
-      # UTF-8 text must identify as a frontend registered with the
-      # :utf8_input capability (see Lich::Common::Frontend.utf8_input?) via
+      # frontend. A --pipe launcher that wants to send already-UTF-8 text
+      # must identify as a frontend registered with the :utf8_input
+      # capability (see Lich::Common::Frontend.utf8_input?) via
       # --frontend=, not rely on this class doing any detection itself.
       def gets(*args)
         line = @input.gets(*args)

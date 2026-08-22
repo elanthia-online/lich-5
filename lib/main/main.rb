@@ -366,7 +366,11 @@ reconnect_if_wanted = proc {
       # stdin supplies what a front-end would send (including the initial login
       # key); processed server output is written to stdout. EOF on stdin marks
       # the client dead (PipeIO#closed?) and triggers the normal shutdown path.
-      Frontend.client = 'unknown'
+      # A --pipe launcher that wants Frontend.utf8_input?/utf8_output? to
+      # activate (e.g. ProfanityFE piped through stdin/stdout) must be able
+      # to say so; only fall back to 'unknown' (Windows-1252 default) when
+      # nothing was actually requested.
+      Frontend.client = @argv_options[:frontend] || 'unknown'
       $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
       Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     elsif Frontend.client.eql?('suks')
@@ -513,7 +517,9 @@ reconnect_if_wanted = proc {
     # stdin/stdout act as the client transport; connect straight to the game
     # server named by -g (SGE/eaccess login already bypassed by -g). stdin
     # supplies the login key + version; processed server output goes to stdout.
-    Frontend.client = 'unknown'
+    # See the --pipe branch above for why this preserves an explicit
+    # --frontend= request instead of always forcing 'unknown'.
+    Frontend.client = @argv_options[:frontend] || 'unknown'
     $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
     Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])

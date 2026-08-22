@@ -1451,11 +1451,22 @@ RSpec.describe Lich::GameBase::Game do
       end
 
       it 'does not forward raw UTF-8 multi-byte sequences to any fanned-out detachable client' do
+        # Paired with the positive assertion in the same `eventually` block
+        # (matching the non-detachable case below) rather than a standalone
+        # `not_to have_received` -- that alone would pass on the first poll,
+        # before the writer thread has written anything at all, making the
+        # example vacuously true regardless of what's actually written.
         allow(raw_socket).to receive(:write)
         allow(second_raw_socket).to receive(:write)
         described_class.send(:send_to_client, "chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
-        eventually { expect(raw_socket).not_to have_received(:write).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
-        eventually { expect(second_raw_socket).not_to have_received(:write).with("chest\u2019s lid") } # rubocop:disable Custom/AsciiOnlySource
+        eventually do
+          expect(raw_socket).to have_received(:write).with("chest\x92s lid".b) # rubocop:disable Custom/AsciiOnlySource
+          expect(raw_socket).not_to have_received(:write).with("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        end
+        eventually do
+          expect(second_raw_socket).to have_received(:write).with("chest\x92s lid".b) # rubocop:disable Custom/AsciiOnlySource
+          expect(second_raw_socket).not_to have_received(:write).with("chest\u2019s lid") # rubocop:disable Custom/AsciiOnlySource
+        end
       end
 
       it 'continues writing to another client when one write fails' do
