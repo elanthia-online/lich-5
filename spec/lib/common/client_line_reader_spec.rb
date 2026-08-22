@@ -46,5 +46,20 @@ RSpec.describe Lich::Common::ClientLineReader do
       allow(fake_client).to receive(:gets).and_return("chest\x94 nice.\r\n".b) # rubocop:disable Custom/AsciiOnlySource
       expect { described_class.read(fake_client) }.not_to raise_error
     end
+
+    it 'passes already-UTF-8 frontend input through untouched instead of double-decoding it as Windows-1252 (regression: a terminal-based frontend like ProfanityFE, which forwards its terminal locale rather than pre-encoding to CP1252 the way Wizard/StormFront/Saga do)' do
+      # U+2019 (real right single quotation mark), sent as genuine UTF-8 bytes
+      # rather than the single CP1252 byte 0x92 a legacy client would send.
+      allow(fake_client).to receive(:gets).and_return("say chest’s lid\r\n") # rubocop:disable Custom/AsciiOnlySource
+      result = described_class.read(fake_client)
+      expect(result).to eq("say chest’s lid\r\n") # rubocop:disable Custom/AsciiOnlySource
+      expect(result.encoding).to eq(Encoding::UTF_8)
+    end
+
+    it 'still treats a raw Windows-1252 high byte as CP1252, not as invalid/stray UTF-8 (a lone 0x80-0x9F byte can never open a valid UTF-8 sequence, so this is unambiguous)' do
+      allow(fake_client).to receive(:gets).and_return("caf\xE9\r\n".b) # rubocop:disable Custom/AsciiOnlySource
+      result = described_class.read(fake_client)
+      expect(result).to eq("café\r\n") # rubocop:disable Custom/AsciiOnlySource
+    end
   end
 end
