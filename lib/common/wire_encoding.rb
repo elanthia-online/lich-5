@@ -27,10 +27,15 @@ module Lich
     # Standard's "best fit" mapping), so this module reproduces that exact
     # behavior instead of leaning on Ruby's stricter built-in table.
     #
-    # Deliberately does not touch how Ox parses the decoded text (Ox's
-    # convert_special: false / ASCII-8BIT attribute-value tagging in
-    # lib/common/xmlparser.rb is unrelated machinery with its own history --
-    # see the comments there -- and is out of scope for this fix).
+    # This module trusts its callers to hand it real Unicode codepoints
+    # (.encode) or raw wire bytes (.decode) -- it does not itself guard
+    # against a string whose encoding tag lies about its content. Ox (run
+    # with convert_special: false in lib/common/xmlparser.rb) hands its SAX
+    # callbacks the already-UTF-8-decoded server line's bytes back re-tagged
+    # ASCII-8BIT; XMLParser#retag_ox_utf8! corrects that tag before any of
+    # those values reach .encode (e.g. the spell/right/left fake tags),
+    # since .encode's codepoint-by-codepoint walk would otherwise treat each
+    # raw UTF-8 byte of a real multibyte character as its own codepoint.
     module WireEncoding
       # index i => Unicode code point for wire byte (0x80 + i). Order and
       # values match the standard Windows-1252 code page and Saga's
