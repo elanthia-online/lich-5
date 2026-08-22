@@ -469,6 +469,41 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.utf8_input?' do
+    context 'with explicit argument' do
+      it "returns true for 'profanity'" do
+        expect(frontend.utf8_input?('profanity')).to be true
+      end
+
+      %w[wizard avalon stormfront saga genie frostbite suks].each do |fe|
+        it "returns false for '#{fe}' (Windows-1252 wire behavior)" do
+          expect(frontend.utf8_input?(fe)).to be false
+        end
+      end
+
+      it "returns false for 'unknown'" do
+        expect(frontend.utf8_input?('unknown')).to be false
+      end
+
+      it 'returns false for nil (e.g. --pipe with no --frontend given)' do
+        expect(frontend.utf8_input?(nil)).to be false
+      end
+    end
+
+    context 'with $frontend global (default argument)' do
+      around do |example|
+        original = $frontend
+        example.run
+        $frontend = original
+      end
+
+      it 'reads from $frontend when no argument given' do
+        $frontend = 'profanity'
+        expect(frontend.utf8_input?).to be true
+      end
+    end
+  end
+
   describe '.supports_streams?' do
     context 'with explicit argument' do
       FE::STREAM_FRONTENDS.each do |fe|

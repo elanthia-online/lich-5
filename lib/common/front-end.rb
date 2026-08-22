@@ -245,8 +245,12 @@ module Lich
                  }
                })
 
+      # ProfanityFE forwards whatever bytes its terminal already gave it
+      # (typically UTF-8 on a modern OS) rather than pre-encoding to
+      # Windows-1252 the way the Simu-lineage clients below do -- see
+      # Lich::Common::ClientLineReader, the only reader of this capability.
       register(:profanity,
-               capabilities: %i[xml streams])
+               capabilities: %i[xml streams utf8_input])
 
       register(:genie,
                capabilities: %i[xml mono])
@@ -385,6 +389,15 @@ module Lich
 
       def self.supports_sentinel?(fe = $frontend)
         has_capability?(fe, :sentinel)
+      end
+
+      # Whether +fe+ sends already-UTF-8 frontend input rather than
+      # pre-encoding to Windows-1252 (see Lich::Common::ClientLineReader).
+      # Unregistered/unknown frontends -- including --pipe with no
+      # --frontend given -- default to false (Windows-1252), matching the
+      # legacy Simu-lineage clients' actual wire behavior.
+      def self.utf8_input?(fe = $frontend)
+        has_capability?(fe, :utf8_input)
       end
 
       # Build the <playerID> re-emit tag for a detachable client (e.g. Saga).

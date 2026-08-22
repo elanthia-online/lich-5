@@ -28,13 +28,15 @@ module Lich
       # Contract: returns raw bytes exactly as read from +input+ ($stdin by
       # default), tagged with whatever Encoding.default_external happens to
       # be -- the same as a real TCPSocket#gets. This is NOT decoded text;
-      # callers must run it through Lich::Common::WireEncoding.decode
-      # before treating it as Unicode (see the $_CLIENT_.gets call sites in
-      # lib/main/main.rb, which all do this immediately). --pipe mode's
-      # wire contract is the same Windows-1252 as the real socket -- $stdin
-      # is not given any special encoding treatment here, deliberately, so
-      # a --pipe frontend must send/receive the same raw bytes a real
-      # socket-based frontend would.
+      # every $_CLIENT_.gets call site in lib/main/main.rb reads through
+      # Lich::Common::ClientLineReader.read, never #gets directly, which
+      # decodes it before anything treats it as Unicode. --pipe mode's wire
+      # contract is Windows-1252 by default, the same as a real socket-based
+      # frontend -- $stdin is not given any special encoding treatment
+      # here, deliberately. A --pipe launcher that wants to send already-
+      # UTF-8 text must identify as a frontend registered with the
+      # :utf8_input capability (see Lich::Common::Frontend.utf8_input?) via
+      # --frontend=, not rely on this class doing any detection itself.
       def gets(*args)
         line = @input.gets(*args)
         @eof = true if line.nil?
