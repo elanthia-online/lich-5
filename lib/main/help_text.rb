@@ -186,9 +186,11 @@ module Lich
 
             Passing --active-session-dir=PATH also enables the active sessions
             service for that launch, even if it isn't persistently enabled.
-            This is a per-launch opt-in only -- it writes nothing to disk, and
+            This is a per-launch opt-in only -- it persists no setting, so
             omitting the flag on a later launch reverts to the persisted
-            setting (disabled by default).
+            setting (disabled by default). The service itself still writes
+            coordination files (a lock and a discovery record) into the
+            directory while it runs.
         TEXT
       end
 
