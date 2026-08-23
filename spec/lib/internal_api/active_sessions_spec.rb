@@ -124,6 +124,11 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
         expect(File.directory?(nested_dir)).to be(true)
       ensure
+        # Release before rm_rf: acquire_ownership_lock retains the open, flocked
+        # handle for the process lifetime, and the outer after hook only drops it
+        # after this deletion. Platforms that refuse to remove open locked files
+        # would leak the temporary directory.
+        described_class.send(:release_ownership_lock)
         FileUtils.rm_rf(base_dir)
       end
     end
