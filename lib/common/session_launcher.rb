@@ -17,7 +17,10 @@ module Lich
         { option: 'logs', key: :log_dir, constant: :LOG_DIR },
         { option: 'backup', key: :backup_dir, constant: :BACKUP_DIR },
         { option: 'lib', key: :lib_dir, constant: :LIB_DIR },
-        { option: 'active-session-dir', key: :active_session_dir, constant: :ACTIVE_SESSION_DIR }
+        # :inherit marks a flag with no constants.rb default of its own, which a
+        # child therefore cannot re-derive from its own ARGV. Such a flag falls
+        # back to this process's constant when the launch context omits it.
+        { option: 'active-session-dir', key: :active_session_dir, constant: :ACTIVE_SESSION_DIR, inherit: true }
       ].freeze
 
       class << self
@@ -96,8 +99,10 @@ module Lich
         end
 
         # Builds optional CLI flags for child launches.
-        # Emits path flags only when explicitly overridden to a non-default value.
-        # This keeps child ARGV concise and avoids passing parent default directories.
+        # Emits path flags only when explicitly overridden to a non-default value,
+        # or, for :inherit flags, when this process holds a value the child cannot
+        # re-derive. This keeps child ARGV concise and avoids passing parent
+        # default directories.
         #
         # @param context [Hash] Optional launch context from GUI callbacks.
         # @return [Array<String>] Optional flags (possibly empty).
@@ -157,8 +162,10 @@ module Lich
         def overridden_path_value(context, path_flag)
           context_key = path_flag[:key]
           constant_name = path_flag[:constant]
-          return nil unless context.key?(context_key)
+          return inherited_path_value(path_flag) unless context.key?(context_key)
 
+          # An explicitly empty value is an opt-out: the caller named the key and
+          # asked for nothing, so don't fall back to this process's own value.
           value = context[context_key]
           return nil if value.to_s.empty?
 
@@ -167,6 +174,29 @@ module Lich
           return nil if default_value && value_expanded == default_value
 
           value
+        end
+
+        # Returns this process's own value for an :inherit flag the launch context
+        # did not mention.
+        #
+        # Production launch contexts (see GuiLogin#handle_play_action) carry
+        # account and frontend keys only -- never directory overrides. For flags
+        # backed by a constants.rb default that is harmless, since the child
+        # re-derives the same path. An :inherit flag has no such default: a child
+        # spawned without it coordinates through its own TEMP_DIR instead, so
+        # every GUI-launched session would build an isolated Active Sessions
+        # registry and defeat the point of --active-session-dir.
+        #
+        # @param path_flag [Hash]
+        # @return [String, nil]
+        def inherited_path_value(path_flag)
+          return nil unless path_flag[:inherit]
+
+          constant_name = path_flag[:constant]
+          return nil unless Object.const_defined?(constant_name)
+
+          value = Object.const_get(constant_name).to_s
+          value.empty? ? nil : value
         end
 
         # Resolves the path value that the child would derive without an explicit flag.
