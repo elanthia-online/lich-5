@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative '../front-end'
-require_relative '../ruby_executable'
 
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Common::Authentication::LoginHelpers.method namespace.
@@ -603,52 +602,6 @@ module Lich
             when 'DRT' then '--drt'
             else nil
             end
-          end
-        end
-
-        # Spawns a Lich login session using a saved entry.
-        #
-        # This constructs and launches a Ruby + Lich command line with proper login arguments.
-        # It is aware of the Lich version and formats launch flags (e.g., `--gst`, `--GSX`) accordingly.
-        # Only the character name and game instance are passed - all sensitive data is handled by Lich internally.
-        #
-        # @param entry [Hash] the login entry (must include :char_name and :game_code)
-        # @param lich_path [String, nil] optional path to lich.rbw; defaults to LICH_DIR/lich.rbw
-        # @param startup_scripts [Array<String>] optional scripts to autostart post-login
-        # @param instance_override [String, Symbol, nil] optional instance override (e.g., 'GST', 'GSX')
-        # @param frontend_override [String, nil] optional frontend (e.g., 'avalon', 'wizard')
-        # @param custom_launch_filter [String, nil] optional custom launch filter for entry selection
-        # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
-        def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil, custom_launch_filter: nil)
-          ruby_path = Lich::Common::RubyExecutable.resolve
-          lich_path ||= File.join(LICH_DIR, 'lich.rbw')
-
-          spawn_cmd = [
-            "#{ruby_path}",
-            "#{lich_path}",
-            '--login', entry[:char_name]
-          ]
-          if instance_override
-            flag = format_launch_flag(instance_override)
-            spawn_cmd << flag if flag
-          end
-          spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
-          spawn_cmd << "--custom-launch=#{custom_launch_filter}" if custom_launch_filter
-          spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
-
-          Lich::Messaging.msg('info', "Spawning login: #{spawn_cmd}")
-
-          begin
-            pid = Process.spawn(*spawn_cmd)
-            Process.detach(pid)
-          rescue Errno::ENOENT => e
-            Lich::Messaging.msg('error', "Executable not found: #{e.message}")
-            Lich.log "error: Executable not found: #{e.message}"
-            nil
-          rescue StandardError => e
-            Lich::Messaging.msg('error', "Failed to launch login session: #{e.class} - #{e.message}")
-            Lich.log "error: Failed to launch login session: #{e.class} - #{e.message}"
-            nil
           end
         end
       end
