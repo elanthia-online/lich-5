@@ -854,7 +854,7 @@ module Lich
             end
           end
           calculate_mana(discern_data['min'], discern_data['more'], discern_data, false, settings)
-        elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil?
+        elsif discern_data.empty? || discern_data['time_stamp'].nil? || Time.now - discern_data['time_stamp'] > settings.check_discern_timer_in_hours * 60 * 60 || !discern_data['more'].nil? || stale_cambrinth_caps?(discern_data, settings)
           discern_data['time_stamp'] = Time.now
           DRC.retreat
           case discern = DRC.bput("discern #{data['abbrev']}", 'The spell requires at minimum \d+ mana streams and you think you can reinforce it with \d+ more', 'You don\'t think you are able to cast this spell', 'You have no idea how to cast that spell', 'You don\'t seem to be able to move to do that')
@@ -881,6 +881,18 @@ module Lich
         normalize_cambrinth_items(settings)
         # Ignore cambrinth if charges to use is nil or 0
         settings.cambrinth_num_charges ||= 0
+        if settings.cambrinth_distribute_charges
+          calculate_mana_by_item(total, remaining, discern_data, cyclic_or_ritual, settings)
+        else
+          calculate_mana_by_ratio(total, remaining, discern_data, cyclic_or_ritual, settings)
+        end
+      end
+
+      # Default. Splits the mana by the cap ratio of each cambrinth item, then gives
+      # every charge of an item the same size. It can charge an item past its cap,
+      # and integer division can drop mana. Kept as the default because a change to
+      # the charge amounts affects every profile.
+      def calculate_mana_by_ratio(total, remaining, discern_data, cyclic_or_ritual, settings)
         settings.cambrinth_items = [] if settings.cambrinth_num_charges == 0
         total_cambrinth_cap = settings.cambrinth_items.map { |x| x['cap'] }.inject(&:+) || 0
         charges_count_floor = remaining >= settings.cambrinth_num_charges ? settings.cambrinth_num_charges : 1
@@ -902,12 +914,161 @@ module Lich
             charge_amount = (total_cambrinth_mana / total_cambrinth_charges) * item['charges']
             discern_data['cambrinth'][index] = []
             charge_amount.times do |i|
-              discern_data['cambrinth'][index][i % item['charges']] += 1
+              # Lich patches NilClass#+ so that nil + 1 is 1. Spell it out here so
+              # that this does not depend on the patch.
+              slot = i % item['charges']
+              discern_data['cambrinth'][index][slot] = (discern_data['cambrinth'][index][slot] || 0) + 1
             end
           end
         else
           discern_data['cambrinth'] = nil
         end
+      end
+
+      # Opt in with cambrinth_distribute_charges. Splits the mana into whole charges,
+      # then fills each item up to its cap before it uses the next, the same way
+      # cast.lic does. No item goes over its cap and no mana is dropped.
+      def calculate_mana_by_item(total, remaining, discern_data, cyclic_or_ritual, settings)
+        cambrinth_items = settings.cambrinth_num_charges == 0 ? [] : settings.cambrinth_items
+        discern_data['cambrinth_caps'] = cambrinth_caps(settings)
+        total_cambrinth_cap = cambrinth_items.map { |item| item['cap'].to_i }.sum
+        if remaining > total_cambrinth_cap
+          discern_data['mana'] = discern_data['mana'] + (remaining - total_cambrinth_cap)
+          remaining = total - discern_data['mana']
+        end
+        if cyclic_or_ritual || cambrinth_items.empty?
+          discern_data['cambrinth'] = nil
+          discern_data['mana'] = discern_data['mana'] + remaining
+        elsif remaining > 0
+          num_charges = remaining >= settings.cambrinth_num_charges ? settings.cambrinth_num_charges : 1
+          distribution, leftover = allocate_cambrinth_charges(remaining, cambrinth_items, num_charges)
+          # Mana that fits in no cambrinth item goes into the base prep instead.
+          discern_data['mana'] = discern_data['mana'] + leftover
+          discern_data['cambrinth'] = distribution.empty? ? nil : distribution
+        else
+          discern_data['cambrinth'] = nil
+        end
+      end
+
+      # The mana capacity of one cambrinth item. An unset or non-positive cap means
+      # the config never declared a limit, so do not enforce one.
+      def cambrinth_item_cap(item)
+        cap = item['cap'].to_i
+        cap <= 0 ? Float::INFINITY : cap
+      end
+
+      # Works out how to charge an amount of mana into the cambrinth items.
+      #
+      # Each item takes as much as its cap allows, in the order the config lists
+      # them, so a small worn item fills before a large stored one. Each item then
+      # splits its own share into charges. Returns the per-item nested array and
+      # the mana that fits in no item.
+      def allocate_cambrinth_charges(mana, cambrinth_items, num_charges)
+        return [[], mana] if mana <= 0 || num_charges <= 0
+        return [[], mana] if cambrinth_items.nil? || cambrinth_items.empty?
+
+        allocations = Array.new(cambrinth_items.length, 0)
+        unallocated = mana
+        usable_cambrinth_indexes(cambrinth_items, num_charges).each do |index|
+          allocations[index] = [unallocated, cambrinth_item_cap(cambrinth_items[index])].min
+          unallocated -= allocations[index]
+        end
+
+        counts = cambrinth_charge_counts(allocations, num_charges)
+        distribution = allocations.each_with_index.map do |allocation, index|
+          split_cambrinth_charges(allocation, counts[index])
+        end
+        # Drop trailing empty entries so unused items are skipped entirely.
+        [distribution.reverse.drop_while(&:empty?).reverse, unallocated]
+      end
+
+      # Every item that holds mana needs at least one charge, so the charge budget
+      # limits how many items can be used. When there are more items than charges,
+      # keep the items with the largest caps.
+      def usable_cambrinth_indexes(cambrinth_items, num_charges)
+        indexes = (0...cambrinth_items.length).to_a
+        return indexes if indexes.length <= num_charges
+
+        indexes.max_by(num_charges) { |index| cambrinth_item_cap(cambrinth_items[index]) }.sort
+      end
+
+      # Gives one charge to every item that holds mana, then spends what is left of
+      # the charge budget on the largest charge, while that makes it smaller. This
+      # keeps each charge inside what the character can channel at once.
+      def cambrinth_charge_counts(allocations, num_charges)
+        counts = allocations.map { |allocation| allocation > 0 ? 1 : 0 }
+        funded = allocations.each_index.select { |index| allocations[index] > 0 }
+        spare = num_charges - funded.length
+        while spare > 0
+          index = funded.max_by { |i| [allocations[i].to_f / counts[i], allocations[i]] }
+          break if counts[index] >= allocations[index]
+
+          largest = funded.map { |i| allocations[i].to_f / counts[i] }.max
+          split = funded.map { |i| allocations[i].to_f / (i == index ? counts[i] + 1 : counts[i]) }.max
+          break if split >= largest
+
+          counts[index] += 1
+          spare -= 1
+        end
+        counts
+      end
+
+      # Splits an amount of mana into num_charges charge values, largest first.
+      # For example, 53 mana over 4 charges becomes [14, 13, 13, 13].
+      def split_cambrinth_charges(total_mana, num_charges)
+        return [] if total_mana <= 0 || num_charges <= 0
+
+        charge_values = []
+        rest = total_mana
+        charges_left = num_charges
+        while rest > 0 && charges_left > 0
+          next_charge = (rest * 1.0 / charges_left).ceil
+          charge_values << next_charge
+          rest -= next_charge
+          charges_left -= 1
+        end
+        charge_values
+      end
+
+      # Packs a flat list of charge values into the cambrinth items. Each item is
+      # filled up to its cap before the next item is used. Returns the per-item
+      # nested array and the mana that fits in no item.
+      def distribute_cambrinth_charges(charge_values, cambrinth_items)
+        pending = Array(charge_values).flatten.map(&:to_i).reject { |value| value <= 0 }
+        return [[], pending.sum] if cambrinth_items.nil? || cambrinth_items.empty?
+
+        distribution = Array.new(cambrinth_items.length) { [] }
+        charged = Array.new(cambrinth_items.length, 0)
+        leftover = 0
+        pending.each do |charge_value|
+          index = cambrinth_items.each_index.find do |i|
+            charged[i] + charge_value <= cambrinth_item_cap(cambrinth_items[i])
+          end
+          if index
+            distribution[index] << charge_value
+            charged[index] += charge_value
+          else
+            leftover += charge_value
+          end
+        end
+        # Drop trailing empty entries so unused items are skipped entirely.
+        [distribution.reverse.drop_while(&:empty?).reverse, leftover]
+      end
+
+      # Signature of the configured cambrinth items. A change to it invalidates any
+      # cached discern data, because the cached charges are split per item.
+      def cambrinth_caps(settings)
+        normalize_cambrinth_items(settings)
+        settings.cambrinth_items.map { |item| item['cap'].to_i }
+      end
+
+      # True when cached discern data was calculated against a different set of
+      # cambrinth items. Only the cambrinth_distribute_charges path records the
+      # signature, so the default path never invalidates on it.
+      def stale_cambrinth_caps?(discern_data, settings)
+        return false unless settings.cambrinth_distribute_charges
+
+        discern_data['cambrinth_caps'] != cambrinth_caps(settings)
       end
 
       def check_to_harness(should_harness)
@@ -1073,6 +1234,16 @@ module Lich
       end
 
       def charge_cambrinth_items(data, settings)
+        if settings.cambrinth_distribute_charges
+          charge_cambrinth_items_by_item(data, settings)
+        else
+          charge_cambrinth_items_repeated(data, settings)
+        end
+      end
+
+      # Default. A nested cambrinth list gives one entry to each item. A flat list
+      # goes to every item in full, so several items each charge the whole list.
+      def charge_cambrinth_items_repeated(data, settings)
         settings.cambrinth_items.each_with_index do |item, index|
           case data['cambrinth'].first
           when Array
@@ -1081,6 +1252,48 @@ module Lich
             find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, data['cambrinth'], settings.cambrinth_invoke_exact_amount)
           end
         end
+      end
+
+      # Opt in with cambrinth_distribute_charges. A flat list is spread over the
+      # items instead of charged into every one of them.
+      def charge_cambrinth_items_by_item(data, settings)
+        charges = data['cambrinth']
+        return unless charges.is_a?(Array) && !charges.empty?
+
+        unless charges.first.is_a?(Array)
+          return unless charges.first.is_a?(Integer)
+
+          charges = spread_flat_cambrinth_charges(charges, settings.cambrinth_items)
+        end
+
+        settings.cambrinth_items.each_with_index do |item, index|
+          item_charges = charges[index]
+          next if item_charges.nil? || item_charges.empty?
+
+          find_charge_invoke_stow(item['name'], item['stored'], item['cap'], settings.dedicated_camb_use, item_charges, settings.cambrinth_invoke_exact_amount)
+        end
+      end
+
+      # Turns one flat list of charge values, as written in a spell config, into one
+      # list for each cambrinth item.
+      #
+      # A single item takes the list unchanged. In this path cambrinth_cap feeds the
+      # arcana check in skilled_to_charge_while_worn?, not a charge limit, and many
+      # configs charge well past it on purpose.
+      #
+      # Several items need the list spread over them, because the whole list into
+      # every item charges the same mana again for each item.
+      def spread_flat_cambrinth_charges(charge_values, cambrinth_items)
+        return [charge_values] if cambrinth_items.nil? || cambrinth_items.length <= 1
+
+        distribution, leftover = distribute_cambrinth_charges(charge_values, cambrinth_items)
+        return distribution if leftover <= 0
+
+        # Never drop mana. What fits nowhere goes to the item with the largest cap.
+        largest = cambrinth_items.each_with_index.max_by { |item, _index| item['cap'].to_i }.last
+        distribution[largest] = (distribution[largest] || []) + [leftover]
+        Lich::Messaging.msg("bold", "DRCA: #{leftover} mana does not fit your cambrinth_items caps and went into your #{cambrinth_items[largest]['name']}. Check those caps.")
+        distribution
       end
     end
   end
