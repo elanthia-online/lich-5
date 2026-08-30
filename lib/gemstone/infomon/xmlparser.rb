@@ -507,7 +507,7 @@ module Lich
             /spasms in death and then goes still/,
             /staggers, then falls to the floor and dies/,
             /dies unceremoniously/,
-            /slumps to <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> side and dies/,            
+            /slumps to <pushBold\/><a exist="[^"]+" noun="[^"]+">(?:hi[ms]|her|s?he|its?)<\/a><popBold\/> side and dies/,
           )
           NpcDeathMessage = /^(?:<pushBold\/>)?#{NpcDeathPrefix}\s(?:<pushBold\/>)?(?:(?:an?|some|the)\s)?<a exist="(?<npc_id>[^"]+)" noun="[^"]+">[^<]+<\/a><popBold\/>(?:'s)?,?\s#{NpcDeathPostfix}[\.!"]\s?\r?\n?$/
 
