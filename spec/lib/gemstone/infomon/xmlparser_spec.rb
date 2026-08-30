@@ -1910,6 +1910,21 @@ As <pushBold/>a <a exist="12345678" noun="master">darkly inked fetish master</a>
 <pushBold/>A <a exist="12345678" noun="ape">hulking forest ape</a><popBold/> grunts and lays still, the life going out of <pushBold/><a exist="12345678" noun="ape">her</a><popBold/> warm brown eyes.
 <pushBold/>A <a exist="12345678" noun="meddler">cloud sprite meddler</a><popBold/> lets out a harsh denial, the sound violent and agonizing, but <pushBold/><a exist="12345678" noun="meddler">his</a><popBold/> cry is cut off along with <pushBold/><a exist="12345678" noun="meddler">his</a><popBold/> life.
 <pushBold/>A <a exist="12345678" noun="sentinel">lithe veiled sentinel</a><popBold/> lets out a ragged gasp, collapsing to one knee and looking sightlessly to the heavens.  <pushBold/><a exist="12345678" noun="sentinel">He</a><popBold/> dies with a knowing smile on <pushBold/><a exist="12345678" noun="sentinel">his</a><popBold/> face.
+With a final squeal the <pushBold/><a exist="12345678" noun="burgee">scaly burgee</a><popBold/> rears up her head, then falls to the floor and curls up into a ball, dead.
+The <pushBold/><a exist="12345678" noun="tegu">tri-toed tegu</a><popBold/> arches her back in a tortured spasm and dies.
+The <pushBold/><a exist="12345678" noun="basilisk">dark-crested basilisk</a><popBold/> rolls over on her back, emits a final hiss and dies.
+The <pushBold/><a exist="12345678" noun="marauder">krolvin marauder</a><popBold/> slams to the floor, dead as a salmon bear snack.
+The <pushBold/><a exist="12345678" noun="marauder">krolvin marauder</a><popBold/> collapses to the floor, dead as a pickled herring.
+The <pushBold/><a exist="12345678" noun="marauder">krolvin marauder</a><popBold/> flattens out on the floor, dead as a salted flounder.
+The <pushBold/><a exist="12345678" noun="marauder">krolvin marauder</a><popBold/> crashes to the floor, dead as a carp on a rock.
+The <pushBold/><a exist="12345678" noun="shaman">hobgoblin shaman</a><popBold/> gasps a final prayer, then falls to the ground dead.
+<pushBold/>A <a exist="12345678" noun="champion">muscular tattooed champion</a><popBold/> thrashes one last time and goes still.
+<pushBold/>A <a exist="12345678" noun="champion">muscular tattooed champion</a><popBold/> spasms in death and then goes still.
+<pushBold/>A <a exist="12345678" noun="champion">muscular tattooed champion</a><popBold/> moans in agony and then goes still.
+<pushBold/>A <a exist="12345678" noun="champion">muscular tattooed champion</a><popBold/> dies and collapses to the floor.
+<pushBold/>A <a exist="12345678" noun="champion">muscular tattooed champion</a><popBold/> staggers, then falls to the floor and dies.
+The <pushBold/><a exist="12345678" noun="servant">kobold servant</a><popBold/> dies unceremoniously.
+<pushBold/>The <a exist="12345678" noun="siren">siren</a><popBold/> slumps to <pushBold/><a exist="12345678" noun="siren">her</a><popBold/> side and dies.
 __DEATH_CORPUS__
 
 CONTROL_CORPUS = <<'__CONTROL_CORPUS__'.freeze
