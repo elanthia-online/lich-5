@@ -523,7 +523,7 @@ module Lich
         /^You slowly open/,
         /^The .* opens/,
         /^You unbutton/,
-        /(It's|is) already open/,
+        /([Ii]t's|is) already open/,
         /^You spread your arms, carefully holding your bag well away from your body/
       ].freeze
 
