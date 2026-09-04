@@ -509,6 +509,63 @@ RSpec.describe Lich::Common::XMLParser do
     end
   end
 
+  # DragonRealms only: an item taken into a hand is no longer worn or in a
+  # container, so the <right>/<left> handler drops any stale placement of it.
+  # GemStone is unaffected (its own inv stream is authoritative), which these
+  # cover via the game gate.
+  describe 'DragonRealms hand-pickup container reconciliation' do
+    let(:gameobj) { Lich::Common::GameObj }
+
+    def feed_hand(side, exist:, noun: 'pouch', name: 'a soft gem pouch')
+      attrs = exist.nil? ? {} : { 'exist' => exist, 'noun' => noun }
+      parser.tag_start(side, attrs)
+      parser.text(name)
+      parser.tag_end(side)
+    end
+
+    context 'when the game is DragonRealms' do
+      before { XMLData.game = 'DR' }
+
+      it 'removes a picked-up item from its container when it appears in the right hand' do
+        gameobj.new_inv('123', 'pouch', 'a soft gem pouch', 'cid')
+        gameobj.new_inv('999', 'gem', 'a ruby', 'cid') # bystander stays
+
+        feed_hand('right', exist: '123')
+
+        expect(gameobj.containers['cid'].map(&:id)).to eq(['999'])
+        expect(gameobj.right_hand.id).to eq('123')
+      end
+
+      it 'reconciles the left hand the same way' do
+        gameobj.new_inv('123', 'pouch', 'a soft gem pouch', 'cid')
+
+        feed_hand('left', exist: '123')
+
+        expect(gameobj.containers['cid'].map(&:id)).to eq([])
+        expect(gameobj.left_hand.id).to eq('123')
+      end
+
+      it 'is a safe no-op for an empty hand (no exist id)' do
+        gameobj.new_inv('999', 'gem', 'a ruby', 'cid')
+
+        expect { feed_hand('right', exist: nil, noun: nil, name: 'Empty') }.not_to raise_error
+        expect(gameobj.containers['cid'].map(&:id)).to eq(['999'])
+      end
+    end
+
+    context 'when the game is GemStone (gated off)' do
+      before { XMLData.game = 'GSIV' }
+
+      it 'leaves the container untouched on a hand update' do
+        gameobj.new_inv('123', 'pouch', 'a soft gem pouch', 'cid')
+
+        feed_hand('right', exist: '123')
+
+        expect(gameobj.containers['cid'].map(&:id)).to eq(['123'])
+      end
+    end
+  end
+
   # DragonRealms now emits <nav rm='NNNN'/> on every arrival (a plain <nav/> with no rm for
   # a room that has no UID). The parser takes room_id from that tag as the primary source, and
   # falls back to the streamWindow subtitle's "(NNNNN)" only when nav did not supply a UID this
