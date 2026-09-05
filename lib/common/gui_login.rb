@@ -10,6 +10,7 @@ require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
+require_relative 'gui/frontend_manager_tab'
 require_relative 'gui/frontend_selector'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
@@ -293,6 +294,7 @@ module Lich
     # with appropriate callbacks and UI elements.
     #
     # @return [void]
+    # @api private
     def create_tab_instances
       # Create callbacks for saved login tab
       saved_login_callbacks = {
@@ -416,6 +418,15 @@ module Lich
         @autosort_state
       )
 
+      @frontend_manager_tab = Lich::Common::GUI::FrontendManagerTab.new(
+        data_dir: DATA_DIR,
+        on_changed: -> {
+          @saved_login_tab&.refresh_frontends
+          @manual_login_tab&.refresh_frontends
+          @account_manager_ui&.refresh_frontends
+        }
+      )
+
       # Get UI elements from tabs
       @saved_login_ui = @saved_login_tab.ui_elements
       @manual_login_ui = @manual_login_tab.ui_elements
@@ -423,6 +434,7 @@ module Lich
       # Set references to UI elements
       @quick_game_entry_tab = @saved_login_tab.tab_widget
       @game_entry_tab = @manual_login_tab.tab_widget
+      @frontends_tab = @frontend_manager_tab.widget
       @custom_launch_entry = @manual_login_ui[:custom_launch_entry]
       @custom_launch_dir = @manual_login_ui[:custom_launch_dir]
       @bonded_pair_char = @saved_login_ui[:bonded_pair_char]
@@ -435,6 +447,7 @@ module Lich
     # Creates the notebook widget and adds all tabs to it.
     #
     # @return [void]
+    # @api private
     def setup_notebook
       @notebook = Gtk::Notebook.new
 
@@ -470,6 +483,7 @@ module Lich
 
       # Add the account management tab to the main notebook
       @notebook.append_page(@account_mgmt_tab, Gtk::Label.new('Account Management'))
+      @notebook.append_page(@frontends_tab, Gtk::Label.new('Frontends'))
 
       # Set tab position
       @notebook.set_tab_pos(:top)

@@ -14,6 +14,8 @@ module Lich
       # Implements the account management feature for the Lich GUI login system
       # Enhanced with data change notification capability for cross-tab synchronization
       class AccountManagerUI
+        FRONTEND_ID_COLUMN = 7
+
         # Creates and displays the account management window
         #
         # @param data_dir [String] Directory containing account data
@@ -37,6 +39,7 @@ module Lich
           @tab_communicator = nil
           @notifications_registered = false
           @tab_indices = {}
+          @frontend_selectors = []
         end
 
         # Sets the data change callback for cross-tab communication
@@ -111,6 +114,14 @@ module Lich
           end
         end
 
+        # Refreshes frontend dropdowns already mounted in account-management
+        # forms. Dialog-local selectors are created from the latest catalog.
+        # @return [void]
+        def refresh_frontends
+          @frontend_selectors.each(&:reload!)
+          nil
+        end
+
         # Creates the accounts tab
         #
         # @param notebook [Gtk::Notebook] Notebook to add tab to
@@ -125,7 +136,7 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String)
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
 
@@ -257,9 +268,9 @@ module Lich
               account = iter[0]
               character = iter[1] # Character is in column 1, not 2
               _game_name = iter[2] # Game name is in column 2, not character
-              frontend_display = iter[3] # Frontend display name
               game_code = iter[4] # Game code is in hidden column 4
               custom_launch = iter[6] # Custom launch is in hidden column 6
+              frontend = iter[FRONTEND_ID_COLUMN] # Stable frontend identifier in hidden column 7
 
               if character.nil? || character.empty?
                 # This is an account node
@@ -299,20 +310,6 @@ module Lich
                 dialog.destroy
 
                 if response == Gtk::ResponseType::YES
-                  # Convert display name back to internal frontend format for precise removal
-                  frontend = case frontend_display.downcase
-                             when 'custom'
-                               'stormfront' # Custom launches use stormfront as base
-                             when 'wrayth'
-                               'stormfront' # Wrayth is display name for stormfront
-                             when 'wizard'
-                               'wizard'
-                             when 'avalon'
-                               'avalon'
-                             else
-                               frontend_display.downcase
-                             end
-
                   # Remove character with frontend precision
                   if AccountManager.remove_character(@data_dir, account, character, game_code, frontend, custom_launch)
                     @msgbox.call("Character removed successfully.")
@@ -400,6 +397,7 @@ module Lich
           frontend_box.pack_start(Gtk::Label.new("Frontend:"), expand: false, fill: false, padding: 0)
 
           frontend_selector = FrontendSelector.new(refresh: false)
+          @frontend_selectors << frontend_selector
           frontend_box.pack_start(frontend_selector.widget, expand: true, fill: true, padding: 0)
 
           add_box.pack_start(frontend_box, expand: false, fill: false, padding: 0)
@@ -864,6 +862,7 @@ module Lich
         # @param favorites_col [Gtk::TreeViewColumn] Favorites column
         # @param data_dir [String] Data directory
         # @return [void]
+        # @api private
         def setup_favorites_column_handler(accounts_view, favorites_col, data_dir)
           accounts_view.signal_connect('button-press-event') do |_widget, event|
             if event.button == 1 # Left click
@@ -874,20 +873,8 @@ module Lich
                   account = iter[0]
                   character = iter[1]
                   game_code = iter[4]
-                  frontend_display = iter[3]
+                  frontend = iter[FRONTEND_ID_COLUMN]
                   custom_launch = iter[6]
-
-                  # Convert display name back to internal frontend format
-                  frontend = case frontend_display.downcase
-                             when 'wrayth', 'custom'
-                               'stormfront'
-                             when 'wizard'
-                               'wizard'
-                             when 'avalon'
-                               'avalon'
-                             else
-                               frontend_display.downcase
-                             end
 
                   # Toggle favorite status with frontend precision
                   new_status = FavoritesManager.toggle_favorite(
@@ -1152,6 +1139,7 @@ module Lich
         #
         # @param store [Gtk::TreeStore] Tree store to populate
         # @return [void]
+        # @api private
         def populate_accounts_view(store)
           store.clear
 
@@ -1173,10 +1161,11 @@ module Lich
               if character[:custom_launch] && !character[:custom_launch].empty?
                 char_iter[3] = 'Custom'
               else
-                char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
+                char_iter[3] = Frontend.display_name(character[:frontend])
               end
               char_iter[4] = character[:game_code] # Store game_code in hidden column
               char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
+              char_iter[FRONTEND_ID_COLUMN] = character[:frontend]
 
               # Add favorites information with frontend precision
               is_favorite = FavoritesManager.is_favorite?(

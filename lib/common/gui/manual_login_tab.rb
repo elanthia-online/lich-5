@@ -109,6 +109,13 @@ module Lich
           end
         end
 
+        # Refreshes the shared frontend dropdown after Frontends settings change.
+        # @return [void]
+        def refresh_frontends
+          @frontend_selector&.reload!
+          nil
+        end
+
         private
 
         # Applies the current theme state to all UI elements
@@ -285,9 +292,10 @@ module Lich
         # Creates frontend selection components
         #
         # @return [Array] Array containing frontend_box and shared selector
+        # @api private
         def create_frontend_selection
-          selector = FrontendSelector.new
-          [selector.widget, selector]
+          @frontend_selector = FrontendSelector.new
+          [@frontend_selector.widget, @frontend_selector]
         end
 
         # Creates custom launch options
@@ -460,6 +468,7 @@ module Lich
         # @param frontend_selector [FrontendSelector] shared frontend selector
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
+        # @api private
         def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           play_button.signal_connect('clicked') {
             play_button.sensitive = false
@@ -482,7 +491,7 @@ module Lich
               custom_launch_dir = custom_launch ? @custom_launch_dir.child.text.to_s.strip : nil
               custom_launch_dir = nil if custom_launch_dir == ''
 
-              if custom_launch.nil? && frontend_selector.resolve_selected(refresh: true).nil?
+              if custom_launch.nil? && !frontend_selector.launchable?(refresh: true)
                 @callbacks.on_error&.call("#{Frontend.display_name(frontend)} is no longer available.")
                 play_button.sensitive = true
                 next

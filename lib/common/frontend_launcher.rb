@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'shellwords'
-require_relative 'front-end'
+require_relative 'frontend'
 require_relative 'frontend_locator'
 
 module Lich
@@ -20,7 +20,30 @@ module Lich
       class UnsupportedError < Error; end
       class UnavailableError < Error; end
 
+      PROCESS_LOCAL_LAUNCH_FIELDS = %w[FRONTEND].freeze
+      CONNECTION_PLACEHOLDER_PATTERN = /(%host%|%port%|%key%)/.freeze
+
       class << self
+        # Returns whether a frontend has enough machine-local configuration to
+        # launch. Custom adapters are backed by their persisted command; native
+        # adapters continue to use executable discovery.
+        #
+        # @param frontend_id [String, Symbol] registered frontend identifier
+        # @param locator [FrontendLocator] injectable discovery API
+        # @param frontend [Frontend] injectable frontend catalog API
+        # @param refresh [Boolean] bypass cached native discovery when true
+        # @return [Boolean]
+        def launchable?(frontend_id, locator: FrontendLocator, frontend: Frontend, refresh: false)
+          definition = frontend.definition_for(frontend_id)
+          if definition.dig(:metadata, :launcher_adapter) == :custom
+            return !definition.dig(:metadata, :launch_command).to_s.strip.empty?
+          end
+
+          locator.launchable?(definition[:id], refresh: refresh)
+        rescue ArgumentError
+          false
+        end
+
         # Builds the platform command template for a registered frontend.
         #
         # @param frontend_id [String, Symbol] registered frontend identifier
@@ -39,15 +62,72 @@ module Lich
         )
           definition = Frontend.definition_for(frontend_id)
 
-          case definition.dig(:metadata, :launcher_adapter)
-          when :environment
-            raise UnsupportedError, "#{definition[:id]} requires a structured spawn plan"
-          when :avalon
-            avalon_command(definition, platform_key, locator)
-          when :simutronics
-            simu_launcher.call || raise(UnavailableError, 'Simutronics launcher was not found')
-          else
-            raise UnsupportedError, "no launcher adapter for #{definition[:id]}"
+          base_command = case definition.dig(:metadata, :launcher_adapter)
+                         when :environment
+                           raise UnsupportedError, "#{definition[:id]} requires a structured spawn plan"
+                         when :avalon
+                           avalon_command(definition, platform_key, locator)
+                         when :simutronics
+                           simu_launcher.call || raise(UnavailableError, 'Simutronics launcher was not found')
+                         when :custom
+                           definition.dig(:metadata, :launch_command)
+                         else
+                           raise UnsupportedError, "no launcher adapter for #{definition[:id]}"
+                         end
+
+          if base_command.to_s.strip.empty?
+            raise UnavailableError, "#{Frontend.display_name(definition[:id])} has no launch command"
+          end
+
+          with_additional_arguments(base_command, definition)
+        end
+
+        # Appends user-configured arguments to a command-template launcher.
+        # Arguments are escaped independently while Lich's connection
+        # placeholders remain available for the launch handoff to replace.
+        #
+        # @param base_command [String] existing launcher command template
+        # @param frontend [String, Symbol, Hash] frontend id or definition
+        # @return [String]
+        def with_additional_arguments(base_command, frontend)
+          definition = frontend.is_a?(Hash) ? frontend : Frontend.definition_for(frontend)
+          arguments = Array(definition.dig(:metadata, :additional_arguments))
+          return base_command if arguments.empty?
+
+          escaped_arguments = arguments.map { |argument| escape_argument(argument) }
+          argument_separator = definition.dig(:metadata, :launcher_adapter) == :avalon ? ' --args ' : ' '
+          "#{base_command}#{argument_separator}#{escaped_arguments.join(' ')}"
+        end
+
+        # Removes Lich-only control fields before launch data is serialized for
+        # a native frontend. The selected frontend identity remains available
+        # to the current Lich process but is not part of Simutronics' .sal
+        # contract.
+        #
+        # @param launch_data [Array<String>]
+        # @return [Array<String>] detached native launch-data copy
+        def native_session_data(launch_data)
+          Array(launch_data).reject do |line|
+            key = line.to_s.split('=', 2).first.to_s.upcase
+            PROCESS_LOCAL_LAUNCH_FIELDS.include?(key)
+          end
+        end
+
+        # Resolves every connection placeholder after Lich opens the local
+        # listener used by a configured frontend.
+        #
+        # @param command [String]
+        # @param host [String]
+        # @param port [String, Integer]
+        # @param key [String]
+        # @return [String]
+        def render_connection(command, host:, port:, key:)
+          {
+            '%host%' => host,
+            '%port%' => port,
+            '%key%'  => key
+          }.reduce(command.to_s) do |rendered, (placeholder, value)|
+            rendered.gsub(placeholder, value.to_s)
           end
         end
 
@@ -96,10 +176,16 @@ module Lich
           environment = plan.fetch(:environment).transform_values do |value|
             replacements.reduce(value.to_s) { |resolved, (token, replacement)| resolved.gsub(token, replacement.to_s) }
           end
-          command = resolve_plan_command(plan.fetch(:command), definition, locator, refresh: refresh)
+          command, arguments = resolve_plan_launch(
+            plan,
+            definition,
+            platform_key,
+            locator,
+            refresh: refresh
+          )
           SpawnPlan.new(
             environment: environment,
-            argv: [command, *plan.fetch(:arguments)]
+            argv: [command, *arguments]
           )
         end
 
@@ -144,7 +230,13 @@ module Lich
           plan = definition.dig(:metadata, :launch_plans, platform_key)
           raise UnsupportedError, "no #{platform_key} launcher for saga" unless plan
 
-          command = resolve_plan_command(plan.fetch(:command), definition, locator, refresh: refresh)
+          command, arguments = resolve_plan_launch(
+            plan,
+            definition,
+            platform_key,
+            locator,
+            refresh: refresh
+          )
           SpawnPlan.new(
             environment: {
               # Saga 0.8.5 implements this currently undocumented startup contract.
@@ -152,11 +244,99 @@ module Lich
               'SAGA_AUTO_LOGIN_ACCOUNT' => account.to_s.strip,
               'SAGA_AUTO_LOGIN_MODE'    => 'lich'
             },
-            argv: [command, *plan.fetch(:arguments)]
+            argv: [command, *arguments]
           )
         end
 
         private
+
+        # Returns configured additional arguments as strings.
+        #
+        # @param definition [Hash] immutable frontend definition
+        # @return [Array<String>] configured additional arguments
+        # @api private
+        def additional_arguments(definition)
+          Array(definition.dig(:metadata, :additional_arguments)).map(&:to_s)
+        end
+
+        # Combines catalog plan arguments with configured additional arguments.
+        #
+        # @param command [String] resolved launcher command
+        # @param plan [Hash] platform launch plan
+        # @param definition [Hash] immutable frontend definition
+        # @return [Array<String>] complete process argument list
+        # @api private
+        def plan_arguments(command, plan, definition)
+          configured = additional_arguments(definition)
+          return plan.fetch(:arguments) if configured.empty?
+
+          separator = command == '/usr/bin/open' ? ['--args'] : []
+          [*plan.fetch(:arguments), *separator, *configured]
+        end
+
+        # Resolves a structured launch plan to its command and arguments.
+        # A configured macOS executable replaces Saga's bundle-id fallback;
+        # application-bundle binaries still launch through `open` so normal
+        # macOS application semantics are retained.
+        #
+        # @param plan [Hash] platform launch plan
+        # @param definition [Hash] immutable frontend definition
+        # @param platform_key [Symbol] canonical host classification
+        # @param locator [FrontendLocator] injectable discovery API
+        # @param refresh [Boolean] bypass cached discovery when true
+        # @return [Array(String, Array<String>)] command and argument list
+        # @api private
+        def resolve_plan_launch(plan, definition, platform_key, locator, refresh:)
+          override = macos_configured_launch(definition, platform_key, locator, refresh: refresh)
+          return override if override
+
+          command = resolve_plan_command(plan.fetch(:command), definition, locator, refresh: refresh)
+          [command, plan_arguments(command, plan, definition)]
+        end
+
+        # Returns a macOS launch pair for a valid configured executable.
+        # Invalid or removed overrides deliberately fall back to discovery and
+        # the catalog's bundle-id launch plan.
+        #
+        # @param definition [Hash] immutable frontend definition
+        # @param platform_key [Symbol] canonical host classification
+        # @param locator [FrontendLocator] injectable discovery API
+        # @param refresh [Boolean] bypass cached discovery when true
+        # @return [Array(String, Array<String>), nil]
+        # @api private
+        def macos_configured_launch(definition, platform_key, locator, refresh:)
+          return nil unless platform_key == :darwin
+          return nil if definition.dig(:metadata, :configured_executable).to_s.strip.empty?
+
+          resolution = locator.resolve(definition[:id], refresh: refresh)
+          return nil unless resolution&.source == :configured
+
+          executable = resolution.executable_path
+          bundle = executable[%r{\A(.+\.app)/Contents/MacOS/[^/]+\z}, 1]
+          command = bundle ? '/usr/bin/open' : executable
+          arguments = bundle ? ['-n', '-a', bundle] : []
+          configured = additional_arguments(definition)
+          arguments.concat(['--args', *configured]) if bundle && !configured.empty?
+          arguments.concat(configured) unless bundle
+          [command, arguments]
+        end
+
+        # Shell-escapes an argument while preserving connection placeholders.
+        #
+        # @param argument [String] argument template
+        # @return [String] escaped argument template
+        # @api private
+        def escape_argument(argument)
+          argument.to_s.split(CONNECTION_PLACEHOLDER_PATTERN).filter_map do |segment|
+            next if segment.empty?
+            next segment if segment.match?(CONNECTION_PLACEHOLDER_PATTERN)
+
+            # Shellwords conservatively escapes '=' even though it is inert
+            # inside an argument. Keep --option=value readable while escaping
+            # whitespace and shell syntax.
+            Shellwords.escape(segment).gsub('\\=', '=')
+          end.join
+        end
 
         def resolve_plan_command(command, definition, locator, refresh:)
           return command unless command == :resolved_executable

@@ -73,12 +73,25 @@ module Lich
           defined?(LICH_DIR) ? LICH_DIR : Dir.pwd
         end
 
+        # Builds direct-login CLI arguments from launch data and explicit context.
+        #
+        # @param entrypoint [String] Lich executable path
+        # @param launch_map [Hash] parsed launch-data fields
+        # @param launch_context [Hash, nil] explicit per-launch overrides
+        # @return [Array<String>] child process arguments
+        # @api private
         def build_spawn_args(entrypoint, launch_map, launch_context)
           context = launch_context || {}
           character = context[:char_name] || launch_map['CHARACTER'] || launch_map['NAME']
           game_code = context[:game_code] || launch_map['GAMECODE']
-          frontend = context[:frontend] || frontend_from_launch(launch_map)
-          custom_launch = context[:custom_launch] || launch_map['CUSTOMLAUNCH']
+          frontend = context[:frontend]
+          frontend = launch_map['FRONTEND'] if frontend.to_s.empty?
+          frontend = frontend_from_launch(launch_map) if frontend.to_s.empty?
+          custom_launch = if context.key?(:custom_launch)
+                            context[:custom_launch]
+                          else
+                            launch_map['CUSTOMLAUNCH']
+                          end
 
           raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
 
@@ -87,7 +100,7 @@ module Lich
             game_flag = Lich::Common::Authentication::LoginHelpers.format_launch_flag(game_code)
             args << game_flag if game_flag
           end
-          args << "--#{frontend}" if frontend && !frontend.to_s.empty?
+          args << "--frontend=#{frontend}" if frontend && !frontend.to_s.empty?
           args << "--custom-launch=#{custom_launch}" if custom_launch && !custom_launch.to_s.empty?
           args.concat(optional_spawn_flags(context))
           args

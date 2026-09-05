@@ -535,6 +535,20 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(custom_launch).to eq(:__unset)
     end
 
+    it 'parses a registered custom frontend through the canonical long form' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=vellum']))
+        .to eq(['GS3', 'vellum', :__unset])
+    end
+
+    it 'does not accept an unregistered long-form frontend selector' do
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=not-registered']))
+        .to eq(['GS3', :__unset, :__unset])
+    end
+
     it 'does not report an invalid game code as a resolved instance' do
       allow(Lich).to receive(:log)
 
@@ -578,6 +592,19 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'], detachable_client: true)).to eq('profanity')
     end
 
+    it 'preserves a registered custom frontend for a detachable client' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(
+        described_class.resolve_headless_frontend(
+          ['--login', 'pickasso', '--without-frontend', '--frontend=vellum'],
+          detachable_client: true
+        )
+      ).to eq('vellum')
+    end
+
     it 'returns unknown when nothing can attach' do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'])).to eq('unknown')
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'])).to eq('unknown')
@@ -615,6 +642,26 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
         '/lich/lich.rbw',
         '--login',
         'Tsetem'
+      )
+    end
+
+    it 'passes a frontend override using the registry-safe long form' do
+      allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/checked/ruby')
+      allow(Process).to receive(:spawn).and_return(12_345)
+      allow(Process).to receive(:detach).with(12_345).and_return(double('process waiter'))
+
+      described_class.spawn_login(
+        { char_name: 'Tsetem', game_code: 'GS3' },
+        lich_path: '/lich/lich.rbw',
+        frontend_override: 'vellum'
+      )
+
+      expect(Process).to have_received(:spawn).with(
+        '/checked/ruby',
+        '/lich/lich.rbw',
+        '--login',
+        'Tsetem',
+        '--frontend=vellum'
       )
     end
   end
