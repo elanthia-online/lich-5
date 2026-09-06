@@ -221,6 +221,12 @@ module Lich
       UCS_TTL = 120        # UCS data expires after 2 minutes
       UCS_SMITE_TTL = 15   # Smite effect expires after 15 seconds
 
+      # Seconds per stun round. Critical tables express stun in *rounds*
+      # (a rank-5 crit's `stunned: 5` means five rounds), while their
+      # `roundtime` field is already in seconds - the two units live side by
+      # side in the same CritRanks hash, so never mix them.
+      STUN_ROUND_SECONDS = 5
+
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
@@ -235,6 +241,9 @@ module Lich
         @ucs_tierup = nil
         @ucs_smote = nil
         @ucs_updated = nil
+        @amputated = []
+        @stun_rounds = nil
+        @stun_estimated_until = nil
       end
 
       # Get the template for this creature. Sentinel-cached so a creature with
@@ -329,11 +338,100 @@ module Lich
         @ucs_tierup
       end
 
+      # Records a crit-table stun estimate, in rounds.
+      #
+      # This is deliberately *not* stored as a timed entry in @status. The
+      # authoritative stun boolean is owned by <crtrStatus> and the combat
+      # message parser (see STATUS_DURATIONS, where 'stunned' is nil on
+      # purpose); expiring it on a table-derived timer would clear stun while
+      # a resisted-or-stacked creature is still stunned, and report
+      # `muckled?` false when acting is still unsafe. So the estimate lives
+      # alongside the boolean and is advisory only.
+      #
+      # Stun does not cleanly stack, so a new estimate extends but never
+      # shortens an existing one.
+      #
+      # @param rounds [Integer] stun rounds from the critical table.
+      # @param at [Time] when the game applied the crit (prompt time, not
+      #   parse time - the async parser can lag the server).
+      # @return [void]
+      def add_stun_estimate(rounds, at: Time.now)
+        rounds = rounds.to_i
+        return if rounds <= 0
+
+        expires_at = at + (rounds * STUN_ROUND_SECONDS)
+        return if @stun_estimated_until && @stun_estimated_until >= expires_at
+
+        @stun_rounds = rounds
+        @stun_estimated_until = expires_at
+        debug_log("+stun estimate: #{rounds} round#{'s' unless rounds == 1} (~#{rounds * STUN_ROUND_SECONDS}s)")
+      end
+
+      # Estimated stun rounds from the last crit, or nil when the estimate has
+      # lapsed or stun is no longer active.
+      #
+      # @return [Integer, nil]
+      def stun_rounds
+        return nil unless stun_estimate_active?
+        @stun_rounds
+      end
+
+      # Estimated seconds of stun remaining.
+      #
+      # Advisory: derived from the critical table, not observed. Returns 0.0
+      # when no estimate is active. Callers deciding whether it is safe to act
+      # should gate on `muckled?`/`has_status?('stunned')` and use this only to
+      # size the window.
+      #
+      # @return [Float]
+      def stunned_for
+        return 0.0 unless stun_estimate_active?
+        [@stun_estimated_until - Time.now, 0.0].max.round(1)
+      end
+
+      # Clears any crit-derived stun estimate (creature shook off the stun).
+      #
+      # @return [void]
+      def clear_stun_estimate
+        @stun_rounds = nil
+        @stun_estimated_until = nil
+      end
+
+      # Marks a body part as amputated.
+      #
+      # Distinct from @injuries, which accumulates rank: an amputated limb is
+      # gone rather than wounded, cannot be wounded further, and stays gone.
+      #
+      # @param body_part [String, Symbol] one of BODY_PARTS.
+      # @return [void]
+      def amputate!(body_part)
+        unless BODY_PARTS.include?(body_part.to_s)
+          raise ArgumentError, "Invalid body part: #{body_part}"
+        end
+        return if @amputated.include?(body_part.to_s)
+
+        @amputated << body_part.to_s
+        debug_log("+amputated: #{body_part}")
+      end
+
+      # @return [Boolean] whether a body part has been amputated.
+      def amputated?(body_part)
+        @amputated.include?(body_part.to_s)
+      end
+
+      # @return [Array<String>] every amputated body part.
+      def amputated_parts
+        @amputated.dup
+      end
+
       # Add injury to body part
       def add_injury(body_part, amount = 1)
         unless BODY_PARTS.include?(body_part.to_s)
           raise ArgumentError, "Invalid body part: #{body_part}"
         end
+        # An amputated limb cannot accrue further wound rank - it is gone.
+        return if amputated?(body_part)
+
         @injuries[body_part.to_sym] += amount
       end
 
@@ -456,8 +554,24 @@ module Lich
           created_at: @created_at,
           ucs_position: ucs_position,
           ucs_tierup: ucs_tierup,
-          ucs_smote: smote?
+          ucs_smote: smote?,
+          amputated: amputated_parts,
+          stun_rounds: stun_rounds,
+          stunned_for: stunned_for
         }
+      end
+
+      private
+
+      # Whether a crit-derived stun estimate is still meaningful.
+      #
+      # Gated on the authoritative status as well as the clock: once the feed
+      # or a removal message says the creature is no longer stunned, the
+      # estimate is stale regardless of remaining time.
+      def stun_estimate_active?
+        return false unless @stun_estimated_until
+        return false if @stun_estimated_until <= Time.now
+        has_status?('stunned')
       end
     end
 
