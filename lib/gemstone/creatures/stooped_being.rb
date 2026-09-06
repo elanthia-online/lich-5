@@ -9,11 +9,11 @@
   type: "Biped",
   undead: false,
   blood: nil,
-  bones: nil,
+  bones: true,
   limbs: nil,
-  witherable: nil,
+  witherable: true,
   sympathy: nil,
-  muggable: nil,
+  muggable: true,
   sleepable: nil,
   boss: false,
   boss_type: nil,
@@ -23,12 +23,16 @@
   bcs: true,
   max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      uids: []
+      uids: [17003011..17003038, 17003101..17003150, 17003201..17003217]
+    },
+    {
+      name: "unmapped",
+      uids: [17003001..17003010]
     }
   ],
   attack_attributes: {
@@ -95,7 +99,10 @@
     description: [
       "The stooped being is a twisted amalgamation of flesh and other, less mentionable things. Skin that is sickly green gives way to an odd, jelly-like substance that covers most of the being's torso. A few extra, stunted arms and short, deformed tentacles protrude from the shoulders and back of the stooped being. The most terrifying part of this abomination's anatomy is the second head that sits in its chest, complete with a mouth, nose, and several dozen eyes."
     ],
-    arrival: [],
+    arrival: [
+      "A stooped being hobbles in, looking about carefully.",
+      "A stooped being stumbles in, the face in {pronoun} chest grinning wickedly."
+    ],
     flee: [
       "A stooped being looks around, then hobbles {direction}.",
       "A stooped being hobbles {direction}, looking about carefully."

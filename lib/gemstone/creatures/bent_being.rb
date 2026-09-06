@@ -9,11 +9,11 @@
   type: "Biped",
   undead: false,
   blood: nil,
-  bones: nil,
+  bones: true,
   limbs: nil,
-  witherable: nil,
+  witherable: true,
   sympathy: nil,
-  muggable: nil,
+  muggable: true,
   sleepable: nil,
   boss: false,
   boss_type: nil,
@@ -23,12 +23,16 @@
   bcs: true,
   max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      uids: []
+      uids: [17003011..17003038, 17003101..17003150, 17003201..17003217]
+    },
+    {
+      name: "unmapped",
+      uids: [17003001..17003010]
     }
   ],
   attack_attributes: {
@@ -107,7 +111,10 @@
     description: [
       "The bent being is a twisted amalgamation of flesh and other, less mentionable things. Stark white hair grows in random patches from the being's sickly green skin, especially around its face. The bent being has over-sized ears that look comical on an otherwise intimidating foe. Thick legs sprout from the being's midsection like tree trunks, ending in gigantic feet that could fit in no boot made for civilized creatures."
     ],
-    arrival: [],
+    arrival: [
+      "A bent being comes rumbling in.",
+      "A bent being comes in, a crackle of lightning briefly surrounding it."
+    ],
     flee: [
       "A bent being rumbles {direction}."
     ],
@@ -116,7 +123,9 @@
     ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A bent being rumbles a series of arcane phrases."
+    ],
     attacks: {
       attack: [
         "A bent being cries out in an acidic tongue, pointing at you!",

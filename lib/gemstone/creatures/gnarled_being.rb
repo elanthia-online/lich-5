@@ -114,7 +114,8 @@
     ],
     flee: [],
     death: [
-      "A gnarled being coughs up some blood and dies."
+      "A gnarled being coughs up some blood and dies.",
+      "A gnarled being crashes to the ground, dead."
     ],
     decay: [
       "A gnarled being crumbles away into nothing."
@@ -126,8 +127,10 @@
     ],
     attacks: {
       attack: [
-        "A gnarled being charges at you with {pronoun} tusk!",
-        "An Ithzir initiate places one palm on {pronoun} chest, and raises the other toward you!"
+        "A gnarled being charges at you with {pronoun} tusk!"
+      ],
+      claw: [
+        "A gnarled being claws at you!"
       ]
     },
     info: {
