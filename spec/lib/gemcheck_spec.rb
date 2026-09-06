@@ -692,6 +692,58 @@ RSpec.describe Lich::GemCheck do
       allow(described_class).to receive(:cmd_available?).with(tool).and_return(true)
     end
 
+    # The dialog chain is only reached with no terminal attached. Stub both
+    # streams explicitly rather than inheriting whatever the runner happens to
+    # have -- rspec's stdout is a tty when run directly in a terminal and a
+    # pipe under CI, which would otherwise make these pass or fail by accident.
+    before do
+      allow($stdout).to receive(:isatty).and_return(false)
+      allow($stderr).to receive(:isatty).and_return(false)
+      allow(described_class).to receive(:warn)
+    end
+
+    it 'always warns, whether or not a dialog follows' do
+      stub_only_available('zenity')
+      allow(described_class).to receive(:run_with_timeout)
+
+      expect(described_class).to receive(:warn).with(/!!ALERT!!.*body text/m).twice
+
+      described_class.alert_linux('body text')             # no tty: warn + dialog
+      allow($stdout).to receive(:isatty).and_return(true)
+      described_class.alert_linux('body text')             # tty: warn only
+    end
+
+    context 'when a terminal is attached' do
+      it 'does not wait on a dialog, even when zenity is available' do
+        stub_only_available('zenity')
+        allow($stdout).to receive(:isatty).and_return(true)
+
+        expect(described_class).not_to receive(:run_with_timeout)
+        expect(described_class).to receive(:warn).with(/!!ALERT!!.*body text/m)
+
+        described_class.alert_linux('body text')
+      end
+
+      it 'treats a terminal on stderr alone as interactive' do
+        stub_only_available('zenity')
+        allow($stderr).to receive(:isatty).and_return(true)
+
+        expect(described_class).not_to receive(:run_with_timeout)
+
+        described_class.alert_linux('body text')
+      end
+    end
+
+    context 'when no dialog tool is available and no terminal is attached' do
+      it 'still reports on stderr' do
+        allow(described_class).to receive(:cmd_available?).and_return(false)
+
+        expect(described_class).to receive(:warn).with(/!!ALERT!!.*body text/m)
+
+        described_class.alert_linux('body text')
+      end
+    end
+
     context 'when zenity is available' do
       before { stub_only_available('zenity') }
 
@@ -720,15 +772,6 @@ RSpec.describe Lich::GemCheck do
       it 'shows an xmessage dialog bounded by a timeout' do
         expect(described_class).to receive(:run_with_timeout)
           .with(['xmessage', '-center', 'body text'], described_class::ALERT_TIMEOUT_SECONDS)
-        described_class.alert_linux('body text')
-      end
-    end
-
-    context 'when no dialog tool is available' do
-      before { allow(described_class).to receive(:cmd_available?).and_return(false) }
-
-      it 'falls back to warn' do
-        expect(described_class).to receive(:warn).with(/!!ALERT!!/)
         described_class.alert_linux('body text')
       end
     end
