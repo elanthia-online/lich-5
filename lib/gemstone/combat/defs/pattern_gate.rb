@@ -19,6 +19,18 @@ module Lich
   module Gemstone
     module Combat
       module Definitions
+        # Markup tolerance tokens for the live XML feed (round-6 sweep,
+        # 46 def kinds proven markup-unsafe against 11.5GB of real logs).
+        # Entity pronouns arrive wrapped in links - creature and player
+        # alike - as <pushBold/><a exist=...>her</a><popBold/>, and a
+        # possessive keeps its 's INSIDE the link, closing before the
+        # next word (<a ...>Nisugi's</a> blow). Interpolate MK_PRE before
+        # a bare pronoun and MK_POST after a pronoun or possessive 's.
+        # Both are fully optional, so stripped-text matching is unchanged.
+        # When the exist id matters, put MK_PRE inside the capture.
+        MK_PRE  = '(?:<pushBold/>)?(?:<a [^>]*>)?'
+        MK_POST = '(?:</a>)?(?:<popBold/>)?'
+
         module PatternGate
           module_function
 

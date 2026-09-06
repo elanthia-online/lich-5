@@ -434,7 +434,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /^Drop of acid gets in .*? eye. Better flush it out./ },
+                                  :regex           => /^Drop of acid gets in .*? eye.  Better flush it out./ },
                            2 =>
                                 { :type            => "acid",
                                   :location        => "left eye",
@@ -511,7 +511,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /^Hit to eye empties the socket. How can something missing be so painful./ },
+                                  :regex           => /^Hit to eye empties the socket.  How can something missing be so painful./ },
                            6 =>
                                 { :type            => "acid",
                                   :location        => "left eye",
@@ -589,7 +589,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => { :location => "head", :wound_rank => 3 },
-                                  :regex           => /^Acid Flush! The .*? brains get washed right out the mouth./ } },
+                                  :regex           => /^Acid Flush!  The .*? brains get washed right out the mouth./ } },
           :right_eye  =>
                          { 4 =>
                                 { :type            => "acid",
@@ -1345,7 +1345,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /^Burn to the elbow eats through tendons. Muscles snap free./ },
+                                  :regex           => /^Burn to the elbow eats through tendons.  Muscles snap free./ },
                            6 =>
                                 { :type            => "acid",
                                   :location        => "left arm",
@@ -1364,7 +1364,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /^Acid dissolves the elbow ligaments. Arm swings in a very odd manner./ },
+                                  :regex           => /^Acid dissolves the elbow ligaments.  Arm swings in a very odd manner./ },
                            7 =>
                                 { :type            => "acid",
                                   :location        => "left arm",
@@ -1383,7 +1383,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /^The .*? arm is drenched in acid. Flesh and bones are reduced to a smoking slime./ },
+                                  :regex           => /^The .*? arm is drenched in acid.  Flesh and bones are reduced to a smoking slime./ },
                            8 =>
                                 { :type            => "acid",
                                   :location        => "left arm",

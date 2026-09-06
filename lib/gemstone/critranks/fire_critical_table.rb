@@ -163,7 +163,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /^Flame sets a .*? head alight like a torch./ },
+                                  :regex           => /^Flame sets an? .*? head alight like a torch./ },
                            8 =>
                                 { :type            => "fire",
                                   :location        => "head",

@@ -14,6 +14,14 @@ module Lich
           # Example: "You have good positioning against a kobold."
           POSITION_PATTERN = /^You have (decent|good|excellent) positioning against.+<a exist="([0-9]+)"/i.freeze
 
+          # Inbound mirror of POSITION_PATTERN: the creature's tier
+          # against US, printed as the second line of its UCS attack
+          # block (round-14 sweep: 40/40 sandwiched between the
+          # "attempts to jab you!" initiation and the UAF/UDF roll;
+          # only "decent" attested but the vocabulary is shared).
+          # Example: "The triton brawler has decent positioning against you."
+          POSITION_INBOUND_PATTERN = /<a exist="([0-9]+)"[^>]*>[^<]+<\/a>(?:<popBold\/>)? has (decent|good|excellent) positioning against you\./i.freeze
+
           # Pattern for tierup vulnerability
           # Example: "Strike leaves foe vulnerable to a followup jab attack!"
           TIERUP_PATTERN = /Strike leaves foe vulnerable to a followup (jab|grapple|punch|kick) attack!/i.freeze
@@ -51,6 +59,17 @@ module Lich
                   type: :position,
                   target_id: target_id,
                   value: position
+                }
+              end
+
+              # Creature's position against us (per-swing attack
+              # metadata, not persistent state - it prints inside the
+              # inbound UCS attack block)
+              if (match = POSITION_INBOUND_PATTERN.match(line))
+                return {
+                  type: :position_inbound,
+                  target_id: match[1].to_i,
+                  value: match[2]
                 }
               end
 

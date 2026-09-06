@@ -2036,7 +2036,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /^Hard blow to left hand breaking bones./ },
+                                  :regex           => /^Hard blow to(?: the)? left hand breaking bones./ },
                            7 =>
                                 { :type            => "impact",
                                   :location        => "left hand",

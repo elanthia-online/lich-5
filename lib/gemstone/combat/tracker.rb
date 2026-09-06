@@ -41,6 +41,12 @@ module Lich
         @buffer = []
         @chunks_processed = 0
         @initialized = false
+        # Thread count to restore when debug mode is turned off. Deliberately
+        # an ivar rather than a setting: `configure` persists settings to
+        # DB_Store, so stashing it there would write max_threads: 0 to disk
+        # and leave the character parsing inline forever if debug were never
+        # cleanly disabled.
+        @pre_debug_threads = nil
 
         # Default settings for combat tracking
         DEFAULT_SETTINGS = {
@@ -49,6 +55,7 @@ module Lich
           track_wounds: true,
           track_statuses: true,
           track_ucs: true,          # Track UCS (position, tierup, smite)
+          emit_attacks: false,      # Emit whole parsed events (:attack blob) for recorder-class subscribers
           max_threads: 2,           # Keep threading for performance
           debug: false,
           buffer_size: 200,         # Increase for large combat chunks
@@ -59,6 +66,23 @@ module Lich
 
         class << self
           attr_reader :settings, :buffer
+
+          # Subscribe to parsed combat events (see Combat::Observers for
+          # event types, payloads, and the subscriber contract - callbacks
+          # may run on worker threads; never send game commands from one).
+          #
+          # @example
+          #   Combat::Tracker.on(:damage) { |type, data| queue << data }
+          #   Combat::Tracker.on(:damage, name: 'mybar') { ... } # idempotent
+          # @return [Proc] handler; pass to {off} to unsubscribe
+          def on(*types, name: nil, &block)
+            Observers.on(*types, name: name, &block)
+          end
+
+          # Unsubscribe a handler returned by {on}, or by its name:.
+          def off(handler_or_name)
+            Observers.off(handler_or_name)
+          end
 
           # Check if combat tracking is enabled
           #
@@ -112,27 +136,62 @@ module Lich
             respond "[Combat] Combat tracking disabled" if debug?
           end
 
-          # Check if debug mode is enabled
+          # Debug levels, in the order they were introduced. `true` is kept
+          # as an alias for :verbose so settings saved before levels existed
+          # still resolve.
+          DEBUG_LEVELS = %i[summary verbose].freeze
+
+          # Check if debug mode is enabled, or whether a specific level is.
           #
-          # @return [Boolean] true if debug logging is active
-          def debug?
-            @settings[:debug] || $combat_debug
+          # Called bare it returns the active level (truthy), which keeps every
+          # existing `if Tracker.debug?` guard working unchanged.
+          #
+          # @param level [Symbol, nil] :verbose or :summary to test one level
+          # @return [Symbol, Boolean, nil] active level, or whether `level` is on
+          def debug?(level = nil)
+            current = @settings[:debug] || $combat_debug
+            current = :verbose if current == true
+            return current unless level
+
+            current == level
           end
 
           # Enable debug logging
           #
+          # Forces inline processing (max_threads: 0) for the duration, so
+          # debug output appears in true order relative to the game text
+          # instead of interleaving from the async worker.
+          #
+          # @param level [Symbol] :verbose for the line-by-line parse trace,
+          #   :summary for one line per persisted event
           # @return [void]
-          def enable_debug!
-            configure(debug: true, enabled: true)
-            respond "[Combat] Debug mode enabled"
+          def enable_debug!(level = :verbose)
+            level = :verbose if level == true
+            unless DEBUG_LEVELS.include?(level)
+              respond "[Combat] Unknown debug level #{level.inspect} (expected #{DEBUG_LEVELS.map(&:inspect).join(' or ')})"
+              return
+            end
+
+            initialize! unless @initialized
+            # Only capture on the first enable - a second call while already
+            # in debug would otherwise record the forced 0 as the value to
+            # restore, stranding the character inline.
+            @pre_debug_threads = @settings[:max_threads] unless debug?
+            configure(debug: level, enabled: true, max_threads: 0)
+            respond "[Combat] Debug mode enabled (#{level}, inline processing)"
           end
 
           # Disable debug logging
           #
+          # Restores the thread count debug mode took over.
+          #
           # @return [void]
           def disable_debug!
-            configure(debug: false)
-            respond "[Combat] Debug mode disabled"
+            initialize! unless @initialized
+            restore = @pre_debug_threads || DEFAULT_SETTINGS[:max_threads]
+            @pre_debug_threads = nil
+            configure(debug: false, max_threads: restore)
+            respond "[Combat] Debug mode disabled (max_threads: #{restore})"
           end
 
           # Set fallback HP value for creatures without templates
@@ -182,6 +241,9 @@ module Lich
           # literals compiles to an efficient multi-substring search.
           COMBAT_RELEVANT_PATTERN = Regexp.union(
             'points of damage',
+            ' damage!', # roll-based short form ("... 6 damage!")
+            # has no "points of" - chunks holding
+            # only these were dropped entirely
             '<pushBold/>',              # Creatures
             '**',                       # Flares
             'AS:',                      # Attack rolls
