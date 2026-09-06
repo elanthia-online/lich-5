@@ -173,7 +173,9 @@
       "An ethereal triton psionicist's dreamy gaze goes lifeless."
     ],
     decay: [],
-    search: [],
+    search: [
+      "An ethereal triton psionicist glances around, sure that {pronoun} has missed something..."
+    ],
     spell_prep: [
       "An ethereal triton psionicist chants in an incomprehensible language, causing streams of dim grey energy to lash about {pronoun} hands."
     ],

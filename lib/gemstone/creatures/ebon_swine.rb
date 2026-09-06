@@ -90,7 +90,8 @@
       ""
     ],
     arrival: [
-      "An ebon swine crashes into view!"
+      "An ebon swine crashes into view!",
+      "An ebon swine trots in!"
     ],
     flee: [
       "An ebon swine trots {direction}.",
@@ -106,7 +107,8 @@
       "An ebon swine decays into a pile of fur and bone."
     ],
     search: [
-      "An ebon swine sniffs the air anxiously."
+      "An ebon swine sniffs the air anxiously.",
+      "An ebon swine glances around, sure that {pronoun} has missed something..."
     ],
     spell_prep: [],
     attacks: {

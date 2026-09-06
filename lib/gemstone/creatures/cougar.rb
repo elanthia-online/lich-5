@@ -112,7 +112,8 @@
       "A belligerent cougar scampers in!",
       "A luminous cougar scampers in!",
       "A dreary cougar scampers in!",
-      "A glittering cougar scampers in!"
+      "A glittering cougar scampers in!",
+      "A cougar pounces to the ground in front of you!"
     ],
     flee: [
       "A cougar scampers {direction}.",

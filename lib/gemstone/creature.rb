@@ -711,7 +711,7 @@ module Lich
                     :decay, :search, :spell_prep, :frenzy,
                     :sympathy, :bite, :claw, :attack,
                     :attacks, :enrage, :mstrike, :stand,
-                    :stun_break
+                    :stun_break, :ambient
 
       # Every form a placeholder can take in a real game line. The lists
       # are alternatives in the generated regex, so a form that is missing

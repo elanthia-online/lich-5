@@ -93,7 +93,8 @@
     ],
     arrival: [
       "A panther scampers in!",
-      "A panther scampers in, mewling in pain!"
+      "A panther scampers in, mewling in pain!",
+      "A panther pounces to the ground in front of you!"
     ],
     flee: [
       "A panther scampers {direction}.",

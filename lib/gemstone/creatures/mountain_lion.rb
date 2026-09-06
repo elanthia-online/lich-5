@@ -99,7 +99,8 @@
     ],
     arrival: [
       "A mountain lion scampers in!",
-      "A mountain lion scampers in, mewling in pain!"
+      "A mountain lion scampers in, mewling in pain!",
+      "A mountain lion pounces to the ground in front of you!"
     ],
     flee: [
       "A mountain lion scampers {direction}.",

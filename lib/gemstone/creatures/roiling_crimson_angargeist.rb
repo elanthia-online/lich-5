@@ -125,6 +125,10 @@
     ],
     description: "Swirling ectoplasm, crimson and black and lit from within by crackles of sickly yellow energy, takes on a rough humanoid shape, but the angargeist is clearly nothing alive.  Where a face ought to be is a molten ruin, lopsided eyes of unholy flame sparking in its ill-made sockets.  Immaterial and dripping essence, the arms and legs are uneven, both ending in straining talons.  The angargeist's form bubbles and simmers in places like fury lent form.",
     sympathy: true,
+    ambient: [
+      "A roiling crimson angargeist lights from within, energy crackling within {pronoun} chaotic core.",
+      "A roiling crimson angargeist swarms low over the ground as if questing for something unseen."
+    ],
     attacks: {
       bolt: [
         "A roiling crimson angargeist hurls a ball of greenish-black flame at {target}!"

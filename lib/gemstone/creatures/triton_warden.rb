@@ -142,9 +142,12 @@
       "A triton warden limps {direction}."
     ],
     death: [
-      "The triton warden gurgles once and goes still, a wrathful look on {pronoun} face."
+      "The triton warden gurgles once and goes still, a wrathful look on {pronoun} face.",
+      "The triton warden collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton warden's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [],
     attacks: {

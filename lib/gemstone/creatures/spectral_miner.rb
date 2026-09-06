@@ -109,7 +109,8 @@
       "A ready spectral miner heads {direction}."
     ],
     death: [
-      "The spectral miner falls to the ground motionless."
+      "The spectral miner falls to the ground motionless.",
+      "The spectral miner ceases all attempts at movement."
     ],
     decay: [
       "A spectral miner quickly crumbles into the ground in front of your eyes."

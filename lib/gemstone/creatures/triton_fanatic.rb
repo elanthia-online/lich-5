@@ -156,11 +156,15 @@
     ],
     death: [
       "The triton fanatic gurgles once and goes still, a wrathful look on {pronoun} face.",
-      "A triton fanatic goes limp as the last of {pronoun} life is crushed from {pronoun} by {target} unyielding bearhug!"
+      "A triton fanatic goes limp as the last of {pronoun} life is crushed from {pronoun} by {target} unyielding bearhug!",
+      "The triton fanatic collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton fanatic's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [
-      "A triton fanatic searches methodically through the environs."
+      "A triton fanatic searches methodically through the environs.",
+      "A triton fanatic glances around, sure that {pronoun} has missed something..."
     ],
     spell_prep: [
       "A triton fanatic's eyes glow with silvery grey light, and then everything around you shimmers to match the argentine color.",

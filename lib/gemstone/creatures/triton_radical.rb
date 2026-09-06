@@ -164,10 +164,12 @@
     death: [
       "The triton radical gurgles once and goes still, a wrathful look on {pronoun} face.",
       "The triton radical collapses to the floor with a splash, gurgling once with a wrathful look on {pronoun} face before expiring.",
-      "The triton radical collapses to the ground with a splash, gurgling once with a wrathful look on {pronoun} face before expiring."
+      "The triton radical collapses to the ground with a splash, gurgling once with a wrathful look on {pronoun} face before expiring.",
+      "The triton radical collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
     decay: [
-      "The siren's soft aura fades and her flesh crumbles to reveal the corpse of a hideous scaled creature, which then quickly decays away."
+      "The siren's soft aura fades and her flesh crumbles to reveal the corpse of a hideous scaled creature, which then quickly decays away.",
+      "A triton radical's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
     ],
     search: [],
     spell_prep: [

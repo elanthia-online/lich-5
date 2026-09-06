@@ -108,7 +108,8 @@
       "A shadow mare runs {direction}."
     ],
     death: [
-      "The shadow mare falls to the ground motionless."
+      "The shadow mare falls to the ground motionless.",
+      "The shadow mare ceases all attempts at movement."
     ],
     decay: [
       "A shadow mare's eyes go dim as she dissolves into the shadows."

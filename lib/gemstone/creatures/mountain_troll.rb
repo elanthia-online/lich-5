@@ -122,7 +122,8 @@
     ],
     arrival: [
       "A mountain troll just arrived!",
-      "A mountain troll just arrived."
+      "A mountain troll just arrived.",
+      "A mountain troll ambles in."
     ],
     flee: [
       "A mountain troll runs {direction}."

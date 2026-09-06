@@ -127,7 +127,11 @@
     arrival: [
       "A quivering sanguine ooze just came through a break in the trees.",
       "A quivering sanguine ooze just came through a pocked red stone arch.",
-      "A quivering sanguine ooze just came through a ragged acid-pocked gash."
+      "A quivering sanguine ooze just came through a ragged acid-pocked gash.",
+      "A quivering sanguine ooze glides in, leaving a slick trail behind {pronoun}."
+    ],
+    decay: [
+      "A quivering sanguine ooze rapidly coagulates, the air sucking the moisture from {pronoun} shape. What remains of the ooze flakes into a pile of reddish-black grit."
     ],
     attacks: {
       attack: [

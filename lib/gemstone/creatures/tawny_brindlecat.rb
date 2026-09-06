@@ -98,7 +98,8 @@
       "The tawny brindlecat is a large, tawny brown animal of the cat family with a slender body and long tail. Larger than her cougar and puma cousins, her sleek build disguises her power. Both claws and jaws are to be feared, as the tawny brindlecat strikes quickly with each. Prized for her soft pelt, this feline is a proud and fierce hunter of the great eastern plains."
     ],
     arrival: [
-      "A tawny brindlecat stalks in!"
+      "A tawny brindlecat stalks in!",
+      "A tawny brindlecat pounces to the ground in front of you!"
     ],
     flee: [
       "A tawny brindlecat bounds {direction}."

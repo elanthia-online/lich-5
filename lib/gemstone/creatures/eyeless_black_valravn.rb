@@ -133,6 +133,9 @@
       "An eyeless black valravn soars in, barely able to keep {reflexive} aloft."
     ],
     description: "Wings of stygian darkness enshroud the huge black bird.  When not in motion, there is an ominous and unnatural stillness to the valravn that marks it as otherworldly.  Where eyes should be, there are strange hollows that occasionally flicker with scintillating golden light.",
+    stand: [
+      "An eyeless black valravn hops to {pronoun} feet and gives a single flap of {pronoun} wings."
+    ],
     attacks: {
       claw: [
         "An eyeless black valravn tries to slash at you with a black talon!"

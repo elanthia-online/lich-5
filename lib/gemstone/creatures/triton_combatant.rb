@@ -148,9 +148,12 @@
     death: [
       "The triton combatant gurgles once and goes still, a wrathful look on {pronoun} face.",
       "The triton combatant collapses to the floor with a splash, gurgling once with a wrathful look on {pronoun} face before expiring.",
-      "The triton combatant collapses to the ground with a splash, gurgling once with a wrathful look on {pronoun} face before expiring."
+      "The triton combatant collapses to the ground with a splash, gurgling once with a wrathful look on {pronoun} face before expiring.",
+      "The triton combatant collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton combatant's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [],
     attacks: {

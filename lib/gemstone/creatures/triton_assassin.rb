@@ -132,9 +132,12 @@
     ],
     flee: [],
     death: [
-      "The triton assassin gurgles once and goes still, a wrathful look on {pronoun} face."
+      "The triton assassin gurgles once and goes still, a wrathful look on {pronoun} face.",
+      "The triton assassin collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton assassin's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [],
     attacks: {

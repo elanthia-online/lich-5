@@ -122,7 +122,8 @@
     ],
     arrival: [
       "A cave gnome just arrived.",
-      "A cave gnome just arrived, limping."
+      "A cave gnome just arrived, limping.",
+      "A cave gnome ambles in."
     ],
     flee: [
       "A cave gnome heads {direction}.",

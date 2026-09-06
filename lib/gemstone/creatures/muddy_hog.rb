@@ -94,7 +94,8 @@
       ""
     ],
     arrival: [
-      "A muddy hog barrels in!"
+      "A muddy hog barrels in!",
+      "A muddy hog trots in!"
     ],
     flee: [
       "A muddy hog trots {direction}.",
@@ -109,7 +110,8 @@
       "A muddy hog decays into a pile of fur and bone."
     ],
     search: [
-      "A muddy hog sniffs the air anxiously."
+      "A muddy hog sniffs the air anxiously.",
+      "A muddy hog glances around, sure that {pronoun} has missed something..."
     ],
     spell_prep: [],
     attacks: {

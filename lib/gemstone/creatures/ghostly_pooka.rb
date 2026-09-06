@@ -99,7 +99,8 @@
       "A ghostly pooka gallops {direction}."
     ],
     death: [
-      "The ghostly pooka falls to the ground motionless."
+      "The ghostly pooka falls to the ground motionless.",
+      "The ghostly pooka ceases all attempts at movement."
     ],
     decay: [
       "A ghostly pooka fades away as if {pronoun} were never there."

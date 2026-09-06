@@ -131,10 +131,15 @@
       "A spectral triton protector falls to the ground and rolls, trying to smother the flames that surround {pronoun}."
     ],
     decay: [],
-    search: [],
+    search: [
+      "A spectral triton protector glances around, sure that {pronoun} has missed something..."
+    ],
     spell_prep: [],
     stun_break: [
       "A spectral triton protector flares briefly with a dull glow, rousing {reflexive} from slumber."
+    ],
+    ambient: [
+      "A spectral triton protector is surrounded by an ominous, chitinous clicking!"
     ],
     attacks: {
       attack: [

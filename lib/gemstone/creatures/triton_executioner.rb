@@ -143,9 +143,12 @@
     ],
     death: [
       "The triton executioner gurgles once and goes still, a wrathful look on {pronoun} face.",
-      "The triton executioner collapses to the floor with a splash, gurgling once with a wrathful look on {pronoun} face before expiring."
+      "The triton executioner collapses to the floor with a splash, gurgling once with a wrathful look on {pronoun} face before expiring.",
+      "The triton executioner collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton executioner's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [],
     attacks: {

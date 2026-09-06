@@ -89,7 +89,9 @@
     description: [
       ""
     ],
-    arrival: [],
+    arrival: [
+      "An imposing elk trots in!"
+    ],
     flee: [
       "An imposing elk trots {direction}.",
       "An imposing elk trots {direction}, snorting to announce {pronoun} arrival!",
@@ -105,7 +107,8 @@
       "An imposing elk decays into a pile of fur and bone."
     ],
     search: [
-      "An imposing elk sniffs the air anxiously."
+      "An imposing elk sniffs the air anxiously.",
+      "An imposing elk glances around, sure that {pronoun} has missed something..."
     ],
     spell_prep: [],
     attacks: {

@@ -99,7 +99,8 @@
     ],
     arrival: [
       "A black leopard scampers in!",
-      "A black leopard scampers in, mewling in pain!"
+      "A black leopard scampers in, mewling in pain!",
+      "A black leopard pounces to the ground in front of you!"
     ],
     flee: [
       "A black leopard scampers {direction}.",

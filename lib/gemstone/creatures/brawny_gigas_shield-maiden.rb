@@ -179,7 +179,8 @@
     ],
     spell_prep: [
       "A brawny gigas shield-maiden raises a fist to the heavens as {pronoun} eyes begin to glow like molten gold.",
-      "A brawny gigas shield-maiden's eyes begin to glow purple."
+      "A brawny gigas shield-maiden's eyes begin to glow purple.",
+      "A brawny gigas shield-maiden raises {pronoun} eyes to the heavens as sunny light enshrouds {pronoun}!"
     ],
     death: [
       "A plaintive look passes across a brawny gigas shield-maiden's eyes like a fleeting shadow as {pronoun} goes still in death.",
@@ -191,6 +192,9 @@
     ],
 
 
+    stand: [
+      "A brawny gigas shield-maiden rises fluidly, dusting a bit of dirt from one knee with a faint smirk."
+    ],
     attacks: {
       attack: [
         "In a display of martial precision, a brawny gigas shield-maiden thrusts with a gold-tipped heavy spear at you!",

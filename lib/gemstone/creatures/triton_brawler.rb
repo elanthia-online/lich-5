@@ -129,6 +129,10 @@
     transmogs: nil
   },
   messaging: {
+    ambient: [
+      "A triton brawler's expression briefly shifts, nearly but not quite smoothing into blankness.",
+      "A triton brawler is surrounded by an ominous, chitinous clicking!"
+    ],
     attacks: {
       attack: [
         "A triton brawler slams {pronoun} head into you!",
@@ -166,10 +170,15 @@
       "The triton brawler gurgles once and goes still, a wrathful look on {pronoun} face.",
       "A triton brawler's dreamy gaze goes lifeless.",
       "A triton brawler slumps slowly, {pronoun} skin growing darker from lack of air.",
-      "A triton brawler's eyes roll up into {pronoun} head as {pronoun} body goes limp on the ground."
+      "A triton brawler's eyes roll up into {pronoun} head as {pronoun} body goes limp on the ground.",
+      "The triton brawler collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
-    search: [],
+    decay: [
+      "A triton brawler's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
+    search: [
+      "A triton brawler glances around, sure that {pronoun} has missed something..."
+    ],
     spell_prep: [],
     info: {
       general: [],

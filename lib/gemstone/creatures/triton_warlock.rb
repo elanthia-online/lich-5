@@ -147,9 +147,12 @@
       "A triton warlock heads {direction}."
     ],
     death: [
-      "The triton warlock gurgles once and goes still, a wrathful look on her face."
+      "The triton warlock gurgles once and goes still, a wrathful look on her face.",
+      "The triton warlock collapses, gurgling once with a wrathful look on {pronoun} face before expiring."
     ],
-    decay: [],
+    decay: [
+      "A triton warlock's slick skin begins to rapidly desiccate and dissolve away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [
       "A triton warlock chants in an incomprehensible language, causing streams of dim grey energy to lash about {pronoun} golden claws."

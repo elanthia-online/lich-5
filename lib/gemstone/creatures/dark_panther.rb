@@ -105,7 +105,8 @@
     ],
     arrival: [
       "A dark panther scampers in!",
-      "A dark panther scampers in, mewling in pain!"
+      "A dark panther scampers in, mewling in pain!",
+      "A dark panther pounces to the ground in front of you!"
     ],
     flee: [
       "A dark panther scampers {direction}.",

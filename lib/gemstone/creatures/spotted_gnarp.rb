@@ -97,7 +97,8 @@
     ],
     arrival: [
       "A spotted gnarp springs in and lands with a clatter of hooves.",
-      "A spotted gnarp just came through the barn door."
+      "A spotted gnarp just came through the barn door.",
+      "A spotted gnarp trots in!"
     ],
     flee: [
       "A spotted gnarp trots {direction}.",

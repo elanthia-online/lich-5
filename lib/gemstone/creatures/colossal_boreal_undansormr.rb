@@ -92,7 +92,8 @@
     ],
     arrival: [
       "A colossal boreal undansormr just came through a break in the trees.",
-      "A colossal boreal undansormr just came through a ragged acid-pocked gash."
+      "A colossal boreal undansormr just came through a ragged acid-pocked gash.",
+      "A colossal boreal undansormr glides in, leaving a slick trail behind {pronoun}."
     ],
     search: [
       "A colossal boreal undansormr scans the surroundings with {pronoun} many eyes."

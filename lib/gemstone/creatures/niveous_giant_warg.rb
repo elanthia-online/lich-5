@@ -167,6 +167,12 @@
     stun_break: [
       "A niveous giant warg paws at {pronoun} snout and struggles back to awareness."
     ],
+    stand: [
+      "A niveous giant warg rolls over and leaps to {pronoun} feet in a single fluid motion."
+    ],
+    ambient: [
+      "A niveous giant warg sits back on {pronoun} haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine!"
+    ],
     attacks: {
       tackle: [
         "A niveous giant warg hurls {reflexive} at {target}!"

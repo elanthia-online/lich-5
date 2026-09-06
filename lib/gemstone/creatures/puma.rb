@@ -112,7 +112,8 @@
       "The puma is a muscular and athletic animal. Covered with a uniform coat of greyish-brown fur, her long, lithe body is equipped with powerful legs, displaying a proportionately greater difference in the length of the forelegs compared to the extenuated hind limbs. The feline's head is topped with rounded ears, and a very long, balancing tail completes the puma's physique."
     ],
     arrival: [
-      "A puma scampers in!"
+      "A puma scampers in!",
+      "A puma pounces to the ground in front of you!"
     ],
     flee: [
       "A puma scampers {direction}.",

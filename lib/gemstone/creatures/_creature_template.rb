@@ -141,6 +141,7 @@
     attacks: {},
     stand: [],                   # rising from prone
     stun_break: [],              # shaking off a stun / status recovery
+    ambient: [],                 # idle flavor with no mechanical event (howls, clicking, questing)
 
     # Optional informational block for human tips (NOT triggers)
     info: {

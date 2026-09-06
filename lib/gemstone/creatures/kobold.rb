@@ -129,7 +129,8 @@
     ],
     arrival: [
       "A kobold just arrived.",
-      "A kobold swaggers in, trying to appear imposing!"
+      "A kobold swaggers in, trying to appear imposing!",
+      "A kobold ambles in."
     ],
     flee: [
       "A kobold heads {direction}.",

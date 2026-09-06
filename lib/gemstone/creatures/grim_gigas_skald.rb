@@ -163,6 +163,9 @@
     ],
 
 
+    stand: [
+      "A grim gigas skald flails on the ground, making the ground shudder, before managing to fight {pronoun} way into a standing position."
+    ],
     attacks: {
       attack: [
         "A heavily armored battle mastodon raises {pronoun} trunk and slams it down toward you!",

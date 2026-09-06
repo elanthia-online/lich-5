@@ -188,6 +188,9 @@
     stun_break: [
       "A tattooed gigas berserker's eyes open wide, crimson with fury, as {pronoun} breaks free from {pronoun} pacified state!"
     ],
+    ambient: [
+      "A tattooed gigas berserker totters around, looking as if {pronoun} is about to topple!"
+    ],
     attacks: {
       attack: [
         "Froth bubbling on {pronoun} lips, a tattooed gigas berserker swings {weapon} at you in a murderous arc!",
