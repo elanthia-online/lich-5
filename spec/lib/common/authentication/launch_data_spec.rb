@@ -14,6 +14,7 @@ module Lich
   end
 end unless defined?(Lich::Common::Authentication)
 
+require_relative '../../../../lib/common/front-end'
 require_relative '../../../../lib/common/authentication/launch_data'
 
 RSpec.describe Lich::Common::Authentication::LaunchData do
@@ -39,6 +40,16 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
         expect(result).to include('GAMECODE=GS3')
         expect(result).to include('GAME=STORM')
         expect(result).to include('GAMEFILE=STORMFRONT.EXE')
+        expect(result).to include('FRONTEND=stormfront')
+      end
+    end
+
+    context 'without a frontend selection' do
+      it 'keeps legacy launch data free of an empty frontend identity' do
+        result = described_class.prepare(auth_data, nil)
+
+        expect(result).not_to include(a_string_starting_with('FRONTEND='))
+        expect(result).to include('GAME=STORM')
       end
     end
 
@@ -98,6 +109,45 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
 
         expect(result).to include('CUSTOMLAUNCH=/usr/bin/warlock')
         expect(result.any? { |line| line.start_with?('CUSTOMLAUNCHDIR=') }).to be false
+      end
+
+      it 'prefers a character-specific custom launch over a registered frontend command' do
+        allow(Lich::Common::Frontend).to receive(:definition_for).with('vellum').and_return(
+          id: 'vellum',
+          capabilities: [:xml],
+          metadata: {
+            launcher_adapter: :custom,
+            launch_command: '/opt/vellum',
+            launch_directory: '/opt'
+          }
+        )
+
+        result = described_class.prepare(auth_data, 'vellum', '/home/me/client %port% %key%', '/home/me')
+
+        expect(result).to include('FRONTEND=vellum')
+        expect(result).to include('CUSTOMLAUNCH=/home/me/client %port% %key%')
+        expect(result).to include('CUSTOMLAUNCHDIR=/home/me')
+      end
+    end
+
+    context 'with a registered custom frontend' do
+      it 'derives custom launch data and the stable frontend identity from its definition' do
+        allow(Lich::Common::Frontend).to receive(:definition_for).with('vellum').and_return(
+          id: 'vellum',
+          capabilities: %i[xml streams],
+          metadata: {
+            launcher_adapter: :custom,
+            launch_command: '/opt/vellum',
+            launch_directory: '/opt/vellum-home',
+            additional_arguments: ['--connect=%port%', '--key=%key%']
+          }
+        )
+
+        result = described_class.prepare(auth_data, 'vellum')
+
+        expect(result).to include('FRONTEND=vellum')
+        expect(result).to include('CUSTOMLAUNCH=/opt/vellum --connect=%port% --key=%key%')
+        expect(result).to include('CUSTOMLAUNCHDIR=/opt/vellum-home')
       end
     end
   end

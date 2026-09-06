@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'rbconfig'
-require_relative 'front-end'
+require_relative 'frontend'
 
 module Lich
   module Common

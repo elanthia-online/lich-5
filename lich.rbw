@@ -74,8 +74,10 @@ require 'zlib'
 
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
-require File.join(LIB_DIR, 'common', 'front-end.rb')
+require File.join(LIB_DIR, 'common', 'frontend.rb')
 require File.join(LIB_DIR, 'common', 'frontend_locator.rb')
+require File.join(LIB_DIR, 'common', 'frontend_settings.rb')
+Lich::Common::FrontendSettings.load!(data_dir: DATA_DIR)
 require File.join(LIB_DIR, 'common', 'frontend_launcher.rb')
 require File.join(LIB_DIR, 'internal_api', 'active_sessions.rb')
 require File.join(LIB_DIR, 'api', 'active_sessions.rb')

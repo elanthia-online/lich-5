@@ -473,7 +473,7 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
     let(:account_entry) { double(text: 'testaccount') }
     let(:password_entry) { double(text: 'secret') }
     let(:frontend_selector) do
-      double(selected_id: 'stormfront', resolve_selected: double('resolution'))
+      double(selected_id: 'stormfront', launchable?: true)
     end
     let(:custom_launch_option) { double(active?: false) }
     let(:launch_data) { ['GAME=STORM', 'CHARACTER=Tsetem'] }

@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../authentication/gui'
-require_relative '../front-end'
+require_relative '../frontend'
+require_relative '../frontend_launcher'
 require_relative '../frontend_locator'
 require_relative '../saga_launch_policy'
 require_relative '../saga_managed_launcher'
@@ -165,9 +166,11 @@ module Lich
         def self.launchable_frontend?(login_info, refresh: false)
           return true if custom_launch?(login_info[:custom_launch])
 
-          FrontendLocator.launchable?(login_info[:frontend], refresh: refresh)
-        rescue ArgumentError
-          false
+          FrontendLauncher.launchable?(
+            login_info[:frontend],
+            locator: FrontendLocator,
+            refresh: refresh
+          )
         end
 
         # Returns whether a value contains a usable Custom Launch command.

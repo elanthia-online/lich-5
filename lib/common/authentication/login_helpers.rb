@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../front-end'
+require_relative '../frontend'
 require_relative '../ruby_executable'
 
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
@@ -47,6 +47,7 @@ module Lich
 
         # Frontend pattern for regex matching
         FRONTEND_PATTERN = /^--(?:frontend=)?(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth|saga)$/i.freeze
+        REGISTERED_FRONTEND_PATTERN = /^--frontend=(?<fe>[a-z0-9][a-z0-9_-]{0,63})$/i.freeze
         INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
         # Custom launch pattern for regex matching
@@ -521,16 +522,13 @@ module Lich
         # @param argv [Array<String>] e.g. ARGV
         # @return [Array(String, String, String)] [game_code, frontend, custom_launch]
         def self.resolve_login_args(argv)
-          frontend = :__unset
+          frontend = resolve_frontend_arg(argv)
           custom_launch = :__unset
           instance = resolve_instance(argv)
 
           argv.each do |arg|
-            case arg
-            when FRONTEND_PATTERN
-              frontend = Frontend.canonical_name(Regexp.last_match[:fe])
-            when CUSTOM_LAUNCH_PATTERN
-              custom_launch = Regexp.last_match[:cl]
+            if (match = arg.match(CUSTOM_LAUNCH_PATTERN))
+              custom_launch = match[:cl]
             end
           end
 
@@ -542,6 +540,25 @@ module Lich
           end
 
           [instance, frontend, custom_launch]
+        end
+
+        # Resolves the final recognized frontend selector from CLI arguments.
+        # Legacy shorthand flags and registry-backed long-form identifiers share
+        # this path so login matching and detachable runtime identity agree.
+        #
+        # @param argv [Array<String>] command line arguments
+        # @return [String, Symbol] canonical frontend id, or :__unset
+        def self.resolve_frontend_arg(argv)
+          frontend = :__unset
+          argv.each do |arg|
+            if (match = arg.match(FRONTEND_PATTERN))
+              frontend = Frontend.canonical_name(match[:fe])
+            elsif (match = arg.match(REGISTERED_FRONTEND_PATTERN))
+              candidate = Frontend.canonical_name(match[:fe])
+              frontend = candidate if Frontend.registered_frontends.include?(candidate)
+            end
+          end
+          frontend
         end
 
         # Resolves which frontend should be used when matching a saved entry for
@@ -576,9 +593,10 @@ module Lich
         # @param detachable_client [Boolean] whether a detachable client port is configured
         # @return [String] frontend identity for Frontend.client
         def self.resolve_headless_frontend(argv, detachable_client: false)
-          return 'saga' if argv.any? { |arg| arg.match?(/^--saga$/i) }
+          requested_frontend = resolve_frontend_arg(argv)
+          return 'saga' if requested_frontend == 'saga'
           return 'unknown' unless detachable_client
-          return 'genie' if argv.any? { |arg| arg.match?(/^--genie$/i) }
+          return requested_frontend unless requested_frontend == :__unset
 
           'profanity'
         end
@@ -632,7 +650,7 @@ module Lich
             flag = format_launch_flag(instance_override)
             spawn_cmd << flag if flag
           end
-          spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
+          spawn_cmd << "--frontend=#{frontend_override}" unless frontend_override.nil?
           spawn_cmd << "--custom-launch=#{custom_launch_filter}" if custom_launch_filter
           spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
 
