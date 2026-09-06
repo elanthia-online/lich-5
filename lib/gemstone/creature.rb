@@ -511,6 +511,24 @@ module Lich
         hp_percent <= threshold
       end
 
+      # Statuses that satisfy Coup de Grace's "incapacitated in some way"
+      # requirement, unlocking the (rank * 10)% threshold instead of
+      # (rank * 5)%. Prone confirmed live (2026-09-06) to qualify without
+      # a stun.
+      COUP_INCAP_STATUSES = %w[stunned immobilized webbed sleeping bound prone kneeling sitting].freeze
+
+      # Check if creature currently qualifies for Coup de Grace at the given
+      # trained rank: at or below (rank * 10)% of max HP when incapacitated,
+      # (rank * 5)% otherwise, hard-capped at 200 HP either way. The cap is
+      # what binds on large creatures, so this compares raw HP, not percent.
+      def coup_eligible?(rank)
+        return false unless rank.to_i > 0
+        return false unless current_hp && max_hp && max_hp > 0
+        incap = COUP_INCAP_STATUSES.any? { |s| has_status?(s) }
+        threshold = [(max_hp * rank.to_i * (incap ? 10 : 5)) / 100.0, 200].min
+        current_hp <= threshold
+      end
+
       # Check if creature is dead (0 HP)
       def dead?
         current_hp == 0
