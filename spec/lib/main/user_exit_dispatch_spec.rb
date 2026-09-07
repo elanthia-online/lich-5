@@ -44,7 +44,26 @@ RSpec.describe Lich::Main::UserExitDispatch do
   end
 
   let(:vars) { Struct.new(:calls) { def save = calls << :save }.new([]) }
-  let(:game) { Struct.new(:calls) { def close = calls << :close }.new([]) }
+  let(:game_reader_thread) do
+    Struct.new(:calls) do
+      def join(timeout)
+        calls << [:reader_join, timeout]
+        self
+      end
+    end.new([])
+  end
+
+  let(:game) do
+    Struct.new(:calls, :reader_thread) do
+      def _puts(command)
+        calls << [:_puts, command]
+        true
+      end
+
+      def remote_eof? = true
+      def close = calls << :close
+    end.new([], game_reader_thread)
+  end
 
   # Forwards the doubled game-side collaborators into the real
   # OrderlyShutdown.request_user_exit the production dispatch calls.
@@ -88,6 +107,7 @@ RSpec.describe Lich::Main::UserExitDispatch do
     it 'routes a prefixed ;exit line through orderly shutdown as the detachable source' do
       expect(dispatch('exit', cmd_prefix: '<c>')).to be(true)
       expect(coordinator.current.source).to eq('detachable_frontend')
+      expect(game.calls).to include([:_puts, '<c>exit'])
     end
 
     it 'arms the watchdog before running the inline script drain' do
@@ -107,13 +127,15 @@ RSpec.describe Lich::Main::UserExitDispatch do
       dispatch('exit', cmd_prefix: '<c>')
 
       expect(coordinator.orderly_shutdown_completed?).to be(true)
-      expect(game.calls).to eq([:close])
+      expect(game.calls).to eq([[:_puts, '<c>exit'], :close])
+      expect(game_reader_thread.calls).to eq([[:reader_join, 10]])
       expect(vars.calls).to eq([:save])
     end
 
     it 'also routes an unprefixed exit line' do
       expect(dispatch('exit', cmd_prefix: '')).to be(true)
       expect(coordinator.current.source).to eq('detachable_frontend')
+      expect(game.calls).to include([:_puts, 'exit'])
     end
 
     it 'applies the cmd_prefix before matching, so a non-matching prefix is not an exit' do

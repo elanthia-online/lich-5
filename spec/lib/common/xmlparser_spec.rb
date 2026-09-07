@@ -344,6 +344,65 @@ RSpec.describe Lich::Common::XMLParser do
         parser.tag_end('component') # commit_room_players
         expect(gameobj.pcs.map(&:id)).to eq(['-2'])
       end
+
+      # The annotation arrives in a later text callback, after </a>, while the
+      # refresh is still open. The staged pc has no published status entry, so
+      # reading it back through GameObj#status used to yield the frozen 'gone'
+      # sentinel and raise FrozenError on the in-place append.
+      def feed_pc(exist, noun, name)
+        parser.tag_start('a', { 'exist' => exist, 'noun' => noun })
+        parser.text(name)
+        parser.tag_end('a')
+      end
+
+      it 'annotates a newly staged pc without mutating the gone sentinel' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+
+        expect { parser.text(' who is sitting.') }.not_to raise_error
+
+        parser.tag_end('component')
+        expect(gameobj['-2'].status).to eq('sitting')
+      end
+
+      it 'replaces rather than appends to the previously published status' do
+        gameobj.new_pc('-2', 'dwarf', 'a dwarf', 'standing')
+
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+
+        expect(gameobj['-2'].status).to eq('sitting')
+      end
+
+      it 'accepts the parenthetical form and combines both captures' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' (kneeling) (hidden)')
+        parser.tag_end('component')
+
+        expect(gameobj['-2'].status).to eq('kneeling hidden')
+      end
+
+      it 'appends the annotation onto a status carried in from the name prefix' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        parser.instance_variable_set(:@player_status, 'dead')
+        feed_pc('-2', 'dwarf', 'a dwarf')
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+
+        expect(gameobj['-2'].status).to eq('dead sitting')
+      end
+
+      it 'does not annotate once the pc reference has been cleared' do
+        parser.tag_start('component', { 'id' => 'room players' })
+        feed_pc('99', 'dwarf', 'a dwarf') # non-negative exist -> @pc = nil
+        parser.text(' who is sitting.')
+        parser.tag_end('component')
+
+        expect(gameobj.pcs).to be_nil
+      end
     end
 
     describe "'room players' DR 'Also here' rebuild" do
@@ -558,6 +617,36 @@ RSpec.describe Lich::Common::XMLParser do
       feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Catacombs, Labyrinth] (54202)"/>))
       expect { feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - "/>)) }.not_to raise_error
       expect(parser.room_title).to eq('[[Catacombs, Labyrinth]]')
+    end
+
+    # show_room_id records whether the game itself displayed the RealID this arrival (a subtitle
+    # "(uid)"/"(**)" marker == ShowRoomID ON). It is what lets the outbound room-name/subtitle
+    # rewrite preserve the game's choice GS-style rather than second-guessing the flag.
+    describe 'show_room_id (did the game display the RealID this arrival?)' do
+      it 'defaults false before any room subtitle is seen' do
+        expect(parser.show_room_id).to be false
+      end
+
+      it 'is true when a ShowRoomID-on subtitle carries a numeric uid marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)"/>))
+        expect(parser.show_room_id).to be true
+      end
+
+      it 'is true for a ShowRoomID-on no-uid room showing the "(**)" marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Dark Cave] (**)"/>))
+        expect(parser.show_room_id).to be true
+      end
+
+      it 'is false when a ShowRoomID-off subtitle has no marker' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks]"/>))
+        expect(parser.show_room_id).to be false
+      end
+
+      it 'clears a stale true when the next arrival turns ShowRoomID off' do
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Lit Room] (230008)"/>))
+        feed(parser, %(<streamWindow id='main' title='Story' subtitle=" - [Dark Cave]"/>))
+        expect(parser.show_room_id).to be false
+      end
     end
   end
 end

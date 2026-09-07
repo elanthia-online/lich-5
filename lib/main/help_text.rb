@@ -115,6 +115,8 @@ module Lich
             --frostbite
             --genie
             --saga
+              Native saved Saga entries use Saga-managed Via Lich login and
+              require the matching account credentials to be saved in Saga.
 
           Advanced launch:
             --custom-launch=NAME

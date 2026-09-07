@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'singleton'
 require 'ostruct'
 require_relative '../common/creature/creature_base'
@@ -235,9 +237,14 @@ module Lich
         @ucs_updated = nil
       end
 
-      # Get the template for this creature
+      # Get the template for this creature. Sentinel-cached so a creature with
+      # no template doesn't redo the name lookup (downcase + boon regex) on
+      # every call the way `||=` would.
       def template
-        @template ||= CreatureTemplate[@name]
+        return @template if defined?(@template_looked_up)
+
+        @template_looked_up = true
+        @template = CreatureTemplate[@name]
       end
 
       # Check if creature has template data

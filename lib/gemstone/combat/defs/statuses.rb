@@ -5,6 +5,8 @@
 # Combat status effects like stun, prone, blind, etc.
 #
 
+require_relative 'pattern_gate'
+
 module Lich
   module Gemstone
     module Combat
@@ -119,11 +121,20 @@ module Lich
 
           ALL_LOOKUP = (ADD_LOOKUP + REMOVE_LOOKUP).freeze
 
-          # Compiled regex for fast detection
+          # Compiled regex for fast detection. NOTE: costs ~1ms per
+          # non-matching line (unanchored `.+?` alternatives); kept for
+          # compatibility but the literal gate below is what parse uses.
           STATUS_DETECTOR = Regexp.union(ALL_LOOKUP.map(&:first)).freeze
+
+          # Literal-substring gate (~7us/line, measured on session logs)
+          STATUS_GATE, STATUS_ALWAYS_SCAN = PatternGate.build(ALL_LOOKUP.map(&:first))
 
           # Parse status effect from line
           def self.parse(line)
+            # Fast rejection: a line can only match a status pattern if it
+            # contains that pattern's literal fragment.
+            return nil if PatternGate.rejects?(STATUS_GATE, STATUS_ALWAYS_SCAN, line)
+
             ALL_LOOKUP.each do |pattern, name, action|
               if (match = pattern.match(line))
                 result = {

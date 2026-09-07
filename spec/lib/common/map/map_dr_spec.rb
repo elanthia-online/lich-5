@@ -2,6 +2,8 @@
 
 require_relative '../../../spec_helper'
 require 'json'
+require 'fileutils'
+require_relative 'game_map_shared_examples'
 
 # Mock StringProc
 class StringProc
@@ -86,10 +88,14 @@ end
 def put(cmd); end
 
 # Load the DR map
-require 'common/map/map_dr'
+MapLoader.use(:dr)
 
 RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
+  it_behaves_like 'a game Map class', :dr
+
   let(:map_class) { Lich::Common::Map }
+
+  before { MapLoader.use(:dr) }
 
   before(:each) do
     # Clear room registry via the public API
@@ -616,6 +622,7 @@ RSpec.describe Lich::Common::Map, 'DragonRealms implementation' do
 end
 
 RSpec.describe Lich::Common::Room, 'DragonRealms' do
+  before { MapLoader.use(:dr) }
   it 'inherits from Map' do
     expect(Lich::Common::Room.superclass).to eq(Lich::Common::Map)
   end
@@ -641,8 +648,10 @@ end
 RSpec.describe Lich::Common::Map, 'UID-aware room resolution' do
   let(:map_class) { Lich::Common::Map }
 
-  # Build and register a room. Ids are kept dense from 0 by every caller so the
-  # @@list.find / load_uids iterations in the matchers never trip over nil holes.
+  before { MapLoader.use(:dr) }
+
+  # Build and register a room. Ids need not be dense: the matchers and load_uids
+  # both skip nil holes.
   def build_room(id, title:, description:, exits:, uid: [], tags: [])
     map_class.new(id, [title], [description], [exits], uid,
                   nil, nil, nil, {}, {}, nil, nil, tags)

@@ -21,6 +21,8 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--headless PORT')
       expect(output).to include('--headless auto')
       expect(output).to include('--save')
+      expect(output).to include('Native saved Saga entries use Saga-managed Via Lich login')
+      expect(output).to include('require the matching account credentials to be saved in Saga.')
     end
 
     it 'documents the refresh-characters and add-character account commands' do

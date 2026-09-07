@@ -14,6 +14,32 @@ RSpec.describe Lich::DragonRealms::DRCI do
     allow(DRC).to receive(:bput).and_return(response)
   end
 
+  describe '.trash_storage' do
+    before(:each) do
+      Lich::DragonRealms::CustomSubstitutions.reset!
+      Lich::Messaging.clear_messages!
+    end
+
+    it 'returns the built-in defaults when nothing is configured' do
+      expect(described_class.trash_storage).to include('barrel', 'bucket', 'urn')
+    end
+
+    it 'merges a player-added receptacle from settings' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_trash_storage: ['sarcophagus']))
+      expect(described_class.trash_storage).to include('sarcophagus', 'barrel')
+    end
+
+    it 'skips a malformed addition, warns, and keeps the defaults' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_trash_storage: [['not', 'a', 'string']]))
+      expect(described_class.trash_storage).to include('barrel')
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join).to include('custom_trash_storage[0] skipped')
+    end
+  end
+
   describe 'constants' do
     describe 'TRASH_STORAGE' do
       it 'is a frozen constant' do
@@ -910,6 +936,11 @@ RSpec.describe Lich::DragonRealms::DRCI do
       it 'returns true when container already open' do
         stub_bput("It's already open.")
         expect(described_class.open_container?('pack')).to be true
+      end
+
+      it 'returns true when the already open message is mid-sentence and lowercase' do
+        stub_bput("Using slow movements so as to not compromise your invisibility, you slide your hand into your backpack.  Oh, I guess it's already open.")
+        expect(described_class.open_container?('backpack')).to be true
       end
     end
 

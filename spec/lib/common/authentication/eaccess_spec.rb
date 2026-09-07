@@ -270,4 +270,30 @@ RSpec.describe Lich::Common::Authentication::EAccess do
       end
     end
   end
+
+  describe '.auth_with_timeout' do
+    it 'returns the result when auth succeeds' do
+      allow(described_class).to receive(:auth).and_return({ 'key' => 'abc' })
+
+      result = described_class.auth_with_timeout(timeout: 1, account: 'ACCT', password: 'pass')
+
+      expect(result).to eq({ 'key' => 'abc' })
+    end
+
+    it 'raises when auth does not finish within the timeout' do
+      allow(described_class).to receive(:auth) { sleep 5 } # hangs past the timeout, e.g. an unresponsive SGE backend
+
+      expect {
+        described_class.auth_with_timeout(timeout: 0.3, account: 'ACCT', password: 'pass')
+      }.to raise_error(/timed out/)
+    end
+
+    it 're-raises whatever auth raises' do
+      allow(described_class).to receive(:auth).and_raise(described_class::AuthenticationError.new('REJECT'))
+
+      expect {
+        described_class.auth_with_timeout(timeout: 1, account: 'ACCT', password: 'pass')
+      }.to raise_error(described_class::AuthenticationError, /REJECT/)
+    end
+  end
 end

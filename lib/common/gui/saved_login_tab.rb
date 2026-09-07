@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
+require_relative 'frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'login_tab_utils'
 require_relative 'theme_utils'
@@ -399,7 +400,7 @@ module Lich
 
           # Get all favorite characters with frontend precision
           favorite_entries = @entry_data.select do |login_info|
-            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
           end
 
           # Sort favorites by favorite_order if available, then by character name
@@ -464,7 +465,7 @@ module Lich
             if login_params.custom_launch && !login_params.custom_launch.empty?
               frontend_display = 'Custom'
             else
-              frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+              frontend_display = Frontend.display_name(login_params.frontend)
             end
 
             label = Gtk::Label.new("#{login_params.char_name} (#{login_params.game_name}, #{frontend_display})")
@@ -518,7 +519,7 @@ module Lich
 
           # Check if this character is a favorite with frontend precision
           is_favorite = @favorites_enabled &&
-                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
 
           # Get realm name from game code
           realm = Utilities.game_code_to_realm(login_params.game_code)
@@ -539,7 +540,7 @@ module Lich
           if login_params.custom_launch && !login_params.custom_launch.empty?
             frontend_display = 'Custom'
           else
-            frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+            frontend_display = Frontend.display_name(login_params.frontend)
           end
 
           fe_label = Gtk::Label.new("#{frontend_display}")
@@ -624,7 +625,14 @@ module Lich
           favorite_button.signal_connect('clicked') do
             begin
               # Toggle favorite status with frontend precision
-              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code, login_params.frontend)
+              new_status = FavoritesManager.toggle_favorite(
+                @data_dir,
+                login_params.user_id,
+                login_params.char_name,
+                login_params.game_code,
+                login_params.frontend,
+                login_params.custom_launch
+              )
 
               # Update button appearance
               # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
@@ -704,21 +712,13 @@ module Lich
           add_instance_pane.add2(add_inst_select)
 
           # Frontend options
-          q_stormfront_option = Gtk::RadioButton.new(label: 'Stormfront')
-          q_wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: q_stormfront_option)
-          q_avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: q_stormfront_option)
+          frontend_selector = FrontendSelector.new(refresh: false)
 
           # Add character button
           add_char_button = Gtk::Button.new(label: "Add to this account")
 
           # Frontend selection box
-          q_frontend_box = Gtk::Box.new(:horizontal, 10)
-          if RUBY_PLATFORM =~ /darwin/i
-            q_frontend_box.pack_end(q_avalon_option, expand: false, fill: false, padding: 0)
-          else
-            q_frontend_box.pack_end(q_wizard_option, expand: false, fill: false, padding: 0)
-            q_frontend_box.pack_end(q_stormfront_option, expand: false, fill: false, padding: 0)
-          end
+          q_frontend_box = frontend_selector.widget
 
           # Character and instance panes
           @bonded_pair_char = Gtk::Paned.new(:horizontal)
@@ -732,7 +732,7 @@ module Lich
           @bonded_pair_inst.add2(add_char_button)
 
           # Set up add character button handler
-          setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
+          setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, frontend_selector)
         end
 
         # Sets up the add character button handler
@@ -741,23 +741,17 @@ module Lich
         # @param add_char_button [Gtk::Button] Add character button
         # @param add_char_entry [Gtk::Entry] Character name entry
         # @param add_inst_select [Gtk::ComboBoxText] Instance selection
-        # @param q_stormfront_option [Gtk::RadioButton] Stormfront radio button
-        # @param q_wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param q_avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param frontend_selector [FrontendSelector] shared frontend selector
         # @return [void]
-        def setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
+        def setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, frontend_selector)
           add_char_button.signal_connect('clicked') {
             # Handle adding a character
             if @callbacks.on_add_character
-              frontend = if q_wizard_option.active?
-                           'wizard'
-                         elsif q_avalon_option.active?
-                           'avalon'
-                         elsif q_stormfront_option.active?
-                           'stormfront'
-                         else # default to
-                           'stormfront'
-                         end
+              frontend = frontend_selector.selected_id
+              unless frontend
+                @callbacks.on_error&.call('No supported frontend is available.')
+                next
+              end
 
               @callbacks.on_add_character.call(
                 character: add_char_entry.text,

@@ -24,6 +24,15 @@ module Lich
           respond "[Combat] Processed #{events.size} events" if Tracker.debug?
         end
 
+        # An event is worth persisting only if it has a target to apply data to
+        # and any data to apply. Single predicate so every save site agrees
+        # (previously three sites used three different criteria).
+        def event_worth_saving?(event)
+          return false unless event && event[:target][:id]
+
+          !event[:damages].empty? || !event[:crits].empty? || !event[:statuses].empty?
+        end
+
         # State machine parser
         def parse_events(lines)
           events = []
@@ -34,12 +43,13 @@ module Lich
           lines.each_with_index do |line, index|
             next if line.strip.empty?
 
+            # Extract creature target once per line; reused by the status
+            # handler and the target-switch logic below
+            line_target = Parser.extract_target_from_line(line)
+
             # Always check for status effects on every line (even outside combat)
             if Tracker.settings[:track_statuses]
               if (status_result = Parser.parse_status(line))
-                # Always try to extract target ID from XML first
-                line_target = Parser.extract_target_from_line(line)
-
                 if line_target && line_target[:id]
                   # Use ID-based lookup - this is most reliable
                   if status_result.is_a?(Hash)
@@ -64,16 +74,12 @@ module Lich
               end
             end
 
-            # Extract target from current line (for multi-target attacks like volley)
-            line_target = Parser.extract_target_from_line(line)
-
-            # If we found a new target and we're in combat, handle target switching
+            # Handle target switching (for multi-target attacks like volley)
             if line_target && parse_state != :seeking_attack
               # Check if this is a real target switch (different creature)
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
-                if current_event && current_event[:target][:id] &&
-                   (!current_event[:damages].empty? || !current_event[:crits].empty? || !current_event[:statuses].empty?)
+                if event_worth_saving?(current_event)
                   events << current_event
                   respond "[Combat] Saved event for #{current_event[:target][:name]}: #{current_event[:damages].size} damages, #{current_event[:crits].size} crits, #{current_event[:statuses].size} statuses" if Tracker.debug?
                 end
@@ -98,29 +104,32 @@ module Lich
               # If current_target[:id] == line_target[:id], do nothing (same target)
             end
 
-            case parse_state
-            when :seeking_attack
-              # Only check for attacks when we're looking for them
-              if (attack = Parser.parse_attack(line))
-                # Save previous event if exists
-                events << current_event if current_event && current_event[:target][:id]
+            # Attack check is needed in both states (a new attack while seeking
+            # damage closes the previous event), so run it once per line. This
+            # replaces the old `redo`, which re-ran the status/UCS handlers
+            # above on the same line and double-applied their effects.
+            attack = Parser.parse_attack(line)
 
-                current_event = {
-                  name: attack[:name],
-                  target: attack[:target] || {},
-                  damages: [],
-                  crits: [],
-                  statuses: []
-                }
-
-                respond "[Combat] Found attack: #{attack[:name]}" if Tracker.debug?
-                parse_state = :seeking_damage
+            if attack
+              # Save previous event before starting a new one
+              if event_worth_saving?(current_event)
+                events << current_event
+                respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:damages].size} damages, #{current_event[:crits].size} crits" if Tracker.debug?
               end
 
-            when :seeking_damage
-              # Once in damage phase, check EVERY line for damage and status
+              current_event = {
+                name: attack[:name],
+                target: attack[:target] || {},
+                damages: [],
+                crits: [],
+                statuses: []
+              }
+              current_target = current_event[:target][:id] ? current_event[:target] : nil
 
-              # Always check for damage (accumulate all damage lines)
+              respond "[Combat] Found attack: #{attack[:name]}" if Tracker.debug?
+              parse_state = :seeking_damage
+            elsif parse_state == :seeking_damage
+              # Accumulate all damage lines for the current attack
               if (damage = Parser.parse_damage(line))
                 current_event[:damages] << damage
                 respond "[Combat] Found damage: #{damage}" if Tracker.debug?
@@ -154,25 +163,11 @@ module Lich
                   end
                 end
               end
-
-              # Note: Status effects are now checked globally on every line above
-
-              # Check for new attack (means we're done with previous)
-              if Parser.parse_attack(line)
-                # Save current event before starting new attack
-                if current_event && current_event[:target][:id] &&
-                   (!current_event[:damages].empty? || !current_event[:crits].empty?)
-                  events << current_event
-                  respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:damages].size} damages, #{current_event[:crits].size} crits" if Tracker.debug?
-                end
-                parse_state = :seeking_attack
-                redo # Process this line as new attack
-              end
             end
           end
 
           # Don't forget the last event
-          events << current_event if current_event && current_event[:target][:id]
+          events << current_event if event_worth_saving?(current_event)
 
           events
         end

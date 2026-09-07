@@ -445,4 +445,90 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
       end
     end
   end
+
+  describe '#setup_play_button_handler' do
+    subject(:tab) do
+      instance = described_class.allocate
+      instance.instance_variable_set(:@callbacks, play_callbacks)
+      instance.instance_variable_set(:@entry_data, [])
+      instance.instance_variable_set(:@data_dir, '/tmp/test-data')
+      instance.instance_variable_set(:@autosort_state, false)
+      instance.instance_variable_set(:@make_quick_option, double(active?: true))
+      instance.instance_variable_set(:@make_favorite_option, double(active?: false))
+      instance.instance_variable_set(:@custom_launch_entry, double(child: double(text: '')))
+      instance.instance_variable_set(:@custom_launch_dir, double(child: double(text: '')))
+      instance
+    end
+
+    let(:on_play) { proc {} }
+    let(:play_callbacks) { Lich::Common::GUI::CallbackParams.new(on_play: on_play) }
+    let(:play_button) do
+      double('Gtk::Button').tap do |button|
+        allow(button).to receive(:sensitive=)
+        allow(button).to receive(:signal_connect).with('clicked') { |&block| @play_handler = block }
+      end
+    end
+    let(:selected_character) { ['GS3', 'GemStone IV', 'GS3001', 'tsetem'] }
+    let(:treeview) { double(selection: double(selected: selected_character)) }
+    let(:account_entry) { double(text: 'testaccount') }
+    let(:password_entry) { double(text: 'secret') }
+    let(:frontend_selector) do
+      double(selected_id: 'stormfront', resolve_selected: double('resolution'))
+    end
+    let(:custom_launch_option) { double(active?: false) }
+    let(:launch_data) { ['GAME=STORM', 'CHARACTER=Tsetem'] }
+
+    before do
+      allow(on_play).to receive(:call)
+      allow(Lich::Common::GUI::LoginTabUtils).to receive(:custom_launch?).and_return(false)
+      allow(Lich::Common::Authentication).to receive(:authenticate).and_return(game: 'STORM')
+      allow(Lich::Common::Authentication::LaunchData).to receive(:prepare).and_return(launch_data)
+      allow(Lich::Common::Authentication::EntryStore).to receive(:save_entries).and_return(true)
+      allow(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries).and_return([])
+
+      tab.send(
+        :setup_play_button_handler,
+        play_button,
+        treeview,
+        account_entry,
+        password_entry,
+        frontend_selector,
+        custom_launch_option
+      )
+    end
+
+    it 'marks the launch context after the requested saved entry is written' do
+      @play_handler.call
+
+      expect(on_play).to have_received(:call).with(
+        launch_data,
+        hash_including(
+          char_name: 'Tsetem',
+          game_code: 'GS3',
+          frontend: 'stormfront',
+          saved_entry: true
+        )
+      )
+    end
+
+    it 'favorites the exact Custom Launch variant that was saved' do
+      custom_launch = '/opt/warlock --port %port% --key %key%'
+      tab.instance_variable_set(:@make_favorite_option, double(active?: true))
+      tab.instance_variable_set(:@custom_launch_entry, double(child: double(text: custom_launch)))
+      allow(custom_launch_option).to receive(:active?).and_return(true)
+      allow(Lich::Common::GUI::LoginTabUtils).to receive(:custom_launch?).and_return(true)
+      allow(Lich::Common::GUI::FavoritesManager).to receive(:add_favorite).and_return(true)
+
+      @play_handler.call
+
+      expect(Lich::Common::GUI::FavoritesManager).to have_received(:add_favorite).with(
+        '/tmp/test-data',
+        'TESTACCOUNT',
+        'Tsetem',
+        'GS3',
+        'stormfront',
+        custom_launch
+      )
+    end
+  end
 end

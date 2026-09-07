@@ -347,6 +347,54 @@ RSpec.describe Lich::Common, "#gui_login" do
       expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
       expect(window).to have_received(:destroy)
     end
+
+    it "keeps the launcher open for a successfully saved manual login in persistent mode" do
+      stub_const("Lich::Common::SessionLauncher", Module.new)
+      allow(Lich::Common::SessionLauncher).to receive(:launch).and_return({ ok: true, pid: 1234 })
+      test_instance.instance_variable_set(:@persistent_launcher_mode, true)
+      test_instance.send(:create_tab_instances)
+
+      captured_manual_callbacks.fetch(:on_play).call(
+        launch_data,
+        { char_name: 'Tsetem', game_code: 'GST', frontend: 'stormfront', saved_entry: true }
+      )
+
+      expect(Lich::Common::SessionLauncher).to have_received(:launch).with(
+        launch_data,
+        launch_context: hash_including(saved_entry: true, dark_mode: false)
+      )
+      expect(window).not_to have_received(:destroy)
+    end
+
+    it "closes after a completed Saga launch when persistent mode is disabled" do
+      stub_const("Lich::Common::SessionLauncher", Module.new)
+      allow(Lich::Common::SessionLauncher).to receive(:launch)
+      test_instance.instance_variable_set(:@persistent_launcher_mode, false)
+      test_instance.send(:create_tab_instances)
+
+      captured_saved_callbacks.fetch(:on_play).call(
+        nil,
+        { managed_launch_completed: true, managed_launch_pid: 1234 }
+      )
+
+      expect(Lich::Common::SessionLauncher).not_to have_received(:launch)
+      expect(window).to have_received(:destroy)
+    end
+
+    it "keeps the launcher open after a completed Saga launch in persistent mode" do
+      stub_const("Lich::Common::SessionLauncher", Module.new)
+      allow(Lich::Common::SessionLauncher).to receive(:launch)
+      test_instance.instance_variable_set(:@persistent_launcher_mode, true)
+      test_instance.send(:create_tab_instances)
+
+      captured_saved_callbacks.fetch(:on_play).call(
+        nil,
+        { managed_launch_completed: true, managed_launch_pid: 1234 }
+      )
+
+      expect(Lich::Common::SessionLauncher).not_to have_received(:launch)
+      expect(window).not_to have_received(:destroy)
+    end
   end
 
   context "when handling launcher window shutdown callbacks" do

@@ -1688,8 +1688,8 @@ end
 
 # Requests an orderly Lich shutdown from a running script.
 #
-# This follows the explicit user-exit shutdown path without sending an `exit`
-# command through game or frontend I/O. The calling script is excluded from the
+# This follows the explicit user-exit shutdown path and requests a game-server
+# exit after local script teardown. The calling script is excluded from the
 # script drain so it can finish the shutdown request.
 #
 # @return [Lich::Common::OrderlyShutdown::Result] shutdown result
@@ -1700,6 +1700,7 @@ def lich_shutdown
   Lich::Common::OrderlyShutdown.request_user_exit(
     source: source,
     current_script: current_script,
+    server_exit_command: "#{$cmd_prefix}exit",
     active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
   )
 end

@@ -38,6 +38,12 @@ module Lich
 
           # Parse damage from line
           def self.parse(line)
+            # Fast rejection: every damage pattern contains "point(s) of damage".
+            # The substring check skips the regex scan on the ~95% of lines that
+            # can't match; the union detector then rejects near-misses cheaply.
+            return nil unless line.include?('point')
+            return nil unless DAMAGE_DETECTOR.match?(line)
+
             ALL_DAMAGE.each do |pattern|
               if (match = pattern.match(line))
                 result = { damage: match[:damage].to_i }

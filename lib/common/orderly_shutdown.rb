@@ -2,6 +2,7 @@
 
 require_relative 'shutdown_log'
 require_relative 'shutdown_result_predicates'
+require_relative 'shutdown_intent'
 
 module Lich
   module Common
@@ -12,6 +13,10 @@ module Lich
     # the stored result. Connection-loss cleanup can add its own runner without
     # overloading the state object.
     module OrderlyShutdown
+      SERVER_EXIT_TIMEOUT_SECONDS = 10
+
+      class ServerExitTimeout < StandardError; end
+
       # Result for one orderly-shutdown attempt.
       Result = Struct.new(
         :completed,
@@ -38,8 +43,11 @@ module Lich
         #
         # @param source [#to_s] source recorded in shutdown logs
         # @param current_script [Object, nil] script to exclude from shutdown drain
+        # @param server_exit_command [String, nil] validated command sent before close
+        # @param server_exit_timeout [Numeric] seconds to wait for remote EOF
         # @return [Result] stored orderly-shutdown result
-        def request_user_exit(source:, current_script: nil, coordinator: ShutdownCoordinator, scripts_provider: nil, script_drain: ShutdownScriptDrain, vars: Vars, game: Game, active_sessions_lifecycle: nil, slow_threshold: 1.5)
+        def request_user_exit(source:, current_script: nil, coordinator: ShutdownCoordinator, scripts_provider: nil, script_drain: ShutdownScriptDrain, vars: Vars, game: Game, active_sessions_lifecycle: nil, slow_threshold: 1.5, server_exit_command: nil, server_exit_timeout: SERVER_EXIT_TIMEOUT_SECONDS)
+          validate_server_exit!(server_exit_command, server_exit_timeout)
           ShutdownLog.begin_user_exit_summary!
           coordinator.request(reason: :user_exit, source: source)
 
@@ -60,7 +68,9 @@ module Lich
             vars: vars,
             game: game,
             active_sessions_lifecycle: active_sessions_lifecycle,
-            slow_threshold: slow_threshold
+            slow_threshold: slow_threshold,
+            server_exit_command: server_exit_command,
+            server_exit_timeout: server_exit_timeout
           )
           if current_script && initial_scripts.include?(current_script)
             result.scripts_drained = false
@@ -83,10 +93,13 @@ module Lich
         # @param game [#close] game connection facade
         # @param active_sessions_lifecycle [#update_connected, nil] optional session registry
         # @param slow_threshold [Float] seconds before script drain reports slow scripts
+        # @param server_exit_command [String, nil] validated command sent before close
+        # @param server_exit_timeout [Numeric] seconds to wait for remote EOF
         # @return [Result] stored orderly-shutdown result
         # @raise [ArgumentError] when caller input is invalid or reason is not :user_exit
-        def run(coordinator:, initial_scripts:, remaining_scripts:, script_drain:, vars:, game:, active_sessions_lifecycle: nil, slow_threshold: 1.5)
-          validate!(coordinator: coordinator, remaining_scripts: remaining_scripts, script_drain: script_drain, vars: vars, game: game)
+        def run(coordinator:, initial_scripts:, remaining_scripts:, script_drain:, vars:, game:, active_sessions_lifecycle: nil, slow_threshold: 1.5, server_exit_command: nil, server_exit_timeout: SERVER_EXIT_TIMEOUT_SECONDS)
+          validate!(coordinator: coordinator, remaining_scripts: remaining_scripts, script_drain: script_drain, vars: vars, game: game, server_exit_command: server_exit_command)
+          validate_server_exit!(server_exit_command, server_exit_timeout)
           raise ArgumentError, "orderly user exit requires reason=:user_exit" unless coordinator.orderly_user_exit?
 
           result = Result.new(
@@ -104,19 +117,36 @@ module Lich
           update_active_sessions(result, active_sessions_lifecycle)
           drain_scripts(result, initial_scripts, remaining_scripts, script_drain, slow_threshold)
           save_vars(result, vars)
+          request_server_exit(result, game, server_exit_command, server_exit_timeout) if server_exit_command
           close_game(result, game)
           finish(result)
         end
 
         private
 
-        def validate!(coordinator:, remaining_scripts:, script_drain:, vars:, game:)
+        def validate!(coordinator:, remaining_scripts:, script_drain:, vars:, game:, server_exit_command:)
           raise ArgumentError, "coordinator must respond to #orderly_user_exit?" unless coordinator.respond_to?(:orderly_user_exit?)
           raise ArgumentError, "coordinator must respond to #begin_orderly_shutdown" unless coordinator.respond_to?(:begin_orderly_shutdown)
           raise ArgumentError, "remaining_scripts must respond to #call" unless remaining_scripts.respond_to?(:call)
           raise ArgumentError, "script_drain must respond to #run" unless script_drain.respond_to?(:run)
           raise ArgumentError, "vars must respond to #save" unless vars.respond_to?(:save)
           raise ArgumentError, "game must respond to #close" unless game.respond_to?(:close)
+          return unless server_exit_command
+
+          raise ArgumentError, "game must respond to #_puts" unless game.respond_to?(:_puts)
+          raise ArgumentError, "game must respond to #reader_thread" unless game.respond_to?(:reader_thread)
+          raise ArgumentError, "game must respond to #remote_eof?" unless game.respond_to?(:remote_eof?)
+        end
+
+        def validate_server_exit!(server_exit_command, server_exit_timeout)
+          return unless server_exit_command
+
+          unless ShutdownIntent.user_exit_command?(server_exit_command)
+            raise ArgumentError, "invalid server exit command: #{server_exit_command.inspect}"
+          end
+          unless server_exit_timeout.is_a?(Numeric) && server_exit_timeout.positive?
+            raise ArgumentError, "server_exit_timeout must be positive"
+          end
         end
 
         def update_active_sessions(result, active_sessions_lifecycle)
@@ -145,6 +175,18 @@ module Lich
             log_info("saving script settings before closing game connection...")
             vars.save
             result.vars_saved = true
+          end
+        end
+
+        def request_server_exit(result, game, command, timeout)
+          run_step(result, "Game exit") do
+            log_info("requesting game server exit...")
+            raise IOError, "failed to send game server exit" unless game._puts(command.to_s.strip)
+
+            reader_thread = game.reader_thread
+            raise IOError, "game reader thread is unavailable" unless reader_thread
+            raise ServerExitTimeout, "game server did not close within #{timeout}s" unless reader_thread.join(timeout)
+            raise IOError, "game reader stopped without remote EOF" unless game.remote_eof?
           end
         end
 

@@ -53,7 +53,11 @@ module Lich
         prefixed = "#{cmd_prefix}#{client_string}"
         return false unless Lich::Common::ShutdownIntent.user_exit_command?(prefixed)
 
-        run_orderly_user_shutdown(source: :detachable_frontend, **request_options)
+        run_orderly_user_shutdown(
+          source: :detachable_frontend,
+          **request_options,
+          server_exit_command: prefixed
+        )
         true
       end
 

@@ -247,10 +247,28 @@ module Lich
       # Returns the current status string of this object, or +nil+ if present
       # but unstated, or +"gone"+ if not found in any registry.
       #
+      # The published status maps are consulted first, then the staging maps.
+      # That order is deliberate: while a refresh is in flight a reader must
+      # still see the previous complete snapshot (see the staging notes above),
+      # so a staged value must never shadow a published one. The staging maps
+      # are only a fallback for an object that has no published entry at all,
+      # which would otherwise be reported as +"gone"+ despite being mid-refresh.
+      #
+      # Note that a dedupe hit in +find_or_create+ means a staged object and its
+      # published counterpart are frequently the *same* instance, so this method
+      # cannot distinguish which of the two a caller holds. Callers that need
+      # the in-flight value (i.e. the parser) must track it themselves and write
+      # through +#status=+ rather than reading it back through here.
+      #
+      # The +"gone"+ sentinel is a frozen literal and must not be mutated in
+      # place; build a new String from it instead.
+      #
       # @return [String, nil]
       def status
         return @@npc_status[@id] if @@npc_status.key?(@id)
         return @@pc_status[@id]  if @@pc_status.key?(@id)
+        return @@staging_npc_status[@id] if @@staging_npc_status&.key?(@id)
+        return @@staging_pc_status[@id]  if @@staging_pc_status&.key?(@id)
 
         present_in_any_registry? ? nil : 'gone'
       end

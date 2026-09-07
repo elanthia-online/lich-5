@@ -95,8 +95,8 @@ module Lich
           dialog.destroy
         end
 
-        # @api private
-        # Restores button sensitivity after a successful launch using a small debounce.
+        # Restores button sensitivity after a successful standard or managed
+        # launch using a small debounce.
         #
         # @param button [Gtk::Button] The play button to restore
         # @return [void]

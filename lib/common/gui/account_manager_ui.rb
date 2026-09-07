@@ -2,6 +2,7 @@
 
 require_relative 'account_manager'
 require_relative 'favorites_manager'
+require_relative 'frontend_selector'
 require_relative 'theme_utils'
 require_relative 'master_password_change'
 require_relative 'encryption_mode_change'
@@ -124,7 +125,7 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String) # Added favorites column
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
 
@@ -258,6 +259,7 @@ module Lich
               _game_name = iter[2] # Game name is in column 2, not character
               frontend_display = iter[3] # Frontend display name
               game_code = iter[4] # Game code is in hidden column 4
+              custom_launch = iter[6] # Custom launch is in hidden column 6
 
               if character.nil? || character.empty?
                 # This is an account node
@@ -312,7 +314,7 @@ module Lich
                              end
 
                   # Remove character with frontend precision
-                  if AccountManager.remove_character(@data_dir, account, character, game_code, frontend)
+                  if AccountManager.remove_character(@data_dir, account, character, game_code, frontend, custom_launch)
                     @msgbox.call("Character removed successfully.")
                     populate_accounts_view(accounts_store)
                     # Notify other tabs of data change
@@ -320,7 +322,8 @@ module Lich
                       account: account,
                       character: character,
                       game_code: game_code,
-                      frontend: frontend
+                      frontend: frontend,
+                      custom_launch: custom_launch
                     })
                   else
                     @msgbox.call("Failed to remove character.")
@@ -396,16 +399,8 @@ module Lich
           frontend_box = Gtk::Box.new(:horizontal, 5)
           frontend_box.pack_start(Gtk::Label.new("Frontend:"), expand: false, fill: false, padding: 0)
 
-          frontend_radio_box = Gtk::Box.new(:horizontal, 5)
-          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
-          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
-          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-
-          frontend_radio_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
-          frontend_radio_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-          frontend_radio_box.pack_start(avalon_option, expand: false, fill: false, padding: 0) if RUBY_PLATFORM =~ /darwin/i
-
-          frontend_box.pack_start(frontend_radio_box, expand: true, fill: true, padding: 0)
+          frontend_selector = FrontendSelector.new(refresh: false)
+          frontend_box.pack_start(frontend_selector.widget, expand: true, fill: true, padding: 0)
 
           add_box.pack_start(frontend_box, expand: false, fill: false, padding: 0)
 
@@ -454,9 +449,7 @@ module Lich
             refresh_button,
             char_name_entry,
             game_combo,
-            stormfront_option,
-            wizard_option,
-            avalon_option,
+            frontend_selector,
             custom_launch_entry,
             custom_launch_dir_entry,
             notebook
@@ -780,14 +773,12 @@ module Lich
         # @param refresh_button [Gtk::Button] Refresh button
         # @param char_name_entry [Gtk::Entry] Character name entry
         # @param game_combo [Gtk::ComboBoxText] Game selection combo
-        # @param stormfront_option [Gtk::RadioButton] Stormfront radio button
-        # @param wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param frontend_selector [FrontendSelector] shared frontend selector
         # @param custom_launch_entry [Gtk::Entry] Custom launch entry
         # @param custom_launch_dir_entry [Gtk::Entry] Custom launch directory entry
         # @param notebook [Gtk::Notebook] Parent notebook
         # @return [void]
-        def setup_add_character_handlers(add_button, account_combo, refresh_button, char_name_entry, game_combo, _stormfront_option, wizard_option, avalon_option, custom_launch_entry, custom_launch_dir_entry, notebook)
+        def setup_add_character_handlers(add_button, account_combo, refresh_button, char_name_entry, game_combo, frontend_selector, custom_launch_entry, custom_launch_dir_entry, notebook)
           # Set up refresh button handler
           refresh_button.signal_connect('clicked') do
             populate_account_combo(account_combo)
@@ -816,14 +807,11 @@ module Lich
               next
             end
 
-            # Determine frontend
-            frontend = if wizard_option.active?
-                         'wizard'
-                       elsif avalon_option.active?
-                         'avalon'
-                       else
-                         'stormfront'
-                       end
+            frontend = frontend_selector.selected_id
+            if frontend.nil?
+              @msgbox.call('No supported frontend is available.')
+              next
+            end
 
             # Get game code from game text
             game_code = GameSelection.get_selected_game_code(game_combo)
@@ -887,6 +875,7 @@ module Lich
                   character = iter[1]
                   game_code = iter[4]
                   frontend_display = iter[3]
+                  custom_launch = iter[6]
 
                   # Convert display name back to internal frontend format
                   frontend = case frontend_display.downcase
@@ -901,7 +890,9 @@ module Lich
                              end
 
                   # Toggle favorite status with frontend precision
-                  new_status = FavoritesManager.toggle_favorite(data_dir, account, character, game_code, frontend)
+                  new_status = FavoritesManager.toggle_favorite(
+                    data_dir, account, character, game_code, frontend, custom_launch
+                  )
                   # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
                   iter[5] = new_status ? '★' : '☆'
                   # rubocop:enable Custom/AsciiOnlySource
@@ -911,6 +902,7 @@ module Lich
                     account: account,
                     character: character,
                     game_code: game_code,
+                    custom_launch: custom_launch,
                     is_favorite: new_status
                   })
                 end
@@ -962,43 +954,20 @@ module Lich
           label = Gtk::Label.new("Select the frontend to use for all characters:")
           content_area.pack_start(label, expand: false, fill: false, padding: 10)
 
-          # Create frontend selection radio buttons (similar to manual login)
-          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
-          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
-          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-
-          # Set Wrayth (stormfront) as default
-          stormfront_option.active = true
-
-          # Create radio button container
-          frontend_box = Gtk::Box.new(:vertical, 5)
-          frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
-          frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-
-          # Only show Avalon on macOS (consistent with manual login)
-          if RUBY_PLATFORM =~ /darwin/i
-            frontend_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
-          end
-
-          content_area.pack_start(frontend_box, expand: false, fill: false, padding: 10)
+          frontend_selector = FrontendSelector.new(refresh: false)
+          content_area.pack_start(frontend_selector.widget, expand: false, fill: false, padding: 10)
 
           # Show dialog and get response
           dialog.show_all
           response = dialog.run
 
           # Determine selected frontend
-          selected_frontend = nil
-          if response == Gtk::ResponseType::OK
-            if wizard_option.active?
-              selected_frontend = 'wizard'
-            elsif avalon_option.active?
-              selected_frontend = 'avalon'
-            else
-              selected_frontend = 'stormfront' # Default/Wrayth
-            end
-          end
+          selected_frontend = response == Gtk::ResponseType::OK ? frontend_selector.selected_id : nil
 
           dialog.destroy
+          if response == Gtk::ResponseType::OK && selected_frontend.nil?
+            @msgbox.call('No supported frontend is available.')
+          end
           selected_frontend
         end
 
@@ -1207,9 +1176,12 @@ module Lich
                 char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
               end
               char_iter[4] = character[:game_code] # Store game_code in hidden column
+              char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
 
               # Add favorites information with frontend precision
-              is_favorite = FavoritesManager.is_favorite?(@data_dir, account, character[:char_name], character[:game_code], character[:frontend])
+              is_favorite = FavoritesManager.is_favorite?(
+                @data_dir, account, character[:char_name], character[:game_code], character[:frontend], character[:custom_launch]
+              )
               # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               char_iter[5] = is_favorite ? '★' : '☆'
               # rubocop:enable Custom/AsciiOnlySource

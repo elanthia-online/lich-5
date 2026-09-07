@@ -128,9 +128,17 @@ module Lich
       end
 
       # BUG FIX: Added nil guard - find_skill can return nil if skill not found
+      #
+      # Capped skills (rank >= 1750) are pinned to 34/34 the same way
+      # `initialize` and `update` do it. Without the cap guard, clearing the
+      # mindstate here would reset exp to 0 and defeat the "capped == 34"
+      # convention that trainer scripts rely on to avoid re-training a capped
+      # skill.
       def self.clear_mind(val)
         skill = find_skill(val)
-        skill.exp = 0 if skill
+        return unless skill
+
+        skill.exp = skill.rank.to_i >= 1750 ? 34 : 0
       end
 
       # BUG FIX: Added nil guard - find_skill can return nil if skill not found

@@ -69,20 +69,165 @@ module Lich
       end
     end
 
+    # An Array of tag names that tells its owning Map class to drop the tag
+    # index whenever the list is structurally mutated. Stored names are frozen
+    # copies, so renaming a tag in place raises rather than silently leaving the
+    # index describing the old name. Reads are plain Array reads with no added
+    # indirection.
+    class TagList < Array
+      # Array mutators that do not end in a bang. This is a closed set, unlike
+      # the bang methods, which are derived below so that a mutator added by a
+      # future Ruby is covered without editing this list.
+      NON_BANG_MUTATORS = %i[
+        << []= append clear concat delete delete_at delete_if fill insert
+        keep_if pop prepend push replace shift unshift
+      ].freeze
+
+      # Every Array method that changes the receiver's contents.
+      MUTATORS = (
+        Array.public_instance_methods(false).select { |name| name.to_s.end_with?('!') } +
+        NON_BANG_MUTATORS
+      ).uniq.freeze
+
+      # Array's own writer, used to replace entries without re-entering the
+      # interceptor. Held unbound so nothing is allocated per mutation.
+      ARRAY_WRITER = Array.instance_method(:[]=)
+      private_constant :ARRAY_WRITER
+
+      # @param contents [Array, nil] initial tag names
+      # @param owner [Class, nil] Map class notified on mutation
+      def initialize(contents = nil, owner = nil)
+        super()
+        # Order matters: concat is an intercepted mutator, so the initial fill
+        # has to happen while @owner is still nil. Construction must not
+        # invalidate the index, or a full map load would fire once per room.
+        concat(contents.to_a) unless contents.nil?
+        @owner = owner
+      end
+
+      # Invalidation is eager, including for a blockless call that returns an
+      # Enumerator without mutating yet. That is deliberate: driving such an
+      # enumerator later does mutate, so deferring would leave the index stale.
+      # An extra rebuild is cheap; a missed one is not.
+      MUTATORS.each do |name|
+        define_method(name) do |*args, &block|
+          result = super(*args, &block)
+          freeze_contents
+          @owner.reset_tag_index if @owner.respond_to?(:reset_tag_index)
+          result
+        end
+      end
+
+      private
+
+      # Replace any unfrozen name with a frozen copy. Without this a caller
+      # could do tags.first.replace('bank'), which changes the tag without
+      # touching the list and so never reaches the interceptor above. Copies
+      # rather than freezing in place, so the caller's own strings are left
+      # alone. Uses Array's writer directly to avoid re-entering the
+      # interceptor.
+      # @return [nil]
+      def freeze_contents
+        each_with_index do |tag, index|
+          next unless tag.is_a?(String) && !tag.frozen?
+
+          ARRAY_WRITER.bind_call(self, index, tag.dup.freeze)
+        end
+        nil
+      end
+    end
+
     # Base module containing shared map functionality
     # Include this in game-specific Map classes
     module MapBase
       def self.included(base)
         base.extend(ClassMethods)
         base.include(InstanceMethods)
+        # The tag cache lives on class-instance variables, which subclasses do
+        # not share. Room subclasses Map and inherits these class methods, so
+        # without a single owner a query through Room would memoize a second
+        # cache that Map's invalidations never reach. Mark the includer as owner
+        # and resolve to it from any subclass, see #tag_cache_host.
+        base.instance_variable_set(:@tag_cache_owner, true)
       end
 
       # Class methods shared across all Map implementations
       module ClassMethods
         # Get the next available room ID
+        # @return [Integer] one past the highest room id in use, or 1 when the
+        #   map holds no rooms
         def get_free_id
-          self.load unless loaded?
-          list.compact.max_by(&:id).id + 1
+          rooms = list.compact
+          # An empty map yields 1, which is what nil.id + 1 produced via Lich's
+          # NilClass patch. Stating it means this no longer depends on that.
+          return 1 if rooms.empty?
+
+          rooms.max_by(&:id).id + 1
+        end
+
+        # Tag names present anywhere in the room list
+        # @return [Array<String>]
+        def tags
+          tag_names
+        end
+
+        # The uid the game last navigated away from
+        # @return [Integer, nil]
+        def previous_uid
+          XMLData.previous_nav_rm
+        end
+
+        # Resolve the current room when the game gave no usable uid. Delegates to
+        # the game-specific matchers.
+        # @return [Object, nil] the resolved room
+        def match_no_uid
+          if (script = Script.current)
+            set_current(match_current(script))
+          else
+            set_fuzzy(match_fuzzy)
+          end
+        end
+
+        # Narrow a set of candidate ids to the one reachable from the current room
+        # @param ids [Array] candidate room ids
+        # @return [Integer, nil] the single reachable id, or nil unless exactly
+        #   one candidate is reachable from the current room
+        def match_multi_ids(ids)
+          # current_room_id can be nil, stale, or point at a hole. Under Lich's
+          # NilClass patch a nil id made Array#[] hand back the whole room list
+          # and the subsequent .wayto then yielded nil, so the result was no
+          # matches either way. Check before indexing rather than relying on it.
+          return nil if current_room_id.nil?
+
+          current = list[current_room_id]
+          return nil if current.nil?
+
+          matches = ids.find_all { |s| current.wayto.keys.include?(s.to_s) }
+          return matches[0] if matches.size == 1
+
+          nil
+        end
+
+        # Record the room the game moved to, remembering the one it left
+        # @param id [Integer, nil] the new current room id
+        # @return [Object, nil] the room, or nil when given nil
+        def set_current(id)
+          self.previous_room_id = current_room_id if id != current_room_id
+          self.current_room_id = id
+          return nil if id.nil?
+
+          list[id]
+        end
+
+        # As #set_current, but a nil id leaves the previous room untouched
+        # @param id [Integer, nil] the fuzzily matched room id
+        # @return [Object, nil] the room, or nil when given nil
+        def set_fuzzy(id)
+          self.previous_room_id = current_room_id if !id.nil? && id != current_room_id
+          self.current_room_id = id
+          return nil if id.nil?
+
+          list[id]
         end
 
         # Estimate total travel time for a path
@@ -97,7 +242,11 @@ module Lich
           time = 0.0
           until array.length < 2
             room = array.shift
-            t = self[room].timeto[array.first.to_s]
+            # A path can name a room that is gone. Under the NilClass patch the
+            # lookup yielded nil and the 0.2 default below applied; keep that
+            # without relying on the patch.
+            current = self[room]
+            t = current.nil? ? nil : current.timeto[array.first.to_s]
             if t
               time += t.is_a?(StringProc) ? t.call.to_f : t.to_f
             else
@@ -107,7 +256,274 @@ module Lich
           time
         end
 
+        # Tag name => Array of room ids. Private: callers must go through
+        # #rooms_by_tag or #tag_names so the memo cannot be mutated in place.
+        #
+        # Rebuild attempts before giving up on caching the result.
+        TAG_INDEX_BUILD_ATTEMPTS = 3
+
+        # Serialises publishing the memo against invalidating it. Only ever held
+        # across a couple of assignments, never across a build or a load, so it
+        # cannot invert the ordering against the load mutex.
+        TAG_INDEX_MUTEX = Mutex.new
+
+        # The single class that owns the tag cache. Map is the owner; Room, which
+        # subclasses it, resolves to Map so both see one cache.
+        # @return [Class]
+        def tag_cache_host
+          @tag_cache_host ||= begin
+            klass = self
+            klass = klass.superclass until klass.instance_variable_defined?(:@tag_cache_owner)
+            klass
+          end
+        end
+
+        # @return [Hash{String => Array<Integer>}] tag name => room ids
+        def tag_index
+          # No explicit load here: build_tag_index reads through #list, which
+          # loads when needed. Loading here as well made a single Map.tags call
+          # attempt the load twice, doubling the failure message.
+          host = tag_cache_host
+          TAG_INDEX_BUILD_ATTEMPTS.times do
+            cached = host.instance_variable_get(:@tag_index)
+            return cached unless cached.nil?
+
+            # Build outside the mutex. build_tag_index reads through #list, which
+            # can take the load mutex, and taking the two in that order here
+            # would invert the ordering every other path uses.
+            generation = tag_index_generation
+            built = build_tag_index
+
+            published = TAG_INDEX_MUTEX.synchronize do
+              # Validate and publish as one step, and never publish a value that
+              # failed validation. Publishing first and undoing afterwards would
+              # let another reader take the cached fast path and consume the
+              # stale index before the undo landed.
+              next false unless generation == tag_index_generation
+
+              host.instance_variable_set(:@tag_index, built)
+              true
+            end
+            return built if published
+          end
+          # Tags are changing faster than the index can settle. Answer from this
+          # build without caching it. It reflects a recent state, not necessarily
+          # the current one.
+          build_tag_index
+        end
+
+        # @return [Integer]
+        def tag_index_generation
+          tag_cache_host.instance_variable_get(:@tag_index_generation) || 0
+        end
+
+        # @return [Hash{String => Array<Integer>}]
+        def build_tag_index
+          index = {}
+          list.compact.each do |room|
+            room.tags.each { |tag| (index[tag] ||= []) << room.id }
+          end
+          index
+        end
+
+        private :tag_index, :tag_index_generation, :build_tag_index, :tag_cache_host
+
+        # Load the newest usable JSON map database, falling back to older
+        # candidates when one is unreadable. The two game classes differ only in
+        # how a parsed room is constructed and what they announce, so those are
+        # hooks: #room_from_json and #map_loaded_message.
+        # @param filename [String, nil] a specific database, or nil to search
+        # @return [Boolean] true once a database loaded
+        def load_json(filename = nil)
+          synchronize_load do
+            return true if loaded?
+
+            file_list = filename ? [filename] : json_map_files
+            if file_list.empty?
+              respond '--- Lich: error: no map database found'
+              return false
+            end
+
+            while (filename = file_list.shift)
+              next unless File.exist?(filename)
+              next unless parse_map_json(filename)
+
+              clear_tags_cache
+              respond map_loaded_message(filename)
+              mark_loaded
+              load_uids
+              return true
+            end
+            false
+          end
+        end
+
+        # @param filename [String] database to read
+        # @return [Boolean] false when the file was unusable
+        def parse_map_json(filename)
+          File.open(filename) do |f|
+            JSON.parse(f.read).each do |room|
+              validate_room_json!(room, filename)
+              # Defaulted before the loops below read .keys on them.
+              # Every field except the id is optional in a real mapdb.
+              room['title'] ||= []
+              room['description'] ||= []
+              room['paths'] ||= []
+              room['wayto'] ||= {}
+              room['timeto'] ||= {}
+              room['tags'] ||= []
+              room['uid'] ||= []
+              room['wayto'].keys.each do |k|
+                room['wayto'][k] = StringProc.new(room['wayto'][k][3..]) if room['wayto'][k][0..2] == ';e '
+              end
+              room['timeto'].keys.each do |k|
+                if room['timeto'][k].is_a?(String) && room['timeto'][k][0..2] == ';e '
+                  room['timeto'][k] = StringProc.new(room['timeto'][k][3..])
+                end
+              end
+              room_from_json(room)
+            end
+          end
+          true
+        rescue StandardError => e
+          # A corrupt or unreadable database must not abort the load or leave a
+          # half-built map behind. Report it, drop whatever was registered, and
+          # let the caller try an older candidate. raw_list because the load
+          # mutex is held and #list would re-enter it.
+          respond "--- Lich: error: failed to load #{filename}: #{e.message}"
+          raw_list.clear
+          clear_tags_cache
+          false
+        end
+
+        # Announced once a database has loaded. Names the script that triggered
+        # the load when there is one; a load can also happen with no script
+        # running, and nil.name only survived via Lich's NilClass patch.
+        # @param filename [String] database that was loaded
+        # @return [String]
+        def map_loaded_message(filename)
+          name = Script.current&.name
+          name ? "--- #{name} Map loaded #{filename}" : "--- Map loaded #{filename}"
+        end
+
+        # The id is the only field a room cannot do without: it indexes the room
+        # into the backing array, and a non-Integer would raise there with a
+        # message that says nothing about the database. Everything else is
+        # optional and defaulted in #parse_map_json - the shipped mapdb has rooms
+        # with no description or paths, such as the fog transitions, so requiring
+        # those fields would reject a valid database outright.
+        # @param room [Hash] one parsed room
+        # @param filename [String] database being read, for the message
+        # @raise [RuntimeError] when the id is missing or not an Integer
+        # @return [nil]
+        def validate_room_json!(room, filename)
+          id = room['id']
+          return nil if id.is_a?(Integer)
+
+          raise "#{File.basename(filename)}: room id is not an Integer: #{id.inspect}"
+        end
+
+        # JSON map databases in the data directory, newest first
+        # @return [Array<String>] full paths, empty when the directory is absent
+        def json_map_files
+          directory = File.join(DATA_DIR, XMLData.game)
+          return [] unless Dir.exist?(directory)
+
+          Dir.entries(directory)
+             .find_all { |fn| fn =~ /^map-[0-9]+\.json$/i }
+             .collect { |fn| File.join(directory, fn) }
+             .sort
+             .reverse
+        end
+
+        # Legacy map files sitting in the data directory, basenames only
+        # @return [Array<String>]
+        def legacy_map_files
+          directory = File.join(DATA_DIR, XMLData.game)
+          return [] unless Dir.exist?(directory)
+
+          Dir.entries(directory).grep(/^map(?:-[0-9]+)?\.(?:dat|xml)$/i).sort
+        end
+
+        # Explain why an old map database no longer loads. The Marshal (.dat) and
+        # XML formats were deprecated for years and support has been removed, so
+        # "no map database found" on its own would be misleading for anyone whose
+        # data directory still holds one.
+        # @param files [Array<String>] legacy file names to name in the message
+        # @return [nil]
+        def report_unsupported_map_files(files)
+          return if files.empty?
+
+          respond "--- Lich: found map data in a format that is no longer supported: #{files.sort.join(', ')}"
+          respond '--- Lich: download the current JSON map database to continue.'
+          nil
+        end
+
+        # Look up a room by id, uid string, or fuzzy title/description text
+        # @param val [Integer, String] room id, "u<uid>", or search text
+        # @return [Object, nil] the matching room
+        def [](val)
+          # One load attempt via the accessor, then work off that array; calling
+          # #list again would retry the load on every lookup when it failed.
+          rooms = list
+          if val.is_a?(Integer) || val =~ /^[0-9]+$/
+            rooms[val.to_i]
+          elsif val =~ /^u(-?\d+)$/i
+            uid_request = ::Regexp.last_match(1).dup.to_i
+            # nil.to_i is 0, so an unknown uid used to resolve to room 0.
+            id = ids_from_uid(uid_request)[0]
+            id.nil? ? nil : rooms[id.to_i]
+          else
+            chkre = /#{val.strip.sub(/\.$/, '').gsub(/\.(?:\.\.)?/, '|')}/i
+            chk = /#{Regexp.escape(val.strip)}/i
+            # Title and exact-description matches share one pass; the loose
+            # regex pass only runs when neither found anything. Same precedence
+            # as the three sequential scans this replaces.
+            live = rooms.compact
+            by_title = nil
+            by_desc = nil
+            live.each do |room|
+              if room.title.find { |title| title =~ chk }
+                by_title = room
+                break
+              end
+              by_desc = room if by_desc.nil? && room.description.find { |desc| desc =~ chk }
+            end
+            by_title || by_desc ||
+              live.find { |room| room.description.find { |desc| desc =~ chkre } }
+          end
+        end
+
+        # Load the newest JSON map database, or a specific file
+        # @param filename [String, nil] explicit path, or nil to search DATA_DIR
+        # @return [Boolean] whether a map was loaded
+        def load(filename = nil)
+          file_list = filename.nil? ? json_map_files : [filename]
+
+          # An explicitly named .dat or .xml would otherwise reach load_json and
+          # raise a parse error rather than saying why it cannot be loaded.
+          unsupported, file_list = file_list.partition { |fn| fn =~ /\.(?:dat|xml)\z/i }
+
+          if file_list.empty?
+            if unsupported.empty?
+              respond '--- Lich: error: no map database found'
+              report_unsupported_map_files(legacy_map_files)
+            else
+              report_unsupported_map_files(unsupported.map { |fn| File.basename(fn) })
+            end
+            return false
+          end
+
+          while (filename = file_list.shift)
+            return true if load_json(filename)
+          end
+          false
+        end
+
         # Class-level dijkstra dispatcher
+        # @param source [Integer, String, Object] room, room id or lookup string
+        # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
+        # @return [Array<Hash>, nil] see Room#dijkstra
         def dijkstra(source, destination = nil)
           if source.is_a?(self)
             source.dijkstra(destination)
@@ -117,6 +533,57 @@ module Lich
             echo 'Map.dijkstra: error: invalid source room'
             nil
           end
+        end
+
+        # Kept so callers written against the transitional name keep working.
+        alias dijkstra_hashes dijkstra
+
+        # Tag names present anywhere in the room list, in room id order
+        # @return [Array<String>]
+        def tag_names
+          tag_index.keys
+        end
+
+        # Room ids carrying a tag, nearest-agnostic and in room id order
+        # @param tag_name [String] Tag to look up
+        # @return [Array<Integer>] a copy, empty when the tag is unknown
+        def rooms_by_tag(tag_name)
+          (tag_index[tag_name] || []).dup
+        end
+
+        # Drop the tag memo. Call after mutating any room's tags in place.
+        # @return [nil]
+        def reset_tag_index
+          host = tag_cache_host
+          TAG_INDEX_MUTEX.synchronize do
+            # Under the same mutex as publication: bumping the generation outside
+            # it could land between a publisher's validation and its assignment.
+            host.instance_variable_set(:@tag_index_generation,
+                                       (host.instance_variable_get(:@tag_index_generation) || 0) + 1)
+            host.instance_variable_set(:@tag_index, nil)
+          end
+          nil
+        end
+
+        # Re-wrap plain Array tags as TagList. Rooms that reach the list without
+        # going through the constructor, such as a caller assigning a list it
+        # built itself, otherwise hold tags that cannot invalidate the index.
+        #
+        # Callers inside a load must pass the rooms explicitly, because the #list
+        # accessor triggers #load when the map is not yet loaded, and #load holds
+        # a non-reentrant mutex.
+        # @param rooms [Array] rooms to normalize; defaults to the current list
+        # @return [nil]
+        def normalize_tag_lists(rooms = list)
+          rooms.compact.each do |room|
+            existing = room.tags
+            next if existing.is_a?(TagList)
+
+            # Round trip through the writer, which is what rewraps the plain
+            # Array as a TagList bound to this class.
+            room.tags = existing
+          end
+          reset_tag_index
         end
 
         # Find path between two rooms
@@ -172,53 +639,14 @@ module Lich
           end
           File.open(filename, 'wb:UTF-8') { |file| file.write(to_json) }
           respond "#{filename} saved"
-          # Reload if map index appears corrupted
-          reload if self[-1].id != self[self[-1].id].id
+          # Reload if the map index appears corrupted: the last entry's id should
+          # index back to itself. Nothing to check when the map holds no rooms,
+          # where self[-1] is nil and only the NilClass patch made this pass.
+          last = list.compact.last
+          reload if !last.nil? && self[last.id]&.id != last.id
         end
 
         alias_method :save, :save_json
-
-        # Load map from .dat file (Marshal format)
-        # @deprecated Use load_json instead. Marshal format is deprecated and will be removed in a future version.
-        def load_dat(filename = nil)
-          respond '--- WARNING: Map.load_dat (Marshal .dat format) is deprecated. Use Map.load_json instead.'
-          synchronize_load do
-            return true if loaded?
-
-            file_list = if filename.nil?
-                          Dir.entries(File.join(DATA_DIR, XMLData.game))
-                             .find_all { |fn| fn =~ /^map-[0-9]+\.dat$/ }
-                             .collect { |fn| File.join(DATA_DIR, XMLData.game, fn) }
-                             .sort
-                             .reverse
-                        else
-                          respond "--- file_list = #{filename.inspect}"
-                          [filename]
-                        end
-
-            if file_list.empty?
-              respond '--- Lich: error: no map database found'
-              return false
-            end
-
-            while (filename = file_list.shift)
-              begin
-                self.list = File.open(filename, 'rb') { |f| Marshal.load(f.read) }
-                respond "--- Map loaded #{filename}"
-                mark_loaded
-                load_uids
-                return true
-              rescue StandardError => e
-                if file_list.empty?
-                  respond "--- Lich: error: failed to load #{filename}: #{e}"
-                else
-                  respond "--- warning: failed to load #{filename}: #{e}"
-                end
-              end
-            end
-            false
-          end
-        end
 
         # Applies personal map wayto overrides and custom targets from YAML settings.
         # Reads base_wayto_overrides, personal_wayto_overrides, and personal_map_targets
@@ -262,6 +690,15 @@ module Lich
 
       # Instance methods for Room/Map objects
       module InstanceMethods
+        # Replace this room's tags and drop the tag index
+        # @param value [Array, nil] new tag names
+        # @return [nil] Ruby ignores a writer's return value, so `room.tags = x`
+        #   evaluates to x regardless of what this returns
+        def tags=(value)
+          @tags = TagList.new(value, self.class)
+          self.class.reset_tag_index
+        end
+
         # Convert room to integer (room ID)
         def to_i
           @id
@@ -321,9 +758,19 @@ module Lich
           JSON.pretty_generate(mapjson)
         end
 
-        # Run Dijkstra's algorithm from this room
+        # Run Dijkstra's algorithm from this room.
+        #
+        # Returns Hashes keyed by room id. These were Arrays indexed by room id
+        # until 5.20.0: the conversion allocated two Arrays sized by the highest
+        # room id reached, which dominated the cost on a sparse map and gained
+        # nothing, since every caller only ever indexes by room id. Access is
+        # unchanged - previous[id] and distances[id] read the same either way,
+        # and an unreached room still yields nil. #size and #length now count the
+        # rooms actually reached rather than the highest id plus one, and
+        # iteration yields pairs rather than slots.
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
-        # @return [Array] [previous_hash, distances_hash] for path reconstruction
+        # @return [Array<Hash>, nil] [previous, distances] keyed by room id, or
+        #   nil when the search failed
         def dijkstra(destination = nil)
           self.class.load unless self.class.loaded?
           source = @id
@@ -354,14 +801,20 @@ module Lich
 
             visited[v] = true
 
-            self.class.list[v].wayto.keys.each do |adj_room|
+            # A wayto edge can name a room that is gone. Under the NilClass
+            # patch the enumeration was simply skipped; without it the raise
+            # would be rescued below and lose the whole search.
+            room = self.class.list[v]
+            next if room.nil?
+
+            room.wayto.keys.each do |adj_room|
               adj_room_i = adj_room.to_i
               next if visited[adj_room_i]
 
-              edge_weight = if self.class.list[v].timeto[adj_room].is_a?(StringProc)
-                              self.class.list[v].timeto[adj_room].call
+              edge_weight = if room.timeto[adj_room].is_a?(StringProc)
+                              room.timeto[adj_room].call
                             else
-                              self.class.list[v].timeto[adj_room]
+                              room.timeto[adj_room]
                             end
 
               next unless edge_weight
@@ -376,20 +829,15 @@ module Lich
             end
           end
 
-          # Convert hashes back to arrays for backward compatibility
-          max_room_id = [previous_hash.keys.max, shortest_distances_hash.keys.max].compact.max || 0
-          previous = Array.new(max_room_id + 1)
-          shortest_distances = Array.new(max_room_id + 1)
-
-          previous_hash.each { |key, value| previous[key] = value }
-          shortest_distances_hash.each { |key, value| shortest_distances[key] = value }
-
-          [previous, shortest_distances]
+          [previous_hash, shortest_distances_hash]
         rescue StandardError => e
           echo "Map.dijkstra: error: #{e}"
           respond e.backtrace
           nil
         end
+
+        # Kept so callers written against the transitional name keep working.
+        alias dijkstra_hashes dijkstra
 
         # Find path from this room to destination
         # @param destination [Integer] Target room ID
@@ -398,10 +846,24 @@ module Lich
           self.class.load unless self.class.loaded?
           destination = destination.to_i
           previous, = dijkstra(destination)
+          # dijkstra returns nil when the search itself failed.
+          return nil if previous.nil?
           return nil unless previous[destination]
 
           path = [destination]
-          path.push(previous[path[-1]]) until previous[path[-1]] == @id
+          seen = { destination => true }
+          until previous[path[-1]] == @id
+            step = previous[path[-1]]
+            # A chain that never reaches this room is not a usable path. The
+            # hash yields nil for a missing predecessor, and a chain that
+            # revisits a room is a cycle; either would loop forever. Dijkstra
+            # should not produce either, but path_to is a public entry point and
+            # dijkstra is overridable.
+            return nil if step.nil? || seen[step]
+
+            seen[step] = true
+            path.push(step)
+          end
           path.reverse
         end
 
@@ -409,24 +871,24 @@ module Lich
         # @param tag_name [String] Tag to search for
         # @return [Integer, nil] Room ID of nearest tagged room
         def find_nearest_by_tag(tag_name)
-          target_list = []
-          self.class.list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-          _, shortest_distances = self.class.dijkstra(@id, target_list)
-          if target_list.include?(@id)
-            @id
-          else
-            target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
-            target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
-          end
+          target_list = self.class.rooms_by_tag(tag_name)
+          return @id if target_list.include?(@id)
+
+          _, shortest_distances = dijkstra(target_list)
+          return nil if shortest_distances.nil?
+
+          target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
+          target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }.first
         end
 
         # Find all rooms with a specific tag, sorted by distance
         # @param tag_name [String] Tag to search for
         # @return [Array<Integer>] Room IDs sorted by distance
         def find_all_nearest_by_tag(tag_name)
-          target_list = []
-          self.class.list.each { |room| target_list.push(room.id) if room.tags.include?(tag_name) }
-          _, shortest_distances = self.class.dijkstra(@id)
+          target_list = self.class.rooms_by_tag(tag_name)
+          _, shortest_distances = dijkstra
+          return [] if shortest_distances.nil?
+
           target_list.delete_if { |room_num| shortest_distances[room_num].nil? }
           target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
         end
@@ -439,7 +901,9 @@ module Lich
           if target_list.include?(@id)
             @id
           else
-            _, shortest_distances = self.class.dijkstra(@id, target_list)
+            _, shortest_distances = dijkstra(target_list)
+            return nil if shortest_distances.nil?
+
             valid_rooms = target_list.select { |room_num| shortest_distances[room_num].is_a?(Numeric) }
             valid_rooms.min_by { |room_num| shortest_distances[room_num] }
           end

@@ -66,6 +66,11 @@ module Lich
           #
           # @return [Boolean] true if tracking is active
           def enabled?
+            # Before login data is available we can't load per-character
+            # settings; report disabled instead of sleeping on the caller's
+            # thread (the background init thread completes setup once ready).
+            return false unless @initialized || xmldata_ready?
+
             initialize! unless @initialized
             @enabled && @settings[:enabled]
           end
@@ -158,7 +163,7 @@ module Lich
             # Quick filter - only process if combat-related content present
             return unless chunk.any? { |line| combat_relevant?(line) }
 
-            if @settings[:max_threads] > 1
+            if @async_processor
               @async_processor.process_async(chunk)
             else
               Processor.process(chunk)
@@ -172,6 +177,22 @@ module Lich
             end
           end
 
+          # Single compiled filter for combat-relevant content. One regex scan
+          # replaces ~11 include? calls plus a regex per line; alternation of
+          # literals compiles to an efficient multi-substring search.
+          COMBAT_RELEVANT_PATTERN = Regexp.union(
+            'points of damage',
+            '<pushBold/>',              # Creatures
+            '**',                       # Flares
+            'AS:',                      # Attack rolls
+            'swing', 'thrust', 'cast', 'gesture',
+            'positioning against',      # UCS position
+            'vulnerable to a followup', # UCS tierup
+            'crimson mist'              # UCS smite
+          ).freeze
+
+          COMBAT_RESOLUTION_PATTERN = /\b(?:hit|miss|parr|block|dodge)\b/i.freeze
+
           # Check if line contains combat-relevant content
           #
           # Quick filter to avoid processing non-combat lines.
@@ -179,18 +200,7 @@ module Lich
           # @param line [String] Game line to check
           # @return [Boolean] true if line may contain combat events
           def combat_relevant?(line)
-            line.include?('swing') ||
-              line.include?('thrust') ||
-              line.include?('cast') ||
-              line.include?('gesture') ||
-              line.include?('points of damage') ||
-              line.include?('**') || # Flares
-              line.include?('<pushBold/>') || # Creatures
-              line.include?('AS:') || # Attack rolls
-              line.include?('positioning against') || # UCS position
-              line.include?('vulnerable to a followup') || # UCS tierup
-              line.include?('crimson mist') || # UCS smite
-              line.match?(/\b(?:hit|miss|parr|block|dodge)\b/i)
+            COMBAT_RELEVANT_PATTERN.match?(line) || COMBAT_RESOLUTION_PATTERN.match?(line)
           end
 
           # Update tracker settings
@@ -271,7 +281,10 @@ module Lich
           end
 
           def initialize_processor
-            return unless @settings[:max_threads] > 1
+            # max_threads <= 0 means process inline on the hook thread
+            # (debugging aid); otherwise use the ordered async worker so
+            # parsing never delays the game stream.
+            return unless @settings[:max_threads] > 0
             @async_processor = AsyncProcessor.new(@settings[:max_threads])
           end
 
@@ -291,8 +304,10 @@ module Lich
               if server_string.include?('<prompt time=')
                 chunk = @buffer.slice!(0, @buffer.size)
 
-                # Check if THIS chunk contains creatures (no persistent state)
-                if chunk.any? { |line| line.match?(/<pushBold\/>.+?<a exist="[^"]+"[^>]*>.+?<\/a><popBold\/>/) }
+                # Check if THIS chunk contains creatures (no persistent state).
+                # Substring checks are equivalent to the old backtracking regex
+                # for gating purposes and far cheaper per line.
+                if chunk.any? { |line| line.include?('<pushBold/>') && line.include?('<a exist=') }
                   process(chunk) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else
@@ -322,11 +337,16 @@ module Lich
           # Called lazily on first access when XMLData is available.
           #
           # @return [void]
+          # True once XMLData has game and character name (settings scope)
+          def xmldata_ready?
+            !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
+          end
+
           def initialize!
             return if @initialized
 
             # Wait until XMLData is ready (avoid wrong scope)
-            sleep 0.1 until !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
+            sleep 0.1 until xmldata_ready?
 
             @initialized = true
             load_settings

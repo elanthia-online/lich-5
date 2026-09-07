@@ -17,7 +17,7 @@ module Lich
         # Executes CLI login flow for a specified character
         #
         # @param character_name [String] Character name to login with
-        # @param game_code [String, nil] Game code/instance (GS3, GS4, DR, etc.)
+        # @param game_code [String, nil] Game code/instance (GS3, GST, DR, etc.)
         # @param frontend [String, nil] Frontend type (stormfront, avalon, wizard)
         # @param custom_launch [String, nil] Custom launch filter (if provided, frontend is ignored for matching)
         # @param data_dir [String] Directory containing saved login entries
@@ -29,7 +29,6 @@ module Lich
         def self.execute(character_name, game_code: nil, frontend: nil, custom_launch: nil, data_dir: nil)
           data_dir ||= DATA_DIR
 
-          # Validate inputs
           unless character_name && !character_name.empty?
             Lich.log "error: Character name is required"
             return nil
@@ -38,35 +37,69 @@ module Lich
           entry_data = load_entry_data(data_dir)
           return nil unless entry_data
 
-          # Find matching character(s) using login_helpers
-          matching_entries = LoginHelpers.find_character_by_name_game_and_frontend(
+          char_entry = select_saved_entry(
             entry_data,
             character_name,
-            game_code,
-            frontend,
-            custom_launch
+            game_code: game_code,
+            frontend: frontend,
+            custom_launch: custom_launch
           )
-
-          if matching_entries.nil? || matching_entries.empty?
-            Lich.log "error: No matching character found for: #{character_name}"
-            return nil
-          end
-
-          # Select best match from candidates
-          char_entry = LoginHelpers.select_best_fit(
-            char_data_sets: matching_entries,
-            requested_character: character_name,
-            requested_instance: game_code,
-            requested_fe: frontend
-          )
-
-          unless char_entry
-            Lich.log "error: Could not select character entry from matches"
-            return nil
-          end
+          return nil unless char_entry
 
           # Decrypt password and authenticate
           decrypt_and_authenticate(char_entry, entry_data)
+        end
+
+        # Resolves a saved character without decrypting its password or
+        # authenticating with Simutronics. This is the CLI/TUI boundary for
+        # frontends, such as Saga, that own authentication and Lich startup.
+        #
+        # @param character_name [String] character name to resolve
+        # @param game_code [String, Symbol, nil] optional game instance filter
+        # @param frontend [String, Symbol, nil] optional frontend filter
+        # @param custom_launch [String, Symbol, nil] optional Custom Launch filter
+        # @param data_dir [String, nil] directory containing saved login entries
+        # @return [Hash, nil] password-free saved target, or nil when the store
+        #   cannot be read or no complete target matches
+        # @raise [ArgumentError] when character_name is blank
+        def self.resolve_saved_target(
+          character_name,
+          game_code: :__unset,
+          frontend: :__unset,
+          custom_launch: :__unset,
+          data_dir: nil
+        )
+          raise ArgumentError, 'Character name is required' if character_name.to_s.strip.empty?
+
+          data_dir ||= DATA_DIR
+          entry_data = load_entry_metadata(data_dir)
+          return nil unless entry_data
+
+          char_entry = select_saved_entry(
+            entry_data,
+            character_name,
+            game_code: game_code,
+            frontend: frontend,
+            custom_launch: custom_launch
+          )
+          return nil unless char_entry
+
+          account = char_entry[:username] || char_entry[:user_id]
+          target = {
+            account: account,
+            character: char_entry[:char_name],
+            game_code: char_entry[:game_code],
+            frontend: char_entry[:frontend],
+            custom_launch: char_entry[:custom_launch]
+          }
+
+          missing = target.filter_map { |name, value| name if %i[account character game_code].include?(name) && value.to_s.strip.empty? }
+          unless missing.empty?
+            Lich.log "error: Saved character is missing required Saga launch data: #{missing.join(', ')}"
+            return nil
+          end
+
+          target.transform_values { |value| value.is_a?(String) ? value.dup.freeze : value }.freeze
         end
 
         # Executes CLI login flow to enter the character generator on an existing account.
@@ -94,7 +127,7 @@ module Lich
             return nil
           end
 
-          unless game_code && LoginHelpers::VALID_GAME_CODES.include?(game_code.to_s)
+          unless game_code && LoginHelpers.valid_game_code?(game_code.to_s)
             Lich.log "error: A valid game code is required for new character creation (e.g. --dr, --gemstone). Got: #{game_code.inspect}"
             return nil
           end
@@ -139,6 +172,24 @@ module Lich
             return nil
           end
 
+          read_entry_data(data_dir)
+        end
+
+        # Loads saved-entry metadata without requesting password access.
+        #
+        # @param data_dir [String] directory containing entry.yaml
+        # @return [Hash, Array, nil] symbolized entry data, or nil on failure
+        # @api private
+        def self.load_entry_metadata(data_dir)
+          read_entry_data(data_dir)
+        end
+
+        # Reads and parses entry.yaml from the given data directory.
+        #
+        # @param data_dir [String] directory containing entry.yaml
+        # @return [Hash, Array, nil] symbolized entry data, or nil on failure
+        # @api private
+        def self.read_entry_data(data_dir)
           yaml_file = EntryStore.yaml_file_path(data_dir)
           unless File.exist?(yaml_file)
             Lich.log "error: No saved entries YAML file found"
@@ -150,6 +201,45 @@ module Lich
         rescue StandardError => e
           Lich.log "error: Failed to load YAML data: #{e.message}"
           nil
+        end
+
+        # Finds and selects one saved entry using the established CLI matching
+        # rules.
+        #
+        # @param entry_data [Hash, Array] symbolized saved-entry data
+        # @param character_name [String] character name to match
+        # @param game_code [String, Symbol, nil] game instance filter
+        # @param frontend [String, Symbol, nil] frontend filter
+        # @param custom_launch [String, Symbol, nil] Custom Launch filter
+        # @return [Hash, nil] selected saved entry, or nil when no match exists
+        # @api private
+        def self.select_saved_entry(entry_data, character_name, game_code:, frontend:, custom_launch:)
+          matching_entries = LoginHelpers.find_character_by_name_game_and_frontend(
+            entry_data,
+            character_name,
+            game_code,
+            frontend,
+            custom_launch
+          )
+
+          if matching_entries.nil? || matching_entries.empty?
+            Lich.log "error: No matching character found for: #{character_name}"
+            return nil
+          end
+
+          char_entry = LoginHelpers.select_best_fit(
+            char_data_sets: matching_entries,
+            requested_character: character_name,
+            requested_instance: game_code,
+            requested_fe: frontend
+          )
+
+          unless char_entry
+            Lich.log "error: Could not select character entry from matches"
+            return nil
+          end
+
+          char_entry
         end
 
         # Finds an account by name in the entry data (case-insensitive).

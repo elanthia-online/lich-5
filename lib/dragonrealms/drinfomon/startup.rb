@@ -99,6 +99,9 @@ module Lich
         warn_obsolete_data_files
         warn_custom_scripts
         $setupfiles.reload if defined?($setupfiles) && $setupfiles
+        # Drop CustomSubstitutions' memoized lists so a fresh login re-reads any
+        # edited custom_* settings (its cache is separate from $setupfiles').
+        Lich::DragonRealms::CustomSubstitutions.reset! if defined?(Lich::DragonRealms::CustomSubstitutions)
       rescue StandardError => e
         safe_message('error', "DRInfomon: post_startup_checks failed: #{e.message}")
         safe_log("DRInfomon: post_startup_checks error: #{e.inspect}\n\t#{e.backtrace&.first(5)&.join("\n\t")}")

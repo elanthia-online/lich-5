@@ -28,10 +28,21 @@ module Lich
           # Pattern for smite removed
           SMITE_REMOVED_PATTERN = /^ *The crimson mist surrounding .+<a exist="([0-9]+)".+returns to an ethereal state/i.freeze
 
+          # Literal substrings required by the patterns below - used as a cheap
+          # gate so non-UCS lines skip all five regexes.
+          RELEVANT_SUBSTRINGS = ['positioning against', 'vulnerable to a followup', 'crimson mist'].freeze
+
           class << self
+            # Quick check whether a line could contain a UCS event
+            def relevant?(line)
+              RELEVANT_SUBSTRINGS.any? { |s| line.include?(s) }
+            end
+
             # Parse UCS-related events from a line
             # Returns: { type: :position|:tierup|:smite_on|:smite_off, target_id: id, value: ... }
             def parse(line)
+              return nil unless relevant?(line)
+
               # Position update
               if (match = POSITION_PATTERN.match(line))
                 position = match[1]
