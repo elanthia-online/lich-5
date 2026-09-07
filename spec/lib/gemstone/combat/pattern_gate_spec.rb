@@ -46,9 +46,30 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
       expect(gate).to match('xx a long literal here xx')
     end
 
-    it 'never rejects when always_scan is non-empty' do
+    it 'keeps a line an always_scan pattern matches, even with no gate literal' do
+      # /ab|cd/ has no usable literal -> it lands in always_scan. A line the
+      # pattern matches must NOT be rejected (that would drop a real match).
       gate, always = described_class.build([/ab|cd/])
-      expect(described_class.rejects?(gate, always, 'anything')).to be false
+      expect(always).to eq([/ab|cd/])
+      expect(described_class.rejects?(gate, always, 'has cd inside')).to be false
+    end
+
+    it 'still rejects a line no always_scan pattern matches (the fast path)' do
+      # This is the case the old contract got wrong: a non-empty always_scan
+      # must not blanket-disable rejection. A line matching neither the gate
+      # nor any always_scan pattern is still safely skippable.
+      gate, always = described_class.build([/ab|cd/])
+      expect(described_class.rejects?(gate, always, 'nothing relevant here')).to be true
+    end
+
+    it 'a non-empty always_scan does not disable the gate fast path for other patterns' do
+      # gated literal pattern + an ungated alternation together: a line with
+      # neither the literal nor an always_scan match is rejected.
+      gate, always = described_class.build([/You swing .+? at (?<t>[^!]+)!/, /ab|cd/])
+      expect(always).to eq([/ab|cd/])
+      expect(described_class.rejects?(gate, always, 'the quick brown fox')).to be true
+      expect(described_class.rejects?(gate, always, 'You swing a stick at it!')).to be false
+      expect(described_class.rejects?(gate, always, 'has cd inside')).to be false
     end
 
     it 'rejects lines containing no gate literal' do

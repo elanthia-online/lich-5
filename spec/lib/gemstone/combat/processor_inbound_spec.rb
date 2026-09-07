@@ -356,4 +356,50 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     events = described_class.parse_events(chunk)
     expect(events.map { |e| e[:target][:id] }.compact.uniq).to contain_exactly(500, 501)
   end
+
+  # Major review finding (mrhoribu, PR #1559): the crit lookahead that fills
+  # hit[:crit] was gated on track_wounds ALONE, but apply_crit_statuses also
+  # consumes hit[:crit]. With track_wounds:false + track_statuses:true, crit
+  # capture went dark and status derivation became a silent no-op. The gate is
+  # now (track_wounds || track_statuses). These pin both directions.
+  describe 'crit capture is not coupled to track_wounds alone' do
+    # a real crush-table crit line that CritRanks parses (carries stun/rt)
+    let(:crit_chunk) do
+      orc = bolded(7777, 'orc', 'a greater orc')
+      [
+        "You swing a slim short sword at #{orc}!",
+        '  AS: +400 vs DS: +200 with AvD: +30 + d100 roll: +50 = +280',
+        '   ... and hits for 30 points of damage!',
+        '   Smack to the eye bursts blood vessels.',
+        '<prompt time="1758161240">&gt;</prompt>'
+      ]
+    end
+
+    def parse_with(settings)
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(settings)
+      described_class.parse_events(crit_chunk).first
+    end
+
+    it 'captures the crit when statuses are on even though wounds are off' do
+      event = parse_with(track_statuses: true, track_ucs: false, emit_attacks: true,
+                         track_damage: true, track_wounds: false)
+      crit = event[:hits].first[:crit]
+      expect(crit).not_to be_nil
+      expect(crit[:location]).to eq('left eye')
+      # the field apply_crit_statuses actually consumes to emit :stun
+      expect(crit[:stunned]).to eq(3)
+    end
+
+    it 'still captures the crit when wounds are on and statuses are off' do
+      event = parse_with(track_statuses: false, track_ucs: false, emit_attacks: true,
+                         track_damage: true, track_wounds: true)
+      expect(event[:hits].first[:crit]).not_to be_nil
+    end
+
+    it 'skips the lookahead entirely when both are off (fast path preserved)' do
+      event = parse_with(track_statuses: false, track_ucs: false, emit_attacks: true,
+                         track_damage: true, track_wounds: false)
+      expect(event[:hits].first[:crit]).to be_nil
+    end
+  end
 end

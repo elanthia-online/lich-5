@@ -76,9 +76,6 @@ module Lich
                             /You fall flat on the floor\./,
                             /You fall to the ground!/,
                             /(?<target>.+?) loses #{MK_PRE}(?:his|her|its)#{MK_POST} balance and falls to the ground\./,
-                            # bang-form generic knockdown (cman sweep result;
-                            # the period form is item-drop flavor, not this)
-                            /(?<target>.+?) falls to the ground!/,
                             # crit-free injury knockdowns (add_status is
                             # idempotent, so overlap with critranks is safe)
                             /(?<target>.+?) falls to the ground grasping #{MK_PRE}(?:his|her|its)#{MK_POST} mangled (?:right|left) (?:leg|arm)!/,

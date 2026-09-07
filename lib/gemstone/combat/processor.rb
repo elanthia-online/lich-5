@@ -815,8 +815,14 @@ module Lich
                 sink[:hits] << hit
                 respond "[Combat] Found damage: #{damage}#{flare_ctx ? " (flare: #{flare_ctx[:name]})" : ''}" if Tracker.debug?(:verbose)
 
-                # When we find damage, look ahead 2-3 lines for related crit
-                if Tracker.settings[:track_wounds]
+                # When we find damage, look ahead 2-3 lines for related crit.
+                # This populates hit[:crit], which BOTH wound application
+                # (apply_crit) and status derivation (apply_crit_statuses)
+                # consume - so it must run whenever EITHER is enabled. Gating
+                # it on track_wounds alone silently starved status tracking of
+                # its input when a user ran track_wounds:false/track_statuses:
+                # true, turning apply_crit_statuses into a no-op.
+                if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses]
                   (1..3).each do |offset|
                     next_line_index = index + offset
                     break if next_line_index >= lines.size

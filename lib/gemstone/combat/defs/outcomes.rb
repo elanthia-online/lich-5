@@ -202,9 +202,10 @@ module Lich
               /You barely manage to block the .+? with your .+?!/,
               /With incredible finesse, you deflect the .+? with your .+?!/,
               /You block the (?:attack|missile|bolt|blow) with your .+?!/,
-              /You manage to deflect (?<attacker>.+?)'s#{MK_POST} blow in the nick of time!/,
-              /(?<attacker>.+?)'s#{MK_POST} spell is deflected by your barrier in a flash of \w+ light!/,
-              %r{Your spell is deflected by (?:<pushBold/>)?the (?<target>.+?)'s#{MK_POST} barrier in a flash of \w+ light!}
+              /You manage to deflect (?<attacker>.+?)'s#{MK_POST} blow in the nick of time!/
+              # (spell-deflect-by-barrier lines live in :intercept, which wins
+              # first-match; keeping copies here would be dead and would also
+              # contradict :intercept's design note that these are NOT :block)
             ].freeze),
             OutcomeDef.new(:parry, [
               /Amazingly, (?<target>.+?) manages to parry the .+? with .+?!/,

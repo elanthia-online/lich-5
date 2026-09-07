@@ -229,10 +229,22 @@ module Lich
           @source = source
           @idle_timeout = idle_timeout
           @last_event_at = nil
+          # record fires on the AsyncProcessor worker thread; check_idle!/close
+          # are documented as driven from the consuming script's own periodic
+          # loop. Both touch @db, so every public entry point serialises on one
+          # non-reentrant mutex. Internal helpers that run while the lock is
+          # already held (start_session/finish_session called from inside
+          # record) must NOT re-acquire it - hence the unsynchronised _locked
+          # variants below.
+          @mutex = Mutex.new
         end
 
         def start_session(character: nil, source: nil, at: Time.now)
-          finish_session if @session_id
+          @mutex.synchronize { start_session_locked(character: character, source: source, at: at) }
+        end
+
+        def start_session_locked(character: nil, source: nil, at: Time.now)
+          finish_session_locked if @session_id
           @db.execute('INSERT INTO sessions (character, source, started_at) VALUES (?, ?, ?)',
                       [character, source, at.to_f])
           @session_id = @db.last_insert_row_id
@@ -243,6 +255,10 @@ module Lich
 
         # @return [Integer, nil] the id of the session just closed
         def finish_session(at: Time.now)
+          @mutex.synchronize { finish_session_locked(at: at) }
+        end
+
+        def finish_session_locked(at: Time.now)
           return unless @session_id
 
           @db.execute('UPDATE sessions SET ended_at = ? WHERE id = ?', [at.to_f, @session_id])
@@ -270,24 +286,34 @@ module Lich
         # Cheap; call it from a periodic loop so a finished hunt closes even
         # when no further event ever arrives.
         def check_idle!(now = Time.now)
+          @mutex.synchronize { check_idle_locked!(now) }
+        end
+
+        def check_idle_locked!(now = Time.now)
           return unless @idle_timeout && @session_id && @last_event_at
           return unless now - @last_event_at > @idle_timeout
 
-          finish_session(at: @last_event_at)
+          finish_session_locked(at: @last_event_at)
         end
 
         # Finish any open session and release the database.
         def close
           unsubscribe!
-          finish_session(at: @last_event_at || Time.now) if @session_id
-          @db.close
+          @mutex.synchronize do
+            finish_session_locked(at: @last_event_at || Time.now) if @session_id
+            @db.close
+          end
         end
 
         def record(type, data)
+          @mutex.synchronize { record_locked(type, data) }
+        end
+
+        def record_locked(type, data)
           if @idle_timeout
             now = Time.now
-            check_idle!(now)
-            start_session(character: @character, source: @source, at: now) unless @session_id
+            check_idle_locked!(now)
+            start_session_locked(character: @character, source: @source, at: now) unless @session_id
             @last_event_at = now
           end
           return unless @session_id
@@ -462,29 +488,34 @@ module Lich
         def record_status(kind:, id:, name:, status: nil, action: nil, value: nil,
                           spell: nil, spell_name: nil, cause: nil)
           at = Time.now.to_f
-          creature_row = id ? ensure_creature({ id: id, name: name }, at) : nil
-          attack_id = nil
-          source = 'direct'
-          if @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
-            attack_id = @open_attack[:id]
-            source = 'window'
-          elsif @open_attack && name == 'self' && @open_attack[:inbound]
-            attack_id = @open_attack[:id]
-            source = 'window'
+          # Atomic like record_attack: the creature upsert, the status insert
+          # and the kill-stamp are one unit, so a mid-write failure can't leave
+          # an auto-vivified creature row with no matching status row.
+          @db.transaction do
+            creature_row = id ? ensure_creature({ id: id, name: name }, at) : nil
+            attack_id = nil
+            source = 'direct'
+            if @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
+              attack_id = @open_attack[:id]
+              source = 'window'
+            elsif @open_attack && name == 'self' && @open_attack[:inbound]
+              attack_id = @open_attack[:id]
+              source = 'window'
+            end
+
+            params = [@session_id, creature_row, name, attack_id, at, kind,
+                      status, action, value, spell, spell_name, cause, source]
+            @db.execute(<<~SQL, params)
+              INSERT INTO statuses (session_id, creature_id, subject, attack_id, occurred_at,
+                                    kind, status, action, value, spell, spell_name, cause, source)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            SQL
+
+            if status == 'dead' && action == 'add' && creature_row
+              @db.execute('UPDATE creatures SET killed_at = ? WHERE id = ? AND killed_at IS NULL',
+                          [at, creature_row])
+            end
           end
-
-          params = [@session_id, creature_row, name, attack_id, at, kind,
-                    status, action, value, spell, spell_name, cause, source]
-          @db.execute(<<~SQL, params)
-            INSERT INTO statuses (session_id, creature_id, subject, attack_id, occurred_at,
-                                  kind, status, action, value, spell, spell_name, cause, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          SQL
-
-          return unless status == 'dead' && action == 'add' && creature_row
-
-          @db.execute('UPDATE creatures SET killed_at = ? WHERE id = ? AND killed_at IS NULL',
-                      [at, creature_row])
         end
       end
     end

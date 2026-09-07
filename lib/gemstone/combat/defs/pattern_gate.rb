@@ -78,10 +78,17 @@ module Lich
             [literals.empty? ? nil : Regexp.union(literals.uniq).freeze, always_scan.freeze]
           end
 
-          # Convenience: true when the line can't possibly match any gated
-          # pattern (no literal present and no ungated patterns exist).
+          # Convenience: true when the line can't possibly match any pattern in
+          # this table, so the caller may skip the full scan. A line is only
+          # rejectable when BOTH the literal gate misses AND no ungated
+          # (always_scan) pattern matches. Any always_scan pattern that matches
+          # keeps the line in play; a non-empty always_scan does NOT blanket-
+          # disable rejection (that was the old bug - it reverted the whole
+          # table to full-scan the moment one short-literal pattern existed).
           def rejects?(gate, always_scan, line)
-            always_scan.empty? && (gate.nil? || !gate.match?(line))
+            return false if gate&.match?(line)
+
+            always_scan.none? { |rx| rx.match?(line) }
           end
         end
       end
