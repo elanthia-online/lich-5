@@ -623,5 +623,4 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(result).to match(/--G?S?3?/i)
     end
   end
-
 end

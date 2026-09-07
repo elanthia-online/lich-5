@@ -622,7 +622,6 @@ module Lich
             end
           end
         end
-
       end
     end
   end
