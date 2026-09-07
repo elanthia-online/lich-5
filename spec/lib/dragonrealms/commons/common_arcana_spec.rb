@@ -1129,4 +1129,401 @@ RSpec.describe Lich::DragonRealms::DRCA do
       DRCA.find_charge_invoke_stow('armband', false, 50, nil, [10])
     end
   end
+
+  # ----------------------------------------------
+  # Cambrinth charge distribution
+  # ----------------------------------------------
+  # A three item setup where the first two items are far too small to hold a
+  # full charge. This is the shape that exposed the old distribution bugs.
+  def three_cambrinth_items
+    [
+      { 'name' => 'cambrinth earcuff', 'cap' => 4, 'stored' => false },
+      { 'name' => 'cambrinth anklet', 'cap' => 4, 'stored' => false },
+      { 'name' => 'sea urchin', 'cap' => 48, 'stored' => true }
+    ]
+  end
+
+  describe '.split_cambrinth_charges' do
+    it 'returns no charges when there is no mana' do
+      expect(DRCA.split_cambrinth_charges(0, 3)).to eq([])
+    end
+
+    it 'returns no charges when the charge count is zero' do
+      expect(DRCA.split_cambrinth_charges(30, 0)).to eq([])
+    end
+
+    it 'puts the remainder in the first charge' do
+      expect(DRCA.split_cambrinth_charges(53, 4)).to eq([14, 13, 13, 13])
+    end
+
+    it 'splits evenly when the mana divides exactly' do
+      expect(DRCA.split_cambrinth_charges(36, 3)).to eq([12, 12, 12])
+    end
+
+    it 'uses a single charge when asked for one' do
+      expect(DRCA.split_cambrinth_charges(40, 1)).to eq([40])
+    end
+
+    it 'never loses mana and never exceeds the charge count' do
+      (1..40).each do |mana|
+        (1..5).each do |count|
+          charges = DRCA.split_cambrinth_charges(mana, count)
+          expect(charges.sum).to eq(mana)
+          expect(charges.length).to be <= count
+        end
+      end
+    end
+  end
+
+  describe '.distribute_cambrinth_charges' do
+    it 'fills each item up to its cap before it uses the next item' do
+      expect(DRCA.distribute_cambrinth_charges([3, 3, 40], three_cambrinth_items))
+        .to eq([[[3], [3], [40]], 0])
+    end
+
+    it 'skips an item that is too small for the next charge' do
+      expect(DRCA.distribute_cambrinth_charges([14, 13, 13], three_cambrinth_items))
+        .to eq([[[], [], [14, 13, 13]], 0])
+    end
+
+    it 'never charges an item past its cap' do
+      distribution, = DRCA.distribute_cambrinth_charges([11, 11, 11], three_cambrinth_items)
+      distribution.each_with_index do |charges, index|
+        expect(charges.sum).to be <= three_cambrinth_items[index]['cap']
+      end
+    end
+
+    it 'puts each charge in the first item with room for it' do
+      expect(DRCA.distribute_cambrinth_charges([5, 4, 4], three_cambrinth_items))
+        .to eq([[[4], [4], [5]], 0])
+    end
+
+    it 'reports mana that fits in no item' do
+      expect(DRCA.distribute_cambrinth_charges([19, 19, 18], three_cambrinth_items))
+        .to eq([[[], [], [19, 19]], 18])
+    end
+
+    it 'drops trailing empty entries so unused items are skipped' do
+      expect(DRCA.distribute_cambrinth_charges([2], three_cambrinth_items))
+        .to eq([[[2]], 0])
+    end
+
+    it 'reports everything as leftover when there are no items' do
+      expect(DRCA.distribute_cambrinth_charges([5, 5], [])).to eq([[], 10])
+    end
+
+    it 'ignores zero and negative charge values' do
+      expect(DRCA.distribute_cambrinth_charges([0, 3, -2], three_cambrinth_items))
+        .to eq([[[3]], 0])
+    end
+
+    it 'treats an unset cap as no limit' do
+      items = [{ 'name' => 'armband', 'cap' => nil, 'stored' => false }]
+      expect(DRCA.distribute_cambrinth_charges([10, 10], items)).to eq([[[10, 10]], 0])
+    end
+  end
+
+  # ----------------------------------------------
+  # calculate_mana
+  # ----------------------------------------------
+  describe '.calculate_mana' do
+    let(:settings) do
+      OpenStruct.new(
+        prep_scaling_factor: 0.8,
+        cambrinth_num_charges: 3,
+        cambrinth_items: three_cambrinth_items,
+        cambrinth_distribute_charges: true
+      )
+    end
+
+    it 'fills the small items before the large one' do
+      discern_data = {}
+      DRCA.calculate_mana(5, 12, discern_data, false, settings)
+      expect(discern_data['mana']).to eq(5)
+      expect(discern_data['cambrinth']).to eq([[4], [4]])
+    end
+
+    it 'uses every item when there is mana for all of them' do
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, false, settings)
+      expect(discern_data['cambrinth']).to eq([[4], [4], [28]])
+      discern_data['cambrinth'].each_with_index do |charges, index|
+        expect(charges.sum).to be <= three_cambrinth_items[index]['cap']
+      end
+    end
+
+    it 'moves mana that fits in no item into the prep instead of losing it' do
+      discern_data = {}
+      DRCA.calculate_mana(40, 80, discern_data, false, settings)
+      total = (120 * 0.8).floor
+      charged = discern_data['cambrinth'].flatten.sum
+      expect(discern_data['mana'] + charged).to eq(total)
+    end
+
+    it 'never loses mana for any discern result' do
+      (1..60).each do |min|
+        discern_data = {}
+        DRCA.calculate_mana(min, min * 2, discern_data, false, OpenStruct.new(
+                                                                 prep_scaling_factor: 0.8,
+                                                                 cambrinth_num_charges: 3,
+                                                                 cambrinth_items: three_cambrinth_items,
+                                                                 cambrinth_distribute_charges: true
+                                                               ))
+        charged = (discern_data['cambrinth'] || []).flatten.sum
+        expect(discern_data['mana'] + charged).to eq(((min * 3) * 0.8).floor)
+      end
+    end
+
+    it 'puts everything in the prep for a cyclic or ritual spell' do
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, true, settings)
+      expect(discern_data['cambrinth']).to be_nil
+      expect(discern_data['mana']).to eq((70 * 0.8).floor)
+    end
+
+    it 'skips cambrinth when the charge count is zero' do
+      settings.cambrinth_num_charges = 0
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, false, settings)
+      expect(discern_data['cambrinth']).to be_nil
+      expect(discern_data['mana']).to eq((70 * 0.8).floor)
+    end
+
+    it 'keeps the configured items when the charge count is zero' do
+      settings.cambrinth_num_charges = 0
+      DRCA.calculate_mana(20, 50, {}, false, settings)
+      expect(settings.cambrinth_items.length).to eq(3)
+    end
+
+    it 'records the cambrinth caps it calculated against' do
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, false, settings)
+      expect(discern_data['cambrinth_caps']).to eq([4, 4, 48])
+    end
+  end
+
+  # ----------------------------------------------
+  # check_discern cambrinth cache
+  # ----------------------------------------------
+  describe '.check_discern cambrinth cache' do
+    let(:settings) do
+      OpenStruct.new(
+        check_discern_timer_in_hours: 24,
+        prep_scaling_factor: 0.8,
+        cambrinth_num_charges: 3,
+        cambrinth_items: three_cambrinth_items,
+        cambrinth_distribute_charges: true
+      )
+    end
+
+    it 'discerns again when the cambrinth items changed' do
+      UserVars.discerns = {
+        'bs' => { 'time_stamp' => Time.now, 'mana' => 5, 'cambrinth' => [[3, 3, 3]], 'cambrinth_caps' => [32] }
+      }
+      allow(DRC).to receive(:bput).and_return('The spell requires at minimum 20 mana streams and you think you can reinforce it with 50 more')
+      data = DRCA.check_discern({ 'abbrev' => 'bs' }, settings)
+      expect(data['cambrinth']).to eq([[4], [4], [28]])
+      expect(UserVars.discerns['bs']['cambrinth_caps']).to eq([4, 4, 48])
+    end
+
+    it 'keeps the cache when the cambrinth items are unchanged' do
+      UserVars.discerns = {
+        'bs' => { 'time_stamp' => Time.now, 'mana' => 5, 'cambrinth' => [[2], [2], [4]], 'cambrinth_caps' => [4, 4, 48] }
+      }
+      expect(DRC).not_to receive(:bput)
+      data = DRCA.check_discern({ 'abbrev' => 'bs' }, settings)
+      expect(data['cambrinth']).to eq([[2], [2], [4]])
+    end
+  end
+
+  # ----------------------------------------------
+  # charge_cambrinth_items
+  # ----------------------------------------------
+  describe '.charge_cambrinth_items' do
+    let(:settings) do
+      OpenStruct.new(
+        cambrinth_items: three_cambrinth_items,
+        dedicated_camb_use: nil,
+        cambrinth_invoke_exact_amount: true,
+        cambrinth_distribute_charges: true
+      )
+    end
+
+    it 'spreads a flat charge list over the items instead of repeating it' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth earcuff', false, 4, nil, [3], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth anklet', false, 4, nil, [3], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [40], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [3, 3, 40] }, settings)
+    end
+
+    it 'never charges an item past its cap from a flat list' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [10, 10], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [10, 10] }, settings)
+    end
+
+    it 'puts mana that fits nowhere into the largest item and warns' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [60], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [60] }, settings)
+      expect(bold_messages.join).to include('60 mana does not fit')
+      expect(bold_messages.join).to include('sea urchin')
+    end
+
+    it 'never loses mana from a flat list' do
+      charged = []
+      allow(DRCA).to receive(:find_charge_invoke_stow) { |*args| charged.concat(args[4]) }
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [30, 30, 30] }, settings)
+      expect(charged.sum).to eq(90)
+    end
+
+    it 'uses a nested list as one entry per item' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth earcuff', false, 4, nil, [1], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth anklet', false, 4, nil, [2], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [3], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [[1], [2], [3]] }, settings)
+    end
+
+    it 'skips items that have no charges' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth earcuff', false, 4, nil, [4], true)
+      expect(DRCA).not_to receive(:find_charge_invoke_stow).with('cambrinth anklet', any_args)
+      expect(DRCA).not_to receive(:find_charge_invoke_stow).with('sea urchin', any_args)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [[4], [], []] }, settings)
+    end
+
+    it 'keeps the old behaviour for a flat list and a single item' do
+      settings.cambrinth_items = [{ 'name' => 'armband', 'cap' => 32, 'stored' => false }]
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('armband', false, 32, nil, [10, 10], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [10, 10] }, settings)
+    end
+
+    # cambrinth_cap drives the arcana check in this path, not a charge limit. Many
+    # profiles charge well past it on purpose, so a single item must not be capped.
+    it 'charges a single item past its cap when the config asks for it' do
+      settings.cambrinth_items = [{ 'name' => 'cam armband', 'cap' => 32, 'stored' => false }]
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cam armband', false, 32, nil, [25, 25], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [25, 25] }, settings)
+    end
+
+    it 'charges a single item with a value larger than its cap' do
+      settings.cambrinth_items = [{ 'name' => 'cambrinth ring', 'cap' => 5, 'stored' => false }]
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth ring', false, 5, nil, [48], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [48] }, settings)
+    end
+
+    it 'does nothing when there are no charges' do
+      expect(DRCA).not_to receive(:find_charge_invoke_stow)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => nil }, settings)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [] }, settings)
+    end
+  end
+
+  # ----------------------------------------------
+  # cambrinth_distribute_charges off: the default path must not change
+  # ----------------------------------------------
+  describe 'default cambrinth behaviour (cambrinth_distribute_charges unset)' do
+    let(:settings) do
+      OpenStruct.new(
+        prep_scaling_factor: 0.8,
+        cambrinth_num_charges: 3,
+        cambrinth_items: three_cambrinth_items,
+        dedicated_camb_use: nil,
+        cambrinth_invoke_exact_amount: true
+      )
+    end
+
+    it 'splits discern mana by cap ratio, cap overflow included' do
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, false, settings)
+      expect(discern_data['mana']).to eq(20)
+      expect(discern_data['cambrinth']).to eq([[7], [7], [7, 7, 7]])
+    end
+
+    it 'records no cambrinth caps signature' do
+      discern_data = {}
+      DRCA.calculate_mana(20, 50, discern_data, false, settings)
+      expect(discern_data).not_to have_key('cambrinth_caps')
+    end
+
+    it 'charges a flat list into every item' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth earcuff', false, 4, nil, [3, 3, 40], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth anklet', false, 4, nil, [3, 3, 40], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [3, 3, 40], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [3, 3, 40] }, settings)
+    end
+
+    it 'gives a nested list one entry per item' do
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth earcuff', false, 4, nil, [1], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('cambrinth anklet', false, 4, nil, [2], true)
+      expect(DRCA).to receive(:find_charge_invoke_stow).with('sea urchin', true, 48, nil, [3], true)
+      DRCA.charge_cambrinth_items({ 'cambrinth' => [[1], [2], [3]] }, settings)
+    end
+
+    it 'ignores a changed cambrinth item list and keeps the cache' do
+      UserVars.discerns = {
+        'bs' => { 'time_stamp' => Time.now, 'mana' => 5, 'cambrinth' => [[3, 3, 3]] }
+      }
+      settings.check_discern_timer_in_hours = 24
+      expect(DRC).not_to receive(:bput)
+      data = DRCA.check_discern({ 'abbrev' => 'bs' }, settings)
+      expect(data['cambrinth']).to eq([[3, 3, 3]])
+    end
+  end
+
+  describe '.allocate_cambrinth_charges' do
+    it 'fills each item up to its cap in configured order' do
+      expect(DRCA.allocate_cambrinth_charges(20, three_cambrinth_items, 3))
+        .to eq([[[4], [4], [12]], 0])
+    end
+
+    it 'uses the small items at every size of discern' do
+      [13, 20, 26, 36, 50, 56].each do |mana|
+        distribution, = DRCA.allocate_cambrinth_charges(mana, three_cambrinth_items, 3)
+        expect(distribution[0]).to eq([4])
+        expect(distribution[1]).to eq([4])
+      end
+    end
+
+    it 'spends spare charges on the largest charge' do
+      # One item, two charges: 22 mana becomes two charges of 11, not one of 22.
+      items = [{ 'name' => 'armband', 'cap' => 32 }]
+      expect(DRCA.allocate_cambrinth_charges(22, items, 2)).to eq([[[11, 11]], 0])
+    end
+
+    it 'leaves a spare charge unused when it would not make any charge smaller' do
+      expect(DRCA.allocate_cambrinth_charges(8, three_cambrinth_items, 3))
+        .to eq([[[4], [4]], 0])
+    end
+
+    it 'reports mana that fits in no item' do
+      expect(DRCA.allocate_cambrinth_charges(60, three_cambrinth_items, 3))
+        .to eq([[[4], [4], [48]], 4])
+    end
+
+    it 'keeps the largest items when there are more items than charges' do
+      expect(DRCA.allocate_cambrinth_charges(40, three_cambrinth_items, 1))
+        .to eq([[[], [], [40]], 0])
+    end
+
+    it 'returns nothing when there is no mana or no charge budget' do
+      expect(DRCA.allocate_cambrinth_charges(0, three_cambrinth_items, 3)).to eq([[], 0])
+      expect(DRCA.allocate_cambrinth_charges(20, three_cambrinth_items, 0)).to eq([[], 20])
+      expect(DRCA.allocate_cambrinth_charges(20, [], 3)).to eq([[], 20])
+    end
+
+    it 'conserves mana, respects every cap and the charge budget' do
+      configs = [three_cambrinth_items,
+                 [{ 'name' => 'ring', 'cap' => 4 }, { 'name' => 'armband', 'cap' => 32 }],
+                 [{ 'name' => 'armband', 'cap' => 32 }]]
+      configs.each do |items|
+        (0..120).each do |mana|
+          (1..6).each do |num_charges|
+            distribution, leftover = DRCA.allocate_cambrinth_charges(mana, items, num_charges)
+            expect(distribution.flatten.sum + leftover).to eq(mana)
+            expect(distribution.flatten.length).to be <= num_charges
+            expect(distribution.flatten).to all(be > 0)
+            distribution.each_with_index { |c, i| expect(c.sum).to be <= items[i]['cap'] }
+          end
+        end
+      end
+    end
+  end
 end
