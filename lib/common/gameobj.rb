@@ -126,6 +126,13 @@ module Lich
       @@staging_fam_pcs       = nil
       @@staging_contents      = {}
 
+      # True while a full-replacement container refresh (DR +INV LIST+) is open.
+      # While set, +new_inv+ routes every container placement into
+      # +@@staging_contents+ (auto-vivifying per-container buffers) instead of the
+      # live +@@contents+, so an interrupted listing never mutates the published
+      # model. See {.begin_all_containers}.
+      @@staging_all_containers = false
+
       # ---------------------------------------------------------------------------
       # Instance interface
       # ---------------------------------------------------------------------------
@@ -356,7 +363,13 @@ module Lich
       # @return [GameObj]
       def self.new_inv(id, noun, name, container = nil, before = nil, after = nil)
         if container
-          target = @@staging_contents[container] || (@@contents[container] ||= [])
+          target = if @@staging_all_containers
+                     # Full INV LIST refresh: stage every container so nothing
+                     # touches the live model until the listing commits cleanly.
+                     @@staging_contents[container] ||= []
+                   else
+                     @@staging_contents[container] || (@@contents[container] ||= [])
+                   end
           find_or_create(target, id, noun, name, before, after)
         else
           find_or_create(@@staging_inv || @@inv, id, noun, name, before, after)
@@ -420,6 +433,11 @@ module Lich
         @@index_mutex.synchronize do
           @@inv.reject! { |obj| obj.id == str_id }
           @@contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
+          # Scrub any in-flight staging buffers too: a hand pickup during a full
+          # INV LIST refresh must not be resurrected in its old container when the
+          # staged listing commits.
+          @@staging_inv&.reject! { |obj| obj.id == str_id }
+          @@staging_contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
         end
         nil
       end
@@ -850,6 +868,46 @@ module Lich
         @@staging_contents.clear
       end
 
+      # Opens a full-replacement refresh of ALL container contents, used by DR's
+      # +INV LIST+ (a complete recursive scrape). While open, +new_inv+ stages
+      # every container placement (see {.new_inv}) and the live +@@contents+ is
+      # left visible to readers. {.commit_all_containers_full} then swaps the
+      # whole hash in one reference assignment, so containers absent from the
+      # listing are dropped -- matching the old clear-then-fill semantics -- while
+      # an interrupted listing that never commits leaves the previous model
+      # intact (see {.discard_inv_refresh}). Pair with {.begin_inv} for worn items.
+      #
+      # @return [void]
+      def self.begin_all_containers
+        @@staging_contents = {}
+        @@staging_all_containers = true
+      end
+
+      # Publishes a full container refresh opened by {.begin_all_containers} with
+      # a single reference swap and closes it. No-op if no full refresh is open,
+      # so an interrupted listing simply keeps the previous published model.
+      #
+      # @return [void]
+      def self.commit_all_containers_full
+        return unless @@staging_all_containers
+
+        @@contents = @@staging_contents
+        @@staging_contents = {}
+        @@staging_all_containers = false
+      end
+
+      # Discards an in-flight INV LIST refresh (worn + full container staging)
+      # without publishing it, leaving the previously published model visible.
+      # Unlike {.discard_staged_refreshes} this touches only the inventory
+      # buffers, so it will not abort an unrelated in-flight room/familiar refresh.
+      #
+      # @return [void]
+      def self.discard_inv_refresh
+        @@staging_inv = nil
+        @@staging_contents = {}
+        @@staging_all_containers = false
+      end
+
       # Discards every in-flight staged refresh without publishing it.
       #
       # Called by +XMLParser#reset+ after a malformed or truncated fragment
@@ -879,6 +937,7 @@ module Lich
         @@staging_fam_npcs      = nil
         @@staging_fam_pcs       = nil
         @@staging_contents.clear
+        @@staging_all_containers = false
       end
 
       # ---------------------------------------------------------------------------
