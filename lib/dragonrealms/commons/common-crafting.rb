@@ -736,6 +736,80 @@ module Lich
         DRCC.get_crafting_item("#{material} ingot", nil, nil, nil, true)
         DRCC.stow_crafting_item("#{material} ingot", settings.crafting_container, nil) if DRC.right_hand
       end
+
+      # --- Private forge helpers ---------------------------------------------
+      # Shared settings resolution and navigation for the blacksmithing private
+      # forge, so smith / forge / makesteel behave identically. Callers should
+      # prefer these over inlining the logic.
+
+      # Default copper reserved to rent/enter a private forge when the
+      # forge_private_forge_cost setting is unset.
+      DEFAULT_PRIVATE_FORGE_COST = 50_000
+
+      # Patterns for entering a private forge through its door/sentry.
+      PRIVATE_FORGE_ENTRY_SUCCESS = ['You head through', 'You walk', 'You go', 'Obvious exits'].freeze
+      PRIVATE_FORGE_ENTRY_BLOCKED = ["You don't have enough", 'The sentry blocks', 'cannot enter', 'You need to pay'].freeze
+
+      # Resolve the town a crafter should work in: the crafting-specific override
+      # if set, otherwise their hometown. Mirrors the convention used by every
+      # crafting script.
+      #
+      # @param settings the character settings object
+      # @return [String] the town name
+      def crafting_hometown(settings)
+        settings.force_crafting_town || settings.hometown
+      end
+
+      # Whether the character wants to use a private forge. Accepts the legacy
+      # forge-only setting name for backward compatibility.
+      #
+      # @param settings the character settings object
+      # @return [Boolean]
+      def use_private_forge?(settings)
+        settings.use_private_forge || settings.forge_use_private_forge || false
+      end
+
+      # Copper to reserve for private forge rental/entry.
+      #
+      # @param settings the character settings object
+      # @return [Integer]
+      def private_forge_cost(settings)
+        settings.forge_private_forge_cost || DEFAULT_PRIVATE_FORGE_COST
+      end
+
+      # The room id of a town's private forge, or nil when it has none.
+      #
+      # @param hometown [String]
+      # @return [Integer, nil]
+      def private_forge_room(hometown)
+        get_data('crafting')['blacksmithing'][hometown]['private_forge']
+      end
+
+      # Blacksmithing towns that define a private forge.
+      #
+      # @return [Array<String>]
+      def towns_with_private_forge
+        get_data('crafting')['blacksmithing'].select { |_town, data| data['private_forge'] }.keys
+      end
+
+      # Ensure funds and navigate into the town's private forge.
+      #
+      # @param hometown [String]
+      # @param settings the character settings object
+      # @return [Boolean] true if we ended up in the private forge, false when the
+      #   town has no private forge, funds could not be secured, or entry was blocked.
+      def go_to_private_forge(hometown, settings)
+        room = private_forge_room(hometown)
+        return false unless room
+        return false unless DRCM.ensure_copper_on_hand(private_forge_cost(settings), settings, hometown)
+
+        DRCT.walk_to(room)
+        return true if Room.current.id == room
+
+        # Not in the room yet -- try to enter through the door/sentry.
+        DRC.bput('go door', *PRIVATE_FORGE_ENTRY_SUCCESS, *PRIVATE_FORGE_ENTRY_BLOCKED, 'What were you')
+        Room.current.id == room
+      end
     end
   end
 end
