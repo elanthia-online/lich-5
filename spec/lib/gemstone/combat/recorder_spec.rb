@@ -401,6 +401,20 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  describe 'ucs status emits' do
+    it 'persists positioning tiers as their ordinal, not nil' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:ucs, { id: 404, name: 'a warg', kind: :position, value: 'good', tier: 2 })
+      rec.record(:ucs, { id: 404, name: 'a warg', kind: :position_inbound, value: 'excellent', tier: 3 })
+      rec.record(:ucs, { id: 404, name: 'a warg', kind: :tierup, value: 'jab', tier: nil })
+      rec.close
+      rows = query("SELECT status, value FROM statuses ORDER BY id")
+      expect(rows.map { |r| r.values_at('status', 'value') })
+        .to eq([['position', 2], ['position_inbound', 3], ['tierup', nil]])
+    end
+  end
+
   describe 'fault isolation' do
     it 'never raises out of record even on a malformed payload' do
       rec = new_recorder

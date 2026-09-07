@@ -158,12 +158,18 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:type]).to eq(:position_inbound)
       expect(result[:target_id]).to eq(452443346)
       expect(result[:value]).to eq('decent')
+      expect(result[:tier]).to eq(1)
     end
 
     it 'does not confuse it with our outbound positioning' do
       line = "You have good positioning against #{bolded(452443346, 'kobold', 'a kobold')}."
       result = Lich::Gemstone::Combat::Definitions::UCS.parse(line)
       expect(result[:type]).to eq(:position)
+      expect(result[:tier]).to eq(2)
+    end
+
+    it 'maps every positioning word to an ordinal tier' do
+      expect(Lich::Gemstone::Combat::Definitions::UCS::POSITION_TIERS).to eq('decent' => 1, 'good' => 2, 'excellent' => 3)
     end
   end
 

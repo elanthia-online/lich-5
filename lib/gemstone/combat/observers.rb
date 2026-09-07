@@ -29,9 +29,11 @@
 #   :wound      { id:, name:, attack:, location:, body_part:, rank: }
 #   :fatal_crit { id:, name:, attack:, location: }
 #   :status     { id:, name:, status:, action: :add | :remove }
-#   :ucs        { id:, name:, kind: :position|:position_inbound|:tierup|:smite_on|:smite_off, value: }
+#   :ucs        { id:, name:, kind: :position|:position_inbound|:tierup|:smite_on|:smite_off, value:, tier: }
 #                 (:position_inbound = the creature's tier against US,
-#                 per-swing metadata printed inside its UCS attack block)
+#                 per-swing metadata printed inside its UCS attack block.
+#                 tier: 1..3 for decent/good/excellent on the two position
+#                 kinds, nil otherwise - the numeric form the recorder keeps)
 #   :spell_loss { id:, name:, spell:, spell_name:, cause: } - a spell
 #                 wearing off the subject (creature OR player in view;
 #                 player ids are negative, id is nil in plain-text logs).

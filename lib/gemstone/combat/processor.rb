@@ -1414,6 +1414,11 @@ module Lich
             creature.set_ucs_position(ucs_result[:value])
             respond "[Combat] Set UCS position #{ucs_result[:value]} on #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
 
+          when :position_inbound
+            # Per-swing metadata (the creature's tier against us) - no
+            # creature state to update; it exists for observers/recorder.
+            respond "[Combat] #{creature.name} (#{creature.id}) has #{ucs_result[:value]} positioning against us" if Tracker.debug?(:verbose)
+
           when :tierup
             creature.set_ucs_tierup(ucs_result[:value])
             respond "[Combat] Set UCS tierup #{ucs_result[:value]} on #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
@@ -1427,7 +1432,8 @@ module Lich
             respond "[Combat] Cleared smite from #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
           end
           Observers.emit(:ucs, id: creature.id, name: creature.name,
-                               kind: ucs_result[:type], value: ucs_result[:value])
+                               kind: ucs_result[:type], value: ucs_result[:value],
+                               tier: ucs_result[:tier])
         rescue => e
           respond "[Combat] Error applying UCS: #{e.message}" if Tracker.debug?(:verbose)
         end

@@ -355,7 +355,7 @@ module Lich
                                               spell_name: data[:spell_name], cause: data[:cause]&.to_s)
           when :ucs then record_status(kind: 'ucs', id: data[:id], name: data[:name],
                                        status: data[:kind].to_s,
-                                       value: (data[:value].is_a?(Numeric) ? data[:value] : nil))
+                                       value: ucs_value(data))
           end
         rescue StandardError => e
           # Never raise into the processor; surfaced via Lich.log when present.
@@ -589,6 +589,15 @@ module Lich
         end
 
         # -- the status stream ---------------------------------------------------
+
+        # The status value column is numeric. UCS position kinds carry their
+        # decent/good/excellent tier as tier: 1..3; anything else only
+        # persists when the payload value is already a number.
+        def ucs_value(data)
+          return data[:tier] if data[:tier].is_a?(Numeric)
+
+          data[:value].is_a?(Numeric) ? data[:value] : nil
+        end
 
         def record_status(kind:, id:, name:, status: nil, action: nil, value: nil,
                           spell: nil, spell_name: nil, cause: nil)
