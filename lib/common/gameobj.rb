@@ -624,8 +624,15 @@ module Lich
       # @return [Array<GameObj>, nil]
       def self.fam_pcs     = registry_or_nil(@@fam_pcs)
 
+      # Returns a snapshot of all container contents: the outer hash and every
+      # inner array are duplicated, so a caller iterating +containers[id]+ is not
+      # affected by concurrent in-place mutation of the live registry (e.g. a hand
+      # pickup's +remove_inv_item+ +reject!+, or +new_inv+'s +push+). Matches the
+      # dup-on-read contract of the other registry accessors and instance
+      # +#contents+. The GameObj elements themselves are shared, not copied.
+      #
       # @return [Hash{String => Array<GameObj>}]
-      def self.containers  = @@contents.dup
+      def self.containers  = @@contents.transform_values(&:dup)
 
       # ---------------------------------------------------------------------------
       # Class-level clear methods

@@ -134,6 +134,24 @@ RSpec.describe Lich::Common::GameObj do
       # Original should not be affected
       expect(described_class.containers['container1']).not_to be_empty
     end
+
+    it 'returns duplicated inner arrays so a reader iterating one is unaffected by in-place mutation' do
+      described_class.new_inv('10', 'gem', 'ruby', 'container1')
+      described_class.new_inv('11', 'gem', 'opal', 'container1')
+      described_class.new_inv('12', 'gem', 'jade', 'container1')
+
+      snapshot = described_class.containers['container1']
+      visited = []
+      snapshot.each do |item|
+        visited << item.id
+        # Simulate a hand pickup reconciling the live model mid-iteration: this
+        # reject!s the live inner array. A shared inner array would shift the
+        # iterator and silently skip '11'.
+        described_class.remove_inv_item('11') if item.id == '10'
+      end
+
+      expect(visited).to eq(%w[10 11 12])
+    end
   end
 
   describe '.upsert_inv' do
