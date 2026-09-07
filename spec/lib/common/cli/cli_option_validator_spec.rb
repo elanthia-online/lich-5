@@ -85,4 +85,16 @@ RSpec.describe Lich::Common::CLI::CliOptionValidator do
       expect($stdout.string).to include("error: Expected CHAR_NAME, got option '--game-code'")
     end
   end
+
+  describe '.reject_invalid_value' do
+    it 'exits 1 naming the flag, the rejected value, and the accepted ones' do
+      expect {
+        described_class.reject_invalid_value('--game-code', 'GSX', valid_values: %w[DR GS3], usage: 'usage')
+      }.to raise_error(SystemExit)
+
+      expect($stdout.string).to include('error: Invalid value for --game-code: GSX')
+      expect($stdout.string).to include('Valid values: DR, GS3')
+      expect($stdout.string).to include('usage')
+    end
+  end
 end

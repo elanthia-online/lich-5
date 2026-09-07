@@ -109,19 +109,18 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_character)
     end
 
-    # GS4 passes LoginHelpers::VALID_GAME_CODES, which is the allow-list for game
-    # codes seen at runtime (the game stream reports instance='GS4'). It is not a code
-    # that can be persisted: GameSelection::GAME_MAPPING has no entry for it, so it
-    # would be stored with game_name 'Unknown'. The persisted production code is GS3.
-    it 'exits 1 without adding a character for a game code that cannot be persisted' do
-      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', 'GS4'])
+    # GSX is a retired Simutronics instance kept only for normalizing entries stored
+    # before its retirement; LoginHelpers.valid_game_code? rejects it, and persisting
+    # it would yield a record whose game_name is 'Unknown'.
+    it 'exits 1 without adding a character for a retired game code' do
+      stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', 'GSX'])
 
       expect { described_class.handle_add_character }.to raise_error(SystemExit)
       expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:add_character)
     end
 
-    it 'accepts every game code that has a display name' do
-      Lich::Common::GUI::GameSelection::GAME_MAPPING.each_key do |code|
+    it 'accepts every game code the login validator accepts' do
+      Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.each do |code|
         stub_const('ARGV', ['--add-character', 'DOUG', 'Newchar', '--game-code', code])
 
         expect { described_class.handle_add_character }.to raise_error(SystemExit)

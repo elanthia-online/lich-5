@@ -159,9 +159,9 @@ module Lich
 
           Game codes (--game-code):
             GS3  GemStone IV              DR   DragonRealms
-            GSX  GemStone IV Platinum     DRX  DragonRealms Platinum
-            GST  GemStone IV Prime Test   DRT  DragonRealms Prime Test
-            GSF  GemStone IV Shattered    DRF  DragonRealms Fallen
+            GST  GemStone IV Prime Test   DRX  DragonRealms Platinum
+            GSF  GemStone IV Shattered    DRT  DragonRealms Prime Test
+                                          DRF  DragonRealms Fallen
 
           Examples:
             lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront

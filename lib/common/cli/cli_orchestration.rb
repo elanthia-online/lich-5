@@ -152,15 +152,20 @@ module Lich
           account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
           char_name = CliOptionValidator.require_positional(char_name, name: 'CHAR_NAME', usage: usage)
 
-          game_code = CliOptionValidator.extract_flag_value(
-            '--game-code',
-            usage: usage,
-            valid_values: Lich::Common::GUI::GameSelection::PERSISTABLE_GAME_CODES
-          )
+          game_code = CliOptionValidator.extract_flag_value('--game-code', usage: usage)
           if game_code.nil?
             $stdout.puts 'error: --game-code is required'
             $stdout.puts usage
             exit 1
+          end
+
+          unless Lich::Common::Authentication::LoginHelpers.valid_game_code?(game_code)
+            CliOptionValidator.reject_invalid_value(
+              '--game-code',
+              game_code,
+              valid_values: Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES,
+              usage: usage
+            )
           end
 
           frontend = CliOptionValidator.extract_flag_value(

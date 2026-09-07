@@ -23,14 +23,26 @@ module Lich
             exit 1
           end
 
-          if valid_values && !valid_values.include?(value)
-            $stdout.puts "error: Invalid value for #{flag}: #{value}"
-            $stdout.puts "Valid values: #{valid_values.join(', ')}"
-            $stdout.puts usage
-            exit 1
-          end
+          reject_invalid_value(flag, value, valid_values: valid_values, usage: usage) if valid_values && !valid_values.include?(value)
 
           value
+        end
+
+        # Reports a flag value that failed validation and exits. Exposed so callers
+        # that test a value with a domain predicate rather than a literal allow-list
+        # (e.g. --game-code, checked with LoginHelpers.valid_game_code?) still report
+        # the failure the same way this module does.
+        #
+        # @param flag [String] flag name including leading dashes, e.g. '--game-code'
+        # @param value [String] the rejected value
+        # @param valid_values [Array<String>] values to list back to the user
+        # @param usage [String] usage line printed alongside the error message
+        # @return [void]
+        def self.reject_invalid_value(flag, value, valid_values:, usage:)
+          $stdout.puts "error: Invalid value for #{flag}: #{value}"
+          $stdout.puts "Valid values: #{valid_values.join(', ')}"
+          $stdout.puts usage
+          exit 1
         end
 
         # Validates a required positional argument (e.g. the ACCOUNT in

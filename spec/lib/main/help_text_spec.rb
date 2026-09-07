@@ -2,6 +2,9 @@
 
 require 'rspec'
 
+# login_spec_helper sets up Lich::Util, which game_selection pulls in transitively
+# by way of Authentication::LoginHelpers.
+require_relative '../../login_spec_helper'
 require_relative '../../../lib/main/help_text'
 require_relative '../../../lib/common/gui/game_selection'
 
@@ -35,8 +38,18 @@ RSpec.describe Lich::Main::HelpText do
     it 'lists every game code --game-code accepts' do
       output = described_class.render('accounts')
 
-      Lich::Common::GUI::GameSelection::GAME_MAPPING.each do |code, name|
+      Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.each do |code|
+        name = Lich::Common::GUI::GameSelection::GAME_MAPPING.fetch(code)
         expect(output).to match(/\b#{code}\s+#{Regexp.escape(name)}/)
+      end
+    end
+
+    it 'does not document game codes the login validator rejects' do
+      output = described_class.render('accounts')
+
+      %w[GS4 GSX].each do |retired_code|
+        expect(Lich::Common::Authentication::LoginHelpers.valid_game_code?(retired_code)).to be(false)
+        expect(output).not_to include(retired_code)
       end
     end
 
