@@ -937,6 +937,11 @@ RSpec.describe Lich::DragonRealms::DRCI do
         stub_bput("It's already open.")
         expect(described_class.open_container?('pack')).to be true
       end
+
+      it 'returns true when the already open message is mid-sentence and lowercase' do
+        stub_bput("Using slow movements so as to not compromise your invisibility, you slide your hand into your backpack.  Oh, I guess it's already open.")
+        expect(described_class.open_container?('backpack')).to be true
+      end
     end
 
     context 'when open fails' do
