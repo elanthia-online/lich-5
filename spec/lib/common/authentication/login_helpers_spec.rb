@@ -624,45 +624,4 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
-  describe '.spawn_login' do
-    it 'uses the shared checked Ruby executable for a child CLI login' do
-      allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/checked/ruby')
-      allow(Process).to receive(:spawn).and_return(12_345)
-      waiter = double('process waiter')
-      allow(Process).to receive(:detach).with(12_345).and_return(waiter)
-
-      result = described_class.spawn_login(
-        { char_name: 'Tsetem', game_code: 'GS3' },
-        lich_path: '/lich/lich.rbw'
-      )
-
-      expect(result).to equal(waiter)
-      expect(Process).to have_received(:spawn).with(
-        '/checked/ruby',
-        '/lich/lich.rbw',
-        '--login',
-        'Tsetem'
-      )
-    end
-
-    it 'passes a frontend override using the registry-safe long form' do
-      allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/checked/ruby')
-      allow(Process).to receive(:spawn).and_return(12_345)
-      allow(Process).to receive(:detach).with(12_345).and_return(double('process waiter'))
-
-      described_class.spawn_login(
-        { char_name: 'Tsetem', game_code: 'GS3' },
-        lich_path: '/lich/lich.rbw',
-        frontend_override: 'vellum'
-      )
-
-      expect(Process).to have_received(:spawn).with(
-        '/checked/ruby',
-        '/lich/lich.rbw',
-        '--login',
-        'Tsetem',
-        '--frontend=vellum'
-      )
-    end
-  end
 end

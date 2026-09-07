@@ -65,44 +65,43 @@ Dir.mktmpdir('lich-inline-ui') do |directory|
   drain
   failures << 'Escape did not preserve the saved entry' unless File.binread(path) == before
   cell.signal_emit('changed', '0:0', option)
-  cell.signal_emit('edited', '0:0', 'Profanity (external client)')
+  cell.signal_emit('edited', '0:0', 'Profanity (unavailable)')
   drain
   entry = YAML.load_file(path)['accounts']['TEST']['characters'].first
-  abort 'Profanity / headless selection not saved' unless entry['frontend'] == 'profanity' && entry['launch_mode'] == 'external'
+  abort 'Frontend selection not saved' unless entry['frontend'] == 'profanity'
+  abort 'GUI headless controls remain' if view.columns.any? { |col| ['Launch mode', 'Local port'].include?(col.title) }
   abort 'Editing collapsed account' unless view.row_expanded?(Gtk::TreePath.new('0'))
-  port_cell = view.columns.find { |col| col.title == 'Local port' }.cells.first
-  port_cell.signal_emit('edited', '0:0', '8001')
-  drain
-  saved = YAML.load_file(path)['accounts']['TEST']
-  abort 'Port not saved' unless saved['characters'].first['listen_port'] == 8001
-  abort 'Credentials changed' unless saved['password'] == 'synthetic-password'
-  before = File.binread(path)
-  cell.signal_emit('editing-canceled')
-  drain
-  abort 'Cancel changed entries' unless File.binread(path) == before
-  # Simulate a hand-edited invalid port, then exercise the actual cell gate.
-  data = YAML.load_file(path)
-  data['accounts']['TEST']['characters'].first['listen_port'] = 65536
-  File.write(path, YAML.dump(data))
-  manager.send(:refresh_accounts_display)
-  port_column = view.columns.find { |col| col.title == 'Local port' }
-  port_column.cell_set_cell_data(view.model, view.model.get_iter('0:0'), false, false)
-  failures << 'invalid external port cannot be edited' unless port_cell.editable?
-  port_cell.signal_emit('edited', '0:0', '8001')
-  drain
-  entry = YAML.load_file(path)['accounts']['TEST']['characters'].first
-  abort 'Invalid port correction failed' unless entry['listen_port'] == 8001
-  # Exercise a real bound port, not just the mocked unit-test seam.
-  occupied = TCPServer.new('127.0.0.1', 0)
-  begin
-    Lich::Common::GUI::LaunchSettings.preflight!(frontend: 'profanity', listen_port: occupied.addr[1])
-    abort 'Occupied port accepted'
-  rescue ArgumentError => e
-    abort e.message unless e.message.include?('unavailable')
-  ensure
-    occupied.close
+  abort 'Credentials changed' unless YAML.load_file(path)['accounts']['TEST']['password'] == 'synthetic-password'
+  locator = Object.new
+  def locator.available(**)
+    []
   end
+  selector = Lich::Common::GUI::ManualFrontendSelector.new(locator: locator)
+  abort 'Unavailable frontends are shown in Manual Login' unless selector.widget.children.map(&:label) == ['Custom']
+  abort 'Custom does not use Wrayth compatibility' unless selector.custom? && selector.selected_id == 'stormfront'
+  manual = Lich::Common::GUI::ManualLoginTab.allocate
+  checkbox = manual.send(:create_custom_launch_options)
+  manual.send(:setup_custom_launch_handler, checkbox)
+  manual.send(:setup_native_launch_handler, selector, checkbox)
+  abort 'Custom did not reveal its controls' unless checkbox.active? &&
+                                                    manual.instance_variable_get(:@custom_launch_entry).visible? &&
+                                                    manual.instance_variable_get(:@custom_launch_dir).visible?
+  def locator.available(**)
+    [Lich::Common::FrontendLocator::Resolution.new(frontend_id: 'stormfront', executable_path: '/synthetic/wrayth', source: :path)]
+  end
+  selector.reload!
+  abort 'Reload lost Custom selection' unless selector.custom?
+  selector.widget.children.find { |radio| radio.label == 'Wrayth' }.active = true
+  abort 'Detected Wrayth selection failed' unless selector.selected_id == 'stormfront' && !selector.custom?
+  checkbox.active = false
+  selector.widget.children.find { |radio| radio.label == 'Custom' }.active = true
+  abort 'Selecting Custom did not enable the command' unless checkbox.active?
+  def locator.available(**)
+    []
+  end
+  selector.reload!
+  abort 'Missing clients did not fall back to Custom' unless selector.custom?
   window.destroy
   abort failures.join("\n") unless failures.empty?
-  puts 'PASS: real GTK commit/cancel, invalid-port repair, preserved account expansion and credentials; occupied-port rejection'
+  puts 'PASS: real GTK commit/cancel, account expansion and credentials, detected radios, Custom fallback and command controls'
 end

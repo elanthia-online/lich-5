@@ -148,7 +148,7 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String, String, String)
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
           @accounts_view = accounts_view
@@ -182,22 +182,6 @@ module Lich
           @inline_frontend_model = Gtk::ListStore.new(String, String)
           reload_inline_frontends
           add_launch_choice_column(accounts_view, accounts_store, 'Frontend', 3, @inline_frontend_model, :frontend)
-
-          mode_model = Gtk::ListStore.new(String, String)
-          [['client', 'Launch client'], ['external', 'Headless / external client']].each do |id, label|
-            option = mode_model.append
-            option[0], option[1] = id, label
-          end
-          add_launch_choice_column(accounts_view, accounts_store, 'Launch mode', 8, mode_model, :launch_mode)
-          port_renderer = Gtk::CellRendererText.new
-          port_column = Gtk::TreeViewColumn.new('Local port', port_renderer, text: 9)
-          port_column.set_cell_data_func(port_renderer) do |_column, cell, _model, iter|
-            cell.editable = !iter[1].to_s.empty? && ['Headless / external client', 'Needs configuration'].include?(iter[8])
-          end
-          port_renderer.signal_connect('edited') do |_cell, path, value|
-            commit_saved_launch(accounts_store.get_iter(path), listen_port: value)
-          end
-          accounts_view.append_column(port_column)
 
           # Favorites column with clickable star (not sortable)
           favorites_renderer = Gtk::CellRendererText.new
@@ -810,7 +794,7 @@ module Lich
             if selected && (iter = store.get_iter(path))
               # Keep the original entry identity, not a TreeIter invalidated by
               # a queued model refresh or a path that may later identify another row.
-              pending = [path, Array.new(10) { |column_index| iter[column_index] }, options.get_value(selected, 0)]
+              pending = [path, Array.new(8) { |column_index| iter[column_index] }, options.get_value(selected, 0)]
             end
           end
           cell.signal_connect('edited') do |_renderer, path, _label|
@@ -839,7 +823,7 @@ module Lich
             end
           else
             Gtk.queue do
-              @msgbox.call('Could not save launch settings. Check the frontend/mode combination and port (1-65535), or refresh if this entry changed or already exists.')
+              @msgbox.call('Could not save the frontend. Check custom-launch compatibility, or refresh if this entry changed or already exists.')
             end
           end
         end
@@ -1263,14 +1247,6 @@ module Lich
               char_iter[4] = character[:game_code] # Store game_code in hidden column
               char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
               char_iter[FRONTEND_ID_COLUMN] = character[:frontend]
-              begin
-                launch = LaunchSettings.resolve(character)
-                char_iter[8] = launch[:mode] == 'external' ? 'Headless / external client' : 'Launch client'
-                char_iter[9] = launch[:port]&.to_s
-              rescue ArgumentError
-                char_iter[8] = 'Needs configuration'
-                char_iter[9] = character[:listen_port]&.to_s
-              end
 
               # Add favorites information with frontend precision
               is_favorite = FavoritesManager.is_favorite?(

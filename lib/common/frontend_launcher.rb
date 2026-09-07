@@ -3,6 +3,7 @@
 require 'shellwords'
 require_relative 'frontend'
 require_relative 'frontend_locator'
+require_relative 'windows_command_line'
 
 module Lich
   module Common
@@ -20,7 +21,7 @@ module Lich
       class UnsupportedError < Error; end
       class UnavailableError < Error; end
 
-      PROCESS_LOCAL_LAUNCH_FIELDS = %w[FRONTEND].freeze
+      PROCESS_LOCAL_LAUNCH_FIELDS = %w[FRONTEND CUSTOMLAUNCHARGV].freeze
       CONNECTION_PLACEHOLDER_PATTERN = /(%host%|%port%|%key%)/.freeze
 
       class << self
@@ -50,7 +51,7 @@ module Lich
         # @param platform_key [Symbol] canonical host classification
         # @param locator [FrontendLocator] injectable discovery API
         # @param simu_launcher [#call] injectable legacy launcher lookup
-        # @return [String]
+        # @return [String, Array<String>] legacy template or shell-free Windows argv
         # @raise [ArgumentError] for an unknown frontend identifier
         # @raise [UnsupportedError] when the adapter has no platform command
         # @raise [UnavailableError] when a required executable/launcher is absent
@@ -79,20 +80,23 @@ module Lich
             raise UnavailableError, "#{Frontend.display_name(definition[:id])} has no launch command"
           end
 
-          with_additional_arguments(base_command, definition)
+          with_additional_arguments(base_command, definition, platform_key: platform_key)
         end
 
         # Appends user-configured arguments to a command-template launcher.
         # Arguments are escaped independently while Lich's connection
         # placeholders remain available for the launch handoff to replace.
         #
-        # @param base_command [String] existing launcher command template
+        # @param base_command [String, Array<String>] command template or literal argv
         # @param frontend [String, Symbol, Hash] frontend id or definition
-        # @return [String]
-        def with_additional_arguments(base_command, frontend)
+        # @param platform_key [Symbol] host command-line convention
+        # @return [String, Array<String>] command template or shell-free argv
+        def with_additional_arguments(base_command, frontend, platform_key: Frontend.platform_key)
           definition = frontend.is_a?(Hash) ? frontend : Frontend.definition_for(frontend)
           arguments = Array(definition.dig(:metadata, :additional_arguments))
+          return [*base_command, *arguments] if base_command.is_a?(Array)
           return base_command if arguments.empty?
+          return [*WindowsCommandLine.split(base_command), *arguments] if platform_key == :windows
 
           escaped_arguments = arguments.map { |argument| escape_argument(argument) }
           argument_separator = definition.dig(:metadata, :launcher_adapter) == :avalon ? ' --args ' : ' '
@@ -116,12 +120,16 @@ module Lich
         # Resolves every connection placeholder after Lich opens the local
         # listener used by a configured frontend.
         #
-        # @param command [String]
+        # @param command [String, Array<String>]
         # @param host [String]
         # @param port [String, Integer]
         # @param key [String]
-        # @return [String]
+        # @return [String, Array<String>]
         def render_connection(command, host:, port:, key:)
+          if command.is_a?(Array)
+            return command.map { |argument| render_connection(argument, host: host, port: port, key: key) }
+          end
+
           {
             '%host%' => host,
             '%port%' => port,
@@ -327,6 +335,8 @@ module Lich
         # @return [String] escaped argument template
         # @api private
         def escape_argument(argument)
+          return "''" if argument.empty?
+
           argument.to_s.split(CONNECTION_PLACEHOLDER_PATTERN).filter_map do |segment|
             next if segment.empty?
             next segment if segment.match?(CONNECTION_PLACEHOLDER_PATTERN)

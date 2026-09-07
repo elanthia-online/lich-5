@@ -620,8 +620,9 @@ module Lich
     #
     # @return [void]
     def hide_optional_elements
-      @custom_launch_entry.visible = false
-      @custom_launch_dir.visible = false
+      # Manual Login owns its checkbox visibility, including Custom's initial
+      # selection when no installed client is available. Its fields opt out of
+      # show_all, so window refreshes need not reset that selection here.
       @bonded_pair_char.visible = false
       @bonded_pair_inst.visible = false
       @slider_box.visible = false
@@ -659,9 +660,6 @@ module Lich
       else
         # Default/single-launch path: used when persistent mode is disabled OR
         # when launch originates from manual login.
-        if Lich::Common::GUI::LaunchSettings.external?(login_context)
-          Lich::Common::GUI::LaunchSettings.apply_to_runtime!(login_context, argv: ARGV, options: @argv_options)
-        end
         @launch_data = launch_data
         close_launcher_window
       end

@@ -29,7 +29,7 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
     column = double('column', resizable: nil, set_cell_data_func: nil)
     options = double('options')
     selected = double('GTK signal TreeIter without a Ruby model')
-    row = ['TEST', 'Tester', 'GemStone IV', 'Wrayth', 'GS3', '', nil, 'stormfront', 'Launch client', nil]
+    row = ['TEST', 'Tester', 'GemStone IV', 'Wrayth', 'GS3', '', nil, 'stormfront']
     store = double('saved entries')
     view = double('view', append_column: nil)
     stub_const('Gtk::CellRendererCombo', Class.new)

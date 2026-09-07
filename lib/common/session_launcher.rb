@@ -2,7 +2,6 @@
 
 require_relative 'authentication/login_helpers'
 require_relative 'ruby_executable'
-require_relative 'gui/launch_settings'
 
 module Lich
   module Common
@@ -93,7 +92,6 @@ module Lich
                           else
                             launch_map['CUSTOMLAUNCH']
                           end
-          context = context.merge(frontend: frontend, custom_launch: custom_launch)
 
           raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
 
@@ -104,9 +102,6 @@ module Lich
           end
           args << "--frontend=#{frontend}" if frontend && !frontend.to_s.empty?
           args << "--custom-launch=#{custom_launch}" if custom_launch && !custom_launch.to_s.empty?
-          if GUI::LaunchSettings.external?(context)
-            args.concat(GUI::LaunchSettings.flags(context))
-          end
           args.concat(optional_spawn_flags(context))
           args
         end

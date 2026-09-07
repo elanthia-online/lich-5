@@ -723,8 +723,6 @@ module Lich
                 game_code: character['game_code'],
                 game_name: character['game_name'],
                 frontend: character['frontend'],
-                launch_mode: character['launch_mode'],
-                listen_port: character['listen_port'],
                 custom_launch: character['custom_launch'],
                 custom_launch_dir: character['custom_launch_dir'],
                 is_favorite: character['is_favorite'] || false,
@@ -773,8 +771,6 @@ module Lich
               'game_code'         => entry[:game_code],
               'game_name'         => entry[:game_name],
               'frontend'          => entry[:frontend],
-              'launch_mode'       => entry[:launch_mode],
-              'listen_port'       => entry[:listen_port],
               'custom_launch'     => entry[:custom_launch],
               'custom_launch_dir' => entry[:custom_launch_dir],
               'is_favorite'       => entry[:is_favorite] || false

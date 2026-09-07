@@ -33,7 +33,7 @@ RSpec.describe 'Saved frontend cross-tab persistence' do
 
         expect(account.update_launch_settings(directory, 'TEST', 'Tester', 'GS3',
                                               old_frontend: 'stormfront', custom_launch: nil,
-                                              frontend: 'profanity', launch_mode: 'external', listen_port: 8001)).to be true
+                                              frontend: 'wizard')).to be true
         manager.send(:notify_data_changed, :character_updated, { character: 'Tester' }) if notify
 
         button = double('play button', sensitive: nil)
@@ -45,13 +45,13 @@ RSpec.describe 'Saved frontend cross-tab persistence' do
         tab.send(:setup_play_button_handler, button,
                  double(selection: double(selected: ['GS3', 'GemStone IV', 'GS3002', 'Second'])),
                  double(text: 'TEST'), double(text: 'synthetic'),
-                 double(selected_id: 'stormfront', launchable?: true), double(active?: false))
+                 double(selected_id: 'stormfront', custom?: false, launchable?: true), double(active?: false))
         click.call
 
         entries = store.load_saved_entries(directory, false)
         expect(entries.map { |entry| entry[:char_name] }).to contain_exactly('Tester', 'Second')
         expect(entries.find { |entry| entry[:char_name] == 'Tester' })
-          .to include(frontend: 'profanity', launch_mode: 'external', listen_port: 8001,
+          .to include(frontend: 'wizard',
                       password: 'synthetic')
       end
     end

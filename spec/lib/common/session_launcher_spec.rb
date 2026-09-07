@@ -26,18 +26,6 @@ RSpec.describe Lich::Common::SessionLauncher do
     expect(defined?(Lich::Common::SessionLauncher)).to eq('constant')
   end
 
-  it 'passes a saved headless port to the child without requiring a desktop frontend' do
-    result = described_class.launch(launch_data, launch_context: {
-      char_name: 'Tsetem', game_code: 'GST', frontend: 'profanity', custom_launch: nil,
-      launch_mode: 'external', listen_port: 8001
-    })
-    expect(result[:ok]).to be true
-    expect(described_class).to have_received(:spawn).with(
-      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST',
-      '--frontend=profanity', '--without-frontend', '--detachable-client=127.0.0.1:8001', hash_including(chdir: anything)
-    )
-  end
-
   it 'launches a detached child session with CLI args from launch_context' do
     result = described_class.launch(
       launch_data,
@@ -60,18 +48,6 @@ RSpec.describe Lich::Common::SessionLauncher do
       hash_including(chdir: anything)
     )
     expect(Process).to have_received(:detach).with(1234)
-  end
-
-  it 'preserves headless settings when frontend identity is supplied by launch data' do
-    result = described_class.launch(
-      ['CHARACTER=Tsetem', 'FRONTEND=profanity', 'GAMECODE=GST'],
-      launch_context: { launch_mode: 'external', listen_port: 8001 }
-    )
-    expect(result[:ok]).to be true
-    expect(described_class).to have_received(:spawn).with(
-      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST',
-      '--frontend=profanity', '--without-frontend', '--detachable-client=127.0.0.1:8001', hash_including(chdir: anything)
-    )
   end
 
   it 'falls back to launch_data values when launch_context is not provided' do

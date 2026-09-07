@@ -2,6 +2,7 @@
 
 require_relative '../frontend'
 require_relative '../frontend_launcher'
+require 'json'
 
 module Lich
   module Common
@@ -36,7 +37,7 @@ module Lich
             custom_launch_dir = definition.dig(:metadata, :launch_directory)
           end
 
-          launch_data.reject! { |line| line.match?(/\AFRONTEND=/i) }
+          launch_data.reject! { |line| line.match?(/\A(?:FRONTEND|CUSTOMLAUNCHARGV)=/i) }
           launch_data.push "FRONTEND=#{frontend_id}" unless frontend_id.empty?
 
           # Modify launch data based on frontend
@@ -60,7 +61,11 @@ module Lich
 
           # Add custom launch information if provided
           if custom_launch
-            launch_data.push "CUSTOMLAUNCH=#{custom_launch}"
+            if custom_launch.is_a?(Array)
+              launch_data.push "CUSTOMLAUNCHARGV=#{JSON.generate(custom_launch)}"
+            else
+              launch_data.push "CUSTOMLAUNCH=#{custom_launch}"
+            end
             launch_data.push "CUSTOMLAUNCHDIR=#{custom_launch_dir}" if custom_launch_dir
           end
 

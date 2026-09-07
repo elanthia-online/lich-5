@@ -8,31 +8,20 @@ Use the **Frontends** tab to configure an executable, extra arguments, or a cust
 frontend before assigning it to a character. Missing desktop clients remain
 visible and annotated rather than silently replacing a saved association.
 
-**Launch mode** is separate from frontend identity:
+**Manual Login** shows detected frontends as radio buttons, plus an always-present
+**Custom** option. Unavailable clients stay in the configuration surfaces, not
+in the Manual Login choices. Selecting Custom automatically checks **Custom
+launch command** and reveals its command and working-directory fields. Custom
+requires a nonblank command before Play can authenticate or save an entry.
+It uses the historical Wrayth (`stormfront`) protocol identity; this does not
+require or execute Wrayth. Detected clients can still use the command checkbox
+unless their native adapter disallows it (for example, Saga).
 
-- **Launch client** preserves normal installed/custom desktop frontend behavior.
-- **Headless / external client** starts Lich without a desktop executable, using
-  the existing detachable-client listener on `127.0.0.1`. Start or attach your
-  external client separately. The **Local port** cell is editable in this mode;
-  its default is 8000. Use distinct ports for simultaneous sessions, such as
-  8000 and 8001, and configure the external client to use the same port.
-
-An invalid saved port displays **Needs configuration** and remains editable so
-you can correct it. Validation still rejects ports outside 1-65535.
-
-Profanity is selectable as an external XML client. Choosing it sets external
-mode; this does not launch a terminal application. Choosing a non-XML frontend
-such as Wizard selects client mode. XML-capable frontends may use either mode.
-Existing native entries retain client mode; existing Profanity entries use
-external mode without needing their saved frontend rewritten. An existing
-explicit custom launch command retains client-launch behavior.
-
-The GUI rejects an occupied/unusable port before authenticating. The actual
-runtime bind remains authoritative: another process can still acquire a port
-between that check and startup. No existing session is killed or replaced.
-These saved mode/port preferences apply to GUI launches; existing CLI launch
-flags remain explicit and unchanged. An unsaved manual external login continues
-in the current process; a persistent launch passes the chosen port to its child.
+Headless operation remains an explicit CLI choice (`--headless PORT` or
+`--detachable-client=PORT`). There is no GUI headless mode or saved listener-port
+preference. Selecting Profanity as a saved protocol identity does not silently
+create a listener or launch a terminal: configure a custom command for GUI use,
+or launch it through the CLI.
 
 Changing the association preserves account credentials, favorite status, and any
 per-entry custom launch command and directory. It does not log in or change other
@@ -43,11 +32,57 @@ before saving a quick entry, preserving frontend settings edited in another tab.
 
 Additional arguments preserve literal spaces and empty values. For example,
 `--title "" "  keep me  "` supplies three arguments, including an empty title.
-The editor uses shell-style quoting to express argument boundaries; this is not
-a guarantee of cross-platform shell execution semantics. Invalid argument lists
+The argument editor uses shell-style quoting to express argument boundaries,
+including on Windows. Windows launch templates with additional arguments are
+split using Windows CRT quoting and passed as an argv list, not POSIX-escaped
+text; quote executable paths containing spaces. Additional arguments remain
+literal, including quotes, backslashes, `%PATH%`, and shell metacharacters.
+Implicit shell operators in that Windows template path are rejected: use a
+wrapper executable if shell behavior is intentional. A legacy custom command
+without a separate argument list retains its existing execution semantics.
+Invalid argument lists
 are rejected rather than silently dropping or truncating values. A malformed
 argument list loaded from `frontends.yml` leaves the last usable catalog active
 and logs a warning; the file is not rewritten.
+
+## Frontend definitions and local settings
+
+Built-in definitions live in `lib/common/frontend/*.rb`; the registry exposes
+their identities, capabilities, discovery rules, and launch adapters without
+GTK. To add a supported capability, update the registry vocabulary and relevant
+definitions. The Frontends tab generates its capability checkboxes from that
+vocabulary; adding a checkbox does not itself implement protocol support.
+
+Machine-local overrides live in `DATA_DIR/frontends.yml`, separate from account
+credentials in `entry.yaml`. A version-1 example (paths are examples, not defaults):
+
+```yaml
+version: 1
+builtins:
+  stormfront:
+    executable: 'C:\Program Files\Wrayth\Wrayth.exe'
+    arguments: ['--profile', 'Test profile']
+custom:
+  local-client:
+    label: Local Client
+    command: 'client --host=%host% --port=%port% --key=%key%'
+    directory: '/path/to/client'
+    arguments: ['--title', '']
+    capabilities: [xml, streams]
+```
+
+`executable`, `directory`, and `arguments` are optional. Custom definitions
+require a unique stable ID, label, and command; IDs must not replace a built-in
+name or alias. Built-ins retain their protocol capabilities. Command placeholders
+are `%host%`, `%port%`, and `%key%`; never put account passwords in commands.
+These settings are trusted executable configuration, not a sandbox. Import only
+commands you trust; explicitly launching a shell or batch wrapper carries that
+shell's interpretation rules. Saves are atomic and owner-only where supported.
+Newer schema versions are not overwritten. Deleting a custom definition does
+not rewrite saved character associations; reassign those entries explicitly.
+
+Windows parsing follows [Microsoft's CRT rules](https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments).
+The argument-list handoff uses [Ruby's process API](https://docs.ruby-lang.org/en/master/Process.html).
 
 An unavailable Wrayth entry is not evidence of bad credentials. Its saved frontend
 may simply not be installed on this computer. The launcher error now points to
@@ -66,9 +101,9 @@ With the project's Ruby/GTK dependencies installed, run:
 xvfb-run -a ruby spec/native/frontend_inline_smoke.rb
 ```
 
-This standalone test uses a virtual display, temporary synthetic accounts, and
-a temporary loopback listener. It checks selection/commit/cancellation, invalid
-port recovery, account expansion, and credential preservation. It neither
+This standalone test uses a virtual display and temporary synthetic accounts.
+It checks selection/commit/cancellation, account expansion, credential preservation,
+detected-client radio buttons, and Custom's fallback and field visibility. It neither
 authenticates to the game nor accesses saved player accounts. Ordinary RSpec
 coverage also exercises a frontend edit followed by another character's Manual
 Login save through the production notification and persistence paths.

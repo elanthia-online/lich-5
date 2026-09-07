@@ -335,7 +335,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
     expect(command).to eq('launcher.exe "%1"')
   end
 
-  it 'appends shell-escaped configured arguments to command-based built-in launchers' do
+  it 'keeps Windows configured arguments separate from the executable template' do
     definition = Lich::Common::Frontend.definition_for('stormfront')
     allow(Lich::Common::Frontend).to receive(:definition_for).with('stormfront').and_return(
       definition.merge(metadata: definition[:metadata].merge(additional_arguments: ['--profile', 'Test profile']))
@@ -347,7 +347,7 @@ RSpec.describe Lich::Common::FrontendLauncher do
       simu_launcher: -> { 'launcher.exe "%1"' }
     )
 
-    expect(command).to eq('launcher.exe "%1" --profile Test\\ profile')
+    expect(command).to eq(['launcher.exe', '%1', '--profile', 'Test profile'])
   end
 
   it 'builds configured custom commands while retaining connection placeholders' do

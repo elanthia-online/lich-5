@@ -131,6 +131,19 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
     end
 
     context 'with a registered custom frontend' do
+      it 'carries Windows argv as process-local structured data without flattening arguments' do
+        allow(Lich::Common::Frontend).to receive(:definition_for).with('local-client').and_return(
+          id: 'local-client', metadata: { launcher_adapter: :custom, launch_command: '"C:\\Client Files\\client.exe"',
+                                         additional_arguments: ['', '  profile  ', '--port=%port%'] }
+        )
+        allow(Lich::Common::Frontend).to receive(:platform_key).and_return(:windows)
+        result = described_class.prepare(auth_data, 'local-client')
+        argv_field = result.find { |line| line.start_with?('CUSTOMLAUNCHARGV=') }
+        expect(JSON.parse(argv_field.split('=', 2).last)).to eq(['C:\\Client Files\\client.exe', '', '  profile  ', '--port=%port%'])
+        expect(result.grep(/\ACUSTOMLAUNCH=/)).to be_empty
+        expect(Lich::Common::FrontendLauncher.native_session_data(result).grep(/\ACUSTOMLAUNCHARGV=/)).to be_empty
+      end
+
       it 'derives custom launch data and the stable frontend identity from its definition' do
         allow(Lich::Common::Frontend).to receive(:definition_for).with('vellum').and_return(
           id: 'vellum',

@@ -35,7 +35,6 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.update_launch_settings' do
     expect(change).to be true
     expected = Marshal.load(Marshal.dump(original))
     expected['accounts']['TEST']['characters'][1]['frontend'] = 'profanity'
-    expected['accounts']['TEST']['characters'][1]['launch_mode'] = 'external'
     expect(YAML.load_file(@path)).to eq(expected)
   end
 
@@ -76,16 +75,4 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.update_launch_settings' do
     expect(File.binread(@path)).to eq(before)
   end
 
-  it 'persists a configurable headless port on just the selected entry' do
-    expect(change('stormfront', launch_mode: 'external', listen_port: '8001')).to be true
-    saved = YAML.load_file(@path)['accounts']['TEST']['characters']
-    expect(saved.first).to eq(other_entry)
-    expect(saved.last).to include('frontend' => 'stormfront', 'launch_mode' => 'external', 'listen_port' => 8001)
-  end
-
-  it 'rejects invalid ports without writing' do
-    before = File.binread(@path)
-    expect(change('stormfront', launch_mode: 'external', listen_port: '8001bad')).to be false
-    expect(File.binread(@path)).to eq(before)
-  end
 end

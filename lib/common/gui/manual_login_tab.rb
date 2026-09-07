@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
-require_relative 'frontend_selector'
+require_relative 'manual_frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'theme_utils'
 
@@ -294,7 +294,7 @@ module Lich
         # @return [Array] Array containing frontend_box and shared selector
         # @api private
         def create_frontend_selection
-          @frontend_selector = FrontendSelector.new
+          @frontend_selector = ManualFrontendSelector.new
           [@frontend_selector.widget, @frontend_selector]
         end
 
@@ -309,6 +309,8 @@ module Lich
           @custom_launch_dir = LoginTabUtils.create_custom_launch_dir
 
           # Initially hide custom launch options
+          @custom_launch_entry.no_show_all = true
+          @custom_launch_dir.no_show_all = true
           @custom_launch_entry.visible = false
           @custom_launch_dir.visible = false
 
@@ -348,12 +350,17 @@ module Lich
 
         # Disables Custom Launch for catalog entries with native-only launchers.
         #
-        # @param frontend_selector [FrontendSelector]
+        # @param frontend_selector [ManualFrontendSelector]
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
         def setup_native_launch_handler(frontend_selector, custom_launch_option)
           update_custom_launch = lambda do |selector|
-            if selector.native_launch_only?
+            if selector.custom?
+              custom_launch_option.sensitive = true
+              custom_launch_option.active = true
+              @custom_launch_entry.visible = true
+              @custom_launch_dir.visible = true
+            elsif selector.native_launch_only?
               custom_launch_option.active = false
               custom_launch_option.sensitive = false
             else
@@ -465,7 +472,7 @@ module Lich
         # @param treeview [Gtk::TreeView] Tree view for character list
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
-        # @param frontend_selector [FrontendSelector] shared frontend selector
+        # @param frontend_selector [ManualFrontendSelector] available frontend selector
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
         # @api private
@@ -491,6 +498,12 @@ module Lich
               custom_launch_dir = custom_launch ? @custom_launch_dir.child.text.to_s.strip : nil
               custom_launch_dir = nil if custom_launch_dir == ''
 
+              if (frontend_selector.custom? || custom_launch_option.active?) && custom_launch.nil?
+                @callbacks.on_error&.call('Enter a custom launch command before playing.')
+                play_button.sensitive = true
+                next
+              end
+
               if custom_launch.nil? && !frontend_selector.launchable?(refresh: true)
                 @callbacks.on_error&.call("#{Frontend.display_name(frontend)} is no longer available.")
                 play_button.sensitive = true
@@ -500,16 +513,6 @@ module Lich
               # Normalize account name to UPCASE and character name to Title case
               normalized_account = user_id_entry.text.upcase
               normalized_character = selected_iter[3].capitalize
-
-              if LaunchSettings.external?(frontend: frontend, custom_launch: custom_launch)
-                begin
-                  LaunchSettings.preflight!(frontend: frontend)
-                rescue ArgumentError => e
-                  @callbacks.on_error&.call(e.message)
-                  play_button.sensitive = true
-                  next
-                end
-              end
 
               launch_data_hash = Authentication.authenticate(
                 account: normalized_account,

@@ -34,11 +34,6 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
   end
 
   describe '.launchable_frontend?' do
-    it 'allows an external Profanity connection without desktop discovery' do
-      expect(Lich::Common::FrontendLocator).not_to receive(:launchable?)
-      expect(described_class.launchable_frontend?({ frontend: 'profanity', launch_mode: 'external' })).to be true
-    end
-
     it 'allows a nonblank custom launch without discovery' do
       expect(Lich::Common::FrontendLocator).not_to receive(:launchable?)
 
@@ -114,17 +109,6 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
     end
   end
 
-  it 'rejects a busy headless port before game authentication' do
-    gui = Lich::Common::Authentication::GUI
-    settings = Lich::Common::GUI::LaunchSettings
-    login = { frontend: 'profanity', launch_mode: 'external', listen_port: 8000 }
-    allow(settings).to receive(:preflight!).with(login).and_raise(ArgumentError, 'Local port 8000 is unavailable.')
-    expect(Lich::Common::Authentication).not_to receive(:authenticate)
-    expect(Lich).to receive(:msgbox).with(message: 'Local port 8000 is unavailable.', icon: :error)
-    gui.authenticate_and_launch(button: button, login_info: login, on_success: proc {})
-    expect(button.sensitive).to be true
-  end
-
   describe '.setup_play_button_handler' do
     let(:login_info) do
       {
@@ -161,7 +145,7 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
 
       expect(result).to be(true)
       expect(Lich).to have_received(:msgbox).with(
-        message: 'Wrayth is no longer available. Change the Frontend or Launch mode dropdown in Account Management > Accounts, or configure the client in the Frontends tab.',
+        message: 'Wrayth is no longer available. Change the Frontend dropdown in Account Management > Accounts, or configure the client in the Frontends tab.',
         icon: :error
       )
       expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)
