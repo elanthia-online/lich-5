@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'ox'
+require 'securerandom'
 
 module Lich
   module Common
@@ -888,10 +889,9 @@ module Lich
             # refresh), which unwinds through +ensure+ but is not a StandardError and
             # so never reaches the +rescue+. Without this a killed caller would
             # orphan its request ids and Assembly, and a late response to one of them
-            # could still be folded and published on the parser thread. A late
-            # response arriving after the routes are gone falls through to the
-            # passive path, which already fails closed on a partial/paginated part
-            # (see {#standalone_complete?}), so retiring the routes here is safe.
+            # could still be folded and published on the parser thread. Once its
+            # route is removed, an id minted by this module is rejected by
+            # route_response even if its late response is complete and unpaginated.
             begin
               # +generate_id+ must be minted under +@mutex+, the same lock that guards
               # the parser thread's +drain_queue+ call site -- otherwise the two call
@@ -1032,16 +1032,15 @@ module Lich
             @consecutive_timeouts = 0
             @feed_absent_until  = nil
             @absent_backoff     = PROBE_BACKOFF_BASE_SECONDS
-            # Initialize the request-id counter once, but NEVER reset it to zero.
-            # Ids are minted as "im" + monotonic-seconds + counter; zeroing the
-            # counter would let a refresh in the same second reuse a prior refresh's
-            # id, and a late pre-reset response could then be folded into the new
-            # refresh's assembly. A counter that only ever grows keeps every id
-            # unique for the whole process lifetime.
+            # Keep the process namespace and issued-id high-water mark across
+            # resets. Retired responses remain recognizable without retaining a
+            # growing set of ids, and cannot become passive updates after reset.
+            @request_prefix   ||= "im#{SecureRandom.hex(8)}".freeze
             @id_counter       ||= 0
             (@assemblies ||= {}).clear
             purge_owned_containers!
             @owned_container_ids = Set.new
+            @container_parents = {}
           end
         end
 
@@ -1091,7 +1090,9 @@ module Lich
         # in-progress {.refresh} assembly, fold the part into it right here -- and,
         # when that completes the tree, mirror it into GameObj on this thread --
         # then hand the waiting refresh a directive (send more / done / error).
-        # Otherwise treat it as a passive standalone response. Never sends upstream.
+        # An unmatched id minted by this module is retired or already consumed;
+        # discard it, including complete single-page replies. Only unrelated ids
+        # may enter the passive path. Never sends upstream.
         #
         # @param handler [Handler]
         # @param closed [Boolean] whether the line structurally closed
@@ -1102,6 +1103,8 @@ module Lich
           directive =
             @mutex.synchronize do
               assembly = @assemblies.delete(handler.manager_id)
+              return if assembly.nil? && issued_request_id?(handler.manager_id)
+
               fold_part(assembly, handler, closed) if assembly
             end
           return passive_absorb(handler, closed) unless assembly
@@ -1310,8 +1313,8 @@ module Lich
           snapshot
         end
 
-        # Tears down an assembly: drops its request-id routing entries so any late
-        # parts fall through to the passive path, and records a feed timeout when
+        # Tears down an assembly: drops its request-id routing entries so late
+        # parts are rejected by route_response, and records a feed timeout when
         # the exchange never completed in time.
         #
         # @param assembly [Assembly]
@@ -1616,9 +1619,14 @@ module Lich
           vanished       = owned - present_ids
           opaque_present = Set.new(snapshot.containers.select(&:opaque?).map(&:id))
 
+          # Refresh visible parent links before walking hidden descendants: a
+          # container may have moved out of a formerly opaque ancestor. Retain
+          # links for absent owned containers until their absence is authoritative.
+          snapshot.containers.each { |item| @container_parents[item.id] = item.parent_id }
+
           retained = Set.new
           vanished.each do |id|
-            if GameObj.container_refresh_open?(id) || hidden_under_opaque?(id, opaque_present)
+            if GameObj.container_refresh_open?(id) || hidden_under_opaque?(id, opaque_present, present_ids)
               retained << id
             else
               GameObj.delete_container(id)
@@ -1626,32 +1634,30 @@ module Lich
           end
 
           @owned_container_ids = present_ids | retained
+          @container_parents.keep_if { |id, _parent| @owned_container_ids.include?(id) }
         end
 
         # Whether a container absent from the new snapshot is merely hidden behind an
-        # opaque (locked) ancestor rather than actually gone. Walks the id's ancestry
-        # in the PRIOR snapshot (+@snapshot+, still current until {#finalize_assembly}
-        # / {#commit_passive} swap the new one in): if any ancestor is
-        # present-and-opaque in the new snapshot, the subtree is unknowable and its
-        # last-known contents must be preserved. Depth-bounded by {MAX_TREE_DEPTH}.
+        # opaque (locked) ancestor rather than actually gone. Walks last-known
+        # parent links retained for owned containers across any number of opaque
+        # snapshots. Visible links have already been updated for this snapshot.
+        # Stops at a visible non-opaque ancestor: its omission of this subtree is
+        # authoritative even if a more distant ancestor is opaque. Depth-bounded
+        # by {MAX_TREE_DEPTH}.
         #
         # @param id [String] the vanished container's exist id
         # @param opaque_present_ids [Set<String>] ids opaque in the new snapshot
+        # @param present_ids [Set<String>] ids visible in the new snapshot
         # @return [Boolean]
         # @api private
-        def hidden_under_opaque?(id, opaque_present_ids)
-          prior = @snapshot
-          return false if prior.nil?
-
-          item = prior[id]
-          return false if item.nil?
-
-          parent = item.parent_item
+        def hidden_under_opaque?(id, opaque_present_ids, present_ids)
+          parent = @container_parents[id]
           depth  = 0
           while parent && depth < MAX_TREE_DEPTH
-            return true if opaque_present_ids.include?(parent.id)
+            return true if opaque_present_ids.include?(parent)
+            return false if present_ids.include?(parent)
 
-            parent = parent.parent_item
+            parent = @container_parents[parent]
             depth += 1
           end
           false
@@ -1695,13 +1701,31 @@ module Lich
           @absent_backoff = [@absent_backoff * 2, PROBE_BACKOFF_MAX_SECONDS].min
         end
 
-        # A Saga-style request id: "im" + base36 monotonic seconds + counter.
+        # An opaque alphanumeric request id: "im", a process-specific namespace,
+        # and an increasing base36 sequence. Both components survive reset!.
         #
         # @return [String]
         # @api private
         def generate_id
           @id_counter += 1
-          "im#{monotonic_now.to_i.to_s(36)}#{@id_counter.to_s(36)}"
+          "#{@request_prefix}#{@id_counter.to_s(36)}"
+        end
+
+        # Recognizes an id minted by this module, without an unbounded history or
+        # an expiry after which a retired response could become passive again.
+        # Caller holds @mutex. This is correlation, not authentication.
+        #
+        # @param id [String, nil] response id
+        # @return [Boolean]
+        # @api private
+        def issued_request_id?(id)
+          return false unless id.is_a?(String) && id.start_with?(@request_prefix)
+
+          suffix = id.delete_prefix(@request_prefix)
+          return false unless suffix.match?(/\A[0-9a-z]+\z/)
+
+          sequence = suffix.to_i(36)
+          sequence.positive? && sequence <= @id_counter && sequence.to_s(36) == suffix
         end
 
         # @return [Float] a monotonic clock reading in seconds

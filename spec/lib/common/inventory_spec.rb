@@ -1188,6 +1188,158 @@ RSpec.describe Lich::Common::Inventory do
     end
   end
 
+  describe 'retained containers and retired responses' do
+    let(:game_obj) { Lich::Common::GameObj }
+
+    def audit_item(id, parent = 'worn,player', extra = '')
+      "<i id='#{id}' loc='#{parent}' name='a,,item' weight='1' #{extra}/>"
+    end
+
+    def audit_response(items, id: 'unsolicited')
+      "<inventoryManager id='#{id}' room='1'>#{items}</inventoryManager>"
+    end
+
+    def visible_nested_tree
+      audit_item('outer', 'worn,player', "in_max='100'") +
+        audit_item('inner', 'in,outer', "in_max='50'") + audit_item('gem', 'in,inner')
+    end
+
+    def locked_outer
+      audit_item('outer', 'worn,player', "in_max='100' flags='locked'")
+    end
+
+    before { @audit_workers = [] }
+
+    after do
+      @audit_workers.each { |worker| worker.kill if worker.alive? }
+      @audit_workers.each { |worker| worker.join(1) }
+      described_class.reset!
+    end
+
+    it 'preserves hidden descendants over repeated opaque snapshots' do
+      described_class.observe(audit_response(visible_nested_tree))
+      3.times do
+        described_class.observe(audit_response(locked_outer))
+        expect(game_obj.containers.fetch('inner').map(&:id)).to eq(['gem'])
+      end
+    end
+
+    it 'removes retained descendants once their unlocked parent reports them absent' do
+      described_class.observe(audit_response(visible_nested_tree))
+      2.times { described_class.observe(audit_response(locked_outer)) }
+      described_class.observe(audit_response(audit_item('outer', 'worn,player', "in_max='100'")))
+      expect(game_obj.containers).not_to have_key('inner')
+    end
+
+    it 'removes retained descendants when their opaque ancestor itself disappears' do
+      described_class.observe(audit_response(visible_nested_tree))
+      2.times { described_class.observe(audit_response(locked_outer)) }
+      described_class.observe(audit_response(audit_item('other')))
+      expect(game_obj.containers).not_to have_key('outer')
+      expect(game_obj.containers).not_to have_key('inner')
+    end
+
+    it 'uses a visible moved ancestor instead of its old opaque ancestry' do
+      tree = visible_nested_tree + audit_item('deep', 'in,inner', "in_max='10'") + audit_item('stone', 'in,deep')
+      described_class.observe(audit_response(tree))
+      described_class.observe(audit_response(locked_outer))
+      expect(game_obj.containers.fetch('deep').map(&:id)).to eq(['stone'])
+
+      # Inner has moved onto the player and is visibly empty, while outer stays locked.
+      described_class.observe(audit_response(locked_outer + audit_item('inner', 'worn,player', "in_max='50'")))
+      expect(game_obj.containers).not_to have_key('deep')
+    end
+
+    it 'preserves a deeper subtree when the visible opaque boundary moves inward' do
+      tree = visible_nested_tree + audit_item('deep', 'in,inner', "in_max='10'") + audit_item('stone', 'in,deep')
+      described_class.observe(audit_response(tree))
+      described_class.observe(audit_response(locked_outer))
+      inner_locked = audit_item('outer', 'worn,player', "in_max='100'") +
+                     audit_item('inner', 'in,outer', "in_max='50' flags='locked'")
+      2.times do
+        described_class.observe(audit_response(inner_locked))
+        expect(game_obj.containers.fetch('deep').map(&:id)).to eq(['stone'])
+      end
+    end
+
+    it 'defers deletion until a classic fill has committed, then cleans up' do
+      described_class.observe(audit_response(visible_nested_tree))
+      game_obj.begin_container('inner')
+      game_obj.new_inv('classic', 'gem', 'a gem', 'inner')
+      described_class.observe(audit_response(audit_item('other')))
+      expect(game_obj.container_refresh_open?('inner')).to be(true)
+      game_obj.commit_container('inner')
+      expect(game_obj.containers.fetch('inner').map(&:id)).to eq(['classic'])
+      described_class.observe(audit_response(audit_item('other')))
+      expect(game_obj.containers).not_to have_key('inner')
+    end
+
+    # Each mode has the same postcondition, but distinct lifecycle exits.
+    %i[kill reset timeout].each do |retirement|
+      it "rejects a complete late response after #{retirement}" do
+        sent = Queue.new
+        allow(Game).to receive(:_puts) { |command| sent << command }
+        worker = Thread.new { described_class.refresh(timeout: retirement == :timeout ? 0.03 : 5) }
+        @audit_workers << worker
+        command = sent.pop(timeout: 1) or raise 'refresh did not send'
+        id = command.split.last
+        worker.kill if retirement == :kill
+        described_class.reset! if retirement == :reset
+        expect(worker.join(1)).to eq(worker)
+
+        described_class.observe(audit_response(audit_item('newer')))
+        prior = described_class.current
+        described_class.observe(audit_response(audit_item('retired'), id: id))
+        expect(described_class.current).to equal(prior)
+        expect(game_obj.inv.map(&:id)).to eq(['newer'])
+      end
+    end
+
+    it 'accepts an active reply and ignores a duplicate after that reply is consumed' do
+      request_id = nil
+      allow(Game).to receive(:_puts) do |command|
+        request_id = command.split.last
+        described_class.observe(audit_response(audit_item('active'), id: request_id))
+      end
+      result = described_class.refresh(timeout: 1)
+      expect(request_id).to match(/\Aim[0-9a-z]+\z/)
+      expect(result.all.map(&:id)).to eq(['active'])
+      described_class.observe(audit_response(audit_item('newer')))
+      prior = described_class.current
+      described_class.observe(audit_response(audit_item('duplicate'), id: request_id))
+      expect(described_class.current).to equal(prior)
+    end
+
+    it 'does not expire retirement after other exchanges and repeated resets' do
+      sent = Queue.new
+      allow(Game).to receive(:_puts) { |command| sent << command }
+      worker = Thread.new { described_class.refresh(timeout: 5) }
+      @audit_workers << worker
+      command = sent.pop(timeout: 1) or raise 'refresh did not send'
+      retired_id = command.split.last
+      worker.kill
+      expect(worker.join(1)).to eq(worker)
+
+      allow(Game).to receive(:_puts) do |request|
+        described_class.observe(audit_response(audit_item('current'), id: request.split.last))
+      end
+      50.times do
+        described_class.reset!
+        expect(described_class.refresh(timeout: 1)).not_to be_nil
+      end
+      prior = described_class.current
+      described_class.observe(audit_response(audit_item('retired'), id: retired_id))
+      expect(described_class.current).to equal(prior)
+    end
+
+    it 'still accepts unrelated passive ids, including other im-prefixed ids' do
+      %w[passive im-another-client im12345].each do |id|
+        described_class.observe(audit_response(audit_item(id), id: id))
+        expect(described_class.all.map(&:id)).to eq([id])
+      end
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Metadata
   # ---------------------------------------------------------------------------
