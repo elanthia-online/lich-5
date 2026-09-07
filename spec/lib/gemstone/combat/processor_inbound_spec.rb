@@ -260,6 +260,108 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     end
   end
 
+  # Re-review finding (PR #1559): apply_crit_statuses only walked the swing's
+  # direct hits, so a FLARE that crit with a stun/roundtime/knockdown recorded
+  # its damage and wound but never its status. Now flare-hit crits emit too,
+  # attributed to the flare's own creature.
+  describe 'flare crit statuses' do
+    let(:creature) do
+      instance_double('Creature', id: 700, name: 'a target').tap do |c|
+        allow(c).to receive(:add_status)
+        allow(c).to receive(:add_stun_estimate)
+        allow(c).to receive(:remove_status)
+      end
+    end
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true,
+        track_damage: true, track_wounds: true
+      )
+      stub_const('Lich::Gemstone::Combat::CreatureInstance',
+                 Module.new.tap { |m| m.const_set(:STUN_ROUND_SECONDS, 5) })
+      # apply_crit_statuses uses record_delta; make it a no-op passthrough
+      allow(described_class).to receive(:record_delta).and_yield({ statuses: [], wounds: [], damage: 0 })
+    end
+
+    it 'emits a stun for a FLARE crit (not just direct hits)' do
+      event = {
+        name: :fire, at: Time.at(1), target: { id: 700 },
+        hits: [{ damage: 30, crit: nil }], # no direct crit
+        flares: [{ name: :ensorcell, target_info: { id: 700 },
+                   hits: [{ damage: 12, crit: { stunned: 2 } }] }]
+      }
+      creature_registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', creature_registry)
+      allow(creature_registry).to receive(:[]).with(700).and_return(creature)
+
+      described_class.apply_crit_statuses(creature, event)
+
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:stun, hash_including(flare: :ensorcell, rounds: 2))
+    end
+
+    it 'still emits a direct-hit crit stun (no regression)' do
+      event = {
+        name: :fire, at: Time.at(1), target: { id: 700 },
+        hits: [{ damage: 30, crit: { stunned: 3 } }],
+        flares: []
+      }
+      described_class.apply_crit_statuses(creature, event)
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:stun, hash_including(flare: nil, rounds: 3))
+    end
+  end
+
+  # Re-review finding (PR #1559): persist_event returned on `unless target[:id]`
+  # BEFORE the flare loop, so a reactive flare (shield spike) hanging off an
+  # INBOUND attack - which has no creature target but whose flare strikes the
+  # attacker creature - had its damage, wounds and statuses dropped entirely.
+  describe 'reactive flare on a targetless (inbound) attack' do
+    let(:attacker_creature) do
+      instance_double('Creature', id: 808, name: 'a triton defender').tap do |c|
+        allow(c).to receive(:add_damage)
+        allow(c).to receive(:add_status)
+        allow(c).to receive(:add_stun_estimate)
+        allow(c).to receive(:remove_status)
+      end
+    end
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true,
+        track_damage: true, track_wounds: true
+      )
+      stub_const('Lich::Gemstone::Combat::CreatureInstance',
+                 Module.new.tap { |m| m.const_set(:STUN_ROUND_SECONDS, 5) })
+      allow(described_class).to receive(:record_delta).and_yield({ statuses: [], wounds: [], damage: 0 })
+      allow(described_class).to receive(:apply_crit)
+      allow(described_class).to receive(:emit_debug_summary)
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      allow(registry).to receive(:[]).with(808).and_return(attacker_creature)
+    end
+
+    it 'applies the reactive flare damage and stun to the attacker creature' do
+      # inbound attack: no creature target; its shield-spike flare hits 808
+      event = {
+        name: :ambush, inbound: true, target: {}, attacker: { id: 808, name: 'a triton defender' },
+        hits: [{ damage: 10, crit: nil }], # the 10 they dealt US
+        flares: [{ name: :spike, target_info: { id: 808 },
+                   hits: [{ damage: 5, crit: { stunned: 2 } }] }], # our spike back
+        statuses: [], outcomes: [], resolutions: []
+      }
+
+      described_class.persist_event(event)
+
+      # the spike's 5 damage landed on the attacker creature (not dropped)
+      expect(attacker_creature).to have_received(:add_damage).with(5)
+      # and its crit stun emitted
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:stun, hash_including(flare: :spike, rounds: 2))
+    end
+  end
+
   # A DoT/effect tick that names the victim but no caster, arriving with
   # no owning cast in the blob (a nearby player's pestilence ticking on a
   # creature we can see, or one we walked in on). Owner ruling 2026-09-06:
@@ -337,6 +439,40 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(fire[:foreign_caster]).to be_falsey
       expect(fire[:hits].map { |h| h[:damage] }).to eq([88])
     end
+
+    # Re-review finding (mrhoribu, PR #1559): cast_owner was keyed by spell
+    # name alone, so OUR pestilence cast on creature A marked a DIFFERENT
+    # player's pestilence tick on creature B as ours in the same chunk. Now
+    # keyed per victim, so B's tick stays unowned (off our ledger).
+    it 'does not let our DoT cast on one creature claim a foreign tick on another' do
+      chunk = [
+        # WE cast pestilence on the warg -> cast_owner[[:pestilence, warg]] = :self
+        "You exhale a virulent green mist toward #{warg}, instantly infecting it!",
+        # a DIFFERENT player's pestilence ticks on the maiden (no caster named)
+        "Boils rupture all over #{maiden} causing 54 points of damage!",
+        '<prompt time="1757186902">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      tick = events.find { |e| e[:name] == :pestilence && e[:hits].any? { |h| h[:damage].to_i == 54 } }
+      expect(tick).not_to be_nil
+      # the maiden's tick is NOT ours - our cast targeted the warg
+      expect(tick[:unowned]).to be_truthy
+    end
+
+    it 'still marks OUR OWN DoT tick on the creature we cast on as ours' do
+      chunk = [
+        "You exhale a virulent green mist toward #{warg}, instantly infecting it!",
+        # a later tick on the SAME creature we cast on -> ours (not unowned)
+        "Boils rupture all over #{warg} causing 44 points of damage!",
+        '<prompt time="1757186903">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      tick = events.find { |e| e[:name] == :pestilence && e[:hits].any? { |h| h[:damage].to_i == 44 } }
+      expect(tick).not_to be_nil
+      expect(tick[:unowned]).to be_falsey
+    end
   end
 
   it 'still switches targets across a multi-target AoE' do
@@ -396,8 +532,17 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(event[:hits].first[:crit]).not_to be_nil
     end
 
-    it 'skips the lookahead entirely when both are off (fast path preserved)' do
+    it 'captures the crit under emit_attacks alone (recorder reads it off the payload)' do
+      # combat_stats enables ONLY emit_attacks; the emitted :attack payload
+      # carries the crit, so the lookahead must run for it too.
       event = parse_with(track_statuses: false, track_ucs: false, emit_attacks: true,
+                         track_damage: true, track_wounds: false)
+      expect(event[:hits].first[:crit]).not_to be_nil
+      expect(event[:hits].first[:crit][:location]).to eq('left eye')
+    end
+
+    it 'skips the lookahead only when wounds, statuses AND emit are all off' do
+      event = parse_with(track_statuses: false, track_ucs: false, emit_attacks: false,
                          track_damage: true, track_wounds: false)
       expect(event[:hits].first[:crit]).to be_nil
     end

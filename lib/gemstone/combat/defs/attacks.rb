@@ -77,7 +77,12 @@ module Lich
             # damage into our rollup via the open web event).
             AttackDef.new(:pulverize, [
               /You wheel your .+? overhead before slamming it around in a wide arc to pulverize your foes!/,
-              /(?<attacker>[A-Z][a-z]+) wheels (?:his|her|its) .+? overhead before slamming it around in a wide arc to pulverize (?:his|her|its) foes!/
+              # attacker uses the file's .+? convention (matches names with
+              # apostrophes/hyphens etc.); the "wheels ... overhead ... pulverize
+              # ... foes" tail bounds it. The old [A-Z][a-z]+ dropped any name
+              # outside a single plain-cased word, silently failing to arm the
+              # foreign latch this def exists to feed.
+              /(?<attacker>.+?) wheels (?:his|her|its) .+? overhead before slamming it around in a wide arc to pulverize (?:his|her|its) foes!/
             ].freeze),
             AttackDef.new(:dizzying_swing, [/You heft your .+? and, looping it once to build momentum, lash out in a strike at (?<target>.+?)'s#{MK_POST} head!/].freeze),
             AttackDef.new(:guardant_thrust, [/You lunge at (?<target>.+?), guiding your .+? with both hands in a powerful thrust!/].freeze),

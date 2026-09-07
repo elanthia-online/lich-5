@@ -19,7 +19,8 @@ require 'gemstone/combat/processor'
 #
 # Fixtures: spec/fixtures/replay/<def>.txt - each blob is a real captured feed
 # chunk with its expect header. Regenerate/extend from the full corpus via the
-# curation described in tools/replay_harness.rb.
+# curation: the single most-common shape per attack def (by wild occurrence
+# count) plus extra flare-bearing shapes, scrubbed of volatile provenance.
 RSpec.describe 'Combat replay fidelity' do
   processor = Lich::Gemstone::Combat::Processor
   fixture_dir = File.join(__dir__, '..', '..', '..', 'fixtures', 'replay')

@@ -33,7 +33,10 @@ module Lich
 
         module_function
 
-        # Process a chunk of game lines for combat events
+        # Process a chunk of game lines for combat events. Parses the chunk
+        # into events, resolves their in-blob spawn-tree links (event-object
+        # refs -> stable per-chunk uids the recorder maps to row ids), stamps
+        # each with the chunk's server time, and emits them.
         #
         # @param chunk [Array<String>] game lines
         # @param at [Time, nil] server time for this chunk (from the chunk's
@@ -226,13 +229,24 @@ module Lich
           # spell_loss cause - a wear-off riding a dispel strip means
           # something different from natural expiry or death cleanup.
           chunk_dispels = []
-          # Names of DoT/effect spells whose OWN cast we saw in this blob:
-          # :self when our 2p cast line fired ("You exhale a virulent green
-          # mist..."), so the trailing ticks that follow are ours; a player
-          # name when a foreign cast opener fired. A tick def for a spell
-          # NOT in here is unowned - the tick is a fact about the creature,
-          # not a claim on our ledger (see UNOWNED_TICK_ATTACKS).
+          # Ownership of DoT/effect casts we saw in this blob, keyed PER VICTIM
+          # as [spell_name, target_key] (target_key = the victim's exist id, or
+          # its name when unresolved). :self when our 2p cast line fired ("You
+          # exhale a virulent green mist toward X..."), so X's trailing ticks
+          # are ours; a player name when a foreign cast opener fired. A tick
+          # whose (spell, victim) is NOT in here is unowned - a fact about the
+          # creature, not a claim on our ledger (see UNOWNED_TICK_ATTACKS).
+          #
+          # Per-victim is load-bearing: keying by spell name alone let our
+          # pestilence cast on creature A mark a DIFFERENT player's pestilence
+          # tick on creature B as ours, in the same chunk (overlapping same-
+          # family AoE DoTs are normal in group hunts). The victim dimension
+          # keeps each cast's ownership bound to the creature it targeted.
           cast_owner = {}
+          # [spell_name, victim] key: id when we have it, else the printed name.
+          cast_owner_key = lambda do |name, tgt|
+            [name, (tgt && (tgt[:id] || tgt[:name]))]
+          end
           # Foreign-attacker latch: a nearby player's AoE (pulverize, and
           # other openers that name the actor but whose per-target swing
           # lines do NOT) fans out into actor-less swing/effect lines. Their
@@ -711,15 +725,16 @@ module Lich
                 # of that spell in this blob. Its damage still applies to the
                 # creature (real received damage) but is NOT our deal - the
                 # recorder files it under other/unknown. Ours only when our
-                # own cast set cast_owner[name] = :self this blob; a foreign
-                # cast makes it foreign_caster instead. A CAST line ("You
-                # exhale...") is our own initiation, never unowned - it is
-                # excluded by the owning-cast check below (which set :self for
-                # it) plus the 2p-line guard.
+                # own cast set cast_owner[[name, victim]] = :self this blob; a
+                # foreign cast makes it foreign_caster instead. A CAST line
+                # ("You exhale...") is our own initiation, never unowned - it
+                # is excluded by the owning-cast check below (which set :self
+                # for it) plus the 2p-line guard. Keyed by THIS tick's victim,
+                # so our cast on another creature can't claim it.
                 unowned: (UNOWNED_TICK_ATTACKS.include?(attack[:name]) &&
                           attack[:attacker].nil? && !eff_foreign &&
                           !line.match?(/\AYou\b/) &&
-                          cast_owner[attack[:name]] != :self) || nil,
+                          cast_owner[cast_owner_key.call(attack[:name], attack[:target])] != :self) || nil,
                 # Struck from hiding: this attack carries the ambush
                 # bonuses (DS pushdown + crit weighting). A modifier on the
                 # attack, not an attack of its own.
@@ -789,10 +804,13 @@ module Lich
               # carry no inline damage, so a same-name event WITH damage is a
               # tick, not a cast - only the cast sets ownership.
               if UNOWNED_TICK_ATTACKS.include?(current_event[:name]) && current_event[:hits].empty?
-                cast_owner[current_event[:name]] =
+                owner =
                   if current_event[:foreign_caster] then (current_event[:attacker] && current_event[:attacker][:name]) || :foreign
                   elsif current_event[:attacker].nil? && line.match?(/\AYou\b/) then :self
                   end
+                # Bind ownership to the creature this cast targeted, not the
+                # spell globally (see cast_owner decl).
+                cast_owner[cast_owner_key.call(current_event[:name], current_event[:target])] = owner
               end
 
               # Claimed - the ambush belongs to this attack only.
@@ -891,13 +909,17 @@ module Lich
                 respond "[Combat] Found damage: #{damage}#{flare_ctx ? " (flare: #{flare_ctx[:name]})" : ''}" if Tracker.debug?(:verbose)
 
                 # When we find damage, look ahead 2-3 lines for related crit.
-                # This populates hit[:crit], which BOTH wound application
-                # (apply_crit) and status derivation (apply_crit_statuses)
-                # consume - so it must run whenever EITHER is enabled. Gating
-                # it on track_wounds alone silently starved status tracking of
-                # its input when a user ran track_wounds:false/track_statuses:
-                # true, turning apply_crit_statuses into a no-op.
-                if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses]
+                # This populates hit[:crit], consumed by wound application
+                # (apply_crit), status derivation (apply_crit_statuses) AND the
+                # emitted :attack payload itself (a recorder reads the crit
+                # location/rank/fatal straight off the hit). So it must run
+                # whenever ANY of those is enabled. Gating it on track_wounds
+                # alone starved status tracking; gating it on wounds||statuses
+                # alone starved an emit_attacks-only recorder (combat_stats
+                # enables only emit_attacks) of every crit - the emit carried a
+                # crit-shaped hole.
+                if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses] ||
+                   Tracker.settings[:emit_attacks]
                   (1..3).each do |offset|
                     next_line_index = index + offset
                     break if next_line_index >= lines.size
@@ -1016,8 +1038,6 @@ module Lich
           #     Creature[id] sees pre-swing state; per-fact emits see post).
           Observers.emit(:attack, event) if Tracker.settings[:emit_attacks]
 
-          return unless target[:id]
-
           # A nearby player's attack (foreign_caster) DOES resolve onto a
           # creature we can see, so unlike inbound/foreign_target it passes
           # the target-id guard - but its damage, wounds and statuses belong
@@ -1028,13 +1048,23 @@ module Lich
           # infused Web on a gigas shield-maiden).
           return if event[:foreign_caster]
 
-          creature = Creature[target[:id].to_i]
-          unless creature
+          # The swing's own creature (nil for an inbound/self/orphan attack
+          # that carries no creature target). Its DIRECT hits/wounds/statuses
+          # apply only when it exists - but the event may still carry FLARES
+          # that strike a creature (a reactive shield spike on an INBOUND
+          # attack hits the attacker). Those flares resolve their own creature
+          # below, so we must NOT bail here just because the swing was
+          # targetless - that dropped reactive-flare damage, wounds and
+          # statuses entirely (they returned before the flare loop).
+          creature = target[:id] ? Creature[target[:id].to_i] : nil
+          if target[:id] && !creature
             respond "[Combat] No creature found for ID #{target[:id]}" if Tracker.debug?(:verbose)
-            return
           end
+          # Nothing to apply at all: no swing creature AND no flare could name
+          # one. (A targetless event with flares still falls through.)
+          return if creature.nil? && (event[:flares] || []).all? { |f| f[:hits].empty? }
 
-          respond "[Combat] Applying to #{creature.name} (#{target[:id]})" if Tracker.debug?(:verbose)
+          respond "[Combat] Applying to #{creature.name} (#{target[:id]})" if creature && Tracker.debug?(:verbose)
 
           # Summary mode records what this event actually changed, per
           # creature - a flare can land on a different creature than the
@@ -1051,7 +1081,10 @@ module Lich
           # arrays. Interleaving them would reorder the observer emits a
           # subscriber sees.
           total_damage = 0
-          if Tracker.settings[:track_damage]
+          # Direct-hit application needs the swing's creature; skipped for a
+          # targetless (inbound/self) parent, whose only creature-bound facts
+          # are its reactive flares, handled in the flare loop below.
+          if creature && Tracker.settings[:track_damage]
             event[:hits].each do |hit|
               damage = hit[:damage]
               creature.add_damage(damage)
@@ -1064,7 +1097,7 @@ module Lich
           end
 
           # Apply critical wounds
-          if Tracker.settings[:track_wounds]
+          if creature && Tracker.settings[:track_wounds]
             event[:hits].each { |hit| apply_crit(creature, hit[:crit], event) if hit[:crit] }
           end
 
@@ -1096,15 +1129,22 @@ module Lich
           end
 
           # Status effects: crit-table-derived and message-derived, under
-          # one gate so they can never drift onto different flags.
+          # one gate so they can never drift onto different flags. Passing a
+          # nil swing creature is fine - apply_crit_statuses skips the direct
+          # hits and still applies each flare's crit statuses to its own
+          # creature (a reactive flare on an inbound attack). Message-derived
+          # statuses on event[:statuses] belong to the swing target, so they
+          # only apply when that creature exists.
           if Tracker.settings[:track_statuses]
             apply_crit_statuses(creature, event)
-            event[:statuses].each do |status|
-              creature.add_status(status)
-              Observers.emit(:status, id: creature.id, name: creature.name,
-                                      status: status, action: :add)
-              record_delta(creature) { |d| d[:statuses] << status }
-              respond "  +status: #{status}" if Tracker.debug?(:verbose)
+            if creature
+              event[:statuses].each do |status|
+                creature.add_status(status)
+                Observers.emit(:status, id: creature.id, name: creature.name,
+                                        status: status, action: :add)
+                record_delta(creature) { |d| d[:statuses] << status }
+                respond "  +status: #{status}" if Tracker.debug?(:verbose)
+              end
             end
           end
 
@@ -1254,53 +1294,81 @@ module Lich
         def apply_crit_statuses(creature, event)
           at = event[:at] || Time.now
 
-          event[:hits].each do |hit|
-            crit = hit[:crit] or next
+          # Direct-hit crits land on the swing's creature (nil for a targetless
+          # inbound/self parent - its only creature-bound facts are its flares).
+          if creature
+            event[:hits].each do |hit|
+              crit = hit[:crit] or next
 
-            if crit[:stunned].to_i > 0
-              # The boolean stays owned by <crtrStatus>/messaging; this records
-              # the table-derived duration estimate beside it.
-              creature.add_status('stunned')
-              creature.add_stun_estimate(crit[:stunned], at: at)
-              Observers.emit(:stun, id: creature.id, name: creature.name,
-                                    attack: event[:name], rounds: crit[:stunned],
-                                    seconds: crit[:stunned].to_i * CreatureInstance::STUN_ROUND_SECONDS)
-              record_delta(creature) { |d| d[:statuses] << "stunned(#{crit[:stunned]}r)" }
+              apply_hit_crit_statuses(creature, crit, event, at)
             end
+          end
 
-            # roundtime is in seconds already - do not scale it.
-            if crit[:roundtime].to_i > 0
-              creature.add_status('roundtime', crit[:roundtime].to_i)
-              Observers.emit(:roundtime, id: creature.id, name: creature.name,
-                                         attack: event[:name], seconds: crit[:roundtime].to_i)
-              record_delta(creature) { |d| d[:statuses] << "roundtime(#{crit[:roundtime].to_i}s)" }
+          # Flare crits land on the FLARE's creature (an AoE flare can strike a
+          # different creature than the swing). Flare damage and flare wounds
+          # are already applied in persist_event; their crit-derived statuses
+          # (stun/roundtime/knockdown/silence/...) were being dropped - a
+          # silencing or stunning flare recorded its wound but never its state.
+          (event[:flares] || []).each do |flare|
+            f_target = flare[:target_info] || event[:target] || {}
+            f_creature = f_target[:id] ? Creature[f_target[:id].to_i] : creature
+            next unless f_creature
+
+            (flare[:hits] || []).each do |hit|
+              crit = hit[:crit] or next
+
+              apply_hit_crit_statuses(f_creature, crit, event, at, flare: flare[:name])
             end
+          end
+        end
 
-            # Position changes carry better provenance than the messaging
-            # equivalents: /It is knocked to the ground!/ has no target
-            # capture, while this crit is already bound to a creature id.
-            if (pos = crit[:position])
-              # Tables report "PRONE"/"KNEELING"/"SITTING"; the status
-              # canon (messaging, <crtrStatus>, consumers) is lowercase.
-              # add_status canonicalizes too, but the observer payload
-              # must match what subscribers compare against.
-              status = pos.to_s.downcase
-              (POSITION_STATUSES - [status]).each { |s| creature.remove_status(s) }
-              creature.add_status(status)
-              Observers.emit(:status, id: creature.id, name: creature.name,
-                                      status: status, action: :add)
-              record_delta(creature) { |d| d[:statuses] << status }
-            end
+        # Apply one crit's status effects (stun/roundtime/position/silence/...)
+        # to a creature. Shared by direct-hit and flare-hit crits so both paths
+        # stay identical; `flare` tags the observer/debug provenance.
+        def apply_hit_crit_statuses(creature, crit, event, at, flare: nil)
+          if crit[:stunned].to_i > 0
+            # The boolean stays owned by <crtrStatus>/messaging; this records
+            # the table-derived duration estimate beside it.
+            creature.add_status('stunned')
+            creature.add_stun_estimate(crit[:stunned], at: at)
+            Observers.emit(:stun, id: creature.id, name: creature.name,
+                                  attack: event[:name], flare: flare, rounds: crit[:stunned],
+                                  seconds: crit[:stunned].to_i * CreatureInstance::STUN_ROUND_SECONDS)
+            record_delta(creature) { |d| d[:statuses] << "stunned(#{crit[:stunned]}r)" }
+          end
 
-            %i[silenced slowed dazed sleeping crippled limb_favored].each do |flag|
-              next unless crit[flag]
+          # roundtime is in seconds already - do not scale it.
+          if crit[:roundtime].to_i > 0
+            creature.add_status('roundtime', crit[:roundtime].to_i)
+            Observers.emit(:roundtime, id: creature.id, name: creature.name,
+                                       attack: event[:name], flare: flare, seconds: crit[:roundtime].to_i)
+            record_delta(creature) { |d| d[:statuses] << "roundtime(#{crit[:roundtime].to_i}s)" }
+          end
 
-              creature.add_status(flag.to_s)
-              Observers.emit(:status, id: creature.id, name: creature.name,
-                                      status: flag.to_s, action: :add)
-              record_delta(creature) { |d| d[:statuses] << flag.to_s }
-              respond "  +status: #{flag} (from crit)" if Tracker.debug?(:verbose)
-            end
+          # Position changes carry better provenance than the messaging
+          # equivalents: /It is knocked to the ground!/ has no target
+          # capture, while this crit is already bound to a creature id.
+          if (pos = crit[:position])
+            # Tables report "PRONE"/"KNEELING"/"SITTING"; the status
+            # canon (messaging, <crtrStatus>, consumers) is lowercase.
+            # add_status canonicalizes too, but the observer payload
+            # must match what subscribers compare against.
+            status = pos.to_s.downcase
+            (POSITION_STATUSES - [status]).each { |s| creature.remove_status(s) }
+            creature.add_status(status)
+            Observers.emit(:status, id: creature.id, name: creature.name,
+                                    status: status, action: :add)
+            record_delta(creature) { |d| d[:statuses] << status }
+          end
+
+          %i[silenced slowed dazed sleeping crippled limb_favored].each do |flag|
+            next unless crit[flag]
+
+            creature.add_status(flag.to_s)
+            Observers.emit(:status, id: creature.id, name: creature.name,
+                                    status: flag.to_s, action: :add)
+            record_delta(creature) { |d| d[:statuses] << flag.to_s }
+            respond "  +status: #{flag} (from crit#{flare ? ", flare: #{flare}" : ''})" if Tracker.debug?(:verbose)
           end
         end
 

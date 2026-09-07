@@ -57,10 +57,10 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
 
   # minimal but realistic :attack payload
   def attack_event(name: 'fire', target_id: 101, target_name: 'a cave lizard',
-                   damage: 42, at: Time.at(1_000_000), **extra)
+                   target_noun: nil, damage: 42, at: Time.at(1_000_000), **extra)
     {
       name: name, at: at,
-      target: { id: target_id, name: target_name },
+      target: { id: target_id, name: target_name, noun: target_noun },
       hits: [{ damage: damage, crit: nil }],
       resolutions: [{ type: :ranged, as: 300, ds: 120, roll: 55, result: 235 }]
     }.merge(extra)
@@ -185,6 +185,23 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       # attack hit + flare hit
       expect(count('hits')).to eq(2)
     end
+
+    it 'stores crit rank and wound rank in their own columns (not conflated)' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      # a real CritRanks-shaped crit: :rank (crit severity) != :wound_rank
+      ev = attack_event(damage: 88).merge(
+        hits: [{ damage: 88, crit: { location: 'left eye', type: 'slash',
+                                     rank: 9, wound_rank: 3, fatal: false } }]
+      )
+      rec.record(:attack, ev)
+      rec.close
+      h = query('SELECT crit_rank, wound_rank, location, crit_type FROM hits').first
+      expect(h['crit_rank']).to eq(9)    # crit severity - was wrongly storing wound_rank (3)
+      expect(h['wound_rank']).to eq(3)   # wound left on the creature
+      expect(h['location']).to eq('left eye')
+      expect(h['crit_type']).to eq('slash')
+    end
   end
 
   describe 'spawn-tree links (root_attack_id / parent_attack_id)' do
@@ -248,6 +265,76 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  describe 'creature-cache rollback safety' do
+    # Re-review finding (PR #1559): ensure_creature cached a creature id inside
+    # a transaction; if that transaction rolled back, the DB row was undone but
+    # the cache entry survived, so a later record referenced a nonexistent
+    # creature row. in_txn now stages cache entries and publishes only on
+    # commit.
+    it 'does not cache a creature whose insert transaction rolled back' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+
+      # Force the FIRST status insert for a brand-new creature to fail AFTER
+      # ensure_creature has staged the id. The transaction rolls back.
+      db = rec.instance_variable_get(:@db)
+      call = 0
+      allow(db).to receive(:execute).and_wrap_original do |orig, sql, *args|
+        # let the creature upsert run, then blow up on the status insert
+        if sql =~ /INSERT INTO statuses/ && (call += 1) == 1
+          raise SQLite3::Exception, 'injected failure'
+        end
+
+        orig.call(sql, *args)
+      end
+      rec.record(:status, { id: 909, name: 'a doomed goblin', status: :prone, action: :add })
+      # record swallows the error; nothing persisted
+      expect(count('creatures')).to eq(0)
+      expect(count('statuses')).to eq(0)
+
+      # stop injecting, record a real attack against the SAME creature id
+      allow(db).to receive(:execute).and_call_original
+      rec.record(:attack, attack_event(target_id: 909, target_name: 'a doomed goblin', damage: 30))
+      rec.close
+
+      # the hit must reference a creature row that actually exists (no dangling FK)
+      cid = query('SELECT creature_id FROM hits').first['creature_id']
+      expect(cid).not_to be_nil
+      expect(query('SELECT COUNT(*) AS n FROM creatures WHERE id = ?', cid).first['n']).to eq(1)
+      # and it's the goblin, freshly (re)created
+      expect(query('SELECT exist_id FROM creatures WHERE id = ?', cid).first['exist_id']).to eq(909)
+    end
+
+    it 'stages spawn-tree chunk-row links until commit (rolled-back parent not reused)' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+
+      # chunk uid 0 (the root/parent) is recorded, but force ITS hit insert to
+      # fail so the whole attack rolls back - its @chunk_rows[0] must not survive.
+      db = rec.instance_variable_get(:@db)
+      allow(db).to receive(:execute).and_wrap_original do |orig, sql, *args|
+        raise SQLite3::Exception, 'injected' if sql =~ /INSERT INTO hits/
+
+        orig.call(sql, *args)
+      end
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0))
+      expect(count('attacks')).to eq(0) # rolled back
+
+      # now a child (uid 1) claims uid 0 as its bracket parent. Since uid 0's
+      # row was rolled back and never published, the child must NOT resolve a
+      # (stale) parent - it falls back to being its own root, parent null.
+      allow(db).to receive(:execute).and_call_original
+      rec.record(:attack, attack_event(name: 'natures_fury', _uid: 1, root_uid: 0,
+                                       parent_uid: 0, parent_confidence: :bracket))
+      rec.close
+
+      child = query('SELECT id, root_attack_id, parent_attack_id FROM attacks').first
+      expect(child).not_to be_nil
+      expect(child['parent_attack_id']).to be_nil          # no stale rolled-back parent
+      expect(child['root_attack_id']).to eq(child['id'])   # own root
+    end
+  end
+
   describe 'status stream + attack-window attribution' do
     it 'attributes a status to the open attack when it names a touched creature' do
       rec = new_recorder
@@ -268,6 +355,20 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.record(:status, { id: 999, name: 'a stranger', status: :prone, action: :add })
       rec.close
       expect(query('SELECT source FROM statuses').first['source']).to eq('direct')
+    end
+
+    it 'backfills a status-first creature\'s noun when a later attack supplies it' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      # status event carries only id + name (no noun) -> creature inserted with
+      # noun NULL
+      rec.record(:status, { id: 404, name: 'a cave troll', status: :prone, action: :add })
+      expect(query('SELECT noun FROM creatures WHERE exist_id = 404').first['noun']).to be_nil
+      # the later attack names the noun -> it must be filled, not left NULL
+      rec.record(:attack, attack_event(target_id: 404, target_name: 'a cave troll',
+                                       target_noun: 'troll'))
+      rec.close
+      expect(query('SELECT noun FROM creatures WHERE exist_id = 404').first['noun']).to eq('troll')
     end
 
     it 'stamps killed_at on a dead status and is transactional (creature+status atomic)' do

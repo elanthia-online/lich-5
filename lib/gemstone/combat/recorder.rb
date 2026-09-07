@@ -3,18 +3,19 @@
 #
 # Combat Recorder - persists the observer event stream to SQLite.
 #
-# Seven-table relational schema (2026-09-05 design). The 22-table
-# normalized ancestor at data/GSIV/*/combat.db predates the combat
-# module entirely and was never fed; it is mined for vocabulary only.
-# The 4-table/JSON sketch that briefly replaced it died for the right
-# reason: GROUP BY location / WHERE crit_rank >= 8 / "flares belonging
-# to attack #452" all punish JSON columns. Real columns, real indexes.
+# Seven-table relational schema (2026-09-05 design).
 #
 #   sessions     - one per hunt / replayed log. The recount unit.
 #   creatures    - subject registry: (session_id, exist_id) unique.
 #   attacks      - one row per :attack observer emission (swing, cast,
 #                  inbound, orphan). The ordered list a forensic view
-#                  walks and a recount groups over.
+#                  walks and a recount groups over. Attribution flags
+#                  (inbound / foreign_caster / unowned / orphan) keep a
+#                  nearby player's attacks and actor-less effect ticks off
+#                  our own damage rollup. Spawn-tree links (root_attack_id
+#                  / parent_attack_id / parent_confidence) chain a blob's
+#                  spawned attacks back to their initiating shot - see the
+#                  spawn-tree note below.
 #   resolutions  - roll lines, one row each, attack- or flare-owned.
 #                  AS/DS/CS/TD are PRINTED values stored verbatim
 #                  (attacker_stat/defender_stat/modifier per type);
@@ -51,14 +52,29 @@
 # the NEXT chunk can land in a stale window only when they name the
 # same creature; accepted and marked via source='window'.
 #
-# Usage (live, auto-sessioned - see scripts/combat_recorder.lic):
+# Spawn tree (2026-09-07): the whole attack - the initiating shot, its
+# flares, any spawned echo attacks and their own flares - resolves inside
+# one prompt-bounded blob before roundtime, so a blob is a closed spawn
+# tree with a single root. root_attack_id points every event at that
+# initiating shot (self for a root), giving correct per-shot spawn-tree
+# damage totals. parent_attack_id/parent_confidence record the immediate
+# spawner ONLY when the game declares it (blink's bracketed cast,
+# confidence 'bracket'); mirror/afterimage echoes are left unparented
+# rather than guessed (positional order does not prove parentage).
+#
+# Thread safety: record fires on the AsyncProcessor worker thread while
+# check_idle!/close run on the consuming script's own loop - both touch
+# @db, so every public entry point serialises on one non-reentrant mutex,
+# with _locked internal variants for calls made while the lock is held.
+#
+# Usage (live, auto-sessioned - see scripts/combat_stats.lic):
 #   rec = Combat::Recorder.new(path, character: Char.name, idle_timeout: 300)
 #   rec.subscribe!            # named handler, idempotent
 #   ...                       # sessions open on the first event and close
 #   rec.check_idle!           # after idle_timeout seconds without one
 #   rec.close                 # (call check_idle! periodically from a loop)
 #
-# Usage (explicit sessions - the replay CLI, tools/combat_recorder.rb):
+# Usage (explicit sessions - a headless replay driver):
 #   rec = Combat::Recorder.new(path)
 #   rec.start_session(character: 'Nisugi', source: log_path, at: t0)
 #   ... feed events ...
@@ -176,11 +192,12 @@ module Lich
             location    TEXT,                             -- CritRanks location
             body_part   TEXT,                             -- mapped injury-doll part
             crit_type   TEXT,
-            crit_rank   INTEGER,
+            crit_rank   INTEGER,                          -- CritRanks :rank (0-9): crit severity
+            wound_rank  INTEGER,                          -- CritRanks :wound_rank (0-3): wound left on the creature
             fatal       INTEGER NOT NULL DEFAULT 0,
             amputated   INTEGER NOT NULL DEFAULT 0,
             secondary_location TEXT,
-            secondary_rank     INTEGER
+            secondary_rank     INTEGER                    -- secondary wound severity (:wound_rank)
           );
           CREATE INDEX IF NOT EXISTS idx_hits_attack ON hits(attack_id);
           CREATE INDEX IF NOT EXISTS idx_hits_creature ON hits(session_id, creature_id);
@@ -230,6 +247,8 @@ module Lich
           @seq = 0
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
           @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
+          @pending_cache = nil      # creature-cache entries staged during a txn (see in_txn)
+          @pending_chunk_rows = nil # chunk-row entries staged during a txn (see in_txn)
           @character = character
           @source = source
           @idle_timeout = idle_timeout
@@ -348,13 +367,52 @@ module Lich
 
         # -- creatures -----------------------------------------------------------
 
+        # Run a block inside a DB transaction, publishing creature-cache
+        # in-memory mappings created during it ONLY on commit. A row inserted
+        # inside a transaction that later rolls back is undone in the DB - but a
+        # naive in-memory write would survive, so the next record would hand out
+        # a row id that no longer exists (dangling FK). Two maps need this:
+        #   @creature_cache - exist_id -> creatures.id (ensure_creature)
+        #   @chunk_rows      - per-chunk _uid -> attacks.id (spawn-tree links)
+        # During a transaction both stage into @pending_* and reads consult the
+        # staged map; on commit we publish, on rollback we drop.
+        def in_txn
+          prev_cache = @pending_cache
+          prev_chunk = @pending_chunk_rows
+          @pending_cache = {}
+          @pending_chunk_rows = {}
+          @db.transaction do
+            yield
+          end
+          # committed: publish staged entries
+          @creature_cache.merge!(@pending_cache)
+          @chunk_rows.merge!(@pending_chunk_rows)
+        ensure
+          # on rollback (transaction raised) the staged entries are discarded
+          # with @pending_*; restore any outer transaction's.
+          @pending_cache = prev_cache
+          @pending_chunk_rows = prev_chunk
+        end
+
+        # Read a chunk-row mapping, consulting the in-transaction staged map
+        # first (a child emitted after its parent in the SAME transaction can
+        # still resolve it), then the committed map.
+        def chunk_row(uid)
+          (@pending_chunk_rows && @pending_chunk_rows[uid]) || @chunk_rows[uid]
+        end
+
         def ensure_creature(info, at)
           return nil unless info && info[:id]
 
           exist_id = info[:id].to_i
-          if (row_id = @creature_cache[exist_id])
-            @db.execute('UPDATE creatures SET last_seen = ?, name = COALESCE(name, ?) WHERE id = ?',
-                        [at, info[:name], row_id])
+          # cache hit: committed cache first, then this transaction's staged.
+          # Backfill BOTH name and noun via COALESCE - a status-first creature
+          # is inserted with a nil noun (status events carry only id + name),
+          # so the later attack that names the noun must fill it, else it stays
+          # NULL forever (1 kill / 0 kinds, since kinds counts DISTINCT noun).
+          if (row_id = @creature_cache[exist_id] || (@pending_cache && @pending_cache[exist_id]))
+            @db.execute('UPDATE creatures SET last_seen = ?, name = COALESCE(name, ?), noun = COALESCE(noun, ?) WHERE id = ?',
+                        [at, info[:name], info[:noun], row_id])
             return row_id
           end
 
@@ -365,7 +423,16 @@ module Lich
           SQL
           row_id = @db.get_first_value('SELECT id FROM creatures WHERE session_id = ? AND exist_id = ?',
                                        [@session_id, exist_id])
-          @creature_cache[exist_id] = row_id
+          # Inside a transaction, stage the id; it becomes visible in
+          # @creature_cache only when in_txn commits. Outside one (the pre-
+          # transaction ensure_creature in record_attack auto-commits), publish
+          # immediately.
+          if @pending_cache
+            @pending_cache[exist_id] = row_id
+          else
+            @creature_cache[exist_id] = row_id
+          end
+          row_id
         end
 
         # -- the :attack payload: attack + resolutions + flares + hits -----------
@@ -401,11 +468,14 @@ module Lich
           @chunk_rows = {} if uid.nil? || uid.zero?
           root_uid = event[:root_uid]
           parent_uid = event[:parent_uid]
-          root_row = (root_uid && @chunk_rows[root_uid]) # nil => self, patched post-insert
-          parent_row = (parent_uid && @chunk_rows[parent_uid])
+          # parent/root were committed by an earlier record in this chunk (they
+          # always emit first), so they live in @chunk_rows; chunk_row also
+          # checks the staged map for safety. nil root => self, patched post-insert.
+          root_row = (root_uid && chunk_row(root_uid))
+          parent_row = (parent_uid && chunk_row(parent_uid))
           parent_conf = event[:parent_confidence]&.to_s
 
-          @db.transaction do
+          in_txn do
             @seq += 1
             params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, parent_weapon,
                       root_row, parent_row, parent_conf,
@@ -424,8 +494,10 @@ module Lich
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
-            @chunk_rows ||= {}
-            @chunk_rows[uid] = attack_id if uid
+            # stage the uid -> row mapping; published to @chunk_rows only when
+            # in_txn commits, so a rolled-back attack can't leave a child
+            # pointing at a nonexistent parent/root row.
+            @pending_chunk_rows[uid] = attack_id if uid
             # A root references itself: when root_uid maps to this very event
             # (or is unset), point root_attack_id at our own new row.
             if root_row.nil?
@@ -485,16 +557,21 @@ module Lich
           crit = hit[:crit] || {}
           secondary = crit[:secondary_wound].is_a?(Hash) ? crit[:secondary_wound] : {}
           fatal = crit[:fatal] ? 1 : 0
+          # crit_rank is the CritRanks :rank (0-9 crit severity - what crit-rank
+          # distributions and `crit_rank >= 8` queries mean); wound_rank is the
+          # distinct :wound_rank (0-3 wound left on the creature). These were
+          # conflated (wound_rank stored as crit_rank), which flattened every
+          # crit-rank analytic - now stored in their own columns.
           params = [attack_id, flare_id, @session_id, creature_row, seq,
                     hit[:damage].to_i, crit[:location], map_body_part(crit[:location]),
-                    crit[:type]&.to_s, crit[:wound_rank], fatal,
+                    crit[:type]&.to_s, crit[:rank], crit[:wound_rank], fatal,
                     crit[:amputated] ? 1 : 0,
                     secondary[:location], secondary[:wound_rank] || secondary[:rank]]
           @db.execute(<<~SQL, params)
             INSERT INTO hits (attack_id, flare_id, session_id, creature_id, seq, damage, location,
-                              body_part, crit_type, crit_rank, fatal, amputated,
+                              body_part, crit_type, crit_rank, wound_rank, fatal, amputated,
                               secondary_location, secondary_rank)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           SQL
 
           return unless fatal == 1 && creature_row
@@ -518,8 +595,10 @@ module Lich
           at = Time.now.to_f
           # Atomic like record_attack: the creature upsert, the status insert
           # and the kill-stamp are one unit, so a mid-write failure can't leave
-          # an auto-vivified creature row with no matching status row.
-          @db.transaction do
+          # an auto-vivified creature row with no matching status row. in_txn
+          # also stages the creature-cache entry so a rollback can't leave a
+          # cached id pointing at a rolled-back row.
+          in_txn do
             creature_row = id ? ensure_creature({ id: id, name: name }, at) : nil
             attack_id = nil
             source = 'direct'
