@@ -369,7 +369,12 @@ module Lich
                 # Check if THIS chunk contains creatures (no persistent state).
                 # Substring checks are equivalent to the old backtracking regex
                 # for gating purposes and far cheaper per line.
-                if chunk.any? { |line| line.include?('<pushBold/>') && line.include?('<a exist=') }
+                # ...or an environmental / self-inflicted tick, which names no
+                # creature at all (frigid wind, thorn-bow recoil).
+                if chunk.any? { |line|
+                  (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
+                  Definitions::Attacks.self_inflicted_line?(line)
+                }
                   process(chunk) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else

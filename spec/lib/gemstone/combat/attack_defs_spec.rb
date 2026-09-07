@@ -63,6 +63,12 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:foreign_target]).to be true
     end
 
+    it 'flags environmental tick lines for the tracker chunk gate (they carry no creature link)' do
+      defs = Lich::Gemstone::Combat::Definitions::Attacks
+      expect(defs.self_inflicted_line?('Bitter cold leaches warmth from your skin.')).to be true
+      expect(defs.self_inflicted_line?('You feel more refreshed.')).to be false
+    end
+
     it 'reports the thorn bow recoil as inbound damage to us' do
       line = 'As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.  A single vine thwaps your left hand as it returns to the longbow.'
       result = described_class.parse_attack(line)

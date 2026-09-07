@@ -480,6 +480,18 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(c['killed_by_attack_id']).to eq(a['id'])
     end
 
+    it 'lets a fatal crit take the credit from an earlier room-feed stamp' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(target_id: 101, damage: 120)) # the shot before
+      rec.record(:status, { id: 101, name: 'a cave lizard', status: 'dead', action: :add }) # lagged feed
+      rec.record(:attack, attack_event(target_id: 101).merge(hits: [{ damage: 50, crit: { fatal: true, location: 'neck', rank: 9 } }]))
+      rec.close
+
+      fatal_id = query('SELECT MAX(id) AS id FROM attacks').first['id']
+      expect(query('SELECT killed_by_attack_id FROM creatures WHERE exist_id = 101').first['killed_by_attack_id']).to eq(fatal_id)
+    end
+
     it 'does not overwrite a fatal-crit kill credit' do
       rec = new_recorder
       rec.start_session(at: Time.at(1))

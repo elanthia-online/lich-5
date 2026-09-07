@@ -47,12 +47,17 @@ module Lich
           # and go out AFTER this chunk's :attack emits - see emit_fact.
           @deferred_emits = []
           events = parse_events(chunk)
-          # A creature struck in an EARLIER chunk may only now show dead="1"
-          # in the room feed (the <component id='room objs'> refresh can land
-          # a chunk after the death message). Sweep before the early return
-          # so a quiet chunk still confirms the kill.
-          sweep_death_watch
-          return if events.empty?
+          # Death sweep runs AFTER this chunk's attacks emit, never before:
+          # the async worker lags the game stream, so the creature registry
+          # already shows a death that THIS chunk's attack caused. Sweeping
+          # first credited it to the previous attack (real-feed 2026-09-07:
+          # the fatal shot's kill filed under the shot before it). A quiet
+          # chunk still sweeps, so a room refresh that lands a chunk after
+          # the death message is caught too.
+          if events.empty?
+            sweep_death_watch
+            return
+          end
 
           at ||= prompt_time(chunk) || Time.now
           # Resolve the in-blob spawn-tree links from event-object references
@@ -75,6 +80,7 @@ module Lich
             event[:at] = at
             persist_event(event)
           end
+          sweep_death_watch
 
           respond "[Combat] Processed #{events.size} events" if Tracker.debug?(:verbose)
         ensure
@@ -131,13 +137,25 @@ module Lich
           nil
         end
 
-        # A fact-less bare gesture: attack-born :cast with no hits, outcomes,
-        # flares or statuses yet. The WRAPPER the spell-specific def supersedes
-        # (see the attack branch), and the shape held across a chunk boundary.
+        # Creature-linked lines that carry no combat fact and must not drive
+        # the target switcher (see the skip in parse_events).
+        NARRATION_PATTERN = Regexp.union(
+          / leaps from the back of .+? as .+? topples, narrowly avoiding being pinned/,
+          / looks a little bit more wary after that display!/,
+          /\AYou are now targeting /
+        ).freeze
+
+        # A fact-less bare gesture: attack-born :cast with no hits, outcomes or
+        # statuses yet. Flares that themselves carry no hit or outcome (a
+        # mirror image echoing the gesture - "Nothing happens.") do not make
+        # it a real cast; they travel with it to the superseding event. The
+        # WRAPPER the spell-specific def supersedes (see the attack branch),
+        # and the shape held across a chunk boundary.
         def bare_cast?(event)
           event && event[:_attack_born] && event[:name] == :cast &&
             event[:hits].empty? && event[:outcomes].empty? &&
-            event[:flares].empty? && event[:statuses].empty? && !event[:_had_status]
+            event[:flares].all? { |f| f[:hits].empty? && f[:outcomes].empty? } &&
+            event[:statuses].empty? && !event[:_had_status]
         end
 
         # An event is worth persisting only if it has a target to apply data to
@@ -339,6 +357,13 @@ module Lich
             # links; feeding them to the target-switcher spawns phantom events
             # for bystander creatures that were never attacked.
             next if line.include?('<component id=')
+            # Narration that links creatures but is no combat fact: a rider
+            # leaping clear of its toppling mount, bystanders growing wary
+            # after a kill, our own target-set echo. Fed to the target
+            # switcher these split the open attack into phantom per-creature
+            # events (real-feed 2026-09-07: one briar lash recorded as three
+            # tangleweed rows because the rider dismounted mid-lash).
+            next if NARRATION_PATTERN.match?(line)
 
             # Extract creature target once per line; reused by the status
             # handler and the target-switch logic below.
@@ -788,6 +813,9 @@ module Lich
                   (current_event[:attacker] && attack[:attacker][:name] == current_event[:attacker][:name])) &&
                  (!current_event[:_held] || !line.match?(/\AYou\b/))
                 pending_resolutions = current_event[:resolutions] + pending_resolutions
+                # fact-less flares on the wrapper (a mirror echoing the
+                # gesture) belong to the spell event that replaces it
+                pending_flares.concat(current_event[:flares])
                 superseded_cast = true
                 current_event = nil
               end
@@ -1321,11 +1349,11 @@ module Lich
           # stayed "alive" for recorders (real-feed: 9 mastodon deaths in a
           # hunt, 3 recorded). The universal signal is the room feed's
           # <crtrStatus dead="1"/>, already parsed onto the creature as
-          # crtr_flag?(:dead). Watch every creature this event touched and
-          # emit ONE `dead` status when the flag turns on.
+          # crtr_flag?(:dead). Watch every creature this event touched; the
+          # sweep that emits ONE `dead` status when the flag turns on runs in
+          # process() after the whole chunk's attacks have emitted.
           watch_for_death(target[:id])
           (event[:flares] || []).each { |f| watch_for_death(f.dig(:target_info, :id)) }
-          sweep_death_watch
         end
 
         # -- death watch ---------------------------------------------------

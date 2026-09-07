@@ -427,6 +427,17 @@ module Lich
           # parser reports them inbound without needing a "you" capture.
           SELF_INFLICTED = %i[frigid_wind thorn_recoil].freeze
 
+          # The tracker's chunk gate only forwards chunks holding a bolded
+          # creature link; an environmental tick names no creature, so its
+          # chunk was discarded before the parser ever saw it (real-feed
+          # 2026-09-07: zero frigid_wind rows against 10 log ticks). This
+          # union lets the gate pass such chunks.
+          SELF_INFLICTED_PATTERN = Regexp.union(ENVIRONMENTAL_ATTACKS.flat_map(&:patterns)).freeze
+
+          def self.self_inflicted_line?(line)
+            SELF_INFLICTED_PATTERN.match?(line)
+          end
+
           # AMBUSH PREFIXES - modifiers, not attacks.
           #
           # Attacking from hiding is still just an attack; the hiding line

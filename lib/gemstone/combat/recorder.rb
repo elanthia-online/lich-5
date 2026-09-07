@@ -615,7 +615,11 @@ module Lich
 
           return unless fatal == 1 && creature_row
 
-          @db.execute('UPDATE creatures SET killed_at = ?, killed_by_attack_id = ? WHERE id = ? AND killed_at IS NULL',
+          # A fatal crit is ground truth for the killing blow: it takes the
+          # credit even when a room-feed death already stamped killed_at
+          # (that stamp can land under an earlier attack when the worker
+          # lags the stream), but never moves an earlier killed_at.
+          @db.execute('UPDATE creatures SET killed_at = COALESCE(killed_at, ?), killed_by_attack_id = ? WHERE id = ?',
                       [at, attack_id, creature_row])
         end
 

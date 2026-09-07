@@ -557,6 +557,31 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(described_class.instance_variable_get(:@held_cast)).to be_nil
     end
 
+    it 'still supersedes when a mirror image echoed the gesture ("Nothing happens.")' do
+      chunk = ["You gesture at #{zerk}.",
+               ' ** Fleeting and insubstantial, a mirror image of you shimmers into view at your side, echoing your attack with one of its own! **',
+               'Nothing happens.',
+               'Cast Roundtime 1 Second.'] + lash_chunk
+      events = described_class.parse_events(chunk)
+      expect(events.map { |e| e[:name] }).to eq([:tangleweed])
+      expect(events.first[:via]).to eq(:cast)
+      expect(events.first[:flares].map { |f| f[:name] }).to include(:mirror_image)
+    end
+
+    it 'does not split the lash when the rider dismounts mid-line (narration, not a target switch)' do
+      masto = bolded(123259310, 'mastodon', 'a heavily armored battle mastodon')
+      maiden = bolded(123241966, 'shield-maiden', 'a brawny gigas shield-maiden')
+      events = described_class.parse_events([
+                                              '<pushBold/>[SMR result: 173 (Open d100: 68, Bonus: 4)]<popBold/>',
+                                              "The lashing emerald briar lashes out violently at #{masto}, dragging it to the ground!",
+                                              "#{maiden} leaps from the back of #{masto} as it topples, narrowly avoiding being pinned beneath its mount!",
+                                              '   ... 5 points of damage!',
+                                              '   Attempt to snare hips shaken loose.'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:target][:id], e[:hits].map { |h| h[:damage] }, e[:resolutions].size] })
+        .to eq([[:tangleweed, 123259310, [5], 1]])
+    end
+
     it 'still supersedes in-blob when gesture and lash share a chunk' do
       events = described_class.parse_events(gesture_chunk + lash_chunk)
       expect(events.map { |e| e[:name] }).to eq([:tangleweed])
@@ -716,7 +741,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
 
     it 'emits :status dead when the touched creature is flagged dead after the event' do
       dead_flag[:value] = true
-      described_class.persist_event(hp_kill_event)
+      described_class.persist_event(hp_kill_event) # watches the creature
+      described_class.process([]) # the sweep runs at chunk level
       expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
         .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
     end
@@ -725,6 +751,18 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       described_class.persist_event(hp_kill_event)
       expect(Lich::Gemstone::Combat::Observers).not_to have_received(:emit)
         .with(:status, hash_including(status: 'dead'))
+    end
+
+    it 'emits the dead status AFTER the chunk\'s :attack, even when the registry already shows the death' do
+      # the async worker lags the stream: by the time this chunk processes,
+      # the room feed has already flagged the creature this chunk killed
+      dead_flag[:value] = true
+      order = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, data| order << [type, data[:status]] }
+      described_class.process(["You fire a faewood arrow at #{bolded(900, 'mastodon', 'a heavily armored battle mastodon')}!",
+                               '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
+                               '   ... and hit for 188 points of damage!'], at: Time.at(1))
+      expect(order.index { |t, _| t == :attack }).to be < order.index { |t, s| t == :status && s == 'dead' }
     end
 
     it 'catches a death whose room flag arrives on a later, event-less chunk, and only once' do
