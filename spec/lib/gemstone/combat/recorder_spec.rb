@@ -452,6 +452,48 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  describe 'text columns from binary game-stream strings' do
+    it 'stores nouns and names as TEXT, not BLOB, so text predicates match' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      # the game stream hands the parser ASCII-8BIT strings
+      rec.record(:attack, attack_event(target_name: 'a cave lizard'.b, target_noun: 'lizard'.b))
+      rec.close
+
+      types = query('SELECT typeof(noun) AS tn, typeof(name) AS tm FROM creatures').first
+      expect(types.values_at('tn', 'tm')).to eq(%w[text text])
+      expect(query("SELECT COUNT(*) AS n FROM creatures WHERE noun = 'lizard'").first['n']).to eq(1)
+    end
+  end
+
+  describe 'room-feed death (dead status without a fatal crit)' do
+    it 'stamps killed_at and credits the attack whose window the death fell in' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(target_id: 101, damage: 120)) # non-fatal hit
+      rec.record(:status, { id: 101, name: 'a cave lizard', status: 'dead', action: :add })
+      rec.close
+
+      c = query('SELECT killed_at, killed_by_attack_id FROM creatures WHERE exist_id = 101').first
+      a = query('SELECT id FROM attacks').first
+      expect(c['killed_at']).not_to be_nil
+      expect(c['killed_by_attack_id']).to eq(a['id'])
+    end
+
+    it 'does not overwrite a fatal-crit kill credit' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(target_id: 101).merge(hits: [{ damage: 50, crit: { fatal: true, location: 'neck', rank: 9 } }]))
+      fatal_id = query('SELECT id FROM attacks').first['id']
+      rec.record(:attack, attack_event(target_id: 101, damage: 5)) # a stray later hit
+      rec.record(:status, { id: 101, name: 'a cave lizard', status: 'dead', action: :add })
+      rec.close
+
+      c = query('SELECT killed_by_attack_id FROM creatures WHERE exist_id = 101').first
+      expect(c['killed_by_attack_id']).to eq(fatal_id)
+    end
+  end
+
   describe 'fault isolation' do
     it 'never raises out of record even on a malformed payload' do
       rec = new_recorder

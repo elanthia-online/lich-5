@@ -29,6 +29,11 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
     stub_const('Lich::Gemstone::Combat::Observers', Module.new)
     allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
+    # cross-chunk state lives in module ivars; never let one example's
+    # death watch or held cast leak into another
+    %i[@death_watch @death_announced @held_cast @deferred_emits].each do |iv|
+      described_class.instance_variable_set(iv, nil)
+    end
   end
 
   def bolded(id, noun, name)
@@ -496,6 +501,248 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # and its crit stun emitted
       expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
         .with(:stun, hash_including(flare: :spike, rounds: 2))
+    end
+  end
+
+  # The gesture wrapper across a chunk boundary (2026-09-07). Live chunks split
+  # at the prompt, and "You gesture at X." ends a chunk; the spell result
+  # (tangleweed's briar lash) opens the next one. In-blob the specific def
+  # supersedes the bare :cast; across the boundary the cast used to emit as a
+  # fact-less phantom first. It is now held for one chunk.
+  describe 'bare cast held across a chunk boundary' do
+    let(:zerk) { bolded(121654846, 'berserker', 'a tattooed gigas berserker') }
+    let(:gesture_chunk) { ["You gesture at #{zerk}.", 'Cast Roundtime 1 Second.'] }
+    let(:lash_chunk) do
+      [
+        'A violently lashing emerald briar bestrewn with unnaturally sharp spikes suddenly sprouts from the ground and begins to thrash about violently!',
+        '<pushBold/>[SMR result: 149 (Open d100: 57)]<popBold/>',
+        "The lashing emerald briar lashes out violently at #{zerk}, dragging her to the ground!",
+        '   ... 10 points of damage!',
+        '   Blow to the diaphragm.'
+      ]
+    end
+
+    before do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      described_class.instance_variable_set(:@held_cast, nil)
+    end
+
+    it 'holds the gesture and lets the next chunk\'s spell result supersede it (one tangleweed via :cast)' do
+      expect(described_class.parse_events(gesture_chunk)).to be_empty
+      events = described_class.parse_events(lash_chunk)
+      expect(events.map { |e| e[:name] }).to eq([:tangleweed])
+      tw = events.first
+      expect(tw[:via]).to eq(:cast)
+      expect(tw[:target][:id]).to eq(121654846)
+      expect(tw[:hits].map { |h| h[:damage] }).to eq([10])
+      expect(tw[:resolutions].size).to eq(1) # the SMR that followed the gesture
+    end
+
+    it 'emits the held cast as itself when the next chunk starts a NEW 2p attack instead' do
+      described_class.parse_events(gesture_chunk)
+      events = described_class.parse_events([
+                                              "You fire a faewood arrow at #{zerk}!",
+                                              '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
+                                              '   ... and hit for 188 points of damage!'
+                                            ])
+      expect(events.map { |e| e[:name] }).to eq(%i[cast fire])
+      expect(events.last[:via]).to be_nil
+    end
+
+    it 'emits the held cast at the end of a quiet chunk rather than holding it forever' do
+      described_class.parse_events(gesture_chunk)
+      events = described_class.parse_events(['You feel more refreshed.'])
+      expect(events.map { |e| e[:name] }).to eq([:cast])
+      expect(described_class.instance_variable_get(:@held_cast)).to be_nil
+    end
+
+    it 'still supersedes in-blob when gesture and lash share a chunk' do
+      events = described_class.parse_events(gesture_chunk + lash_chunk)
+      expect(events.map { |e| e[:name] }).to eq([:tangleweed])
+      expect(events.first[:via]).to eq(:cast)
+    end
+  end
+
+  # Glowbark chain (2026-09-07 naming): phosphorescence (primary, names the
+  # swing target) -> glowbright (chain trigger, no target) -> spectral_bloom
+  # (one per extra creature). The bloom names ITS OWN creature; the target
+  # switcher used to read that as a switch and open an inherited `fire`
+  # event on the bloom's creature, so the bloom damage landed on a phantom
+  # fire (PLASMA crit and all) while the flare row stayed empty.
+  describe 'glowbark chain: spectral bloom on another creature' do
+    let(:zerk) { bolded(121654846, 'berserker', 'a tattooed gigas berserker') }
+    let(:masto) { bolded(121678494, 'mastodon', 'a heavily armored battle mastodon') }
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true, track_damage: true, track_wounds: true
+      )
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+    end
+
+    let(:chunk) do
+      [
+        "You fire a faewood arrow at #{zerk}!",
+        '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
+        '   ... and hit for 188 points of damage!',
+        "   Crossing slash to chest catches the #{bolded(121654846, 'berserker', 'gigas berserker')}'s attention!",
+        " ** Countless points of pale phosphorescence awaken across your glowbark long bow, rapidly brightening before bursting into brilliant light around #{zerk}! **",
+        '   ... 20 points of damage!',
+        "   Wreath of energy burns away the #{bolded(121654846, 'berserker', 'gigas berserker')}'s hair and leaves skin blackened!",
+        "You blinded #{zerk}!",
+        ' ** Phosphorescent light races through the glowbark as its entire surface blossoms with dazzling radiance, flooding the surroundings in ghostly light! **',
+        " ** A bloom of spectral light blossoms around #{masto}, engulfing it in searing brilliance! **",
+        '   ... 5 points of damage!',
+        "   Plasma scalds the #{bolded(121678494, 'mastodon', 'armored battle mastodon')}'s stomach leaving painful red streaks.",
+        "You blinded #{masto}!",
+        "The arrow sticks in #{zerk}'s chest!",
+        'Roundtime: 3 sec.'
+      ]
+    end
+
+    it 'keeps the bloom damage on the spectral_bloom flare, attributed to the bloom creature, as ONE event' do
+      events = described_class.parse_events(chunk)
+      expect(events.size).to eq(1)
+      ev = events.first
+      expect(ev[:name]).to eq(:fire)
+      expect(ev[:target][:id]).to eq(121654846)
+      expect(ev[:hits].map { |h| h[:damage] }).to eq([188])
+      names = ev[:flares].map { |f| f[:name] }
+      expect(names).to eq(%i[phosphorescence glowbright spectral_bloom])
+      bloom = ev[:flares].last
+      expect(bloom[:target_info][:id]).to eq(121678494)
+      expect(bloom[:hits].map { |h| h[:damage] }).to eq([5])
+      expect(ev[:flares].first[:hits].map { |h| h[:damage] }).to eq([20])
+    end
+  end
+
+  # Parse-phase facts (message statuses, UCS, spell loss) used to be emitted
+  # the moment their line parsed - BEFORE the chunk's :attack emit - so a
+  # recorder keying on "the open attack" filed them under the previous one
+  # (real-feed 2026-09-07: every blind 1-3s ahead of its attack). process()
+  # now queues them and flushes after the attacks.
+  describe 'fact emit ordering (statuses after their chunk\'s attack)' do
+    let(:creature) do
+      instance_double('Creature', id: 121654846, name: 'a tattooed gigas berserker').tap do |c|
+        allow(c).to receive(:add_damage)
+        allow(c).to receive(:add_status)
+        allow(c).to receive(:remove_status)
+        allow(c).to receive(:add_stun_estimate)
+        allow(c).to receive(:has_status?).and_return(false)
+        allow(c).to receive(:crtr_flag?).and_return(false)
+      end
+    end
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true, track_damage: true, track_wounds: false
+      )
+      allow(described_class).to receive(:record_delta).and_yield({ statuses: [], wounds: [], damage: 0 })
+      allow(described_class).to receive(:emit_debug_summary)
+      allow(described_class).to receive(:apply_crit)
+      stub_const('Lich::Gemstone::Combat::CreatureInstance', Module.new.tap { |m| m.const_set(:STUN_ROUND_SECONDS, 5) })
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      allow(registry).to receive(:[]).with(121654846).and_return(creature)
+      described_class.instance_variable_set(:@death_watch, nil)
+    end
+
+    it 'emits the :attack before the blind :status parsed from the same chunk' do
+      zerk = bolded(121654846, 'berserker', 'a tattooed gigas berserker')
+      order = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, data| order << [type, data[:status]] }
+      described_class.process([
+                                "You fire a faewood arrow at #{zerk}!",
+                                '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
+                                '   ... and hit for 188 points of damage!',
+                                "You blinded #{zerk}!"
+                              ], at: Time.at(1))
+      attack_i = order.index { |t, _| t == :attack }
+      blind_i = order.index { |t, s| t == :status && s == :blind }
+      expect(attack_i).not_to be_nil
+      expect(blind_i).not_to be_nil
+      expect(attack_i).to be < blind_i
+    end
+
+    it 'still emits immediately when parse_events is called on its own' do
+      zerk = bolded(121654846, 'berserker', 'a tattooed gigas berserker')
+      described_class.parse_events(["You blinded #{zerk}!"])
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:status, hash_including(status: :blind))
+    end
+  end
+
+  # Death detection (2026-09-07). Only fatal crits marked kills; a creature
+  # that died of hit-point loss or a coup de grace never emitted anything, so
+  # recorders kept it alive forever (9 mastodon deaths in a hunt, 3 recorded).
+  # The room feed's <crtrStatus dead="1"/> lands on the creature as
+  # crtr_flag?(:dead); the processor watches every creature an event touched
+  # and emits one `dead` status when that flag turns on - immediately, or on
+  # a later chunk when the room refresh lags the death message.
+  describe 'death watch (room-feed dead flag -> :status dead)' do
+    let(:dead_flag) { { value: false } }
+    let(:creature) do
+      flag = dead_flag
+      instance_double('Creature', id: 900, name: 'a heavily armored battle mastodon').tap do |c|
+        allow(c).to receive(:add_damage)
+        allow(c).to receive(:add_status)
+        allow(c).to receive(:remove_status)
+        allow(c).to receive(:has_status?).and_return(false)
+        allow(c).to receive(:crtr_flag?) { |key| key == :dead && flag[:value] }
+      end
+    end
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true,
+        track_damage: true, track_wounds: false
+      )
+      allow(described_class).to receive(:record_delta).and_yield({ statuses: [], wounds: [], damage: 0 })
+      allow(described_class).to receive(:emit_debug_summary)
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      allow(registry).to receive(:[]).with(900).and_return(creature)
+      # fresh watch state per example (module-level ivars)
+      described_class.instance_variable_set(:@death_watch, nil)
+      described_class.instance_variable_set(:@death_announced, nil)
+    end
+
+    def hp_kill_event
+      { name: :fire, at: Time.at(1), target: { id: 900 },
+        hits: [{ damage: 120, crit: nil }], flares: [], statuses: [], outcomes: [], resolutions: [] }
+    end
+
+    it 'emits :status dead when the touched creature is flagged dead after the event' do
+      dead_flag[:value] = true
+      described_class.persist_event(hp_kill_event)
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+    end
+
+    it 'emits nothing for a creature that is still alive' do
+      described_class.persist_event(hp_kill_event)
+      expect(Lich::Gemstone::Combat::Observers).not_to have_received(:emit)
+        .with(:status, hash_including(status: 'dead'))
+    end
+
+    it 'catches a death whose room flag arrives on a later, event-less chunk, and only once' do
+      described_class.persist_event(hp_kill_event) # alive at this point
+      dead_flag[:value] = true
+      described_class.process([]) # quiet chunk: the sweep still runs
+      described_class.process([])
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+    end
+
+    it 'stops watching a survivor after a few sweeps' do
+      described_class.persist_event(hp_kill_event)
+      4.times { described_class.process([]) }
+      dead_flag[:value] = true
+      described_class.process([]) # no longer watched - a much later death is not this event's
+      expect(Lich::Gemstone::Combat::Observers).not_to have_received(:emit)
+        .with(:status, hash_including(status: 'dead'))
     end
   end
 

@@ -48,7 +48,13 @@ module Lich
                 # fallback below would install the attacker as its own
                 # target and apply its damage/crits to itself. Resolve the
                 # target as us and stop - never fall through.
-                if self_target?(match)
+                # Environmental / self-inflicted defs (SELF_INFLICTED) are
+                # damage to us by construction - no attacker, no "you"
+                # capture - unless this particular pattern named someone
+                # else (a nearby player taking the same tick).
+                self_inflicted = Definitions::Attacks::SELF_INFLICTED.include?(name) &&
+                                 !(match.names.include?('target') && match[:target])
+                if self_target?(match) || self_inflicted
                   return {
                     name: name,
                     target: {},

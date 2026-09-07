@@ -144,7 +144,10 @@ module Lich
             FlareDef.new(:natures_decay, [
               /Soot brown specks of leaf mold trail in the wake of (?<target>.+?) movements, distorted by a murky haze\./,
               /The earthy, sweet aroma clinging to (?<target>.+?) grows more pervasive\./,
-              /An earthy, sweet armoa clings to (?<target>.+?) in a murky haze\./,
+              # first application (real-feed 2026-09-07; was a typo'd "armoa
+              # clings" that never matched, so the first proc on each creature
+              # recorded as a status only, never as a flare)
+              /An earthy, sweet aroma wafts from (?<target>.+?) in a murky haze\./,
               /An earthy, sweet aroma clings to (?<target>.+?) in a murky haze, accompanied by soot brown specks of leaf mold\./
             ].freeze, false, true, false),
             FlareDef.new(:necromancy_flourish, [/\*\* A sickly green aura radiates from .+? and seeps into (?<target>.+?) wounds! \*\*/].freeze, true, true, false),
@@ -154,35 +157,37 @@ module Lich
               /\*\* Your .+? pulses with a burst of plasma energy! \*\*/,
               /\*\* (?<attacker>.+?)'s#{MK_POST} .+? pulses with a burst of plasma energy! \*\*/
             ].freeze, true, true, false),
-            # Glowbark bow plasma burst. Three lines, three roles (owner
+            # Glowbark / plasma weapon flare. Three lines, three roles (owner
             # breakdown 2026-09-06):
             #   1. PRIMARY - damages the swing's target, names it.
             #   2. CHAIN TRIGGER - the 25% AoE proc fires; no target, no
             #      damage. It can flush hidden creatures ("... forced out of
             #      hiding!"), so it must NOT be treated as damaging or it
             #      would swallow the next damage line.
-            #   3. SECONDARY (ribbon) - one per additional creature the AoE
-            #      caught; damages and names each.
+            #   3. SECONDARY - one per additional creature the AoE caught;
+            #      damages and names each.
             # 580 primaries + 123 chain lines were dropped as unmatched flare
             # text before this (real-feed, GSIV-Nisugi glowbark long bow).
-            # Two messaging generations, same three roles (the phosphorescence
-            # forms are the 2026-09-06 rewording of the plasma wave).
-            FlareDef.new(:plasma_burst, [
-              # gen1: plasma wave
-              /\*\* Searing white light spills from your .+?, breaking over (?<target>.+?) in a blistering wave of plasma! \*\*/,
-              /\*\* Searing white light spills from (?<attacker>.+?)'s#{MK_POST} .+?, breaking over (?<target>.+?) in a blistering wave of plasma! \*\*/,
-              /\*\* A ribbon of plasma whips across the space between and bursts against (?<target>.+?)! \*\*/,
-              # gen2: phosphorescence - primary and secondary
+            # The game reworded this flare on 2026-09-06 ("plasma wave" ->
+            # phosphorescence) and the old wording no longer prints, so only
+            # the current forms are defined, one name per role (owner naming
+            # 2026-09-07) so analytics can tell the three lines apart.
+            # PRIMARY: names and damages the swing's target
+            FlareDef.new(:phosphorescence, [
               /\*\* Countless points of pale phosphorescence awaken across your .+?, rapidly brightening before bursting into brilliant light around (?<target>.+?)! \*\*/,
-              /\*\* Countless points of pale phosphorescence awaken across (?<attacker>.+?)'s#{MK_POST} .+?, rapidly brightening before bursting into brilliant light around (?<target>.+?)! \*\*/,
-              /\*\* A bloom of spectral light blossoms around (?<target>.+?), engulfing .+? in searing brilliance! \*\*/
+              /\*\* Countless points of pale phosphorescence awaken across (?<attacker>.+?)'s#{MK_POST} .+?, rapidly brightening before bursting into brilliant light around (?<target>.+?)! \*\*/
             ].freeze, true, true, false),
-            # The AoE chain trigger - not damaging (see note above). Both
-            # messaging generations.
-            FlareDef.new(:plasma_burst_chain, [
-              /\*\* Light swells along the length of the .+?, and the plasma leaps hungrily onward! \*\*/,
+            # CHAIN TRIGGER: no target, no damage (see note above)
+            FlareDef.new(:glowbright, [
               /\*\* Phosphorescent light races through the .+? as its entire surface blossoms with dazzling radiance, flooding the surroundings in ghostly light! \*\*/
             ].freeze, false, true, false),
+            # SECONDARY: one bloom per extra creature the chain reached.
+            # Its target is NOT the swing's target - the processor must keep
+            # the damage on this flare (creature-attributed) rather than
+            # switching the whole event onto the bloom's creature.
+            FlareDef.new(:spectral_bloom, [
+              /\*\* A bloom of spectral light blossoms around (?<target>.+?), engulfing .+? in searing brilliance! \*\*/
+            ].freeze, true, true, false),
             FlareDef.new(:psychic_assault, [
               # bare form (no target clause) observed 2,148x in round-5 logs;
               # optional pushBold before "the" or the targeted-live form dies

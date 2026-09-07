@@ -269,10 +269,23 @@ module Lich
           @mutex.synchronize { start_session_locked(character: character, source: source, at: at) }
         end
 
+        # Text from the game stream arrives as ASCII-8BIT (binary) strings, and
+        # the sqlite3 gem binds a binary string as a BLOB. Every noun, creature
+        # name, attacker and weapon was landing typed blob (real db 2026-09-07:
+        # creatures.noun blob=196, text=0), so `WHERE noun = 'berserker'` never
+        # matched and text functions saw bytes, not words. Re-tag as UTF-8 at
+        # the boundary; game text is ASCII/Latin-1 so scrub only guards junk.
+        def txt(value)
+          return nil if value.nil?
+
+          s = value.to_s
+          s.encoding == Encoding::ASCII_8BIT ? s.dup.force_encoding('UTF-8').scrub('?') : s
+        end
+
         def start_session_locked(character: nil, source: nil, at: Time.now)
           finish_session_locked if @session_id
           @db.execute('INSERT INTO sessions (character, source, started_at) VALUES (?, ?, ?)',
-                      [character, source, at.to_f])
+                      [txt(character), txt(source), at.to_f])
           @session_id = @db.last_insert_row_id
           @seq = 0
           @creature_cache = {}
@@ -433,11 +446,11 @@ module Lich
           # NULL forever (1 kill / 0 kinds, since kinds counts DISTINCT noun).
           if (row_id = @creature_cache[exist_id] || (@pending_cache && @pending_cache[exist_id]))
             @db.execute('UPDATE creatures SET last_seen = ?, name = COALESCE(name, ?), noun = COALESCE(noun, ?) WHERE id = ?',
-                        [at, info[:name], info[:noun], row_id])
+                        [at, txt(info[:name]), txt(info[:noun]), row_id])
             return row_id
           end
 
-          @db.execute(<<~SQL, [@session_id, exist_id, info[:noun], info[:name], at, at])
+          @db.execute(<<~SQL, [@session_id, exist_id, txt(info[:noun]), txt(info[:name]), at, at])
             INSERT INTO creatures (session_id, exist_id, noun, name, first_seen, last_seen)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (session_id, exist_id) DO UPDATE SET last_seen = excluded.last_seen
@@ -498,11 +511,11 @@ module Lich
 
           in_txn do
             @seq += 1
-            params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, parent_weapon,
+            params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, txt(parent_weapon),
                       root_row, parent_row, parent_conf,
                       event[:via]&.to_s, creature_row, target_kind,
-                      attacker[:name], attacker[:id],
-                      event[:weapon], outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
+                      txt(attacker[:name]), attacker[:id],
+                      txt(event[:weapon]), outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
                       event[:aimed] ? 1 : 0, event[:ambush] ? 1 : 0,
                       event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0,
                       event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0,
@@ -547,7 +560,7 @@ module Lich
               f_outcomes = (flare[:outcomes] || []).map(&:to_s)
               weapon = flare[:weapon].is_a?(Hash) ? flare[:weapon][:name] : flare[:weapon]
               f_params = [attack_id, i + 1, flare[:name].to_s, flare[:damaging] ? 1 : 0,
-                          f_creature, weapon, f_outcomes.first]
+                          f_creature, txt(weapon), f_outcomes.first]
               @db.execute(<<~SQL, f_params)
                 INSERT INTO flares (attack_id, seq, name, damaging, creature_id, weapon, outcome)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -645,17 +658,24 @@ module Lich
               source = 'window'
             end
 
-            params = [@session_id, creature_row, name, attack_id, at, kind,
-                      status, action, value, spell, spell_name, cause, source]
+            params = [@session_id, creature_row, txt(name), attack_id, at, kind,
+                      txt(status), action, value, spell, txt(spell_name), cause, source]
             @db.execute(<<~SQL, params)
               INSERT INTO statuses (session_id, creature_id, subject, attack_id, occurred_at,
                                     kind, status, action, value, spell, spell_name, cause, source)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
 
+            # A death confirmed by the room feed (processor death watch) rather
+            # than a fatal crit: stamp the kill and credit the attack whose
+            # window it fell in - the last attack that touched this creature.
+            # Ownership (kill vs assist) is judged later from that attack's
+            # flags, so crediting a foreign caster's attack here is correct.
             if status == 'dead' && action == 'add' && creature_row
-              @db.execute('UPDATE creatures SET killed_at = ? WHERE id = ? AND killed_at IS NULL',
-                          [at, creature_row])
+              @db.execute(<<~SQL, [at, attack_id, creature_row])
+                UPDATE creatures SET killed_at = ?, killed_by_attack_id = COALESCE(killed_by_attack_id, ?)
+                WHERE id = ? AND killed_at IS NULL
+              SQL
             end
           end
         end

@@ -49,7 +49,10 @@ module Lich
             AttackDef.new(:sunburst, [/The dazzling solar blaze flashes before (?<target>[^!]+)!/].freeze),
             AttackDef.new(:tangleweed, [
               /The (?<weed>.+?) lashes out violently at (?<target>[^,]+), dragging .+? to the (?:ground|floor)!/,
-              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the ground\./
+              # ground|floor: indoor rooms print "floor" (Ojandhaart great hall,
+              # real-feed 2026-09-07) - the ground-only form orphaned every
+              # indoor entangle tick as an unknown attack with no target
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),

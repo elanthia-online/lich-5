@@ -396,8 +396,36 @@ module Lich
             ].freeze)
           ].freeze
 
-          # Environmental attacks
-          ENVIRONMENTAL_ATTACKS = [].freeze
+          # Environmental / self-inflicted damage. No attacker, no target
+          # capture: the parser classifies every name in SELF_INFLICTED as
+          # inbound (damage to US), so the "... N points of damage!" line that
+          # follows lands on our taken ledger instead of orphaning or, worse,
+          # attaching to whatever creature event was open (real-feed
+          # 2026-09-07: 18 cold ticks and 10 thorn recoils per hunt, damage
+          # taken recorded as 0).
+          ENVIRONMENTAL_ATTACKS = [
+            # Ojandhaart weather: the wind/sleet announce is flavor, the tick
+            # line names the effect and precedes the damage
+            AttackDef.new(:frigid_wind, [
+              /The burn of the cold tears precious warmth from your flesh\./,
+              /A shiver rattles your knees as the crystalline cold settles deep into your bones\./,
+              /Your limbs tingle as warmth flees them in the frigid air\./,
+              /Bitter cold leaches warmth from your skin\./,
+              # a nearby player taking the same tick (foreign_target - the
+              # capture is a bare name, never a creature link)
+              /(?<target>.+?) shivers as the cold settles into #{MK_PRE}(?:his|her|its)#{MK_POST} flesh\./
+            ].freeze),
+            # Thorn-grown bow recoil: sheathing it rips the embedded thorns
+            # out of the wielder's hand (owner: "my weapon hurts me when I
+            # put it away")
+            AttackDef.new(:thorn_recoil, [
+              /As (?:a|an|your) .+? leaves your (?:left|right) hand, the thorns embedded in your skin painfully rip away/
+            ].freeze)
+          ].freeze
+
+          # Def names whose lines describe damage to US with no attacker: the
+          # parser reports them inbound without needing a "you" capture.
+          SELF_INFLICTED = %i[frigid_wind thorn_recoil].freeze
 
           # AMBUSH PREFIXES - modifiers, not attacks.
           #

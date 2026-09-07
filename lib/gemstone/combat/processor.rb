@@ -43,7 +43,15 @@ module Lich
         #   <prompt time=>). Duration estimates are anchored to this rather
         #   than to parse time, which the async worker can lag under load.
         def process(chunk, at: nil)
+          # Parse-phase fact emits (:status/:ucs/:spell_loss) queue up here
+          # and go out AFTER this chunk's :attack emits - see emit_fact.
+          @deferred_emits = []
           events = parse_events(chunk)
+          # A creature struck in an EARLIER chunk may only now show dead="1"
+          # in the room feed (the <component id='room objs'> refresh can land
+          # a chunk after the death message). Sweep before the early return
+          # so a quiet chunk still confirms the kill.
+          sweep_death_watch
           return if events.empty?
 
           at ||= prompt_time(chunk) || Time.now
@@ -69,6 +77,32 @@ module Lich
           end
 
           respond "[Combat] Processed #{events.size} events" if Tracker.debug?(:verbose)
+        ensure
+          flush_deferred_emits
+        end
+
+        # -- parse-phase fact emits --------------------------------------------
+        #
+        # Message statuses ("You blinded X!"), UCS facts and spell losses are
+        # recognised while a chunk PARSES, but the chunk's :attack emits only
+        # happen afterwards in persist_event. Emitting them immediately put
+        # every such fact in front of the attack it belongs to, so a recorder
+        # keying on "the attack currently open" filed it under the PREVIOUS
+        # attack (real-feed 2026-09-07: every blind stamped 1-3s before its
+        # attack). Inside process() they queue and flush after the attacks;
+        # a bare parse_events (tests, tools) still emits at once.
+        def emit_fact(type, payload)
+          if @deferred_emits
+            @deferred_emits << [type, payload]
+          else
+            Observers.emit(type, payload)
+          end
+        end
+
+        def flush_deferred_emits
+          pending = @deferred_emits
+          @deferred_emits = nil
+          pending&.each { |type, payload| Observers.emit(type, payload) }
         end
 
         PROMPT_TIME_PATTERN = /<prompt time="(\d+)"/.freeze
@@ -95,6 +129,15 @@ module Lich
             end
           end
           nil
+        end
+
+        # A fact-less bare gesture: attack-born :cast with no hits, outcomes,
+        # flares or statuses yet. The WRAPPER the spell-specific def supersedes
+        # (see the attack branch), and the shape held across a chunk boundary.
+        def bare_cast?(event)
+          event && event[:_attack_born] && event[:name] == :cast &&
+            event[:hits].empty? && event[:outcomes].empty? &&
+            event[:flares].empty? && event[:statuses].empty? && !event[:_had_status]
         end
 
         # An event is worth persisting only if it has a target to apply data to
@@ -274,6 +317,22 @@ module Lich
           orphan_hits = []
           orphan_outcomes = []
 
+          # A bare gesture held over from the previous chunk (see the hold at
+          # the end of this method). Re-open it as the current event so the
+          # spell-result line that begins THIS chunk can supersede it exactly
+          # as it would in-blob. _held marks it so it is emitted, not re-held,
+          # if nothing supersedes it here; _line is cleared so the switch-
+          # artifact check cannot mistake it for an event born on this chunk's
+          # first line.
+          if (held = @held_cast)
+            @held_cast = nil
+            held[:_held] = true
+            held[:_line] = nil
+            current_event = held
+            current_target = held[:target] if held[:target] && held[:target][:id]
+            parse_state = :seeking_damage
+          end
+
           lines.each_with_index do |line, index|
             next if line.strip.empty?
             # Room-window components (objs/players) are full of bold creature
@@ -351,9 +410,9 @@ module Lich
                   # attacks stun US), so emit it for recorders with the
                   # :self subject instead of dropping it (replay
                   # 2026-09-05: every 2p status was invisible).
-                  Observers.emit(:status, id: nil, name: 'self',
-                                          status: status_result[:status],
-                                          action: status_result[:action])
+                  emit_fact(:status, id: nil, name: 'self',
+                                     status: status_result[:status],
+                                     action: status_result[:action])
                 end
                 respond "[Combat] Found status effect: #{status_result}" if Tracker.debug?(:verbose)
               end
@@ -378,9 +437,9 @@ module Lich
                       (c.dead? || (c.respond_to?(:crtr_flag?) && c.crtr_flag?(:dead)))
                   cause = :death
                 end
-                Observers.emit(:spell_loss, id: loss[:id], name: loss[:name],
-                                            spell: loss[:spell], spell_name: loss[:spell_name],
-                                            cause: cause)
+                emit_fact(:spell_loss, id: loss[:id], name: loss[:name],
+                                       spell: loss[:spell], spell_name: loss[:spell_name],
+                                       cause: cause)
                 respond "[Combat] Spell loss: #{loss[:spell]} #{loss[:spell_name]} off #{loss[:name]}#{cause ? " (#{cause})" : ''}" if Tracker.debug?(:verbose)
               end
             end
@@ -481,7 +540,21 @@ module Lich
             # A foreign-target event (the def named a player or an
             # unresolvable name) is bound to a non-creature for the same
             # reason and must not adopt one either.
-            if line_target && !line_redirect && parse_state != :seeking_attack &&
+            # A flare announce that names ITS OWN target (a spectral bloom on
+            # a creature the glowbark chain reached) is not a target switch:
+            # the damage line that follows belongs to that flare, creature-
+            # attributed, not to a phantom copy of the swing opened on the
+            # bloom's creature (real-feed 2026-09-07: every bloom recorded as
+            # a `fire` echo attack with a PLASMA crit while the flare row sat
+            # empty). Likewise a non-attack line naming a creature one of this
+            # event's flares already touched ("You blinded <bloom target>!")
+            # stays with this event.
+            flare_owned_target = line_target && current_event &&
+                                 ((flare && flare[:target_info]) ||
+                                  (!line_attack && (current_event[:flares] || []).any? do |f|
+                                    f[:target_info] && f[:target_info][:id] == line_target[:id]
+                                  end))
+            if line_target && !line_redirect && parse_state != :seeking_attack && !flare_owned_target &&
                !(current_event && (current_event[:inbound] || current_event[:foreign_target] ||
                                    current_event[:foreign_caster]))
               # Check if this is a real target switch (different creature)
@@ -705,14 +778,15 @@ module Lich
               #     wrapper's means an unrelated (creature) attack
               #     interleaved - that must not eat our cast. Spell-result
               #     lines are attackerless, so they supersede.
+              #   - a cast HELD over from the previous chunk (see @held_cast)
+              #     is superseded only by a spell-result line, never by a
+              #     fresh 2p initiation of our own ("You fire ...") - that is
+              #     the next action, not this cast's effect.
               superseded_cast = nil
-              if current_event && current_event[:_attack_born] &&
-                 current_event[:name] == :cast &&
-                 current_event[:hits].empty? && current_event[:outcomes].empty? &&
-                 current_event[:flares].empty? && current_event[:statuses].empty? &&
-                 !current_event[:_had_status] &&
+              if bare_cast?(current_event) &&
                  (attack[:attacker].nil? ||
-                  (current_event[:attacker] && attack[:attacker][:name] == current_event[:attacker][:name]))
+                  (current_event[:attacker] && attack[:attacker][:name] == current_event[:attacker][:name])) &&
+                 (!current_event[:_held] || !line.match?(/\AYou\b/))
                 pending_resolutions = current_event[:resolutions] + pending_resolutions
                 superseded_cast = true
                 current_event = nil
@@ -1044,8 +1118,20 @@ module Lich
             end
           end
 
-          # Don't forget the last event
-          events << current_event if event_savable?(current_event)
+          # Don't forget the last event - unless it is a bare gesture whose
+          # spell result has not arrived yet. Live chunks split at the prompt,
+          # and "You gesture at X." / "Cast Roundtime 1 Second." end right
+          # there, so the wrapper closed and emitted as a fact-less `cast`
+          # attack before the briar's lash arrived in the next chunk (real-
+          # feed 2026-09-07: 15 phantom casts per hunt, every tangleweed
+          # recorded without its via: :cast). Hold it for ONE chunk; the next
+          # parse re-opens it (see the top of this method) and either
+          # supersedes it or emits it as it stands.
+          if bare_cast?(current_event) && !current_event[:_held] && current_event[:attacker].nil?
+            @held_cast = current_event
+          elsif event_savable?(current_event)
+            events << current_event
+          end
 
           # Orphaned rolls: no attack ever claimed them (trailing rider
           # maneuvers - the pilfer pat-down roll, a topple - or a bespoke
@@ -1227,6 +1313,68 @@ module Lich
 
           respond "  Total damage applied: #{total_damage}" if total_damage > 0 && Tracker.debug?(:verbose)
           emit_debug_summary(event)
+
+          # Death detection (2026-09-07). Crit tables flag a FATAL crit, but a
+          # creature that dies of hit-point loss, or to a coup de grace (no
+          # damage line at all), printed only its creature-specific death
+          # message - and nothing here emitted a death, so every such kill
+          # stayed "alive" for recorders (real-feed: 9 mastodon deaths in a
+          # hunt, 3 recorded). The universal signal is the room feed's
+          # <crtrStatus dead="1"/>, already parsed onto the creature as
+          # crtr_flag?(:dead). Watch every creature this event touched and
+          # emit ONE `dead` status when the flag turns on.
+          watch_for_death(target[:id])
+          (event[:flares] || []).each { |f| watch_for_death(f.dig(:target_info, :id)) }
+          sweep_death_watch
+        end
+
+        # -- death watch ---------------------------------------------------
+
+        # How many sweeps a touched creature stays watched without dying.
+        # Two chunks covers the room-refresh lag seen in real feeds; anything
+        # longer is a creature that simply survived.
+        DEATH_WATCH_SWEEPS = 3
+
+        def watch_for_death(id)
+          return unless id
+
+          @death_watch ||= {}
+          @death_watch[id.to_i] = DEATH_WATCH_SWEEPS
+        end
+
+        # Emits :status dead (add) for any watched creature whose registry
+        # entry now reports the dead classification flag, once per creature.
+        def sweep_death_watch
+          return if @death_watch.nil? || @death_watch.empty?
+          return unless defined?(Creature)
+
+          @death_announced ||= {}
+          @death_watch.keys.each do |id|
+            creature = Creature[id]
+            if creature.nil?
+              @death_watch.delete(id) # left the registry - nothing to confirm
+              next
+            end
+            if creature_dead?(creature)
+              @death_watch.delete(id)
+              next if @death_announced.key?(id)
+
+              @death_announced[id] = true
+              @death_announced.shift if @death_announced.size > 1_000 # bound the memory
+              Observers.emit(:status, id: creature.id, name: creature.name,
+                                      status: 'dead', action: :add)
+              respond "[Combat] #{creature.name} (#{id}) confirmed dead" if Tracker.debug?(:verbose)
+            elsif (@death_watch[id] -= 1) <= 0
+              @death_watch.delete(id)
+            end
+          end
+        end
+
+        def creature_dead?(creature)
+          (creature.respond_to?(:crtr_flag?) && creature.crtr_flag?(:dead)) ||
+            (creature.respond_to?(:has_status?) && creature.has_status?('dead'))
+        rescue StandardError
+          false
         end
 
         # Records one change against a creature for :summary output.
@@ -1483,9 +1631,9 @@ module Lich
             creature.clear_smote
             respond "[Combat] Cleared smite from #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
           end
-          Observers.emit(:ucs, id: creature.id, name: creature.name,
-                               kind: ucs_result[:type], value: ucs_result[:value],
-                               tier: ucs_result[:tier])
+          emit_fact(:ucs, id: creature.id, name: creature.name,
+                          kind: ucs_result[:type], value: ucs_result[:value],
+                          tier: ucs_result[:tier])
         rescue => e
           respond "[Combat] Error applying UCS: #{e.message}" if Tracker.debug?(:verbose)
         end
@@ -1527,8 +1675,8 @@ module Lich
               creature.add_status(status)
               respond "[Combat] Applied status #{status} to #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
             end
-            Observers.emit(:status, id: creature.id, name: creature.name,
-                                    status: status, action: action == :remove ? :remove : :add)
+            emit_fact(:status, id: creature.id, name: creature.name,
+                               status: status, action: action == :remove ? :remove : :add)
           else
             respond "[Combat] Could not find creature for status: #{status} -> #{target_name_or_id}" if Tracker.debug?(:verbose)
           end

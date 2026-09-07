@@ -38,6 +38,38 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:target][:id]).to eq(452440152)
     end
 
+    it 'matches the briar entangle variant indoors ("on the floor", real-feed 2026-09-07)' do
+      line = "The lashing emerald briar lashes out at #{bolded(121654846, 'berserker', 'a tattooed gigas berserker')}, wraps itself around her body and entangles her on the floor."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:tangleweed)
+      expect(result[:target][:id]).to eq(121654846)
+    end
+
+    # Environmental / self-inflicted damage (real-feed 2026-09-07): no
+    # attacker, no "you" capture, yet the damage is ours to take.
+    it 'reports a frigid-wind cold tick as inbound damage to us' do
+      result = described_class.parse_attack('The burn of the cold tears precious warmth from your flesh.')
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:frigid_wind)
+      expect(result[:inbound]).to be true
+      expect(result[:target]).to eq({})
+    end
+
+    it 'reports a nearby player taking the cold tick as a foreign target, not inbound' do
+      result = described_class.parse_attack('Onkel shivers as the cold settles into his flesh.')
+      expect(result[:name]).to eq(:frigid_wind)
+      expect(result[:inbound]).to be_nil
+      expect(result[:foreign_target]).to be true
+    end
+
+    it 'reports the thorn bow recoil as inbound damage to us' do
+      line = 'As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.  A single vine thwaps your left hand as it returns to the longbow.'
+      result = described_class.parse_attack(line)
+      expect(result[:name]).to eq(:thorn_recoil)
+      expect(result[:inbound]).to be true
+    end
+
     it 'matches the classic ewave messaging' do
       line = "#{bolded(98732276, 'shield-maiden', 'A brawny gigas shield-maiden')} is buffeted by the churning ethereal waves and is knocked to the ground."
       result = described_class.parse_attack(line)
