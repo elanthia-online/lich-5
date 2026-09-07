@@ -244,5 +244,99 @@ RSpec.describe 'Lich::Common::Script pause enforcement' do
       wait_thread.join(2)
       expect(wait_thread).not_to be_alive
     end
+
+    # Astra review, PR #1537 (finding 1): the entry/per-iteration pause check
+    # happens *before* the predicate is evaluated, so a script paused while
+    # the predicate itself is blocked or yielding control would previously
+    # fall straight through to the caller the instant the predicate
+    # resolved, without ever re-checking pause. Deterministic via Queue
+    # hand-off rather than sleep timing, per that review's testability note.
+    it 'does not return to the caller if the script is paused while wait_while\'s predicate is resolving' do
+      script = build_script(name: 'waiter', paused: false)
+      allow(script_class).to receive(:current).and_return(script)
+      predicate_entered = Queue.new
+      release_predicate = Queue.new
+      keep_waiting = true
+
+      wait_thread = Thread.new do
+        wait_while do
+          predicate_entered << true
+          release_predicate.pop
+          keep_waiting
+        end
+      end
+
+      predicate_entered.pop # the predicate is now blocked, mid-evaluation
+      script.paused = true  # pause while control is inside the predicate
+      keep_waiting = false  # predicate will return false -- wait_while's exit condition
+      release_predicate << true
+
+      sleep 0.1
+      expect(wait_thread).to be_alive
+
+      script.paused = false
+      wait_thread.join(2)
+      expect(wait_thread).not_to be_alive
+    end
+
+    it 'does not return to the caller if the script is paused while wait_until\'s predicate is resolving' do
+      script = build_script(name: 'waiter', paused: false)
+      allow(script_class).to receive(:current).and_return(script)
+      predicate_entered = Queue.new
+      release_predicate = Queue.new
+      condition_met = false
+
+      wait_thread = Thread.new do
+        wait_until do
+          predicate_entered << true
+          release_predicate.pop
+          condition_met
+        end
+      end
+
+      predicate_entered.pop # the predicate is now blocked, mid-evaluation
+      script.paused = true  # pause while control is inside the predicate
+      condition_met = true  # predicate will return true -- wait_until's exit condition
+      release_predicate << true
+
+      sleep 0.1
+      expect(wait_thread).to be_alive
+
+      script.paused = false
+      wait_thread.join(2)
+      expect(wait_thread).not_to be_alive
+    end
+  end
+
+  describe 'Script.run' do
+    # Astra review, PR #1537 (finding 2): Script.start gained a pause
+    # checkpoint but the adjacent Script.run -- a separate public entry point
+    # used by e.g. lib/common/spell.rb -- called the same start primitive
+    # directly, bypassing it.
+    it 'does not let Script.run initiate a new script until the calling script is unpaused' do
+      caller_script = build_script(name: 'bigshot', paused: true)
+      script_class.class_variable_set(:@@running, [caller_script])
+      started_script = instance_double(script_class, join: 'child-name')
+      original_start = script_class.class_variable_get(:@@elevated_script_start)
+      script_class.class_variable_set(:@@elevated_script_start, proc { |_args, _parent| started_script })
+
+      begin
+        run_thread = Thread.new do
+          Thread.current.thread_variable_set(Lich::Common::Script::CLEANUP_SCRIPT_THREAD_KEY, caller_script)
+          script_class.run('child')
+        end
+
+        sleep 0.1
+        expect(run_thread).to be_alive
+
+        caller_script.paused = false
+        run_thread.join(2)
+
+        expect(run_thread).not_to be_alive
+        expect(run_thread.value).to eq('child-name')
+      ensure
+        script_class.class_variable_set(:@@elevated_script_start, original_start)
+      end
+    end
   end
 end
