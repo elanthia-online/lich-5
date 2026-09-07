@@ -140,7 +140,8 @@ module Lich
             inbound     INTEGER NOT NULL DEFAULT 0,
             orphan      INTEGER NOT NULL DEFAULT 0,
             foreign_caster INTEGER NOT NULL DEFAULT 0, -- a nearby player's attack (observed, not ours)
-            unowned     INTEGER NOT NULL DEFAULT 0     -- effect tick, no owning cast: applied to creature, not our deal
+            unowned     INTEGER NOT NULL DEFAULT 0,    -- effect tick, no owning cast: applied to creature, not our deal
+            redirected_from TEXT                       -- guardian redirect: noun of the creature we struck AT; the row's creature is the guardian that took it
           );
           CREATE INDEX IF NOT EXISTS idx_attacks_session ON attacks(session_id, seq);
           CREATE INDEX IF NOT EXISTS idx_attacks_creature ON attacks(creature_id);
@@ -244,6 +245,7 @@ module Lich
           @db.execute('PRAGMA journal_mode = WAL')
           @db.execute('PRAGMA synchronous = NORMAL')
           @db.execute_batch(SCHEMA)
+          migrate!
           @seq = 0
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
           @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
@@ -365,6 +367,25 @@ module Lich
 
         private
 
+        # Additive schema migrations for databases created before a column
+        # existed. CREATE TABLE IF NOT EXISTS never alters an existing table,
+        # so each column added after first release is listed here and ALTERed
+        # in when absent. Keep entries append-only.
+        ADDED_COLUMNS = {
+          'attacks' => { 'redirected_from' => 'TEXT' }
+        }.freeze
+
+        def migrate!
+          ADDED_COLUMNS.each do |table, cols|
+            present = @db.execute("PRAGMA table_info(#{table})").map { |r| r[1] }
+            cols.each do |col, type|
+              next if present.include?(col)
+
+              @db.execute("ALTER TABLE #{table} ADD COLUMN #{col} #{type}")
+            end
+          end
+        end
+
         # -- creatures -----------------------------------------------------------
 
         # Run a block inside a DB transaction, publishing creature-cache
@@ -484,14 +505,19 @@ module Lich
                       event[:weapon], outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
                       event[:aimed] ? 1 : 0, event[:ambush] ? 1 : 0,
                       event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0,
-                      event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0]
+                      event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0,
+                      # only an HONORED redirect changes who the row is about;
+                      # an announced-but-unhonored one (UAC shape) resolved on
+                      # the intended creature, which the row already names
+                      (event[:redirect] && event[:redirect][:honored] != false) ? event[:redirect][:intended] : nil]
             @db.execute(<<~SQL, params)
               INSERT INTO attacks (session_id, seq, occurred_at, name, parent, parent_weapon,
                                    root_attack_id, parent_attack_id, parent_confidence,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
-                                   outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned,
+                                   redirected_from)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
             # stage the uid -> row mapping; published to @chunk_rows only when

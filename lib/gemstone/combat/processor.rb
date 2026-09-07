@@ -224,6 +224,12 @@ module Lich
           # by an outcome when the ambush is wholly negated and no attack
           # line is ever printed).
           pending_ambush = nil
+          # Armed by a guardian redirect prefix ("<shield-maiden> throws
+          # herself between you and the <mastodon> to intercept your
+          # attack!"); claimed by the next own attack, whose target IS the
+          # guardian. Records that the DS rolled against was the
+          # guardian's, not the intended victim's (see REDIRECT_PREFIXES).
+          pending_redirect = nil
           # Dispel-family flares seen in THIS chunk, by stripped target id
           # (:any when the flare line names no target). Used to attribute
           # spell_loss cause - a wear-off riding a dispel strip means
@@ -294,6 +300,13 @@ module Lich
             line_attack = Parser.parse_attack(line)
             inbound_line = line_attack ? line_attack[:inbound] : false
             line_target = inbound_line ? nil : Parser.extract_target_from_line(line)
+            # Guardian redirect announce (see pending_redirect decl). Hoisted
+            # here because the line BOLDS THE GUARDIAN, and the target
+            # switcher below would otherwise read that link as a switch off
+            # the open attack - saving it fact-less and spawning an inherited
+            # phantom on the guardian (the UAC shape then re-switched back on
+            # the positioning line: three events for one kick).
+            line_redirect = Definitions::Attacks.redirect_prefix(line)
             # The id a status applied to on THIS line: after the switch/attack
             # handling below, the event holding that target is flagged - a
             # status IS a fact, and a per-target line whose only payload is
@@ -468,7 +481,7 @@ module Lich
             # A foreign-target event (the def named a player or an
             # unresolvable name) is bound to a non-creature for the same
             # reason and must not adopt one either.
-            if line_target && parse_state != :seeking_attack &&
+            if line_target && !line_redirect && parse_state != :seeking_attack &&
                !(current_event && (current_event[:inbound] || current_event[:foreign_target] ||
                                    current_event[:foreign_caster]))
               # Check if this is a real target switch (different creature)
@@ -640,11 +653,44 @@ module Lich
               respond '[Combat] Ambush prefix armed' if Tracker.debug?(:verbose)
             end
 
+            # Guardian redirect prefix (see pending_redirect decl). Like the
+            # ambush prefix it is a modifier on the attack line that follows,
+            # never an event or outcome of its own. The interceptor is the
+            # bolded creature on the line when the feed carries links.
+            if (rdr = line_redirect)
+              redirect = {
+                interceptor: line_target || { name: Parser.strip_links(rdr[:interceptor]) },
+                intended: rdr[:intended]
+              }
+              # UAC shape (corpus: 21/130, all "You attempt to kick <X>!"):
+              # the announce comes AFTER the attack line, no re-issued
+              # attack follows, and the roll/damage still land on the
+              # intended victim. The guardian announced but did not take
+              # the hit. Stamp the open attack as an unhonored redirect so
+              # the fact survives, and do NOT arm the pending marker - a
+              # later unrelated swing in the chunk must not claim it.
+              # (noun from the link; in stripped mode the open event carries
+              # no target identity at all, so an open fact-less attack is
+              # taken as the intended one - the only shape the corpus shows)
+              open_noun = current_event && current_event[:target] &&
+                          (current_event[:target][:noun] || current_event[:target][:name]&.split&.last)
+              if current_event && !current_event[:redirect] && current_event[:_attack_born] &&
+                 (open_noun.nil? || open_noun == rdr[:intended]) &&
+                 current_event[:resolutions].empty? && current_event[:hits].empty? &&
+                 current_event[:outcomes].empty?
+                current_event[:redirect] = redirect.merge(honored: false)
+                respond "[Combat] Redirect announced but not honored (#{rdr[:intended]})" if Tracker.debug?(:verbose)
+              else
+                pending_redirect = redirect.merge(honored: true)
+                respond "[Combat] Redirect prefix armed: intended #{rdr[:intended]}" if Tracker.debug?(:verbose)
+              end
+            end
+
             # Attack check is needed in both states (a new attack while seeking
             # damage closes the previous event), so run it once per line. This
             # replaces the old `redo`, which re-ran the status/UCS handlers
             # above on the same line and double-applied their effects.
-            attack = amb ? nil : line_attack
+            attack = (amb || rdr) ? nil : line_attack
 
             if attack
               # A bare gesture :cast event is the WRAPPER for whatever
@@ -752,6 +798,11 @@ module Lich
                 # bonuses (DS pushdown + crit weighting). A modifier on the
                 # attack, not an attack of its own.
                 ambush: !pending_ambush.nil?,
+                # A guardian stepped in front of the creature we struck at
+                # and this attack resolved against the guardian instead:
+                # { interceptor: {id?, name}, intended: <victim noun> }.
+                # A modifier, not an outcome - nothing was nullified.
+                redirect: pending_redirect,
                 # Aimed shot ("take aim and", or UAC's "make a precise").
                 # Same shape as :ambush - a modifier, not an attack. The
                 # defs captured this all along and it was never surfaced.
@@ -838,8 +889,9 @@ module Lich
                 cast_owner[cast_owner_key.call(current_event[:name], current_event[:target])] = owner
               end
 
-              # Claimed - the ambush belongs to this attack only.
+              # Claimed - the ambush/redirect belong to this attack only.
               pending_ambush = nil
+              pending_redirect = nil
               current_target = current_event[:target][:id] ? current_event[:target] : nil
 
               # Assault binding: while an assault is open, its own targetless

@@ -129,6 +129,143 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     expect(events.map { |e| e[:target][:id] }).not_to include(129427134)
   end
 
+  # A guardian creature stepping in front of the creature we struck at is a
+  # MODIFIER on the attack that follows (which now names the guardian), not
+  # an intercept outcome: the attack resolved in full against the guardian.
+  # Real-feed 2026-09-07 (gigas hunt, mirror echo redirected off a mastodon
+  # onto a shield-maiden); corpus shows the same shape after ambush prefixes
+  # and thrown/UAC openers (130 lines, always followed by an attack line).
+  describe 'guardian redirect prefix' do
+    let(:mastodon) { bolded(1001, 'mastodon', 'a heavily armored battle mastodon') }
+    let(:maiden) { bolded(1002, 'shield-maiden', 'a brawny gigas shield-maiden') }
+    let(:redirect_line) do
+      "Gritting her teeth with determination, #{maiden} raises her targe and throws herself between you and the mastodon to intercept your attack!"
+    end
+
+    it 'stamps the following attack with interceptor + intended victim and opens no event of its own' do
+      chunk = [
+        redirect_line,
+        "You fire a faewood arrow at #{maiden}!",
+        '  AS: +652 vs DS: +394 with AvD: +38 + d100 roll: +32 = +328',
+        '   ... and hit for 50 points of damage!',
+        '<prompt time="1">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.size).to eq(1)
+      fire = events.first
+      expect(fire[:name]).to eq(:fire)
+      expect(fire[:target][:id]).to eq(1002)
+      expect(fire[:outcomes]).to be_empty
+      expect(fire[:redirect]).to eq(interceptor: { id: 1002, noun: 'shield-maiden', name: 'a brawny gigas shield-maiden' },
+                                    intended: 'mastodon', honored: true)
+      expect(fire[:hits].map { |h| h[:damage] }).to eq([50])
+    end
+
+    # UAC shape (corpus 21/130): the announce follows the kick line, no
+    # attack is re-issued, and the roll + damage still land on the intended
+    # creature. Record the announce on the open kick as unhonored and do
+    # not let a later swing in the chunk claim it.
+    it 'marks an announce that follows the attack line, with resolution still on the intended target, as unhonored' do
+      skald = bolded(1003, 'skald', 'a grim gigas skald')
+      chunk = [
+        'You leap from hiding to strike!',
+        "You attempt to kick #{skald}!",
+        "Gritting her teeth with determination, #{maiden} raises her targe and throws herself between you and the skald to intercept your attack!",
+        "You have good positioning against #{skald}.",
+        '  UAF: 746 vs UDF: 629 = 1.186 * MM: 92 + d100: 94 = 203',
+        '  ... and hit for 71 points of damage!',
+        "You fire a faewood arrow at #{mastodon}!",
+        '   ... and hit for 10 points of damage!',
+        '<prompt time="5">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.map { |e| e[:target][:id] }).to eq([1003, 1001])
+      kick = events[0]
+      expect(kick[:name]).to eq(:kick)
+      expect(kick[:hits].map { |h| h[:damage] }).to eq([71])
+      expect(kick[:redirect]).to include(intended: 'skald', honored: false)
+      expect(kick[:redirect][:interceptor][:id]).to eq(1002)
+      expect(events[1][:redirect]).to be_nil
+    end
+
+    it 'does not file the redirect on the previous (still open) attack, and does not leak' do
+      chunk = [
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +328 with AvD: +20 + d100 roll: +1 = +345',
+        '   ... and hit for 63 points of damage!',
+        ' ** Fleeting and insubstantial, a whisper of shadow coalesces beside you, echoing your attack with one of its own! **',
+        redirect_line,
+        "You fire a faewood arrow at #{maiden}!",
+        '   ... and hit for 50 points of damage!',
+        "You fire a faewood arrow at #{mastodon}!",
+        '   ... and hit for 10 points of damage!',
+        '<prompt time="2">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.map { |e| e[:target][:id] }).to eq([1001, 1002, 1001])
+      expect(events.map { |e| e[:redirect]&.dig(:intended) }).to eq([nil, 'mastodon', nil])
+      expect(events[0][:outcomes]).to be_empty
+      expect(events[0][:flares].map { |f| f[:name] }).to eq([:mirror_image])
+      expect(events[0][:flares].first[:outcomes]).to be_empty
+    end
+
+    it 'coexists with an ambush prefix (both flags land on the same attack)' do
+      chunk = [
+        'You leap from hiding to attack!',
+        redirect_line,
+        "You take aim and punch with a somnis katar at #{maiden}!",
+        '  AS: +728 vs DS: +427 with AvD: +38 + d100 roll: +71 = +410',
+        '   ... and hit for 90 points of damage!',
+        '<prompt time="3">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.size).to eq(1)
+      expect(events.first[:ambush]).to be(true)
+      expect(events.first[:redirect][:intended]).to eq('mastodon')
+    end
+  end
+
+  # Hunter's afterimage re-forms the arrow and fires AGAIN as its own swing.
+  # The announce lands on the shot it rode (still open); the echo swing that
+  # follows is its own event carrying its own roll and damage - the flare
+  # must NOT be damaging or it would steal that swing's cursor.
+  describe 'hunters afterimage flare' do
+    let(:mastodon) { bolded(1001, 'mastodon', 'a heavily armored battle mastodon') }
+
+    it 'attaches to the shot it rode and leaves the echo swing its own damage' do
+      chunk = [
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +375 with AvD: +20 + d100 roll: +20 = +317',
+        '   ... and hit for 48 points of damage!',
+        ' ** A radiant afterimage of the arrow appears in your ready hand, coalescing to replace its predecessor! **',
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +328 with AvD: +20 + d100 roll: +1 = +345',
+        '   ... and hit for 63 points of damage!',
+        '<prompt time="4">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.size).to eq(2)
+      expect(events[0][:flares].map { |f| f[:name] }).to eq([:hunters_afterimage])
+      expect(events[0][:flares].first[:hits]).to be_empty
+      expect(events[0][:hits].map { |h| h[:damage] }).to eq([48])
+      expect(events[1][:flares]).to be_empty
+      expect(events[1][:hits].map { |h| h[:damage] }).to eq([63])
+    end
+
+    it 'recognises the third-person form with the attacker' do
+      flare = Lich::Gemstone::Combat::Parser.parse_flare(
+        " ** A radiant afterimage of the arrow appears in Taloin's ready hand, coalescing to replace its predecessor! **"
+      )
+      expect(flare).not_to be_nil
+      expect(flare[:name]).to eq(:hunters_afterimage)
+    end
+  end
+
   # Ambush is a MODIFIER, not an attack. "<X> leaps from hiding to strike!"
   # carries no target and no roll - the attack that follows carries both,
   # and only gains the ambush bonuses (DS pushdown + crit weighting).

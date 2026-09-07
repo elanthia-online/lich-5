@@ -329,6 +329,20 @@ module Lich
               /\*\* Fleeting and insubstantial, a whisper of shadow coalesces beside (?<attacker>.+?), echoing #{MK_PRE}(?:his|her)#{MK_POST} attack with one of its own! \*\*/
             ].freeze, true, false, false),
 
+            # Hunter's afterimage: the arrow re-forms in hand and the bow
+            # fires AGAIN as its own "You fire ..." swing with its own roll
+            # and damage. The announce arrives while the shot it rode is
+            # still open (after that shot's damage/crit), so it attaches
+            # there; the echo swing that follows opens its own event.
+            # NOT damaging - the echo's damage belongs to the echo swing, and
+            # a damaging flare here would steal the cursor from it. Lineage
+            # is deliberately not chained (see processor spawn_root notes).
+            # (real-feed 2026-09-07, gigas hunt; 3p form from corpus.)
+            FlareDef.new(:hunters_afterimage, [
+              /\*\* A radiant afterimage of the .+? appears in your ready hand, coalescing to replace its predecessor! \*\*/,
+              /\*\* A radiant afterimage of the .+? appears in (?<attacker>.+?)'s#{MK_POST} ready hand, coalescing to replace its predecessor! \*\*/
+            ].freeze, false, false, false),
+
             # lance/weapon motes proc - rolls its own SMR immediately after
             # (logs/examples/weapon_guardant_thrust.txt); damaging so the
             # flare cursor owns that roll instead of orphaning it

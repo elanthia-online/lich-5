@@ -265,6 +265,43 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  describe 'guardian redirect (redirected_from)' do
+    it 'stores the intended victim noun; the row itself belongs to the guardian' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(name: 'fire', target_id: 1002, target_name: 'a brawny gigas shield-maiden',
+                                       redirect: { interceptor: { id: 1002, name: 'a brawny gigas shield-maiden' },
+                                                   intended: 'mastodon' }))
+      rec.record(:attack, attack_event(name: 'fire'))
+      # announced but not honored (UAC shape): the row already names the
+      # creature that took the hit, so nothing is redirected
+      rec.record(:attack, attack_event(name: 'uac', target_id: 1003, target_name: 'a grim gigas skald',
+                                       redirect: { interceptor: { id: 1002 }, intended: 'skald', honored: false }))
+      rec.close
+
+      rows = query('SELECT redirected_from, creature_id FROM attacks ORDER BY seq')
+      expect(rows[0]['redirected_from']).to eq('mastodon')
+      expect(rows[0]['creature_id']).not_to be_nil
+      expect(rows[1]['redirected_from']).to be_nil
+      expect(rows[2]['redirected_from']).to be_nil
+    end
+
+    it 'adds the column to a database created before it existed' do
+      legacy = SQLite3::Database.new(@db_path)
+      # drop the column (and the comma that now precedes it) from the DDL
+      pre = described_class::SCHEMA.gsub(/,([^\n]*\n)\s*redirected_from TEXT[^\n]*/, '\1')
+      expect(pre).not_to include('redirected_from')
+      legacy.execute_batch(pre)
+      cols = legacy.execute('PRAGMA table_info(attacks)').map { |r| r[1] }
+      legacy.close
+      expect(cols).not_to include('redirected_from')
+
+      rec = new_recorder
+      rec.close
+      expect(query('PRAGMA table_info(attacks)').map { |r| r['name'] }).to include('redirected_from')
+    end
+  end
+
   describe 'creature-cache rollback safety' do
     # Re-review finding (PR #1559): ensure_creature cached a creature id inside
     # a transaction; if that transaction rolled back, the DB row was undone but

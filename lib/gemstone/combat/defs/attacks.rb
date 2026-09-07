@@ -446,6 +446,49 @@ module Lich
             nil
           end
 
+          # REDIRECT PREFIXES - modifiers, not attacks and not outcomes.
+          #
+          # A guardian creature (gigas shield-maiden) steps between us and
+          # the creature we struck at, and the attack RESOLVES IN FULL
+          # against the guardian instead. The line names the guardian and
+          # the intended victim (by noun) and is followed by the real attack
+          # line, which now names the guardian as its target:
+          #
+          #     Gritting her teeth ..., a brawny gigas shield-maiden raises
+          #       her targe and throws herself between you and the mastodon
+          #       to intercept your attack!                <- prefix
+          #     You fire a faewood arrow at a brawny gigas shield-maiden!
+          #       AS: ... = +328                            <- the real attack
+          #
+          # Corpus (130 lines, 2026-09-07): the follower is ALWAYS an attack
+          # line (aimed/ambush/thrown/UAC/echo shot). So this is not an
+          # :intercept outcome - nothing was nullified, and treating it as
+          # one would either file it on the PREVIOUS attack (the one still
+          # open) or fabricate a phantom :unknown event when no attack is
+          # open (the ambush-prefix + kick cases). Instead it arms a pending
+          # marker the next attack claims as `redirect: { interceptor:,
+          # intended: }`, so per-creature hit stats know the guardian's DS
+          # was rolled against, not the intended victim's.
+          REDIRECT_PREFIXES = [
+            /\A(?:Gritting (?:her|his|its) teeth with determination, )?(?<interceptor>.+?) raises (?:her|his|its) \S+ and throws (?:herself|himself|itself) between you and the (?<intended>[^!]+?) to intercept your attack!/
+          ].freeze
+
+          REDIRECT_GATE, REDIRECT_ALWAYS_SCAN = PatternGate.build(REDIRECT_PREFIXES)
+
+          # True when the line announces a guardian intercepting the attack
+          # that follows; returns the interceptor (raw, links intact) and the
+          # intended victim's noun.
+          def self.redirect_prefix(line)
+            return nil if PatternGate.rejects?(REDIRECT_GATE, REDIRECT_ALWAYS_SCAN, line)
+
+            REDIRECT_PREFIXES.each do |pattern|
+              next unless (m = pattern.match(line))
+
+              return { interceptor: m[:interceptor], intended: m[:intended] }
+            end
+            nil
+          end
+
           # All attack definitions combined
           # Ordering is load-bearing: PRIORITY defs pre-empt the generic
           # swing patterns; second-person defs come before third-person so
