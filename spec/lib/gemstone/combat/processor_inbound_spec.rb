@@ -626,5 +626,29 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # each is its own root
       events.each { |e| expect(e[:root_uid]).to eq(e[:_uid]) }
     end
+
+    # Re-review finding (PR #1559): a multi-target AoE line that BOTH switches
+    # target AND matches an attack def (per-target arrow at a different
+    # creature) had the attack branch discard the switch artifact's inherited
+    # lineage and recompute a fresh root - fragmenting the AoE into N
+    # single-hit roots. Each per-target hit is the SAME attack on another
+    # creature and must share the opener's root.
+    it 'shares one root across a multi-target AoE hitting different creatures' do
+      orc = bolded(501, 'orc', 'a greater orc')
+      troll = bolded(502, 'troll', 'a cave troll')
+      chunk = [
+        "You fire a faewood arrow at #{orc}!",
+        '   ... and hits for 20 points of damage!',
+        # same attack, next creature - a target switch that is also an attack def
+        "You fire a faewood arrow at #{troll}!",
+        '   ... and hits for 15 points of damage!',
+        '<prompt time="1758161238">&gt;</prompt>'
+      ]
+      events = process_chunk(chunk).select { |e| e[:_attack_born] }
+      expect(events.size).to eq(2)
+      expect(events.map { |e| e[:target][:id] }).to eq([501, 502]) # different creatures
+      # both share the opener's root (uid 0), not fragmented into two roots
+      expect(events.map { |e| e[:root_uid] }).to eq([0, 0])
+    end
   end
 end

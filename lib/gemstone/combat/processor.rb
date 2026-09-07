@@ -681,8 +681,21 @@ module Lich
               # the switch branch above (volley: the arrow's own SMR) -
               # they belong to THIS attack, so carry them across the
               # replacement instead of discarding them with the artifact.
-              if current_event && current_event[:_line] == index && current_event[:resolutions].any?
-                pending_resolutions = current_event[:resolutions] + pending_resolutions
+              # The switch artifact also inherited spawn-tree lineage from the
+              # sibling it split from (a multi-target AoE per-target line is the
+              # same attack striking another creature - same tree node). Capture
+              # it here so the fresh current_event below can carry it forward
+              # instead of recomputing a fresh root and fragmenting the AoE.
+              switch_artifact_lineage = nil
+              if current_event && current_event[:_line] == index
+                pending_resolutions = current_event[:resolutions] + pending_resolutions if current_event[:resolutions].any?
+                if current_event[:root_ref]
+                  switch_artifact_lineage = {
+                    root_ref: current_event[:root_ref],
+                    parent_ref: current_event[:parent_ref],
+                    parent_confidence: current_event[:parent_confidence]
+                  }
+                end
               end
 
               # Foreign-attacker latch (see foreign_latch decl). A 2p "You..."
@@ -783,9 +796,18 @@ module Lich
               #     lineage (the initial->afterimage->mirror sibling-vs-child
               #     case). Left for the count-constraint / spawn-detection pass.
               #   - inbound/foreign/orphan events are their own root regardless.
-              if active_spawn && spawn_root &&
-                 !(current_event[:inbound] || current_event[:foreign_target] ||
-                   current_event[:foreign_caster] || current_event[:unowned] || current_event[:_orphan])
+              if switch_artifact_lineage
+                # Same-line AoE per-target line: this is the same attack
+                # striking another creature, so it sits at the SAME spawn-tree
+                # node as the sibling it split from. Carry that lineage forward
+                # rather than recomputing (which would fragment the AoE into N
+                # independent single-hit roots).
+                current_event[:root_ref] = switch_artifact_lineage[:root_ref]
+                current_event[:parent_ref] = switch_artifact_lineage[:parent_ref]
+                current_event[:parent_confidence] = switch_artifact_lineage[:parent_confidence]
+              elsif active_spawn && spawn_root &&
+                    !(current_event[:inbound] || current_event[:foreign_target] ||
+                      current_event[:foreign_caster] || current_event[:unowned] || current_event[:_orphan])
                 current_event[:root_ref] = spawn_root
                 current_event[:parent_ref] = spawn_root
                 current_event[:parent_confidence] = :bracket
