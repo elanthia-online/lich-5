@@ -2,6 +2,7 @@
 
 require_relative 'authenticator'
 require_relative 'launch_data'
+require_relative '../gui/launch_settings'
 
 module Lich
   module Common
@@ -25,6 +26,15 @@ module Lich
           button.sensitive = false
 
           begin
+            if Lich::Common::GUI::LaunchSettings.external?(login_info)
+              begin
+                Lich::Common::GUI::LaunchSettings.preflight!(login_info)
+              rescue ArgumentError => e
+                button.sensitive = true
+                Lich.msgbox(message: e.message, icon: :error)
+                return
+              end
+            end
             # Authenticate with game server
             auth_data = Authentication.authenticate(
               account: login_info[:user_id],

@@ -213,7 +213,7 @@ RSpec.describe Lich::Common::Frontend do
     it 'exposes the first-tier GUI frontend catalog from one registry' do
       ids = frontend.definitions(gui_selectable: true).map { |definition| definition[:id] }
 
-      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
+      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga', 'profanity')
     end
 
     it 'keeps historical Wrayth and Wizard GUI choices available on macOS' do

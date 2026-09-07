@@ -11,6 +11,24 @@ RSpec.describe Lich::Common, "#gui_login" do
   let(:entry_data) { [] }
   let(:launch_data) { ["KEY=value", "SERVER=game.example.com"] }
 
+  it 'continues an unsaved headless login in-process with its configured listener' do
+    stub_const('ARGV', [])
+    options = {}
+    test_instance.instance_variable_set(:@argv_options, options)
+    test_instance.instance_variable_set(:@persistent_launcher_mode, false)
+    allow(test_instance).to receive(:close_launcher_window)
+    expect(Lich::Common::SessionLauncher).not_to receive(:launch)
+
+    test_instance.send(:handle_play_action, launch_data, {
+      frontend: 'profanity', launch_mode: 'external', listen_port: 8001, saved_entry: false
+    })
+
+    expect(options).to include(detachable_client_host: '127.0.0.1', detachable_client_port: 8001)
+    expect(ARGV).to include('--without-frontend', '--frontend=profanity', '--detachable-client=127.0.0.1:8001')
+    expect(test_instance.instance_variable_get(:@launch_data)).to eq(launch_data)
+    expect(test_instance).to have_received(:close_launcher_window)
+  end
+
   # Create test doubles at RSpec example group scope
   let(:custom_launch_entry) { double("CustomLaunchEntry", visible: nil) }
   let(:custom_launch_dir) { double("CustomLaunchDir", visible: nil) }

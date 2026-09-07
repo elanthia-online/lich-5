@@ -662,6 +662,9 @@ module Lich
       else
         # Default/single-launch path: used when persistent mode is disabled OR
         # when launch originates from manual login.
+        if Lich::Common::GUI::LaunchSettings.external?(login_context)
+          Lich::Common::GUI::LaunchSettings.apply_to_runtime!(login_context, argv: ARGV, options: @argv_options)
+        end
         @launch_data = launch_data
         close_launcher_window
       end

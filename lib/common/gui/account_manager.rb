@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../frontend'
+require_relative 'launch_settings'
 
 module Lich
   module Common
@@ -357,7 +358,7 @@ module Lich
         # @param custom_launch [String, nil] exact selected custom command
         # @param frontend [String] new configured frontend identifier
         # @return [Boolean] whether the change was saved
-        def self.change_frontend(data_dir, username, char_name, game_code, old_frontend:, custom_launch:, frontend:)
+        def self.update_launch_settings(data_dir, username, char_name, game_code, old_frontend:, custom_launch:, frontend: old_frontend, launch_mode: :__unset, listen_port: :__unset)
           definition = Frontend.definition_for(frontend)
           return false if definition.dig(:metadata, :native_launch_only) && !custom_launch.to_s.strip.empty?
 
@@ -377,6 +378,17 @@ module Lich
           return false if candidates.any? { |other| !other.equal?(character) && other['frontend'] == definition[:id] }
 
           character['frontend'] = definition[:id]
+          character['launch_mode'] = launch_mode unless launch_mode == :__unset
+          character['listen_port'] = listen_port unless listen_port == :__unset
+          if old_frontend != definition[:id]
+            if definition.dig(:metadata, :external_client_only) && custom_launch.to_s.strip.empty?
+              character['launch_mode'] = 'external'
+            elsif !definition[:capabilities].include?(:xml)
+              character['launch_mode'] = 'client'
+            end
+          end
+          normalized = LaunchSettings.resolve(character.transform_keys(&:to_sym))
+          character['listen_port'] = normalized[:port] if character.key?('listen_port') && normalized[:port]
           write_yaml_with_headers(yaml_file, yaml_data)
         rescue StandardError => e
           Lich.log "error: Could not change saved frontend: #{e.class}"
@@ -455,6 +467,8 @@ module Lich
                   game_code: char['game_code'],
                   game_name: char['game_name'],
                   frontend: char['frontend'],
+                  launch_mode: char['launch_mode'],
+                  listen_port: char['listen_port'],
                   custom_launch: char['custom_launch'],
                   custom_launch_dir: char['custom_launch_dir']
                 }

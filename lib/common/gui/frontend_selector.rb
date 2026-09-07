@@ -85,6 +85,7 @@ module Lich
         # @return [Boolean]
         def launchable?(refresh: true)
           return false unless selected_id
+          return true if @frontend.definition_for(selected_id).dig(:metadata, :external_client_only)
 
           FrontendLauncher.launchable?(
             selected_id,
@@ -99,6 +100,12 @@ module Lich
         # @return [Boolean]
         def empty?
           @definitions.empty?
+        end
+
+        # Stable ids and annotated labels shared by form and inline selectors.
+        # @return [Array<Array<String>>] frontend choices
+        def choices
+          @definitions.map { |definition| [definition[:id], option_label(definition)] }
         end
 
         private
@@ -170,7 +177,9 @@ module Lich
         # @api private
         def option_label(definition)
           label = definition.dig(:metadata, :display_name) || definition[:id].capitalize
-          state = if configured_custom?(definition)
+          state = if definition.dig(:metadata, :external_client_only)
+                    'external client'
+                  elsif configured_custom?(definition)
                     'configured'
                   elsif @resolution_by_id.key?(definition[:id])
                     'detected'

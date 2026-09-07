@@ -7,38 +7,46 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
   describe 'changing a saved frontend' do
     let(:manager) { described_class.new('/saved') }
     let(:row) { ['TEST', 'Tester', 'GemStone IV', 'Wrayth', 'GS3', '', nil, 'stormfront'] }
-    let(:selector) { double('selector', widget: Object.new, selected_id: 'profanity') }
-    let(:content) { double('content', pack_start: nil) }
-    let(:dialog) { double('dialog', content_area: content, show_all: nil, destroy: nil, destroyed?: true) }
-
-    before do
-      stub_const('Gtk::ResponseType', Module.new)
-      Gtk::ResponseType.const_set(:OK, -5)
-      stub_const('Gtk::Dialog', Class.new)
-      allow(Gtk::Dialog).to receive(:new).and_return(dialog)
-      allow(content).to receive(:spacing=)
-      allow(content).to receive(:border_width=)
-      allow(Lich::Common::GUI::FrontendSelector).to receive(:new)
-        .with(selected_id: 'stormfront').and_return(selector)
-    end
-
-    it 'does not write on Cancel and destroys the dialog' do
-      allow(dialog).to receive(:run).and_return(-6)
-      expect(dialog).to receive(:destroy)
-      expect(Lich::Common::GUI::AccountManager).not_to receive(:change_frontend)
-      manager.send(:change_saved_frontend, row)
+    it 'does not allow editing an account header' do
+      expect(Lich::Common::GUI::AccountManager).not_to receive(:update_launch_settings)
+      manager.send(:commit_saved_launch, ['TEST'], frontend: 'profanity')
     end
 
     it 'saves the exact selected row and refreshes other launcher tabs' do
-      allow(dialog).to receive(:run).and_return(-5)
-      expect(Lich::Common::GUI::AccountManager).to receive(:change_frontend)
+      expect(Lich::Common::GUI::AccountManager).to receive(:update_launch_settings)
         .with('/saved', 'TEST', 'Tester', 'GS3', old_frontend: 'stormfront',
               custom_launch: nil, frontend: 'profanity').and_return(true)
       expect(manager).to receive(:refresh_accounts_display)
       expect(manager).to receive(:notify_data_changed)
         .with(:character_updated, { account: 'TEST', character: 'Tester', game_code: 'GS3' })
-      manager.send(:change_saved_frontend, row)
+      manager.send(:commit_saved_launch, row, frontend: 'profanity')
     end
+  end
+
+  it 'reads dropdown selections through their model, not an unbound GTK TreeIter' do
+    manager = described_class.new('/saved')
+    cell = double('combo renderer')
+    column = double('column', resizable: nil, set_cell_data_func: nil)
+    options = double('options')
+    selected = double('GTK signal TreeIter without a Ruby model')
+    row = double('saved row')
+    store = double('saved entries')
+    view = double('view', append_column: nil)
+    stub_const('Gtk::CellRendererCombo', Class.new)
+    stub_const('Gtk::TreeViewColumn', Class.new)
+    allow(Gtk::CellRendererCombo).to receive(:new).and_return(cell)
+    allow(Gtk::TreeViewColumn).to receive(:new).and_return(column)
+    %i[model= text_column= has_entry=].each { |setter| allow(cell).to receive(setter) }
+    allow(column).to receive(:resizable=)
+    callback = nil
+    allow(cell).to receive(:signal_connect) { |_signal, &block| callback = block }
+    expect(options).to receive(:get_value).with(selected, 0).and_return('profanity')
+    expect(selected).not_to receive(:[])
+    expect(store).to receive(:get_iter).with('0:0').and_return(row)
+    expect(manager).to receive(:commit_saved_launch).with(row, { frontend: 'profanity' })
+
+    manager.send(:add_launch_choice_column, view, store, 'Frontend', 3, options, :frontend)
+    callback.call(cell, '0:0', selected)
   end
 
   let(:row_class) do

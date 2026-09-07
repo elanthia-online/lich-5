@@ -106,6 +106,15 @@ RSpec.describe Lich::Common::GUI::FrontendSelector do
     expect(selector.selected_id).to eq('stormfront')
   end
 
+  it 'preserves a saved Profanity association instead of silently selecting Wrayth' do
+    allow(locator).to receive(:available).and_return([])
+
+    selector = described_class.new(selected_id: 'profanity', locator: locator)
+
+    expect(selector.widget.entries.map(&:first)).to include('profanity')
+    expect(selector.selected_id).to eq('profanity')
+  end
+
   it 'reports native-only launch metadata for the selection' do
     allow(Lich::Common::Frontend).to receive(:platform_key).and_return(:darwin)
     allow(locator).to receive(:available).and_return([resolution('avalon')])

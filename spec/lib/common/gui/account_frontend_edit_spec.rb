@@ -3,7 +3,7 @@
 require 'tmpdir'
 require_relative '../../../login_spec_helper'
 
-RSpec.describe Lich::Common::GUI::AccountManager, '.change_frontend' do
+RSpec.describe Lich::Common::GUI::AccountManager, '.update_launch_settings' do
   around do |example|
     Dir.mktmpdir('lich-frontend-edit') do |directory|
       @data_dir = directory
@@ -26,15 +26,16 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.change_frontend' do
   before { File.write(@path, YAML.dump(original)) }
 
   def change(frontend = 'profanity', **identity)
-    described_class.change_frontend(@data_dir, 'test', 'Tester', 'GS3',
-                                    old_frontend: 'stormfront', custom_launch: nil,
-                                    frontend: frontend, **identity)
+    described_class.update_launch_settings(@data_dir, 'test', 'Tester', 'GS3',
+                                           old_frontend: 'stormfront', custom_launch: nil,
+                                           frontend: frontend, **identity)
   end
 
   it 'changes only the exact saved entry, preserving credentials, favorites and launch data' do
     expect(change).to be true
     expected = Marshal.load(Marshal.dump(original))
     expected['accounts']['TEST']['characters'][1]['frontend'] = 'profanity'
+    expected['accounts']['TEST']['characters'][1]['launch_mode'] = 'external'
     expect(YAML.load_file(@path)).to eq(expected)
   end
 
@@ -62,6 +63,19 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.change_frontend' do
   it 'rejects Saga when the saved entry has a custom launch command' do
     before = File.binread(@path)
     expect(change('saga', custom_launch: '/opt/other-client')).to be false
+    expect(File.binread(@path)).to eq(before)
+  end
+
+  it 'persists a configurable headless port on just the selected entry' do
+    expect(change('stormfront', launch_mode: 'external', listen_port: '8001')).to be true
+    saved = YAML.load_file(@path)['accounts']['TEST']['characters']
+    expect(saved.first).to eq(other_entry)
+    expect(saved.last).to include('frontend' => 'stormfront', 'launch_mode' => 'external', 'listen_port' => 8001)
+  end
+
+  it 'rejects invalid ports without writing' do
+    before = File.binread(@path)
+    expect(change('stormfront', launch_mode: 'external', listen_port: '8001bad')).to be false
     expect(File.binread(@path)).to eq(before)
   end
 end

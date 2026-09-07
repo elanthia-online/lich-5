@@ -7,7 +7,7 @@ module Lich
       # Encapsulates all data needed for character login with favorites support
       class LoginParams
         attr_accessor :user_id, :password, :char_name, :game_code, :game_name,
-                      :frontend, :custom_launch, :custom_launch_dir,
+                      :frontend, :custom_launch, :custom_launch_dir, :launch_mode, :listen_port,
                       :is_favorite, :favorite_order, :favorite_added
 
         # Initializes a new LoginParams instance with favorites support
@@ -32,6 +32,8 @@ module Lich
           @game_code = params[:game_code]
           @game_name = params[:game_name]
           @frontend = params[:frontend]
+          @launch_mode = params[:launch_mode]
+          @listen_port = params[:listen_port]
           @custom_launch = params[:custom_launch]
           @custom_launch_dir = params[:custom_launch_dir]
           @is_favorite = params[:is_favorite] || false
@@ -50,6 +52,8 @@ module Lich
             game_code: @game_code,
             game_name: @game_name,
             frontend: @frontend,
+            launch_mode: @launch_mode,
+            listen_port: @listen_port,
             custom_launch: @custom_launch,
             custom_launch_dir: @custom_launch_dir,
             is_favorite: @is_favorite,

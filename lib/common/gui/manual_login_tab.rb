@@ -501,6 +501,16 @@ module Lich
               normalized_account = user_id_entry.text.upcase
               normalized_character = selected_iter[3].capitalize
 
+              if LaunchSettings.external?(frontend: frontend, custom_launch: custom_launch)
+                begin
+                  LaunchSettings.preflight!(frontend: frontend)
+                rescue ArgumentError => e
+                  @callbacks.on_error&.call(e.message)
+                  play_button.sensitive = true
+                  next
+                end
+              end
+
               launch_data_hash = Authentication.authenticate(
                 account: normalized_account,
                 password: pass_entry.text,

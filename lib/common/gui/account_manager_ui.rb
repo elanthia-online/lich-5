@@ -104,11 +104,22 @@ module Lich
           return unless @accounts_store
 
           begin
+            expanded_accounts = []
+            if @accounts_view
+              @accounts_store.each do |_model, path, iter|
+                expanded_accounts << iter[0] if iter[1].to_s.empty? && @accounts_view.row_expanded?(path)
+              end
+            end
             # Clear existing data
             @accounts_store.clear
 
             # Repopulate with current data
             populate_accounts_view(@accounts_store)
+            if @accounts_view
+              @accounts_store.each do |_model, path, iter|
+                @accounts_view.expand_row(path, false) if iter[1].to_s.empty? && expanded_accounts.include?(iter[0])
+              end
+            end
           rescue StandardError => e
             Lich.log "error: Error refreshing accounts display: #{e.message}"
           end
@@ -119,6 +130,7 @@ module Lich
         # @return [void]
         def refresh_frontends
           @frontend_selectors.each(&:reload!)
+          reload_inline_frontends if @inline_frontend_model
           nil
         end
 
@@ -136,9 +148,10 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String)
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
+          @accounts_view = accounts_view
 
           # Enable sortable columns
           accounts_view.set_headers_clickable(true)
@@ -166,12 +179,25 @@ module Lich
           col.clickable = true
           accounts_view.append_column(col)
 
-          # Frontend column - sortable
-          col = Gtk::TreeViewColumn.new("Frontend", renderer, text: 3)
-          col.resizable = true
-          col.set_sort_column_id(3)
-          col.clickable = true
-          accounts_view.append_column(col)
+          @inline_frontend_model = Gtk::ListStore.new(String, String)
+          reload_inline_frontends
+          add_launch_choice_column(accounts_view, accounts_store, 'Frontend', 3, @inline_frontend_model, :frontend)
+
+          mode_model = Gtk::ListStore.new(String, String)
+          [['client', 'Launch client'], ['external', 'Headless / external client']].each do |id, label|
+            option = mode_model.append
+            option[0], option[1] = id, label
+          end
+          add_launch_choice_column(accounts_view, accounts_store, 'Launch mode', 8, mode_model, :launch_mode)
+          port_renderer = Gtk::CellRendererText.new
+          port_column = Gtk::TreeViewColumn.new('Local port', port_renderer, text: 9)
+          port_column.set_cell_data_func(port_renderer) do |_column, cell, _model, iter|
+            cell.editable = !iter[1].to_s.empty? && iter[8] == 'Headless / external client'
+          end
+          port_renderer.signal_connect('edited') do |_cell, path, value|
+            commit_saved_launch(accounts_store.get_iter(path), listen_port: value)
+          end
+          accounts_view.append_column(port_column)
 
           # Favorites column with clickable star (not sortable)
           favorites_renderer = Gtk::CellRendererText.new
@@ -205,10 +231,6 @@ module Lich
           remove_button = Gtk::Button.new(label: "Remove")
           remove_button.sensitive = false
           button_box.pack_start(remove_button, expand: false, fill: false, padding: 0)
-
-          change_frontend_button = Gtk::Button.new(label: "Change Frontend")
-          change_frontend_button.sensitive = false
-          button_box.pack_start(change_frontend_button, expand: false, fill: false, padding: 0)
 
           # Create add account button
           add_account_button = Gtk::Button.new(label: "Add Account")
@@ -256,20 +278,13 @@ module Lich
 
               # Enable remove button for all selections
               remove_button.sensitive = !iter.nil?
-              change_frontend_button.sensitive = !character.to_s.empty?
 
               # Only enable change password for account nodes (not character nodes)
               change_password_button.sensitive = !account.nil? && (character.nil? || character.empty?)
             else
               remove_button.sensitive = false
-              change_frontend_button.sensitive = false
               change_password_button.sensitive = false
             end
-          end
-
-          change_frontend_button.signal_connect('clicked') do
-            iter = selection.selected
-            change_saved_frontend(iter) if iter && !iter[1].to_s.empty?
           end
 
           # Set up remove button handler
@@ -758,42 +773,54 @@ module Lich
 
         private
 
-        # Changes the association of an existing character using the same
-        # frontend catalog as Add Character. Cancel leaves the saved file alone.
-        # @param iter [Gtk::TreeIter] selected character row
+        # Rebuilds inline options from the same catalog as Add Character.
         # @return [void]
-        def change_saved_frontend(iter)
+        def reload_inline_frontends
+          @inline_frontend_model.clear
+          FrontendSelector.new(refresh: false).choices.each do |id, label|
+            option = @inline_frontend_model.append
+            option[0], option[1] = id, label
+          end
+        end
+
+        # Adds an editable character-only dropdown with stable-id selection.
+        # @return [void]
+        def add_launch_choice_column(view, store, title, index, options, field)
+          cell = Gtk::CellRendererCombo.new
+          cell.model = options
+          cell.text_column = 1
+          cell.has_entry = false
+          column = Gtk::TreeViewColumn.new(title, cell, text: index)
+          column.resizable = true
+          column.set_cell_data_func(cell) do |_column, renderer, _model, iter|
+            renderer.editable = !iter[1].to_s.empty?
+          end
+          cell.signal_connect('changed') do |_renderer, path, selected|
+            commit_saved_launch(store.get_iter(path), field => options.get_value(selected, 0)) if selected
+          end
+          view.append_column(column)
+        end
+
+        # Saves the selected row only; cancelling a cell edit never calls here.
+        # @param iter [Gtk::TreeIter] selected character row
+        # @param updates [Hash] launch fields selected by the user
+        # @return [void]
+        def commit_saved_launch(iter, updates)
+          return unless iter && !iter[1].to_s.empty?
+
           account, character, game_code = iter[0], iter[1], iter[4]
           old_frontend, custom_launch = iter[FRONTEND_ID_COLUMN], iter[6]
-          selector = FrontendSelector.new(selected_id: old_frontend)
-          dialog = Gtk::Dialog.new(
-            title: "Change Frontend - #{character}", parent: @window, flags: :modal,
-            buttons: [["Cancel", :cancel], ["Save", :ok]]
-          )
-          dialog.content_area.spacing = 10
-          dialog.content_area.border_width = 12
-          dialog.content_area.pack_start(Gtk::Label.new("Frontend for #{character}:"), expand: false, fill: false, padding: 0)
-          dialog.content_area.pack_start(selector.widget, expand: false, fill: true, padding: 0)
-          unless custom_launch.to_s.strip.empty?
-            notice = Gtk::Label.new('The existing custom launch command will be preserved.')
-            notice.wrap = true
-            dialog.content_area.pack_start(notice, expand: false, fill: true, padding: 0)
-          end
-          dialog.show_all
-          response = dialog.run
-          frontend = selector.selected_id
-          dialog.destroy
-          return unless response == Gtk::ResponseType::OK && frontend
-
-          if AccountManager.change_frontend(@data_dir, account, character, game_code,
-                                            old_frontend: old_frontend, custom_launch: custom_launch, frontend: frontend)
-            refresh_accounts_display
-            notify_data_changed(:character_updated, { account: account, character: character, game_code: game_code })
+          if AccountManager.update_launch_settings(@data_dir, account, character, game_code,
+                                                   old_frontend: old_frontend, custom_launch: custom_launch, **updates)
+            Gtk.queue do
+              refresh_accounts_display
+              notify_data_changed(:character_updated, { account: account, character: character, game_code: game_code })
+            end
           else
-            @msgbox.call('Could not change frontend. The entry may have changed, already exist, or have an incompatible custom launch command. Refresh and try again.')
+            Gtk.queue do
+              @msgbox.call('Could not save launch settings. Check the frontend/mode combination and port (1-65535), or refresh if this entry changed or already exists.')
+            end
           end
-        ensure
-          dialog.destroy if dialog && !dialog.destroyed?
         end
 
         # Notifies other tabs of data changes
@@ -1215,6 +1242,14 @@ module Lich
               char_iter[4] = character[:game_code] # Store game_code in hidden column
               char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
               char_iter[FRONTEND_ID_COLUMN] = character[:frontend]
+              begin
+                launch = LaunchSettings.resolve(character)
+                char_iter[8] = launch[:mode] == 'external' ? 'Headless / external client' : 'Launch client'
+                char_iter[9] = launch[:port]&.to_s
+              rescue ArgumentError
+                char_iter[8] = 'Needs configuration'
+                char_iter[9] = character[:listen_port]&.to_s
+              end
 
               # Add favorites information with frontend precision
               is_favorite = FavoritesManager.is_favorite?(
