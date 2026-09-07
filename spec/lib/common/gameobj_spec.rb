@@ -113,6 +113,23 @@ RSpec.describe Lich::Common::GameObj do
 
         expect(obj.after_name).to eq('after text')
       end
+
+      it 'refreshes before_name on a name-preserving move to a new container' do
+        # Same id/noun/name -> same identity-index entry, so the instance is
+        # reused. A move must update its command metadata, not keep the stale one.
+        first  = described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #20')
+        second = described_class.new_inv('10', 'gem', 'ruby', '30', 'get #10 in #30')
+
+        expect(second).to equal(first) # reused instance
+        expect(second.before_name).to eq('get #10 in #30')
+      end
+
+      it 'does not let a nil observation blank a known before_name' do
+        obj = described_class.new_inv('11', 'gem', 'opal', '20', 'get #11 in #20')
+        described_class.new_inv('11', 'gem', 'opal', '20', nil) # e.g. a source with no command
+
+        expect(obj.before_name).to eq('get #11 in #20')
+      end
     end
 
     context 'with integer id' do

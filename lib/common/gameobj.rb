@@ -542,8 +542,8 @@ module Lich
       # @param id     [Integer, String]
       # @param noun   [String, nil]
       # @param name   [String, nil]
-      # @param before [String, nil]   backfills +before_name+ if previously unset
-      # @param after  [String, nil]   backfills +after_name+ if previously unset
+      # @param before [String, nil]   sets +before_name+ from a differing non-nil observation
+      # @param after  [String, nil]   sets +after_name+ from a differing non-nil observation
       # @return [GameObj]
       # @api private Internal identity-index plumbing. No compatibility guarantee.
       def self.index_or_create(id, noun, name, before = nil, after = nil)
@@ -555,8 +555,13 @@ module Lich
           if (entry = @@index[key])
             existing, _ts        = entry
             @@index[key]         = [existing, now]
-            existing.before_name = before if existing.before_name.nil? && !before.nil?
-            existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+            # Refresh command metadata whenever a differing non-nil observation
+            # arrives -- e.g. a name-preserving move updates +before_name+ from
+            # "get #id in #old" to "get #id in #new". A nil observation never
+            # clobbers a known value (a sighting from a source that carries no
+            # command, such as the hand slot, must not blank it).
+            existing.before_name = before if !before.nil? && existing.before_name != before
+            existing.after_name  = after  if !after.nil?  && existing.after_name  != after
             existing
           else
             new_obj      = GameObj.new(id, noun, name, before, after)
@@ -1370,8 +1375,8 @@ module Lich
         # @param id       [Integer, String]
         # @param noun     [String, nil]
         # @param name     [String, nil]
-        # @param before   [String, nil]   backfills +before_name+ if previously unset
-        # @param after    [String, nil]   backfills +after_name+ if previously unset
+        # @param before   [String, nil]   sets +before_name+ from a differing non-nil observation
+        # @param after    [String, nil]   sets +after_name+ from a differing non-nil observation
         # @return [GameObj]
         def find_or_create(registry, id, noun, name, before = nil, after = nil)
           str_id = id.is_a?(Integer) ? id.to_s : id
@@ -1382,8 +1387,13 @@ module Lich
             if (entry = @@index[key])
               existing, _ts        = entry
               @@index[key]         = [existing, now] # refresh last-seen timestamp
-              existing.before_name = before if existing.before_name.nil? && !before.nil?
-              existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+              # Refresh command metadata whenever a differing non-nil observation
+              # arrives -- e.g. a name-preserving move updates +before_name+ from
+              # "get #id in #old" to "get #id in #new". A nil observation never
+              # clobbers a known value (a sighting from a source that carries no
+              # command must not blank it).
+              existing.before_name = before if !before.nil? && existing.before_name != before
+              existing.after_name  = after  if !after.nil?  && existing.after_name  != after
               registry.push(existing) unless registry.include?(existing)
               existing
             else
