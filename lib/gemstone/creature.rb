@@ -513,9 +513,9 @@ module Lich
 
       # Statuses that satisfy Coup de Grace's "incapacitated in some way"
       # requirement, unlocking the (rank * 10)% threshold instead of
-      # (rank * 5)%. Prone confirmed live (2026-09-06) to qualify without
-      # a stun.
-      COUP_INCAP_STATUSES = %w[stunned immobilized webbed sleeping bound prone kneeling sitting].freeze
+      # (rank * 5)%. Positional states (prone/kneeling/sitting) are
+      # deliberately excluded.
+      COUP_INCAP_STATUSES = %w[stunned immobilized webbed sleeping bound].freeze
 
       # Check if creature currently qualifies for Coup de Grace at the given
       # trained rank: at or below (rank * 10)% of max HP when incapacitated,
