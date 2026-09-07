@@ -145,7 +145,7 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
 
       expect(result).to be(true)
       expect(Lich).to have_received(:msgbox).with(
-        message: 'Wrayth is no longer available.',
+        message: 'Wrayth is no longer available. Use Account Management > Accounts > Change Frontend to update this saved entry, or configure it in the Frontends tab.',
         icon: :error
       )
       expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)

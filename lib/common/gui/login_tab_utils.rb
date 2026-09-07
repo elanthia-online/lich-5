@@ -94,7 +94,7 @@ module Lich
             if ev.event_type == Gdk::EventType::BUTTON_RELEASE && ev.button == 1
               unless launchable_frontend?(login_info, refresh: true)
                 Lich.msgbox(
-                  message: "#{Frontend.display_name(login_info[:frontend])} is no longer available.",
+                  message: "#{Frontend.display_name(login_info[:frontend])} is no longer available. Use Account Management > Accounts > Change Frontend to update this saved entry, or configure it in the Frontends tab.",
                   icon: :error
                 )
                 next true

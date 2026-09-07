@@ -78,7 +78,7 @@ module Lich
               # Refresh accounts view to reflect favorite changes
               refresh_accounts_display if @accounts_store
               Lich.log "info: Account manager refreshed for favorite change: #{data}"
-            when :character_added, :character_removed, :account_added, :account_removed
+            when :character_added, :character_removed, :character_updated, :account_added, :account_removed
               # Refresh accounts view for structural changes
               refresh_accounts_display if @accounts_store
               Lich.log "info: Account manager refreshed for data change: #{change_type}"
@@ -206,6 +206,10 @@ module Lich
           remove_button.sensitive = false
           button_box.pack_start(remove_button, expand: false, fill: false, padding: 0)
 
+          change_frontend_button = Gtk::Button.new(label: "Change Frontend")
+          change_frontend_button.sensitive = false
+          button_box.pack_start(change_frontend_button, expand: false, fill: false, padding: 0)
+
           # Create add account button
           add_account_button = Gtk::Button.new(label: "Add Account")
           # button_box.pack_start(add_account_button, expand: false, fill: false, padding: 0)
@@ -252,13 +256,20 @@ module Lich
 
               # Enable remove button for all selections
               remove_button.sensitive = !iter.nil?
+              change_frontend_button.sensitive = !character.to_s.empty?
 
               # Only enable change password for account nodes (not character nodes)
               change_password_button.sensitive = !account.nil? && (character.nil? || character.empty?)
             else
               remove_button.sensitive = false
+              change_frontend_button.sensitive = false
               change_password_button.sensitive = false
             end
+          end
+
+          change_frontend_button.signal_connect('clicked') do
+            iter = selection.selected
+            change_saved_frontend(iter) if iter && !iter[1].to_s.empty?
           end
 
           # Set up remove button handler
@@ -549,7 +560,7 @@ module Lich
               if auth_data && auth_data.is_a?(Array) && !auth_data.empty?
                 # Show frontend selection dialog
                 selected_frontend = show_frontend_selection_dialog
-                return if selected_frontend.nil? # User cancelled
+                next if selected_frontend.nil? # User cancelled
 
                 # Convert character data to the format expected by YAML storage
                 character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(auth_data, selected_frontend)
@@ -746,6 +757,44 @@ module Lich
         end
 
         private
+
+        # Changes the association of an existing character using the same
+        # frontend catalog as Add Character. Cancel leaves the saved file alone.
+        # @param iter [Gtk::TreeIter] selected character row
+        # @return [void]
+        def change_saved_frontend(iter)
+          account, character, game_code = iter[0], iter[1], iter[4]
+          old_frontend, custom_launch = iter[FRONTEND_ID_COLUMN], iter[6]
+          selector = FrontendSelector.new(selected_id: old_frontend)
+          dialog = Gtk::Dialog.new(
+            title: "Change Frontend - #{character}", parent: @window, flags: :modal,
+            buttons: [["Cancel", :cancel], ["Save", :ok]]
+          )
+          dialog.content_area.spacing = 10
+          dialog.content_area.border_width = 12
+          dialog.content_area.pack_start(Gtk::Label.new("Frontend for #{character}:"), expand: false, fill: false, padding: 0)
+          dialog.content_area.pack_start(selector.widget, expand: false, fill: true, padding: 0)
+          unless custom_launch.to_s.strip.empty?
+            notice = Gtk::Label.new('The existing custom launch command will be preserved.')
+            notice.wrap = true
+            dialog.content_area.pack_start(notice, expand: false, fill: true, padding: 0)
+          end
+          dialog.show_all
+          response = dialog.run
+          frontend = selector.selected_id
+          dialog.destroy
+          return unless response == Gtk::ResponseType::OK && frontend
+
+          if AccountManager.change_frontend(@data_dir, account, character, game_code,
+                                            old_frontend: old_frontend, custom_launch: custom_launch, frontend: frontend)
+            refresh_accounts_display
+            notify_data_changed(:character_updated, { account: account, character: character, game_code: game_code })
+          else
+            @msgbox.call('Could not change frontend. The entry may have changed, already exist, or have an incompatible custom launch command. Refresh and try again.')
+          end
+        ensure
+          dialog.destroy if dialog && !dialog.destroyed?
+        end
 
         # Notifies other tabs of data changes
         # Triggers the data change callback if one is registered
