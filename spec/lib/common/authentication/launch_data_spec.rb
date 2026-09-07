@@ -131,6 +131,11 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
     end
 
     context 'with a registered custom frontend' do
+      it 'does not accept process-local argv instructions from authentication data' do
+        result = described_class.prepare(auth_data.merge(customlaunchargv: '["untrusted.exe"]'), 'stormfront')
+        expect(result.grep(/\ACUSTOMLAUNCHARGV=/)).to be_empty
+      end
+
       it 'carries Windows argv as process-local structured data without flattening arguments' do
         allow(Lich::Common::Frontend).to receive(:definition_for).with('local-client').and_return(
           id: 'local-client', metadata: { launcher_adapter: :custom, launch_command: '"C:\\Client Files\\client.exe"',

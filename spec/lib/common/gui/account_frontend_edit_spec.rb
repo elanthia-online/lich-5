@@ -74,5 +74,4 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.update_launch_settings' do
     expect(change('saga', custom_launch: '/opt/other-client')).to be false
     expect(File.binread(@path)).to eq(before)
   end
-
 end

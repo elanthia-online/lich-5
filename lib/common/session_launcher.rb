@@ -100,7 +100,14 @@ module Lich
             game_flag = Lich::Common::Authentication::LoginHelpers.format_launch_flag(game_code)
             args << game_flag if game_flag
           end
-          args << "--frontend=#{frontend}" if frontend && !frontend.to_s.empty?
+          if frontend && !frontend.to_s.empty?
+            legacy_flag = "--#{frontend}"
+            args << if Authentication::LoginHelpers::FRONTEND_PATTERN.match?(legacy_flag)
+                      legacy_flag
+                    else
+                      "--frontend=#{frontend}"
+                    end
+          end
           args << "--custom-launch=#{custom_launch}" if custom_launch && !custom_launch.to_s.empty?
           args.concat(optional_spawn_flags(context))
           args

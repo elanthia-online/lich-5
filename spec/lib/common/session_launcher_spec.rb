@@ -43,7 +43,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=avalon',
+      '--avalon',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: anything)
     )
@@ -61,7 +61,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=stormfront',
+      '--stormfront',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: anything)
     )
@@ -78,7 +78,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=saga',
+      '--saga',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: anything)
     )
@@ -128,7 +128,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=stormfront',
+      '--stormfront',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: anything)
     )
@@ -172,7 +172,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=stormfront',
+      '--stormfront',
       '--custom-launch=/path/to/custom',
       '--dark-mode=true',
       hash_including(chdir: '/tmp/lich-home')
@@ -200,7 +200,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=stormfront',
+      '--stormfront',
       '--custom-launch=/path/to/custom',
       '--data=/tmp/alt-data',
       hash_including(chdir: '/tmp/lich-home')
@@ -222,7 +222,7 @@ RSpec.describe Lich::Common::SessionLauncher do
       File.expand_path($PROGRAM_NAME),
       '--login', 'Tsetem',
       '--GST',
-      '--frontend=stormfront',
+      '--stormfront',
       '--custom-launch=/path/to/custom',
       hash_including(chdir: '/tmp/override-home')
     )

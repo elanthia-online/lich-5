@@ -76,7 +76,8 @@ module Lich
           @buttons = {}
           resolutions.each do |resolution|
             id = Frontend.canonical_name(resolution.frontend_id)
-            add_button(id, Frontend.display_name(id), resolution.executable_path)
+            notice = Frontend.definition_for(id).dig(:metadata, :launch_notice)
+            add_button(id, Frontend.display_name(id), [resolution.executable_path, notice].compact.join("\n"))
           end
           add_button(CUSTOM_ID, 'Custom', 'Use a custom launch command with Wrayth-compatible protocol.')
           requested = preferred == CUSTOM_ID ? CUSTOM_ID : Frontend.canonical_name(preferred)
