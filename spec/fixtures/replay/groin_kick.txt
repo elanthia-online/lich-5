@@ -1,0 +1,7 @@
+##### groin_kick df4202e7a01fa104
+# expect: attacks=groin_kick | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+You discover the hiding place of <pushBold/>a <a exist="10042184" noun="bandit">dwarven bandit</a><popBold/>!
+<pushBold/>A <a exist="10042184" noun="bandit">dwarven bandit</a><popBold/> kicks at your groin!
+[SMR result: 74 (Open d100: 78, Penalty: 19)]
+You manage to turn away in time, resulting in a light kick to your leg instead.
+

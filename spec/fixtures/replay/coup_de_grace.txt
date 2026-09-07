@@ -1,0 +1,15 @@
+##### coup_de_grace 1867e265fd743b76
+# expect: attacks=coup_de_grace | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+You lunge towards <pushBold/>the <a exist="58705009" noun="defender">triton defender</a><popBold/>, intending to finish her off!
+[SMR result: 156 (Open d100: 8, Bonus: 56)]
+You make a vicious slash with your mithril dagger at <pushBold/>the <a exist="58705009" noun="defender">triton defender</a><popBold/>'s torso!
+Nasty blow rips <pushBold/>the <a exist="58705009" noun="defender">triton defender</a><popBold/> wide open!
+You hear a sound like a child weeping as a white glow separates itself from <pushBold/>the <a exist="58705009" noun="defender">triton defender</a><popBold/>'s body and rises into the heavens.
+The spectral form of <pushBold/>the <a exist="58705009" noun="defender">triton defender</a><popBold/> tenses in agony as she begins to dissolve from the bottom up!
+The heady flush of your spectacular kill makes you feel invigorated!
+A siren looks a little bit more wary after that display!
+A siren looks a little bit more wary after that display!
+A triton executioner looks a little bit more wary after that display!
+A siren looks a little bit more wary after that display!
+Roundtime: 2 sec.
+

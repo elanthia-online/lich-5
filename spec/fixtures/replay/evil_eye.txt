@@ -1,0 +1,13 @@
+##### evil_eye 095c8c79f9471135
+# expect: attacks=evil_eye | res=cs_td | flares=none | outcomes=ward_failed | dmg=0 | statuses=
+You turn to stare at <pushBold/>a <a exist="59961650" noun="primordial">fulminating stormborn primordial</a><popBold/>.
+d125 == 1 FUMBLE!
+The stormborn primordial stares back at you without fear.
+You turn to stare at <pushBold/>a <a exist="59961650" noun="primordial">fulminating stormborn primordial</a><popBold/>.
+  CS: +658 - TD: +518 + CvA: +25 + d125: +20 == +185
+  Warding failed!
+<pushBold/>A <a exist="59961650" noun="primordial">fulminating stormborn primordial</a><popBold/> looks at you in fear!
+The stormborn primordial drops its spine sword.
+The primordial turns and runs screaming into the distance, never to be seen again.
+Cast Roundtime 1 Second.
+

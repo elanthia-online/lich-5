@@ -1,0 +1,7 @@
+##### volley 902c20f7d77da6f8
+# expect: attacks=volley | res=none | flares=none | outcomes=none | dmg=1 | statuses=
+An arrow finds its mark!  <pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> is hit!
+   ... 25 points of damage!
+   Feint left spins <pushBold/>the <a exist="67597902" noun="radical">triton radical</a><popBold/> around!
+2026-08-02 21:56:09.434 -05:00
+

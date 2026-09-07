@@ -1,0 +1,8 @@
+##### companion ff674ed44edd7fe2
+# expect: attacks=companion | res=none | flares=none | outcomes=none | dmg=1 | statuses=
+<pushBold/>A <a exist="19327826" noun="mongoose">scrub mongoose</a><popBold/> charges forward and bites down on <pushBold/>a <a exist="13275640" noun="shark">tenebrific wraith shark</a><popBold/> faster than it can react!
+   ... 30 points of damage!
+   The wraith shark wails eerily as the blow passes through its vocal cords.
+<pushBold/>A <a exist="13275640" noun="shark">tenebrific wraith shark</a><popBold/>'s form unravels into gyrating veils of shadow that whirl around you in a tenebrous tornado!
+Your defenses repel the whirling shadows, and the shark coalesces nearby, black eyes glinting.
+
