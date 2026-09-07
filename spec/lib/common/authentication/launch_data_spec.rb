@@ -128,6 +128,20 @@ RSpec.describe Lich::Common::Authentication::LaunchData do
         expect(result).to include('CUSTOMLAUNCH=/home/me/client %port% %key%')
         expect(result).to include('CUSTOMLAUNCHDIR=/home/me')
       end
+
+      it 'replaces stale authentication launch fields with explicit custom launch values' do
+        stale_auth_data = auth_data.merge(
+          customlaunch: '/old/client',
+          customlaunchdir: '/old',
+          customlaunchargv: '["/old/client"]'
+        )
+
+        result = described_class.prepare(stale_auth_data, 'stormfront', '/new/client', '/new')
+
+        expect(result.grep(/\ACUSTOMLAUNCH=/)).to eq(['CUSTOMLAUNCH=/new/client'])
+        expect(result.grep(/\ACUSTOMLAUNCHDIR=/)).to eq(['CUSTOMLAUNCHDIR=/new'])
+        expect(result.grep(/\ACUSTOMLAUNCHARGV=/)).to be_empty
+      end
     end
 
     context 'with a registered custom frontend' do

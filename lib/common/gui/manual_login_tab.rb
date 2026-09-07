@@ -118,6 +118,19 @@ module Lich
 
         private
 
+        # Refreshes saved entries before or after a quick-save operation.
+        # Keeps the existing cache when the entry store cannot be read.
+        #
+        # @return [Boolean] true when saved entries were refreshed
+        # @api private
+        def refresh_entry_data_for_quick_save
+          @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+          true
+        rescue StandardError => e
+          Lich.log "error: Failed to refresh entry data for quick save: #{e.message}"
+          false
+        end
+
         # Applies the current theme state to all UI elements
         #
         # @return [void]
@@ -532,12 +545,13 @@ module Lich
 
               # Initialize save success tracking for synchronization
               save_success = true
+              quick_save_requested = @make_quick_option.active?
+              # Re-read before the whole-collection save even if a cross-tab
+              # notification was missed. Do not save the tab's opening snapshot.
+              save_success = refresh_entry_data_for_quick_save if quick_save_requested
 
               # Save quick entry if selected
-              if @make_quick_option.active?
-                # Re-read before the whole-collection save even if a cross-tab
-                # notification was missed. Do not save the tab's opening snapshot.
-                @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+              if quick_save_requested && save_success
                 # Preserve encryption_mode from existing entries to prevent silent downgrade
                 existing_encryption_mode = @entry_data.first&.[](:encryption_mode) || :plaintext
                 entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir, :encryption_mode => existing_encryption_mode }
@@ -584,7 +598,7 @@ module Lich
                   # Reset save flag to prevent duplicate save on window destruction
                   @save_entry_data = false
                   # Refresh local cache with normalized data after successful save
-                  @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+                  refresh_entry_data_for_quick_save
                   # Trigger main GUI cache refresh only once after successful save
                   @callbacks.on_save.call(entry_data) if @callbacks.on_save
                 else
@@ -653,7 +667,7 @@ module Lich
                   game_code: selected_iter[0],
                   frontend: frontend,
                   custom_launch: custom_launch,
-                  saved_entry: @make_quick_option.active? && save_success
+                  saved_entry: quick_save_requested && save_success
                 }
 
                 # Backward compatibility: support both 1-arg and 2-arg callback handlers.

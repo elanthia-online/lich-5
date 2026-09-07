@@ -37,7 +37,7 @@ module Lich
             custom_launch_dir = definition.dig(:metadata, :launch_directory)
           end
 
-          launch_data.reject! { |line| line.match?(/\A(?:FRONTEND|CUSTOMLAUNCHARGV)=/i) }
+          launch_data.reject! { |line| line.match?(/\A(?:FRONTEND|CUSTOMLAUNCH|CUSTOMLAUNCHDIR|CUSTOMLAUNCHARGV)=/i) }
           launch_data.push "FRONTEND=#{frontend_id}" unless frontend_id.empty?
 
           # Modify launch data based on frontend

@@ -511,6 +511,22 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
       )
     end
 
+    it 'continues launching without saving when the entry reread fails' do
+      prior_entry_data = [{ char_name: 'Existing' }]
+      tab.instance_variable_set(:@entry_data, prior_entry_data)
+      allow(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries)
+        .and_raise(StandardError, 'read failed')
+
+      expect { @play_handler.call }.not_to raise_error
+
+      expect(tab.instance_variable_get(:@entry_data)).to equal(prior_entry_data)
+      expect(Lich::Common::Authentication::EntryStore).not_to have_received(:save_entries)
+      expect(on_play).to have_received(:call).with(
+        launch_data,
+        hash_including(saved_entry: false)
+      )
+    end
+
     it 'rejects Custom with a blank command before authentication or saving' do
       allow(frontend_selector).to receive(:custom?).and_return(true)
       allow(custom_launch_option).to receive(:active?).and_return(true)
