@@ -169,6 +169,32 @@ RSpec.describe Lich::Common::GameObj do
       expect(list.first.name).to eq('soft gem pouch (closed)')
     end
 
+    it 'evicts the orphaned index entry for the old name immediately (no wait for TTL prune)' do
+      index = described_class.class_variable_get(:@@index)
+      described_class.new_inv('123', nil, 'soft gem pouch', 'container1')
+      expect(index).to have_key('123||soft gem pouch') # noun is nil -> empty segment
+
+      described_class.upsert_inv('123', nil, 'soft gem pouch (closed)', 'container1')
+
+      # The renamed entry is live; the old-name entry is a dead orphan and must be
+      # gone right away rather than lingering until the next prune sweep.
+      expect(index).to have_key('123||soft gem pouch (closed)')
+      expect(index).not_to have_key('123||soft gem pouch')
+    end
+
+    it 'keeps a same-id variant that is still live in another registry' do
+      index = described_class.class_variable_get(:@@index)
+      described_class.new_right_hand('123', 'pouch', 'a soft gem pouch') # live in a hand
+      described_class.new_inv('123', 'pouch', 'a soft gem pouch', 'container1')
+
+      described_class.upsert_inv('123', 'pouch', 'a soft gem pouch (closed)', 'container1')
+
+      # The hand variant shares the id but is a distinct, still-held instance;
+      # eviction is by object identity, so it must survive.
+      expect(index).to have_key('123|pouch|a soft gem pouch') # held in the hand
+      expect(index).to have_key('123|pouch|a soft gem pouch (closed)')
+    end
+
     it 'relocates a contained item to worn inv when container is nil' do
       described_class.new_inv('123', 'gem', 'ruby', 'container1')
 
