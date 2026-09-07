@@ -627,6 +627,74 @@ RSpec.describe Lich::Common::Inventory do
 
       expect(game_obj.containers).not_to have_key('ca')
     end
+
+    it 'defers deleting a vanished container while its classic refresh is open' do
+      # Inventory owns container ca...
+      first_snapshot
+      expect(game_obj.containers).to have_key('ca')
+
+      # ...the classic stream begins re-filling ca and stages a NEW child...
+      game_obj.begin_container('ca')
+      game_obj.new_inv('classic-child', 'gem', 'a gem', 'ca')
+
+      # ...and a later snapshot omits ca entirely. The deletion loop must NOT abort
+      # the in-flight classic staging (delete_container would drop @@staging_contents).
+      described_class.observe(
+        "<inventoryManager id='s2' room='1'>" \
+        "<i id='cb' loc='worn,player' name=\"a,canvas,sack\" weight='8' in_max='1000'/>" \
+        "</inventoryManager>"
+      )
+      expect(game_obj.container_refresh_open?('ca')).to be(true)
+      game_obj.commit_container('ca')
+      expect(game_obj.containers['ca'].map(&:id)).to eq(['classic-child'])
+    end
+
+    it 'preserves a descendant hidden behind an ancestor that turned opaque' do
+      # A(pk) -> B(pouch) -> gem, all visible.
+      described_class.observe(
+        "<inventoryManager id='s1' room='1'>" \
+        "<i id='pk' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000'/>" \
+        "<i id='pouch' loc='in,pk' name=\"a,small,pouch\" weight='2' in_max='500'/>" \
+        "<i id='gem' loc='in,pouch' name=\"a,shiny,gem\" weight='1'/>" \
+        "</inventoryManager>"
+      )
+      expect(game_obj.containers['pouch'].map(&:id)).to eq(['gem'])
+
+      # A is now locked (opaque): it reports zero children, so B and the gem are
+      # simply absent -- unknowable, not confirmed gone. B's last-known contents
+      # must survive rather than being deleted.
+      described_class.observe(
+        "<inventoryManager id='s2' room='1'>" \
+        "<i id='pk' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000' flags='locked'/>" \
+        "</inventoryManager>"
+      )
+      expect(game_obj.containers['pouch'].map(&:id)).to eq(['gem'])
+    end
+
+    it 'aborts only its own staging (never wedges it open) when a mirror write raises' do
+      first_snapshot
+      expect(game_obj.inv_refresh_open?).to be(false)
+
+      # Injected fault: the SECOND worn registration this cycle raises.
+      calls = 0
+      allow(game_obj).to receive(:new_inv).and_wrap_original do |orig, *args|
+        calls += 1
+        raise 'injected mirror failure' if calls == 2
+
+        orig.call(*args)
+      end
+
+      # observe must swallow it (parser-thread safety) and leave no half-open buffer.
+      expect do
+        described_class.observe(
+          "<inventoryManager id='s2' room='1'>" \
+          "<i id='r1' loc='worn,player' name=\"a,red,hat\" weight='1'/>" \
+          "<i id='r2' loc='worn,player' name=\"a,blue,sock\" weight='1'/>" \
+          "</inventoryManager>"
+        )
+      end.not_to raise_error
+      expect(game_obj.inv_refresh_open?).to be(false)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -645,6 +713,11 @@ RSpec.describe Lich::Common::Inventory do
       pack = described_class[lootpouch_id]
       expect(pack.noun).to be_frozen
       expect(pack.name).to be_frozen
+    end
+
+    it 'freezes the snapshot room id so shared metadata cannot be mutated in place' do
+      expect(described_class.current.room_id).to be_frozen
+      expect { described_class.current.room_id.replace('changed') }.to raise_error(FrozenError)
     end
   end
 
@@ -713,6 +786,53 @@ RSpec.describe Lich::Common::Inventory do
     it 'handles a self-closing empty envelope without raising' do
       expect { described_class.observe("<inventoryManager id='z' room='1'/>") }.not_to raise_error
       expect(described_class.all).to eq([])
+    end
+
+    # Integrity checks the refresh path already enforces must also gate the passive
+    # path, since observe writes the snapshot AND the GameObj registries directly on
+    # the parser thread. Each of these must fail closed (keep the prior snapshot),
+    # not absorb a malformed/stale response.
+
+    it 'rejects a passive response whose state is stale (interrupted mid-build)' do
+      described_class.observe(full_capture)
+      described_class.observe(
+        "<inventoryManager id='st' room='1' state='stale'>" \
+        "<i id='1' loc='worn,player' name=\"a,,thing\" weight='1'/></inventoryManager>"
+      )
+      expect(described_class.all.size).to eq(418)
+      expect(described_class['1']).to be_nil
+    end
+
+    it 'rejects a passive response with an unknown (non-nil) state' do
+      described_class.observe(full_capture)
+      described_class.observe(
+        "<inventoryManager id='uk' room='1' state='rebuilding'>" \
+        "<i id='1' loc='worn,player' name=\"a,,thing\" weight='1'/></inventoryManager>"
+      )
+      expect(described_class.all.size).to eq(418)
+    end
+
+    it 'rejects a passive response with a duplicate item id rather than collapsing it' do
+      described_class.observe(full_capture)
+      # Second occurrence would last-wins-overwrite the first, silently dropping the
+      # worn placement; the whole response must be discarded instead.
+      described_class.observe(
+        "<inventoryManager id='dup' room='1'>" \
+        "<i id='9' loc='worn,player' name=\"a,,pack\" weight='1'/>" \
+        "<i id='9' loc='room' name=\"a,,pack\" weight='1'/></inventoryManager>"
+      )
+      expect(described_class.all.size).to eq(418)
+      expect(described_class['9']).to be_nil
+    end
+
+    it 'rejects a passive response with an item that has no id' do
+      described_class.observe(full_capture)
+      described_class.observe(
+        "<inventoryManager id='noid' room='1'>" \
+        "<i loc='worn,player' name=\"a,,thing\" weight='1'/></inventoryManager>"
+      )
+      expect(described_class.all.size).to eq(418)
+      expect(described_class.all.map(&:id)).not_to include(nil)
     end
   end
 
@@ -820,6 +940,49 @@ RSpec.describe Lich::Common::Inventory do
       described_class.refresh(timeout: 0.1)
 
       expect(described_class.feed_available?).to be(true)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # refresh lifecycle safety: cancellation and id reuse. Real threads with Queue
+  # barriers (not sleeps) so we exercise actual parser/caller thread ownership.
+  # ---------------------------------------------------------------------------
+  describe 'refresh lifecycle safety' do
+    it 'removes its routing state when the refresh thread is killed mid-exchange' do
+      sent = Queue.new
+      allow(Game).to receive(:_puts) { |cmd| sent << cmd }
+
+      t = Thread.new { described_class.refresh(timeout: 30) }
+      sent.pop # barrier: initial request sent -> the assembly is registered
+      t.kill
+      t.join
+
+      expect(described_class.instance_variable_get(:@assemblies)).to be_empty
+    end
+
+    it 'never reuses a request id after reset!, even within the same clock second' do
+      allow(described_class).to receive(:monotonic_now).and_return(1_000.0)
+      ids = []
+      allow(Game).to receive(:_puts) { |cmd| ids << cmd[/\bim\S+/] }
+
+      Thread.new { described_class.refresh(timeout: 0.2) }.join
+      described_class.reset!
+      Thread.new { described_class.refresh(timeout: 0.2) }.join
+
+      expect(ids.compact.size).to eq(2)
+      expect(ids.compact.uniq.size).to eq(2)
+    end
+
+    it 'wakes a blocked refresh caller promptly on reset! instead of parking it until timeout' do
+      allow(Game).to receive(:_puts) # server never answers
+      result = Queue.new
+      t = Thread.new { result << described_class.refresh(timeout: 30) }
+
+      sleep 0.01 until described_class.instance_variable_get(:@assemblies).any?
+      described_class.reset!
+
+      expect(t.join(2)).to be_truthy # returned well within 2s, not parked ~30s
+      expect(result.pop).to be_nil
     end
   end
 

@@ -326,21 +326,14 @@ module Lich
         # pounds. A container subtree contributes the container's own {#weight}
         # plus ({#in_encum} when present, else the recursive contribution of its
         # children) -- so a weight-nullifying eddy adds only its own weight, not
-        # the heavy contents inside it. Cycle-safe (visited set + depth cap).
+        # the heavy contents inside it. Cycle-safe (visited set + depth cap; see
+        # the internal {#effective_weight} traversal).
         #
         # @return [Integer]
         # @example The eddy weighs 10 lb regardless of its contents
         #   Inventory['40235966'].total_weight #=> 10
-        def total_weight(visited = Set.new, depth = 0)
-          return 0 if depth > MAX_TREE_DEPTH || visited.include?(@id)
-
-          visited.add(@id)
-          own = @weight
-          return own unless container?
-          return own if opaque?
-          return own + @in_encum unless @in_encum.nil?
-
-          own + @children.sum { |child| child.total_weight(visited, depth + 1) }
+        def total_weight
+          effective_weight(Set.new, 0)
         end
 
         # Type classification (e.g. "weapon,edged"), derived from this item's own
@@ -425,6 +418,29 @@ module Lich
           backfill_names(@gameobj, before, after)
         end
 
+        protected
+
+        # Recursive weight traversal backing {#total_weight}. Kept internal so the
+        # public query takes no arguments; +protected+ so a parent {Item} can pass
+        # the shared +visited+/+depth+ accumulators down to its children (a cycle
+        # guard + depth cap) without exposing them as public API.
+        #
+        # @param visited [Set<String>] exist ids already counted on this walk
+        # @param depth [Integer] current recursion depth
+        # @return [Integer]
+        # @api private
+        def effective_weight(visited, depth)
+          return 0 if depth > MAX_TREE_DEPTH || visited.include?(@id)
+
+          visited.add(@id)
+          own = @weight
+          return own unless container?
+          return own if opaque?
+          return own + @in_encum unless @in_encum.nil?
+
+          own + @children.sum { |child| child.effective_weight(visited, depth + 1) }
+        end
+
         private
 
         # Freezes a string in place (nil-safe), so identity fields cannot be
@@ -501,8 +517,9 @@ module Lich
       #
       # ## Immutability contract
       #
-      # The Snapshot, its id-keyed item map, and its worn/room/at-feet collections
-      # are frozen; each {Item}'s identity strings, {Item#flags}, and {Item#children}
+      # The Snapshot, its id-keyed item map, its {#room_id}, and its
+      # worn/room/at-feet collections are frozen; each {Item}'s identity strings,
+      # {Item#flags}, and {Item#children}
       # are frozen too, so a consumer cannot corrupt shared state through a returned
       # object (e.g. +item.flags << "locked"+ raises). The {Item} objects themselves
       # are deliberately NOT frozen: their backing {GameObj} is populated lazily for
@@ -520,7 +537,11 @@ module Lich
         # @api private
         def initialize(items:, room_id:)
           @items      = items.freeze
-          @room_id    = room_id
+          # Duplicated and frozen so shared snapshot metadata cannot be mutated
+          # through {#room_id} (e.g. +Inventory.current.room_id.replace('x')+): the
+          # room id arrives as an unfrozen Ox attribute string, unlike the {Item}
+          # identity fields which are frozen at construction.
+          @room_id    = room_id.nil? ? nil : room_id.dup.freeze
           @worn       = items.values.select(&:worn?).freeze
           @room       = items.values.select(&:in_room?).freeze
           @at_feet    = items.values.select(&:at_feet?).freeze
@@ -729,10 +750,11 @@ module Lich
       end
 
       # Mutable, single-refresh accumulator that assembles a paginated inventory
-      # from an initial response plus its continuation responses. Owned by the
-      # calling {.refresh} thread; {.observe} only deposits parsed parts on its
-      # {#latch}. All field mutation happens under the module +@mutex+ (see
-      # {Inventory.accept_part}).
+      # from an initial response plus its continuation responses. Field mutation
+      # (folding parts, queueing continuations, staging outbound requests) happens on
+      # the PARSER thread under the module +@mutex+ (see {Inventory.accept_part}); the
+      # parser then posts a directive to {#latch}, which the calling {.refresh} thread
+      # pops to issue the next continuation requests or return the finished snapshot.
       #
       # @api private
       class Assembly
@@ -801,9 +823,12 @@ module Lich
         # failed closed -- assembling one requires sending continuation requests,
         # which observe must never do; use {.refresh} for paginated inventories.
         #
-        # A response whose id belongs to an in-progress {.refresh} assembly is
-        # routed to that refresh's latch (the refresh thread validates, accumulates,
-        # and drives the continuation exchange); observe stays passive.
+        # A response whose id belongs to an in-progress {.refresh} assembly is folded
+        # into that assembly HERE on the parser thread (validated, accumulated, and --
+        # when the tree completes -- mirrored into GameObj); a directive is then posted
+        # to the refresh's latch, and the waiting caller thread only issues any
+        # continuation requests it asks for and returns the finished snapshot. observe
+        # itself stays passive and never sends.
         #
         # @param server_string [String] a raw line from the game server
         # @return [String] +server_string+, unchanged
@@ -856,24 +881,36 @@ module Lich
             assembly = Assembly.new
             deadline = monotonic_now + timeout
 
-            # +generate_id+ must be minted under +@mutex+, the same lock that guards
-            # the parser thread's +drain_queue+ call site -- otherwise the two call
-            # sites race on +@id_counter+ and could mint the same id. +@refresh_mutex+
-            # serializes callers today, but this keeps the invariant true once that
-            # serialization is relaxed (see the +@refresh_mutex+ note).
-            initial = @mutex.synchronize do
-              id = generate_id
-              assembly.pending[id] = :initial
-              @assemblies[id] = assembly
-              id
-            end
-            Game._puts("_inventory manager #{initial}")
-
+            # The whole exchange -- route registration, the initial send, and the
+            # wait/continue loop -- lives inside begin/ensure so that EVERY exit
+            # removes this assembly's routing entries from +@assemblies+. That
+            # includes +Thread#kill+ (how Lich terminates a script that is mid-
+            # refresh), which unwinds through +ensure+ but is not a StandardError and
+            # so never reaches the +rescue+. Without this a killed caller would
+            # orphan its request ids and Assembly, and a late response to one of them
+            # could still be folded and published on the parser thread. A late
+            # response arriving after the routes are gone falls through to the
+            # passive path, which already fails closed on a partial/paginated part
+            # (see {#standalone_complete?}), so retiring the routes here is safe.
             begin
+              # +generate_id+ must be minted under +@mutex+, the same lock that guards
+              # the parser thread's +drain_queue+ call site -- otherwise the two call
+              # sites race on +@id_counter+ and could mint the same id. +@refresh_mutex+
+              # serializes callers today, but this keeps the invariant true once that
+              # serialization is relaxed (see the +@refresh_mutex+ note).
+              initial = @mutex.synchronize do
+                id = generate_id
+                assembly.pending[id] = :initial
+                @assemblies[id] = assembly
+                id
+              end
+              Game._puts("_inventory manager #{initial}")
               drive_refresh(assembly, deadline)
             rescue StandardError => e
               log("Inventory.refresh error: #{e.class}: #{e.message}")
-              abort_assembly(assembly)
+              nil
+            ensure
+              discard_assembly_routes(assembly)
             end
           end
         end
@@ -987,12 +1024,21 @@ module Lich
           # out from under a still-draining +route_response+. +purge_owned_containers!+
           # touches only GameObj's own lock, so there's no re-entrant deadlock here.
           @mutex.synchronize do
+            # Wake any callers blocked on an in-flight exchange so a reconnect does
+            # not leave them parked until their timeout, THEN drop the routes.
+            wake_pending_callers
             @snapshot           = nil
             @feed_seen          = false
             @consecutive_timeouts = 0
             @feed_absent_until  = nil
             @absent_backoff     = PROBE_BACKOFF_BASE_SECONDS
-            @id_counter         = 0
+            # Initialize the request-id counter once, but NEVER reset it to zero.
+            # Ids are minted as "im" + monotonic-seconds + counter; zeroing the
+            # counter would let a refresh in the same second reuse a prior refresh's
+            # id, and a late pre-reset response could then be folded into the new
+            # refresh's assembly. A counter that only ever grows keeps every id
+            # unique for the whole process lifetime.
+            @id_counter       ||= 0
             (@assemblies ||= {}).clear
             purge_owned_containers!
             @owned_container_ids = Set.new
@@ -1000,6 +1046,20 @@ module Lich
         end
 
         private
+
+        # Wakes any refresh callers currently blocked on their assembly latch by
+        # posting an +:error+ directive, so {.reset!} (a session reset / reconnect)
+        # returns them promptly instead of leaving them parked until timeout. Each
+        # distinct assembly is signalled once; its routing entries are cleared by the
+        # +@assemblies+ clear that follows in {.reset!}. Caller holds {@mutex}.
+        #
+        # @return [void]
+        # @api private
+        def wake_pending_callers
+          return if @assemblies.nil? || @assemblies.empty?
+
+          @assemblies.values.uniq.each { |assembly| assembly.latch << [:error] }
+        end
 
         # Drops every container Inventory still owns from GameObj. Used by {.reset!}
         # so a session reset / reconnect leaves no stale container mirror behind.
@@ -1079,23 +1139,29 @@ module Lich
         # @return [void]
         # @api private
         def passive_absorb(handler, closed)
-          if standalone_complete?(handler, closed)
-            commit_passive(build_snapshot(handler))
-          else
-            log("Inventory: discarding incomplete/paginated passive inventoryManager response (id=#{handler.manager_id})")
+          unless standalone_complete?(handler, closed)
+            return log("Inventory: discarding incomplete/paginated/stale passive inventoryManager response (id=#{handler.manager_id})")
           end
+
+          snapshot = build_snapshot(handler)
+          return log("Inventory: discarding passive inventoryManager response with malformed item identities (id=#{handler.manager_id})") if snapshot.nil?
+
+          commit_passive(snapshot)
         end
 
         # A standalone (non-paginated) response is usable only if Ox reported no
-        # errors, the line structurally closed, and it is neither a continuation
-        # response nor announces continuation branches.
+        # errors, the line structurally closed, the envelope reports a usable state
+        # ({#recognized_state?} -- so an interrupted +state='stale'+ or any unknown
+        # state is rejected exactly as the refresh path rejects it), and it is
+        # neither a continuation response nor announces continuation branches. Item
+        # identity (missing/duplicate ids) is validated separately in {#build_snapshot}.
         #
         # @param handler [Handler]
         # @param closed [Boolean]
         # @return [Boolean]
         # @api private
         def standalone_complete?(handler, closed)
-          handler.errors.empty? && closed && !handler.continuation?
+          handler.errors.empty? && closed && recognized_state?(handler) && !handler.continuation?
         end
 
         # Drives a {.refresh} exchange on the CALLER thread: waits for directives the
@@ -1136,8 +1202,7 @@ module Lich
         def accept_part(assembly, handler, closed)
           kind = assembly.pending.delete(handler.manager_id)
           return :error if kind.nil? || !handler.errors.empty? || !closed
-          return :error if handler.state == 'stale' # interrupted mid-exchange
-          return :error unless handler.state.nil? # unknown inventory state
+          return :error unless recognized_state?(handler)
           return :error unless valid_envelope?(assembly, handler, kind)
           return :error unless accumulate_items(assembly, handler)
           return :error unless queue_continuations(assembly, handler)
@@ -1179,13 +1244,11 @@ module Lich
         # @api private
         def accumulate_items(assembly, handler)
           handler.items.each do |raw|
-            item = build_item(raw)
-            return false if assembly.items.key?(item.id)
+            item = coerce_unique(assembly.items, raw)
+            return false if item.nil?
 
             pid = item.parent_id
             return false unless pid.nil? || pid == 'player' || pid == 'room' || assembly.items.key?(pid)
-
-            assembly.items[item.id] = item
           end
           true
         end
@@ -1256,11 +1319,22 @@ module Lich
         # @return [nil]
         # @api private
         def abort_assembly(assembly, timed_out: false)
-          @mutex.synchronize do
-            @assemblies.delete_if { |_id, a| a.equal?(assembly) }
-            register_timeout! if timed_out
-          end
+          discard_assembly_routes(assembly)
+          @mutex.synchronize { register_timeout! } if timed_out
           nil
+        end
+
+        # Removes every routing entry that points at +assembly+ from +@assemblies+,
+        # so no further response is routed to it. Idempotent (a no-op once the
+        # entries are already gone), so it is safe to call from both the normal
+        # teardown ({#abort_assembly}) and the ensure in {.refresh} that fires on
+        # ordinary return, error, or +Thread#kill+.
+        #
+        # @param assembly [Assembly]
+        # @return [void]
+        # @api private
+        def discard_assembly_routes(assembly)
+          @mutex.synchronize { @assemblies.delete_if { |_id, a| a.equal?(assembly) } }
         end
 
         # Whether the line contains a real closing tag or is self-closing. A
@@ -1274,17 +1348,21 @@ module Lich
             server_string.match?(%r{<inventoryManager\b[^>]*/>})
         end
 
-        # Builds an immutable {Snapshot} from a completed parse: coerce items,
-        # wire the parent/child tree (order-independent), then freeze.
+        # Builds an immutable {Snapshot} from a completed parse: coerce items
+        # (rejecting the same missing-id / duplicate-id violations the refresh
+        # accumulator rejects, via {#coerce_unique}), wire the parent/child tree
+        # (order-independent -- passive responses carry the whole tree in one line,
+        # so no wire-order parent rule is imposed), then freeze. Returns +nil+ when
+        # an item identity is malformed, so the passive path can fail closed instead
+        # of publishing a corrupt snapshot.
         #
         # @param handler [Handler]
-        # @return [Snapshot]
+        # @return [Snapshot, nil] nil when an item id is missing or duplicated
         # @api private
         def build_snapshot(handler)
           items = {}
           handler.items.each do |raw|
-            item = build_item(raw)
-            items[item.id] = item
+            return nil if coerce_unique(items, raw).nil?
           end
           wire_tree(items)
           Snapshot.new(items: items, room_id: handler.room_id)
@@ -1315,6 +1393,39 @@ module Lich
             flags: raw['flags'].to_s.split(','),
             has_max: raw.key?('in_max') || raw.key?('on_max')
           )
+        end
+
+        # Whether the envelope reports a usable inventory state. The feed omits
+        # +state+ on a good response and sets it (e.g. +stale+) when the snapshot
+        # was interrupted or is otherwise untrustworthy; any present state fails
+        # closed. Shared by the passive gate ({#standalone_complete?}) and the
+        # refresh accumulator ({#accept_part}) so both ingress paths agree.
+        #
+        # @param handler [Handler]
+        # @return [Boolean]
+        # @api private
+        def recognized_state?(handler)
+          handler.state.nil?
+        end
+
+        # Coerces one raw <i> hash into an {Item} and folds it into +items+ under
+        # its id, enforcing the item-identity rules shared by BOTH ingress paths:
+        # the id must be present and non-blank, and must not already be in +items+
+        # (a duplicate silently overwriting an earlier occurrence -- e.g. dropping a
+        # worn item when its id reappears as room loot -- is a corrupt response).
+        # Returns the {Item} on success, or +nil+ on a violation (leaving +items+
+        # unchanged for the rejected entry).
+        #
+        # @param items [Hash{String => Item}] accumulator, mutated in place
+        # @param raw [Hash] raw string attributes for one <i>
+        # @return [Item, nil]
+        # @api private
+        def coerce_unique(items, raw)
+          item = build_item(raw)
+          return nil if item.id.nil? || item.id.empty?
+          return nil if items.key?(item.id)
+
+          items[item.id] = item
         end
 
         # Splits a +loc+ value into [relation, parent]. Forms seen on the wire:
@@ -1427,13 +1538,22 @@ module Lich
         #
         # Locked/opaque containers are skipped entirely -- they report zero children
         # by design, so replacing their contents with +[]+ would destroy last-known
-        # state. A container Inventory previously mirrored that has vanished from the
-        # tree (not merely gone opaque) is dropped with +delete_container+.
+        # state. A container Inventory previously mirrored that has genuinely
+        # vanished is dropped with +delete_container+ (see
+        # {#reconcile_deleted_containers}); but deletion is deferred for a target
+        # with an open classic refresh and for a subtree hidden behind an opaque
+        # ancestor, so neither an in-flight classic fill nor unknowable locked
+        # contents are destroyed.
         #
         # A target whose classic staged refresh is already open ({GameObj.inv_refresh_open?}
         # / {GameObj.container_refresh_open?}) is skipped this cycle so Inventory
         # cannot truncate an in-flight classic fill; its items fall back to
         # identity-only pooling and the mirror self-heals on the next response.
+        #
+        # The staging opens/registers/commits are wrapped so that a failure partway
+        # (a raise from any GameObj write) aborts ONLY the buffers this writer opened,
+        # never leaving +@@inv+/+@@contents+ staging half-open for the next cycle to
+        # misread as an in-flight classic refresh.
         #
         # Runs on the parser thread with {@mutex} held (see {#finalize_assembly} /
         # {#commit_passive}), so registry writes stay single-threaded.
@@ -1449,16 +1569,92 @@ module Lich
             containers.reject(&:opaque?).map(&:id).reject { |id| GameObj.container_refresh_open?(id) }
           )
 
-          GameObj.begin_inv if place_worn
-          open_ids.each { |id| GameObj.begin_container(id) }
+          committed = false
+          begin
+            GameObj.begin_inv if place_worn
+            open_ids.each { |id| GameObj.begin_container(id) }
 
-          snapshot.all.each { |item| item.register_gameobj(place_worn: place_worn, open_container_ids: open_ids) }
+            snapshot.all.each { |item| item.register_gameobj(place_worn: place_worn, open_container_ids: open_ids) }
 
-          GameObj.commit_inv if place_worn
-          open_ids.each { |id| GameObj.commit_container(id) }
+            GameObj.commit_inv if place_worn
+            open_ids.each { |id| GameObj.commit_container(id) }
 
-          (@owned_container_ids - present_ids).each { |id| GameObj.delete_container(id) }
-          @owned_container_ids = present_ids
+            reconcile_deleted_containers(snapshot, present_ids)
+            committed = true
+          ensure
+            # Roll back only THIS writer's still-open staging on a partial failure.
+            # It is never a classic writer's buffer: place_worn is false while a
+            # classic +@@inv+ refresh is open, and open_ids already excludes any
+            # container with a classic refresh open. On success the commits have
+            # nil'd/removed these buffers, so the aborts are no-ops.
+            unless committed
+              GameObj.abort_inv if place_worn
+              open_ids.each { |id| GameObj.abort_container(id) }
+            end
+          end
+        end
+
+        # Reconciles containers Inventory previously mirrored that are absent from
+        # the new snapshot. A vanished container is dropped from GameObj UNLESS:
+        #
+        # - a classic staged refresh for it is open ({GameObj.container_refresh_open?}):
+        #   deleting would abort that in-flight fill (the deletion-path analogue of
+        #   the replacement guard) -- defer and retry next cycle; or
+        # - it sits under an ancestor that is present-and-opaque (locked) in the new
+        #   snapshot ({#hidden_under_opaque?}): its subtree is unknowable, not
+        #   confirmed absent -- preserve its last-known contents.
+        #
+        # Deferred/preserved ids stay owned so a later cycle, where absence is
+        # authoritative, can still clean them up. Caller holds {@mutex}.
+        #
+        # @param snapshot [Snapshot] the newly built snapshot
+        # @param present_ids [Set<String>] container ids present in +snapshot+
+        # @return [void]
+        # @api private
+        def reconcile_deleted_containers(snapshot, present_ids)
+          owned          = @owned_container_ids || Set.new
+          vanished       = owned - present_ids
+          opaque_present = Set.new(snapshot.containers.select(&:opaque?).map(&:id))
+
+          retained = Set.new
+          vanished.each do |id|
+            if GameObj.container_refresh_open?(id) || hidden_under_opaque?(id, opaque_present)
+              retained << id
+            else
+              GameObj.delete_container(id)
+            end
+          end
+
+          @owned_container_ids = present_ids | retained
+        end
+
+        # Whether a container absent from the new snapshot is merely hidden behind an
+        # opaque (locked) ancestor rather than actually gone. Walks the id's ancestry
+        # in the PRIOR snapshot (+@snapshot+, still current until {#finalize_assembly}
+        # / {#commit_passive} swap the new one in): if any ancestor is
+        # present-and-opaque in the new snapshot, the subtree is unknowable and its
+        # last-known contents must be preserved. Depth-bounded by {MAX_TREE_DEPTH}.
+        #
+        # @param id [String] the vanished container's exist id
+        # @param opaque_present_ids [Set<String>] ids opaque in the new snapshot
+        # @return [Boolean]
+        # @api private
+        def hidden_under_opaque?(id, opaque_present_ids)
+          prior = @snapshot
+          return false if prior.nil?
+
+          item = prior[id]
+          return false if item.nil?
+
+          parent = item.parent_item
+          depth  = 0
+          while parent && depth < MAX_TREE_DEPTH
+            return true if opaque_present_ids.include?(parent.id)
+
+            parent = parent.parent_item
+            depth += 1
+          end
+          false
         end
 
         # Marks the feed present and resets absence/backoff bookkeeping.
