@@ -44,6 +44,22 @@ module Lich
           return if events.empty?
 
           at ||= prompt_time(chunk) || Time.now
+          # Resolve the in-blob spawn-tree links from event-object references
+          # into stable per-chunk uids the recorder can map to row ids. Each
+          # event gets a _uid; :root_uid/:parent_uid point at other events in
+          # THIS chunk (or self for a root). A ref to an event not in the emit
+          # set (should not happen) degrades to self-root / no-parent.
+          uids = {}.compare_by_identity
+          events.each_with_index { |ev, i| uids[ev] = i }
+          events.each_with_index do |event, i|
+            event[:_uid] = i
+            root = event[:root_ref]
+            event[:root_uid] = root ? (uids[root] || i) : i
+            parent = event[:parent_ref]
+            event[:parent_uid] = parent ? uids[parent] : nil
+            event.delete(:root_ref)
+            event.delete(:parent_ref)
+          end
           events.each do |event|
             event[:at] = at
             persist_event(event)
@@ -184,6 +200,19 @@ module Lich
           pending_flares = []
           spawn_pending = nil
           active_spawn = nil
+          # Spawn lineage within THIS blob. The whole attack (initiating shot,
+          # its flares, any spawned echo attacks and their own flares) resolves
+          # inside one prompt-bounded chunk before roundtime - so the blob is a
+          # closed spawn tree with a single root. spawn_root holds the current
+          # tree's root event (our own initiating attack); every later OWN
+          # attack in the blob that is spawn-born (a mirror/afterimage echo, or
+          # a bracketed blink cast) points its :root at it. Foreign/inbound/
+          # orphan events are their own root and reset it. Only lineage we can
+          # assert is stamped: blink via its bracket (:parent + confidence
+          # :bracket); ambiguous mirror/afterimage immediate-parent is left
+          # nil (root still known) rather than guessed. See recorder root/
+          # parent_attack_id.
+          spawn_root = nil
           # Rolls that could not claim a virgin sink. An array: several can
           # stack up (volley's per-arrow SMRs, trailing rider maneuvers) and
           # the old single slot silently overwrote all but the last.
@@ -444,6 +473,12 @@ module Lich
                   target: line_target,
                   weapon: current_event && current_event[:weapon],
                   parent: current_event && current_event[:parent],
+                  # Same attack, another AoE target: it sits at the SAME point
+                  # in the spawn tree as the event it split from, so it carries
+                  # the same lineage. root_ref resolves to a real event below.
+                  root_ref: current_event && current_event[:root_ref],
+                  parent_ref: current_event && current_event[:parent_ref],
+                  parent_confidence: current_event && current_event[:parent_confidence],
                   hits: [],
 
                   statuses: [],
@@ -697,6 +732,18 @@ module Lich
                 # the gesture line that opened this spell (see wrapper rule)
                 via: superseded_cast ? :cast : nil,
                 parent: active_spawn ? { flare: active_spawn[:flare], weapon: active_spawn[:weapon] } : nil,
+                # Spawn-tree links (resolved to row ids by the recorder):
+                #   :root_ref   - the initiating own attack of this blob's tree
+                #   :parent_ref - the immediate spawner, ONLY when we can assert
+                #                 it (blink's bracket); nil when ambiguous
+                #   :parent_confidence - :bracket (declared by the game) for
+                #                 blink; nil otherwise. Reserved for :count
+                #                 (count-constraint-forced) in a later pass.
+                # eff_foreign/inbound events are their own root and do not join
+                # our tree; they are handled after the hash is built.
+                root_ref: nil,
+                parent_ref: nil,
+                parent_confidence: nil,
                 hits: [],
 
                 statuses: [],
@@ -707,6 +754,34 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
+
+              # Spawn-tree lineage (see spawn_root decl). We stamp ONLY lineage
+              # we can assert, never a positional guess:
+              #   - blink's bracketed cast (active_spawn) is a child DECLARED by
+              #     the game: root = the open tree root, parent = that root,
+              #     confidence :bracket.
+              #   - every other own attack becomes the root of its OWN tree.
+              #     This deliberately does NOT chain mirror/afterimage echoes to
+              #     a prior shot: within one blob we currently cannot tell a
+              #     spawned echo (a bare "You fire" with no bracket) apart from
+              #     an independent follow-on swing, and guessing would fabricate
+              #     lineage (the initial->afterimage->mirror sibling-vs-child
+              #     case). Left for the count-constraint / spawn-detection pass.
+              #   - inbound/foreign/orphan events are their own root regardless.
+              if active_spawn && spawn_root &&
+                 !(current_event[:inbound] || current_event[:foreign_target] ||
+                   current_event[:foreign_caster] || current_event[:unowned] || current_event[:_orphan])
+                current_event[:root_ref] = spawn_root
+                current_event[:parent_ref] = spawn_root
+                current_event[:parent_confidence] = :bracket
+              else
+                spawn_root = current_event unless current_event[:inbound] ||
+                                                  current_event[:foreign_target] ||
+                                                  current_event[:foreign_caster] ||
+                                                  current_event[:unowned] || current_event[:_orphan]
+                current_event[:root_ref] = current_event
+              end
+
               # Record ownership of a DoT/effect spell from its CAST line so
               # the ticks that follow (this blob or later) can be claimed.
               # Our 2p cast ("You exhale a virulent green mist...") makes the

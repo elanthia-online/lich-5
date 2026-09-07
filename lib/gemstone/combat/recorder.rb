@@ -108,6 +108,9 @@ module Lich
             name        TEXT NOT NULL,                -- def name (:unknown = orphan sink)
             parent      TEXT,                         -- spawned-cast lineage (flare name)
             parent_weapon TEXT,                       -- the weapon whose flare spawned it
+            root_attack_id   INTEGER REFERENCES attacks(id), -- initiating shot of this blob's spawn tree (self for a root)
+            parent_attack_id INTEGER REFERENCES attacks(id), -- immediate spawner, ONLY when asserted (blink bracket); NULL when ambiguous
+            parent_confidence TEXT,                   -- 'bracket' (game-declared) | NULL (unproven); reserved: 'count'
             via         TEXT,                         -- gesture wrapper (:cast)
             creature_id INTEGER REFERENCES creatures(id),  -- NULL: inbound/self/foreign/orphan
             target_kind TEXT NOT NULL,                -- creature|self|foreign|none
@@ -126,6 +129,7 @@ module Lich
           CREATE INDEX IF NOT EXISTS idx_attacks_session ON attacks(session_id, seq);
           CREATE INDEX IF NOT EXISTS idx_attacks_creature ON attacks(creature_id);
           CREATE INDEX IF NOT EXISTS idx_attacks_name ON attacks(session_id, name);
+          CREATE INDEX IF NOT EXISTS idx_attacks_root ON attacks(root_attack_id);
 
           -- attacker_stat/defender_stat/modifier by type:
           --   as_ds:  AS  / DS  / AvD      cs_td: CS  / TD  / CvA
@@ -225,6 +229,7 @@ module Lich
           @db.execute_batch(SCHEMA)
           @seq = 0
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
+          @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
           @character = character
           @source = source
           @idle_timeout = idle_timeout
@@ -386,9 +391,24 @@ module Lich
             parent = parent[:flare]
           end
 
+          # Spawn-tree links: the processor stamps a per-chunk _uid on every
+          # event and points :root_uid/:parent_uid at other events in the same
+          # chunk (root/parent always emit BEFORE their children). We map uid ->
+          # row id in @chunk_rows, resetting when a new chunk's first event
+          # (_uid == 0) arrives. A root points at itself; an ambiguous spawn has
+          # parent_uid nil.
+          uid = event[:_uid]
+          @chunk_rows = {} if uid.nil? || uid.zero?
+          root_uid = event[:root_uid]
+          parent_uid = event[:parent_uid]
+          root_row = (root_uid && @chunk_rows[root_uid]) # nil => self, patched post-insert
+          parent_row = (parent_uid && @chunk_rows[parent_uid])
+          parent_conf = event[:parent_confidence]&.to_s
+
           @db.transaction do
             @seq += 1
             params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, parent_weapon,
+                      root_row, parent_row, parent_conf,
                       event[:via]&.to_s, creature_row, target_kind,
                       attacker[:name], attacker[:id],
                       event[:weapon], outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
@@ -397,12 +417,20 @@ module Lich
                       event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0]
             @db.execute(<<~SQL, params)
               INSERT INTO attacks (session_id, seq, occurred_at, name, parent, parent_weapon,
+                                   root_attack_id, parent_attack_id, parent_confidence,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
                                    outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
+            @chunk_rows ||= {}
+            @chunk_rows[uid] = attack_id if uid
+            # A root references itself: when root_uid maps to this very event
+            # (or is unset), point root_attack_id at our own new row.
+            if root_row.nil?
+              @db.execute('UPDATE attacks SET root_attack_id = ? WHERE id = ?', [attack_id, attack_id])
+            end
 
             hit_seq = 0
             res_seq = 0

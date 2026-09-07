@@ -402,4 +402,84 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(event[:hits].first[:crit]).to be_nil
     end
   end
+
+  # Spawn-tree lineage: within one prompt blob, the initiating shot is the
+  # root; blink's bracketed cast is a game-DECLARED child (parent = the shot,
+  # confidence :bracket); everything else is its own root. We assert only what
+  # the game declares - a mirror/afterimage echo is NOT chained by guess.
+  describe 'spawn-tree lineage (root/parent within a blob)' do
+    def process_chunk(chunk)
+      events = described_class.parse_events(chunk)
+      # mirror Processor.process's uid resolution (object refs -> uids)
+      uids = {}.compare_by_identity
+      events.each_with_index { |ev, i| uids[ev] = i }
+      events.each_with_index do |event, i|
+        event[:_uid] = i
+        r = event[:root_ref]
+        event[:root_uid] = r ? (uids[r] || i) : i
+        p = event[:parent_ref]
+        event[:parent_uid] = p ? uids[p] : nil
+      end
+      events
+    end
+
+    it 'makes a lone swing its own root with no parent' do
+      orc = bolded(4242, 'orc', 'a greater orc')
+      chunk = [
+        "You swing a slim short sword at #{orc}!",
+        '  AS: +400 vs DS: +200 with AvD: +30 + d100 roll: +50 = +280',
+        '   ... and hits for 30 points of damage!',
+        '<prompt time="1758161235">&gt;</prompt>'
+      ]
+      ev = process_chunk(chunk).first
+      expect(ev[:_uid]).to eq(0)
+      expect(ev[:root_uid]).to eq(0)         # its own root
+      expect(ev[:parent_uid]).to be_nil      # no spawner
+      expect(ev[:parent_confidence]).to be_nil
+    end
+
+    it 'links blink\'s bracketed spawned cast to the initiating shot' do
+      orc = bolded(4242, 'orc', 'a greater orc')
+      chunk = [
+        "You swing a glowbark long bow at #{orc}!",
+        '  AS: +400 vs DS: +200 with AvD: +30 + d100 roll: +50 = +280',
+        '   ... and hits for 30 points of damage!',
+        # blink flare (spawns:true) then its bracketed natures_fury cast
+        'Your glowbark long bow suddenly lights up with hundreds of tiny blue sparks!',
+        'You close your eyes in a moment of intense concentration, channeling the pure natural power of your surroundings.',
+        "The surroundings advance upon #{orc} with relentless fury!",
+        '  CS: +484 - TD: +293 + CvA: +25 + d100: +93 == +309',
+        '  Warding failed!',
+        "#{orc} is struck by a sharp piece of mist-covered debris!",
+        '   ... 56 points of damage!',
+        'As swiftly as the chaos came to be, it recedes again into the surroundings.',
+        '<prompt time="1758161236">&gt;</prompt>'
+      ]
+      events = process_chunk(chunk)
+      root = events.find { |e| e[:name] == :swing || e[:_uid] == 0 } || events.first
+      child = events.find { |e| e[:parent_uid] }
+      expect(child).not_to be_nil
+      expect(child[:parent_uid]).to eq(root[:_uid])
+      expect(child[:root_uid]).to eq(root[:_uid])
+      expect(child[:parent_confidence]).to eq(:bracket)
+    end
+
+    it 'does NOT chain an unbracketed follow-on shot (no guessed lineage)' do
+      orc = bolded(4242, 'orc', 'a greater orc')
+      chunk = [
+        "You fire a faewood arrow at #{orc}!",
+        '   ... and hits for 20 points of damage!',
+        # a second bare shot with no bracket - must be its own root, not a guess
+        "You fire a faewood arrow at #{orc}!",
+        '   ... and hits for 25 points of damage!',
+        '<prompt time="1758161237">&gt;</prompt>'
+      ]
+      events = process_chunk(chunk).select { |e| e[:_attack_born] }
+      expect(events.size).to be >= 2
+      # neither shot claims the other as parent
+      expect(events.map { |e| e[:parent_uid] }.compact).to be_empty
+      # each is its own root
+      events.each { |e| expect(e[:root_uid]).to eq(e[:_uid]) }
+    end
+  end
 end

@@ -187,6 +187,67 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  describe 'spawn-tree links (root_attack_id / parent_attack_id)' do
+    # The processor stamps per-chunk _uid + root_uid/parent_uid; the recorder
+    # resolves them to row ids. A chunk resets on _uid == 0.
+    it 'points a lone root attack at itself with no parent' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(_uid: 0, root_uid: 0, parent_uid: nil))
+      rec.close
+      a = query('SELECT id, root_attack_id, parent_attack_id, parent_confidence FROM attacks').first
+      expect(a['root_attack_id']).to eq(a['id']) # self-root
+      expect(a['parent_attack_id']).to be_nil
+      expect(a['parent_confidence']).to be_nil
+    end
+
+    it 'resolves a blink child to the root row id it shares a chunk with' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      # root (uid 0) then blink child (uid 1, parent/root -> uid 0), same chunk
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0, parent_uid: nil))
+      rec.record(:attack, attack_event(name: 'natures_fury', _uid: 1, root_uid: 0,
+                                       parent_uid: 0, parent_confidence: :bracket))
+      rec.close
+      rows = query('SELECT id, name, root_attack_id, parent_attack_id, parent_confidence FROM attacks ORDER BY id')
+      root, child = rows
+      expect(root['root_attack_id']).to eq(root['id'])
+      expect(child['root_attack_id']).to eq(root['id'])       # shares the root
+      expect(child['parent_attack_id']).to eq(root['id'])     # declared parent
+      expect(child['parent_confidence']).to eq('bracket')
+    end
+
+    it 'resets the uid map on a new chunk so uids never cross-link' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      # chunk A: root(0) + child(1)
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0))
+      rec.record(:attack, attack_event(name: 'natures_fury', _uid: 1, root_uid: 0,
+                                       parent_uid: 0, parent_confidence: :bracket))
+      # chunk B: a fresh root reusing uid 0 must NOT link to chunk A's row
+      rec.record(:attack, attack_event(name: 'jab', _uid: 0, root_uid: 0))
+      rec.close
+      rows = query('SELECT id, name, root_attack_id, parent_attack_id FROM attacks ORDER BY id')
+      chunk_b = rows.last
+      expect(chunk_b['name']).to eq('jab')
+      expect(chunk_b['root_attack_id']).to eq(chunk_b['id']) # its own root, not chunk A's
+      expect(chunk_b['parent_attack_id']).to be_nil
+    end
+
+    it 'leaves an ambiguous echo (no parent_uid) rooted but parentless' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0))
+      # a mirror/afterimage echo: shares nothing asserted - own root, no parent
+      rec.record(:attack, attack_event(name: 'fire', _uid: 1, root_uid: 1, parent_uid: nil))
+      rec.close
+      echo = query('SELECT id, root_attack_id, parent_attack_id, parent_confidence FROM attacks ORDER BY id').last
+      expect(echo['root_attack_id']).to eq(echo['id']) # own root (not guessed onto the first)
+      expect(echo['parent_attack_id']).to be_nil
+      expect(echo['parent_confidence']).to be_nil
+    end
+  end
+
   describe 'status stream + attack-window attribution' do
     it 'attributes a status to the open attack when it names a touched creature' do
       rec = new_recorder
