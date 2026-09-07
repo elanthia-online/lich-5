@@ -154,6 +154,35 @@ module Lich
               /\*\* Your .+? pulses with a burst of plasma energy! \*\*/,
               /\*\* (?<attacker>.+?)'s#{MK_POST} .+? pulses with a burst of plasma energy! \*\*/
             ].freeze, true, true, false),
+            # Glowbark bow plasma burst. Three lines, three roles (owner
+            # breakdown 2026-09-06):
+            #   1. PRIMARY - damages the swing's target, names it.
+            #   2. CHAIN TRIGGER - the 25% AoE proc fires; no target, no
+            #      damage. It can flush hidden creatures ("... forced out of
+            #      hiding!"), so it must NOT be treated as damaging or it
+            #      would swallow the next damage line.
+            #   3. SECONDARY (ribbon) - one per additional creature the AoE
+            #      caught; damages and names each.
+            # 580 primaries + 123 chain lines were dropped as unmatched flare
+            # text before this (real-feed, GSIV-Nisugi glowbark long bow).
+            # Two messaging generations, same three roles (the phosphorescence
+            # forms are the 2026-09-06 rewording of the plasma wave).
+            FlareDef.new(:plasma_burst, [
+              # gen1: plasma wave
+              /\*\* Searing white light spills from your .+?, breaking over (?<target>.+?) in a blistering wave of plasma! \*\*/,
+              /\*\* Searing white light spills from (?<attacker>.+?)'s#{MK_POST} .+?, breaking over (?<target>.+?) in a blistering wave of plasma! \*\*/,
+              /\*\* A ribbon of plasma whips across the space between and bursts against (?<target>.+?)! \*\*/,
+              # gen2: phosphorescence - primary and secondary
+              /\*\* Countless points of pale phosphorescence awaken across your .+?, rapidly brightening before bursting into brilliant light around (?<target>.+?)! \*\*/,
+              /\*\* Countless points of pale phosphorescence awaken across (?<attacker>.+?)'s#{MK_POST} .+?, rapidly brightening before bursting into brilliant light around (?<target>.+?)! \*\*/,
+              /\*\* A bloom of spectral light blossoms around (?<target>.+?), engulfing .+? in searing brilliance! \*\*/
+            ].freeze, true, true, false),
+            # The AoE chain trigger - not damaging (see note above). Both
+            # messaging generations.
+            FlareDef.new(:plasma_burst_chain, [
+              /\*\* Light swells along the length of the .+?, and the plasma leaps hungrily onward! \*\*/,
+              /\*\* Phosphorescent light races through the .+? as its entire surface blossoms with dazzling radiance, flooding the surroundings in ghostly light! \*\*/
+            ].freeze, false, true, false),
             FlareDef.new(:psychic_assault, [
               # bare form (no target clause) observed 2,148x in round-5 logs;
               # optional pushBold before "the" or the targeted-live form dies
@@ -199,6 +228,7 @@ module Lich
             ].freeze, false, true, false),
             FlareDef.new(:telepathy_flourish, [/\*\* Rippling and half-seen, strands of psychic power unravel from .+? to strike at (?<target>.+?)! \*\*/].freeze, true, true, false),
             FlareDef.new(:terror, [
+              /\*\* A series of cacophonous caws and screeches fills the air as a murder of crows appears out of nowhere, swarming (?<target>.+?) and pecking .+? relentlessly! \*\*/,
               /\*\* A wave of wicked power surges forth from your .+? and fills (?<target>.+?) with terror, .+? form trembling with unmitigated fear! \*\*/,
               # 3p (round-6: 8.3k)
               /\*\* A wave of wicked power surges forth from (?<attacker>.+?)'s#{MK_POST} .+? and fills (?<target>.+?) with terror, .+? form trembling with unmitigated fear! \*\*/

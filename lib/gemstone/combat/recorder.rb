@@ -119,7 +119,9 @@ module Lich
             aimed       INTEGER NOT NULL DEFAULT 0,
             ambush      INTEGER NOT NULL DEFAULT 0,
             inbound     INTEGER NOT NULL DEFAULT 0,
-            orphan      INTEGER NOT NULL DEFAULT 0
+            orphan      INTEGER NOT NULL DEFAULT 0,
+            foreign_caster INTEGER NOT NULL DEFAULT 0, -- a nearby player's attack (observed, not ours)
+            unowned     INTEGER NOT NULL DEFAULT 0     -- effect tick, no owning cast: applied to creature, not our deal
           );
           CREATE INDEX IF NOT EXISTS idx_attacks_session ON attacks(session_id, seq);
           CREATE INDEX IF NOT EXISTS idx_attacks_creature ON attacks(creature_id);
@@ -365,13 +367,14 @@ module Lich
                       attacker[:name], attacker[:id],
                       event[:weapon], outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
                       event[:aimed] ? 1 : 0, event[:ambush] ? 1 : 0,
-                      event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0]
+                      event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0,
+                      event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0]
             @db.execute(<<~SQL, params)
               INSERT INTO attacks (session_id, seq, occurred_at, name, parent, parent_weapon,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
-                                   outcomes_all, aimed, ambush, inbound, orphan)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
 

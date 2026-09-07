@@ -96,6 +96,21 @@ module Lich
                 # Third-person defs capture the attacker (a player link with
                 # a negative exist id, or a pushBold-wrapped creature link)
                 result[:attacker] = attacker if attacker
+                # A NEARBY PLAYER's attack on a creature we can see. When a
+                # 3p attack names its actor but that actor is not us and not
+                # a creature - a player link (negative id) or a bare name
+                # from mid-sentence prose (the paladin weapon_infusion proc
+                # names "Heavenscent", not a link) - the whole event belongs
+                # to that player. Marked foreign_caster so the processor
+                # emits it for observers but never lands its damage on our
+                # ledger, the attacker-side mirror of foreign_target
+                # (real-feed, GSIV-Nisugi 2026-09-06). Attacks a CREATURE
+                # makes on us are :inbound and handled above; those keep
+                # their creature-id attacker and are not foreign_caster.
+                if attacker && !result[:inbound] &&
+                   (attacker[:id].to_i < 0 || (attacker[:id].nil? && attacker[:name]))
+                  result[:foreign_caster] = true
+                end
                 result[:weapon] = strip_links(match[:weapon]) if match.names.include?('weapon') && match[:weapon]
                 # Aimed shots ("You take aim and fire...", "You make a precise
                 # attempt to jab...") roll differently from unaimed ones. The

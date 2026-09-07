@@ -70,7 +70,15 @@ module Lich
             # so positional inference is also out. Bind targets only from
             # explicit naming lines; leave anonymous rolls unattributed.
             # TODO: revisit with more logs (blessed weapon, living targets).
-            AttackDef.new(:pulverize, [/You wheel your .+? overhead before slamming it around in a wide arc to pulverize your foes!/].freeze),
+            # 2p (ours) and 3p (a nearby player's - the opener names them, so
+            # the whole actor-less AoE swing chain that follows is theirs, not
+            # ours; foreign_caster keeps it off our ledger - real-feed,
+            # GSIV-Nisugi 2026-09-06: Heavenscent's pulverize dumped ~825 swing
+            # damage into our rollup via the open web event).
+            AttackDef.new(:pulverize, [
+              /You wheel your .+? overhead before slamming it around in a wide arc to pulverize your foes!/,
+              /(?<attacker>[A-Z][a-z]+) wheels (?:his|her|its) .+? overhead before slamming it around in a wide arc to pulverize (?:his|her|its) foes!/
+            ].freeze),
             AttackDef.new(:dizzying_swing, [/You heft your .+? and, looping it once to build momentum, lash out in a strike at (?<target>.+?)'s#{MK_POST} head!/].freeze),
             AttackDef.new(:guardant_thrust, [/You lunge at (?<target>.+?), guiding your .+? with both hands in a powerful thrust!/].freeze),
             AttackDef.new(:cyclone, [

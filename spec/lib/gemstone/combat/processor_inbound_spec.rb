@@ -210,6 +210,135 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     expect(Lich::Gemstone::Combat::Observers).to have_received(:emit).with(:attack, event)
   end
 
+  # A nearby player's attack on a creature we can see (foreign_caster).
+  # The paladin weapon-infusion proc names the caster in prose, not a
+  # link, and its target IS a bolded creature - so without the
+  # foreign_caster classification it matched attacker=nil/target=creature
+  # and its Web/damage was credited to us (real-feed, GSIV-Nisugi
+  # 2026-09-06: Heavenscent's infused Web on a gigas shield-maiden).
+  describe 'foreign caster (nearby player attacks a creature)' do
+    let(:maiden) { bolded(555001, 'shield-maiden', 'a brawny gigas shield-maiden') }
+
+    it 'flags a paladin weapon-infusion proc as foreign_caster' do
+      chunk = [
+        "As Heavenscent attempts to strike with her star, a surge of power flows out of it, through Heavenscent, and leaps out at #{maiden}!",
+        '[SMR result: 271 (Open d100: 58, Bonus: 125)]',
+        "The wisps solidify into thick strands of webbing that tighten about #{maiden}!",
+        '   ... 20 points of damage!',
+        '<prompt time="1757183315">&gt;</prompt>'
+      ]
+
+      event = described_class.parse_events(chunk).first
+      expect(event[:name]).to eq(:weapon_infusion)
+      expect(event[:foreign_caster]).to be(true)
+      expect(event[:attacker][:name]).to eq('Heavenscent')
+      expect(event[:target][:id]).to eq(555001)
+    end
+
+    it 'does not apply a foreign caster event to the creature' do
+      event = { name: :weapon_infusion, target: { id: 555001, name: 'a brawny gigas shield-maiden' },
+                foreign_caster: true, attacker: { name: 'Heavenscent' },
+                hits: [{ damage: 20, crit: nil }], statuses: [], flares: [],
+                outcomes: [], resolutions: [] }
+
+      described_class.persist_event(event)
+      # emitted for observers, but Creature[] never consulted for application
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit).with(:attack, event)
+    end
+
+    it 'keeps our OWN weapon infusion (through you) as ours' do
+      chunk = [
+        "As you attempt to strike with your star, it sends a surge of power through you that quickly leaps out at #{maiden}!",
+        '  AS: +400 vs DS: +200 with AvD: +30 + d100 roll: +50 = +280',
+        '   ... and hits for 30 points of damage!',
+        '<prompt time="1757183316">&gt;</prompt>'
+      ]
+
+      event = described_class.parse_events(chunk).first
+      expect(event[:foreign_caster]).to be_falsey
+      expect(event[:target][:id]).to eq(555001)
+    end
+  end
+
+  # A DoT/effect tick that names the victim but no caster, arriving with
+  # no owning cast in the blob (a nearby player's pestilence ticking on a
+  # creature we can see, or one we walked in on). Owner ruling 2026-09-06:
+  # apply the damage to the creature (its received-total is real) but keep
+  # it OFF our deal - the recorder files it under other/unknown.
+  describe 'unowned effect tick (no owning cast)' do
+    let(:skald) { bolded(556001, 'skald', 'a grim gigas skald') }
+
+    it 'flags a lone pestilence tick as unowned' do
+      chunk = [
+        "Boils rupture all over #{skald} causing 54 points of damage!",
+        '   ... 10 points of damage!',
+        '<prompt time="1757186800">&gt;</prompt>'
+      ]
+
+      event = described_class.parse_events(chunk).first
+      expect(event[:name]).to eq(:pestilence)
+      expect(event[:unowned]).to be(true)
+      # still bound to the creature, so its damage applies
+      expect(event[:target][:id]).to eq(556001)
+      expect(event[:hits].map { |h| h[:damage] }).to include(54)
+    end
+
+    it 'does NOT flag a pestilence tick that follows our own cast in-blob' do
+      chunk = [
+        "You exhale a virulent green mist toward #{skald}, instantly infecting it!",
+        "Boils rupture all over #{skald} causing 54 points of damage!",
+        '<prompt time="1757186801">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      expect(events.none? { |e| e[:unowned] }).to be(true)
+    end
+  end
+
+  # A nearby player's AoE (pulverize) fans out into anonymous per-target
+  # swing lines that name no actor. The opener names the player, arming
+  # the foreign latch so the whole chain stays off our ledger (real-feed,
+  # GSIV-Nisugi 2026-09-06: Heavenscent's pulverize dumped ~825 swing
+  # damage into our open web event).
+  describe 'foreign AoE latch' do
+    let(:warg) { bolded(557001, 'warg', 'a niveous giant warg') }
+    let(:maiden) { bolded(557002, 'shield-maiden', 'a brawny gigas shield-maiden') }
+
+    it 'attributes an anonymous foreign AoE swing chain to the opener' do
+      chunk = [
+        'Heavenscent wheels her star overhead before slamming it around in a wide arc to pulverize her foes!',
+        '[SMR result: 281 (Open d100: 69, Bonus: 146)]',
+        "As Heavenscent attempts to strike with her star, a surge of power flows out of it, through Heavenscent, and leaps out at #{maiden}!",
+        "Cloudy wisps swirl about #{maiden}.",
+        "A #{maiden} becomes ensnared in thick strands of webbing!",
+        '  AS: +673 vs DS: +333 with AvD: +42 + d100 roll: +25 = +407',
+        '   ... and hits for 159 points of damage!',
+        '<prompt time="1757186900">&gt;</prompt>'
+      ]
+
+      events = described_class.parse_events(chunk)
+      # every damaging event in this blob is foreign, none credited to us
+      dmg_events = events.select { |e| e[:hits].any? { |h| h[:damage].to_i > 0 } }
+      expect(dmg_events).not_to be_empty
+      expect(dmg_events).to all(satisfy { |e| e[:foreign_caster] })
+    end
+
+    it 'clears the latch when WE act, keeping our own attack ours' do
+      chunk = [
+        'Heavenscent wheels her star overhead before slamming it around in a wide arc to pulverize her foes!',
+        "You fire a firewheel arrow at #{warg}!",
+        '  AS: +500 vs DS: +200 with AvD: +30 + d100 roll: +40 = +370',
+        '   ... and hits for 88 points of damage!',
+        '<prompt time="1757186901">&gt;</prompt>'
+      ]
+
+      fire = described_class.parse_events(chunk).find { |e| e[:name] == :fire }
+      expect(fire).not_to be_nil
+      expect(fire[:foreign_caster]).to be_falsey
+      expect(fire[:hits].map { |h| h[:damage] }).to eq([88])
+    end
+  end
+
   it 'still switches targets across a multi-target AoE' do
     chunk = [
       'You wheel your maul overhead before slamming it around in a wide arc to pulverize your foes!',

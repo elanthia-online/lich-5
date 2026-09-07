@@ -18,6 +18,19 @@ module Lich
         # stand-up messagings are shared between them.
         POSITION_STATUSES = %w[prone sitting kneeling].freeze
 
+        # Trailing-effect / DoT tick defs whose line names the VICTIM but
+        # never the CASTER (pestilence's per-round boils, web's ensnare).
+        # They exist so the tick damage is not dropped - but when the tick
+        # arrives with no cast in the blob (a nearby player's DoT ticking on
+        # a creature we can see, or one we walked in on), it is NOT ours.
+        # Marked :unowned so the damage still lands on the creature (its
+        # received-total is real) while staying out of our damage-dealt
+        # rollup, and sits in the recorder's other/unknown bucket for later
+        # adjudication - missing def vs genuine drive-by (owner ruling
+        # 2026-09-06). A tick IS ours only when our own cast of that spell
+        # is visible in the same blob (see cast_owner tracking below).
+        UNOWNED_TICK_ATTACKS = %i[pestilence web].freeze
+
         module_function
 
         # Process a chunk of game lines for combat events
@@ -184,6 +197,23 @@ module Lich
           # spell_loss cause - a wear-off riding a dispel strip means
           # something different from natural expiry or death cleanup.
           chunk_dispels = []
+          # Names of DoT/effect spells whose OWN cast we saw in this blob:
+          # :self when our 2p cast line fired ("You exhale a virulent green
+          # mist..."), so the trailing ticks that follow are ours; a player
+          # name when a foreign cast opener fired. A tick def for a spell
+          # NOT in here is unowned - the tick is a fact about the creature,
+          # not a claim on our ledger (see UNOWNED_TICK_ATTACKS).
+          cast_owner = {}
+          # Foreign-attacker latch: a nearby player's AoE (pulverize, and
+          # other openers that name the actor but whose per-target swing
+          # lines do NOT) fans out into actor-less swing/effect lines. Their
+          # opener sets this to the player's name; while set, actor-less
+          # attack events inherit foreign_caster so the whole chain stays off
+          # our ledger (real-feed, GSIV-Nisugi 2026-09-06: Heavenscent's
+          # pulverize dumped ~825 swing damage into our web event). Cleared
+          # the instant WE act (a 2p "You ..." attack reclaims ownership).
+          # Chunk-local, so a prompt boundary clears it for free.
+          foreign_latch = nil
           # Facts with NO recognized initiation anywhere in the chunk
           # (bespoke initiations we have no def for - the burnt-arms
           # snatch, the wraith-shark charge). The def layer sees their
@@ -396,7 +426,8 @@ module Lich
             # unresolvable name) is bound to a non-creature for the same
             # reason and must not adopt one either.
             if line_target && parse_state != :seeking_attack &&
-               !(current_event && (current_event[:inbound] || current_event[:foreign_target]))
+               !(current_event && (current_event[:inbound] || current_event[:foreign_target] ||
+                                   current_event[:foreign_caster]))
               # Check if this is a real target switch (different creature)
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
@@ -605,6 +636,20 @@ module Lich
                 pending_resolutions = current_event[:resolutions] + pending_resolutions
               end
 
+              # Foreign-attacker latch (see foreign_latch decl). A 2p "You..."
+              # attack is ours and reclaims ownership - clear the latch. A
+              # foreign_caster attack (its line names a player) arms it, so
+              # the actor-less swing/effect lines that fan out from a nearby
+              # player's AoE inherit their ownership. An event is foreign when
+              # its own def said so, OR when the latch is armed and this line
+              # named no actor of its own (an anonymous AoE per-target swing).
+              our_2p = line.match?(/\AYou\b/) && attack[:attacker].nil? &&
+                       !attack[:foreign_caster]
+              foreign_latch = nil if our_2p
+              foreign_latch = attack[:attacker][:name] if attack[:foreign_caster] && attack[:attacker]
+              eff_foreign = attack[:foreign_caster] ||
+                            (foreign_latch && attack[:attacker].nil? && !our_2p) || nil
+
               current_event = {
                 name: attack[:name],
                 target: attack[:target] || {},
@@ -619,6 +664,27 @@ module Lich
                 # an unresolvable name). Same rule as inbound: never adopt
                 # a creature later in the chunk.
                 foreign_target: attack[:foreign_target],
+                # A nearby player's attack on a creature we can see. Unlike
+                # foreign_target it DOES have a creature target; persist_event
+                # emits it for observers but never applies it to the creature.
+                # eff_foreign folds in the foreign_latch: an anonymous swing
+                # inside a nearby player's AoE is theirs even though its own
+                # line named nobody.
+                foreign_caster: eff_foreign,
+                # A DoT/effect TICK line (pestilence boils, web ensnare) that
+                # named the victim but no caster, arriving with no owning cast
+                # of that spell in this blob. Its damage still applies to the
+                # creature (real received damage) but is NOT our deal - the
+                # recorder files it under other/unknown. Ours only when our
+                # own cast set cast_owner[name] = :self this blob; a foreign
+                # cast makes it foreign_caster instead. A CAST line ("You
+                # exhale...") is our own initiation, never unowned - it is
+                # excluded by the owning-cast check below (which set :self for
+                # it) plus the 2p-line guard.
+                unowned: (UNOWNED_TICK_ATTACKS.include?(attack[:name]) &&
+                          attack[:attacker].nil? && !eff_foreign &&
+                          !line.match?(/\AYou\b/) &&
+                          cast_owner[attack[:name]] != :self) || nil,
                 # Struck from hiding: this attack carries the ambush
                 # bonuses (DS pushdown + crit weighting). A modifier on the
                 # attack, not an attack of its own.
@@ -641,6 +707,19 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
+              # Record ownership of a DoT/effect spell from its CAST line so
+              # the ticks that follow (this blob or later) can be claimed.
+              # Our 2p cast ("You exhale a virulent green mist...") makes the
+              # spell ours; a 3p cast names the foreign caster. Cast lines
+              # carry no inline damage, so a same-name event WITH damage is a
+              # tick, not a cast - only the cast sets ownership.
+              if UNOWNED_TICK_ATTACKS.include?(current_event[:name]) && current_event[:hits].empty?
+                cast_owner[current_event[:name]] =
+                  if current_event[:foreign_caster] then (current_event[:attacker] && current_event[:attacker][:name]) || :foreign
+                  elsif current_event[:attacker].nil? && line.match?(/\AYou\b/) then :self
+                  end
+              end
+
               # Claimed - the ambush belongs to this attack only.
               pending_ambush = nil
               current_target = current_event[:target][:id] ? current_event[:target] : nil
@@ -857,6 +936,16 @@ module Lich
           Observers.emit(:attack, event) if Tracker.settings[:emit_attacks]
 
           return unless target[:id]
+
+          # A nearby player's attack (foreign_caster) DOES resolve onto a
+          # creature we can see, so unlike inbound/foreign_target it passes
+          # the target-id guard - but its damage, wounds and statuses belong
+          # to that player, not to us. Emit it for observers (done above),
+          # then stop before touching the creature registry: applying it
+          # would credit their kill/damage to us and mutate a creature we
+          # did not act on (real-feed, GSIV-Nisugi 2026-09-06: Heavenscent's
+          # infused Web on a gigas shield-maiden).
+          return if event[:foreign_caster]
 
           creature = Creature[target[:id].to_i]
           unless creature

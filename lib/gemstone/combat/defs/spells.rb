@@ -54,6 +54,19 @@ module Lich
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),
             AttackDef.new(:web, [/Cloudy wisps swirl about (?<target>.+?)\./].freeze),
+            # Paladin weapon infusion proc (a "star"-family weapon the
+            # paladin charges by casting a spell into it - like Blink, the
+            # spell that fires varies with what they infused). The wrapper
+            # is invariant and names the caster TWICE, so a nearby player's
+            # infusion on a creature we can see is attributable rather than
+            # silently credited to us: without the attacker capture this
+            # matched attacker=nil/target=creature and landed in our ledger
+            # (real-feed, GSIV-Nisugi 2026-09-06: Heavenscent's Web infusion
+            # on a brawny gigas shield-maiden). The 2p form ("through you")
+            # is ours. foreign_caster is set downstream from the attacker.
+            AttackDef.new(:weapon_infusion, [
+              /As (?<attacker>.+?) attempts to strike with .+?, a surge of power flows out of it, through .+?, and leaps out at (?<target>[^!]+)!/
+            ].freeze),
           ].freeze
 
           # Spell initiations catalogued from the wiki Messaging sections
