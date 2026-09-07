@@ -40,6 +40,7 @@ module Lich
         # Missing, unreadable, or malformed files become an empty configuration
         # and restore the pristine built-in catalog. A document from a newer
         # schema is left untouched and the last known-good catalog remains active.
+        # Invalid argument lists likewise retain the previous catalog and are logged.
         #
         # @param data_dir [String, nil] Lich data directory; defaults to DATA_DIR
         # @return [Hash] normalized configuration snapshot
@@ -54,6 +55,9 @@ module Lich
             end
 
             apply_configuration(normalize_configuration(raw))
+          rescue ArgumentError => error
+            log_warning("could not apply #{FILE_NAME}: #{error.message}")
+            deep_copy(@current)
           end
         end
 
@@ -98,6 +102,25 @@ module Lich
                        @current.fetch('custom').fetch(frontend_id, nil)
             settings && deep_copy(settings)
           end
+        end
+
+        # Validates literal argv values without trimming or dropping positions.
+        #
+        # @param value [Array<String>] complete additional argument list
+        # @return [Array<String>] detached, unchanged argument values
+        # @raise [ArgumentError] when the list exceeds bounds or contains invalid values
+        def validate_arguments(value)
+          unless value.is_a?(Array) && value.length <= MAX_ARGUMENTS
+            raise ArgumentError, "Additional arguments must be an array of at most #{MAX_ARGUMENTS} strings."
+          end
+          unless value.all? { |argument|
+            argument.is_a?(String) && argument.valid_encoding? &&
+            argument.bytesize <= MAX_SCALAR_BYTES && !argument.match?(/[\x00-\x1f\x7f]/)
+          }
+            raise ArgumentError, 'Arguments must be bounded strings without control characters.'
+          end
+
+          value.map(&:dup)
         end
 
         private
@@ -280,17 +303,16 @@ module Lich
           value
         end
 
-        # Normalizes a bounded list of frontend arguments.
+        # Validates optional literal frontend arguments without changing positions.
         #
         # @param value [Object] candidate argument list
-        # @return [Array<String>, nil] normalized arguments or nil for a non-array
+        # @return [Array<String>, nil] unchanged arguments or nil when absent
+        # @raise [ArgumentError] when a supplied list is invalid
         # @api private
         def clean_arguments(value)
-          return nil unless value.is_a?(Array)
+          return nil if value.nil?
 
-          value.first(MAX_ARGUMENTS).filter_map do |argument|
-            clean_scalar(argument) if argument.is_a?(String)
-          end
+          validate_arguments(value)
         end
 
         # Filters declared capabilities to the supported public vocabulary.
@@ -317,7 +339,7 @@ module Lich
         # @return [Object, nil] matching value when present
         # @api private
         def hash_value(hash, key)
-          hash[key] || hash[key.to_sym]
+          hash.key?(key) ? hash[key] : hash[key.to_sym]
         end
 
         # Applies normalized settings to the frontend catalog and process snapshot.

@@ -511,11 +511,7 @@ module Lich
         # @api private
         def parse_arguments
           arguments = Shellwords.split(@arguments_entry.text.to_s)
-          if arguments.length > FrontendSettings::MAX_ARGUMENTS
-            raise ArgumentError, "Additional arguments are limited to #{FrontendSettings::MAX_ARGUMENTS}."
-          end
-          arguments.each { |argument| required_scalar('Argument', argument) }
-          arguments
+          FrontendSettings.validate_arguments(arguments)
         rescue ArgumentError => error
           raise error if error.message.start_with?('Additional arguments', 'Argument')
 

@@ -16,6 +16,43 @@ RSpec.describe Lich::Common::FrontendSettings do
   let(:data_dir) { Dir.mktmpdir('lich-frontend-settings') }
   let(:settings_file) { File.join(data_dir, 'frontends.yml') }
 
+  it 'preserves literal whitespace and empty positional arguments through disk reload' do
+    arguments = ['--title', '', '  keep me  ', '--next']
+    described_class.replace!(data_dir: data_dir,
+                             builtins: { 'stormfront' => { 'arguments' => arguments } }, custom: {})
+    described_class.load!(data_dir: data_dir)
+    expect(described_class.settings_for('stormfront')['arguments']).to eq(arguments)
+  end
+
+  it 'rejects invalid argument lists without replacing the file or active configuration' do
+    original = described_class.replace!(data_dir: data_dir,
+                                        builtins: { 'stormfront' => { 'arguments' => ['--valid'] } }, custom: {})
+    before = File.binread(settings_file)
+    invalid_lists = [false, '--not-an-array', ['--title', 12, '--next'], ["bad\nargument"],
+                     ["bad\0argument"], ['x' * (described_class::MAX_SCALAR_BYTES + 1)],
+                     Array.new(described_class::MAX_ARGUMENTS + 1, '--extra')]
+    invalid_lists.each do |arguments|
+      expect do
+        described_class.replace!(data_dir: data_dir,
+                                 builtins: { 'stormfront' => { 'arguments' => arguments } }, custom: {})
+      end.to raise_error(ArgumentError)
+      expect(File.binread(settings_file)).to eq(before)
+      expect(described_class.current).to eq(original)
+    end
+  end
+
+  it 'retains the last usable catalog when a hand-edited argument list is invalid' do
+    original = described_class.replace!(data_dir: data_dir,
+                                        builtins: { 'stormfront' => { 'arguments' => ['--valid'] } }, custom: {})
+    invalid = { 'version' => 1, 'custom' => {
+      'test-client' => { 'label' => 'Test', 'command' => '/opt/test', 'arguments' => ['--title', false, '--next'] }
+    } }
+    File.write(settings_file, YAML.dump(invalid))
+    before = File.binread(settings_file)
+    expect(described_class.load!(data_dir: data_dir)).to eq(original)
+    expect(File.binread(settings_file)).to eq(before)
+  end
+
   after do
     described_class.replace!(data_dir: data_dir, builtins: {}, custom: {})
     FileUtils.rm_rf(data_dir)
@@ -89,7 +126,7 @@ RSpec.describe Lich::Common::FrontendSettings do
         'builtins' => {
           'Wrayth'      => {
             'executable'   => " /games/Wrayth.exe \n",
-            'arguments'    => ['--safe', 12, '', "bad\nargument"],
+            'arguments'    => ['--safe', ''],
             'capabilities' => ['gsl'],
             'label'        => 'Not authoritative'
           },
@@ -110,7 +147,7 @@ RSpec.describe Lich::Common::FrontendSettings do
             'label'        => ' Good Frontend ',
             'command'      => ' /opt/good/frontend ',
             'directory'    => 7,
-            'arguments'    => ['--one', false, "bad\nargument"],
+            'arguments'    => ['--one'],
             'capabilities' => ['XML', 'unknown', 'streams', 5]
           }
         }
@@ -124,7 +161,7 @@ RSpec.describe Lich::Common::FrontendSettings do
       'builtins' => {
         'stormfront' => {
           'executable' => '/games/Wrayth.exe',
-          'arguments'  => ['--safe']
+          'arguments'  => ['--safe', '']
         }
       },
       'custom'   => {

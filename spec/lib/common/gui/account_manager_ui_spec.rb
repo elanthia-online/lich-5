@@ -29,7 +29,7 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
     column = double('column', resizable: nil, set_cell_data_func: nil)
     options = double('options')
     selected = double('GTK signal TreeIter without a Ruby model')
-    row = double('saved row')
+    row = ['TEST', 'Tester', 'GemStone IV', 'Wrayth', 'GS3', '', nil, 'stormfront', 'Launch client', nil]
     store = double('saved entries')
     view = double('view', append_column: nil)
     stub_const('Gtk::CellRendererCombo', Class.new)
@@ -38,15 +38,22 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
     allow(Gtk::TreeViewColumn).to receive(:new).and_return(column)
     %i[model= text_column= has_entry=].each { |setter| allow(cell).to receive(setter) }
     allow(column).to receive(:resizable=)
-    callback = nil
-    allow(cell).to receive(:signal_connect) { |_signal, &block| callback = block }
-    expect(options).to receive(:get_value).with(selected, 0).and_return('profanity')
+    callbacks = {}
+    allow(cell).to receive(:signal_connect) { |signal, &block| callbacks[signal] = block }
+    expect(options).to receive(:get_value).with(selected, 0).twice.and_return('profanity')
     expect(selected).not_to receive(:[])
-    expect(store).to receive(:get_iter).with('0:0').and_return(row)
-    expect(manager).to receive(:commit_saved_launch).with(row, { frontend: 'profanity' })
+    expect(store).to receive(:get_iter).with('0:0').twice.and_return(row)
+    allow(manager).to receive(:commit_saved_launch)
 
     manager.send(:add_launch_choice_column, view, store, 'Frontend', 3, options, :frontend)
-    callback.call(cell, '0:0', selected)
+    callbacks.fetch('changed').call(cell, '0:0', selected)
+    expect(manager).not_to have_received(:commit_saved_launch)
+    callbacks.fetch('editing-canceled').call(cell)
+    callbacks.fetch('edited').call(cell, '0:0', 'Profanity (external client)')
+    expect(manager).not_to have_received(:commit_saved_launch)
+    callbacks.fetch('changed').call(cell, '0:0', selected)
+    callbacks.fetch('edited').call(cell, '0:0', 'Profanity (external client)')
+    expect(manager).to have_received(:commit_saved_launch).with(row, { frontend: 'profanity' })
   end
 
   let(:row_class) do

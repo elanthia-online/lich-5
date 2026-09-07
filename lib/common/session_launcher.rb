@@ -93,6 +93,7 @@ module Lich
                           else
                             launch_map['CUSTOMLAUNCH']
                           end
+          context = context.merge(frontend: frontend, custom_launch: custom_launch)
 
           raise ArgumentError, 'missing character for launcher spawn' if character.to_s.empty?
 

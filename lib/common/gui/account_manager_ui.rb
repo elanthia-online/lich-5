@@ -192,7 +192,7 @@ module Lich
           port_renderer = Gtk::CellRendererText.new
           port_column = Gtk::TreeViewColumn.new('Local port', port_renderer, text: 9)
           port_column.set_cell_data_func(port_renderer) do |_column, cell, _model, iter|
-            cell.editable = !iter[1].to_s.empty? && iter[8] == 'Headless / external client'
+            cell.editable = !iter[1].to_s.empty? && ['Headless / external client', 'Needs configuration'].include?(iter[8])
           end
           port_renderer.signal_connect('edited') do |_cell, path, value|
             commit_saved_launch(accounts_store.get_iter(path), listen_port: value)
@@ -783,8 +783,16 @@ module Lich
           end
         end
 
-        # Adds an editable character-only dropdown with stable-id selection.
+        # Adds a character-only dropdown; selection is staged until editing commits.
+        #
+        # @param view [Gtk::TreeView] destination account view
+        # @param store [Gtk::TreeStore] saved entry model
+        # @param title [String] column heading
+        # @param index [Integer] display column in the saved entry model
+        # @param options [Gtk::ListStore] stable identifier and label pairs
+        # @param field [Symbol] launch setting to update
         # @return [void]
+        # @api private
         def add_launch_choice_column(view, store, title, index, options, field)
           cell = Gtk::CellRendererCombo.new
           cell.model = options
@@ -795,9 +803,22 @@ module Lich
           column.set_cell_data_func(cell) do |_column, renderer, _model, iter|
             renderer.editable = !iter[1].to_s.empty?
           end
+          pending = nil
+          cell.signal_connect('editing-started') { pending = nil }
           cell.signal_connect('changed') do |_renderer, path, selected|
-            commit_saved_launch(store.get_iter(path), field => options.get_value(selected, 0)) if selected
+            pending = nil
+            if selected && (iter = store.get_iter(path))
+              # Keep the original entry identity, not a TreeIter invalidated by
+              # a queued model refresh or a path that may later identify another row.
+              pending = [path, Array.new(10) { |column_index| iter[column_index] }, options.get_value(selected, 0)]
+            end
           end
+          cell.signal_connect('edited') do |_renderer, path, _label|
+            selection = pending
+            pending = nil
+            commit_saved_launch(selection[1], field => selection[2]) if selection && selection[0] == path
+          end
+          cell.signal_connect('editing-canceled') { pending = nil }
           view.append_column(column)
         end
 

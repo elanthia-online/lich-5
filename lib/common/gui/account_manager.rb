@@ -357,6 +357,8 @@ module Lich
         # @param old_frontend [String] frontend of the selected entry
         # @param custom_launch [String, nil] exact selected custom command
         # @param frontend [String] new configured frontend identifier
+        # @param launch_mode [String, nil, Symbol] client/external mode; :__unset preserves the stored value
+        # @param listen_port [Integer, String, nil, Symbol] local port; :__unset preserves the stored value
         # @return [Boolean] whether the change was saved
         def self.update_launch_settings(data_dir, username, char_name, game_code, old_frontend:, custom_launch:, frontend: old_frontend, launch_mode: :__unset, listen_port: :__unset)
           definition = Frontend.definition_for(frontend)
@@ -375,7 +377,7 @@ module Lich
           return false unless selected.one?
 
           character = selected.first
-          return false if candidates.any? { |other| !other.equal?(character) && other['frontend'] == definition[:id] }
+          return false if candidates.any? { |other| !other.equal?(character) && Frontend.canonical_name(other['frontend']) == definition[:id] }
 
           character['frontend'] = definition[:id]
           character['launch_mode'] = launch_mode unless launch_mode == :__unset

@@ -532,6 +532,9 @@ module Lich
 
               # Save quick entry if selected
               if @make_quick_option.active?
+                # Re-read before the whole-collection save even if a cross-tab
+                # notification was missed. Do not save the tab's opening snapshot.
+                @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
                 # Preserve encryption_mode from existing entries to prevent silent downgrade
                 existing_encryption_mode = @entry_data.first&.[](:encryption_mode) || :plaintext
                 entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir, :encryption_mode => existing_encryption_mode }

@@ -394,6 +394,13 @@ RSpec.describe Lich::Common::GUI::FrontendManagerTab do
     expect(editor(:@id_entry).sensitive).to be false
   end
 
+  it 'accepts explicitly quoted empty and whitespace-bearing arguments' do
+    editor(:@arguments_entry).text = '--title "" "  keep me  " --next'
+    expect(manager.send(:save_current)).to be true
+    expect(settings.replace_calls.last[:builtins]['stormfront']['arguments'])
+      .to eq(['--title', '', '  keep me  ', '--next'])
+  end
+
   it 'rejects duplicate IDs without replacing the settings document' do
     manager.send(:begin_new_custom)
     editor(:@id_entry).text = 'wrayth'

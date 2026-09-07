@@ -253,7 +253,7 @@ module Lich
     #
     # Configures the communication system that allows tabs to notify
     # each other of data changes for real-time synchronization.
-    # Enhanced to include manual login tab cache refresh for account/character removal events.
+    # Refreshes every entry cache after data mutations, including launch-setting edits.
     #
     # @return [void]
     def setup_cross_tab_communication
@@ -265,10 +265,7 @@ module Lich
         # Refresh saved login tab for all data changes to ensure synchronization
         @saved_login_tab.refresh_data if @saved_login_tab
 
-        # Refresh manual login tab cache when accounts are removed to prevent stale data
-        if @manual_login_tab && (change_type == :account_removed || change_type == :character_removed)
-          @manual_login_tab.refresh_entry_data
-        end
+        @manual_login_tab.refresh_entry_data if @manual_login_tab
 
         # Sanitize data before logging to prevent password exposure
         sanitized_data = data.dup

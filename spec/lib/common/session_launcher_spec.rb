@@ -62,6 +62,18 @@ RSpec.describe Lich::Common::SessionLauncher do
     expect(Process).to have_received(:detach).with(1234)
   end
 
+  it 'preserves headless settings when frontend identity is supplied by launch data' do
+    result = described_class.launch(
+      ['CHARACTER=Tsetem', 'FRONTEND=profanity', 'GAMECODE=GST'],
+      launch_context: { launch_mode: 'external', listen_port: 8001 }
+    )
+    expect(result[:ok]).to be true
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST',
+      '--frontend=profanity', '--without-frontend', '--detachable-client=127.0.0.1:8001', hash_including(chdir: anything)
+    )
+  end
+
   it 'falls back to launch_data values when launch_context is not provided' do
     launch_data_with_name = launch_data + ['CHARACTER=Tsetem']
 

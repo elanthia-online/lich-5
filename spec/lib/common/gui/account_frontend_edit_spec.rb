@@ -54,6 +54,16 @@ RSpec.describe Lich::Common::GUI::AccountManager, '.update_launch_settings' do
     expect(File.binread(@path)).to eq(before)
   end
 
+  it 'rejects an alias-equivalent destination without writing' do
+    data = original
+    data['accounts']['TEST']['characters'][1]['frontend'] = 'wizard'
+    data['accounts']['TEST']['characters'] << entry.merge('frontend' => 'wrayth')
+    File.write(@path, YAML.dump(data))
+    before = File.binread(@path)
+    expect(change('stormfront', old_frontend: 'wizard')).to be false
+    expect(File.binread(@path)).to eq(before)
+  end
+
   it 'refuses a stale selection without changing another entry' do
     before = File.binread(@path)
     expect(change(old_frontend: 'wizard')).to be false
