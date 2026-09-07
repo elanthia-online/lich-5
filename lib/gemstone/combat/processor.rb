@@ -796,7 +796,15 @@ module Lich
               #     lineage (the initial->afterimage->mirror sibling-vs-child
               #     case). Left for the count-constraint / spawn-detection pass.
               #   - inbound/foreign/orphan events are their own root regardless.
-              if switch_artifact_lineage
+              # A foreign/inbound/unowned/orphan event is NEVER part of our
+              # spawn tree - it must not graft onto or become a linkable node in
+              # it. This single flag gates every branch below (the switch-
+              # artifact branch omitted it once and let a nearby player's attack
+              # on another creature inherit our lineage - real-feed group play).
+              not_ours = current_event[:inbound] || current_event[:foreign_target] ||
+                         current_event[:foreign_caster] || current_event[:unowned] ||
+                         current_event[:_orphan]
+              if switch_artifact_lineage && !not_ours
                 # Same-line AoE per-target line: this is the same attack
                 # striking another creature, so it sits at the SAME spawn-tree
                 # node as the sibling it split from. Carry that lineage forward
@@ -805,17 +813,12 @@ module Lich
                 current_event[:root_ref] = switch_artifact_lineage[:root_ref]
                 current_event[:parent_ref] = switch_artifact_lineage[:parent_ref]
                 current_event[:parent_confidence] = switch_artifact_lineage[:parent_confidence]
-              elsif active_spawn && spawn_root &&
-                    !(current_event[:inbound] || current_event[:foreign_target] ||
-                      current_event[:foreign_caster] || current_event[:unowned] || current_event[:_orphan])
+              elsif active_spawn && spawn_root && !not_ours
                 current_event[:root_ref] = spawn_root
                 current_event[:parent_ref] = spawn_root
                 current_event[:parent_confidence] = :bracket
               else
-                spawn_root = current_event unless current_event[:inbound] ||
-                                                  current_event[:foreign_target] ||
-                                                  current_event[:foreign_caster] ||
-                                                  current_event[:unowned] || current_event[:_orphan]
+                spawn_root = current_event unless not_ours
                 current_event[:root_ref] = current_event
               end
 

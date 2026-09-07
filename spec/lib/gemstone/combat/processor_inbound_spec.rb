@@ -650,5 +650,35 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # both share the opener's root (uid 0), not fragmented into two roots
       expect(events.map { |e| e[:root_uid] }).to eq([0, 0])
     end
+
+    # Re-review round 4 (PR #1559): the switch-artifact lineage-carry branch
+    # added above had no foreign/inbound guard (its sibling branches do), so a
+    # nearby player's attack on a DIFFERENT creature in the same chunk - which
+    # is both a target switch AND an attack def - inherited our lineage and
+    # grafted onto our spawn tree (over-counting root rollups). A foreign event
+    # must self-root regardless of the switch artifact.
+    it 'does not graft a foreign attack (switched target) onto our spawn tree' do
+      orc = bolded(501, 'orc', 'a greater orc')
+      troll = bolded(502, 'troll', 'a cave troll')
+      chunk = [
+        "You fire a faewood arrow at #{orc}!",
+        '   ... and hits for 20 points of damage!',
+        # a NEARBY PLAYER's own attack on another creature, same chunk: switches
+        # target (building an artifact that inherited OUR lineage) AND parses as
+        # a foreign_caster attack def
+        "Heavenscent swings a warhammer at #{troll}!",
+        '   ... and hits for 33 points of damage!',
+        '<prompt time="1758161239">&gt;</prompt>'
+      ]
+      events = process_chunk(chunk).select { |e| e[:_attack_born] }
+      ours = events.find { |e| !e[:foreign_caster] }
+      foreign = events.find { |e| e[:foreign_caster] }
+      expect(ours).not_to be_nil
+      expect(foreign).not_to be_nil
+      # the foreign attack is its OWN root, not a child of ours
+      expect(foreign[:root_uid]).to eq(foreign[:_uid])
+      expect(foreign[:root_uid]).not_to eq(ours[:_uid])
+      expect(foreign[:parent_uid]).to be_nil
+    end
   end
 end
