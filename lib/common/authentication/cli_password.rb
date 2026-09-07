@@ -6,6 +6,7 @@ require_relative '../gui/utilities'
 require_relative '../gui/account_manager'
 require_relative '../gui/game_selection'
 require_relative 'authenticator'
+require_relative 'login_helpers'
 
 module Lich
   module Common
@@ -338,12 +339,24 @@ module Lich
         # same method the GUI's "Add Character" tab calls) - duplicate detection and
         # account-not-found messaging live there, not here.
         #
+        # The game code is validated here rather than only at the CLI boundary: a
+        # direct call carrying a retired code (GSX) or a runtime-only one would
+        # otherwise persist a character record whose game_name is 'Unknown'.
+        #
         # @param account [String] Account username
         # @param char_name [String] Character name
         # @param game_code [String] Game code (default 'DR' - DragonRealms)
         # @param frontend [String, nil] Frontend (wizard, stormfront, avalon, or nil)
         # @return [Integer] Exit code (0=success, 1=failure)
         def self.add_character(account, char_name, game_code: 'DR', frontend: nil)
+          unless Lich::Common::Authentication::LoginHelpers.valid_game_code?(game_code)
+            valid_codes = Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.join(', ')
+            puts "error: Invalid game code: #{game_code}"
+            puts "Valid game codes: #{valid_codes}"
+            Lich.log "error: CLI add character failed for '#{account}': invalid game code '#{game_code}'"
+            return 1
+          end
+
           account = account.upcase
 
           data_dir = DATA_DIR

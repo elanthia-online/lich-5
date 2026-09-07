@@ -709,6 +709,39 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
       expect(exit_code).to eq(1)
     end
+
+    # Validity is not the CLI layer's alone to enforce: a direct call carrying a
+    # retired code (GSX) or an unrecognized one must be rejected here too, before
+    # AccountManager persists a record whose game_name is 'Unknown'.
+    it 'returns 1 without persisting a character for a retired game code' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'GSX')
+
+      expect(exit_code).to eq(1)
+      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_character)
+    end
+
+    it 'returns 1 without persisting a character for an unrecognized game code' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+
+      exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'ZZ')
+
+      expect(exit_code).to eq(1)
+      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_character)
+    end
+
+    it 'persists every game code the login validator accepts' do
+      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+        .and_return({ success: true, message: 'ok' })
+
+      Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.each do |game_code|
+        expect(Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: game_code)).to eq(0), game_code
+        expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+          anything, 'DOUG', hash_including(game_code: game_code, game_name: satisfy { |name| name != 'Unknown' })
+        )
+      end
+    end
   end
 
   describe '.determine_predominant_frontend' do
