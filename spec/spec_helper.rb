@@ -1710,6 +1710,21 @@ module DRCT
 end unless defined?(DRCT)
 
 # -----------------------------------------------------------------------------
+# DRCM - Money module
+# -----------------------------------------------------------------------------
+module DRCM
+  class << self
+    def ensure_copper_on_hand(_copper, _settings = nil, _hometown = nil)
+      true
+    end
+
+    def town_currency(_hometown)
+      'Kronars'
+    end
+  end
+end unless defined?(DRCM)
+
+# -----------------------------------------------------------------------------
 # DRCMM - Moon mage module
 # -----------------------------------------------------------------------------
 module DRCMM
@@ -1768,6 +1783,7 @@ Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSp
 Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
 Lich::DragonRealms::DRExpMonitor = DRExpMonitor unless defined?(Lich::DragonRealms::DRExpMonitor)
 Lich::DragonRealms::DRCA = DRCA unless defined?(Lich::DragonRealms::DRCA)
+Lich::DragonRealms::DRCM = DRCM unless defined?(Lich::DragonRealms::DRCM)
 Lich::DragonRealms::DRCT = DRCT unless defined?(Lich::DragonRealms::DRCT)
 Lich::DragonRealms::DRCMM = DRCMM unless defined?(Lich::DragonRealms::DRCMM)
 Lich::DragonRealms::DRCTH = DRCTH unless defined?(Lich::DragonRealms::DRCTH)
