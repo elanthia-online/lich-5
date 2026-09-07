@@ -239,6 +239,16 @@ module Lich
               id = id_match[:itemID].strip.delete('#').to_s
               noun = nil # This isn't exposed in the DR XML stream
               name = item_name
+              # An item reported "... is in your right/left hand" is held, not worn
+              # or in a container: its placement is the hand slot, tracked
+              # separately by the <right>/<left> stream. Storing it here (cmd has no
+              # "in #container", so container=nil -> worn inv) would recreate the
+              # held/worn duplicate that hand reconciliation removes on pickup. Drop
+              # any stale placement and skip the worn/container store.
+              if stripped =~ /\bis in your (?:right|left) hand\b/i
+                GameObj.remove_inv_item(id)
+                return server_string
+              end
               # Only container1 (the item's immediate parent) is used -- it is the
               # single placement each line establishes. The regex still captures
               # container2 (the grandparent in a doubly-nested line) because it is

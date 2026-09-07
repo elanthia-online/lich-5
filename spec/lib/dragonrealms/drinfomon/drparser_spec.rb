@@ -958,9 +958,24 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
     end
 
-    it 'parses an item line with trailing location prose' do
-      expect(GameObj).to receive(:new_inv).with('8761784', nil, 'seagull feather quill', nil, 'get #8761784', nil)
+    it 'parses an item line with trailing location prose after the </d> element' do
+      expect(GameObj).to receive(:new_inv).with('8286821', nil, 'papyrus parchment', '8286816', 'get #8286821 in #8286816', nil)
+      described_class.populate_inventory_get("<d cmd='get #8286821 in #8286816'>a papyrus parchment</d> is in a black winter cloak.")
+    end
+
+    it 'does NOT store a held item ("... is in your right hand") as worn inventory' do
+      # The item is in a hand, tracked by the <right> stream -- storing it here
+      # (cmd has no container -> worn inv) would recreate the held/worn duplicate.
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
+    end
+
+    it 'also skips the worn store for a left-hand item' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
     end
 
     it 'parses an inv list worn item linked with a remove command into inv' do
