@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../frontend'
+require_relative '../front-end'
 
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Common::Authentication::LoginHelpers.method namespace.
