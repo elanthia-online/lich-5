@@ -288,6 +288,8 @@ module Lich
         # of the real login path (Authenticator.authenticate), which also
         # uses WebLogin, either forced via --auth-provider=web or
         # automatically as a fallback when EAccess is unreachable.
+        #
+        # @return [void] exits the process; never returns normally
         def self.handle_web_login_test
           idx = ARGV.index('--web-login-test')
           account = ARGV[idx + 1]

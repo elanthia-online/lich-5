@@ -78,6 +78,8 @@ module Lich
             self
           end
 
+          # Builds the Cookie header value for the next request.
+          #
           # @return [String, nil] Cookie header value for the next request, or nil if empty
           def header
             return nil if @pairs.empty?
@@ -195,18 +197,6 @@ module Lich
           auth_thread.value
         end
 
-        # Step 0 + 1: GET the family's sign-in page first to establish an ASP
-        # session cookie, then POST credentials against that session --
-        # confirmed live as required: posting login.asp cold (no prior GET,
-        # no session cookie) gets a bare 500 from the server, matching how a
-        # real browser always visits signin_needed.asp before submitting the
-        # form. Failure is detected by comparing the redirect target's PATH
-        # against the two page paths we supplied -- not a prefix match
-        # against the raw Location string, which would also match an
-        # unrelated same-prefix page (e.g. "login_error.aspX") and would miss
-        # an absolute-URL redirect entirely -- and NOT by parsing response
-        # body text.
-        #
         # An account that has never set a security question is redirected
         # here instead of okay_page on an otherwise-successful login --
         # confirmed live. The session is already fully authenticated at this
@@ -219,6 +209,19 @@ module Lich
         # CHARACTER_NOT_FOUND rather than proceeding on bad data.
         SECURITY_QA_PATH = "/playdotnet/account/security_qa.asp"
 
+        # GETs the family's sign-in page first to establish an ASP session
+        # cookie, then POSTs credentials against that session -- confirmed
+        # live as required: posting login.asp cold (no prior GET, no session
+        # cookie) gets a bare 500 from the server, matching how a real
+        # browser always visits signin_needed.asp before submitting the
+        # form. Failure is detected by comparing the redirect target's PATH
+        # against the two page paths we supplied -- not a prefix match
+        # against the raw Location string, which would also match an
+        # unrelated same-prefix page (e.g. "login_error.aspX") and would
+        # miss an absolute-URL redirect entirely -- and NOT by parsing
+        # response body text. See SECURITY_QA_PATH for the one other
+        # accepted redirect target.
+        #
         # @param http [Net::HTTP] open connection to BASE_HOST
         # @param jar [CookieJar] session cookie jar, mutated in place
         # @param account [String] account name
@@ -268,13 +271,15 @@ module Lich
         # @param character [String] character name to match (case-insensitive)
         # @return [String] the matched charID (e.g. "W_ACCOUNT_000")
         # @raise [AuthenticationError] "NO_SUBSCRIPTION" if the account has no active subscription
-        #   on this instance, "CHARACTER_NOT_FOUND" if no radio input matches, or
-        #   "UNEXPECTED_CHARACTER_LIST_RESPONSE" for any other non-200 response
+        #   on this instance, "CHARACTER_NOT_FOUND" if no radio input matches a 200 response, or
+        #   "UNEXPECTED_CHARACTER_LIST_RESPONSE" for any other non-200 response (a 3xx to anywhere
+        #   but subscription_needed.asp, or a 4xx/5xx)
         # @api private
         def self.resolve_char_code(http, jar, instance:, character:)
           response = get(http, jar, instance[:character_list_path])
+          code = response.code.to_i
 
-          if (300..399).cover?(response.code.to_i)
+          if (300..399).cover?(code)
             # Confirmed live: an account with no active subscription on this
             # instance gets a *second* redirect here (the first, from
             # login.asp, already landed on okay_page successfully) --
@@ -286,6 +291,15 @@ module Lich
 
             raise AuthenticationError, "UNEXPECTED_CHARACTER_LIST_RESPONSE"
           end
+
+          # A non-3xx error response (4xx/5xx -- e.g. a transient 503) must
+          # not fall through to the scraper either: an empty/error body
+          # scrapes to no match, which would otherwise raise the same
+          # CHARACTER_NOT_FOUND a real "no such character" case raises --
+          # and Authenticator treats CHARACTER_NOT_FOUND as fatal (no
+          # retry), silently discarding what may well have been a transient,
+          # retryable server error.
+          raise AuthenticationError, "UNEXPECTED_CHARACTER_LIST_RESPONSE" unless code == 200
 
           body = response.body.to_s
           body.scan(/id="(W_[A-Za-z0-9_]+)"[^>]*>\s*<label for="\1"><span[^>]*>([^<]+)<\/span>/).each do |char_code, name|
@@ -391,9 +405,12 @@ module Lich
           location = response["location"]
           raise AuthenticationError, "UNEXPECTED_NON_REDIRECT_RESPONSE" unless (300..399).cover?(code) && location && !location.empty?
 
-          return location if full_url
-
-          URI.parse(location).path
+          # Always parse -- even when returning the raw string for chaining
+          # (full_url) -- so a malformed Location raises malformed_code here
+          # rather than being handed unvalidated to `get` as if it were a
+          # well-formed relative path.
+          parsed = URI.parse(location)
+          full_url ? location : parsed.path
         rescue URI::InvalidURIError
           raise AuthenticationError, malformed_code
         end
@@ -454,6 +471,9 @@ module Lich
           raise AuthenticationError, "MALFORMED_LAUNCH_URL"
         end
 
+        # Issues a GET with the common headers set, absorbing any cookies
+        # from the response into the jar before returning it.
+        #
         # @param http [Net::HTTP] open connection to BASE_HOST
         # @param jar [CookieJar] session cookie jar, mutated in place
         # @param path [String] request path

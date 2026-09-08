@@ -28,12 +28,17 @@ module Lich
       # NO_SUBSCRIPTION = WebLogin: account has no active subscription on the requested instance
       FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND GENERATOR_NOT_AVAILABLE LOGIN_FAILED NO_SUBSCRIPTION].freeze
 
-      # Connection-level failures where the endpoint itself didn't respond --
-      # retrying the same unreachable endpoint 3 times with backoff wastes
-      # time (and, when a web fallback is available, delays it) compared to a
-      # protocol-level hiccup on an endpoint that IS reachable, which is
-      # still worth retrying. with_retry stops after the first attempt for
-      # these instead of exhausting MAX_AUTH_RETRIES.
+      # Connection-level failures where the endpoint itself didn't respond.
+      # with_retry can stop after the first attempt for these (see its
+      # fast_fail_unreachable: parameter) when an alternate provider is
+      # actually available to hand off to -- retrying the same unreachable
+      # endpoint 3 times with backoff only wastes time in that case, since
+      # it just delays the handoff. When there is NO alternate provider
+      # (legacy/generator EAccess calls, or a WebLogin call itself, forced
+      # or already-the-fallback), these same error classes get full retries
+      # like any other transient error: an ECONNRESET or "SSL_read:
+      # unexpected eof" mid-exchange is not proof the endpoint is down, and
+      # there is nothing to fail fast *to*.
       UNREACHABLE_ERROR_CLASSES = [
         SocketError, Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::ETIMEDOUT,
         Errno::EHOSTUNREACH, Errno::ENETUNREACH, OpenSSL::SSL::SSLError
@@ -107,8 +112,13 @@ module Lich
           return result
         end
 
+        fallback_available = web_fallback_supported?(character: character, game_code: game_code, legacy: legacy, generator: generator)
+
         begin
-          result = authenticate_via_eaccess(account: account, password: password, character: character, game_code: game_code, legacy: legacy, generator: generator)
+          result = authenticate_via_eaccess(
+            account: account, password: password, character: character, game_code: game_code,
+            legacy: legacy, generator: generator, fast_fail_unreachable: fallback_available
+          )
           Lich.log "info: authenticated via eaccess"
           result
         rescue FatalAuthError
@@ -117,7 +127,7 @@ module Lich
           # second system for no benefit. Surface the real problem.
           raise
         rescue StandardError => e
-          raise unless web_fallback_supported?(character: character, game_code: game_code, legacy: legacy, generator: generator)
+          raise unless fallback_available
 
           Lich.log "warn: EAccess authentication unavailable (#{e.class}: #{e.message}); falling back to web login"
           result = with_retry {
@@ -137,10 +147,13 @@ module Lich
       # @param game_code [String, nil] game instance code
       # @param legacy [Boolean] use the legacy multi-game enumeration mode
       # @param generator [Boolean] enter the character generator
+      # @param fast_fail_unreachable [Boolean] stop after one attempt on a connection-level
+      #   failure instead of retrying -- only pass true when a WebLogin fallback is actually
+      #   available to hand off to (see Authenticator.authenticate)
       # @return [Hash, Array] see EAccess.auth
       # @api private
-      def self.authenticate_via_eaccess(account:, password:, character:, game_code:, legacy:, generator:)
-        with_retry do
+      def self.authenticate_via_eaccess(account:, password:, character:, game_code:, legacy:, generator:, fast_fail_unreachable: false)
+        with_retry(fast_fail_unreachable: fast_fail_unreachable) do
           if game_code && (character || generator)
             EAccess.auth_with_timeout(
               account: account,
@@ -180,14 +193,23 @@ module Lich
 
       # Executes a block with retry logic for transient errors
       #
+      # @param fast_fail_unreachable [Boolean] if true, a connection-level failure (see
+      #   .unreachable_error?) stops retrying after the first attempt instead of exhausting
+      #   MAX_AUTH_RETRIES. Only pass true when an alternate provider is actually available to
+      #   hand off to (see Authenticator.authenticate) -- otherwise this just gives up early on
+      #   what may be a genuinely transient, reachable-endpoint error (e.g. an ECONNRESET or
+      #   "SSL_read: unexpected eof" mid-exchange) with nothing to fail over to.
       # @yield The block to execute with retry
       # @return [Object] The result of the block
       # @raise [FatalAuthError] For fatal auth failures (bad credentials, etc.)
       # @raise [StandardError] Re-raises the last error after all retries exhausted
-      def self.with_retry
+      def self.with_retry(fast_fail_unreachable: false)
         last_error = nil
+        attempts_made = 0
 
         MAX_AUTH_RETRIES.times do |attempt|
+          attempts_made = attempt + 1
+
           begin
             result = yield
 
@@ -211,16 +233,21 @@ module Lich
 
             last_error = e
 
-            if unreachable_error?(e)
-              # The endpoint itself didn't respond -- retrying it again
-              # immediately isn't going to help, and (when a web fallback is
-              # available) every retry here directly delays it. Stop now
-              # instead of exhausting MAX_AUTH_RETRIES.
-              Lich.log "warn: Authentication endpoint unreachable (#{e.class}: #{e.message}); not retrying the same endpoint"
+            if fast_fail_unreachable && unreachable_error?(e)
+              # The endpoint itself didn't respond, and an alternate
+              # provider is available -- retrying it again immediately
+              # isn't going to help, and every retry here directly delays
+              # the handoff. Stop now instead of exhausting MAX_AUTH_RETRIES.
+              Lich.log "warn: Authentication endpoint unreachable (#{e.class}: #{e.message}); not retrying the same endpoint -- an alternate provider is available"
               break
             end
 
-            # Transient (but reachable) auth error - allow retry
+            # Transient auth error - allow retry (this covers
+            # unreachable_error? classes too when fast_fail_unreachable is
+            # false, e.g. legacy/generator EAccess calls or any WebLogin
+            # call -- there is no alternate provider to fail fast *to* there,
+            # so a reset mid-exchange gets the same retry chance as any
+            # other transient error).
             if attempt < MAX_AUTH_RETRIES - 1
               delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
               Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \
@@ -230,8 +257,11 @@ module Lich
           end
         end
 
-        # All retries exhausted - re-raise the last error
-        Lich.log "error: Authentication failed after #{MAX_AUTH_RETRIES} attempts: #{last_error&.message}"
+        # All retries exhausted (or fast-failed early) - re-raise the last
+        # error, logging how many attempts actually happened rather than
+        # always claiming MAX_AUTH_RETRIES.
+        attempt_word = attempts_made == 1 ? 'attempt' : 'attempts'
+        Lich.log "error: Authentication failed after #{attempts_made} #{attempt_word}: #{last_error&.message}"
         raise last_error
       end
     end

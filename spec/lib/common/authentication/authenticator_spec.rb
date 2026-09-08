@@ -269,6 +269,92 @@ RSpec.describe Lich::Common::Authentication do
       expect(Lich::Common::Authentication::EAccess).to have_received(:auth).once
       expect(described_class).not_to have_received(:sleep)
     end
+
+    it 'logs the actual number of attempts made, not always MAX_AUTH_RETRIES, when fast-failing early' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'getaddrinfo failed')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
+
+      described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3')
+
+      expect(Lich).to have_received(:log).with(/Authentication failed after 1 attempt:/)
+    end
+
+    it 'still retries a transient reachable-endpoint error (not fast-failed) 3 times when no fallback is available' do
+      # legacy: true has no WebLogin fallback (web_fallback_supported? is
+      # false), so this also confirms the retry loop doesn't reach for a
+      # fallback that isn't there -- EAccess.auth is the only thing stubbed.
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(StandardError, 'weird protocol response')
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'testpass', legacy: true)
+      }.to raise_error(StandardError, /weird protocol response/)
+      expect(Lich::Common::Authentication::EAccess).to have_received(:auth).exactly(3).times
+      expect(Lich).to have_received(:log).with(/Authentication failed after 3 attempts:/)
+    end
+
+    it 'does NOT fast-fail an unreachable-classified error on a legacy call -- there is no alternate provider to hand off to' do
+      expect(Lich::Common::Authentication::WebLogin).not_to receive(:auth_with_timeout)
+      attempts = 0
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth) do
+        attempts += 1
+        raise Errno::ECONNRESET if attempts == 1
+
+        []
+      end
+
+      result = described_class.authenticate(account: 'testuser', password: 'testpass', legacy: true)
+
+      expect(result).to eq([])
+      expect(attempts).to eq(2) # retried, not fast-failed, and recovered on the 2nd attempt
+    end
+
+    it 'does NOT fast-fail an unreachable-classified error on generator entry -- there is no alternate provider to hand off to' do
+      attempts = 0
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth) do
+        attempts += 1
+        raise Errno::ECONNRESET if attempts == 1
+
+        auth_result
+      end
+
+      result = described_class.authenticate(account: 'testuser', password: 'testpass', game_code: 'GS3', generator: true)
+
+      expect(result).to eq(auth_result)
+      expect(attempts).to eq(2)
+    end
+
+    it 'does NOT fast-fail an unreachable-classified error on a forced-web call -- there is no alternate provider to hand off to' do
+      attempts = 0
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout) do
+        attempts += 1
+        raise Errno::ECONNRESET if attempts == 1
+
+        auth_result
+      end
+
+      result = described_class.authenticate(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3', auth_provider: :web
+      )
+
+      expect(result).to eq(auth_result)
+      expect(attempts).to eq(2)
+    end
+
+    it 'does NOT fast-fail an unreachable-classified error on the fallback-to-web attempt itself -- no third provider' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      attempts = 0
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout) do
+        attempts += 1
+        raise Errno::ECONNRESET if attempts == 1
+
+        auth_result
+      end
+
+      result = described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3')
+
+      expect(result).to eq(auth_result)
+      expect(attempts).to eq(2)
+    end
   end
 
   describe '.unreachable_error?' do

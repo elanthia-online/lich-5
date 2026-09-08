@@ -187,6 +187,22 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       end
     end
 
+    context 'when the character-list page returns a non-3xx HTTP error (e.g. a transient 503)' do
+      # A 4xx/5xx must NOT fall through to the body scraper: an empty/error
+      # body scrapes to no match, which would otherwise raise the same
+      # CHARACTER_NOT_FOUND a real "no such character" case raises --
+      # and Authenticator treats CHARACTER_NOT_FOUND as fatal (no retry),
+      # silently discarding what may well have been a transient, retryable
+      # server error.
+      let(:home_page_response) { response_double(code: '503', location: nil, body: 'Temporarily unavailable') }
+
+      it 'raises UNEXPECTED_CHARACTER_LIST_RESPONSE rather than a fatal CHARACTER_NOT_FOUND' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_CHARACTER_LIST_RESPONSE/)
+      end
+    end
+
     context 'when login redirects to the error page (bad password on a real account)' do
       let(:login_okay_response) { response_double(location: '/dr/login_error.asp?error=&returnto=/dr/') }
 
@@ -334,6 +350,21 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         expect {
           described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
         }.to raise_error(described_class::AuthenticationError, /TOO_MANY_REDIRECTS/)
+      end
+    end
+
+    context 'when a mid-chain relative redirect Location is malformed' do
+      # redirect_path(..., full_url: true) used to return the raw Location
+      # before ever calling URI.parse, so a malformed relative Location was
+      # handed to `get` unvalidated instead of raising MALFORMED_REDIRECT_URL
+      # here. A literal space is invalid in a URI (confirmed:
+      # URI.parse("/invalid path") raises URI::InvalidURIError).
+      let(:goplay2_response) { response_double(location: '/invalid path') }
+
+      it 'raises MALFORMED_REDIRECT_URL rather than requesting the malformed path unvalidated' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /MALFORMED_REDIRECT_URL/)
       end
     end
   end
