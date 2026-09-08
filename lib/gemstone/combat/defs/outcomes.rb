@@ -382,6 +382,22 @@ module Lich
           # holds the few patterns the gate cannot cover.
           GATE, ALWAYS_SCAN = PatternGate.build(RESOLUTION_LOOKUP.map(&:first))
 
+          # Crit RIDER maneuvers: a leg/knockdown crit rolls an SMR of its
+          # own AFTER the damage settles, then prints the fall. That roll
+          # belongs to the hit that caused it, not to the next attack -
+          # without this it was orphaned into a synthetic :unknown attack
+          # against whatever creature was current (2026-09-07 hunt log,
+          # spectral_bloom leg crit on a skald -> "unknown" on the mastodon).
+          CRIT_RIDER_PATTERNS = [
+            /Despite desperate windmilling to catch (?:his|her|its|their) balance, .+? topples/
+          ].freeze
+
+          # @param line [String] the line right after a roll
+          # @return [Boolean] true when it narrates a crit-knockdown rider
+          def self.crit_rider_line?(line)
+            CRIT_RIDER_PATTERNS.any? { |rx| rx.match?(line) }
+          end
+
           # Parses a single roll line into its numeric components.
           #
           # @param line [String] one line of game text

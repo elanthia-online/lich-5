@@ -708,6 +708,25 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(bloom[:hits].map { |h| h[:damage] }).to eq([5])
       expect(ev[:flares].first[:hits].map { |h| h[:damage] }).to eq([20])
     end
+
+    # A knockdown crit (leg blown off) rolls its own SMR AFTER the damage
+    # and narrates the fall on the next line (hunt log 2026-09-07 19:10:54).
+    # That roll rides on the hit that caused it; held, it became a synthetic
+    # :unknown attack on the swing target with the swing's blind status.
+    it 'keeps a crit-rider SMR (topple) on the bloom instead of orphaning it' do
+      lines = chunk.dup
+      i = lines.index { |l| l.include?('Plasma scalds') }
+      lines[i] = "   Fiery blast of plasma blows the #{bolded(121678494, 'mastodon', 'armored battle mastodon')}'s leg into a bloody spray!"
+      lines.insert(i + 1,
+                   '<pushBold/>[SMR result: 35 (Open d100: 55, Penalty: 23)]<popBold/>',
+                   "Despite desperate windmilling to catch its balance, #{masto} topples toward you!  You stumble into visibility as you try to dodge.",
+                   "   The #{bolded(121678494, 'mastodon', 'armored battle mastodon')} is stunned!")
+      events = described_class.parse_events(lines)
+      expect(events.map { |e| e[:name] }).to eq([:fire])
+      bloom = events.first[:flares].last
+      expect(bloom[:name]).to eq(:spectral_bloom)
+      expect(bloom[:resolutions].map { |r| r[:result] }).to eq([35])
+    end
   end
 
   # Parse-phase facts (message statuses, UCS, spell loss) used to be emitted

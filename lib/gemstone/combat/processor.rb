@@ -684,8 +684,18 @@ module Lich
                 # already dealt its damage is complete - an acid proc must
                 # not steal the next swing's AS/DS (real-feed replay,
                 # logs/examples/weapon_pulverize.txt).
-                flare_ctx = nil if flare_ctx && flare_ctx[:hits].any?
+                settled_flare = flare_ctx if flare_ctx && flare_ctx[:hits].any?
+                flare_ctx = nil if settled_flare
                 sink = flare_ctx
+                # Crit RIDER roll: a knockdown crit rolls its own SMR after
+                # the damage and then narrates the fall on the very next
+                # line. It belongs to the hit that caused it (the flare or
+                # the swing), not to the next attack - held, it became a
+                # synthetic :unknown on the wrong creature.
+                if sink.nil? && %i[smr maneuver_roll].include?(resolution[:type]) &&
+                   (peek = lines[index + 1]) && Definitions::Resolutions.crit_rider_line?(peek)
+                  sink = settled_flare || (current_event && current_event[:hits].any? ? current_event : nil)
+                end
                 # Roll routing differs by roll class (fixture-verified,
                 # logs/examples/):
                 #   SMR/SSR/maneuver rolls PRECEDE their per-target line
