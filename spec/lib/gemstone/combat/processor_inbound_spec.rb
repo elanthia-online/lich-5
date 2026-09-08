@@ -649,6 +649,23 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
         .to eq([[:tangleweed, 123259310, [5], 1]])
     end
 
+    it "hands the line back to the lash after the pinned rider's single hit (mount collapse)" do
+      masto = bolded(130483104, 'mastodon', 'a heavily armored battle mastodon')
+      maiden = bolded(130483100, 'shield-maiden', 'a brawny gigas shield-maiden')
+      events = described_class.parse_events([
+                                              '<pushBold/>[SMR result: 125 (Open d100: 12, Bonus: 9)]<popBold/>',
+                                              "The lashing emerald briar lashes out violently at #{masto}, dragging it to the ground!",
+                                              "#{maiden} is pinned beneath #{masto} as it falls!",
+                                              '   ... 5 points of damage!',
+                                              "   Blow raises a welt on #{bolded(130483100, 'shield-maiden', "the gigas shield-maiden's")} left arm.",
+                                              '   ... 5 points of damage!',
+                                              '   Attempt to grab from behind shrugged off.',
+                                              "You notice a number of the briar's nettles scrape into #{bolded(130483104, 'mastodon', "a heavily armored battle mastodon's")} skin.  It suddenly looks very weak!"
+                                            ])
+      expect(events.map { |e| [e[:name], e[:target][:id], e[:hits].map { |h| h[:damage] }, e[:resolutions].size] })
+        .to contain_exactly([:tangleweed, 130483104, [5], 1], [:mount_collapse, 130483100, [5], 0])
+    end
+
     it 'still supersedes in-blob when gesture and lash share a chunk' do
       events = described_class.parse_events(gesture_chunk + lash_chunk)
       expect(events.map { |e| e[:name] }).to eq([:tangleweed])

@@ -36,6 +36,14 @@ module Lich
         # "... N points of damage!" line that follows (that line carries the
         # crit) - applying both doubled the tick (hunt log 2026-09-07 23:20).
         SUMMARY_DAMAGE_ATTACKS = %i[spiritual_malady].freeze
+        # Side effects of another attack that land exactly ONE hit and then
+        # hand the line back to the attack they interrupted: a mount toppled
+        # by our briar pins its rider ("X is pinned beneath Y as it falls!",
+        # one damage line + crit), then the briar's own grapple damage on the
+        # mount prints. Without this the mount's damage landed on the pin row
+        # and the nettles line spawned an empty pin copy on the mount (hunt
+        # log 2026-09-08 00:25).
+        SINGLE_HIT_ATTACKS = %i[mount_collapse].freeze
 
         # Sequence brackets (Definitions::Sequences) whose rounds are attack
         # events of the SAME name: a round that prints no initiation line of
@@ -308,6 +316,8 @@ module Lich
           # (disciple's wither: "A nebulous haze shimmers into view around
           # you", hunt log 2026-09-07 23:50) - the effect is that caster's.
           last_inbound_attacker = nil
+          # the event a SINGLE_HIT_ATTACKS side effect cut in front of (see decl)
+          single_hit_parent = nil
           current_event = nil
           parse_state = :seeking_attack
           current_target = nil
@@ -1014,6 +1024,16 @@ module Lich
                 superseded_cast = true
                 current_event = nil
               end
+              # A one-hit side effect remembers the event it cut in front of
+              # (see SINGLE_HIT_ATTACKS); anything else clears it. The side
+              # effect's own line names ITS victim, so the target switcher
+              # has already saved the real parent and left a same-line
+              # artifact copy in current_event - the parent is the saved one.
+              single_hit_parent = nil
+              if SINGLE_HIT_ATTACKS.include?(attack[:name])
+                cand = current_event && current_event[:_line] == index ? events.last : current_event
+                single_hit_parent = cand if cand && !cand[:inbound] && !cand[:foreign_caster] && !cand[:foreign_target]
+              end
               # Save previous event before starting a new one - unless the
               # target-switcher created it on this very line (see _line)
               if event_savable?(current_event) && current_event[:_line] != index
@@ -1327,6 +1347,16 @@ module Lich
                                                              wound_rank: nil, fatal: true } }
                 respond '[Combat] Coup de grace kill' if Tracker.debug?(:verbose)
               elsif (damage = Parser.parse_damage(line))
+                # a one-hit side effect already has its hit: this damage is
+                # the interrupted attack's (see SINGLE_HIT_ATTACKS)
+                if !flare_ctx && current_event && single_hit_parent &&
+                   SINGLE_HIT_ATTACKS.include?(current_event[:name]) && current_event[:hits].any?
+                  save_event.call(current_event)
+                  current_event = single_hit_parent
+                  single_hit_parent = nil
+                  current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                  respond "[Combat] Resumed #{current_event[:name]} after its one-hit side effect" if Tracker.debug?(:verbose)
+                end
                 sink = flare_ctx || current_event
                 # ONE record per landed hit, damage bound to the crit it
                 # produced. Parallel :damages/:crits arrays could not express
