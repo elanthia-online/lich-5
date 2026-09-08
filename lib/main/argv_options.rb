@@ -12,7 +12,6 @@ require File.join(LIB_DIR, 'common', 'bind_host_resolver.rb')
 require File.join(LIB_DIR, 'main', 'bind_address_option.rb')
 require File.join(LIB_DIR, 'main', 'arg_normalization.rb')
 require File.join(LIB_DIR, 'main', 'detachable_client_target.rb')
-require File.join(LIB_DIR, 'main', 'help_text.rb')
 require File.join(LIB_DIR, 'main', 'startup_theme.rb')
 
 module Lich
@@ -31,12 +30,6 @@ module Lich
 
           ARGV.each do |arg|
             case arg
-            when '-h', '--help', /^--help=.+$/
-              print_help(HelpText.topic_from_argv(ARGV, arg))
-              exit
-            when '-v', '--version'
-              print_version
-              exit
             when '--link-to-sge'
               result = Lich.link_to_sge
               $stdout.puts(result ? 'Successfully linked to SGE.' : 'Failed to link to SGE.') if $stdout.isatty
@@ -133,22 +126,6 @@ module Lich
         def self.handle_dark_mode(value)
           # Regex returns Integer/nil; force strict boolean for startup handling.
           @argv_options[:dark_mode] = !!(value =~ /^(true|on)$/i)
-        end
-
-        def self.print_help(topic = nil)
-          puts HelpText.render(topic)
-        end
-
-        def self.print_version
-          puts "The Lich, version #{LICH_VERSION}"
-          puts ' (an implementation of the Ruby interpreter by Yukihiro Matsumoto designed to be a \'script engine\' for text-based MUDs)'
-          puts ''
-          puts '- The Lich program and all material collectively referred to as "The Lich project" is copyright (C) 2005-2006 Murray Miron.'
-          puts '- The Gemstone IV and DragonRealms games are copyright (C) Simutronics Corporation.'
-          puts '- The Wizard front-end and the StormFront front-end are also copyrighted by the Simutronics Corporation.'
-          puts '- Ruby is (C) Yukihiro \'Matz\' Matsumoto.'
-          puts ''
-          puts 'Thanks to all those who\'ve reported bugs and helped me track down problems on both Windows and Linux.'
         end
       end
 
