@@ -262,6 +262,52 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(events[1][:hits].map { |h| h[:damage] }).to eq([63])
     end
 
+    # Echo lineage (owner ruling 2026-09-07: "the flare is the attack"). The
+    # echo swing that follows an echo flare in the same blob is that flare's
+    # child: parent = the event the flare rode, parent flare = its name,
+    # confidence :count. An echo's own echo flare parents the next swing to
+    # the echo, so chains nest.
+    it 'parents the echo swing to the shot whose afterimage spawned it' do
+      chunk = [
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +375 with AvD: +20 + d100 roll: +20 = +317',
+        '   ... and hit for 48 points of damage!',
+        ' ** A radiant afterimage of the arrow appears in your ready hand, coalescing to replace its predecessor! **',
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +328 with AvD: +20 + d100 roll: +1 = +345',
+        '   ... and hit for 63 points of damage!',
+        ' ** Fleeting and insubstantial, a mirror image of you shimmers into view at your side, echoing your attack with one of its own! **',
+        "You fire a faewood arrow at #{mastodon}!",
+        '  AS: +652 vs DS: +300 with AvD: +20 + d100 roll: +50 = +422',
+        '   ... and hit for 90 points of damage!',
+        '<prompt time="4">&gt;</prompt>'
+      ]
+
+      shot, echo1, echo2 = described_class.parse_events(chunk)
+      expect(shot[:root_ref]).to equal(shot)
+      expect(shot[:parent_ref]).to be_nil
+      expect(echo1[:root_ref]).to equal(shot)
+      expect(echo1[:parent_ref]).to equal(shot)
+      expect(echo1[:parent]).to include(flare: :hunters_afterimage)
+      expect(echo1[:parent_confidence]).to eq(:count)
+      # the mirror rode echo1, so echo2 is echo1's child, still rooted at the shot
+      expect(echo2[:root_ref]).to equal(shot)
+      expect(echo2[:parent_ref]).to equal(echo1)
+      expect(echo2[:parent]).to include(flare: :mirror_image)
+    end
+
+    it 'leaves two independent shots in one blob as separate roots (no echo flare between them)' do
+      chunk = [
+        "You fire a faewood arrow at #{mastodon}!",
+        '   ... and hit for 48 points of damage!',
+        "You fire a faewood arrow at #{mastodon}!",
+        '   ... and hit for 63 points of damage!'
+      ]
+      _, b = described_class.parse_events(chunk)
+      expect(b[:root_ref]).to equal(b)
+      expect(b[:parent_ref]).to be_nil
+    end
+
     it 'recognises the third-person form with the attacker' do
       flare = Lich::Gemstone::Combat::Parser.parse_flare(
         " ** A radiant afterimage of the arrow appears in Taloin's ready hand, coalescing to replace its predecessor! **"
@@ -501,6 +547,27 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # and its crit stun emitted
       expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
         .with(:stun, hash_including(flare: :spike, rounds: 2))
+    end
+  end
+
+  # A coup de grace prints no damage number; its success line is the killing
+  # blow and is recorded as a zero-damage FATAL hit (owner ruling 2026-09-07).
+  describe 'coup de grace kill line' do
+    it 'records the kill as a fatal zero-damage hit on the coup event' do
+      zerk = bolded(121654846, 'berserker', 'a tattooed gigas berserker')
+      events = described_class.parse_events([
+                                              "You lunge towards the #{bolded(121654846, 'berserker', 'gigas berserker')}, intending to finish her off!",
+                                              '<pushBold/>[SMR result: 276 (Open d100: 89, Bonus: 105)]<popBold/>',
+                                              "You stiffen your fingers and drive them into the #{bolded(121654846, 'berserker', 'gigas berserker')}'s neck, tearing out a handful of dripping trachea!  The gigas berserker gags just once.",
+                                              "#{zerk}'s fists tense with impotent rage as she surrenders to death."
+                                            ])
+      expect(events.size).to eq(1)
+      coup = events.first
+      expect(coup[:name]).to eq(:coup_de_grace)
+      expect(coup[:hits].size).to eq(1)
+      expect(coup[:hits].first[:damage]).to eq(0)
+      expect(coup[:hits].first[:crit]).to include(fatal: true, location: 'neck', type: 'coup_de_grace')
+      expect(coup[:resolutions].size).to eq(1)
     end
   end
 

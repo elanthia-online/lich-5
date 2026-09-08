@@ -137,6 +137,10 @@ module Lich
           nil
         end
 
+        # Flares whose announce spawns a fresh own swing of the same attack
+        # (the image/afterimage "echoes your attack with one of its own").
+        ECHO_FLARES = %i[mirror_image hunters_afterimage].freeze
+
         # Creature-linked lines that carry no combat fact and must not drive
         # the target switcher (see the skip in parse_events).
         NARRATION_PATTERN = Regexp.union(
@@ -264,6 +268,10 @@ module Lich
           pending_flares = []
           spawn_pending = nil
           active_spawn = nil
+          # Echo flares seen in this blob whose spawned swing has not arrived
+          # yet, in announce order: [{ flare:, owner: event }]. Consumed FIFO
+          # by the bare own swings that follow (see echo lineage below).
+          pending_echoes = []
           # Spawn lineage within THIS blob. The whole attack (initiating shot,
           # its flares, any spawned echo attacks and their own flares) resolves
           # inside one prompt-bounded chunk before roundtime - so the blob is a
@@ -525,6 +533,10 @@ module Lich
               # swing's damage.
               flare_ctx = flare[:damaging] ? flare : nil
               spawn_pending = flare if flare[:spawns]
+              # An echo flare (mirror image, hunter's afterimage) is the spawn
+              # point of the bare 2p swing that follows it in this blob; queue
+              # it so that swing can be parented to it (see echo lineage).
+              pending_echoes << { flare: flare, owner: current_event } if ECHO_FLARES.include?(flare[:name])
               respond "[Combat] Found flare: #{flare[:name]}" if Tracker.debug?(:verbose)
             end
 
@@ -941,13 +953,18 @@ module Lich
               #   - blink's bracketed cast (active_spawn) is a child DECLARED by
               #     the game: root = the open tree root, parent = that root,
               #     confidence :bracket.
+              #   - a mirror/afterimage ECHO: the echo flare announces, then the
+              #     spawned swing prints as a bare 2p line of the same attack
+              #     ("You fire ..."). The whole tree resolves inside one blob
+              #     before roundtime, so a bare own swing arriving while an echo
+              #     flare of this blob is unconsumed IS that flare's swing -
+              #     pair them FIFO (the count constraint: N echo flares, N echo
+              #     swings). parent = the event the flare rode, confidence
+              #     :count, parent flare recorded so reports can hang the echo
+              #     under the flare row (owner ruling 2026-09-07: "the flare
+              #     is the attack"). An echo's own echo flare parents the next
+              #     swing to the echo, so mirror->afterimage chains nest.
               #   - every other own attack becomes the root of its OWN tree.
-              #     This deliberately does NOT chain mirror/afterimage echoes to
-              #     a prior shot: within one blob we currently cannot tell a
-              #     spawned echo (a bare "You fire" with no bracket) apart from
-              #     an independent follow-on swing, and guessing would fabricate
-              #     lineage (the initial->afterimage->mirror sibling-vs-child
-              #     case). Left for the count-constraint / spawn-detection pass.
               #   - inbound/foreign/orphan events are their own root regardless.
               # A foreign/inbound/unowned/orphan event is NEVER part of our
               # spawn tree - it must not graft onto or become a linkable node in
@@ -970,6 +987,14 @@ module Lich
                 current_event[:root_ref] = spawn_root
                 current_event[:parent_ref] = spawn_root
                 current_event[:parent_confidence] = :bracket
+              elsif !not_ours && spawn_root && !pending_echoes.empty? && line.match?(/\AYou\b/) &&
+                    current_event[:name] == (pending_echoes.first[:owner] || spawn_root)[:name]
+                echo = pending_echoes.shift
+                owner = echo[:owner] || spawn_root
+                current_event[:root_ref] = spawn_root
+                current_event[:parent_ref] = owner
+                current_event[:parent_confidence] = :count
+                current_event[:parent] = { flare: echo[:flare][:name], weapon: echo[:flare][:weapon] }
               else
                 spawn_root = current_event unless not_ours
                 current_event[:root_ref] = current_event
@@ -1069,7 +1094,17 @@ module Lich
               # (its damage arrives after its announce line, before the next
               # swing); otherwise they belong to the current attack. flare_ctx
               # alone also routes pre-flare damage arriving before any swing.
-              if (damage = Parser.parse_damage(line))
+              #
+              # A coup de grace prints no damage line: its success line is the
+              # killing blow. Record it as a zero-damage FATAL hit so the kill
+              # is credited and shown like a fatal crit (owner ruling
+              # 2026-09-07); the room-feed death that follows agrees.
+              if current_event && current_event[:name] == :coup_de_grace &&
+                 (coup_loc = Definitions::Attacks.coup_kill_location(line))
+                current_event[:hits] << { damage: 0, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
+                                                             wound_rank: nil, fatal: true } }
+                respond '[Combat] Coup de grace kill' if Tracker.debug?(:verbose)
+              elsif (damage = Parser.parse_damage(line))
                 sink = flare_ctx || current_event
                 # ONE record per landed hit, damage bound to the crit it
                 # produced. Parallel :damages/:crits arrays could not express

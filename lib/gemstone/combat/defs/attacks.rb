@@ -423,6 +423,22 @@ module Lich
             ].freeze)
           ].freeze
 
+          # Coup de Grace kill lines. The coup prints no damage number; its
+          # success line IS the killing blow (owner ruling 2026-09-07: mark it
+          # fatal like a crit). Messaging varies by weapon type - add forms as
+          # they are seen. Each entry: [pattern, location].
+          COUP_KILL_PATTERNS = [
+            # UAC / bare hands
+            [/You stiffen your fingers and drive them into .+? neck, tearing out a handful of dripping trachea!/, 'neck']
+          ].freeze
+
+          # @return [String, nil] the struck location when the line is a coup
+          #   de grace kill line
+          def self.coup_kill_location(line)
+            COUP_KILL_PATTERNS.each { |pattern, loc| return loc if pattern.match?(line) }
+            nil
+          end
+
           # Def names whose lines describe damage to US with no attacker: the
           # parser reports them inbound without needing a "you" capture.
           SELF_INFLICTED = %i[frigid_wind thorn_recoil].freeze
