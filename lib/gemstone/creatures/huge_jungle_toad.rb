@@ -1,27 +1,32 @@
 {
   schema_version: 3,
   name: "huge jungle toad",
-  noun: "",
+  noun: "toad",
   url: "https://gswiki.play.net/huge_jungle_toad",
   picture: "",
   level: 25,
   family: "Amphibian",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
   max_hp: 300,
-  speed: nil,
+  speed: 12,
   height: nil,
   size: "",
   areas: [
     {
       name: "Monsoon Jungle",
-      rooms: []
+      uids: [3218017..3218023, 3218045..3218048]
     }
   ],
   attack_attributes: {
@@ -33,12 +38,23 @@
       {
         name: "Charge (attack)",
         as: 232
+      },
+      {
+        name: "Bite",
+        as: (199..230)
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "poisonous glob of phlegm"
+      },
+      {
+        name: "Glob"
+      }
+    ],
     special_abilities: [
       {
         name: "Poison spit"
@@ -49,10 +65,10 @@
   defense_attributes: {
     asg: "10N",
     immunities: [],
-    melee: 146,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (122..157),
+    ranged: (131..134),
+    bolt: (131..134),
+    udf: (311..343),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -60,8 +76,8 @@
     ran_td: nil,
     sor_td: 83,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 86,
+    mje_td: (86..92),
+    mne_td: (86..92),
     mjs_td: nil,
     mns_td: 80,
     mnm_td: nil,
@@ -73,13 +89,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "green jungle toad hide",
-    other: "No"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -91,6 +110,11 @@
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      bite: [
+        "A huge jungle toad attempts to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

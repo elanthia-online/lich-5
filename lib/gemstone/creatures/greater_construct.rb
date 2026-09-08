@@ -1,41 +1,49 @@
 {
   schema_version: 3,
   name: "greater construct",
-  noun: "",
+  noun: "construct",
   url: "https://gswiki.play.net/greater_construct",
   picture: "",
   level: 96,
   family: "Golem",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: false,
+  sympathy: false,
+  muggable: true,
+  sleepable: false,
   boss: true,
+  boss_type: "miniboss",
   otherclass: [
     "Magical",
     "Boss"
   ],
   bcs: true,
-  max_hp: 500,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 517,
+  speed: 9,
+  height: 18,
+  size: "huge",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      rooms: []
+      uids: [17004001..17004028, 17004030..17004120]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Stomp",
-        as: (435..443)
+        name: "Stomp"
       },
       {
         name: "Arm",
-        as: 449
+        as: (449..460)
+      },
+      {
+        name: "Smash",
+        as: (459..468)
       }
     ],
     bolt_spells: [],
@@ -50,6 +58,12 @@
       },
       {
         name: "Team Swat"
+      },
+      {
+        name: "Ground Slam"
+      },
+      {
+        name: "Slam"
       }
     ],
     special_abilities: [],
@@ -57,16 +71,16 @@
   },
   defense_attributes: {
     asg: "20N",
-    immunities: [],
-    melee: nil,
-    ranged: (299..344),
-    bolt: nil,
-    udf: nil,
+    immunities: ["magic"],
+    melee: (219..499),
+    ranged: (192..387),
+    bolt: (192..387),
+    udf: (456..487),
     bar_td: nil,
     cle_td: (366..387),
     emp_td: (358..379),
     pal_td: nil,
-    ran_td: nil,
+    ran_td: 326,
     sor_td: 398,
     wiz_td: nil,
     mje_td: nil,
@@ -84,22 +98,47 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a polished steel shield"
+  ],
   treasure: {
     coins: true,
-    magic_items: nil,
+    magic_items: true,
     gems: true,
-    boxes: nil,
+    boxes: true,
     skin: nil,
-    other: nil
+    other: "crystal core",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
+    attacks: {
+      attack: [
+        "A glorious greater construct raises {pronoun} massive foot and attempts to smash you!",
+        "A greater construct raises {pronoun} massive foot and attempts to smash you!",
+        "A greater construct swings {weapon} at you!",
+        "A greater construct slams towards you, but you evade the attack!"
+      ]
+    },
+    stand: [
+      "A greater construct rises slowly until {pronoun} towers overhead once more."
+    ],
     description: [
       "The white granite-like features of the greater construct hold no hints of the giant creature's intentions or motivations. Its alabaster skin made more of the hardest rock than any living tissue makes the construct a formidable opponent for any who dare to trifle with it. Massing more than ten giantmen, it is a mountain of rock when in motion and very little, man or animal can oppose its desired path of travel once it is in motion."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A greater construct stomps in.",
+      "A glorious greater construct stomps in.",
+      "A hoarse rumbling heralds the arrival of a greater construct!",
+      "A deep humming sound comes from a greater construct as it lumbers in."
+    ],
+    flee: [
+      "A greater construct stomps {direction}."
+    ],
     death: [],
-    decay: [],
+    decay: [
+      "A greater construct's body crumbles until only a pile of rubble marks its remains."
+    ],
     search: [],
     spell_prep: [],
     info: {

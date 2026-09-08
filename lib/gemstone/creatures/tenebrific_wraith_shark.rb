@@ -1,33 +1,43 @@
 {
   schema_version: 3,
   name: "tenebrific wraith shark",
-  noun: "",
+  noun: "shark",
   url: "https://gswiki.play.net/tenebrific_wraith_shark",
   picture: "",
   level: 110,
   family: "Wraith",
   type: "",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: nil,
+  max_hp: 500,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Sailor's Grief",
-      rooms: []
+      uids: [7150501..7150535]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
+    physical_attacks: [
+      {
+        name: "Crush",
+        as: 614
+      }
+    ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
@@ -41,7 +51,7 @@
     melee: nil,
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: 642,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -62,13 +72,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

@@ -1,27 +1,36 @@
 {
   schema_version: 3,
   name: "chitinous kiramon myrmidon",
-  noun: "",
+  noun: "myrmidon",
   url: "https://gswiki.play.net/chitinous_kiramon_myrmidon",
   picture: "",
   level: 102,
   family: "Kiramon",
   type: "Insect",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
   max_hp: 500,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 10,
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "The Hive",
-      rooms: []
+      uids: [13041101..13041132, 13041201..13041230, 13041301..13041329]
+    },
+    {
+      name: "unmapped",
+      uids: [13041330..13041330]
     }
   ],
   attack_attributes: {
@@ -31,6 +40,10 @@
       },
       {
         name: "Pincer (attack)"
+      },
+      {
+        name: "Bladed forelegs",
+        as: (532..541)
       }
     ],
     bolt_spells: [],
@@ -45,6 +58,9 @@
       },
       {
         name: "Crowd Press"
+      },
+      {
+        name: "Charge"
       }
     ],
     special_abilities: [
@@ -64,18 +80,18 @@
     asg: "20N",
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    ranged: (225..474),
+    bolt: (225..474),
+    udf: (669..1030),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: (402..408),
+    emp_td: 420,
+    pal_td: (360..369),
+    ran_td: (366..375),
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
+    mje_td: (448..454),
+    mne_td: (448..454),
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
@@ -90,13 +106,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: true,
     boxes: false,
     skin: "some glossy kiramon chitin",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -104,10 +123,32 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "A chitinous kiramon myrmidon collapses, {pronoun} forelegs spasming and twitching before {pronoun} at last surrenders to death."
+    ],
     decay: [],
-    search: [],
-    spell_prep: [],
+    search: [
+      "A chitinous kiramon myrmidon's faceted eyes reflect nothing but empty shadows as {pronoun} twitches {pronoun} head to look around, hesitantly, as if {pronoun} has missed something."
+    ],
+    spell_prep: [
+      "A chitinous kiramon myrmidon hisses and clicks, cocking {pronoun} head curiously as if not entirely comprehending your death."
+    ],
+    stun_break: [
+      "A chitinous kiramon myrmidon spasms as {pronoun} tries to regain control of {pronoun} scattered senses.",
+      "A chitinous kiramon myrmidon shakes off {pronoun} unconscious state."
+    ],
+    attacks: {
+      attack: [
+        "A chitinous kiramon myrmidon strikes out at you with all of {pronoun} might!",
+        "Bringing {pronoun} forelegs together, a chitinous kiramon myrmidon attempts to pincer you!",
+        "Surging forward powerfully, a chitinous kiramon myrmidon slashes at you with {pronoun} bladed forelegs!",
+        "A chitinous kiramon myrmidon slams {pronoun} head into you!",
+        "A chitinous kiramon myrmidon vomits a bit of brackish goo onto a crack in {pronoun} chitin, using one foreleg to massage the glutinous muck over the breach."
+      ],
+      bite: [
+        "A chitinous kiramon myrmidon snaps {pronoun} armored head {direction}, a fractured mirror of the surroundings visible in {pronoun} compound eyes."
+      ]
+    },
     info: {
       general: [],
       class_tips: {

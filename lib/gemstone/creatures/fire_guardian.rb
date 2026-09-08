@@ -1,40 +1,45 @@
 {
   schema_version: 3,
   name: "fire guardian",
-  noun: "",
+  noun: "guardian",
   url: "https://gswiki.play.net/fire_guardian",
   picture: "",
   level: 16,
   family: "Elemental",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: false,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Element-based"
   ],
   bcs: true,
-  max_hp: 140,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 141,
+  speed: 16,
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "Glatoph",
-      rooms: []
+      uids: [35010..35024]
     },
     {
       name: "Vornavian Coast",
-      rooms: []
+      uids: [4202301..4202320]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Closed fist",
-        as: 152
+        as: (122..152)
       },
       {
         name: "Ensnare (attack)",
@@ -64,22 +69,22 @@
   defense_attributes: {
     asg: "7N",
     immunities: [],
-    melee: 51,
-    ranged: 37,
-    bolt: 48,
-    udf: nil,
+    melee: (37..51),
+    ranged: (27..37),
+    bolt: (27..37),
+    udf: (60..67),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: 48,
+    emp_td: 48,
+    pal_td: (45..48),
+    ran_td: 48,
     sor_td: 48,
     wiz_td: nil,
     mje_td: 48,
     mne_td: 48,
-    mjs_td: nil,
+    mjs_td: 48,
     mns_td: 48,
-    mnm_td: nil,
+    mnm_td: 48,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -88,13 +93,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Essence of fire"
+    other: "Essence of fire",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -102,10 +110,21 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The fire guardian falls to the ground motionless.",
+      "The fire guardian screams evilly one last time and goes still."
+    ],
+    decay: [
+      "A fire guardian turns to dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A fire guardian gestures at you!",
+        "A fire guardian swings {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

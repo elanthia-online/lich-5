@@ -1,37 +1,50 @@
 {
   schema_version: 3,
   name: "roa'ter",
-  noun: "",
+  noun: "roa'ter",
   url: "https://gswiki.play.net/roa'ter",
   picture: "",
   level: 41,
   family: "Worm",
   type: "Worm",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: "boss",
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: 260,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 262,
+  speed: 4,
+  height: 3,
+  size: "huge",
   areas: [
     {
       name: "Castle Varunar",
-      rooms: []
+      uids: [4750006..4750029]
     },
     {
       name: "Darkstone Castle",
-      rooms: []
+      uids: [42500..42521]
     },
     {
-      name: "Czeroth Labyrinth",
-      rooms: []
+      name: "Vornavian Coast",
+      uids: [4218101..4218121]
+    },
+    {
+      name: "Czeroth Caverns",
+      uids: [13007201..13007228]
+    },
+    {
+      name: "The Hive",
+      uids: [13041001..13041026]
     }
   ],
   attack_attributes: {
@@ -44,13 +57,21 @@
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
-    special_abilities: [
+    maneuvers: [
       {
         name: "Burrow"
       },
       {
         name: "Tail Slam"
+      },
+      {
+        name: "Tail Swipe"
+      },
+      {
+        name: "Charge"
+      },
+      {
+        name: "Stomp"
       }
     ],
     special_notes: []
@@ -58,22 +79,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 141,
-    ranged: nil,
-    bolt: 143,
-    udf: nil,
+    melee: (134..332),
+    ranged: (130..208),
+    bolt: (130..208),
+    udf: 234,
     bar_td: nil,
-    cle_td: 142,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 154,
+    cle_td: (142..155),
+    emp_td: (146..149),
+    pal_td: (120..123),
+    ran_td: (123..129),
+    sor_td: (151..154),
     wiz_td: nil,
-    mje_td: 162,
-    mne_td: nil,
-    mjs_td: 146,
-    mns_td: 146,
-    mnm_td: nil,
+    mje_td: 165,
+    mne_td: 165,
+    mjs_td: (137..146),
+    mns_td: (137..146),
+    mnm_td: (123..132),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -82,24 +103,39 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: true,
     boxes: true,
     skin: "roa'ter skin",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "This massive worm is probably over twenty to thirty feet long, making it an easy target to hit, but having incomparable force and strength. Dark red in color, it seems to have no eyes, but its keen sense of smell quickly finds targets."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "A roa'ter slithers {direction}.",
+      "The roa'ter warily backs away."
+    ],
+    death: [
+      "The roa'ter rolls over and dies."
+    ],
+    decay: [
+      "A roa'ter decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A roa'ter charges at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

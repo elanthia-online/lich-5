@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "sand devil",
-  noun: "",
+  noun: "devil",
   url: "https://gswiki.play.net/sand_devil",
   picture: "",
   level: 48,
   family: "Reptilian",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 240,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 5,
+  height: 2,
+  size: "medium",
   areas: [
     {
       name: "Fhorian Village",
-      rooms: []
+      uids: [3030201..3030210]
     }
   ],
   attack_attributes: {
@@ -35,6 +40,22 @@
       {
         name: "Pound (attack)",
         as: 303
+      },
+      {
+        name: "Claw",
+        as: 293
+      },
+      {
+        name: "Fist",
+        as: 303
+      },
+      {
+        name: "Small surge of electricity",
+        as: 283
+      },
+      {
+        name: "Stream of water",
+        as: 283
       }
     ],
     bolt_spells: [
@@ -71,29 +92,33 @@
         name: "Tangleweed (610)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Lash"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "2N",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (249..477),
+    ranged: (317..416),
+    bolt: (317..416),
+    udf: (505..560),
     bar_td: (168..171),
-    cle_td: nil,
+    cle_td: 184,
     emp_td: (183..185),
-    pal_td: nil,
-    ran_td: nil,
+    pal_td: (187..190),
+    ran_td: (157..159),
     sor_td: (196..197),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: 202,
-    mnm_td: nil,
+    mje_td: (203..206),
+    mne_td: (203..206),
+    mjs_td: (183..185),
+    mns_td: (183..185),
+    mnm_td: 172,
     defensive_spells: [
       "Spirit Warding II (107)",
       "Lesser Shroud (120)",
@@ -111,24 +136,57 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a crystal wand",
+    "a giant clamshell shield",
+    "a metal wand",
+    "a slender blue wand",
+    "some dirty turquoise robes",
+    "some dusty green robes",
+    "some ripped blue robes",
+    "some tattered ochre robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: "glowing violet essence dust"
+    skin: nil,
+    other: "glowing violet essence dust",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Mutiple attack abilities, including a command of many offensive spells, make the sand devil a most dangerous adversary. Its name comes from the appearance of its leathery, yellowish, reptilian head crowned with two long, upright, black horns. The sand devil swirls in and out of areas, constantly rotating to keep the wind and dust whipping around it. This allows its sharp claws to remain hidden, emerging suddenly from the sandstorm to slash at surprised foes."
     ],
-    arrival: [],
+    arrival: [
+      "A sand devil charges in."
+    ],
     flee: [],
-    death: [],
+    death: [
+      "The sand devil screams one last time and dies.",
+      "The sand devil falls to the ground and dies."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A sand devil mutters some guttural sounds.",
+      "A sand devil gestures at {target}!"
+    ],
+    attacks: {
+      attack: [
+        "A sand devil pounds at you with {pronoun} fist!",
+        "A sand devil shoots strands of webbing at you!",
+        "A sand devil waves {pronoun} silver wand at you."
+      ],
+      claw: [
+        "A sand devil claws at {target}!"
+      ],
+      hurl: [
+        "A sand devil hurls {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

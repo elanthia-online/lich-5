@@ -1,27 +1,32 @@
 {
   schema_version: 3,
   name: "shimmering fungus",
-  noun: "",
+  noun: "fungus",
   url: "https://gswiki.play.net/shimmering_fungus",
   picture: "",
   level: 35,
   family: "Fungus",
   type: "Plantlife",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: 300,
+  max_hp: 262,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Wraithenmist",
-      rooms: []
+      uids: [13027003..13027035, 13027056..13027083]
     }
   ],
   attack_attributes: {
@@ -36,8 +41,8 @@
   defense_attributes: {
     asg: "6",
     immunities: [],
-    melee: "+185",
-    ranged: "+185",
+    melee: 185,
+    ranged: 185,
     bolt: nil,
     udf: nil,
     bar_td: nil,
@@ -60,13 +65,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: "fungal cap",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

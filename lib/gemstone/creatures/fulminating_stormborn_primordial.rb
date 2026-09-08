@@ -1,34 +1,43 @@
 {
   schema_version: 3,
   name: "fulminating stormborn primordial",
-  noun: "",
+  noun: "primordial",
   url: "https://gswiki.play.net/fulminating_stormborn_primordial",
   picture: "",
   level: 109,
   family: "Elemental",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
-  max_hp: 325,
+  max_hp: 327,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Sailor's Grief",
-      rooms: []
+      uids: [7150201..7150229, 7150301..7150325, 7150328..7150329]
+    },
+    {
+      name: "unmapped",
+      uids: [7150326..7150327]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Crackling Sparks",
-        as: "+476"
+        as: 476
       }
     ],
     bolt_spells: [
@@ -71,7 +80,7 @@
     melee: (900..921),
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: (543..1023),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -99,24 +108,37 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: "ayanad crystal",
+    armaments: [
+      "drake mace"
+    ],
+    transmogs: nil
   },
   messaging: {
     description: [
       "The stormborn primordial takes the shape of a living tempest, its form a shifting torrent of roiling clouds and arcs of searing lightning. Shrouded by the perpetual swirl of vertiginous mist, a roughly humanoid form hovers within the eye of the storm. Seething fissures of electric blue energy streak across the nearly corporeal shape, which is mostly featureless save for malevolent eyes of white light blazing from the shadows of the primordial's face."
     ],
-    arrival: [],
+    arrival: [
+      "A fulminating stormborn primordial streaks forward faster than the eye can see, leaving smoking plumes behind as {pronoun} jagged tendrils propel {pronoun} aggressively into the fray."
+    ],
     flee: [],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A fulminating stormborn primordial swirls, illuminating the surroundings harshly as {pronoun} sprays crackling sparks at you!",
+        "A fulminating stormborn primordial grows scintillatingly bright, arcs of electricity coalescing into a beam of blazing plasma that erupts toward you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

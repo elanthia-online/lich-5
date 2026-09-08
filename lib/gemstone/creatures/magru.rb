@@ -1,27 +1,32 @@
 {
   schema_version: 3,
   name: "magru",
-  noun: "",
+  noun: "magru",
   url: "https://gswiki.play.net/magru",
   picture: "",
   level: 37,
   family: "Globoid",
   type: "Globoid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: false,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 299,
+  speed: 7,
+  height: 3,
+  size: "medium",
   areas: [
     {
       name: "The Broken Lands",
-      rooms: []
+      uids: [94002..94019]
     }
   ],
   attack_attributes: {
@@ -29,6 +34,10 @@
       {
         name: "Pound",
         as: 210
+      },
+      {
+        name: "Fist",
+        as: 260
       }
     ],
     bolt_spells: [],
@@ -47,22 +56,22 @@
     immunities: [
       "Fire"
     ],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
+    melee: (107..119),
+    ranged: (98..125),
+    bolt: (98..125),
     udf: nil,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: 129,
+    emp_td: 130,
+    pal_td: (108..111),
+    ran_td: 111,
     sor_td: 136,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: 143,
+    mne_td: 143,
+    mjs_td: 130,
+    mns_td: 130,
+    mnm_td: 111,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,24 +80,39 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The magru appears to be a huge, gelatinous red lump that pulses, swelling and shrinking slightly with a hypnotic rhythm. Its skin glistens with a dark, disgusting ooze."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A magru just arrived.",
+      "A magru slides in."
+    ],
+    flee: [
+      "A magru heads {direction}."
+    ],
     death: [],
-    decay: [],
+    decay: [
+      "The magru collapses into a heap of quivering jelly."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A magru pounds at you with {pronoun} fist!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

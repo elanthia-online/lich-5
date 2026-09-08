@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "monastic lich",
-  noun: "",
+  noun: "lich",
   url: "https://gswiki.play.net/monastic_lich",
   picture: "",
   level: 27,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
   max_hp: 220,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
-      name: "The Monastery",
-      rooms: []
+      name: "Lysierian Hills",
+      uids: [95156..95168, 95180..95185]
     }
   ],
   attack_attributes: {
@@ -59,6 +64,10 @@
       {
         name: "Silence (210)",
         cs: 150
+      },
+      {
+        name: "Wickedly barbed leather whip",
+        cs: 156
       }
     ],
     offensive_spells: [
@@ -83,22 +92,22 @@
   defense_attributes: {
     asg: "2",
     immunities: [],
-    melee: (254..272),
-    ranged: nil,
+    melee: (210..272),
+    ranged: (135..190),
     bolt: 220,
-    udf: nil,
+    udf: 261,
     bar_td: nil,
     cle_td: (89..117),
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    emp_td: 123,
+    pal_td: (92..102),
+    ran_td: (89..99),
     sor_td: (106..126),
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 120,
     mne_td: 120,
-    mjs_td: nil,
-    mns_td: 115,
-    mnm_td: nil,
+    mjs_td: (115..121),
+    mns_td: (115..121),
+    mnm_td: (81..87),
     defensive_spells: [
       "Prayer of Protection (303)",
       "Prismatic Guard (905)",
@@ -115,13 +124,23 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a blackened shield",
+    "a blackened visor",
+    "a ceremonial kris",
+    "a wickedly barbed leather whip",
+    "some black ora bracers",
+    "some tattered flowing black robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: "glimmering blue essence dust",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -130,9 +149,22 @@
     arrival: [],
     flee: [],
     death: [],
-    decay: [],
+    decay: [
+      "A monastic lich dissolves into a foul-smelling miasma.",
+      "The monastic lich seems to collapse in upon {reflexive}, leaving only a withered husk."
+    ],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A monastic lich mutters in agonizing ecstacy."
+    ],
+    stun_break: [
+      "A monastic lich's hollow eye sockets flash with a blood red glow as {pronoun} shakes off the stun!"
+    ],
+    attacks: {
+      attack: [
+        "A monastic lich points at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

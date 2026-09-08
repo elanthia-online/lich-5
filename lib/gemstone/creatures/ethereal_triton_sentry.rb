@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "ethereal triton sentry",
-  noun: "",
+  noun: "sentry",
   url: "https://gswiki.play.net/ethereal_triton_sentry",
   picture: "",
   level: 103,
   family: "Triton",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: nil,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 238,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "Ruined Temple",
-      rooms: []
+      uids: [3031081..3031106]
     }
   ],
   attack_attributes: {
@@ -32,19 +37,19 @@
     warding_spells: [
       {
         name: "Dark Catalyst (719)",
-        cs: "+451 to +457"
+        cs: (451..457)
       },
       {
         name: "Mana Disruption (702)",
-        cs: "+451 to +457"
+        cs: (451..457)
       },
       {
         name: "Disintegrate (705)",
-        cs: "+451 to +457"
+        cs: (451..457)
       },
       {
         name: "Mind Jolt (706)",
-        cs: "+451 to +457"
+        cs: (451..457)
       }
     ],
     offensive_spells: [
@@ -55,7 +60,11 @@
         name: "Major Elemental Wave (435)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Claw Curse"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
@@ -63,14 +72,14 @@
     asg: nil,
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    ranged: (364..483),
+    bolt: (364..483),
+    udf: (382..648),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: (440..450),
+    emp_td: (432..442),
+    pal_td: (379..389),
+    ran_td: (385..392),
     sor_td: nil,
     wiz_td: nil,
     mje_td: nil,
@@ -86,24 +95,48 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a twisted soot black runestaff capped with a gold-caged crystal drop of water"
+  ],
   treasure: {
-    coins: nil,
-    magic_items: nil,
-    gems: nil,
-    boxes: nil,
+    coins: true,
+    magic_items: true,
+    gems: true,
+    boxes: true,
     skin: nil,
-    other: nil
+    other: [
+      "inky necrotic core",
+      "n'ayanad crystal"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
+    attacks: {
+      attack: [
+        "An ethereal triton sentry points an ethereal, clawed finger toward you!",
+        "An ethereal triton sentry swings a twisted soot black runestaff at you!"
+      ]
+    },
+    stun_break: [
+      "An ethereal triton sentry flares briefly with a dull glow, rousing {reflexive} from slumber.",
+      "An ethereal triton sentry flares briefly with a dull glow, rousing {reflexive} from slumber and righting {pronoun} posture."
+    ],
     description: [
       "The triton sentry holds himself erect, as he skims along the ground on long-nailed translucent webbed feet. Obsessively alert, the creature sniffs constantly and halts to listen every few moments. Despite empty eye sockets, constantly weeping viscous green mucus, he peers into the shadows for infiltrators, his head constantly turning with rapid, jerky motions. Threadbare green-belted robes cover his insubstantial frame."
     ],
-    arrival: [],
+    arrival: [
+      "An ethereal triton sentry just arrived."
+    ],
     flee: [],
-    death: [],
+    death: [
+      "The triton sentry fades into transparency, {pronoun} remnants rapidly dissolving into the air."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "An ethereal triton sentry chants in an incomprehensible language, causing streams of dim grey energy to lash about {pronoun} hands."
+    ],
     info: {
       general: [],
       class_tips: {

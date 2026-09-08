@@ -1,33 +1,47 @@
 {
   schema_version: 3,
   name: "shadow steed",
-  noun: "",
+  noun: "steed",
   url: "https://gswiki.play.net/shadow_steed",
   picture: "",
   level: 38,
   family: "Equine",
   type: "Quadruped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
   max_hp: 400,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 8,
+  height: 6,
+  size: "large",
   areas: [
     {
       name: "Shadow Valley",
-      rooms: []
+      uids: [389030..389035, 2160001..2160035, 2161001..2161022]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
+    physical_attacks: [
+      {
+        name: "Charge",
+        as: 254
+      },
+      {
+        name: "Foot",
+        as: (228..242)
+      }
+    ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
@@ -38,22 +52,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (140..293),
+    ranged: (128..216),
+    bolt: (128..216),
+    udf: (192..290),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: (127..141),
+    emp_td: (131..141),
+    pal_td: (119..122),
+    ran_td: (112..121),
+    sor_td: (144..151),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (154..157),
+    mne_td: (154..157),
+    mjs_td: (130..140),
+    mns_td: (130..140),
+    mnm_td: (115..125),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -62,13 +76,21 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye"
+  ],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: "a silvery tail",
-    other: "Glowing violet essence dust"
+    other: [
+      "Glowing violet essence dust",
+      "ayanad crystal"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -76,10 +98,20 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "A shadow steed fades into oblivion."
+    ],
+    decay: [
+      "A shadow steed fades into oblivion."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A shadow steed charges at you!",
+        "A shadow steed stomps at you with {pronoun} foot!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

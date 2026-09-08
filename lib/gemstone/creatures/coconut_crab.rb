@@ -1,31 +1,45 @@
 {
   schema_version: 3,
   name: "coconut crab",
-  noun: "",
+  noun: "crab",
   url: "https://gswiki.play.net/coconut_crab",
   picture: "",
   level: 2,
   family: "Crab",
   type: "Crustacean",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 32,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 1,
+  size: "small",
   areas: [
     {
       name: "Rocky Shoals",
-      rooms: []
+      uids: [7127001..7127019]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
+    physical_attacks: [
+      {
+        name: "Claw",
+        as: 43
+      },
+      {
+        name: "Unknown",
+        as: 53
+      }
+    ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
@@ -36,22 +50,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: 37,
+    ranged: 34,
+    bolt: 34,
+    udf: 44,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: 6,
+    emp_td: (3..6),
+    pal_td: (3..6),
+    ran_td: 6,
+    sor_td: 6,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: 6,
+    mne_td: 6,
+    mjs_td: (3..6),
+    mns_td: (3..6),
+    mnm_td: 6,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -60,24 +74,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
-    magic_items: nil,
-    gems: nil,
+    coins: true,
+    magic_items: true,
+    gems: true,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       ""
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "The crab skitters {direction}."
+    ],
+    death: [
+      "The coconut crab falls back into a heap and dies.",
+      "The coconut crab hisses one last time and dies."
+    ],
+    decay: [
+      "A coconut crab decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A coconut crab tries to ensnare {target}!"
+      ],
+      claw: [
+        "A coconut crab claws at {target}!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

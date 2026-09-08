@@ -21,9 +21,9 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
   def known_top_level_keys
     %i[
       schema_version name noun url picture level family type undead
-      has_blood has_bones muggable boss otherclass bcs max_hp speed height
+      blood bones limbs witherable sympathy muggable sleepable boss boss_type otherclass bcs max_hp speed height
       size areas attack_attributes defense_attributes special_other
-      abilities alchemy abilities_misc treasure messaging
+      abilities alchemy abilities_misc equipment treasure messaging
     ]
   end
 
@@ -66,6 +66,31 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
 
       extra = data.keys - known_top_level_keys
       offenders[File.basename(path)] = extra unless extra.empty?
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'areas entries are well-formed: String name, uids an Array of ascending Integer Ranges' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      areas = data[:areas]
+      next if areas.nil?
+
+      unless areas.is_a?(Array)
+        offenders << "#{File.basename(path)}: areas is #{areas.class}"
+        next
+      end
+      areas.each do |a|
+        ok = a.is_a?(Hash) &&
+             a[:name].is_a?(String) && !a[:name].strip.empty? &&
+             a[:uids].is_a?(Array) &&
+             a[:uids].all? { |r| r.is_a?(Range) && r.first.is_a?(Integer) && r.last.is_a?(Integer) && r.first <= r.last }
+        offenders << "#{File.basename(path)}: #{a.inspect[0, 80]}" unless ok
+      end
     end
 
     expect(offenders).to be_empty
@@ -119,16 +144,64 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
     expect(offenders).to be_empty
   end
 
-  it 'has_blood/has_bones/muggable are only true, false, or nil - never coerced or stringly-typed' do
+  it 'probe facts and muggable are only true, false, or nil - never coerced or stringly-typed' do
     offenders = []
     creature_files.each do |path|
       data = load_data(path)
       next unless data.is_a?(Hash)
 
-      %i[has_blood has_bones muggable].each do |field|
+      %i[blood bones limbs witherable sympathy muggable sleepable].each do |field|
         value = data[field]
         offenders << "#{File.basename(path)} #{field}=#{value.inspect}" unless value.nil? || value == true || value == false
       end
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'speed is Integer seconds, an ascending Range, or nil - never a wiki string' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      value = data[:speed]
+      ok = value.nil? || value.is_a?(Integer) ||
+           (value.is_a?(Range) && value.first.is_a?(Integer) && value.first <= value.last)
+      offenders << "#{File.basename(path)} speed=#{value.inspect}" unless ok
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'defense numbers (max_hp, melee/ranged/bolt/udf, every TD) are Integer, ascending Range, or nil - never a wiki string' do
+    numeric_keys = %i[melee ranged bolt udf bar_td cle_td emp_td pal_td ran_td sor_td wiz_td
+                      mje_td mne_td mjs_td mns_td mnm_td]
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      values = { max_hp: data[:max_hp] }
+      numeric_keys.each { |k| values[k] = data.dig(:defense_attributes, k) }
+      values.each do |key, value|
+        ok = value.nil? || value.is_a?(Integer) ||
+             (value.is_a?(Range) && value.first.is_a?(Integer) && value.first <= value.last)
+        offenders << "#{File.basename(path)} #{key}=#{value.inspect}" unless ok
+      end
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'boss_type is nil, "pack", "miniboss", or "boss" - never a typo or a bare symbol' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      value = data[:boss_type]
+      offenders << "#{File.basename(path)} boss_type=#{value.inspect}" unless value.nil? || %w[pack miniboss boss].include?(value)
     end
 
     expect(offenders).to be_empty

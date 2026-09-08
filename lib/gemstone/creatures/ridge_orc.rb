@@ -1,36 +1,41 @@
 {
   schema_version: 3,
   name: "ridge orc",
-  noun: "",
+  noun: "orc",
   url: "https://gswiki.play.net/ridge_orc",
   picture: "",
   level: 4,
   family: "Orc",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: true,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: 80,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 70,
+  speed: 15,
+  height: 6,
+  size: "medium",
   areas: [
     {
-      name: "Dead Plateau",
-      rooms: []
+      name: "Locksmehr Trail",
+      uids: [13000063..13000085]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Handaxe",
-        as: 84
+        as: (74..84)
       }
     ],
     bolt_spells: [],
@@ -43,22 +48,22 @@
   defense_attributes: {
     asg: "5",
     immunities: [],
-    melee: 78,
-    ranged: nil,
-    bolt: 23,
-    udf: 103,
+    melee: (65..70),
+    ranged: (21..24),
+    bolt: (21..24),
+    udf: (90..106),
     bar_td: 12,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: 12,
+    emp_td: 12,
+    pal_td: (9..12),
+    ran_td: 12,
+    sor_td: 12,
     wiz_td: nil,
     mje_td: 12,
     mne_td: 12,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: 12,
+    mns_td: 12,
+    mnm_td: 12,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -67,24 +72,44 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a handaxe",
+    "some light leather"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "an orc ear",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Massive and sullen looking, the ridge orc glares and grimaces at all who dare to approach. Unknown power resides in this horrific-appearing monster."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A ridge orc rushes in, howling with rage!"
+    ],
+    flee: [
+      "A ridge orc flees {direction}."
+    ],
+    death: [
+      "A ridge orc gives a last gasp and dies."
+    ],
+    decay: [
+      "A ridge orc decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A ridge orc swings {weapon} at you!",
+        "A ridge orc glares accusingly at you."
+      ]
+    },
     info: {
       general: [],
       class_tips: {

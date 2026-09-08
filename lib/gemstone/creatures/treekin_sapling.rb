@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "treekin sapling",
-  noun: "",
+  noun: "sapling",
   url: "https://gswiki.play.net/treekin_sapling",
   picture: "",
   level: nil,
   family: "",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
   max_hp: nil,
@@ -68,24 +73,37 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: false,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Standing approximately five feet tall, this relatively mature sapling sways menacingly before you. Lambent yellow eyes and thick leg-shaped roots make it clear that this is no ordinary tree. Leaves cover the sapling from head to trunk, with two arm-shaped branches protruding from the canopy."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A treekin sapling lumbers in!"
+    ],
+    flee: [
+      "A treekin sapling lumbers {direction}."
+    ],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A treekin sapling rakes a branch at you!",
+        "A treekin sapling lashes a root out at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

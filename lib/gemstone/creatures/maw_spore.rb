@@ -1,21 +1,26 @@
 {
   schema_version: 3,
   name: "maw spore",
-  noun: "",
+  noun: "spore",
   url: "https://gswiki.play.net/maw_spore",
   picture: "",
   level: nil,
   family: "",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
   max_hp: nil,
-  speed: nil,
+  speed: 8,
   height: nil,
   size: "",
   areas: [],
@@ -23,6 +28,10 @@
     physical_attacks: [
       {
         name: "Stinger (attack)",
+        as: 227
+      },
+      {
+        name: "Stinger",
         as: 227
       }
     ],
@@ -37,8 +46,8 @@
     asg: "6N",
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: nil,
+    ranged: 185,
+    bolt: 185,
     udf: nil,
     bar_td: nil,
     cle_td: nil,
@@ -60,24 +69,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "A maw spore is a spore of the Elanthian variety."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A maw spore arrives, bobbing haphazardly on a current of air."
+    ],
+    flee: [
+      "A maw spore bobs haphazardly northwestward on an air current.",
+      "A maw spore bobs haphazardly southeastward on an air current.",
+      "A maw spore bobs haphazardly southwestward on an air current.",
+      "A maw spore bobs haphazardly westward on an air current.",
+      "A maw spore bobs up and down gently in the air.",
+      "A maw spore bobs haphazardly eastward on an air current.",
+      "A maw spore bobs haphazardly southward on an air current."
+    ],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A maw spore stabs at you with {pronoun} stinger!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

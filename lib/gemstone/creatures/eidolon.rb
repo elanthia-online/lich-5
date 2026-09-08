@@ -1,36 +1,41 @@
 {
   schema_version: 3,
   name: "eidolon",
-  noun: "",
+  noun: "eidolon",
   url: "https://gswiki.play.net/eidolon",
   picture: "",
   level: 55,
   family: "Eidolon",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
   max_hp: 240,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 9,
+  size: "large",
   areas: [
     {
       name: "Bonespear Tower",
-      rooms: []
+      uids: [319117..319140]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Closed fist",
-        as: "248 to 307"
+        as: (248..307)
       }
     ],
     bolt_spells: [],
@@ -50,6 +55,10 @@
       {
         name: "Repel (fear)",
         cs: 251
+      },
+      {
+        name: "Point",
+        cs: 272
       }
     ],
     offensive_spells: [],
@@ -60,22 +69,22 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 348,
-    ranged: nil,
-    bolt: nil,
-    udf: 286,
-    bar_td: "179 to 209",
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: 204,
-    sor_td: "245 to 254",
+    melee: (281..410),
+    ranged: (282..389),
+    bolt: (282..389),
+    udf: (364..452),
+    bar_td: (179..209),
+    cle_td: (234..240),
+    emp_td: (213..224),
+    pal_td: (190..200),
+    ran_td: (204..207),
+    sor_td: (245..254),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: "217 to 252",
-    mjs_td: nil,
-    mns_td: 231,
-    mnm_td: nil,
+    mje_td: 244,
+    mne_td: (217..252),
+    mjs_td: 248,
+    mns_td: 248,
+    mnm_td: (211..218),
     defensive_spells: [
       "Spirit Warding I (101)",
       "Spirit Defense (103)",
@@ -91,24 +100,49 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a blackened staff",
+    "some tattered robes"
+  ],
   treasure: {
     coins: true,
     magic_items: nil,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glowing violet mote of essence"
+    other: "Glowing violet mote of essence",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The eidolon is a nightmarish vision of pure evil, appearing from the shadows like a disconcerting fragment of thought that haunts you relentlessly. The eidolon's eyes shine out of its ephemeral silhouette like twin coals, radiating hatred and hunger. The monstrous apparition is as big as it is misshapen, towering over a tall giantman as it moves in rapid spurts that defy the eye's ability to follow its progress. As it conjures and strikes, its extremities contort and blur through each other, amplifying its grotesque demeanor."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
+    arrival: [
+      "An eidolon just arrived.",
+      "An eidolon just came through an iron door."
+    ],
+    flee: [
+      "An eidolon floats {direction}.",
+      "An eidolon just went through a tall archway.",
+      "An eidolon just went through an iron door."
+    ],
+    death: [
+      "An eidolon fades into oblivion.",
+      "The eidolon falls to the floor dead, {pronoun} ethereal mist still pulsating with a blinding white hue."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "An eidolon exhales the last of a virulent green mist.",
+        "An eidolon exhales a virulent green mist toward you, but you are unaffected."
+      ],
+      cast: [
+        "An eidolon points a spectral finger at {target}!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

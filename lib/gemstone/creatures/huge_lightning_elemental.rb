@@ -1,37 +1,46 @@
 {
   schema_version: 3,
   name: "huge lightning elemental",
-  noun: "",
+  noun: "elemental",
   url: "https://gswiki.play.net/huge_lightning_elemental",
   picture: "",
   level: 100,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: false,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Extraplanar",
     "Magical"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 15,
+  size: "huge",
   areas: [
     {
       name: "Elemental Confluence",
-      rooms: []
+      uids: [580026..580053, 581026..581053, 582026..582053, 583026..583053, 584026..584053, 585026..585053, 586026..586053, 587026..587053, 588026..588053]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Charge",
-        as: 460
+        as: (460..495)
+      },
+      {
+        name: "Powerful lightning bolt",
+        as: 469
       }
     ],
     bolt_spells: [
@@ -65,6 +74,9 @@
       },
       {
         name: "Major Elemental Wave"
+      },
+      {
+        name: "Burrow Ambush"
       }
     ],
     special_abilities: [],
@@ -74,14 +86,14 @@
     asg: "10",
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: 331,
+    ranged: (280..358),
+    bolt: (280..358),
     udf: nil,
     bar_td: 406,
     cle_td: 431,
     emp_td: 431,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: (362..372),
     sor_td: nil,
     wiz_td: nil,
     mje_td: nil,
@@ -104,24 +116,40 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "essence of air"
+    other: "essence of air",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The lightning elemental is a crackling mass of solidified power, definitely alien to Elanthia. Nearly gelatinous in substance, solid bolts of lightning weave themselves into the skeletal form of some horrible beast, only to arc in an instant to a vaguely humanoid form and then back again."
     ],
-    arrival: [],
+    arrival: [
+      "A gust of wind and a flash of lightning herald the arrival of a stooped titan stormcaller as {pronoun} lumbers in."
+    ],
     flee: [],
     death: [],
-    decay: [],
+    decay: [
+      "The siren's soft aura fades and her flesh crumbles to reveal the corpse of a hideous scaled creature, which then quickly decays away."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A huge lightning elemental charges at you, crackling with power!",
+        "A huge lightning elemental releases sparks towards you!"
+      ],
+      hurl: [
+        "A huge lightning elemental hurls {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

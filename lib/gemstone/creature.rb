@@ -12,18 +12,18 @@ module Lich
       @@loaded = false
 
       attr_reader :name, :url, :picture, :level, :family, :type,
-                  :undead, :otherclass, :areas, :bcs, :max_hp,
+                  :undead, :boss, :boss_type, :otherclass, :areas, :bcs, :max_hp,
                   :speed, :height, :size, :attack_attributes,
                   :defense_attributes, :treasure, :messaging,
-                  :special_other, :abilities, :alchemy
+                  :special_other, :abilities, :alchemy, :equipment
 
       BOON_ADJECTIVES = %w[
         adroit afflicted apt barbed belligerent blurry canny combative dazzling deft diseased drab
         dreary ethereal flashy flexile flickering flinty frenzied ghastly ghostly gleaming glittering
         glorious glowing grotesque hardy illustrious indistinct keen lanky luminous lustrous muculent
-        nebulous oozing pestilent radiant raging ready resolute robust rune-covered shadowy shifting
-        shimmering shining sickly green sinuous slimy sparkling spindly spiny stalwart steadfast stout
-        tattoed tenebrous tough twinkling unflinching unyielding wavering wispy
+        nebulous oozing pestilent radiant raging ready resolute robust rune-covered shadowy shielded
+        shifting shimmering shining sickly green sinuous slimy sparkling spindly spiny stalwart steadfast stout
+        tattoed tattooed tenebrous tough twinkling unflinching unyielding wavering wispy
       ]
 
       def initialize(data)
@@ -35,9 +35,18 @@ module Lich
         @type = data[:type]
         @undead = data[:undead]
         # Tri-state (true/false/nil) - nil means uncatalogued/unknown, not false.
-        @has_blood = data[:has_blood]
-        @has_bones = data[:has_bones]
+        @blood = data[:blood]
+        @bones = data[:bones]
+        @limbs = data[:limbs]
+        @witherable = data[:witherable]
+        @sympathy = data[:sympathy]
         @muggable = data[:muggable]
+        @sleepable = data[:sleepable]
+        @boss = data[:boss]
+        # nil | "pack" | "miniboss" | "boss" - bestiary classification
+        # ("boss" = the once-per-30-days uniques). Zone-dependent for a
+        # few creatures; the template carries the highest tier.
+        @boss_type = data[:boss_type]
         @otherclass = data[:otherclass] || []
         @areas = data[:areas] || []
         @bcs = data[:bcs]
@@ -62,6 +71,8 @@ module Lich
         @special_other = data[:special_other]
         @abilities = data[:abilities] || []
         @alchemy = data[:alchemy] || []
+        # Items seen on the creature via LOOK, as plain strings.
+        @equipment = data[:equipment] || []
       end
 
       # Load all templates from files
@@ -156,18 +167,109 @@ module Lich
         @@templates.values.uniq
       end
 
+      # All game uids the creature is found at, expanded from the stored
+      # ranges (memoized - ranges stay compact on disk).
+      def uids
+        @uids ||= @areas.flat_map { |a| Array(a[:uids]).flat_map(&:to_a) }.uniq.sort
+      end
+
+      # Whether the creature is found at the given game room uid. Checks
+      # the ranges directly, so no expansion cost.
+      def found_at_uid?(uid)
+        @areas.any? { |a| Array(a[:uids]).any? { |r| r.cover?(uid) } }
+      end
+
+      # Templates for the creatures found at the given game room uid.
+      def self.at_uid(uid)
+        all.select { |t| t.found_at_uid?(uid) }
+      end
+
+      # ---- consumer views (need the Lich mapdb loaded) ----------------
+      # Everything below converts uid -> Lich room id at call time via
+      # Map.ids_from_uid, so stored data survives mapdb renumbering. Gaps
+      # in the game's uid numbering never matter here: each uid converts
+      # individually, and uids the mapdb doesn't know yet simply drop out
+      # until someone maps those rooms.
+
+      # Every Lich room id the creature is found in, across all areas -
+      # ranges combined, deduped, sorted.
+      def rooms
+        @rooms ||= uids.flat_map { |u| Lich::Common::Map.ids_from_uid(u) }.uniq.sort
+      end
+
+      # {area name => [Lich room ids]} - the per-area display view
+      # (eBestiary and friends).
+      def rooms_by_area
+        @rooms_by_area ||= @areas.to_h do |a|
+          ids = Array(a[:uids]).flat_map { |r| r.flat_map { |u| Lich::Common::Map.ids_from_uid(u) } }
+          [a[:name], ids.uniq.sort]
+        end
+      end
+
+      # Rooms bordering the creature's rooms: connected by an edge - in
+      # either direction - to a room the creature is found in, without
+      # being one themselves (bigshot's perimeter list). The reverse-edge
+      # pass scans the map once; the result is memoized.
+      def boundary_rooms
+        @boundary_rooms ||= begin
+          inside = {}
+          rooms.each { |id| inside[id] = true }
+          border = {}
+          inside.each_key do |id|
+            room = Lich::Common::Map[id] or next
+            (room.wayto || {}).each_key do |dest|
+              d = dest.to_i
+              border[d] = true unless inside[d]
+            end
+          end
+          Lich::Common::Map.list.compact.each do |room|
+            next if inside[room.id] || border[room.id]
+
+            border[room.id] = true if (room.wayto || {}).keys.any? { |dest| inside[dest.to_i] }
+          end
+          border.keys.sort
+        end
+      end
+
       # Returns whether the bestiary template says the creature has blood.
       #
       # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def has_blood?
-        @has_blood
+        @blood
       end
 
       # Returns whether the bestiary template says the creature has bones.
       #
       # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def has_bones?
-        @has_bones
+        @bones
+      end
+
+      # Returns whether Limb Disruption (708) has limbs to target on this
+      # creature ("The X has no limbs left!" on a fresh target = false).
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def has_limbs?
+        @limbs
+      end
+
+      # Returns whether Wither (1115) has a body to attack on this
+      # creature. Not about limbs - the spell strikes all thirteen
+      # locations, chest and abdomen most often - and not about
+      # corporeality either: it works on non-corporeal undead (wraiths,
+      # spectres, lost souls) and fails on the golem and elemental
+      # families.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def witherable?
+        @witherable
+      end
+
+      # Returns whether Sympathy (1120) can affect this creature.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def sympathy?
+        @sympathy
       end
 
       # Returns whether the bestiary template says the creature can be mugged.
@@ -175,6 +277,14 @@ module Lich
       # @return [Boolean, nil] true or false when catalogued; nil when unknown.
       def muggable?
         @muggable
+      end
+
+      # Returns whether the creature can be put to sleep. False comes from
+      # the game's own refusal ("does not seem to be affected").
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def sleepable?
+        @sleepable
       end
 
       private
@@ -401,6 +511,24 @@ module Lich
         hp_percent <= threshold
       end
 
+      # Statuses that satisfy Coup de Grace's "incapacitated in some way"
+      # requirement, unlocking the (rank * 10)% threshold instead of
+      # (rank * 5)%. Positional states (prone/kneeling/sitting) are
+      # deliberately excluded.
+      COUP_INCAP_STATUSES = %w[stunned immobilized webbed sleeping bound].freeze
+
+      # Check if creature currently qualifies for Coup de Grace at the given
+      # trained rank: at or below (rank * 10)% of max HP when incapacitated,
+      # (rank * 5)% otherwise, hard-capped at 200 HP either way. The cap is
+      # what binds on large creatures, so this compares raw HP, not percent.
+      def coup_eligible?(rank)
+        return false unless rank.to_i > 0
+        return false unless current_hp && max_hp && max_hp > 0
+        incap = COUP_INCAP_STATUSES.any? { |s| has_status?(s) }
+        threshold = [(max_hp * rank.to_i * (incap ? 10 : 5)) / 100.0, 200].min
+        current_hp <= threshold
+      end
+
       # Check if creature is dead (0 HP)
       def dead?
         current_hp == 0
@@ -579,6 +707,8 @@ module Lich
           skin: nil,
           magic_items: nil,
           other: nil,
+          armaments: nil,
+          transmogs: nil,
           blunt_required: false
         }.merge(data)
       end
@@ -587,6 +717,8 @@ module Lich
       def has_gems? = !!@data[:gems]
       def has_boxes? = !!@data[:boxes]
       def has_skin? = !!@data[:skin]
+      def has_armaments? = !!(@data[:armaments] && !Array(@data[:armaments]).empty?)
+      def has_transmogs? = !!(@data[:transmogs] && !Array(@data[:transmogs]).empty?)
       def blunt_required? = !!@data[:blunt_required]
 
       def to_h = @data
@@ -594,13 +726,21 @@ module Lich
 
     class Messaging
       attr_accessor :description, :arrival, :flee, :death,
-                    :spell_prep, :frenzy, :sympathy, :bite,
-                    :claw, :attack, :enrage, :mstrike
+                    :decay, :search, :spell_prep, :frenzy,
+                    :sympathy, :bite, :claw, :attack,
+                    :attacks, :enrage, :mstrike, :stand,
+                    :stun_break, :ambient
 
+      # Every form a placeholder can take in a real game line. The lists
+      # are alternatives in the generated regex, so a form that is missing
+      # here makes an otherwise-correct message unmatchable - "its" and
+      # "their" (possessives) and "out" (a flee direction) were absent.
       PLACEHOLDER_MAP = {
-        Pronoun: %w[He Her His It She],
-        pronoun: %w[he her his it she],
-        direction: %w[north south east west up down northeast northwest southeast southwest],
+        Pronoun: %w[He She It His Her Its Their Him Them Himself Herself Itself Themselves],
+        pronoun: %w[he she it his her its their him them himself herself itself themselves],
+        Reflexive: %w[Himself Herself Itself Themselves],
+        reflexive: %w[himself herself itself themselves],
+        direction: %w[north south east west up down out northeast northwest southeast southwest],
         weapon: %w[RAW:.+?]
       }
 
@@ -633,13 +773,16 @@ module Lich
         end
       end
 
+      # Returns the placeholder captures ({} for a literal hit) when +str+
+      # is one of the field's messages, else nil. Arrays are the common
+      # case - most creatures have several variants of a message - so a
+      # match against any variant counts.
       def match(field, str)
-        msg = send(field)
-        if msg.is_a?(PlaceholderTemplate)
-          msg.match(str)
-        else
-          msg == str ? {} : nil
+        Array(send(field)).each do |msg|
+          hit = msg.is_a?(PlaceholderTemplate) ? msg.match(str) : (msg == str ? {} : nil)
+          return hit if hit
         end
+        nil
       end
     end
 
@@ -722,6 +865,18 @@ module Lich
         @regex_cache[cache_key] = regex
       end
 
+      # Public: Messaging#match calls this on the template it holds. It
+      # sat below the `private` keyword, so every templated message
+      # raised NoMethodError on match - the placeholder machinery could
+      # render a line but never recognize one.
+      def match(str, literals = {})
+        regex = to_regex(literals)
+        m = regex.match(str)
+        return nil unless m
+
+        m.names.any? ? m.named_captures.transform_keys(&:to_sym) : m.captures
+      end
+
       private
 
       def build_regex(literals)
@@ -736,13 +891,6 @@ module Lich
           end
         end
         Regexp.new("#{pattern}")
-      end
-
-      def match(str, literals = {})
-        regex = to_regex(literals)
-        m = regex.match(str)
-        return nil unless m
-        m.names.any? ? m.named_captures.transform_keys(&:to_sym) : m.captures
       end
     end
   end
