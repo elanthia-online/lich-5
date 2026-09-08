@@ -193,7 +193,7 @@ module Lich
             # attacker as "his").
             links = text.to_enum(:scan, TARGET_LINK_PATTERN).map { Regexp.last_match }
             if (link = links.last)
-              { id: link[:id].to_i, noun: link[:noun], name: link[:name] }
+              { id: link[:id].to_i, noun: link[:noun], name: link_name(link) }
             else
               { name: strip_links(text).strip }
             end
@@ -202,6 +202,14 @@ module Lich
           # Drop XML link/bold markup from a captured fragment
           def strip_links(text)
             text.gsub(/<[^>]+>/, '')
+          end
+
+          # A creature's display name from its link. The game sometimes puts
+          # the possessive INSIDE the link ("<a>grim gigas skald's</a> mastery
+          # of music"), which registered a second creature named "grim gigas
+          # skald's" (hunt log 2026-09-07). Same id, same creature: strip it.
+          def link_name(link)
+            link[:name].sub(/'s\z/, '')
           end
 
           # Parse damage amounts using damage definitions
@@ -314,7 +322,7 @@ module Lich
             {
               id: id,
               noun: link_match[:noun],
-              name: link_match[:name]
+              name: link_name(link_match)
             }
           end
 
@@ -332,7 +340,7 @@ module Lich
               return {
                 id: id,
                 noun: target_match[:noun],
-                name: target_match[:name]
+                name: link_name(target_match)
               }
             end
 

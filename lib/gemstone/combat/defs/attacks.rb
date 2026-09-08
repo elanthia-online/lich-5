@@ -378,7 +378,11 @@ module Lich
               /(?<attacker>.+?) leaps from the shadows and (?:throws #{MK_PRE}(?:his|her|its)#{MK_POST} .+? around|hurtles at) (?<target>[^,!]+)/
             ].freeze),
             # PSM maneuvers, third person
-            AttackDef.new(:hamstring, [/(?<attacker>.+?) lunges forward and tries to hamstring (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/].freeze),
+            AttackDef.new(:hamstring, [
+              /(?<attacker>.+?) lunges forward and tries to hamstring (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/,
+              # warg jaws form (hunt log 2026-09-07)
+              /With a quick lunge, (?<attacker>.+?) tries to hamstring (?<target>you|.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} jaws!/
+            ].freeze),
             AttackDef.new(:shield_bash, [
               /(?<attacker>.+?) lunges forward at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+? and attempts a shield bash!/,
               /(?<attacker>.+?) launches a quick bash with (?<weapon>.+?) at (?<target>[^!]+)!/,

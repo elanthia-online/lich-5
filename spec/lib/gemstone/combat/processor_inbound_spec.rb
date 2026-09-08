@@ -908,6 +908,51 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(Lich::Gemstone::Combat::Definitions::Attacks.attackerless_line?('Your right leg drips as you continue to bleed.')).to be true
     end
 
+    it 'names a missed first volley arrow :volley and roots the round on it (hunt log 21:03:43)' do
+      lines = File.readlines(File.join(__dir__, '../../../fixtures/volley_miss_first.txt'), chomp: true)
+      events = described_class.parse_events(lines)
+      expect(events.map { |e| e[:name] }.uniq).to eq([:volley])
+      miss = events.first
+      expect(miss[:target][:id]).to eq(126382122)
+      expect(miss[:outcomes]).to eq([:evade])
+      expect(miss[:resolutions].map { |r| r[:result] }).to eq([29])
+      expect(miss[:root_ref]).to equal(miss)
+      expect(events[1..].map { |e| e[:root_ref] }.uniq).to eq([miss])
+      expect(events.map { |e| e[:hits].sum { |h| h[:damage] } }).to eq([0, 10, 35, 15, 10, 30])
+    end
+
+    it 'keeps a crit-rider topple whose pronoun is a link on the swing (hunt log 21:03:06)' do
+      her = bolded(124194699, 'shield-maiden', 'her')
+      events = described_class.parse_events([
+                                              "You fire a faewood arrow at #{maiden}!",
+                                              '  AS: +646 vs DS: +414 with AvD: +38 + d100 roll: +42 = +312',
+                                              '   ... and hit for 54 points of damage!',
+                                              "   Deft slash to the #{bolded(124194699, 'shield-maiden', 'gigas shield-maiden')}'s left leg digs deep!",
+                                              '   Bone is chipped!',
+                                              '<pushBold/>[SMR result: -84 (Open d100: 45, Penalty: 26)]<popBold/>',
+                                              "Despite desperate windmilling to catch #{her} balance, #{maiden} topples toward you!  You stumble into visibility as you try to dodge the falling shield-maiden."
+                                            ])
+      expect(events.map { |e| e[:name] }).to eq([:fire])
+      expect(events.first[:resolutions].map { |r| r[:result] }).to eq([312, -84])
+    end
+
+    it 'parses the warg jaw hamstring as an inbound hamstring with its miss' do
+      events = described_class.parse_events([
+                                              "With a quick lunge, #{warg} tries to hamstring you with #{bolded(123985834, 'warg', 'its')} jaws!",
+                                              '<pushBold/>[SMR result: 33 (Open d100: 37, Penalty: 29)]<popBold/>',
+                                              "#{bolded(123985834, 'warg', 'A niveous giant warg')}'s swing goes wide!"
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:hamstring, true]])
+      expect(events.first[:outcomes]).to include(:miss)
+    end
+
+    it 'strips a possessive baked into the creature link' do
+      events = described_class.parse_events([
+                                              "The thorny barrier surrounding you blocks the attack from the #{bolded(126564429, 'skald', "gigas skald's")}!"
+                                            ])
+      expect(events.first[:attacker][:name]).to eq('gigas skald')
+    end
+
     it 'labels environmental and self-inflicted damage by source' do
       cold = described_class.parse_events(['The burn of the cold tears precious warmth from your flesh.', '   ... 6 points of damage!'])
       thorn = described_class.parse_events(['As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.',
@@ -1050,13 +1095,21 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
         .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
     end
 
-    it 'stops watching a survivor after a few sweeps' do
+    it 'keeps watching a survivor until it dies (someone else finishing it minutes later still counts)' do
       described_class.persist_event(hp_kill_event)
-      4.times { described_class.process([]) }
+      8.times { described_class.process([]) }
       dead_flag[:value] = true
-      described_class.process([]) # no longer watched - a much later death is not this event's
-      expect(Lich::Gemstone::Combat::Observers).not_to have_received(:emit)
-        .with(:status, hash_including(status: 'dead'))
+      described_class.process([])
+      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
+        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+    end
+
+    it 'stops watching a creature that left the registry' do
+      described_class.persist_event(hp_kill_event)
+      registry = Lich::Gemstone::Combat::Creature
+      allow(registry).to receive(:[]).with(900).and_return(nil)
+      described_class.process([])
+      expect(described_class.instance_variable_get(:@death_watch)).to be_empty
     end
   end
 

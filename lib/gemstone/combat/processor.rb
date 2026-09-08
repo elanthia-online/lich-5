@@ -32,6 +32,11 @@ module Lich
         # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
         UNOWNED_TICK_ATTACKS = %i[pestilence web bleed].freeze
 
+        # Sequence brackets (Definitions::Sequences) whose rounds are attack
+        # events of the SAME name: a round that prints no initiation line of
+        # its own (a missed volley arrow: roll + dodge only) is still one.
+        SEQUENCE_ROUND_NAMES = %i[volley].freeze
+
         module_function
 
         # Process a chunk of game lines for combat events. Parses the chunk
@@ -286,6 +291,9 @@ module Lich
           # nil (root still known) rather than guessed. See recorder root/
           # parent_attack_id.
           spawn_root = nil
+          # The sequence bracket (Definitions::Sequences) currently open in
+          # this blob, when its rounds are events of the same name (volley).
+          active_sequence = nil
           # Rolls that could not claim a virgin sink. An array: several can
           # stack up (volley's per-arrow SMRs, trailing rider maneuvers) and
           # the old single slot silently overwrote all but the last.
@@ -570,13 +578,23 @@ module Lich
             # Spawn-class flares (Blink) fire an imbedded spell whose cast
             # unfolds as a bracketed sequence. Events inside the bracket are
             # children of the flare, not independent casts.
-            if spawn_pending && (seq = Parser.parse_sequence_start(line))
-              active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
-              spawn_pending = nil
-              respond "[Combat] Spawn sequence started: #{seq} from #{active_spawn[:flare]}" if Tracker.debug?(:verbose)
-            elsif active_spawn && Parser.parse_sequence_end(line) == active_spawn[:sequence]
-              respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
-              active_spawn = nil
+            if (seq = Parser.parse_sequence_start(line))
+              # Any sequence bracket names the rounds inside it that print no
+              # initiation of their own (a volley arrow that MISSED prints
+              # only roll + dodge line; hunt log 2026-09-07: two such arrows
+              # recorded as :unknown outside the volley tree).
+              active_sequence = seq
+              if spawn_pending
+                active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
+                spawn_pending = nil
+                respond "[Combat] Spawn sequence started: #{seq} from #{active_spawn[:flare]}" if Tracker.debug?(:verbose)
+              end
+            elsif (seq_end = Parser.parse_sequence_end(line))
+              active_sequence = nil if active_sequence == seq_end
+              if active_spawn && seq_end == active_spawn[:sequence]
+                respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
+                active_spawn = nil
+              end
             end
 
             # Assault brackets (single-target multi-round attacks: flurry,
@@ -785,8 +803,12 @@ module Lich
                     pending_resolutions = []
                     parse_state = :seeking_damage
                   else
+                    # Inside a volley bracket the round IS a volley arrow: name
+                    # it and seat it in the volley's spawn tree (the first arrow
+                    # of the round becomes the root the later arrows point at).
+                    round_name = SEQUENCE_ROUND_NAMES.include?(active_sequence) ? active_sequence : nil
                     current_event = {
-                      name: pending_ambush ? :ambush : :unknown,
+                      name: pending_ambush ? :ambush : (round_name || :unknown),
                       target: line_target, attacker: nil,
                       weapon: nil, parent: nil, hits: [],
                       statuses: [], flares: [], outcomes: [outcome],
@@ -796,6 +818,12 @@ module Lich
                       ambush: !pending_ambush.nil?,
                       resolutions: pending_resolutions
                     }
+                    if round_name
+                      # lineage as the attack branch would stamp it: first own
+                      # event of the blob roots the tree, later ones point at it
+                      spawn_root ||= current_event
+                      current_event[:root_ref] = spawn_root
+                    end
                     pending_ambush = nil
                     pending_resolutions = []
                     current_target = line_target
@@ -1460,16 +1488,22 @@ module Lich
 
         # -- death watch ---------------------------------------------------
 
-        # How many sweeps a touched creature stays watched without dying.
-        # Two chunks covers the room-refresh lag seen in real feeds; anything
-        # longer is a creature that simply survived.
-        DEATH_WATCH_SWEEPS = 3
+        # A touched creature stays watched until it dies or leaves the
+        # registry. It used to expire after three sweeps ("a much later death
+        # is not this event's"), which left creatures we fought and someone
+        # else finished minutes later marked alive (hunt log 2026-09-07: two
+        # mastodons dead in the room feed, both "Alive: true"). Credit is the
+        # recorder's call - a dead status outside any attack window credits
+        # nobody - so watching longer only fixes killed_at. Bounded FIFO.
+        DEATH_WATCH_MAX = 256
 
         def watch_for_death(id)
           return unless id
 
           @death_watch ||= {}
-          @death_watch[id.to_i] = DEATH_WATCH_SWEEPS
+          @death_watch.delete(id.to_i) # re-insert at the tail (most recent)
+          @death_watch[id.to_i] = true
+          @death_watch.shift while @death_watch.size > DEATH_WATCH_MAX
         end
 
         # Emits :status dead (add) for any watched creature whose registry
@@ -1494,8 +1528,6 @@ module Lich
               Observers.emit(:status, id: creature.id, name: creature.name,
                                       status: 'dead', action: :add)
               respond "[Combat] #{creature.name} (#{id}) confirmed dead" if Tracker.debug?(:verbose)
-            elsif (@death_watch[id] -= 1) <= 0
-              @death_watch.delete(id)
             end
           end
         end

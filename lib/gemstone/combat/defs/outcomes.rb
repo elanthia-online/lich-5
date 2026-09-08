@@ -139,6 +139,7 @@ module Lich
               # pre-emptive evade (warg, hunt log 2026-09-07): prints INSTEAD
               # of the attack line, so this is the only record of the swing
               /With preternatural speed, (?<target>.+?) bounds to safety as you move to attack #{MK_PRE}(?:him|her|it)#{MK_POST}, leaving you off-balance!/,
+              /You avoid the push!/,
               # 3p feint we saw through (also the :feint initiation line)
               /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but you aren't fooled for a second\./,
               /Unable to focus clearly, you blindly evade the attack!/,
@@ -422,7 +423,8 @@ module Lich
           # against whatever creature was current (2026-09-07 hunt log,
           # spectral_bloom leg crit on a skald -> "unknown" on the mastodon).
           CRIT_RIDER_PATTERNS = [
-            /Despite desperate windmilling to catch (?:his|her|its|their) balance, .+? topples/
+            # (the pronoun is a link in the live feed - hunt log 2026-09-07 21:03)
+            /Despite desperate windmilling to catch #{MK_PRE}(?:his|her|its|their)#{MK_POST} balance, .+? topples/
           ].freeze
 
           # @param line [String] the line right after a roll
