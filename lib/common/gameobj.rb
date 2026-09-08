@@ -126,9 +126,15 @@ module Lich
       @@staging_fam_pcs       = nil
       @@staging_contents      = {}
 
+      # Dedicated buffer for a full-replacement container refresh (DR +INV LIST+),
+      # kept separate from +@@staging_contents+ so the whole-buffer swap/discard of
+      # a full refresh can never clobber an unrelated per-container
+      # +begin_container+ refresh that happens to be in flight at the same time.
+      @@staging_all_contents   = {}
+
       # True while a full-replacement container refresh (DR +INV LIST+) is open.
-      # While set, +new_inv+ routes every container placement into
-      # +@@staging_contents+ (auto-vivifying per-container buffers) instead of the
+      # While set, +new_inv+ routes container placements not already owned by an
+      # open per-container refresh into +@@staging_all_contents+ instead of the
       # live +@@contents+, so an interrupted listing never mutates the published
       # model. See {.begin_all_containers}.
       @@staging_all_containers = false
@@ -363,12 +369,19 @@ module Lich
       # @return [GameObj]
       def self.new_inv(id, noun, name, container = nil, before = nil, after = nil)
         if container
-          target = if @@staging_all_containers
-                     # Full INV LIST refresh: stage every container so nothing
-                     # touches the live model until the listing commits cleanly.
-                     @@staging_contents[container] ||= []
+          target = if @@staging_contents.key?(container)
+                     # An explicit per-container refresh (+begin_container+, e.g. a
+                     # +clearContainer+ fill) already owns this container -- stage
+                     # into it even during a full INV LIST refresh so the two paths
+                     # never share a buffer.
+                     @@staging_contents[container]
+                   elsif @@staging_all_containers
+                     # Full INV LIST refresh: stage every other container into the
+                     # dedicated buffer so nothing touches the live model until the
+                     # listing commits cleanly.
+                     @@staging_all_contents[container] ||= []
                    else
-                     @@staging_contents[container] || (@@contents[container] ||= [])
+                     @@contents[container] ||= []
                    end
           find_or_create(target, id, noun, name, before, after)
         else
@@ -438,6 +451,7 @@ module Lich
           # staged listing commits.
           @@staging_inv&.reject! { |obj| obj.id == str_id }
           @@staging_contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
+          @@staging_all_contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
         end
         nil
       end
@@ -675,6 +689,8 @@ module Lich
       # @return [void]
       def self.clear_all_containers
         @@staging_contents.clear
+        @@staging_all_contents.clear
+        @@staging_all_containers = false
         @@contents.clear
       end
 
@@ -876,12 +892,12 @@ module Lich
       # +clearContainer+ ... +inv+ fill sequence (which has no closing tag).
       # No-op when no container refresh is open.
       #
-      # A full INV LIST refresh ({.begin_all_containers}) stages into the same
-      # +@@staging_contents+ hash, but must publish only through its own clean
-      # path ({.commit_all_containers_full}) or be discarded on interruption
-      # ({.discard_inv_refresh}). This runs at every +prompt+ via XMLParser,
-      # which fires before DRParser can discard an interrupted listing, so it
-      # must refuse to publish a partial full refresh here.
+      # A full INV LIST refresh ({.begin_all_containers}) uses its own dedicated
+      # buffer (+@@staging_all_contents+) and is published only through its clean
+      # path ({.commit_all_containers_full}) or discarded on interruption
+      # ({.discard_inv_refresh}) -- never here. While one is open this defers the
+      # ordinary per-container publish until the listing closes, so the two commit
+      # paths never interleave at an interrupting +prompt+.
       #
       # @return [void]
       def self.commit_all_containers
@@ -893,17 +909,21 @@ module Lich
       end
 
       # Opens a full-replacement refresh of ALL container contents, used by DR's
-      # +INV LIST+ (a complete recursive scrape). While open, +new_inv+ stages
-      # every container placement (see {.new_inv}) and the live +@@contents+ is
-      # left visible to readers. {.commit_all_containers_full} then swaps the
-      # whole hash in one reference assignment, so containers absent from the
-      # listing are dropped -- matching the old clear-then-fill semantics -- while
-      # an interrupted listing that never commits leaves the previous model
-      # intact (see {.discard_inv_refresh}). Pair with {.begin_inv} for worn items.
+      # +INV LIST+ (a complete recursive scrape). Staging goes into a dedicated
+      # buffer (+@@staging_all_contents+), separate from the ordinary per-container
+      # +@@staging_contents+, so an unrelated +begin_container+ refresh in flight
+      # at the same time is never clobbered by this refresh's discard/commit. While
+      # open, +new_inv+ stages every not-already-owned container placement (see
+      # {.new_inv}) and the live +@@contents+ is left visible to readers.
+      # {.commit_all_containers_full} then swaps the whole buffer in one reference
+      # assignment, so containers absent from the listing are dropped -- matching
+      # the old clear-then-fill semantics -- while an interrupted listing that
+      # never commits leaves the previous model intact (see {.discard_inv_refresh}).
+      # Pair with {.begin_inv} for worn items.
       #
       # @return [void]
       def self.begin_all_containers
-        @@staging_contents = {}
+        @@staging_all_contents = {}
         @@staging_all_containers = true
       end
 
@@ -915,20 +935,22 @@ module Lich
       def self.commit_all_containers_full
         return unless @@staging_all_containers
 
-        @@contents = @@staging_contents
-        @@staging_contents = {}
+        @@contents = @@staging_all_contents
+        @@staging_all_contents = {}
         @@staging_all_containers = false
       end
 
       # Discards an in-flight INV LIST refresh (worn + full container staging)
       # without publishing it, leaving the previously published model visible.
-      # Unlike {.discard_staged_refreshes} this touches only the inventory
-      # buffers, so it will not abort an unrelated in-flight room/familiar refresh.
+      # Unlike {.discard_staged_refreshes} this touches only the INV LIST buffers,
+      # so it will not abort an unrelated in-flight room/familiar refresh -- nor an
+      # unrelated per-container +begin_container+ refresh, which lives in the
+      # separate +@@staging_contents+ hash and commits on its own at the next prompt.
       #
       # @return [void]
       def self.discard_inv_refresh
         @@staging_inv = nil
-        @@staging_contents = {}
+        @@staging_all_contents = {}
         @@staging_all_containers = false
       end
 
@@ -961,6 +983,7 @@ module Lich
         @@staging_fam_npcs      = nil
         @@staging_fam_pcs       = nil
         @@staging_contents.clear
+        @@staging_all_contents.clear
         @@staging_all_containers = false
       end
 
@@ -1536,6 +1559,7 @@ module Lich
             *Array(@@staging_fam_loot), *Array(@@staging_fam_npcs),
             *Array(@@staging_fam_pcs), *Array(@@staging_fam_room_desc),
             *@@staging_contents.values.flatten,
+            *@@staging_all_contents.values.flatten,
             @@right_hand, @@left_hand
           ].compact
           defined?(Set) ? Set.new(objs) : objs

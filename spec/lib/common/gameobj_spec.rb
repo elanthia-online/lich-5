@@ -1282,4 +1282,50 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
   end
+
+  # A full INV LIST refresh (begin_all_containers) stages into its own dedicated
+  # buffer, so an unrelated per-container refresh (begin_container -- e.g. a
+  # clearContainer fill) that is in flight at the same time must never be
+  # clobbered by the full refresh's whole-buffer discard or commit.
+  describe 'INV LIST full refresh isolation from per-container refreshes' do
+    it 'does not drop an unrelated in-flight container when the listing is discarded' do
+      described_class.begin_all_containers          # INV LIST opens
+      described_class.begin_container('backpack')   # unrelated clearContainer refresh
+      described_class.new_inv('55', 'gem', 'a gem', 'backpack')
+
+      described_class.discard_inv_refresh           # listing interrupted -- must not wipe backpack
+      described_class.commit_all_containers         # next prompt publishes the per-container refresh
+
+      expect(described_class.containers['backpack'].map(&:id)).to eq(['55'])
+    end
+
+    it 'does not publish an unrelated half-filled container when the listing commits' do
+      described_class.begin_all_containers
+      described_class.new_inv('99', 'ring', 'a ring', 'pouch') # a real INV LIST container
+      described_class.begin_container('backpack')              # unrelated, still filling
+      described_class.new_inv('55', 'gem', 'a gem', 'backpack')
+
+      described_class.commit_all_containers_full # clean INV LIST terminator
+
+      # The full commit publishes only its own containers, never the half-filled backpack.
+      expect(described_class.containers).to have_key('pouch')
+      expect(described_class.containers).not_to have_key('backpack')
+
+      described_class.commit_all_containers         # prompt publishes the per-container refresh
+      expect(described_class.containers['backpack'].map(&:id)).to eq(['55'])
+    end
+
+    it 'preserves an already-open per-container refresh when a full refresh starts' do
+      described_class.begin_container('backpack')
+      described_class.new_inv('55', 'gem', 'a gem', 'backpack')
+
+      described_class.begin_all_containers          # INV LIST opens AFTER the per-container refresh
+      described_class.new_inv('99', 'ring', 'a ring', 'pouch')
+      described_class.commit_all_containers_full
+      described_class.commit_all_containers
+
+      expect(described_class.containers['backpack'].map(&:id)).to eq(['55'])
+      expect(described_class.containers['pouch'].map(&:id)).to eq(['99'])
+    end
+  end
 end

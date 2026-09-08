@@ -119,6 +119,7 @@ RSpec.configure do |config|
         g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
       end
       g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
+      g.class_variable_set(:@@staging_all_contents, {}) if g.class_variable_defined?(:@@staging_all_contents)
       # Full-container INV LIST refresh flag: reset so a refresh opened (and not
       # committed/discarded) by one example never leaks into the next, where it
       # would silently route new_inv into staging instead of the live registry.
