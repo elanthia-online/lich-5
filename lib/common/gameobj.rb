@@ -394,11 +394,34 @@ module Lich
       # @return [GameObj]
       def self.upsert_inv(id, noun, name, container = nil, before = nil, after = nil)
         str_id = id.is_a?(Integer) ? id.to_s : id
+        remove_inv_item(str_id)
+        new_inv(str_id, noun, name, container, before, after)
+      end
+
+      # Removes every placement of +id+ from the worn inventory (+@@inv+) and
+      # from all container contents (+@@contents+). Used as the removal half of
+      # {.upsert_inv} and to reconcile the model when an item leaves inventory
+      # for a hand (a held item is neither worn nor in a container). Leaves
+      # +@@right_hand+/+@@left_hand+ and the shared identity index untouched.
+      #
+      # A +nil+ or empty id is an explicit no-op: empty hands stream a hand tag
+      # with no +exist+ id, so this is called constantly with +nil+, and matching
+      # +obj.id == nil+ would wrongly wipe any (future) nil-id entry -- and also
+      # scan the whole inventory for nothing. The +reject!+ runs under
+      # +@@index_mutex+ (the lock +find_or_create+ holds for registry writes) so
+      # it cannot race the off-thread prune sweep that walks these registries.
+      #
+      # @param id [Integer, String, nil]
+      # @return [void]
+      def self.remove_inv_item(id)
+        str_id = id.is_a?(Integer) ? id.to_s : id
+        return if str_id.nil? || str_id.empty?
+
         @@index_mutex.synchronize do
           @@inv.reject! { |obj| obj.id == str_id }
           @@contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
         end
-        new_inv(str_id, noun, name, container, before, after)
+        nil
       end
 
       # Creates and registers a new reserve slot item.

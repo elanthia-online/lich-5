@@ -1045,9 +1045,17 @@ module Lich
             @prompt = text_string
           elsif @active_tags.include?('right')
             GameObj.new_right_hand(@obj_exist, @obj_noun, text_string)
+            # DR only: an item now held in hand is no longer worn or in a
+            # container, so drop any stale placement of it. DR has no passive
+            # container stream to self-correct this, and its containers are
+            # rebuilt only on an explicit INV LIST/SEARCH. Gated so GemStone
+            # (which relies on its own inv stream) is unaffected. Empty hands
+            # carry no exist id (@obj_exist nil), making this a safe no-op.
+            GameObj.remove_inv_item(@obj_exist) if XMLData.game =~ /^DR/
             $_CLIENT_.puts "\034GSm#{sprintf('%-45s', text_string)}\r\n" if @send_fake_tags
           elsif @active_tags.include?('left')
             GameObj.new_left_hand(@obj_exist, @obj_noun, text_string)
+            GameObj.remove_inv_item(@obj_exist) if XMLData.game =~ /^DR/ # see 'right' above
             $_CLIENT_.puts "\034GSl#{sprintf('%-45s', text_string)}\r\n" if @send_fake_tags
           elsif @active_tags.include?('spell')
             @prepared_spell = text_string
