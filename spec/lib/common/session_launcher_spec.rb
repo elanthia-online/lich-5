@@ -90,6 +90,50 @@ RSpec.describe Lich::Common::SessionLauncher do
     expect(result[:error]).to include('missing character')
   end
 
+  it 'prefers the stable frontend identity carried in launch data over legacy GAME mapping' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'FRONTEND=vellum'])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--frontend=vellum',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
+  it 'does not reuse a registry-derived custom command as a saved-entry filter' do
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem', 'FRONTEND=vellum'],
+      launch_context: { frontend: 'vellum', custom_launch: nil }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--frontend=vellum',
+      hash_including(chdir: anything)
+    )
+  end
+
+  it 'falls back to legacy GAME mapping when stable frontend identity is blank' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'FRONTEND='])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
   it 'returns structured error details when launch_data is invalid' do
     result = described_class.launch([])
     expect(result).to eq({ ok: false, error: 'launch_data must be a non-empty Array' })

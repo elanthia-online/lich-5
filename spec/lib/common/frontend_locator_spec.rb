@@ -220,7 +220,7 @@ RSpec.describe Lich::Common::FrontendLocator do
 
     expect { locator.available(gui_selectable: true) }.not_to raise_error
     expect(definitions.map { |definition| definition[:id] })
-      .to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
+      .to contain_exactly('stormfront', 'wizard', 'avalon', 'saga', 'profanity')
   end
 
   it 'refreshes cached unavailable results' do

@@ -535,6 +535,20 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(custom_launch).to eq(:__unset)
     end
 
+    it 'parses a registered custom frontend through the canonical long form' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=vellum']))
+        .to eq(['GS3', 'vellum', :__unset])
+    end
+
+    it 'does not accept an unregistered long-form frontend selector' do
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=not-registered']))
+        .to eq(['GS3', :__unset, :__unset])
+    end
+
     it 'does not report an invalid game code as a resolved instance' do
       allow(Lich).to receive(:log)
 
@@ -576,6 +590,19 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
 
     it 'assumes Profanity for a detachable client with no frontend flag' do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'], detachable_client: true)).to eq('profanity')
+    end
+
+    it 'preserves a registered custom frontend for a detachable client' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(
+        described_class.resolve_headless_frontend(
+          ['--login', 'pickasso', '--without-frontend', '--frontend=vellum'],
+          detachable_client: true
+        )
+      ).to eq('vellum')
     end
 
     it 'returns unknown when nothing can attach' do

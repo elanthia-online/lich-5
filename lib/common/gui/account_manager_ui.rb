@@ -14,6 +14,8 @@ module Lich
       # Implements the account management feature for the Lich GUI login system
       # Enhanced with data change notification capability for cross-tab synchronization
       class AccountManagerUI
+        FRONTEND_ID_COLUMN = 7
+
         # Creates and displays the account management window
         #
         # @param data_dir [String] Directory containing account data
@@ -37,6 +39,7 @@ module Lich
           @tab_communicator = nil
           @notifications_registered = false
           @tab_indices = {}
+          @frontend_selectors = []
         end
 
         # Sets the data change callback for cross-tab communication
@@ -75,7 +78,7 @@ module Lich
               # Refresh accounts view to reflect favorite changes
               refresh_accounts_display if @accounts_store
               Lich.log "info: Account manager refreshed for favorite change: #{data}"
-            when :character_added, :character_removed, :account_added, :account_removed
+            when :character_added, :character_removed, :character_updated, :account_added, :account_removed
               # Refresh accounts view for structural changes
               refresh_accounts_display if @accounts_store
               Lich.log "info: Account manager refreshed for data change: #{change_type}"
@@ -101,14 +104,34 @@ module Lich
           return unless @accounts_store
 
           begin
+            expanded_accounts = []
+            if @accounts_view
+              @accounts_store.each do |_model, path, iter|
+                expanded_accounts << iter[0] if iter[1].to_s.empty? && @accounts_view.row_expanded?(path)
+              end
+            end
             # Clear existing data
             @accounts_store.clear
 
             # Repopulate with current data
             populate_accounts_view(@accounts_store)
+            if @accounts_view
+              @accounts_store.each do |_model, path, iter|
+                @accounts_view.expand_row(path, false) if iter[1].to_s.empty? && expanded_accounts.include?(iter[0])
+              end
+            end
           rescue StandardError => e
             Lich.log "error: Error refreshing accounts display: #{e.message}"
           end
+        end
+
+        # Refreshes frontend dropdowns already mounted in account-management
+        # forms. Dialog-local selectors are created from the latest catalog.
+        # @return [void]
+        def refresh_frontends
+          @frontend_selectors.each(&:reload!)
+          reload_inline_frontends if @inline_frontend_model
+          nil
         end
 
         # Creates the accounts tab
@@ -125,9 +148,10 @@ module Lich
           accounts_box.border_width = 10
 
           # Create accounts treeview with favorites support
-          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String)
+          accounts_store = Gtk::TreeStore.new(String, String, String, String, String, String, String, String)
           @accounts_store = accounts_store # Store reference for refresh operations
           accounts_view = Gtk::TreeView.new(accounts_store)
+          @accounts_view = accounts_view
 
           # Enable sortable columns
           accounts_view.set_headers_clickable(true)
@@ -155,12 +179,9 @@ module Lich
           col.clickable = true
           accounts_view.append_column(col)
 
-          # Frontend column - sortable
-          col = Gtk::TreeViewColumn.new("Frontend", renderer, text: 3)
-          col.resizable = true
-          col.set_sort_column_id(3)
-          col.clickable = true
-          accounts_view.append_column(col)
+          @inline_frontend_model = Gtk::ListStore.new(String, String)
+          reload_inline_frontends
+          add_launch_choice_column(accounts_view, accounts_store, 'Frontend', 3, @inline_frontend_model, :frontend)
 
           # Favorites column with clickable star (not sortable)
           favorites_renderer = Gtk::CellRendererText.new
@@ -257,9 +278,9 @@ module Lich
               account = iter[0]
               character = iter[1] # Character is in column 1, not 2
               _game_name = iter[2] # Game name is in column 2, not character
-              frontend_display = iter[3] # Frontend display name
               game_code = iter[4] # Game code is in hidden column 4
               custom_launch = iter[6] # Custom launch is in hidden column 6
+              frontend = iter[FRONTEND_ID_COLUMN] # Stable frontend identifier in hidden column 7
 
               if character.nil? || character.empty?
                 # This is an account node
@@ -299,20 +320,6 @@ module Lich
                 dialog.destroy
 
                 if response == Gtk::ResponseType::YES
-                  # Convert display name back to internal frontend format for precise removal
-                  frontend = case frontend_display.downcase
-                             when 'custom'
-                               'stormfront' # Custom launches use stormfront as base
-                             when 'wrayth'
-                               'stormfront' # Wrayth is display name for stormfront
-                             when 'wizard'
-                               'wizard'
-                             when 'avalon'
-                               'avalon'
-                             else
-                               frontend_display.downcase
-                             end
-
                   # Remove character with frontend precision
                   if AccountManager.remove_character(@data_dir, account, character, game_code, frontend, custom_launch)
                     @msgbox.call("Character removed successfully.")
@@ -400,6 +407,7 @@ module Lich
           frontend_box.pack_start(Gtk::Label.new("Frontend:"), expand: false, fill: false, padding: 0)
 
           frontend_selector = FrontendSelector.new(refresh: false)
+          @frontend_selectors << frontend_selector
           frontend_box.pack_start(frontend_selector.widget, expand: true, fill: true, padding: 0)
 
           add_box.pack_start(frontend_box, expand: false, fill: false, padding: 0)
@@ -551,7 +559,7 @@ module Lich
               if auth_data && auth_data.is_a?(Array) && !auth_data.empty?
                 # Show frontend selection dialog
                 selected_frontend = show_frontend_selection_dialog
-                return if selected_frontend.nil? # User cancelled
+                next if selected_frontend.nil? # User cancelled
 
                 # Convert character data to the format expected by YAML storage
                 character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(auth_data, selected_frontend)
@@ -749,6 +757,77 @@ module Lich
 
         private
 
+        # Rebuilds inline options from the same catalog as Add Character.
+        # @return [void]
+        def reload_inline_frontends
+          @inline_frontend_model.clear
+          FrontendSelector.new(refresh: false).choices.each do |id, label|
+            option = @inline_frontend_model.append
+            option[0], option[1] = id, label
+          end
+        end
+
+        # Adds a character-only dropdown; selection is staged until editing commits.
+        #
+        # @param view [Gtk::TreeView] destination account view
+        # @param store [Gtk::TreeStore] saved entry model
+        # @param title [String] column heading
+        # @param index [Integer] display column in the saved entry model
+        # @param options [Gtk::ListStore] stable identifier and label pairs
+        # @param field [Symbol] launch setting to update
+        # @return [void]
+        # @api private
+        def add_launch_choice_column(view, store, title, index, options, field)
+          cell = Gtk::CellRendererCombo.new
+          cell.model = options
+          cell.text_column = 1
+          cell.has_entry = false
+          column = Gtk::TreeViewColumn.new(title, cell, text: index)
+          column.resizable = true
+          column.set_cell_data_func(cell) do |_column, renderer, _model, iter|
+            renderer.editable = !iter[1].to_s.empty?
+          end
+          pending = nil
+          cell.signal_connect('editing-started') { pending = nil }
+          cell.signal_connect('changed') do |_renderer, path, selected|
+            pending = nil
+            if selected && (iter = store.get_iter(path))
+              # Keep the original entry identity, not a TreeIter invalidated by
+              # a queued model refresh or a path that may later identify another row.
+              pending = [path, Array.new(8) { |column_index| iter[column_index] }, options.get_value(selected, 0)]
+            end
+          end
+          cell.signal_connect('edited') do |_renderer, path, _label|
+            selection = pending
+            pending = nil
+            commit_saved_launch(selection[1], field => selection[2]) if selection && selection[0] == path
+          end
+          cell.signal_connect('editing-canceled') { pending = nil }
+          view.append_column(column)
+        end
+
+        # Saves the selected row only; cancelling a cell edit never calls here.
+        # @param iter [Gtk::TreeIter] selected character row
+        # @param updates [Hash] launch fields selected by the user
+        # @return [void]
+        def commit_saved_launch(iter, updates)
+          return unless iter && !iter[1].to_s.empty?
+
+          account, character, game_code = iter[0], iter[1], iter[4]
+          old_frontend, custom_launch = iter[FRONTEND_ID_COLUMN], iter[6]
+          if AccountManager.update_launch_settings(@data_dir, account, character, game_code,
+                                                   old_frontend: old_frontend, custom_launch: custom_launch, **updates)
+            Gtk.queue do
+              refresh_accounts_display
+              notify_data_changed(:character_updated, { account: account, character: character, game_code: game_code })
+            end
+          else
+            Gtk.queue do
+              @msgbox.call('Could not save the frontend. Check custom-launch compatibility, or refresh if this entry changed or already exists.')
+            end
+          end
+        end
+
         # Notifies other tabs of data changes
         # Triggers the data change callback if one is registered
         #
@@ -864,6 +943,7 @@ module Lich
         # @param favorites_col [Gtk::TreeViewColumn] Favorites column
         # @param data_dir [String] Data directory
         # @return [void]
+        # @api private
         def setup_favorites_column_handler(accounts_view, favorites_col, data_dir)
           accounts_view.signal_connect('button-press-event') do |_widget, event|
             if event.button == 1 # Left click
@@ -874,20 +954,8 @@ module Lich
                   account = iter[0]
                   character = iter[1]
                   game_code = iter[4]
-                  frontend_display = iter[3]
+                  frontend = iter[FRONTEND_ID_COLUMN]
                   custom_launch = iter[6]
-
-                  # Convert display name back to internal frontend format
-                  frontend = case frontend_display.downcase
-                             when 'wrayth', 'custom'
-                               'stormfront'
-                             when 'wizard'
-                               'wizard'
-                             when 'avalon'
-                               'avalon'
-                             else
-                               frontend_display.downcase
-                             end
 
                   # Toggle favorite status with frontend precision
                   new_status = FavoritesManager.toggle_favorite(
@@ -1152,6 +1220,7 @@ module Lich
         #
         # @param store [Gtk::TreeStore] Tree store to populate
         # @return [void]
+        # @api private
         def populate_accounts_view(store)
           store.clear
 
@@ -1173,10 +1242,11 @@ module Lich
               if character[:custom_launch] && !character[:custom_launch].empty?
                 char_iter[3] = 'Custom'
               else
-                char_iter[3] = character[:frontend].capitalize == 'Stormfront' ? 'Wrayth' : character[:frontend].capitalize
+                char_iter[3] = Frontend.display_name(character[:frontend])
               end
               char_iter[4] = character[:game_code] # Store game_code in hidden column
               char_iter[6] = character[:custom_launch] # Store custom launch in hidden column
+              char_iter[FRONTEND_ID_COLUMN] = character[:frontend]
 
               # Add favorites information with frontend precision
               is_favorite = FavoritesManager.is_favorite?(

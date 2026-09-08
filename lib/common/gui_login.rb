@@ -10,6 +10,7 @@ require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
+require_relative 'gui/frontend_manager_tab'
 require_relative 'gui/frontend_selector'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
@@ -252,7 +253,7 @@ module Lich
     #
     # Configures the communication system that allows tabs to notify
     # each other of data changes for real-time synchronization.
-    # Enhanced to include manual login tab cache refresh for account/character removal events.
+    # Refreshes every entry cache after data mutations, including launch-setting edits.
     #
     # @return [void]
     def setup_cross_tab_communication
@@ -264,10 +265,7 @@ module Lich
         # Refresh saved login tab for all data changes to ensure synchronization
         @saved_login_tab.refresh_data if @saved_login_tab
 
-        # Refresh manual login tab cache when accounts are removed to prevent stale data
-        if @manual_login_tab && (change_type == :account_removed || change_type == :character_removed)
-          @manual_login_tab.refresh_entry_data
-        end
+        @manual_login_tab.refresh_entry_data if @manual_login_tab
 
         # Sanitize data before logging to prevent password exposure
         sanitized_data = data.dup
@@ -293,6 +291,7 @@ module Lich
     # with appropriate callbacks and UI elements.
     #
     # @return [void]
+    # @api private
     def create_tab_instances
       # Create callbacks for saved login tab
       saved_login_callbacks = {
@@ -416,6 +415,15 @@ module Lich
         @autosort_state
       )
 
+      @frontend_manager_tab = Lich::Common::GUI::FrontendManagerTab.new(
+        data_dir: DATA_DIR,
+        on_changed: -> {
+          @saved_login_tab&.refresh_frontends
+          @manual_login_tab&.refresh_frontends
+          @account_manager_ui&.refresh_frontends
+        }
+      )
+
       # Get UI elements from tabs
       @saved_login_ui = @saved_login_tab.ui_elements
       @manual_login_ui = @manual_login_tab.ui_elements
@@ -423,6 +431,7 @@ module Lich
       # Set references to UI elements
       @quick_game_entry_tab = @saved_login_tab.tab_widget
       @game_entry_tab = @manual_login_tab.tab_widget
+      @frontends_tab = @frontend_manager_tab.widget
       @custom_launch_entry = @manual_login_ui[:custom_launch_entry]
       @custom_launch_dir = @manual_login_ui[:custom_launch_dir]
       @bonded_pair_char = @saved_login_ui[:bonded_pair_char]
@@ -435,6 +444,7 @@ module Lich
     # Creates the notebook widget and adds all tabs to it.
     #
     # @return [void]
+    # @api private
     def setup_notebook
       @notebook = Gtk::Notebook.new
 
@@ -470,6 +480,7 @@ module Lich
 
       # Add the account management tab to the main notebook
       @notebook.append_page(@account_mgmt_tab, Gtk::Label.new('Account Management'))
+      @notebook.append_page(@frontends_tab, Gtk::Label.new('Frontends'))
 
       # Set tab position
       @notebook.set_tab_pos(:top)
@@ -609,8 +620,9 @@ module Lich
     #
     # @return [void]
     def hide_optional_elements
-      @custom_launch_entry.visible = false
-      @custom_launch_dir.visible = false
+      # Manual Login owns its checkbox visibility, including Custom's initial
+      # selection when no installed client is available. Its fields opt out of
+      # show_all, so window refreshes need not reset that selection here.
       @bonded_pair_char.visible = false
       @bonded_pair_inst.visible = false
       @slider_box.visible = false

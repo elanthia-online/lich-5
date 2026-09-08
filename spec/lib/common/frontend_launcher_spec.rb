@@ -78,6 +78,83 @@ RSpec.describe Lich::Common::FrontendLauncher do
     )
   end
 
+  it 'appends configured arguments to structured built-in launch plans' do
+    definition = Lich::Common::Frontend.definition_for('saga')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('saga').and_return(
+      definition.merge(metadata: definition[:metadata].merge(additional_arguments: ['--profile', 'Test profile']))
+    )
+
+    plan = described_class.spawn_plan(
+      'saga',
+      host: '127.0.0.1',
+      port: 12_345,
+      key: 'secret',
+      platform_key: :darwin
+    )
+
+    expect(plan.argv).to eq(['/usr/bin/open', '-n', '-b', 'com.auchand.saga', '--args', '--profile', 'Test profile'])
+  end
+
+  it 'honors a configured macOS Saga application executable' do
+    definition = Lich::Common::Frontend.definition_for('saga')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('saga').and_return(
+      definition.merge(
+        metadata: definition[:metadata].merge(
+          configured_executable: '/Applications/Saga Preview.app/Contents/MacOS/Saga',
+          additional_arguments: ['--profile', 'Test profile']
+        )
+      )
+    )
+    resolution = Lich::Common::FrontendLocator::Resolution.new(
+      frontend_id: 'saga',
+      executable_path: '/Applications/Saga Preview.app/Contents/MacOS/Saga',
+      source: :configured
+    )
+    allow(locator).to receive(:resolve).with('saga', refresh: false).and_return(resolution)
+
+    plan = described_class.spawn_plan(
+      'saga',
+      host: '127.0.0.1',
+      port: 12_345,
+      key: 'secret',
+      platform_key: :darwin,
+      locator: locator,
+      refresh: false
+    )
+
+    expect(plan.argv).to eq(
+      ['/usr/bin/open', '-n', '-a', '/Applications/Saga Preview.app', '--args', '--profile', 'Test profile']
+    )
+  end
+
+  it 'honors a configured standalone macOS Saga executable for managed login' do
+    definition = Lich::Common::Frontend.definition_for('saga')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('saga').and_return(
+      definition.merge(
+        metadata: definition[:metadata].merge(
+          configured_executable: '/Users/test/bin/saga-preview',
+          additional_arguments: ['--profile', 'Tsetem']
+        )
+      )
+    )
+    resolution = Lich::Common::FrontendLocator::Resolution.new(
+      frontend_id: 'saga',
+      executable_path: '/Users/test/bin/saga-preview',
+      source: :configured
+    )
+    allow(locator).to receive(:resolve).with('saga', refresh: true).and_return(resolution)
+
+    plan = described_class.saga_managed_login_plan(
+      account: 'TESTACCOUNT',
+      character: 'Tsetem',
+      game_code: 'GS3',
+      platform_key: :darwin,
+      locator: locator
+    )
+
+    expect(plan.argv).to eq(['/Users/test/bin/saga-preview', '--profile', 'Tsetem'])
+  end
+
   it 'builds a keyless macOS Saga-managed Via-Lich login plan' do
     plan = described_class.saga_managed_login_plan(
       account: 'TESTACCOUNT',
@@ -207,6 +284,23 @@ RSpec.describe Lich::Common::FrontendLauncher do
     ).to eq('/usr/bin/open -n -a /Applications/Avalon\\ 4.4.app "%1"')
   end
 
+  it 'passes configured Avalon arguments through open to the application' do
+    definition = Lich::Common::Frontend.definition_for('avalon')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('avalon').and_return(
+      definition.merge(metadata: definition[:metadata].merge(additional_arguments: ['--profile', 'Test profile']))
+    )
+    resolution = Lich::Common::FrontendLocator::Resolution.new(
+      frontend_id: 'avalon',
+      executable_path: '/Applications/Avalon.app/Contents/MacOS/Avalon',
+      source: :application
+    )
+    allow(locator).to receive(:resolve).with('avalon', refresh: true).and_return(resolution)
+
+    expect(
+      described_class.command('avalon', platform_key: :darwin, locator: locator)
+    ).to eq('/usr/bin/open -n -a /Applications/Avalon.app "%1" --args --profile Test\\ profile')
+  end
+
   it 'reports a missing Avalon executable' do
     allow(locator).to receive(:resolve).with('avalon', refresh: true).and_return(nil)
 
@@ -239,6 +333,72 @@ RSpec.describe Lich::Common::FrontendLauncher do
     )
 
     expect(command).to eq('launcher.exe "%1"')
+  end
+
+  it 'keeps Windows configured arguments separate from the executable template' do
+    definition = Lich::Common::Frontend.definition_for('stormfront')
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('stormfront').and_return(
+      definition.merge(metadata: definition[:metadata].merge(additional_arguments: ['--profile', 'Test profile']))
+    )
+
+    command = described_class.command(
+      'stormfront',
+      platform_key: :windows,
+      simu_launcher: -> { 'launcher.exe "%1"' }
+    )
+
+    expect(command).to eq(['launcher.exe', '%1', '--profile', 'Test profile'])
+  end
+
+  it 'builds configured custom commands while retaining connection placeholders' do
+    allow(Lich::Common::Frontend).to receive(:definition_for).with('vellum').and_return(
+      id: 'vellum',
+      capabilities: [:xml],
+      metadata: {
+        launcher_adapter: :custom,
+        launch_command: '/opt/Vellum FE/vellum --port=%port% --key=%key%',
+        additional_arguments: ['--profile', 'Test profile']
+      }
+    )
+
+    expect(described_class.command('vellum')).to eq(
+      '/opt/Vellum FE/vellum --port=%port% --key=%key% --profile Test\\ profile'
+    )
+  end
+
+  it 'keeps process-local frontend identity out of native session data' do
+    launch_data = [
+      'KEY=secret',
+      'FRONTEND=vellum',
+      'GAME=STORM'
+    ]
+
+    expect(described_class.native_session_data(launch_data)).to eq(
+      ['KEY=secret', 'GAME=STORM']
+    )
+    expect(launch_data).to include('FRONTEND=vellum')
+  end
+
+  it 'renders every connection placeholder in a configured command' do
+    command = 'frontend --host=%host% --port=%port% --again=%port% --key=%key%'
+
+    expect(
+      described_class.render_connection(command, host: '127.0.0.1', port: 12_345, key: 'secret')
+    ).to eq('frontend --host=127.0.0.1 --port=12345 --again=12345 --key=secret')
+  end
+
+  it 'does not confuse literal sentinel-like text with a connection placeholder' do
+    definition = {
+      id: 'literal',
+      metadata: {
+        launcher_adapter: :custom,
+        additional_arguments: ['LICH_FRONTEND_KEY_PLACEHOLDER', '--key=%key%']
+      }
+    }
+
+    expect(described_class.with_additional_arguments('frontend', definition)).to eq(
+      'frontend LICH_FRONTEND_KEY_PLACEHOLDER --key=%key%'
+    )
   end
 
   it 'reports an unavailable Simutronics launcher' do
