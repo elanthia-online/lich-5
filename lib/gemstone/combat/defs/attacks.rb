@@ -338,6 +338,11 @@ module Lich
               # whip's miss rides the same line (:miss outcome)
               /(?<attacker>.+?) manifests a thick pseudopod and brings it smashing down at (?<target>you|.+?)!/,
               /(?<attacker>.+?) whips a thick pseudopod at (?<target>you|.+?)!/,
+              # the ooze's vitality drain: touch, then "Dizziness rushes
+              # through you..." and the damage line
+              /(?<attacker>.+?) whips a pseudopod toward (?<target>you|.+?), brushing/,
+              # halfling cannibal ambush swing (hunt log 2026-09-07 23:34)
+              /With an ululating shriek, (?<attacker>.+?) leaps from the shadows and hammers blindly at (?<target>you|.+?) with grimy little fists!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,
@@ -471,7 +476,13 @@ module Lich
             AttackDef.new(:bleed, [
               /Blood weeps from (?<target>.+?)'s#{MK_POST} open .+? wound\./,
               /(?<target>.+?)'s#{MK_POST} .+? drips as #{MK_PRE}(?:he|she|it)#{MK_POST} continues to bleed\./,
+              /Trickles of blood course from (?<target>.+?)'s#{MK_POST} .+?\./,
               /(?<target>Your) .+? drips as you continue to bleed\./
+            ].freeze),
+            # Rot tick (a nearby player's curse on a creature; hunt log
+            # 2026-09-07 23:36). Unowned like bleed.
+            AttackDef.new(:rot, [
+              /Skin peels off (?<target>.+?)'s#{MK_POST} body, exposing rotting flesh\./
             ].freeze)
           ].freeze
 

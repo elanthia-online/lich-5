@@ -30,7 +30,7 @@ module Lich
         # 2026-09-06). A tick IS ours only when our own cast of that spell
         # is visible in the same blob (see cast_owner tracking below).
         # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
-        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed spiritual_malady].freeze
+        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady].freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the

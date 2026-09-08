@@ -1072,6 +1072,32 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(malady.map { |e| [e[:name], e[:unowned], e[:target][:id], e[:hits].map { |h| h[:damage] }] }).to eq([[:spiritual_malady, true, 129575116, [5]]])
     end
 
+    it 'parses the ooze vitality drain, the cannibal ambush swing, and rot / neck-bleed ticks' do
+      ooze = bolded(129635928, 'ooze', 'a quivering sanguine ooze')
+      drain = described_class.parse_events([
+                                             "#{ooze} whips a pseudopod toward you, brushing your exposed flesh.  The layer of bark on you hardens and absorbs the magical energy!  The bark crackles, but maintains its form.",
+                                             "  Dizziness rushes through you as #{bolded(129635928, 'ooze', "the ooze's")} appendage siphons away your vitality!",
+                                             '   ... 20 points of damage!'
+                                           ])
+      expect(drain.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:hits].map { |h| h[:damage] }] }).to eq([[:natural, true, 129635928, [20]]])
+      cannibal = bolded(129776223, 'cannibal', 'a bloody halfling cannibal')
+      ambush = described_class.parse_events([
+                                              "With an ululating shriek, #{cannibal} leaps from the shadows and hammers blindly at you with grimy little fists!",
+                                              '  AS: +476 vs DS: +585 with AvD: +25 + d100 roll: +48 = -36',
+                                              '   A clean miss.'
+                                            ])
+      expect(ambush.map { |e| [e[:name], e[:inbound], e[:outcomes], e[:resolutions].size] }).to eq([[:natural, true, [:miss], 1]])
+      mutant = bolded(129870380, 'mutant', 'a squamous reptilian mutant')
+      ticks = described_class.parse_events([
+                                             "Skin peels off #{mutant}'s body, exposing rotting flesh.",
+                                             '   ... 2 points of damage!',
+                                             '   Unpleasant wound to left arm!',
+                                             "Trickles of blood course from #{bolded(129870380, 'mutant', 'the reptilian mutant')}'s neck.",
+                                             '   ... 4 points of damage!'
+                                           ])
+      expect(ticks.map { |e| [e[:name], e[:unowned], e[:hits].map { |h| h[:damage] }] }).to eq([[:rot, true, [2]], [:bleed, true, [4]]])
+    end
+
     it 'wraps a held pre-flare as its own event when no swing follows in the next chunk' do
       nock_chunk = [
         " ** Your <a exist=\"125479289\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}! **",
