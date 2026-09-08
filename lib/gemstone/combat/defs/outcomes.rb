@@ -144,6 +144,8 @@ module Lich
               /You avoid the push!/,
               # sanguine ooze shrapnel burst dodged
               /Bobbing and weaving, you dodge the spray of shrapnel!/,
+              # gigas disciple leech fling dodged (same line as the fling)
+              /You duck to narrowly avoid the flying vermiforms!/,
               # 3p feint we saw through (also the :feint initiation line)
               /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but you aren't fooled for a second\./,
               /Unable to focus clearly, you blindly evade the attack!/,

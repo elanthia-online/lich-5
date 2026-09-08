@@ -429,6 +429,23 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(query('SELECT DISTINCT source FROM statuses').map { |r| r['source'] }).to eq(['window'])
     end
 
+    it 'files a status under the attack the processor names (attack_uid), not the last one emitted' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      fire = attack_event(target_id: 202, target_name: 'an orc', _uid: 0, root_uid: 0)
+      fire[:flares] = [{ name: :phosphorescence, damaging: true, target_info: { id: 202, name: 'an orc' }, hits: [{ damage: 5, crit: nil }] }]
+      cast = attack_event(name: 'cast', target_id: nil, target_name: nil, inbound: true, _uid: 1, root_uid: 1,
+                          attacker: { id: 202, name: 'an orc' })
+      cast[:hits] = []
+      rec.record(:attack, fire)
+      rec.record(:attack, cast)
+      rec.record(:status, { id: 202, name: 'an orc', status: :blind, action: :add, flare_seq: 1, attack_uid: 0 })
+      rec.close
+
+      row = query('SELECT s.source, a.name AS attack, f.name AS flare FROM statuses s JOIN attacks a ON a.id = s.attack_id LEFT JOIN flares f ON f.id = s.flare_id').first
+      expect([row['source'], row['attack'], row['flare']]).to eq(['event', 'fire', 'phosphorescence'])
+    end
+
     it 'marks a status with no matching open attack as direct' do
       rec = new_recorder
       rec.start_session(at: Time.at(1))

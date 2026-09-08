@@ -747,6 +747,35 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       blinds = emitted.select { |t, p| t == :status && p[:status] == :blind }
       expect(blinds.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[121654846, 1], [121678494, 3]])
     end
+
+    it "files a flare-and-status line (nature's decay) on its own flare, not the one before it" do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      dbl = instance_double('Creature', id: 129649881, name: 'a flayed gigas disciple')
+      allow(dbl).to receive(:add_status)
+      allow(registry).to receive(:[]).with(129649881).and_return(dbl)
+      emitted = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      described_class.instance_variable_set(:@deferred_emits, nil)
+      disc = bolded(129649881, 'disciple', 'a flayed gigas disciple')
+      events = described_class.parse_events([
+                                              "** Your <a exist=\"129604585\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around #{bolded(129649881, 'disciple', 'the gigas disciple')}! **",
+                                              "You fire a faewood arrow at #{disc}!",
+                                              '  AS: +652 vs DS: +602 with AvD: +32 + d100 roll: +95 = +177',
+                                              '   ... and hit for 30 points of damage!',
+                                              "   Strike pierces #{bolded(129649881, 'disciple', "the gigas disciple's")} forearm!",
+                                              "   #{bolded(129649881, 'disciple', 'The gigas disciple')} is stunned!",
+                                              "#{disc} is buffeted by a burst of wind and pushed back!",
+                                              "The earthy, sweet aroma clinging to #{disc} grows more pervasive.",
+                                              'Vital energy infuses you, hastening your arcane reflexes!'
+                                            ])
+      expect(events.first[:flares].map { |f| f[:name] }).to eq(%i[dispel breeze natures_decay arcane_reflex])
+      decay = emitted.select { |t, p| t == :status && p[:status].to_s == 'natures_decay' }
+      expect(decay.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[129649881, 3]])
+      # the swing's own crit stun is not the dispel pre-flare's doing
+      stun = emitted.select { |t, p| t == :status && p[:status].to_s == 'stunned' }
+      expect(stun.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[129649881, nil]])
+    end
   end
 
   describe 'hunt-log defs 2026-09-07 (session 4 audit)' do
@@ -1009,11 +1038,29 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(fire[:hits].map { |h| h[:damage] }).to eq([21])
       phos = fire[:flares].find { |f| f[:name] == :phosphorescence }
       expect(phos[:hits].map { |h| h[:damage] }).to eq([25])
+      # weaponless flares (nature's decay, arcane reflex) resume the shot too
+      expect(fire[:flares].map { |f| f[:name] }).to contain_exactly(:natures_decay, :arcane_reflex, :phosphorescence)
       expect(cast[:hits]).to be_empty
       expect(cast[:flares]).to be_empty
       expect(cast[:outcomes]).to eq([:warded])
       expect(cast[:resolutions].map { |r| r[:type] }).to eq([:cs_td])
       expect(cast[:attacker]).to include(id: 129623615, name: 'flayed gigas disciple')
+    end
+
+    it 'names the resumed shot (attack_uid) on the blind its flare inflicted, though the cast emits last' do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      dbl = double('Creature', id: 129623615, name: 'a flayed gigas disciple').as_null_object
+      allow(registry).to receive(:[]).with(129623615).and_return(dbl)
+      emitted = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      lines = File.readlines(File.join(__dir__, '../../../fixtures/cloak_of_shadows_interrupt.txt'), chomp: true)
+      described_class.process(lines)
+      attacks = emitted.select { |t, _| t == :attack }.map { |_, e| [e[:name], e[:_uid]] }
+      expect(attacks).to eq([[:fire, 0], [:cast, 1]])
+      blind = emitted.find { |t, p| t == :status && p[:status] == :blind }.last
+      expect(blind).to include(attack_uid: 0, flare_seq: 3)
+      expect(blind).not_to have_key(:_event)
     end
 
     it 'keeps an ooze splitting on the hit off the target switcher (raw chunk 23:19:53)' do
@@ -1070,6 +1117,37 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                               '   Unpleasant wound to right arm!'
                                             ])
       expect(malady.map { |e| [e[:name], e[:unowned], e[:target][:id], e[:hits].map { |h| h[:damage] }] }).to eq([[:spiritual_malady, true, 129575116, [5]]])
+    end
+
+    it "parses the disciple's leech fling with its held roll and same-line dodge" do
+      disc = bolded(129649883, 'disciple', 'a flayed gigas disciple')
+      events = described_class.parse_events([
+                                              'The layer of bark on you hardens and absorbs the attack!  The bark crackles, but maintains its form.',
+                                              '<pushBold/>[SMR result: 0 (Open d100: 81, Penalty: 3)]<popBold/>',
+                                              "#{disc} reaches into a pouch at #{bolded(129649883, 'disciple', 'her')} waist and draws back a hand covered in fat leeches, so deep a violet in hue as to be almost black.  With a fleshless sneer, she flings the parasites at you!  You duck to narrowly avoid the flying vermiforms!"
+                                            ])
+      # the barkskin absorb stays its own intercepted unknown (an attack
+      # the bark ate whole); the fling owns the roll and the dodge
+      expect(events.map { |e| [e[:name], e[:outcomes]] }).to contain_exactly([:natural, [:evade]], [:unknown, [:intercept]])
+      fling = events.find { |e| e[:name] == :natural }
+      expect([fling[:inbound], fling[:attacker][:id], fling[:resolutions].map { |r| r[:result] }]).to eq([true, 129649883, [0]])
+    end
+
+    it "gives a creature's warding-spell effect line the caster of the cast it follows (disciple's wither)" do
+      disc = bolded(129649881, 'disciple', 'a flayed gigas disciple')
+      events = described_class.parse_events([
+                                              "A dark shadowy tendril rises up from #{disc}, writhes its way up a <a exist=\"129604585\" noun=\"bow\">scorched glowbark long bow</a> towards you and lashes out malevolently...",
+                                              "The force of #{bolded(129649881, 'disciple', "a flayed gigas disciple's")} power warps the air as it surges toward you!",
+                                              '  CS: +497 - TD: +485 + CvA: +13 + d100: +92 - -5 == +122',
+                                              '  Warding failed!',
+                                              'The layer of bark on you hardens and absorbs the magical energy!  The bark crackles, but maintains its form.',
+                                              'A nebulous haze shimmers into view around you, plunging inward to envelop your left eye!',
+                                              '   ... 10 points of damage!',
+                                              '   Left eyelid turns to dust, causing you to blink rapidly, or try to.',
+                                              'Cloudy tendrils writhe throughout your form, ravaging you for 15 points of damage!'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound], e[:attacker]&.[](:id), e[:hits].map { |h| h[:damage] }] })
+        .to eq([[:cast, true, 129649881, []], [:wither, true, 129649881, [10, 15]]])
     end
 
     it 'parses the ooze vitality drain, the cannibal ambush swing, and rot / neck-bleed ticks' do

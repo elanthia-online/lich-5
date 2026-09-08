@@ -7,6 +7,8 @@ The force of <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disc
   CS: +497 - TD: +501 + CvA: +13 + d100: +57 - -5 == +71
   Warded off!
 A few nebulous wisps coalesce about you before dissipating in a confused spiral.
+Soot brown specks of leaf mold trail in the wake of <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple's</a><popBold/> movements, distorted by a murky haze.
+Vital energy infuses you, hastening your arcane reflexes!
 
 ** Countless points of pale phosphorescence awaken across your <a exist="129604585" noun="bow">glowbark long bow</a>, rapidly brightening before bursting into brilliant light around <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple</a><popBold/>! **
    ... 25 points of damage!

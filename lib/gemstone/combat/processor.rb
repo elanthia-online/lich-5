@@ -87,6 +87,16 @@ module Lich
             event.delete(:root_ref)
             event.delete(:parent_ref)
           end
+          # Parse-phase status facts remember the event they rode (:_event,
+          # an object ref). Resolve it to that event's _uid so the recorder
+          # files the status under THAT attack, not under whatever attack it
+          # emitted last: a creature's cast that interrupted our swing emits
+          # after it, and the swing's blinds fell off the swing (hunt log
+          # 2026-09-07 23:50, cloak of shadows).
+          @deferred_emits&.each do |_, payload|
+            ev = payload.delete(:_event)
+            payload[:attack_uid] = uids[ev] if ev && uids.key?(ev)
+          end
           events.each do |event|
             event[:at] = at
             persist_event(event)
@@ -112,6 +122,7 @@ module Lich
           if @deferred_emits
             @deferred_emits << [type, payload]
           else
+            payload.delete(:_event)
             Observers.emit(type, payload)
           end
         end
@@ -119,7 +130,10 @@ module Lich
         def flush_deferred_emits
           pending = @deferred_emits
           @deferred_emits = nil
-          pending&.each { |type, payload| Observers.emit(type, payload) }
+          pending&.each do |type, payload|
+            payload.delete(:_event) # unresolved (no events emitted this chunk)
+            Observers.emit(type, payload)
+          end
         end
 
         PROMPT_TIME_PATTERN = /<prompt time="(\d+)"/.freeze
@@ -288,6 +302,12 @@ module Lich
           # log 2026-09-07 23:18, flayed gigas disciple). Our next own flare
           # line resumes the interrupted event.
           interrupted_own = nil
+          # Attacker of the last inbound event saved this blob. A creature's
+          # warding spell that lands prints its effect as an attackerless
+          # spell-result line right after the cast's "Warding failed!"
+          # (disciple's wither: "A nebulous haze shimmers into view around
+          # you", hunt log 2026-09-07 23:50) - the effect is that caster's.
+          last_inbound_attacker = nil
           current_event = nil
           parse_state = :seeking_attack
           current_target = nil
@@ -475,12 +495,31 @@ module Lich
                 status_flare_seq = lambda do |cid|
                   next nil unless current_event && cid
                   flares = current_event[:flares] || []
+                  # A line that is itself a flare AND a status (nature's
+                  # decay's "earthy, sweet aroma ... grows more pervasive")
+                  # rides the flare it announces - which the flare branch
+                  # below has not appended yet, so it is the NEXT position.
+                  # Without this the status sat on the flare before it
+                  # (breeze, hunt log 2026-09-07 23:50). Not when the flare
+                  # is about to resume an interrupted swing (see
+                  # interrupted_own): the positions belong to another event.
+                  if (lf = Parser.parse_flare(line)) && !(current_event[:inbound] && interrupted_own)
+                    lf_id = lf[:target].to_s[/exist="(-?\d+)"/, 1]&.to_i
+                    if lf_id == cid || (lf_id.nil? && current_event[:target] && current_event[:target][:id] == cid)
+                      next flares.size + 1
+                    end
+                  end
                   f = if flare_ctx && flare_ctx[:target_info]
                         flare_ctx if flare_ctx[:target_info][:id] == cid
                       elsif flare_ctx && current_event[:target] && current_event[:target][:id] == cid
                         flare_ctx
                       end
-                  f ||= flares.reverse.find { |x| x[:target_info] && x[:target_info][:id] == cid }
+                  # Only flares that printed AFTER the swing line: a status
+                  # right after the swing's crit ("Strike pierces forearm!
+                  # The mutant is stunned!") is the swing's, even when a
+                  # pre-flare (dispel, ensorcell) named the creature first
+                  # (hunt log 2026-09-07 23:51).
+                  f ||= flares.reverse.find { |x| !x[:_pre] && x[:target_info] && x[:target_info][:id] == cid }
                   f && (i = flares.index(f)) ? i + 1 : nil
                 end
                 if line_target && line_target[:id]
@@ -488,7 +527,7 @@ module Lich
                   line_status_id = line_target[:id]
                   if status_result.is_a?(Hash)
                     apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action],
-                                           flare_seq: status_flare_seq.call(line_target[:id]))
+                                           flare_seq: status_flare_seq.call(line_target[:id]), event: current_event)
                   else
                     # Legacy format - status_result is just the status symbol
                     apply_status_to_target(status_result, line_target[:name], line_target[:id], :add)
@@ -511,7 +550,7 @@ module Lich
                   line_status_id = subject[:id]
                   apply_status_to_target(status_result[:status], subject[:name],
                                          subject[:id], status_result[:action],
-                                         flare_seq: status_flare_seq.call(subject[:id]))
+                                         flare_seq: status_flare_seq.call(subject[:id]), event: current_event)
                 elsif status_result.is_a?(Hash) && line.match?(/\A\s*Your?\b/)
                   # 2p: the status is OURS ("You are stunned!"). Never a
                   # creature application - but it IS a fact (inbound
@@ -597,10 +636,17 @@ module Lich
               # The reject clause still matters: when two weapons' flares
               # fire back to back with no attack line between them, the
               # weapon name is the ONLY thing telling them apart.
-              # Our own flare ("your <weapon>") arriving while a creature's
-              # inbound attack is the open event: it belongs to the own swing
-              # that attack interrupted - resume it (see interrupted_own).
-              if current_event && current_event[:inbound] && interrupted_own && line.match?(/\byour\b/i)
+              # Our own flare arriving while a creature's inbound attack is
+              # the open event: it belongs to the own swing that attack
+              # interrupted - resume it (see interrupted_own). Not only the
+              # "your <weapon>" lines: the disciple's cloak-of-shadows cast
+              # also cut in front of our nature's decay ("Soot brown specks
+              # ... in the wake of <creature>"), breeze and arcane reflex
+              # ("Vital energy infuses you") lines, which name no weapon
+              # (hunt log 2026-09-07 23:50). A creature's cast has no flares
+              # of its own; anything the swing could own resumes it.
+              if current_event && current_event[:inbound] && interrupted_own &&
+                 !flare_contradicts_weapon?(flare, interrupted_own)
                 save_event.call(current_event)
                 current_event = interrupted_own
                 interrupted_own = nil
@@ -978,6 +1024,7 @@ module Lich
                 if attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target])
                   interrupted_own = current_event
                 end
+                last_inbound_attacker = current_event[:attacker] if current_event[:inbound] && current_event[:attacker]
               end
               # A same-line artifact event may have claimed held rolls in
               # the switch branch above (volley: the arrow's own SMR) -
@@ -1089,6 +1136,11 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
+              # see last_inbound_attacker decl
+              if current_event[:inbound] && current_event[:attacker].nil? && last_inbound_attacker &&
+                 !Definitions::Attacks.attackerless_line?(line)
+                current_event[:attacker] = last_inbound_attacker
+              end
 
               # Spawn-tree lineage (see spawn_root decl). We stamp ONLY lineage
               # we can assert, never a positional guess:
@@ -1231,6 +1283,10 @@ module Lich
                   still_pending = []
                   pending_flares.each do |f|
                     if flare_matches_weapon?(f, current_event[:weapon]) || !flare_contradicts_weapon?(f, current_event)
+                      # fired BEFORE the swing line (dispel-on-nock, ensorcell's
+                      # veil): never the cause of a status the swing's own crit
+                      # inflicts afterwards (see status_flare_seq)
+                      f[:_pre] = true
                       current_event[:flares] << f
                     else
                       still_pending << f
@@ -1877,7 +1933,10 @@ module Lich
         end
 
         # Apply status effect directly to a creature (outside combat events)
-        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add, flare_seq: nil)
+        # flare_seq / event: which flare (1-based position) of which parse
+        # event the status rode on; process() turns the event ref into an
+        # :attack_uid for the recorder.
+        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add, flare_seq: nil, event: nil)
           # Handle both name lookup and direct ID
           if target_id
             creature = Creature[target_id.to_i]
@@ -1916,6 +1975,7 @@ module Lich
             payload = { id: creature.id, name: creature.name,
                         status: status, action: action == :remove ? :remove : :add }
             payload[:flare_seq] = flare_seq if flare_seq
+            payload[:_event] = event if event
             emit_fact(:status, payload)
           else
             respond "[Combat] Could not find creature for status: #{status} -> #{target_name_or_id}" if Tracker.debug?(:verbose)

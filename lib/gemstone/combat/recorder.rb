@@ -250,6 +250,7 @@ module Lich
           @seq = 0
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
           @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
+          @chunk_flares = {} # per-chunk _uid -> [flare row ids], for status attack_uid/flare_seq
           @pending_cache = nil      # creature-cache entries staged during a txn (see in_txn)
           @pending_chunk_rows = nil # chunk-row entries staged during a txn (see in_txn)
           @character = character
@@ -374,7 +375,7 @@ module Lich
           when :attack then record_attack(data)
           when :status then record_status(kind: 'status', id: data[:id], name: data[:name],
                                           status: data[:status].to_s, action: data[:action].to_s,
-                                          flare_seq: data[:flare_seq])
+                                          flare_seq: data[:flare_seq], attack_uid: data[:attack_uid])
           when :stun then record_status(kind: 'stun', id: data[:id], name: data[:name],
                                         status: 'stunned', action: 'add', value: data[:rounds].to_i)
           when :roundtime then record_status(kind: 'roundtime', id: data[:id], name: data[:name],
@@ -513,7 +514,10 @@ module Lich
           # (_uid == 0) arrives. A root points at itself; an ambiguous spawn has
           # parent_uid nil.
           uid = event[:_uid]
-          @chunk_rows = {} if uid.nil? || uid.zero?
+          if uid.nil? || uid.zero?
+            @chunk_rows = {}
+            @chunk_flares = {}
+          end
           root_uid = event[:root_uid]
           parent_uid = event[:parent_uid]
           # parent/root were committed by an earlier record in this chunk (they
@@ -588,6 +592,7 @@ module Lich
               end
             end
 
+            @chunk_flares[uid] = flare_ids if uid
             @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound], flare_ids: flare_ids }
           end
         end
@@ -659,7 +664,7 @@ module Lich
         end
 
         def record_status(kind:, id:, name:, status: nil, action: nil, value: nil,
-                          spell: nil, spell_name: nil, cause: nil, flare_seq: nil)
+                          spell: nil, spell_name: nil, cause: nil, flare_seq: nil, attack_uid: nil)
           at = Time.now.to_f
           # Atomic like record_attack: the creature upsert, the status insert
           # and the kill-stamp are one unit, so a mid-write failure can't leave
@@ -671,12 +676,20 @@ module Lich
             attack_id = nil
             flare_id = nil
             source = 'direct'
-            if @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
+            flare_at = ->(ids) { ids&.[](flare_seq - 1) if flare_seq.is_a?(Integer) && flare_seq.positive? }
+            if attack_uid && (uid_row = chunk_row(attack_uid))
+              # the processor named the parse event the status rode on -
+              # authoritative over the last-attack window (the last attack
+              # of a chunk may be a creature's cast that interrupted ours)
+              attack_id = uid_row
+              source = 'event'
+              flare_id = flare_at.call(@chunk_flares[attack_uid])
+            elsif @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
               attack_id = @open_attack[:id]
               source = 'window'
               # the processor says which of the attack's flares the status
               # rode on (1-based position in the event's flare list)
-              flare_id = @open_attack[:flare_ids]&.[](flare_seq - 1) if flare_seq.is_a?(Integer) && flare_seq.positive?
+              flare_id = flare_at.call(@open_attack[:flare_ids])
             elsif @open_attack && name == 'self' && @open_attack[:inbound]
               attack_id = @open_attack[:id]
               source = 'window'

@@ -343,6 +343,9 @@ module Lich
               /(?<attacker>.+?) whips a pseudopod toward (?<target>you|.+?), brushing/,
               # halfling cannibal ambush swing (hunt log 2026-09-07 23:34)
               /With an ululating shriek, (?<attacker>.+?) leaps from the shadows and hammers blindly at (?<target>you|.+?) with grimy little fists!/,
+              # gigas disciple leech fling: the SMR roll prints BEFORE this
+              # line and the evade rides on it (hunt log 2026-09-07 23:52)
+              /(?<attacker>.+?) reaches into a pouch at #{MK_PRE}(?:his|her|its)#{MK_POST} waist and draws back a hand covered in fat leeches.*?flings the parasites at (?<target>you|.+?)!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,
