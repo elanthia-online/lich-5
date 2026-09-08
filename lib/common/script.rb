@@ -142,9 +142,9 @@ module Lich
           begin
             if file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
               trusted = false
-              script_obj = WizardScript.new("#{SCRIPT_DIR}/#{file_name}", script_args, false)
+              script_obj = WizardScript.new(File.join(SCRIPT_DIR, file_name), script_args, false)
             else
-              script_obj = Script.new(:file => "#{SCRIPT_DIR}/#{file_name}", :args => script_args, :quiet => options[:quiet], :publish => false)
+              script_obj = Script.new(:file => File.join(SCRIPT_DIR, file_name), :args => script_args, :quiet => options[:quiet], :publish => false)
               trusted = script_obj.labels.length <= 1
             end
             if trusted
@@ -242,17 +242,17 @@ module Lich
         if script_name =~ /\\|\//
           nil
         elsif script_name =~ /\.(?:lic|lich|rb|cmd|wiz)(?:\.gz)?$/i
-          File.exist?("#{SCRIPT_DIR}/#{script_name}") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}")
+          File.exist?(File.join(SCRIPT_DIR, script_name)) || File.exist?(File.join(SCRIPT_DIR, "custom", script_name))
         else
-          File.exist?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lich") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz.gz")
+          File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lic")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lic")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lich")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lich")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.rb")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.rb")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.cmd")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.cmd")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.wiz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.wiz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lic.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lic.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.rb.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.rb.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.cmd.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.cmd.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.wiz.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.wiz.gz"))
         end
       }
       @@elevated_log = proc { |data|
@@ -261,8 +261,8 @@ module Lich
             nil
           else
             begin
-              Dir.mkdir("#{LICH_DIR}/logs") unless File.exist?("#{LICH_DIR}/logs")
-              File.open("#{LICH_DIR}/logs/#{script.name}.log", 'a') { |f| f.puts data }
+              Dir.mkdir(LOG_DIR) unless File.exist?(LOG_DIR)
+              File.open(File.join(LOG_DIR, "#{script.name}.log"), 'a') { |f| f.puts data }
               true
             rescue
               respond "--- Lich: error: Script.log: #{$!}"
@@ -283,7 +283,7 @@ module Lich
             respond '--- error: Script.db cannot be used by exec scripts'
             nil
           else
-            SQLite3::Database.new("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.db3")
+            SQLite3::Database.new(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.db3"))
           end
         else
           respond '--- error: Script.db called by an unknown script'
@@ -302,12 +302,12 @@ module Lich
             respond '--- error: Script.open_file cannot be used by exec scripts'
             nil
           elsif ext.downcase == 'db3'
-            SQLite3::Database.new("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.db3")
+            SQLite3::Database.new(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.db3"))
             # fixme: block gets elevated... why?
             #         elsif block
             #            File.open("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}", mode, &block)
           else
-            File.open("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}", mode)
+            File.open(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}"), mode)
           end
         else
           respond '--- error: Script.open_file called by an unknown script'
@@ -399,7 +399,7 @@ module Lich
           Dir.children(dir)
              .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
              .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
-             .map { |s| "#{prefix}/#{s}" }
+             .map { |s| File.join(prefix, s) }
         } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
         file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } ||
           file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } ||
@@ -475,7 +475,7 @@ module Lich
       # @return [Array<String>, nil] the header comment lines, or nil when no file matches
       def Script.__header_lines_for(script_name)
         file_name = __find_script_file(script_name.sub(/[.](lic|rb|cmd|wiz)$/, ''))
-        file_name && __read_header_comments("#{SCRIPT_DIR}/#{file_name}")
+        file_name && __read_header_comments(File.join(SCRIPT_DIR, file_name))
       end
       private_class_method :__header_lines_for
 
