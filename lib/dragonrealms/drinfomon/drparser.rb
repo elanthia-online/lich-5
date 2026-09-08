@@ -37,7 +37,17 @@ module Lich
         Rested_EXP_F2P = %r{^<component id='exp rexp'>\[Unlock Rested Experience}.freeze
         TDPValue_XPWindow = %r{^<component id='exp tdp'>\s*TDPs:\s*(?<tdp>\d+)</component>}.freeze
         FavorValue_XPWindow = %r{^<component id='exp favor'>\s*Favors:\s*(?<favor>\d+)</component>}.freeze
-        InventoryGetStart = %r{You rummage about your person, looking for}.freeze
+        # Header line emitted by the DR inventory verbs whose <d> output we
+        # scrape for item IDs. Two verbs share this scrape:
+        #   INV SEARCH <text> => "You rummage about your person, looking for ..."
+        #   INV LIST          => "You take a moment and rummage about your
+        #                          person, taking stock of your possessions..."
+        # Anchored to the start of the stream line, allowing only the optional
+        # leading <roundTime/> the search verbs emit, so quoted/chat/book text
+        # containing the phrase mid-line cannot open a scrape (cf. GameShutdown).
+        # Logs confirm the header is never otherwise prefixed: INV LIST is bare at
+        # line start; the "looking for" verbs carry exactly one <roundTime/>.
+        InventoryGetStart = %r{^(?:<roundTime[^>]*/>)?You (?:take a moment and )?rummage about your person, (?:taking stock of your possessions|looking for)}.freeze
 
         # Scheduled shutdown announcement, e.g. "Announcement: DragonRealms will
         # be shutting down in 15 minutes for routine maintenance." Anchored to
@@ -179,7 +189,10 @@ module Lich
           # This block parses a single line from the output of the `inv search <string>` verb,
           # which lists items on your character. Each line is an XML-like string.
           # Example: <d cmd='get #12345'>a small pouch</d>
-          if @@parsing_inventory_get && (stripped = server_string.strip).start_with?('<d cmd=')
+          # INV LIST nests a container's contents beneath it and prefixes each
+          # nested line with a dash (e.g. "   -<d cmd='get #1 in #2'>..."), while
+          # INV SEARCH output is flat. Strip a leading dash so both forms parse.
+          if @@parsing_inventory_get && (stripped = server_string.strip.sub(/\A-\s*/, '')).start_with?('<d cmd=')
             # Pull the cmd attribute and item name out of the line's leading <d> element
             # with a SAX handler. The element is captured as it streams in, before any
             # trailing prose (e.g. "... is in your right hand.") -- which is not valid XML
@@ -200,8 +213,12 @@ module Lich
 
             # Extract the command and the unique item ID from the 'cmd' attribute.
             cmd = handler.cmd.to_s.downcase.strip
-            id_match = /get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
-            # <!-- Regex to capture item and container IDs: cmd='get (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
+            # INV SEARCH links every item with a GET command. INV LIST links
+            # worn (top-level) items with a REMOVE command and their contents
+            # with GET, so accept either verb: worn items (no container) go back
+            # into GameObj.inv, nested items into their container's contents.
+            id_match = /(?:get|remove) (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?/.match(cmd)
+            # <!-- Regex to capture item and container IDs: cmd='(?:get|remove) (?<itemID>#\d+)(?: in (?<container1>#\d+|[^']+))?(?: in (?<container2>#\d+|[^']+))?' -->
             # <d cmd='get #8286821 in #8286816 in #8286762'>A papyrus parchment</d> is in a black winter cloak crafted from thick cashmere, which is in a scuffed traveler's pack.
             # <d cmd='get #8735861 in #8735860 in watery portal'>Some arzumodine cloth</d> is in a lumpy canvas sack, which is in an effervescent eddy of honey-hued light captured by a sungold frame.
             # <d cmd='get #8761784'>A seagull feather quill with dyed snowy white barbs</d> is lying at your feet.
@@ -211,21 +228,32 @@ module Lich
               id = id_match[:itemID].strip.delete('#').to_s
               noun = nil # This isn't exposed in the DR XML stream
               name = item_name
+              # Only container1 (the item's immediate parent) is used -- it is the
+              # single placement each line establishes. The regex still captures
+              # container2 (the grandparent in a doubly-nested line) because it is
+              # needed to bound container1 correctly, but we do not read it: see
+              # the note below new_inv.
               container1 = id_match[:container1].strip.delete('#') if id_match[:container1]
-              container2 = id_match[:container2].strip.delete('#') if id_match[:container2]
               container = container1 || nil
               before = cmd
               after = nil
 
-              # Store the parsed item information.
+              # Store the parsed item into its immediate container (or worn inv).
               # DRItems.update_item(item, id, cmd, full_description)
               Lich.log("DRParser: Adding inventory item - ID: #{id}, Noun: #{noun}, Name: #{name}, Container: #{container}, Before: #{before}, After: #{after}")
               GameObj.new_inv(id, noun, name, container, before, after)
-              if container2
-                before = cmd.sub(/get \#\d+ in/, "get")
-                name = nil # We don't know the name of the item in container2
-                GameObj.new_inv(container1, noun, name, container2, before, after)
-              end
+              # A doubly-nested line (get #item in #mid in <parent>) also reveals
+              # that the middle container #mid sits inside <parent>, but we do NOT
+              # synthesize that placement here. INV LIST is a complete, recursive
+              # scrape, and #mid always carries its own id (the only idless item in
+              # DR is the portal, which only ever appears as <parent>), so #mid is
+              # always emitted on its own line -- "get #mid in <parent>" -- which
+              # registers it into <parent> with its REAL name via new_inv above.
+              # Re-deriving that edge from a child line could only add a second
+              # copy of #mid with name=nil (the child line never carries the middle
+              # container's name); because find_or_create keys on "id|noun|name",
+              # the nil-name copy never collides with the real one, leaving a
+              # phantom duplicate in GameObj.containers[<parent>].
             end
           end
         end
@@ -600,6 +628,14 @@ module Lich
             DRStats.tdps = match[:tdp].to_i
           elsif (match = line.match(Pattern::FavorValue_XPWindow))
             DRStats.favors = match[:favor].to_i
+          end
+
+          # Safety valve: a scrape that never saw its closing <output class=""/>
+          # (interrupted or truncated stream) must not stay open and hijack later
+          # <d cmd> links in ordinary output. Any <prompt> ends the exchange, so
+          # reset there. In normal flow the flag is already false by the prompt.
+          if @@parsing_inventory_get && line.start_with?('<prompt')
+            @@parsing_inventory_get = false
           end
 
           populate_inventory_get(line) if @@parsing_inventory_get

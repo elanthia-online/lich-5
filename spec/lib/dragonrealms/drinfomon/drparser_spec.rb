@@ -6,6 +6,12 @@ require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lic
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
+# so it observes the actual container contents. spec_helper installs a
+# lightweight GameObj double; requiring the production file reopens it with the
+# real implementation. This is idempotent -- in the combined suite gameobj_spec
+# has already loaded it -- and mirrors how gameobj_spec obtains the real class.
+require_relative '../../../../lib/common/gameobj'
 
 # Stub DRBanking to avoid loading its dependencies
 module Lich
@@ -707,6 +713,62 @@ RSpec.describe Lich::DragonRealms::DRParser do
         line = 'You rummage about your person, looking for all items'
         expect(line).to match(described_class::Pattern::InventoryGetStart)
       end
+
+      it 'matches inv list command output' do
+        line = 'You take a moment and rummage about your person, taking stock of your possessions...'
+        expect(line).to match(described_class::Pattern::InventoryGetStart)
+      end
+
+      it 'matches a search header carrying the real <roundTime/> prefix' do
+        line = "<roundTime value='1788496743'/>You rummage about your person, looking for pouch..."
+        expect(line).to match(described_class::Pattern::InventoryGetStart)
+      end
+
+      # Adversarial: the phrase quoted mid-line (speech/thought/book) must NOT
+      # open a mutating scrape. This is why the pattern is anchored.
+      it 'does NOT match the phrase quoted mid-line in speech' do
+        line = %(Someone says, "You rummage about your person, looking for trouble.")
+        expect(line).not_to match(described_class::Pattern::InventoryGetStart)
+      end
+
+      it 'does NOT match the phrase embedded after other prose' do
+        line = 'She watched as you take a moment and rummage about your person, taking stock of your possessions.'
+        expect(line).not_to match(described_class::Pattern::InventoryGetStart)
+      end
+
+      it 'does NOT match an arbitrary tag glued before the header' do
+        line = "<pushStream id='thought'/>You rummage about your person, looking for pouch..."
+        expect(line).not_to match(described_class::Pattern::InventoryGetStart)
+      end
+    end
+
+    describe 'when the inv list header matches' do
+      let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
+
+      it 'clears inv and containers and enters parsing state' do
+        expect(GameObj).to receive(:clear_inv)
+        expect(GameObj).to receive(:clear_all_containers)
+
+        described_class.parse(inv_list_line)
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+      end
+    end
+
+    describe 'scrape safety valve (interrupted stream)' do
+      it 'resets an unclosed scrape on the next <prompt> so later <d cmd> links are not hijacked' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+
+        # Stream is interrupted -- no <output class=""/> arrives, just a prompt.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+
+        # A later stray get-link in ordinary output must NOT be parsed as inventory.
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.parse("<d cmd='get #999'>a random link</d>")
+      end
     end
   end
 
@@ -888,9 +950,87 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
     end
 
+    it 'parses an inv list worn item linked with a remove command into inv' do
+      expect(GameObj).to receive(:new_inv).with('10859433', nil, 'hooded electroweave cloak', nil, 'remove #10859433', nil)
+      described_class.populate_inventory_get("  <d cmd='remove #10859433'>a hooded electroweave cloak</d>")
+    end
+
+    it 'parses an inv list nested item despite the leading dash and indentation' do
+      expect(GameObj).to receive(:new_inv).with('10859466', nil, 'dirty inkpot', '10859433', 'get #10859466 in #10859433', nil)
+      described_class.populate_inventory_get("     -<d cmd='get #10859466 in #10859433'>a dirty inkpot</d>")
+    end
+
+    # A doubly-nested line establishes ONLY the item -> immediate parent
+    # (#10956107) edge. It must NOT also synthesize the middle-container ->
+    # grandparent ('a watery portal') edge with a nil name: INV LIST lists
+    # #10956107 on its own line with its real name, so a second nil-name
+    # placement would be a phantom duplicate (find_or_create dedups on
+    # "id|noun|name", so the nil-name copy never collides). See the non-mocked
+    # regression below for the duplicate itself.
+    it 'parses a doubly-nested inv list item without re-registering the middle container' do
+      expect(GameObj).to receive(:new_inv).with('10956111', nil, 'rosemary-dusted pumpkin and apple tart drizzled with an amber glaze', '10956107', 'get #10956111 in #10956107 in a watery portal', nil)
+      # The middle container (#10956107) is never re-added from this child line.
+      expect(GameObj).not_to receive(:new_inv).with('10956107', anything, anything, anything, anything, anything)
+      described_class.populate_inventory_get("        -<d cmd='get #10956111 in #10956107 in a watery portal'>a rosemary-dusted pumpkin and apple tart drizzled with an amber glaze</d>")
+    end
+
     it 'stops parsing on the output-class-empty tag' do
       described_class.populate_inventory_get('<output class=""/>')
       expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+    end
+  end
+
+  # Regression (NON-MOCKED): drives the real GameObj model end-to-end. Kept in
+  # its own describe -- OUTSIDE '.populate_inventory_get', whose before(:each)
+  # stubs new_inv -- precisely so new_inv is NOT stubbed here. This is the case
+  # the mocked tests cannot see: they stub new_inv, so they never observe the
+  # resulting duplicate in GameObj.containers. We feed a real doubly-nested
+  # INV LIST fragment (middle container listed on its own line AND as the parent
+  # of nested items, exactly as DR emits it) and assert each id lands in its
+  # parent container exactly once, with its real name and no nil phantom.
+  describe 'doubly-nested INV LIST against the real GameObj (duplicate regression)' do
+    before(:each) do
+      # GameObj has no reset! -- clear the production registries and identity
+      # index this test touches so it is isolated from earlier examples.
+      %i[@@inv @@contents @@index].each do |cv|
+        GameObj.class_variable_get(cv).clear if GameObj.class_variable_defined?(cv)
+      end
+      described_class.class_variable_set(:@@parsing_inventory_get, true)
+      # COMPLETE (INV LIST) mode. Harmless where the flag is not yet read; keeps
+      # the scrape in replace-not-upsert mode once partial scrapes are added.
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    # Raw INV LIST lines: a single leading dash + indentation at every depth.
+    # #10783170 is the middle container -- it appears on its own line and as the
+    # parent of the two nested items.
+    let(:inv_list_lines) do
+      [
+        "      -<d cmd='get #10783170 in a watery portal'>a deep-green square tin (closed)</d>",
+        "         -<d cmd='get #10783174 in #10783170 in a watery portal'>a sheet of red parchment</d>",
+        "         -<d cmd='get #10783173 in #10783170 in a watery portal'>a tart</d>"
+      ]
+    end
+
+    it 'registers the middle container in its parent exactly once (no nil-name phantom)' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      portal = GameObj.containers['a watery portal'] || []
+      mids = portal.select { |o| o.id == '10783170' }
+
+      # Before the fix this was 2: the real 'deep-green square tin (closed)' plus
+      # a nil-name phantom synthesized from the nested item lines.
+      expect(mids.size).to eq(1)
+      expect(mids.first.name).to eq('deep-green square tin (closed)')
+      expect(portal.map(&:name)).not_to include(nil)
+    end
+
+    it 'places the nested contents under the middle container once each' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      contents = GameObj.containers['10783170'] || []
+      expect(contents.map(&:id)).to contain_exactly('10783174', '10783173')
+      expect(contents.map(&:name)).to contain_exactly('sheet of red parchment', 'tart')
     end
   end
 end
