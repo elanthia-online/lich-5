@@ -1042,9 +1042,9 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(described_class.safe_pause_list).to be false
       end
 
-      it 'pauses scripts and returns their names' do
+      it 'pauses scripts and returns the paused Script objects' do
         result = described_class.safe_pause_list
-        expect(result).to eq(['other'])
+        expect(result).to eq([mock_script])
       end
     end
 
@@ -1054,11 +1054,29 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'unpauses scripts and releases lock' do
-        described_class.safe_pause_list
+        paused = described_class.safe_pause_list
         mock_script.paused = true
-        described_class.safe_unpause_list(['other'])
+        described_class.safe_unpause_list(paused)
         expect(mock_script).to have_received(:unpause)
         expect($safe_pause_lock.owned?).to be false
+      end
+
+      # Regression: safe_pause_list used to hand back script *names* and
+      # safe_unpause_list re-derived the unpause set from a fresh
+      # Script.running scan, matching by name. Any script that left
+      # Script.running between pause and unpause (gone hidden, or mid
+      # start/teardown) was silently dropped and stranded paused forever,
+      # while the log still claimed it was unpaused. Capturing and restoring
+      # the exact objects fixes this.
+      it 'unpauses a paused script even after it leaves Script.running' do
+        paused = described_class.safe_pause_list
+        expect(paused).to eq([mock_script])
+        mock_script.paused = true
+        # The script goes hidden / deregisters: no longer visible to a live
+        # Script.running rescan.
+        allow(Script).to receive(:running).and_return([])
+        described_class.safe_unpause_list(paused)
+        expect(mock_script).to have_received(:unpause)
       end
 
       context 'when list is empty' do
@@ -1093,8 +1111,8 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'restores the holder pause setting when the lock is released' do
-        described_class.safe_pause_list
-        described_class.safe_unpause_list(['other'])
+        paused = described_class.safe_pause_list
+        described_class.safe_unpause_list(paused)
         expect(holder.ignore_pause).to be false
       end
 
