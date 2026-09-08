@@ -29,7 +29,8 @@ module Lich
         # adjudication - missing def vs genuine drive-by (owner ruling
         # 2026-09-06). A tick IS ours only when our own cast of that spell
         # is visible in the same blob (see cast_owner tracking below).
-        UNOWNED_TICK_ATTACKS = %i[pestilence web].freeze
+        # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
+        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed].freeze
 
         module_function
 

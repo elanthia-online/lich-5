@@ -444,6 +444,17 @@ module Lich
             # put it away")
             AttackDef.new(:thorn_recoil, [
               /As (?:a|an|your) .+? leaves your (?:left|right) hand, the thorns embedded in your skin painfully rip away/
+            ].freeze),
+            # Bleed ticks from open wounds. Nobody's ability: the processor
+            # marks a creature's tick :unowned (UNOWNED_TICK_ATTACKS) so the
+            # damage lands on the creature without joining our rollup; ours
+            # ("Your right leg drips...") is inbound via the "Your" capture.
+            # Lives in this list so the chunk gate passes our own tick, which
+            # carries no creature link.
+            AttackDef.new(:bleed, [
+              /Blood weeps from (?<target>.+?)'s#{MK_POST} open .+? wound\./,
+              /(?<target>.+?)'s#{MK_POST} .+? drips as #{MK_PRE}(?:he|she|it)#{MK_POST} continues to bleed\./,
+              /(?<target>Your) .+? drips as you continue to bleed\./
             ].freeze)
           ].freeze
 

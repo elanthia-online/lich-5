@@ -892,6 +892,22 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(ev[:outcomes]).to eq([:intercept])
     end
 
+    it 'records bleed ticks: a creature\'s as an unowned attack on it, ours as inbound' do
+      theirs = described_class.parse_events([
+                                              "Blood weeps from the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}'s open left arm wound.",
+                                              '   ... 8 points of damage!'
+                                            ])
+      drips = described_class.parse_events([
+                                             "The #{bolded(123985834, 'warg', 'giant warg')}'s chest drips as #{bolded(123985834, 'warg', 'it')} continues to bleed.",
+                                             '   ... 14 points of damage!'
+                                           ])
+      ours = described_class.parse_events(['Your right leg drips as you continue to bleed.', '   ... 3 points of damage!'])
+      expect(theirs.map { |e| [e[:name], e[:target][:id], e[:unowned], e[:hits].map { |h| h[:damage] }] }).to eq([[:bleed, 123956079, true, [8]]])
+      expect(drips.map { |e| [e[:name], e[:target][:id], e[:unowned], e[:hits].map { |h| h[:damage] }] }).to eq([[:bleed, 123985834, true, [14]]])
+      expect(ours.map { |e| [e[:name], e[:inbound], e[:hits].map { |h| h[:damage] }] }).to eq([[:bleed, true, [3]]])
+      expect(Lich::Gemstone::Combat::Definitions::Attacks.attackerless_line?('Your right leg drips as you continue to bleed.')).to be true
+    end
+
     it 'labels environmental and self-inflicted damage by source' do
       cold = described_class.parse_events(['The burn of the cold tears precious warmth from your flesh.', '   ... 6 points of damage!'])
       thorn = described_class.parse_events(['As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.',
