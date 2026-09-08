@@ -193,6 +193,13 @@ module Lich
         case server_string
         when Pattern::OutputClassEmpty
           if @@parsing_inventory_get
+            # Clean terminator: a COMPLETE INV LIST finished, so publish the
+            # staged full replacement atomically. PARTIAL scrapes upsert as they
+            # go and stage nothing, so there is nothing to commit for them.
+            unless @@inventory_partial
+              GameObj.commit_inv
+              GameObj.commit_all_containers_full
+            end
             @@parsing_inventory_get = false
             @@inventory_partial = false
           end
@@ -239,6 +246,16 @@ module Lich
               id = id_match[:itemID].strip.delete('#').to_s
               noun = nil # This isn't exposed in the DR XML stream
               name = item_name
+              # An item reported "... is in your right/left hand" is held, not worn
+              # or in a container: its placement is the hand slot, tracked
+              # separately by the <right>/<left> stream. Storing it here (cmd has no
+              # "in #container", so container=nil -> worn inv) would recreate the
+              # held/worn duplicate that hand reconciliation removes on pickup. Drop
+              # any stale placement and skip the worn/container store.
+              if stripped =~ /\bis in your (?:right|left) hand\b/i
+                GameObj.remove_inv_item(id)
+                return server_string
+              end
               # Only container1 (the item's immediate parent) is used -- it is the
               # single placement each line establishes. The regex still captures
               # container2 (the grandparent in a doubly-nested line) because it is
@@ -529,9 +546,12 @@ module Lich
         begin
           check_game_shutdown(line)
           if Pattern::InventoryListStart.match?(line)
-            # COMPLETE inventory (INV LIST): wipe and repopulate from scratch.
-            GameObj.clear_inv
-            GameObj.clear_all_containers
+            # COMPLETE inventory (INV LIST): stage a full replacement and publish
+            # it only on the clean terminator (see populate_inventory_get). The
+            # live model stays visible until then, so an interrupted listing keeps
+            # the previous inventory instead of wiping it.
+            GameObj.begin_inv
+            GameObj.begin_all_containers
             @@parsing_inventory_get = true
             @@inventory_partial = false
           elsif Pattern::InventorySearchStart.match?(line)
@@ -672,6 +692,15 @@ module Lich
           # <d cmd> links in ordinary output. Any <prompt> ends the exchange, so
           # reset there. In normal flow the flag is already false by the prompt.
           if @@parsing_inventory_get && line.start_with?('<prompt')
+            # Reaching the prompt with the flag still set means the closing tag was
+            # never seen -- the listing was interrupted/truncated. For a COMPLETE
+            # INV LIST that means the staged full replacement is incomplete, so
+            # discard it (keeping the previously published model) and tell the user
+            # rather than silently leaving inventory half-updated.
+            unless @@inventory_partial
+              GameObj.discard_inv_refresh
+              Lich::Messaging.msg('warn', "DRParser: 'inv list' did not finish; keeping previous inventory. Re-run 'inv list' to refresh.")
+            end
             @@parsing_inventory_get = false
             @@inventory_partial = false
           end

@@ -724,9 +724,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
     describe 'when the INV LIST (complete) header matches' do
       let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
 
-      it 'clears inv and containers, enters parsing, and is NOT partial' do
-        expect(GameObj).to receive(:clear_inv)
-        expect(GameObj).to receive(:clear_all_containers)
+      it 'opens a staged full refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
+        # The full replacement is now staged so the live model stays visible until
+        # a clean terminator commits it -- the header must not wipe anything.
+        expect(GameObj).not_to receive(:clear_inv)
+        expect(GameObj).not_to receive(:clear_all_containers)
+        expect(GameObj).to receive(:begin_inv)
+        expect(GameObj).to receive(:begin_all_containers)
 
         described_class.parse(inv_list_line)
 
@@ -778,6 +782,100 @@ RSpec.describe Lich::DragonRealms::DRParser do
         # A stray get-link afterward must NOT be upserted into the live model.
         expect(GameObj).not_to receive(:upsert_inv)
         described_class.parse("<d cmd='get #999'>a random link</d>")
+      end
+    end
+
+    # Non-mocked, drives the REAL GameObj end-to-end to prove the COMPLETE INV
+    # LIST path is atomic: the previous model stays visible until a clean
+    # terminator commits the staged replacement, and an interrupted listing
+    # keeps the old model instead of leaving it half-updated.
+    describe 'atomic full INV LIST refresh (real GameObj)' do
+      before do
+        GameObj.class_variable_set(:@@inv, [])
+        GameObj.class_variable_set(:@@contents, {})
+        GameObj.class_variable_set(:@@staging_inv, nil)
+        GameObj.class_variable_set(:@@staging_contents, {})
+        GameObj.class_variable_set(:@@staging_all_containers, false)
+        GameObj.class_variable_set(:@@index, {})
+        described_class.class_variable_set(:@@parsing_inventory_get, false)
+        described_class.class_variable_set(:@@inventory_partial, false)
+        allow(Lich::Messaging).to receive(:msg)
+
+        # Seed a known model: a worn cloak (#10) holding a gem (#11).
+        GameObj.new_inv('10', nil, 'cloak', nil, 'remove #10')
+        GameObj.new_inv('11', nil, 'gem', '10', 'get #11 in #10')
+      end
+
+      def ids(list) = Array(list).map(&:id)
+
+      it 'leaves the previous model visible while the listing streams (no up-front wipe)' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        # Nothing committed yet: the old cloak+gem are still the published model.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(GameObj.containers).to have_key('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      it 'atomically replaces the model on the clean terminator, dropping absent containers' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+        described_class.parse('<output class=""/>')
+
+        expect(ids(GameObj.inv)).to contain_exactly('20')
+        # The cloak was not in the new listing, so its container entry is dropped.
+        expect(GameObj.containers).not_to have_key('10')
+      end
+
+      it 'keeps the previous model and warns when the listing is interrupted by a prompt' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Interrupted: a prompt arrives with no closing <output class=""/>.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # Old model intact; the half-streamed backpack was discarded.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      # Regression: in production Game.process_xml_data runs XMLParser BEFORE
+      # DRParser, so the interrupting <prompt> first fires
+      # GameObj.commit_all_containers (the ordinary per-container publish) and
+      # only afterwards does DRParser discard the refresh. commit_all_containers
+      # must refuse to publish while a full refresh is open, or it commits the
+      # partial listing before the discard can run -- corrupting the model while
+      # still warning that the previous inventory was kept.
+      it 'does not commit a partial full refresh when XMLParser commits at the prompt first' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # Listing streams the cloak with a DIFFERENT child (#12) than published (#11).
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #12 in #10'>a coin</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Production order at the prompt: XMLParser publishes containers first...
+        GameObj.commit_all_containers
+        # ...then DRParser sees the interrupted scrape and discards it.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # The premature commit must NOT have replaced #11 with #12.
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+      end
+
+      it 'does not resurrect an item picked into a hand mid-listing when the staged list commits' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # The listing streams the gem (#11) as still inside the cloak...
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #11 in #10'>a gem</d>")
+        # ...but it is then picked into a hand before the list commits.
+        GameObj.remove_inv_item('11')
+        described_class.parse('<output class=""/>')
+
+        # The commit must not re-add the picked-up gem to the cloak.
+        expect(ids(GameObj.containers['10'] || [])).not_to include('11')
       end
     end
   end
@@ -958,9 +1056,24 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
     end
 
-    it 'parses an item line with trailing location prose' do
-      expect(GameObj).to receive(:new_inv).with('8761784', nil, 'seagull feather quill', nil, 'get #8761784', nil)
+    it 'parses an item line with trailing location prose after the </d> element' do
+      expect(GameObj).to receive(:new_inv).with('8286821', nil, 'papyrus parchment', '8286816', 'get #8286821 in #8286816', nil)
+      described_class.populate_inventory_get("<d cmd='get #8286821 in #8286816'>a papyrus parchment</d> is in a black winter cloak.")
+    end
+
+    it 'does NOT store a held item ("... is in your right hand") as worn inventory' do
+      # The item is in a hand, tracked by the <right> stream -- storing it here
+      # (cmd has no container -> worn inv) would recreate the held/worn duplicate.
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
+    end
+
+    it 'also skips the worn store for a left-hand item' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
     end
 
     it 'parses an inv list worn item linked with a remove command into inv' do
