@@ -584,7 +584,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => nil,
-                                  :regex           => /^Perfect strike to the abdomen./ } },
+                                  :regex           => /^Perfect strike to (?:the )?abdomen./ } },
           :back       =>
                          { 0 =>
                                 { :type            => "puncture",

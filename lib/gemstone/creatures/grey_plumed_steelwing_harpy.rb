@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "grey-plumed steelwing harpy",
-  noun: "",
+  noun: "harpy",
   url: "https://gswiki.play.net/grey-plumed_steelwing_harpy",
   picture: "",
   level: 111,
   family: "Harpy",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
   max_hp: 300,
@@ -21,7 +26,11 @@
   areas: [
     {
       name: "Sailor's Grief",
-      rooms: []
+      uids: [7150301..7150325, 7150328..7150329]
+    },
+    {
+      name: "unmapped",
+      uids: [7150326..7150327]
     }
   ],
   attack_attributes: {
@@ -69,24 +78,34 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
-    magic_items: nil,
-    gems: nil,
-    boxes: nil,
+    coins: true,
+    magic_items: true,
+    gems: true,
+    boxes: true,
     skin: nil,
-    other: nil
+    other: "ayanad crystal",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Lithe but powerful in a bestial fashion, the body of the steelwing harpy is plumed in a cascade of smoky grey feathers that gleam like tarnished silver. The remiges of her wings are as sharp-tipped as daggers and look nearly as substantial. A crest of downy semiplume feathers sweeps back from her face, which has a feral facsimile of pinched human features and golden eyes like a hawk's. The harpy's talons are as dark as coal and tipped with claws that are wickedly sharp."
     ],
-    arrival: [],
+    arrival: [
+      "A grey-plumed steelwing harpy soars in on metallic wings."
+    ],
     flee: [],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A grey-plumed steelwing harpy whirls down toward you, gnashing {pronoun} teeth at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

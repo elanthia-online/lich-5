@@ -1,30 +1,35 @@
 {
   schema_version: 3,
   name: "dark vortece",
-  noun: "",
+  noun: "vortece",
   url: "https://gswiki.play.net/dark_vortece",
   picture: "",
   level: 42,
   family: "Vortece",
   type: "Globoid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: false,
+  sympathy: false,
+  muggable: false,
+  sleepable: nil,
   boss: true,
+  boss_type: "pack",
   otherclass: [
     "Magical",
     "Boss"
   ],
   bcs: true,
   max_hp: 300,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "The Broken Lands",
-      rooms: []
+      uids: [94026..94040]
     }
   ],
   attack_attributes: {
@@ -43,8 +48,8 @@
   },
   defense_attributes: {
     asg: nil,
-    immunities: [],
-    melee: 28,
+    immunities: ["magic"],
+    melee: (24..141),
     ranged: nil,
     bolt: nil,
     udf: nil,
@@ -55,7 +60,7 @@
     ran_td: nil,
     sor_td: 159,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 158,
     mne_td: nil,
     mjs_td: nil,
     mns_td: nil,
@@ -68,24 +73,34 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: "essence of air",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The dark vortece is a mass of dark, swirling shadows. Little more is known about this deadly creature despite many attempts to study their origins. This is understandable when you consider the one well known fact about them: Simply being in the presense of a dark vortece is enough to endanger your life, due to their tendency to drain the life out of everything around them."
     ],
-    arrival: [],
+    arrival: [
+      "A dark vortece drifts in smoothly, trailed by a shadowy haze."
+    ],
     flee: [],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A dark vortece shoots a shaft of pure darkness at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

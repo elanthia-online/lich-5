@@ -1,36 +1,45 @@
 {
   schema_version: 3,
   name: "twisted being",
-  noun: "",
+  noun: "being",
   url: "https://gswiki.play.net/twisted_being",
   picture: "",
   level: 82,
   family: "Chimeric",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      rooms: []
+      uids: [17003011..17003038, 17003101..17003150, 17003201..17003217]
+    },
+    {
+      name: "unmapped",
+      uids: [17003001..17003010]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Bite",
-        as: 396
+        as: (356..396)
       },
       {
         name: "Claw",
@@ -43,6 +52,9 @@
     maneuvers: [
       {
         name: "Firebreathing"
+      },
+      {
+        name: "Lash"
       }
     ],
     special_abilities: [],
@@ -82,24 +94,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The twisted being is a twisted amalgamation of flesh and other, less mentionable things. The chalky white skin of this being is rough and pebbly, similar to a reptile's. Two beady black eyes peer out from a snake-shaped head that is topped with a twisted, spiked crest which runs all the way down the being's spine and along its whip-like tail. Row upon row of deadly, razor-sharp teeth fill the being's mouth, and saliva drips from its thick purple tongue."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A twisted being stalks in, its tail swishing back and forth menacingly.",
+      "A twisted being comes darting in."
+    ],
+    flee: [
+      "A twisted being stoops low and darts {direction}.",
+      "A twisted being quickly limps {direction}."
+    ],
     death: [],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A twisted being rumbles a series of arcane phrases."
+    ],
+    attacks: {
+      claw: [
+        "A twisted being claws at you!"
+      ],
+      bite: [
+        "A twisted being tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

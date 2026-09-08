@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "night hound",
-  noun: "",
+  noun: "hound",
   url: "https://gswiki.play.net/night_hound",
   picture: "",
   level: 24,
   family: "Canine",
   type: "Quadruped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
   max_hp: 210,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 3,
+  size: "medium",
   areas: [
     {
       name: "The Graveyard",
-      rooms: []
+      uids: [2150002..2150007, 2150010..2150014]
     }
   ],
   attack_attributes: {
@@ -34,7 +39,7 @@
       },
       {
         name: "Claw",
-        as: 202
+        as: (182..202)
       }
     ],
     bolt_spells: [],
@@ -51,18 +56,18 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 105,
-    ranged: nil,
-    bolt: 143,
-    udf: nil,
+    melee: (124..149),
+    ranged: (106..141),
+    bolt: (106..143),
+    udf: (111..143),
     bar_td: 97,
     cle_td: 99,
-    emp_td: nil,
+    emp_td: 101,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: 97,
     sor_td: 104,
     wiz_td: nil,
-    mje_td: 106,
+    mje_td: (101..107),
     mne_td: (101..107),
     mjs_td: nil,
     mns_td: nil,
@@ -75,24 +80,52 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye",
+    "a bruised right eye",
+    "a completely severed right paw"
+  ],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a night hound hide",
-    other: "No"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "You have never seen anything quite like a night hound, so you are not really sure what to make of it or how dangerous it might be."
-    ],
+    description: [],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
-    search: [],
+    flee: [
+      "A night hound pads {direction}, a mist of shadows puffing from {pronoun} nostrils."
+    ],
+    death: [
+      "The night hound lets out one last whimpering sigh of dark and shadowy whirlwinds and dies."
+    ],
+    decay: [
+      "A night hound decays into a compost of fur and fangs."
+    ],
+    search: [
+      "The night hound sniffs at the air and growls low in the throat."
+    ],
     spell_prep: [],
+    stun_break: [
+      "A night hound howls in rage as {pronoun} shakes off the stun.",
+      "A night hound howls silently in rage as {pronoun} shakes off the stun."
+    ],
+    attacks: {
+      attack: [
+        "A night hound belches a dark cloud at you!"
+      ],
+      claw: [
+        "A night hound claws at you!"
+      ],
+      bite: [
+        "A night hound tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

@@ -1,0 +1,6 @@
+##### trip 3e2caf55a2bd48a3
+# expect: attacks=trip | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+With a fluid whirl, <pushBold/>a <a exist="13914958" noun="disir">shining winged disir</a><popBold/> plants a shining metallic spear firmly into the ground near you and jerks the weapon sharply sideways.
+[SMR result: 25 (Open d100: 13, Penalty: 28)]
+You deftly avoid the stroke.  The metallic spear flies harmlessly aside.
+

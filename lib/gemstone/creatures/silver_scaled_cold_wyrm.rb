@@ -8,10 +8,15 @@
   family: "Reptilian",
   type: "Avian",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
   max_hp: 5000,
@@ -21,7 +26,7 @@
   areas: [
     {
       name: "Hinterwilds",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -58,19 +63,19 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
+    melee: (332..543),
+    ranged: (205..536),
+    bolt: (205..536),
     udf: nil,
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: 490,
     sor_td: nil,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
+    mje_td: 490,
+    mne_td: 490,
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
@@ -82,13 +87,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: false,
     magic_items: false,
     gems: false,
     boxes: false,
-    skin: "no",
-    other: "no"
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -100,6 +108,19 @@
     decay: [],
     search: [],
     spell_prep: [],
+    stun_break: [
+      "A silver-scaled cold wyrm shakes off the magic.",
+      "A silver-scaled cold wyrm tenses {pronoun} vast musculatures and breaks free of the bounds that root {pronoun} to the ground."
+    ],
+    attacks: {
+      attack: [
+        "A silver-scaled cold wyrm lashes out with a scythe-like talon at {target}!",
+        "A silver-scaled cold wyrm charges toward the nearby shadows, revealing you in your hiding place!",
+        "A silver-scaled cold wyrm charges toward the nearby shadows, revealing {target}, who was hidden!",
+        "A silver-scaled cold wyrm swoops low and extends {pronoun} sinewy neck so {pronoun} can snap at you!",
+        "A silver-scaled cold wyrm folds {pronoun} wings against {pronoun} back and plummets down from the skies, aiming {pronoun} bulk at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

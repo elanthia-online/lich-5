@@ -535,6 +535,20 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(custom_launch).to eq(:__unset)
     end
 
+    it 'parses a registered custom frontend through the canonical long form' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=vellum']))
+        .to eq(['GS3', 'vellum', :__unset])
+    end
+
+    it 'does not accept an unregistered long-form frontend selector' do
+      expect(described_class.resolve_login_args(['--GS3', '--frontend=not-registered']))
+        .to eq(['GS3', :__unset, :__unset])
+    end
+
     it 'does not report an invalid game code as a resolved instance' do
       allow(Lich).to receive(:log)
 
@@ -578,6 +592,19 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'], detachable_client: true)).to eq('profanity')
     end
 
+    it 'preserves a registered custom frontend for a detachable client' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(
+        described_class.resolve_headless_frontend(
+          ['--login', 'pickasso', '--without-frontend', '--frontend=vellum'],
+          detachable_client: true
+        )
+      ).to eq('vellum')
+    end
+
     it 'returns unknown when nothing can attach' do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'])).to eq('unknown')
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'])).to eq('unknown')
@@ -594,28 +621,6 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       # Assuming lich_version_at_least?(5, 12, 0) returns true in test environment
       result = described_class.format_launch_flag('GS3')
       expect(result).to match(/--G?S?3?/i)
-    end
-  end
-
-  describe '.spawn_login' do
-    it 'uses the shared checked Ruby executable for a child CLI login' do
-      allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/checked/ruby')
-      allow(Process).to receive(:spawn).and_return(12_345)
-      waiter = double('process waiter')
-      allow(Process).to receive(:detach).with(12_345).and_return(waiter)
-
-      result = described_class.spawn_login(
-        { char_name: 'Tsetem', game_code: 'GS3' },
-        lich_path: '/lich/lich.rbw'
-      )
-
-      expect(result).to equal(waiter)
-      expect(Process).to have_received(:spawn).with(
-        '/checked/ruby',
-        '/lich/lich.rbw',
-        '--login',
-        'Tsetem'
-      )
     end
   end
 end

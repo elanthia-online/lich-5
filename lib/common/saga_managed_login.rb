@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'authentication/cli'
-require_relative 'front-end'
+require_relative 'frontend'
 require_relative 'saga_launch_policy'
 require_relative 'saga_managed_launcher'
 

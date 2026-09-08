@@ -1,30 +1,35 @@
 {
   schema_version: 3,
   name: "huge lava elemental",
-  noun: "",
+  noun: "elemental",
   url: "https://gswiki.play.net/huge_lava_elemental",
   picture: "",
   level: 100,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Extraplanar",
     "Magical"
   ],
   bcs: true,
-  max_hp: nil,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 300,
+  speed: 7,
+  height: 15,
+  size: "huge",
   areas: [
     {
       name: "Elemental Confluence",
-      rooms: []
+      uids: [580026..580053, 581026..581053, 582026..582053, 583026..583053, 584026..584053, 585026..585053, 586026..586053, 587026..587053, 588026..588053]
     }
   ],
   attack_attributes: {
@@ -32,6 +37,14 @@
       {
         name: "Pound (double attack)",
         as: 450
+      },
+      {
+        name: "Molten fist",
+        as: (409..496)
+      },
+      {
+        name: "Roaring ball of fire",
+        as: 469
       }
     ],
     bolt_spells: [
@@ -54,14 +67,14 @@
     asg: "10",
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: 335,
+    ranged: (285..361),
+    bolt: (285..361),
     udf: nil,
     bar_td: 406,
     cle_td: 428,
     emp_td: 428,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: (352..387),
     sor_td: nil,
     wiz_td: nil,
     mje_td: nil,
@@ -84,24 +97,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "essence of fire"
+    other: "essence of fire",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The lava elemental is a bubbling mound of lava, across which an occasional warped face appears before dissolving away. Various appendages form and melt away constantly, as the alien creature goes about its business."
     ],
     arrival: [],
-    flee: [],
+    flee: [
+      "A huge lava elemental flows {direction}, scorching the ground in {pronoun} wake.",
+      "A huge lava elemental flows {direction}, leaving the ground scorched in {pronoun} wake!"
+    ],
     death: [],
-    decay: [],
+    decay: [
+      "The lava elemental hardens into a chalky rock that quickly crumbles away into nothingness."
+    ],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A huge lava elemental's eyes glow brilliantly orange as {pronoun} opens {pronoun} mouth and spits forth a blazing ball of fire!",
+      "A huge lava elemental glows with wild elemental energy as {pronoun} shrugs off the force controlling {pronoun}!"
+    ],
+    attacks: {
+      attack: [
+        "A huge lava elemental pounds at you with a molten fist!"
+      ],
+      hurl: [
+        "A huge lava elemental hurls {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

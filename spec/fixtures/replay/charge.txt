@@ -1,0 +1,5 @@
+##### charge c379953362271408
+# expect: attacks=charge | res=none | flares=none | outcomes=none | dmg=0 | statuses=
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> rushes forward at you with her bronze scaling fork and attempts a charge!
+You take a quick half step back.
+

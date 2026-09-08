@@ -1,35 +1,52 @@
 {
   schema_version: 3,
   name: "bent being",
-  noun: "",
+  noun: "being",
   url: "https://gswiki.play.net/bent_being",
   picture: "",
   level: 82,
   family: "Chimeric",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      rooms: []
+      uids: [17003011..17003038, 17003101..17003150, 17003201..17003217]
+    },
+    {
+      name: "unmapped",
+      uids: [17003001..17003010]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Stomp",
+        as: 386
+      },
+      {
+        name: "Claw",
+        as: 356
+      },
+      {
+        name: "Foot",
         as: 386
       }
     ],
@@ -79,24 +96,45 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The bent being is a twisted amalgamation of flesh and other, less mentionable things. Stark white hair grows in random patches from the being's sickly green skin, especially around its face. The bent being has over-sized ears that look comical on an otherwise intimidating foe. Thick legs sprout from the being's midsection like tree trunks, ending in gigantic feet that could fit in no boot made for civilized creatures."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
+    arrival: [
+      "A bent being comes rumbling in.",
+      "A bent being comes in, a crackle of lightning briefly surrounding it."
+    ],
+    flee: [
+      "A bent being rumbles {direction}."
+    ],
+    death: [
+      "A bent being curses through its teeth as it dies."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A bent being rumbles a series of arcane phrases."
+    ],
+    attacks: {
+      attack: [
+        "A bent being cries out in an acidic tongue, pointing at you!",
+        "A bent being stomps at you with {pronoun} foot!"
+      ],
+      claw: [
+        "A bent being claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

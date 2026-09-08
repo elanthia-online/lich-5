@@ -1,36 +1,45 @@
 {
   schema_version: 3,
   name: "mezic",
-  noun: "",
+  noun: "mezic",
   url: "https://gswiki.play.net/mezic",
   picture: "",
   level: 33,
   family: "Humanoid",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living",
     "Magical"
   ],
   bcs: true,
   max_hp: 240,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 9,
+  height: 4,
+  size: "small",
   areas: [
     {
-      name: "Foggy Valley",
-      rooms: []
+      name: "Vornavian Coast",
+      uids: [4214303..4214323]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Ball and chain"
+      },
+      {
+        name: "Stream of water",
+        as: 198
       }
     ],
     bolt_spells: [
@@ -65,22 +74,22 @@
   defense_attributes: {
     asg: "5",
     immunities: [],
-    melee: 240,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (209..305),
+    ranged: (214..237),
+    bolt: (214..237),
+    udf: (209..290),
     bar_td: 110,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 113,
+    cle_td: (99..114),
+    emp_td: (111..117),
+    pal_td: (92..102),
+    ran_td: (103..113),
+    sor_td: (113..132),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 130,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (124..130),
+    mne_td: (124..130),
+    mjs_td: 134,
+    mns_td: 134,
+    mnm_td: (105..113),
     defensive_spells: [
       "Elemental Defense I (401)",
       "Elemental Defense II (406)",
@@ -96,24 +105,49 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a ball",
+    "some tattered rags",
+    "a ball and chain"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glimmering blue essence shard"
+    other: "Glimmering blue essence shard",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Hunched shoulders and a stooping posture, the mezic is humanoid in appearance, her clothes ill-fitting and made of simple cloth. Dark, beady eyes stare at you from beneath a mass of tangled grey hair as the mezic shuffles her hunched form back and forth. Its long, gnarled fingers contort in magical configurations as it glances maliciously about the area."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "A mezic hobbles {direction}.",
+      "A mezic hobbles {direction}, grumbling about something or another.",
+      "A mezic hobbles slowly {direction}."
+    ],
+    death: [
+      "The mezic twitches violently, then dies.",
+      "The mezic falls to the ground motionless.",
+      "The mezic cries out one last time and lies still."
+    ],
+    decay: [
+      "A mezic decays away, leaving nothing behind."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A mezic swings a ball and chain at {target}!"
+      ],
+      hurl: [
+        "A mezic hurls {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

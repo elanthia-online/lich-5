@@ -1,0 +1,7 @@
+##### tangleweed b1eadf564e7765c8
+# expect: attacks=tangleweed | res=none | flares=none | outcomes=none | dmg=1 | statuses=
+The long thorny vine lashes out at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>, wraps itself around his body and entangles him on the ground.
+   ... 25 points of damage!
+   Head bounces off the ground.  <pushBold/>The <a exist="11755131" noun="combatant">triton combatant</a><popBold/> looks a bit dazed.
+The vigor of your vine surges through you, imparting the strength leached from your foe.
+

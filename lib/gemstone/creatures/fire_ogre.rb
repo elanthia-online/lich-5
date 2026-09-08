@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "fire ogre",
-  noun: "",
+  noun: "ogre",
   url: "https://gswiki.play.net/fire_ogre",
   picture: "",
   level: 28,
   family: "Ogre",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: true,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living",
     "Element-based"
@@ -19,12 +24,12 @@
   bcs: true,
   max_hp: 225,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 10,
+  size: "huge",
   areas: [
     {
-      name: "Greymist Wood",
-      rooms: []
+      name: "Volcanic Flats",
+      uids: [3023001..3023028]
     }
   ],
   attack_attributes: {
@@ -49,22 +54,22 @@
   defense_attributes: {
     asg: "17N",
     immunities: [],
-    melee: nil,
-    ranged: (92..123),
-    bolt: nil,
-    udf: nil,
+    melee: (102..205),
+    ranged: (92..126),
+    bolt: (102..126),
+    udf: (178..281),
     bar_td: (101..115),
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 104,
+    cle_td: (95..105),
+    emp_td: (101..109),
+    pal_td: (74..83),
+    ran_td: (82..89),
+    sor_td: (104..111),
     wiz_td: nil,
-    mje_td: 113,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (113..137),
+    mne_td: (113..137),
+    mjs_td: (114..124),
+    mns_td: (114..124),
+    mnm_td: (86..95),
     defensive_spells: [
       "Elemental Defense I",
       "Elemental Defense II"
@@ -76,24 +81,41 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a deep black spiked flail",
+    "a scorched black oak-hafted flail"
+  ],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
-    gems: nil,
-    boxes: nil,
+    gems: true,
+    boxes: true,
     skin: "ogre tooth",
-    other: "shimmering blue essence shardessence of fire"
+    other: "shimmering blue essence shardessence of fire",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Easily three times as large as the largest giantman, this brutish creature glares about with fire red eyes. The fire ogre has black, soot-covered skin and fiery orange hair. Steam pours from her nose as she flexes her massive claws."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A fire ogre stomps in, covered in black soot!"
+    ],
+    flee: [
+      "A fire ogre stomps {direction}, leaving a trail of black soot."
+    ],
     death: [],
-    decay: [],
+    decay: [
+      "A fire ogre burns down to a husk, that crumbles to ash."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A fire ogre blows {pronoun} fiery breath at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

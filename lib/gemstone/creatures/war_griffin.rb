@@ -1,44 +1,61 @@
 {
   schema_version: 3,
   name: "war griffin",
-  noun: "",
+  noun: "griffin",
   url: "https://gswiki.play.net/war_griffin",
   picture: "",
   level: 100,
   family: "Griffin",
   type: "Hybrid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 400,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 6,
+  size: "large",
   areas: [
     {
       name: "Old Ta'Faendryl",
-      rooms: []
+      uids: [17004001..17004028, 17004030..17004120, 17004160..17004168, 17004180..17004187, 17004190..17004195]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Bite",
-        as: (435..460)
+        as: (465..475)
       },
       {
         name: "Claw",
-        as: (445..470)
+        as: (465..467)
       },
       {
         name: "Impale",
         as: 436
+      },
+      {
+        name: "Beak",
+        as: (444..471)
+      },
+      {
+        name: "Smash",
+        as: 443
+      },
+      {
+        name: "Swoop",
+        as: (457..475)
       }
     ],
     bolt_spells: [],
@@ -56,6 +73,9 @@
       },
       {
         name: "Wing swat"
+      },
+      {
+        name: "Dive"
       }
     ],
     special_abilities: [],
@@ -64,22 +84,22 @@
   defense_attributes: {
     asg: "12",
     immunities: [],
-    melee: 343,
-    ranged: nil,
-    bolt: 347,
-    udf: nil,
+    melee: (168..348),
+    ranged: (184..358),
+    bolt: (184..358),
+    udf: (415..542),
     bar_td: 390,
-    cle_td: (409..418),
-    emp_td: (409..415),
-    pal_td: 360,
-    ran_td: nil,
-    sor_td: 439,
+    cle_td: (424..433),
+    emp_td: (415..424),
+    pal_td: (366..375),
+    ran_td: 360,
+    sor_td: (439..448),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: (400..409),
-    mnm_td: nil,
+    mje_td: (457..561),
+    mne_td: (457..561),
+    mjs_td: (381..388),
+    mns_td: (381..388),
+    mnm_td: (351..360),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -88,24 +108,46 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: "a war griffin talon",
-    other: "Alchemy"
+    other: "Alchemy",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The war griffin is a magnificent beast, as if designed by the gods to embody fierce and graceful predation. Its front legs, forebody, wings, and head are those of a great eagle, complete with large golden feathers and aquiline beak. The rear half of the creature's body is that of a powerful lion, with short white fur and a long feline tail. Trained by its captors to enhance its fighting prowess, the massive war griffin is poetry in motion, its beautiful ferocity the last sight its foes ever see."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "A war griffin flies {direction}."
+    ],
+    death: [
+      "The war griffin writhes in agony, its wings flapping fruitlessly as it dies.",
+      "The war griffin crashes to the ground, motionless."
+    ],
+    decay: [
+      "The war griffin decays into a pile of feathers and fur."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A war griffin rakes at you with a razor-sharp claw!",
+        "A war griffin tries to spear you with {pronoun} beak!"
+      ],
+      bite: [
+        "A war griffin tries to bite you!"
+      ],
+      claw: [
+        "A war griffin rakes at {target} with a razor-sharp claw!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

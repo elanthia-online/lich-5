@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
+require_relative '../frontend'
+require_relative '../frontend_launcher'
+require 'json'
+
 module Lich
   module Common
     module Authentication
       # Handles formatting of launch data for different game frontends
       module LaunchData
-        # @api private
         # Prepares launch data from authentication result
         # Formats the authentication data for use with different frontends
         #
@@ -14,15 +17,31 @@ module Lich
         # @param custom_launch [String, nil] Custom launch command (optional)
         # @param custom_launch_dir [String, nil] Custom launch directory (optional)
         # @return [Array<String>] Launch data strings formatted for the selected frontend
+        # @api private
         def self.prepare(auth_data, frontend, custom_launch = nil, custom_launch_dir = nil)
           launch_data = auth_data.map { |k, v| "#{k.upcase}=#{v}" }
+          frontend_id = frontend == :__unset ? '' : Frontend.canonical_name(frontend)
           custom_launch = custom_launch.to_s.strip
           custom_launch = nil if custom_launch.empty?
           custom_launch_dir = custom_launch_dir.to_s.strip if custom_launch
           custom_launch_dir = nil if custom_launch_dir == ''
 
+          definition = begin
+            Frontend.definition_for(frontend_id)
+          rescue ArgumentError
+            nil
+          end
+
+          if custom_launch.nil? && definition&.dig(:metadata, :launcher_adapter) == :custom
+            custom_launch = FrontendLauncher.command(frontend_id)
+            custom_launch_dir = definition.dig(:metadata, :launch_directory)
+          end
+
+          launch_data.reject! { |line| line.match?(/\A(?:FRONTEND|CUSTOMLAUNCH|CUSTOMLAUNCHDIR|CUSTOMLAUNCHARGV)=/i) }
+          launch_data.push "FRONTEND=#{frontend_id}" unless frontend_id.empty?
+
           # Modify launch data based on frontend
-          case frontend.to_s.downcase
+          case frontend_id
           when 'wizard'
             launch_data.collect! { |line|
               line.sub(/GAMEFILE=.+/, 'GAMEFILE=WIZARD.EXE')
@@ -42,7 +61,11 @@ module Lich
 
           # Add custom launch information if provided
           if custom_launch
-            launch_data.push "CUSTOMLAUNCH=#{custom_launch}"
+            if custom_launch.is_a?(Array)
+              launch_data.push "CUSTOMLAUNCHARGV=#{JSON.generate(custom_launch)}"
+            else
+              launch_data.push "CUSTOMLAUNCH=#{custom_launch}"
+            end
             launch_data.push "CUSTOMLAUNCHDIR=#{custom_launch_dir}" if custom_launch_dir
           end
 

@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "milky-eyed drowned mariner",
-  noun: "",
+  noun: "mariner",
   url: "https://gswiki.play.net/milky-eyed_drowned_mariner",
   picture: "",
   level: 106,
   family: "Humanoid",
   type: "",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Undead"
   ],
   bcs: nil,
-  max_hp: nil,
+  max_hp: 377,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Sailor's Grief",
-      rooms: []
+      uids: [7150501..7150535]
     }
   ],
   attack_attributes: {
@@ -41,7 +46,7 @@
     melee: nil,
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: (609..722),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -62,19 +67,24 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       ""
     ],
-    arrival: [],
+    arrival: [
+      "A milky-eyed drowned mariner totters in, filmy eyes empty and face slack-jawed. {pronoun} gropes about with bloated fingers, each step a jerky, unnatural motion."
+    ],
     flee: [],
     death: [],
     decay: [],

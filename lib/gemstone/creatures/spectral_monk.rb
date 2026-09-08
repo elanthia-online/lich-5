@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "spectral monk",
-  noun: "",
+  noun: "monk",
   url: "https://gswiki.play.net/spectral_monk",
   picture: "",
   level: 25,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
-  max_hp: 205,
+  max_hp: 204,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
-      name: "The Monastery",
-      rooms: []
+      name: "Lysierian Hills",
+      uids: [95156..95179]
     }
   ],
   attack_attributes: {
@@ -54,6 +59,10 @@
       {
         name: "Mind Jolt (706)",
         cs: 146
+      },
+      {
+        name: "Long blackened scythe",
+        cs: 148
       }
     ],
     offensive_spells: [
@@ -68,22 +77,22 @@
   defense_attributes: {
     asg: "8",
     immunities: [],
-    melee: (225..235),
-    ranged: nil,
-    bolt: (100..132),
-    udf: nil,
+    melee: (98..219),
+    ranged: (93..135),
+    bolt: (93..135),
+    udf: (144..239),
     bar_td: nil,
     cle_td: (76..101),
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 107,
+    emp_td: (90..100),
+    pal_td: (74..84),
+    ran_td: (74..84),
+    sor_td: (100..109),
     wiz_td: nil,
-    mje_td: 98,
-    mne_td: 98,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (98..103),
+    mne_td: (98..103),
+    mjs_td: (96..106),
+    mns_td: (96..106),
+    mnm_td: (75..80),
     defensive_spells: [
       "Spirit Warding I (101)",
       "Spirit Shield (202)",
@@ -97,13 +106,22 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a black skull-cap",
+    "a long blackened scythe",
+    "a rusty claidhmore",
+    "some black coiled prayer beads",
+    "some burnished black leathers"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: "glimmering blue essence dust",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -111,10 +129,22 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "A spectral monk fades into oblivion."
+    ],
+    decay: [
+      "A spectral monk fades into oblivion."
+    ],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A spectral monk utters an arcane incantation."
+    ],
+    attacks: {
+      attack: [
+        "A spectral monk swings a long blackened scythe at you!",
+        "A spectral monk swings a rusty claidhmore at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

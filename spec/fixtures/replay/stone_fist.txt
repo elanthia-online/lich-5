@@ -1,0 +1,21 @@
+##### stone_fist b4154edf0a4b6415
+# expect: attacks=stone_fist | res=cs_td | flares=none | outcomes=warded,miss | dmg=0 | statuses=
+The floor beneath <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> rumbles, then erupts in a shower of rubble that coalesces in to an enormous hand in mid-air.
+  CS: +452 - TD: +541 + CvA: -32 + d100: +15 - +30 == -136
+  Warded off!
+The enormous hand attempts to grab you, but you manage to avoid it at the last moment.  Soon the enormous hand goes still and collapses to a pile of rubble that quickly disintegrates to invisible dust.
+There doesn't seem to be any way to do that.
+? Left the following items: heavy quartz orb, coarse cotton pants, some silver coins.?
+You have no silver with you.
+You are carrying 5,065 silver stored within your coin hand.
+You are carrying a total of 5,065 silver.
+          Level: 100                         Fame: 2,883,108,898
+     Experience: 49,765,255             Field Exp: 1,088/1,088
+  Ascension Exp: 70,606,830         Recent Deaths: 1
+      Total Exp: 120,372,085        Death's Sting: None
+  Long-Term Exp: 1                          Deeds: 0
+ Exp to next TP: 2,245            Exp to next ATP: 43,170
+      PTPs/MTPs: 18/0                        ATPs: 37
+Your mind can't take much more of this!  You must rest!
+You have been experiencing the Wisdom of the Ages for 19 months.
+

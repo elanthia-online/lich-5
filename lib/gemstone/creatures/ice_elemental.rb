@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "ice elemental",
-  noun: "",
+  noun: "elemental",
   url: "https://gswiki.play.net/ice_elemental",
   picture: "",
   level: 63,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Extraplanar",
     "Magical"
@@ -24,7 +29,7 @@
   areas: [
     {
       name: "Mount Aenatumgana",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -63,13 +68,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -77,7 +85,10 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "The ice elemental dissipates into a cool breeze that fades rapidly away.",
+      "The ice elemental falls to the ground dead, {pronoun} icy vapor still pulsating with a blinding white hue."
+    ],
     decay: [],
     search: [],
     spell_prep: [],

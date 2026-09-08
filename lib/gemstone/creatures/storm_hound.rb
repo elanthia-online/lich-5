@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "storm hound",
-  noun: "",
+  noun: "hound",
   url: "https://gswiki.play.net/storm_hound",
   picture: "",
   level: 24,
   family: "Canine",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: true,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 210,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 3,
+  size: "medium",
   areas: [
     {
       name: "Stormpeak",
-      rooms: []
+      uids: [13150101..13150120]
     }
   ],
   attack_attributes: {
@@ -34,6 +39,10 @@
       },
       {
         name: "Claw",
+        as: 202
+      },
+      {
+        name: "Powerful lightning bolt",
         as: 202
       }
     ],
@@ -52,22 +61,22 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: 206,
+    ranged: (106..206),
+    bolt: (106..206),
+    udf: 143,
     bar_td: nil,
     cle_td: 74,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    emp_td: 76,
+    pal_td: (69..72),
+    ran_td: 72,
     sor_td: 79,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 82,
-    mjs_td: 76,
-    mns_td: 76,
-    mnm_td: nil,
+    mje_td: (81..82),
+    mne_td: (81..82),
+    mjs_td: (76..101),
+    mns_td: (76..101),
+    mnm_td: 72,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
@@ -78,24 +87,45 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "storm hound paw",
-    other: "Essence of air"
+    other: "Essence of air",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "You have never seen anything quite like a storm hound, so you are not really sure what to make of it or how dangerous it might be.\n\n;Assess\nThe vapor hound is medium in size and about three feet high in its current state."
-    ],
+    description: [],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
-    search: [],
+    flee: [
+      "A storm hound pads {direction}, a static-charged blue mist puffing from {pronoun} nostrils."
+    ],
+    death: [
+      "The storm hound lets out one last whimpering sigh of sparks and blue mist and dies."
+    ],
+    decay: [
+      "A storm hound decays into a compost of fur and fangs."
+    ],
+    search: [
+      "The storm hound sniffs at the air and growls low in the throat."
+    ],
     spell_prep: [],
+    stun_break: [
+      "A storm hound howls in rage as {pronoun} shakes off the stun.",
+      "A storm hound howls silently in rage as {pronoun} shakes off the stun."
+    ],
+    attacks: {
+      attack: [
+        "A storm hound barks thunder and lightning at you!"
+      ],
+      hurl: [
+        "A storm hound hurls {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

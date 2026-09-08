@@ -144,6 +144,8 @@ module Lich
 
           Commands:
             --add-account ACCOUNT PASSWORD
+            --refresh-characters ACCOUNT [--frontend FRONTEND]
+            --add-character ACCOUNT CHAR_NAME --game-code CODE [--frontend FRONTEND]
             --change-account-password ACCOUNT NEWPASSWORD
             --change-master-password OLDPASSWORD [NEWPASSWORD]
             --recover-master-password [NEWPASSWORD]
@@ -155,8 +157,16 @@ module Lich
             standard
             enhanced
 
+          Game codes (--game-code):
+            GS3  GemStone IV              DR   DragonRealms
+            GST  GemStone IV Prime Test   DRX  DragonRealms Platinum
+            GSF  GemStone IV Shattered    DRT  DragonRealms Prime Test
+                                          DRF  DragonRealms Fallen
+
           Examples:
             lich --add-account MYACCOUNT MYPASSWORD --frontend stormfront
+            lich --refresh-characters MYACCOUNT
+            lich --add-character MYACCOUNT NewCharName --game-code DR
             lich --change-account-password MYACCOUNT NEWPASSWORD
             lich --convert-entries enhanced
             lich --change-encryption-mode enhanced --master-password SECRET
@@ -177,6 +187,20 @@ module Lich
           Examples:
             lich --active-sessions
             lich --session-info Mychar
+
+          Notes:
+            Active session discovery coordinates through TEMP_DIR by default. If
+            each character uses a separate --temp-dir, pass a shared
+            --active-session-dir=PATH so all characters coordinate through one
+            directory instead of isolated per-character ones.
+
+            Passing --active-session-dir=PATH also enables the active sessions
+            service for that launch, even if it isn't persistently enabled.
+            This is a per-launch opt-in only -- it persists no setting, so
+            omitting the flag on a later launch reverts to the persisted
+            setting (disabled by default). The service itself still writes
+            coordination files (a lock and a discovery record) into the
+            directory while it runs.
         TEXT
       end
 
@@ -198,10 +222,12 @@ module Lich
             --lib-dir=PATH
             --hosts-dir=PATH
             --hosts-file=PATH
+            --active-session-dir=PATH
 
           Examples:
             lich --script-dir=/my/scripts
             lich --data-dir=/my/data --temp-dir=/tmp/lich
+            lich --temp-dir=/tmp/lich-Mychar --active-session-dir=/tmp/lich-sessions
         TEXT
       end
 

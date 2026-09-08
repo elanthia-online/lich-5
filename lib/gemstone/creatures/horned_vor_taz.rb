@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "horned vor'taz",
-  noun: "",
+  noun: "vor'taz",
   url: "https://gswiki.play.net/horned_vor'taz",
   picture: "",
   level: 48,
   family: "Vor'taz",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living",
     "Magical"
@@ -19,12 +24,12 @@
   bcs: true,
   max_hp: 400,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 7,
+  size: "large",
   areas: [
     {
       name: "Gyldemar Forest",
-      rooms: []
+      uids: [13030001..13030040]
     }
   ],
   attack_attributes: {
@@ -62,22 +67,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: nil,
-    ranged: 165,
-    bolt: 202,
-    udf: nil,
+    melee: (196..309),
+    ranged: (146..247),
+    bolt: (146..247),
+    udf: (287..428),
     bar_td: (160..183),
-    cle_td: (174..193),
-    emp_td: (182..195),
-    pal_td: nil,
-    ran_td: 166,
-    sor_td: 202,
+    cle_td: (174..199),
+    emp_td: (182..192),
+    pal_td: (156..166),
+    ran_td: (156..166),
+    sor_td: (194..202),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 208,
-    mjs_td: nil,
-    mns_td: 192,
-    mnm_td: nil,
+    mje_td: (204..208),
+    mne_td: (204..208),
+    mjs_td: (182..192),
+    mns_td: (182..192),
+    mnm_td: (153..162),
     defensive_spells: [
       "Natural Colors (601)",
       "Phoen's Strength (606)",
@@ -93,13 +98,20 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a vor'taz horn, a shiny vor'taz horn",
-    other: "Glowing violet essence dust"
+    other: [
+      "Glowing violet essence dust",
+      "glowing violet essence shard",
+      "tiny golden seed"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -107,8 +119,13 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The horned vor'taz's horn dims as {pronoun} lifeforce fades away.",
+      "The horned vor'taz's horn dims, and {pronoun} falls to the ground dead."
+    ],
+    decay: [
+      "A horned vor'taz crumbles away to nothing."
+    ],
     search: [],
     spell_prep: [],
     info: {

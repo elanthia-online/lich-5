@@ -1,0 +1,9 @@
+##### smite_undead ce1d981c38799735
+# expect: attacks=cast,smite_undead | res=cs_td | flares=none | outcomes=warded | dmg=0 | statuses=
+# mixed exchange - this def never appears alone in the corpus
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> brings a hand forward, pointing at you!
+A scintillating, blue-white aura encompasses you.
+  CS: +409 - TD: +392 + CvA: 0 + d100: +5 == +22
+  Warded off!
+You are now in a defensive stance.
+

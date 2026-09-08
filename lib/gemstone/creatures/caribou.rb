@@ -1,33 +1,38 @@
 {
   schema_version: 3,
   name: "caribou",
-  noun: "",
+  noun: "caribou",
   url: "https://gswiki.play.net/caribou",
   picture: "",
   level: 32,
   family: "Deer",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 370,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 5,
+  size: "large",
   areas: [
     {
-      name: "Dark Caves",
-      rooms: []
+      name: "Pinefar Forests",
+      uids: [4563001..4563021]
     },
     {
-      name: "Northern Mountains",
-      rooms: []
+      name: "Sleeping Lady Mountains",
+      uids: [4565004..4565014]
     }
   ],
   attack_attributes: {
@@ -39,6 +44,14 @@
       {
         name: "Kick",
         as: 232
+      },
+      {
+        name: "(quarantine-recovered)",
+        as: 238
+      },
+      {
+        name: "Antlers",
+        as: 238
       }
     ],
     bolt_spells: [],
@@ -51,22 +64,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (165..229),
+    ranged: (150..195),
+    bolt: (150..195),
+    udf: 250,
     bar_td: 96,
-    cle_td: nil,
-    emp_td: (88..96),
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: (95..104),
+    cle_td: (89..98),
+    emp_td: (91..102),
+    pal_td: (96..105),
+    ran_td: (93..99),
+    sor_td: (95..113),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 100,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (100..110),
+    mne_td: (100..110),
+    mjs_td: (99..108),
+    mns_td: (99..108),
+    mnm_td: (96..99),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -75,24 +88,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: "a pair of caribou antlers",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "A hoofed herbivore of the northern snowfields, the caribou is very similar to a large deer with a bad attitude. The caribou uses her large rack of antlers to eagerly impale anything that would encroach upon her territory. Light brown hide affords the caribou some camouflage against the more barren slopes, but the caribou relies on her defenses and running in herds to handle most predators."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A caribou lopes into the area!"
+    ],
+    flee: [
+      "A caribou lopes {direction}.",
+      "A caribou lopes {direction}, shuddering in pain.",
+      "A caribou lopes {direction}, shuddering in pain!",
+      "The caribou slowly backs away and lowers {pronoun} antlers."
+    ],
     death: [],
     decay: [],
-    search: [],
+    search: [
+      "A caribou snuffles the ground hungrily."
+    ],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A caribou charges you with {pronoun} antlers!",
+        "A caribou rears back and kicks {pronoun} front hooves at you!",
+        "A caribou charges {target} with {pronoun} antlers!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

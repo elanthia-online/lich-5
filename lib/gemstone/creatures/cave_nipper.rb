@@ -1,33 +1,51 @@
 {
   schema_version: 3,
   name: "cave nipper",
-  noun: "",
+  noun: "nipper",
   url: "https://gswiki.play.net/cave_nipper",
   picture: "",
   level: 3,
   family: "Reptilian",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: true,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 42,
+  speed: 8,
+  height: 1,
+  size: "medium",
   areas: [
     {
-      name: "Old Mine Road",
-      rooms: []
+      name: "Sea Caverns",
+      uids: [391001..391022]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
+    physical_attacks: [
+      {
+        name: "Charge",
+        as: (43..63)
+      },
+      {
+        name: "Unknown",
+        as: 53
+      },
+      {
+        name: "Claw",
+        as: 53
+      }
+    ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
@@ -38,22 +56,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (26..33),
+    ranged: (20..30),
+    bolt: (20..30),
+    udf: 45,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: 9,
+    emp_td: 9,
+    pal_td: (6..9),
+    ran_td: 9,
+    sor_td: 9,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: 9,
+    mne_td: 9,
+    mjs_td: (6..9),
+    mns_td: (6..9),
+    mnm_td: 9,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -62,24 +80,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: nil,
     boxes: nil,
-    skin: "a cave nipper skin",
-    other: nil
+    skin: "a cave nipper's ",
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "More serpent than lizard, the cave nipper is nearly as long as a human is tall, though less thick. It has a short and stubby tail, virtually no neck, and legs so stumpy that they are nearly nonexistent. A brown back shading off to a tannish underside allows this beast to blend in among the rocks and moss of its habitat. Moving swiftly and showing great strength for its size, the cave nipper will pursue and capture prey much larger than itself. This one is sizing up its next meal through cold, unblinking, reptilian eyes that stare out from its thick, blunt-nosed head. Its tongue flicks out quickly, as if gathering your scent."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A cave nipper slithers in!"
+    ],
+    flee: [
+      "A cave nipper slithers {direction}."
+    ],
+    death: [
+      "The cave nipper hisses one last time and dies."
+    ],
+    decay: [
+      "A cave nipper decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A cave nipper charges at you!"
+      ],
+      claw: [
+        "A cave nipper claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

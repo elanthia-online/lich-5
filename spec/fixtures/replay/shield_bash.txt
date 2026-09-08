@@ -1,0 +1,9 @@
+##### shield_bash 3659aa76d78ac16b
+# expect: attacks=shield_bash | res=smr | flares=none | outcomes=block | dmg=0 | statuses=
+<pushBold/>An <a exist="75958221" noun="champion">Ithzir champion</a><popBold/> fades into view!
+<pushBold/>An <a exist="75958221" noun="champion">Ithzir champion</a><popBold/> dips her shoulder and rushes towards you!
+[SMR result: 62 (Open d100: 43)]
+You harmlessly deflect the charge!
+[Old Ta'Faendryl, River Bank - 12087] (u17004094)
+What appears to be a thick projection of tangled vegetation is in reality the broken base of a wide stone arch that once supported a section of the city wall.  A piled mass of blocks at the edge of the river, crowded over with a thick growth of bushes and trees, bear mute testimony of the massive structure that once spanned the width of the water.
+

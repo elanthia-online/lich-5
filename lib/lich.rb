@@ -297,36 +297,37 @@ module Lich
       end
     elsif defined?(Gtk)
       if args[:buttons] == :ok_cancel
-        buttons = Gtk::MessageDialog::BUTTONS_OK_CANCEL
+        buttons = :ok_cancel
       elsif args[:buttons] == :yes_no
-        buttons = Gtk::MessageDialog::BUTTONS_YES_NO
+        buttons = :yes_no
       else
-        buttons = Gtk::MessageDialog::BUTTONS_OK
+        buttons = :ok
       end
       if args[:icon] == :error
-        type = Gtk::MessageDialog::ERROR
+        type = :error
       elsif args[:icon] == :question
-        type = Gtk::MessageDialog::QUESTION
+        type = :question
       elsif args[:icon] == :warning
-        type = Gtk::MessageDialog::WARNING
+        type = :warning
       else
-        type = Gtk::MessageDialog::INFO
+        type = :info
       end
-      dialog = Gtk::MessageDialog.new(nil, Gtk::Dialog::MODAL, type, buttons, args[:message])
+      dialog = Gtk::MessageDialog.new(parent: nil, flags: :modal, type: type, buttons: buttons, message: args[:message])
       args[:title] ||= "Lich v#{LICH_VERSION}"
       dialog.title = args[:title]
-      response = nil
-      dialog.run { |d_r|
-        response = d_r
+      begin
+        # GTK3 returns the response; it does not yield to a block passed to run.
+        response = dialog.run
+      ensure
         dialog.destroy
-      }
-      if response == Gtk::Dialog::RESPONSE_OK
+      end
+      if response == Gtk::ResponseType::OK
         return :ok
-      elsif response == Gtk::Dialog::RESPONSE_CANCEL
+      elsif response == Gtk::ResponseType::CANCEL
         return :cancel
-      elsif response == Gtk::Dialog::RESPONSE_YES
+      elsif response == Gtk::ResponseType::YES
         return :yes
-      elsif response == Gtk::Dialog::RESPONSE_NO
+      elsif response == Gtk::ResponseType::NO
         return :no
       else
         return nil

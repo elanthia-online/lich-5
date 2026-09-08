@@ -1,0 +1,20 @@
+##### eviscerate 15aea6f22534cf2c
+# expect: attacks=eviscerate | res=smr,ssr | flares=none | outcomes=none | dmg=3 | statuses=terrified/add
+You uncoil from the shadows, your mithril dagger poised to eviscerate <pushBold/>an <a exist="86648608" noun="bandit">elven bandit</a><popBold/>!
+[SMR result: 177 (Open d100: 76, Bonus: 6)]
+Catching him unaware, you carve into <pushBold/>an <a exist="86648608" noun="bandit">elven bandit</a><popBold/> with a ruthlessness calculated to terrorize onlookers!
+   ... 10 points of damage!
+   Smooth slash to <pushBold/>the <a exist="86648608" noun="bandit">elven bandit</a><popBold/>'s hip!
+   Nice crunching sound.
+   ... 30 points of damage!
+Blood sprays from <pushBold/>the <a exist="86648608" noun="bandit">elven bandit</a><popBold/>'s abdomen in a crimson arc!
+   ... 7 points of damage!
+[SSR result: 121 (Open d100: 20)]
+<pushBold/>The <a exist="96711291" noun="mugger">halfling mugger</a><popBold/> freezes in place, quivering with fright!
+Upon witnessing your vicious display, <pushBold/>a <a exist="96711291" noun="mugger">halfling mugger</a><popBold/> appears profoundly unsettled.
+[SSR result: 176 (Open d100: 93)]
+<pushBold/>A <a exist="10042184" noun="bandit">dwarven bandit</a><popBold/> freezes in place, shaking with terror!
+Upon witnessing your vicious display, <pushBold/>a <a exist="10042184" noun="bandit">dwarven bandit</a><popBold/> appears profoundly unsettled.
+You retreat back into the shadows.
+Roundtime: 3 sec.
+

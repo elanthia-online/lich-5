@@ -1,35 +1,44 @@
 {
   schema_version: 3,
   name: "spotted gak",
-  noun: "",
+  noun: "gak",
   url: "https://gswiki.play.net/spotted_gak",
   picture: "",
   level: 2,
   family: "Bovine",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 70,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 12,
+  height: 4,
+  size: "large",
   areas: [
     {
-      name: "Wehnimer's Environs",
-      rooms: []
+      name: "Graendlor Pasture",
+      uids: [4301001..4301025]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Impale",
+        as: 48
+      },
+      {
+        name: "Tusk",
         as: 48
       }
     ],
@@ -43,22 +52,22 @@
   defense_attributes: {
     asg: "6N",
     immunities: [],
-    melee: 26,
-    ranged: nil,
+    melee: (1..36),
+    ranged: (8..11),
     bolt: 18,
-    udf: 60,
+    udf: (38..60),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: 6,
+    emp_td: 6,
+    pal_td: (3..6),
+    ran_td: 6,
     sor_td: 6,
     wiz_td: nil,
     mje_td: 6,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: 6,
-    mnm_td: nil,
+    mne_td: 6,
+    mjs_td: (4..6),
+    mns_td: (4..6),
+    mnm_td: 6,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -67,24 +76,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a gak hide",
-    other: "No"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The spotted gak is a big, ugly beast with a heavy spotted brown pelt. A marked odor of dung and musty wool surrounds him in a noxious cloud. The gak chomps vicious-looking teeth, a mix of distrust and hatred in his large doe-like eyes. A pair of sharp horns curves up above his short, broad head in a shape that resembles a lyre. The animal looks ungainly with his tall shoulders and shorter hindquarters, which give his a jerky, uneven gait. Suddenly, he bares his bovine ivories and brays loudly!"
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A spotted gak charges in, flaring {pronoun} nostrils angrily!"
+    ],
+    flee: [
+      "A spotted gak gallops {direction}.",
+      "A spotted gak snorts as {pronoun} slowly backs away."
+    ],
+    death: [
+      "The spotted gak collapses to the ground, emits a final bellow, and dies.",
+      "The spotted gak lets out a final agonized bellow and dies."
+    ],
+    decay: [
+      "A spotted gak decays into a pile of fur and bone."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A spotted gak charges at you with {pronoun} tusk!",
+        "A spotted gak charges at {target} with {pronoun} tusk!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

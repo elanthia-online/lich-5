@@ -1,41 +1,46 @@
 {
   schema_version: 3,
   name: "tree spirit",
-  noun: "",
+  noun: "spirit",
   url: "https://gswiki.play.net/tree_spirit",
   picture: "",
   level: 26,
   family: "Tree",
   type: "Plantlife",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
   max_hp: 310,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 10,
+  size: "large",
   areas: [
     {
-      name: "Danjirland",
-      rooms: []
-    },
-    {
-      name: "Foggy Valley",
-      rooms: []
-    },
-    {
-      name: "Icemule Environs",
-      rooms: []
-    },
-    {
       name: "Lunule Weald",
-      rooms: []
+      uids: [14016039..14016057, 14016059..14016082]
+    },
+    {
+      name: "Upper Trollfang",
+      uids: [2123001..2123010]
+    },
+    {
+      name: "Abandoned Farm",
+      uids: [4124001..4124006]
+    },
+    {
+      name: "Vornavian Coast",
+      uids: [4214303..4214323]
     }
   ],
   attack_attributes: {
@@ -63,29 +68,33 @@
         name: "Earthen Fury (917)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Gesture"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 194,
-    ranged: nil,
-    bolt: 111,
-    udf: nil,
+    melee: (105..226),
+    ranged: (96..156),
+    bolt: (96..156),
+    udf: (127..230),
     bar_td: 78,
-    cle_td: 82,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 88,
+    cle_td: (76..85),
+    emp_td: (81..90),
+    pal_td: (75..84),
+    ran_td: (72..78),
+    sor_td: (88..91),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 91,
-    mjs_td: nil,
-    mns_td: 84,
-    mnm_td: nil,
+    mje_td: (91..97),
+    mne_td: (91..97),
+    mjs_td: (84..90),
+    mns_td: (84..90),
+    mnm_td: (75..84),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -94,24 +103,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glimmering blue essence shard"
+    other: [
+      "Glimmering blue essence shard",
+      "glimmering blue essence dust",
+      "ayanad crystal"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The undead tree spirit resides among its living brethren, barely distinguishable from them until it is awakened from its slumber. It resembles many different types of towering trees, for a tree spirit is able to take on the shape and appearance of the forest around it. Being spirit, though, it is not quite solid, not quite sharply defined, and its appearance shifts slightly as it moves. Many are fooled by a tree spirit's soft, soothing whispering, only to realize with horror that it is the preparation of a lethal spell."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
+    arrival: [
+      "A tree spirit just arrived."
+    ],
+    flee: [
+      "A tree spirit heads {direction}."
+    ],
+    death: [
+      "The tree spirit slowly settles to the ground and begins to dissipate."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A tree spirit gestures at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

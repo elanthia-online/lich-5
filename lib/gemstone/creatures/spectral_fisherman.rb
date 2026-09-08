@@ -1,40 +1,45 @@
 {
   schema_version: 3,
   name: "spectral fisherman",
-  noun: "",
+  noun: "fisherman",
   url: "https://gswiki.play.net/spectral_fisherman",
   picture: "",
   level: 6,
   family: "Ghost",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: nil,
   max_hp: 90,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 10,
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Coastal Cliffs",
-      rooms: []
+      uids: [84110..84112, 84205..84207]
     },
     {
       name: "Vornavian Coast",
-      rooms: []
+      uids: [4202141..4202156]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Trident",
-        as: "+94"
+        as: 94
       },
       {
         name: "Bite"
@@ -53,22 +58,22 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 15,
-    ranged: nil,
+    melee: (11..80),
+    ranged: (-27..-15),
     bolt: 7,
-    udf: nil,
+    udf: (52..138),
     bar_td: 18,
     cle_td: 18,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    emp_td: 18,
+    pal_td: (15..18),
+    ran_td: 18,
+    sor_td: 18,
     wiz_td: nil,
     mje_td: 18,
     mne_td: 18,
     mjs_td: 18,
     mns_td: 18,
-    mnm_td: nil,
+    mnm_td: 18,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -77,24 +82,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a leather fisherman's apron",
+    "a trident"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Excruciating pain reflected in his tired eyes and weathered face, the spectral fisherman still guards his now-destroyed fishing grounds, held by his love of the sea and the curse that binds his soul to the shore. Human in appearance, the spectral fisherman wields his weapon capably in defense of what he considers to be his, by right, by ancestry, and earned long ago by his own hand."
     ],
-    arrival: [],
+    arrival: [
+      "A spectral fisherman just arrived!",
+      "A spectral fisherman just arrived."
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The spectral fisherman falls to the ground motionless."
+    ],
+    decay: [
+      "A spectral fisherman turns to dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A spectral fisherman thrusts with a trident at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "titan tempest tyrant",
-  noun: "",
+  noun: "tyrant",
   url: "https://gswiki.play.net/titan_tempest_tyrant",
   picture: "",
   level: 83,
   family: "Giant",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 400,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 8,
+  height: 13,
+  size: "huge",
   areas: [
     {
       name: "Stormpeak",
-      rooms: []
+      uids: [13150401..13150425]
     }
   ],
   attack_attributes: {
@@ -34,6 +39,15 @@
     maneuvers: [
       {
         name: "Tempest Strike(?)"
+      },
+      {
+        name: "Feint"
+      },
+      {
+        name: "Ground Slam"
+      },
+      {
+        name: "Ethereal Wave"
       }
     ],
     special_abilities: [],
@@ -42,22 +56,22 @@
   defense_attributes: {
     asg: "12",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (277..465),
+    ranged: (252..387),
+    bolt: (252..387),
+    udf: (481..689),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: "298 to 328",
+    cle_td: (292..301),
+    emp_td: (292..301),
+    pal_td: (254..263),
+    ran_td: (251..260),
+    sor_td: (298..328),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: "317 to 347",
-    mjs_td: nil,
-    mns_td: "277 to 307",
-    mnm_td: nil,
+    mje_td: 332,
+    mne_td: (317..347),
+    mjs_td: 307,
+    mns_td: (277..307),
+    mnm_td: (252..261),
     defensive_spells: [
       "Spirit Warding I (101)",
       "Spirit Barrier (102)",
@@ -74,24 +88,46 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a crude feras morning star",
+    "a crude zorchar khopesh",
+    "a jagged feras spikestar",
+    "some ornate brass scalemail"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "Though powerfully muscled, the tempest tyrant is so tall and long of limb that she looks well-proportioned, even agile. Ritual scars like lightning bolts fork down her immense arms, and matching tattoos in metallic ink gleam electric blue from her severe face. They curve around each eye and fan out onto her hollow cheeks, lending her unforgiving features an alien cast.\n\n;Assess\nThe tempest tyrant is huge in size and about thirteen feet high in her current state."
+    description: [],
+    arrival: [
+      "A gust of wind and a flash of lightning herald the arrival of a stooped titan stormcaller as {pronoun} lumbers in.",
+      "A titan tempest tyrant charges in, electricity crackling down {pronoun} forearms!",
+      "A titan tempest tyrant thunders in, rage roiling in {pronoun} glowing eyes.",
+      "A titan tempest tyrant thunders in, pain and rage warring in {pronoun} glowing eyes."
     ],
-    arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "A titan tempest tyrant stretches a hand skyward, fumbling for something unseen as {pronoun} surrenders to death.",
+      "An odor of burnt ozone fills the air as a titan tempest tyrant's body collapses in upon itself, drying into fine-grained dust that fills the air with grit.",
+      "A ragged gasp fills a stooped titan stormcaller's lungs with a last breath that wooshes out as {pronoun} dies."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A titan tempest tyrant's feras morning star crackles with corruscating lightning as {pronoun} swings it at you!",
+        "Tightening {pronoun} grip on {pronoun} feras morning star, a {pronoun} strikes out at you with all of {pronoun} might!",
+        "A titan tempest tyrant's feras spikestar crackles with corruscating lightning as {pronoun} swings it at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

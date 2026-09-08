@@ -1,41 +1,47 @@
 {
   schema_version: 3,
   name: "fire mage",
-  noun: "",
+  noun: "mage",
   url: "https://gswiki.play.net/fire_mage",
   picture: "",
   level: 71,
   family: "Humanoid",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: true,
+  boss_type: "miniboss",
   otherclass: [
     "Living",
     "Element-based",
     "Boss"
   ],
   bcs: true,
-  max_hp: 240,
+  max_hp: 238,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Eye of V'Tull",
-      rooms: []
-    },
-    {
-      name: "Glaes Caverns",
-      rooms: []
+      uids: [3051005..3051020, 3051022..3051030, 3061001..3061017, 3061028..3061038]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Closed fist"
+        name: "Closed fist",
+        as: 115
+      },
+      {
+        name: "Gnarled black staff",
+        as: 274
       }
     ],
     bolt_spells: [
@@ -44,8 +50,7 @@
         as: 311
       }
     ],
-    warding_spells: [],
-    offensive_spells: [
+    warding_spells: [
       {
         name: "Earthen Fury"
       },
@@ -60,31 +65,39 @@
       },
       {
         name: "Weapon Fire"
+      },
+      {
+        name: "Feras mattock",
+        cs: 324
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Fire Bolt"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "6N",
     immunities: [],
-    melee: nil,
-    ranged: (285..295),
-    bolt: nil,
-    udf: nil,
+    melee: (233..400),
+    ranged: (256..380),
+    bolt: (256..380),
+    udf: (302..482),
     bar_td: (251..285),
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 316,
+    cle_td: (296..306),
+    emp_td: (292..302),
+    pal_td: (253..263),
+    ran_td: (251..260),
+    sor_td: (316..328),
     wiz_td: nil,
-    mje_td: 345,
-    mne_td: 333,
-    mjs_td: nil,
-    mns_td: 294,
-    mnm_td: nil,
+    mje_td: (333..345),
+    mne_td: (333..345),
+    mjs_td: (292..311),
+    mns_td: (292..311),
+    mnm_td: (233..243),
     defensive_spells: [
       "Elemental Barrier",
       "Elemental Defense I",
@@ -103,24 +116,56 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a gnarled black staff",
+    "some sooty black robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: "essence of fire",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The fire mage isn't tall, standing no more than five feet, but her harrowing image is more than intimidating. Blackened skin of her face is framed with a wild mane of silvery hair, which lifts in the smoke and flames rising from the mage's robes like writhing serpents. Twin pits of fire glare out of the apparition's eye sockets, constantly sweeping her surroundings with maleficent intent."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
-    search: [],
-    spell_prep: [],
+    arrival: [
+      "Violent flames begin to whip and spit about the area as a fire mage strides into view!",
+      "A fire mage strides in!",
+      "An apt fire mage strides in!"
+    ],
+    flee: [
+      "A fire mage crawls {direction}.",
+      "A fire mage walks {direction}.",
+      "A fire mage strides south, leaving traces of fire in the air.",
+      "A fire mage strides north, leaving traces of fire in the air."
+    ],
+    death: [
+      "The fire mage goes limp and {pronoun} falls over as the fire slowly fades from {pronoun} eyes.",
+      "The fire mage twitches violently, then dies.",
+      "The fire in the fire mage's eyes slowly fades away."
+    ],
+    decay: [
+      "A fire mage decays into a fine grey ash that quickly blows away.",
+      "An apt fire mage decays into a fine grey ash that quickly blows away."
+    ],
+    search: [
+      "A fire mage looks around apprehensively as {pronoun} takes a step back."
+    ],
+    spell_prep: [
+      "A fire mage gestures mystically, leaving a trail of fire in the air!"
+    ],
+    attacks: {
+      attack: [
+        "A fire mage leaves a trail of fire in the air while gesturing at you!",
+        "A fire mage swings {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

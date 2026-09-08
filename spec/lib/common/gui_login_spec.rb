@@ -21,9 +21,33 @@ RSpec.describe Lich::Common, "#gui_login" do
   let(:tab_widget) { double("TabWidget") }
   let(:window_allocation) { double("WindowAllocation", width: 900, height: 700) }
   let(:window) { double("Window", destroy: nil) }
-  let(:account_manager_ui) { double("AccountManagerUI", create_accounts_tab: nil, create_add_character_tab: nil, create_add_account_tab: nil) }
-  let(:saved_login_tab) { double("SavedLoginTab", ui_elements: saved_login_ui, tab_widget: tab_widget) }
-  let(:manual_login_tab) { double("ManualLoginTab", ui_elements: manual_login_ui, tab_widget: tab_widget, update_theme_state: nil) }
+  let(:account_manager_ui) do
+    double(
+      "AccountManagerUI",
+      create_accounts_tab: nil,
+      create_add_character_tab: nil,
+      create_add_account_tab: nil,
+      refresh_frontends: nil
+    )
+  end
+  let(:saved_login_tab) do
+    double(
+      "SavedLoginTab",
+      ui_elements: saved_login_ui,
+      tab_widget: tab_widget,
+      refresh_frontends: nil
+    )
+  end
+  let(:manual_login_tab) do
+    double(
+      "ManualLoginTab",
+      ui_elements: manual_login_ui,
+      tab_widget: tab_widget,
+      update_theme_state: nil,
+      refresh_frontends: nil
+    )
+  end
+  let(:frontend_manager_tab) { double("FrontendManagerTab", widget: tab_widget) }
   let(:saved_login_ui) { { bonded_pair_char: bonded_pair_char, bonded_pair_inst: bonded_pair_inst, slider_box: slider_box } }
   let(:manual_login_ui) { { custom_launch_entry: custom_launch_entry, custom_launch_dir: custom_launch_dir } }
 
@@ -41,6 +65,9 @@ RSpec.describe Lich::Common, "#gui_login" do
       end
       if Lich::Common::GUI.const_defined?(:ManualLoginTab)
         Lich::Common::GUI.send(:remove_const, :ManualLoginTab)
+      end
+      if Lich::Common::GUI.const_defined?(:FrontendManagerTab)
+        Lich::Common::GUI.send(:remove_const, :FrontendManagerTab)
       end
     end
 
@@ -90,6 +117,10 @@ RSpec.describe Lich::Common, "#gui_login" do
     end
     stub_const("Lich::Common::GUI::ManualLoginTab", manual_login_tab_class)
     allow(Lich::Common::GUI::ManualLoginTab).to receive(:new).with(any_args).and_return(manual_login_tab)
+
+    frontend_manager_tab_class = Class.new
+    stub_const("Lich::Common::GUI::FrontendManagerTab", frontend_manager_tab_class)
+    allow(Lich::Common::GUI::FrontendManagerTab).to receive(:new).with(any_args).and_return(frontend_manager_tab)
 
     # Mock Utilities as a module
     stub_const("Lich::Common::GUI::Utilities", Module.new)
@@ -297,6 +328,7 @@ RSpec.describe Lich::Common, "#gui_login" do
       test_instance.instance_variable_set(:@autosort_state, false)
       test_instance.instance_variable_set(:@done, false)
       test_instance.instance_variable_set(:@default_icon, nil)
+      test_instance.instance_variable_set(:@account_manager_ui, account_manager_ui)
     end
 
     # Regression guard: default mode must preserve current single-launch behavior.
@@ -394,6 +426,21 @@ RSpec.describe Lich::Common, "#gui_login" do
 
       expect(Lich::Common::SessionLauncher).not_to have_received(:launch)
       expect(window).not_to have_received(:destroy)
+    end
+
+    it "refreshes mounted frontend selectors after frontend configuration changes" do
+      manager_options = nil
+      allow(Lich::Common::GUI::FrontendManagerTab).to receive(:new) do |**options|
+        manager_options = options
+        frontend_manager_tab
+      end
+      test_instance.send(:create_tab_instances)
+
+      manager_options.fetch(:on_changed).call
+
+      expect(saved_login_tab).to have_received(:refresh_frontends)
+      expect(manual_login_tab).to have_received(:refresh_frontends)
+      expect(account_manager_ui).to have_received(:refresh_frontends)
     end
   end
 

@@ -1,37 +1,42 @@
 {
   schema_version: 3,
   name: "zombie rolton",
-  noun: "",
+  noun: "rolton",
   url: "https://gswiki.play.net/zombie_rolton",
   picture: "",
   level: 1,
   family: "Caprine",
   type: "Quadruped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
   max_hp: 28,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 20,
+  height: 3,
+  size: "medium",
   areas: [
     {
-      name: "Cairnfang Forest",
-      rooms: []
-    },
-    {
-      name: "Icemule Environs",
-      rooms: []
-    },
-    {
       name: "The Citadel",
-      rooms: []
+      uids: [2102008..2102020, 2103001..2103007]
+    },
+    {
+      name: "Cairnfang",
+      uids: [630100..630105]
+    },
+    {
+      name: "Southern Snowfields",
+      uids: [4128056..4128059]
     }
   ],
   attack_attributes: {
@@ -42,6 +47,10 @@
       },
       {
         name: "Claw",
+        as: 32
+      },
+      {
+        name: "Unknown",
         as: 32
       }
     ],
@@ -55,14 +64,14 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 7,
+    melee: (5..7),
     ranged: 5,
     bolt: 5,
-    udf: 22,
+    udf: 42,
     bar_td: nil,
     cle_td: 3,
     emp_td: 3,
-    pal_td: nil,
+    pal_td: 3,
     ran_td: 3,
     sor_td: 3,
     wiz_td: nil,
@@ -79,24 +88,44 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a rotting rolton pelt",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "An undead version of the domesticated breed, these were one of the earlier attempts by the Council of Twelve to create undead. They litter the countryside, viciously attacking any living thing they see."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A zombie rolton scampers in."
+    ],
+    flee: [
+      "The rolton scampers {direction}."
+    ],
+    death: [
+      "The zombie rolton falls back into a heap and dies.",
+      "The zombie rolton hisses one last time and dies."
+    ],
+    decay: [
+      "A zombie rolton decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      claw: [
+        "A zombie rolton claws at you!"
+      ],
+      bite: [
+        "A zombie rolton tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

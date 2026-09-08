@@ -1,0 +1,16 @@
+##### barrage b4cace66918f6f8e
+# expect: attacks=barrage | res=as_ds | flares=none | outcomes=none | dmg=1 | statuses=immobilized/remove
+Nocking another arrow to your bowstring, you swiftly draw back and loose again!
+  AS: +595 vs DS: +156 with AvD: +20 + d100 roll: +16 = +475
+   ... and hit for 83 points of damage!
+   A fine strike immobilizes the left leg for an instant.
+   The triton defender looks miffed.
+You hear a sound like a child weeping as a white glow separates itself from the triton defender's body and rises into the heavens.
+The spectral form of the triton defender tenses in agony as she begins to dissolve from the bottom up!
+<pushBold/>A <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>'s movements no longer appear hampered as the lunar light encircling her fades away.
+The arrow passes straight through <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>'s left leg and trails ethereal wisps behind it as it makes its way into the distance.
+Upon firing your last arrow, you release a measured breath and lower your ruic longbow.
+Your satisfying display of dexterity bolsters you and inspires those around you!
+You feel a fair amount more dextrous.
+Roundtime: 2 sec.
+

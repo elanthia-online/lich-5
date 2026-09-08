@@ -1,0 +1,17 @@
+##### attack 92d5937e1896a10a
+# expect: attacks=attack | res=none | flares=none | outcomes=evade | dmg=0 | statuses=
+<pushBold/>A <a exist="37507821" noun="construct">greater construct</a><popBold/> swings a massive arm at you!
+You dodge just in the nick of time!
+
+##### attack 5110a6c49c3f7711
+# expect: attacks=attack | res=as_ds | flares=ensorcell | outcomes=none | dmg=1 | statuses=
+You swing a perfect mithril war-hammer at <pushBold/>a <a exist="37507821" noun="construct">greater construct</a><popBold/>!
+  AS: +351 vs DS: +299 with AvD: +22 + d100 roll: +88 = +162
+   ... and hit for 20 points of damage!
+   Torn muscle in <pushBold/>the <a exist="37507821" noun="construct">greater construct</a><popBold/>'s left leg!
+The shimmering gold aura surrounding <pushBold/>the <a exist="37507821" noun="construct">greater construct</a><popBold/> flickers momentarily.
+ ** Necrotic energy from your mithril war-hammer overflows into you! **
+   You feel energized!
+Roundtime: 4 sec.
+Roundtime changed to 1 second.
+

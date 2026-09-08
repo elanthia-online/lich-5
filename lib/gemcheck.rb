@@ -507,18 +507,44 @@ module Lich
       body.split("\n").map(&:inspect).join(' & return & ')
     end
 
+    # Reports missing gems on stderr, and additionally in a GUI dialog when
+    # there is no terminal that report could have reached.
+    #
+    # The dialog is only ever *waited on*, never merely shown: a launcher start
+    # has no other channel, so {run_with_timeout} keeps the process alive long
+    # enough for the dialog to be read. From a terminal that wait is what makes
+    # the failure look like a hang -- the dialog is easily missed (another
+    # workspace, behind other windows, or not rendering at all), it blocks for
+    # {ALERT_TIMEOUT_SECONDS}, and the child's output is discarded, so the user
+    # waits two minutes and never learns why. Worst for the early-exit CLI
+    # commands (`--help`, `--version`, `--active-sessions`, ...): they are
+    # dispatched well after this check runs, so while it blocks they cannot be
+    # reached at all.
+    #
+    # Both streams are probed because a terminal launch may redirect either
+    # one.
+    #
     # @param body [String]
     # @return [void]
     def alert_linux(body)
+      # Always say it on stderr, whether or not a dialog follows. It costs
+      # nothing, it is the whole message rather than a pointer to it, and when
+      # stderr is captured (a launcher's output, a service log) it is the only
+      # record that survives -- the dialog text goes nowhere else.
+      warn("!!ALERT!! #{body}")
+
+      # Only wait on a dialog when there was no terminal to have said it in.
+      return if $stdout.isatty || $stderr.isatty
+
       if cmd_available?('zenity')
         run_with_timeout(['zenity', '--info', '--title', TITLE, '--text', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('kdialog')
         run_with_timeout(['kdialog', '--title', TITLE, '--msgbox', body], ALERT_TIMEOUT_SECONDS)
       elsif cmd_available?('xmessage')
         run_with_timeout(['xmessage', '-center', body], ALERT_TIMEOUT_SECONDS)
-      else
-        warn "!!ALERT!! #{body}"
       end
+      # No dialog tool available needs no fallback branch any more -- the
+      # unconditional warn above is the fallback.
     end
 
     # @param cmd [String] executable name to probe

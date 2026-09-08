@@ -249,8 +249,20 @@ reconnect_if_wanted = proc {
       Lich.log "error: launch_data contains no GAME info"
       exit(1)
     end
-    if (custom_launch = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCH=/ })
-      custom_launch.sub!(/^.*?\=/, '')
+    selected_frontend_id = @launch_data.find { |opt| opt =~ /\AFRONTEND=/i }&.split('=', 2)&.last
+    selected_frontend_id = Lich::Common::Frontend.canonical_name(selected_frontend_id) unless selected_frontend_id.to_s.empty?
+    selected_frontend_definition = begin
+      Lich::Common::Frontend.definition_for(selected_frontend_id) unless selected_frontend_id.to_s.empty?
+    rescue ArgumentError
+      nil
+    end
+
+    custom_launch_line = @launch_data.find { |opt| opt =~ /\ACUSTOMLAUNCH=/i }
+    custom_argv_line = @launch_data.find { |opt| opt =~ /\ACUSTOMLAUNCHARGV=/i }
+    if custom_argv_line
+      custom_launch = JSON.parse(custom_argv_line.split('=', 2).last)
+    elsif custom_launch_line
+      custom_launch = custom_launch_line.split('=', 2).last
       Lich.log "info: using custom launch command: #{custom_launch}"
     elsif @launch_data.find { |opt| opt =~ /GAME=SAGA/i }
       native_saga_launch = true
@@ -258,24 +270,41 @@ reconnect_if_wanted = proc {
     elsif Lich::Common::Frontend.windows_platform?
       Lich.log("info: Working against a Windows Platform for FE Executable")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
+        resolved_frontend = Lich::Common::FrontendLocator.resolve('wizard', refresh: true)
+        frontend_executable = resolved_frontend ? File.basename(resolved_frontend.executable_path) : 'Wizard.Exe'
+        custom_launch = [frontend_executable, "/G#{gamecodeshort}/H127.0.0.1", '/P%port%', '/K%key%']
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         resolved_frontend = Lich::Common::FrontendLocator.resolve('stormfront', refresh: true)
         if resolved_frontend
           frontend_executable = File.basename(resolved_frontend.executable_path)
-          custom_launch = "#{frontend_executable} /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%"
+          custom_launch = [frontend_executable, "/G#{gamecodeshort}/Hlocalhost/P%port%/K%key%"]
         end
       end
     elsif defined?(Wine)
       Lich.log("info: Working against a Linux | WINE Platform")
       if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
-        custom_launch = "#{Wine::BIN} Wizard.Exe /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
+        resolved_frontend = Lich::Common::FrontendLocator.resolve('wizard', refresh: true)
+        frontend_executable = resolved_frontend ? Shellwords.escape(File.basename(resolved_frontend.executable_path)) : 'Wizard.Exe'
+        custom_launch = "#{Wine::BIN} #{frontend_executable} /G#{gamecodeshort}/H127.0.0.1 /P%port% /K%key%"
       elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
         resolved_frontend = Lich::Common::FrontendLocator.resolve('stormfront', refresh: true)
         if resolved_frontend
           frontend_executable = Shellwords.escape(File.basename(resolved_frontend.executable_path))
           custom_launch = "#{Wine::BIN} #{frontend_executable} /G#{gamecodeshort}/Hlocalhost/P%port%/K%key%"
         end
+      end
+    end
+    if custom_launch && custom_launch_line.nil? && custom_argv_line.nil?
+      inferred_frontend_id = if @launch_data.find { |opt| opt =~ /GAME=WIZ/ }
+                               'wizard'
+                             elsif @launch_data.find { |opt| opt =~ /GAME=STORM/ }
+                               'stormfront'
+                             end
+      if inferred_frontend_id
+        custom_launch = Lich::Common::FrontendLauncher.with_additional_arguments(
+          custom_launch,
+          inferred_frontend_id
+        )
       end
     end
     if (custom_launch_dir = @launch_data.find { |opt| opt =~ /CUSTOMLAUNCHDIR=/ })
@@ -370,7 +399,9 @@ reconnect_if_wanted = proc {
     elsif Frontend.client.eql?('suks')
       nil
     else
-      if game =~ /WIZ/i
+      if selected_frontend_definition
+        Frontend.client = selected_frontend_definition[:id]
+      elsif game =~ /WIZ/i
         Frontend.client = 'wizard'
       elsif game =~ /STORM/i
         Frontend.client = 'stormfront'
@@ -413,8 +444,23 @@ reconnect_if_wanted = proc {
         sal_filename = nil
       elsif custom_launch
         sal_filename = nil
-        launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, game_key.to_s)
-        scrubbed_launcher_cmd = custom_launch.sub(/\%port\%/, localport.to_s).sub(/\%key\%/, '[scrubbed key]')
+        frontend_host = if @argv_options[:bind_address] && !%w[0.0.0.0 ::].include?(@argv_options[:bind_address])
+                          @argv_options[:bind_address]
+                        else
+                          '127.0.0.1'
+                        end
+        launcher_cmd = Lich::Common::FrontendLauncher.render_connection(
+          custom_launch,
+          host: frontend_host,
+          port: localport,
+          key: game_key
+        )
+        scrubbed_launcher_cmd = Lich::Common::FrontendLauncher.render_connection(
+          custom_launch,
+          host: frontend_host,
+          port: localport,
+          key: '[scrubbed key]'
+        )
         Lich.log "info: launcher_cmd: #{scrubbed_launcher_cmd}"
       else
         # GAMEHOST tells the spawned frontend where to connect. Mirror a specific
@@ -432,13 +478,18 @@ reconnect_if_wanted = proc {
         while File.exist?(sal_filename)
           sal_filename = File.join(TEMP_DIR, "lich#{rand(10000)}.sal")
         end
-        File.open(sal_filename, 'w') { |f| f.puts @launch_data }
+        native_launch_data = Lich::Common::FrontendLauncher.native_session_data(@launch_data)
+        File.open(sal_filename, 'w') { |f| f.puts native_launch_data }
         # Backstop only. The removals below run on both the connected and the
         # timeout path, but an exception in between would otherwise leave the
         # eaccess key sitting in TEMP_DIR.
         at_exit { Lich::Common::CredentialScrub.shred_file(sal_filename) }
-        launcher_cmd = launcher_cmd.sub('%1', sal_filename)
-        launcher_cmd = launcher_cmd.tr('/', "\\") if Lich::Common::Frontend.windows_platform?
+        if launcher_cmd.is_a?(Array)
+          launcher_cmd = launcher_cmd.map { |argument| argument.gsub('%1', sal_filename) }
+        else
+          launcher_cmd = launcher_cmd.sub('%1', sal_filename)
+          launcher_cmd = launcher_cmd.tr('/', "\\") if Lich::Common::Frontend.windows_platform?
+        end
       end
       accept_thread = Thread.new {
         accepted_socket, = listener.accept
@@ -452,6 +503,8 @@ reconnect_if_wanted = proc {
 
         frontend_pid = if native_saga_launch
                          Lich::Common::ProcessLauncher.call(saga_plan.environment, saga_plan.argv)
+                       elsif launcher_cmd.is_a?(Array)
+                         Lich::Common::ProcessLauncher.call({}, launcher_cmd)
                        else
                          spawn(launcher_cmd)
                        end
@@ -721,7 +774,7 @@ reconnect_if_wanted = proc {
         $_CLIENT_.gets
         Frontend.send_handshake(Frontend::CLIENT_STRING)
       else
-        if launcher_cmd =~ /mudlet/
+        if launcher_cmd.to_s =~ /mudlet/
           Game._puts(game_key)
           game_key = nil
 

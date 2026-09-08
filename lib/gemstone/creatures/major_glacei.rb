@@ -1,40 +1,49 @@
 {
   schema_version: 3,
   name: "major glacei",
-  noun: "",
+  noun: "glacei",
   url: "https://gswiki.play.net/major_glacei",
   picture: "",
   level: 47,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: false,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Magical"
   ],
   bcs: true,
   max_hp: 240,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
-      name: "Arctic Tundra",
-      rooms: []
+      name: "Great Mountain Aenatumgana",
+      uids: [4561001..4561010]
     },
     {
-      name: "Nightmare Gorge",
-      rooms: []
+      name: "Pinefar Forests",
+      uids: [4563034..4563051]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Lash",
-        as: 250
+        as: 259
+      },
+      {
+        name: "Strike",
+        as: (234..281)
       }
     ],
     bolt_spells: [
@@ -52,22 +61,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (120..265),
+    ranged: (145..180),
+    bolt: (145..180),
+    udf: (179..324),
     bar_td: (172..211),
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: (180..196),
+    emp_td: (173..189),
+    pal_td: (158..167),
+    ran_td: 160,
+    sor_td: (191..200),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: 153,
+    mje_td: (206..212),
+    mne_td: (206..212),
+    mjs_td: (177..186),
+    mns_td: (177..186),
+    mnm_td: (155..165),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -76,13 +85,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: "essence of water",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -93,7 +105,20 @@
     death: [],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A major glacei flares with a deep blue glow.",
+      "A major glacei glows blue while absorbing the energy!"
+    ],
+    attacks: {
+      attack: [
+        "A major glacei focuses a wave of cold energy at you!",
+        "A major glacei lashes out at {target}!",
+        "A major glacei strikes at {target}!"
+      ],
+      hurl: [
+        "A major glacei hurls a chunk of ice at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

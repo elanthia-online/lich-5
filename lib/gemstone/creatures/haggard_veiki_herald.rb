@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "haggard veiki herald",
-  noun: "",
+  noun: "herald",
   url: "https://gswiki.play.net/haggard_veiki_herald",
   picture: "",
   level: 85,
   family: "Giant",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: nil,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 400,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 12,
+  height: 13,
+  size: "huge",
   areas: [
     {
       name: "Stormpeak",
-      rooms: []
+      uids: [13150401..13150425]
     }
   ],
   attack_attributes: {
@@ -36,29 +41,39 @@
       }
     ],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Ethereal Wave"
+      },
+      {
+        name: "Ground Slam"
+      },
+      {
+        name: "Shield Bash"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "8",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (353..507),
+    ranged: (350..465),
+    bolt: (350..465),
+    udf: 485,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: "366 to 396",
+    cle_td: (359..364),
+    emp_td: (368..376),
+    pal_td: (325..328),
+    ran_td: (322..329),
+    sor_td: (366..396),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: "385 to 415",
-    mjs_td: nil,
-    mns_td: "364 to 374",
-    mnm_td: nil,
+    mje_td: 400,
+    mne_td: (385..415),
+    mjs_td: (359..364),
+    mns_td: (364..374),
+    mnm_td: 313,
     defensive_spells: [
       "Mantle of Faith (1601)",
       "Divine Shield (1609)",
@@ -72,24 +87,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a crude zorchar khopesh",
+    "a round metal aegis emblazoned with a jagged lightning bolt",
+    "some hardened hide armor"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "Power rumbles and thrums through the limbs of the Veiki herald. That barely contained might and the intensity of his devotion have colluded to burn the meat from his bones, leaving him skeletally thin. The hollows of his face are deep and haunted, the crags cast in deep shadow by the flashes of brilliant azure that flicker and fade within his mesmerizing stare. The herald's hair is brittle and blanched, starkly pale against his sun-darkened skin.\n\n;Assess\nThe Veiki herald is huge in size and about thirteen feet high in his current state."
+    description: [],
+    arrival: [
+      "A gust of wind and a flash of lightning herald the arrival of a stooped titan stormcaller as {pronoun} lumbers in.",
+      "A haggard veiki herald lumbers ponderously in, azure sparks flickering in {pronoun} eyes to illuminate the ominous crevices of {pronoun} face."
     ],
-    arrival: [],
-    flee: [],
+    flee: [
+      "A haggard veiki herald hobbles {direction}, clenching a fist to distract {reflexive} from pain."
+    ],
     death: [],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A haggard Veiki herald chants in a low, guttural voice."
+    ],
+    attacks: {
+      attack: [
+        "Hoisting {pronoun} zorchar khopesh high, a haggard Veiki herald strikes brutally at you!",
+        "A haggard veiki herald touches {pronoun} palm to the ground, sending a charged pulse of energy directly toward you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

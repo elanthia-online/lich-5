@@ -1,30 +1,35 @@
 {
   schema_version: 3,
   name: "huge air elemental",
-  noun: "",
+  noun: "elemental",
   url: "https://gswiki.play.net/huge_air_elemental",
   picture: "",
   level: 95,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Extraplanar",
     "Magical"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 300,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Elemental Confluence",
-      rooms: []
+      uids: [580001..580025, 581001..581025, 582001..582025, 583001..583025, 584001..584025, 585001..585025, 586001..586025, 587001..587025, 588001..588025]
     }
   ],
   attack_attributes: {
@@ -63,7 +68,7 @@
     asg: "10",
     immunities: [],
     melee: nil,
-    ranged: nil,
+    ranged: (320..328),
     bolt: 312,
     udf: nil,
     bar_td: nil,
@@ -93,13 +98,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "essence of air"
+    other: "essence of air",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -110,7 +118,16 @@
     death: [],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A huge air elemental whispers an incantation into the wind."
+    ],
+    attacks: {
+      attack: [
+        "A huge air elemental unleashes a bolt of churning air at you!",
+        "A huge air elemental takes a deep breath, opens {pronoun} mouth and blows a forceful gust of air at you!",
+        "A huge air elemental spins rapidly at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

@@ -82,6 +82,14 @@ module Lich
           show_refresh_notification
         end
 
+        # Reloads the frontend catalog used by the add-character selector.
+        #
+        # @return [void]
+        def refresh_frontends
+          @add_character_frontend_selector&.reload!
+          nil
+        end
+
         # Returns the tab widget for adding to a notebook
         #
         # @return [Gtk::Widget] The tab widget
@@ -713,6 +721,7 @@ module Lich
 
           # Frontend options
           frontend_selector = FrontendSelector.new(refresh: false)
+          @add_character_frontend_selector = frontend_selector
 
           # Add character button
           add_char_button = Gtk::Button.new(label: "Add to this account")

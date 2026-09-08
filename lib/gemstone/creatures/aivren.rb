@@ -1,30 +1,35 @@
 {
   schema_version: 3,
   name: "aivren",
-  noun: "",
+  noun: "aivren",
   url: "https://gswiki.play.net/aivren",
   picture: "",
   level: 86,
   family: "Aivren",
   type: "Avian",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: true,
+  boss_type: "pack",
   otherclass: [
     "Living",
     "Boss"
   ],
   bcs: true,
   max_hp: 300,
-  speed: nil,
+  speed: 5,
   height: nil,
-  size: "",
+  size: "medium",
   areas: [
     {
       name: "The Rift",
-      rooms: []
+      uids: [4568028..4568055]
     }
   ],
   attack_attributes: {
@@ -36,12 +41,32 @@
       {
         name: "Claw (attack)",
         as: 378
+      },
+      {
+        name: "Bite",
+        as: 403
+      },
+      {
+        name: "Massive beak",
+        as: 358
+      },
+      {
+        name: "Razor-sharp claw",
+        as: 410
+      },
+      {
+        name: "Swoop",
+        as: 410
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Wing Buffet"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
@@ -49,21 +74,21 @@
     asg: "8",
     immunities: [],
     melee: (300..400),
-    ranged: nil,
-    bolt: 335,
-    udf: nil,
+    ranged: (263..404),
+    bolt: (263..404),
+    udf: 473,
     bar_td: 320,
     cle_td: 338,
-    emp_td: 332,
-    pal_td: 289,
-    ran_td: nil,
+    emp_td: (332..341),
+    pal_td: (289..301),
+    ran_td: 301,
     sor_td: 354,
     wiz_td: nil,
-    mje_td: 373,
-    mne_td: nil,
-    mjs_td: 332,
-    mns_td: 332,
-    mnm_td: nil,
+    mje_td: (367..373),
+    mne_td: (367..373),
+    mjs_td: (320..332),
+    mns_td: (320..332),
+    mnm_td: (271..319),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -72,13 +97,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "an aivren gizzard",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -90,6 +118,15 @@
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "An aivren rakes at you with a razor-sharp claw!",
+        "An aivren tries to spear you with {pronoun} massive beak!"
+      ],
+      bite: [
+        "An aivren tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

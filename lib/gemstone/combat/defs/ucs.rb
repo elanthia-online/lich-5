@@ -14,6 +14,14 @@ module Lich
           # Example: "You have good positioning against a kobold."
           POSITION_PATTERN = /^You have (decent|good|excellent) positioning against.+<a exist="([0-9]+)"/i.freeze
 
+          # Inbound mirror of POSITION_PATTERN: the creature's tier
+          # against US, printed as the second line of its UCS attack
+          # block (round-14 sweep: 40/40 sandwiched between the
+          # "attempts to jab you!" initiation and the UAF/UDF roll;
+          # only "decent" attested but the vocabulary is shared).
+          # Example: "The triton brawler has decent positioning against you."
+          POSITION_INBOUND_PATTERN = /<a exist="([0-9]+)"[^>]*>[^<]+<\/a>(?:<popBold\/>)? has (decent|good|excellent) positioning against you\./i.freeze
+
           # Pattern for tierup vulnerability
           # Example: "Strike leaves foe vulnerable to a followup jab attack!"
           TIERUP_PATTERN = /Strike leaves foe vulnerable to a followup (jab|grapple|punch|kick) attack!/i.freeze
@@ -28,6 +36,11 @@ module Lich
           # Pattern for smite removed
           SMITE_REMOVED_PATTERN = /^ *The crimson mist surrounding .+<a exist="([0-9]+)".+returns to an ethereal state/i.freeze
 
+          # Positioning tier words -> ordinal, so the recorder can persist
+          # positioning as a number (its value column is numeric) and
+          # queries can compare outbound vs inbound tiers directly.
+          POSITION_TIERS = { 'decent' => 1, 'good' => 2, 'excellent' => 3 }.freeze
+
           # Literal substrings required by the patterns below - used as a cheap
           # gate so non-UCS lines skip all five regexes.
           RELEVANT_SUBSTRINGS = ['positioning against', 'vulnerable to a followup', 'crimson mist'].freeze
@@ -39,7 +52,8 @@ module Lich
             end
 
             # Parse UCS-related events from a line
-            # Returns: { type: :position|:tierup|:smite_on|:smite_off, target_id: id, value: ... }
+            # Returns: { type: :position|:position_inbound|:tierup|:smite_on|:smite_off, target_id: id, value: ... }
+            # Position types also carry tier: 1..3 (see POSITION_TIERS).
             def parse(line)
               return nil unless relevant?(line)
 
@@ -50,7 +64,21 @@ module Lich
                 return {
                   type: :position,
                   target_id: target_id,
-                  value: position
+                  value: position,
+                  tier: POSITION_TIERS[position.downcase]
+                }
+              end
+
+              # Creature's position against us (per-swing attack
+              # metadata, not persistent state - it prints inside the
+              # inbound UCS attack block)
+              if (match = POSITION_INBOUND_PATTERN.match(line))
+                position = match[2]
+                return {
+                  type: :position_inbound,
+                  target_id: match[1].to_i,
+                  value: position,
+                  tier: POSITION_TIERS[position.downcase]
                 }
               end
 

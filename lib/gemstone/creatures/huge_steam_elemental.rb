@@ -1,30 +1,35 @@
 {
   schema_version: 3,
   name: "huge steam elemental",
-  noun: "",
+  noun: "elemental",
   url: "https://gswiki.play.net/huge_steam_elemental",
   picture: "",
   level: 99,
   family: "Elemental",
   type: "Elemental",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Extraplanar",
     "Magical"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 300,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 15,
+  size: "huge",
   areas: [
     {
       name: "Elemental Confluence",
-      rooms: []
+      uids: [580026..580053, 581026..581053, 582026..582053, 583026..583053, 584026..584053, 585026..585053, 586026..586053, 587026..587053, 588026..588053]
     }
   ],
   attack_attributes: {
@@ -32,6 +37,10 @@
       {
         name: "Ensnare",
         as: 460
+      },
+      {
+        name: "Boiling tendril",
+        as: (469..491)
       }
     ],
     bolt_spells: [
@@ -49,6 +58,9 @@
     maneuvers: [
       {
         name: "Major Elemental Wave"
+      },
+      {
+        name: "Ethereal Wave"
       }
     ],
     special_abilities: [],
@@ -58,14 +70,14 @@
     asg: "10",
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: 280,
+    ranged: (263..337),
+    bolt: (263..337),
     udf: nil,
     bar_td: 403,
     cle_td: 428,
     emp_td: 428,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: (359..365),
     sor_td: nil,
     wiz_td: nil,
     mje_td: nil,
@@ -88,13 +100,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: true,
     boxes: nil,
     skin: nil,
-    other: "essence of water"
+    other: "essence of water",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -102,10 +117,21 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "The steam elemental dissipates into a warm breeze that fades rapidly away."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A huge steam elemental lashes out at you with a boiling tendril!",
+        "A huge steam elemental releases a wave of heat at you!"
+      ],
+      bolt: [
+        "A huge steam elemental hurls a seething blast of steam at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {
