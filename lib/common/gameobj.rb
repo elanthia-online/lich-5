@@ -867,8 +867,16 @@ module Lich
       # +clearContainer+ ... +inv+ fill sequence (which has no closing tag).
       # No-op when no container refresh is open.
       #
+      # A full INV LIST refresh ({.begin_all_containers}) stages into the same
+      # +@@staging_contents+ hash, but must publish only through its own clean
+      # path ({.commit_all_containers_full}) or be discarded on interruption
+      # ({.discard_inv_refresh}). This runs at every +prompt+ via XMLParser,
+      # which fires before DRParser can discard an interrupted listing, so it
+      # must refuse to publish a partial full refresh here.
+      #
       # @return [void]
       def self.commit_all_containers
+        return if @@staging_all_containers
         return if @@staging_contents.empty?
 
         @@staging_contents.each { |id, staged| @@contents[id] = staged }

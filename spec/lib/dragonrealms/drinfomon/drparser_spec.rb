@@ -841,6 +841,30 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(ids(GameObj.containers['10'])).to contain_exactly('11')
       end
 
+      # Regression: in production Game.process_xml_data runs XMLParser BEFORE
+      # DRParser, so the interrupting <prompt> first fires
+      # GameObj.commit_all_containers (the ordinary per-container publish) and
+      # only afterwards does DRParser discard the refresh. commit_all_containers
+      # must refuse to publish while a full refresh is open, or it commits the
+      # partial listing before the discard can run -- corrupting the model while
+      # still warning that the previous inventory was kept.
+      it 'does not commit a partial full refresh when XMLParser commits at the prompt first' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # Listing streams the cloak with a DIFFERENT child (#12) than published (#11).
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #12 in #10'>a coin</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Production order at the prompt: XMLParser publishes containers first...
+        GameObj.commit_all_containers
+        # ...then DRParser sees the interrupted scrape and discards it.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # The premature commit must NOT have replaced #11 with #12.
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+      end
+
       it 'does not resurrect an item picked into a hand mid-listing when the staged list commits' do
         described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
         # The listing streams the gem (#11) as still inside the cloak...
