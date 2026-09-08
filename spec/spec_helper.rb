@@ -124,6 +124,8 @@ RSpec.configure do |config|
       # committed/discarded) by one example never leaks into the next, where it
       # would silently route new_inv into staging instead of the live registry.
       g.class_variable_set(:@@staging_all_containers, false) if g.class_variable_defined?(:@@staging_all_containers)
+      # Identity-keyed like the production initializer; a plain {} would break buffer scoping.
+      g.class_variable_set(:@@pending_metadata, {}.compare_by_identity) if g.class_variable_defined?(:@@pending_metadata)
     end
 
     # DR mocks from spec_helper - these have reset! defined in the mock (not production)
