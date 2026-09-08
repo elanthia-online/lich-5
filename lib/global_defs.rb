@@ -800,25 +800,63 @@ def watchhealth(value, theproc = nil, &block)
   }
 end
 
+# Blocks until the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   not already true on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   true, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_until(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or yield
     respond(announce)
   end
-  until yield
+  loop do
+    script&.wait_while_paused!
+    if yield
+      # The predicate may have blocked or yielded control for a while (e.g.
+      # waiting on another thread); re-check pause before honoring its
+      # result and returning to the caller, without re-invoking a
+      # potentially stateful predicate a second time.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
 end
 
+# Blocks while the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   already false on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   false, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_while(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or !yield
     respond(announce)
   end
-  while yield
+  loop do
+    script&.wait_while_paused!
+    unless yield
+      # See wait_until: re-check pause after the predicate resolves, before
+      # returning control, without re-invoking the predicate.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
