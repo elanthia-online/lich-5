@@ -873,6 +873,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
     end
 
+    it 'strips a capitalized leading article (e.g. from INV SEARCH output)' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', nil, 'get #12345', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345'>A soft gem pouch</d>")
+    end
+
     it 'parses a nested item with its container' do
       expect(GameObj).to receive(:new_inv).with('1', nil, 'sack', '2', 'get #1 in #2', nil)
       described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")

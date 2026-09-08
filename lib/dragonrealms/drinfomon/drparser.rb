@@ -192,8 +192,11 @@ module Lich
 
             return server_string unless handler.cmd
 
-            # Normalize the item name by removing leading articles ('a', 'an', 'some').
-            item_name = Lich::Common::XmlEntities.decode(handler.name.to_s).sub(/^(?:a|an|some)\s/, '').strip
+            # Normalize the item name by removing a leading article ('a', 'an',
+            # 'some'), case-insensitively: some inventory verbs lowercase the
+            # article ("a dirty inkpot") while others capitalize it ("A soft gem
+            # pouch"), and the same item must normalize identically either way.
+            item_name = Lich::Common::XmlEntities.decode(handler.name.to_s).sub(/^(?:a|an|some)\s/i, '').strip
 
             # Extract the command and the unique item ID from the 'cmd' attribute.
             cmd = handler.cmd.to_s.downcase.strip
