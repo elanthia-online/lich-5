@@ -529,8 +529,9 @@ module Lich
       # based garbage collection.
       #
       # When a matching entry is found, +before_name+ and +after_name+ are
-      # backfilled if they were previously +nil+ and the incoming values are
-      # non-nil. Existing non-nil values are never overwritten.
+      # refreshed from a differing non-nil incoming value; a nil observation
+      # never clobbers a known value. (Hand slots pass no before/after, so in
+      # practice this path only ever backfills.)
       #
       # @example Replace a bare GameObj.new call
       #   # Before:
@@ -1368,8 +1369,8 @@ module Lich
         # and it is re-added to the cleared registry - no allocation required.
         #
         # When a duplicate is found, +before_name+ and +after_name+ are
-        # backfilled if they were previously +nil+ and the incoming values are
-        # non-nil. Existing non-nil values are never overwritten.
+        # refreshed from a differing non-nil observation; a nil observation
+        # never clobbers a known value.
         #
         # @param registry [Array<GameObj>]  the target registry array
         # @param id       [Integer, String]
