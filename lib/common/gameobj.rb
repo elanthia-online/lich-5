@@ -215,7 +215,16 @@ module Lich
       #
       # @return [String, nil]
       def type
-        GameObj.load_data if @@type_data.empty?
+        # +load_data+ nils +@@type_data+ (not +{}+) when the data file is missing
+        # or corrupt, and returns false rather than raising. Only attempt the load
+        # from the pristine +{}+ state (a nil is falsy under +&&+, so a failed load
+        # isn't retried on every call -- it echoes its error once, then degrades),
+        # and guard the lookup so a broken +gameobj-data.xml+ yields +nil+ instead
+        # of crashing every +#type+ caller -- including every Inventory::Item,
+        # which now exposes this as public API.
+        GameObj.load_data if @@type_data && @@type_data.empty?
+        return nil if @@type_data.nil?
+
         cache_key = "#{@noun}|#{@name}|#{full_name}"
         return @@type_cache[cache_key] if @@type_cache.key?(cache_key)
 
@@ -235,7 +244,11 @@ module Lich
       #
       # @return [String, nil]
       def sellable
-        GameObj.load_data if @@sellable_data.empty?
+        # See +#type+: degrade to +nil+ (loudly once, then quietly) when the data
+        # file is missing/corrupt rather than raising on +nil.empty?+/+nil.keys+.
+        GameObj.load_data if @@sellable_data && @@sellable_data.empty?
+        return nil if @@sellable_data.nil?
+
         matches = matching_data_keys(@@sellable_data)
         matches.empty? ? nil : matches.join(',')
       end
@@ -600,6 +613,21 @@ module Lich
         @@contents.delete(container_id)
       end
 
+      # Whether a top-level inventory (+@@inv+) staged refresh is currently open.
+      # Lets a second writer (e.g. the {Lich::Common::Inventory} read-model) skip
+      # its own +begin_inv+/+commit_inv+ cycle so it cannot prematurely publish or
+      # truncate an in-flight classic +@@inv+ refresh.
+      #
+      # @return [Boolean]
+      def self.inv_refresh_open? = !@@staging_inv.nil?
+
+      # Whether a staged refresh for one container's contents is currently open.
+      # Same purpose as {.inv_refresh_open?}, scoped to a single container id.
+      #
+      # @param container_id [String]
+      # @return [Boolean]
+      def self.container_refresh_open?(container_id) = @@staging_contents.key?(container_id)
+
       # ---------------------------------------------------------------------------
       # Staged registry refresh - begin/commit pairs
       #
@@ -629,6 +657,15 @@ module Lich
         @@inv         = @@staging_inv
         @@staging_inv = nil
       end
+
+      # Discards an open +@@inv+ staging buffer WITHOUT publishing it, leaving the
+      # previously published +@@inv+ visible. Rolls back a +begin_inv+ whose fill
+      # failed partway (e.g. a second writer's mirror raised mid-registration) so a
+      # later cycle does not see {.inv_refresh_open?} stuck open. No-op when none is
+      # open. Symmetric with {.commit_inv}.
+      #
+      # @return [void]
+      def self.abort_inv = @@staging_inv = nil
 
       # @return [Array]
       def self.begin_reserve = @@staging_reserve = []
@@ -729,6 +766,15 @@ module Lich
 
         @@contents[container_id] = staged
       end
+
+      # Discards one container's open staging buffer WITHOUT publishing it, leaving
+      # the previously published +@@contents[id]+ visible. Rolls back a
+      # +begin_container+ whose fill failed partway; no-op when none is open. Unlike
+      # {.delete_container} it does NOT remove the published contents.
+      #
+      # @param container_id [String]
+      # @return [void]
+      def self.abort_container(container_id) = @@staging_contents.delete(container_id)
 
       # Publishes every open container staging buffer. Called at the +prompt+
       # that terminates a command burst, the reliable close signal for the

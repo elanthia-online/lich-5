@@ -561,6 +561,23 @@ RSpec.describe Lich::Common::GameObj do
       end
     end
 
+    it 'degrades #type/#sellable to nil (never raises) when the data file is missing' do
+      # A missing/mid-download/corrupt gameobj-data.xml makes load_data nil the
+      # data hashes (not {}). type/sellable must degrade to nil rather than raise
+      # NoMethodError on nil (via matching_data_keys on the first call, or the
+      # nil.empty? reload guard on later calls) -- they are public API on every
+      # GameObj, and now on every Inventory::Item.
+      stub_const('DATA_DIR', Dir.mktmpdir)
+      described_class.class_variable_set(:@@type_data, {})
+      described_class.class_variable_set(:@@sellable_data, {})
+      obj = described_class.new('900', 'rapier', 'a rapier')
+
+      expect { obj.type }.not_to raise_error # first call: load_data fails, data -> nil
+      expect(obj.type).to be_nil # later call: nil data, reload guard holds
+      expect { obj.sellable }.not_to raise_error
+      expect(obj.sellable).to be_nil
+    end
+
     it 'reload delegates to load_data with filename' do
       expect(described_class).to receive(:load_data).with('custom.xml')
       described_class.reload('custom.xml')
