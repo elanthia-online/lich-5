@@ -95,14 +95,34 @@ module Lich
         # this module makes must carry this header.
         USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
-        # Every game code this module will accept, each confirmed live
-        # against the real play.net servers -- see
-        # docs/web-login-protocol-analysis.md. Fail closed: a game_code not
-        # in this table raises rather than guessing its family/web-code/host
-        # from the EAccess table, since GS3->GS4 already proved that
-        # assumption wrong once. `expected_host`/`expected_port` are also
-        # used to validate the server's own response (.extract_connection_info)
-        # rather than trusting whatever host/port comes back unchecked.
+        # Every game code this module will accept, each with a
+        # `character_list_path` (the actual page a user would pick that game
+        # code from -- see below) and a `web_game_code` (the `game` form
+        # value; not always identical to the EAccess code -- confirmed
+        # mismatch: GemStone Prime is "GS4" here vs "GS3" over EAccess).
+        # Fail closed: a game_code not in this table raises rather than
+        # guessing at any of this from the EAccess table.
+        #
+        # `expected_host`/`expected_port`, when present, pin
+        # .extract_connection_info to the exact live-confirmed values rather
+        # than trusting whatever the server's response says. DR, DRT, GS3,
+        # GST, and GSF are all confirmed this way.
+        #
+        # DRX (Platinum) and DRF (Fallen) are enabled with `expected_host`/
+        # `expected_port` deliberately left nil: nobody has an account with
+        # these entitlements to confirm live yet, but they're wired in
+        # end-to-end (character_list_path, family, and a best-guess
+        # web_game_code assuming it matches the EAccess code, as it does for
+        # DR/DRT/GSF -- only GS3->GS4 has ever diverged) so a tester who does
+        # have access can exercise this without a code change. See
+        # .extract_connection_info for what "unverified" relaxes and what it
+        # still enforces, and docs/web-login-protocol-analysis.md for what to
+        # do once a real result comes back: hardcode the observed host/port
+        # here and this comment no longer applies.
+        #
+        # GSX (GemStone Platinum) is absent because the instance itself has
+        # been retired -- LoginHelpers.VALID_GAME_CODES already excludes it
+        # for the same reason, independent of this module.
         #
         # `character_list_path` matters: confirmed live that a character can
         # exist on ONE instance of a family but not appear on that family's
@@ -113,24 +133,33 @@ module Lich
         # has the full account-wide picture (true for DR/DRT/GS3/GST, where
         # the same character happens to be shared, but not a safe general
         # assumption).
-        #
-        # DRF/DRX are deliberately absent -- add an entry only after a live
-        # probe confirms both the `game` form value this flow expects and
-        # the resulting host/port, the same way these five were. GSX
-        # (GemStone Platinum) is absent because the instance itself has been
-        # retired -- LoginHelpers.VALID_GAME_CODES already excludes it for
-        # the same reason, independent of this module.
         CONFIRMED_INSTANCES = {
           "DR"  => { family: "dr",  web_game_code: "DR",  character_list_path: "/dr/play/home.asp",       expected_host: "storm.dr.game.play.net",  expected_port: "11024" },
           "DRT" => { family: "dr",  web_game_code: "DRT", character_list_path: "/dr/play/playdrt.asp",    expected_host: "hydra.simutronics.com",   expected_port: "11624" },
+          "DRX" => { family: "dr",  web_game_code: "DRX", character_list_path: "/dr/play/playx.asp",      expected_host: nil, expected_port: nil }, # unverified -- see comment above
+          "DRF" => { family: "dr",  web_game_code: "DRF", character_list_path: "/dr/play/playf.asp",      expected_host: nil, expected_port: nil }, # unverified -- see comment above
           "GS3" => { family: "gs4", web_game_code: "GS4", character_list_path: "/gs4/play/home.asp",      expected_host: "storm.gs4.game.play.net", expected_port: "10024" },
           "GST" => { family: "gs4", web_game_code: "GST", character_list_path: "/gs4/play/play_test.asp", expected_host: "chimera.simutronics.com", expected_port: "10624" },
           "GSF" => { family: "gs4", web_game_code: "GSF", character_list_path: "/gs4/play/playf.asp",     expected_host: "storm.gs4.game.play.net", expected_port: "10324" },
         }.freeze
 
+        # The fallback guard for an unverified instance's connection info
+        # (.extract_connection_info), since there's no exact expected_host to
+        # match yet -- the returned host must at least end in one of these.
+        # A confirmed instance's exact-match check already implies this, so
+        # this only comes into play for the unverified case.
+        TRUSTED_GAME_HOST_SUFFIXES = [".simutronics.com", ".simutronics.net", ".game.play.net"].freeze
+
+        # @param host [String] hostname to check
+        # @return [Boolean] true if host ends in a known Simutronics game-server domain
+        # @api private
+        def self.trusted_game_host?(host)
+          TRUSTED_GAME_HOST_SUFFIXES.any? { |suffix| host.to_s.end_with?(suffix) }
+        end
+
         # @param game_code [String] EAccess-style game instance code
         # @return [Hash] the CONFIRMED_INSTANCES entry for game_code
-        # @raise [AuthenticationError] "UNSUPPORTED_GAME_CODE" if game_code is not confirmed live
+        # @raise [AuthenticationError] "UNSUPPORTED_GAME_CODE" if game_code is not in CONFIRMED_INSTANCES at all
         # @api private
         def self.instance_for(game_code)
           CONFIRMED_INSTANCES.fetch(game_code) { raise AuthenticationError, "UNSUPPORTED_GAME_CODE" }
@@ -286,8 +315,17 @@ module Lich
             # `get` doesn't follow it, so this would otherwise silently fall
             # through to an empty body scrape and a misleading
             # CHARACTER_NOT_FOUND instead of the real cause.
-            subscription_needed_path = "/#{instance[:family]}/play/subscription_needed.asp"
-            raise AuthenticationError, "NO_SUBSCRIPTION" if response["location"] == subscription_needed_path
+            #
+            # Not one fixed path: confirmed live that this varies per
+            # instance -- DR's is plain "subscription_needed.asp", but
+            # DRX's/DRF's are "subscription_to_plat_needed.asp" /
+            # "subscription_to_fall_needed.asp". Matched by pattern rather
+            # than an exact string so an instance-specific variant we
+            # haven't seen yet (e.g. if GST/GSF ever needs one) is still
+            # recognized instead of falling through to the generic
+            # UNEXPECTED_CHARACTER_LIST_RESPONSE below.
+            subscription_needed_pattern = %r{\A/#{Regexp.escape(instance[:family])}/play/subscription(?:_to_\w+)?_needed\.asp\z}
+            raise AuthenticationError, "NO_SUBSCRIPTION" if response["location"].to_s.match?(subscription_needed_pattern)
 
             raise AuthenticationError, "UNEXPECTED_CHARACTER_LIST_RESPONSE"
           end
@@ -436,18 +474,28 @@ module Lich
         end
 
         # Parses the final redirect's query string into the host/port/key
-        # triple, validated against the requested instance's expected
-        # values rather than trusted as-is. Rejects a duplicate query key
-        # (last-value-wins would otherwise let a repeated `key` param
-        # silently override the real one) and any blank value.
+        # triple. Rejects a duplicate query key (last-value-wins would
+        # otherwise let a repeated `key` param silently override the real
+        # one) and any blank value.
+        #
+        # For a confirmed instance (expected_host/expected_port both
+        # present), the returned host/port must match exactly rather than
+        # being trusted as-is. For an unverified instance (see
+        # CONFIRMED_INSTANCES), there's nothing yet to match exactly, so the
+        # host is instead checked against TRUSTED_GAME_HOST_SUFFIXES -- a
+        # looser but still real guard, and the observed host/port are logged
+        # so they can be promoted into CONFIRMED_INSTANCES once a live
+        # result confirms them.
         #
         # @param location [String] the validated final URL from .follow_redirects
         # @param instance [Hash] a CONFIRMED_INSTANCES entry
         # @return [Array(String, String, String)] [host, port, key]
         # @raise [AuthenticationError] "MALFORMED_LAUNCH_URL" if the query string doesn't parse,
         #   "DUPLICATE_QUERY_PARAM" if host/port/key appears more than once, "NO_CONNECTION_INFO"
-        #   if any of host/port/key is missing or blank, or "UNEXPECTED_CONNECTION_INFO" if the
-        #   returned host/port don't match the requested instance's expected values
+        #   if any of host/port/key is missing or blank, "UNEXPECTED_CONNECTION_INFO" if a
+        #   confirmed instance's returned host/port don't match its expected values, or
+        #   "UNTRUSTED_CONNECTION_HOST" if an unverified instance's returned host isn't a
+        #   recognized Simutronics game-server domain
         # @api private
         def self.extract_connection_info(location, instance:)
           uri = URI.parse(location)
@@ -462,8 +510,16 @@ module Lich
           key = grouped["key"]&.first&.last
           raise AuthenticationError, "NO_CONNECTION_INFO" if [host, port, key].any? { |v| v.to_s.empty? }
 
-          unless host == instance[:expected_host] && port == instance[:expected_port]
-            raise AuthenticationError, "UNEXPECTED_CONNECTION_INFO"
+          if instance[:expected_host] && instance[:expected_port]
+            unless host == instance[:expected_host] && port == instance[:expected_port]
+              raise AuthenticationError, "UNEXPECTED_CONNECTION_INFO"
+            end
+          else
+            raise AuthenticationError, "UNTRUSTED_CONNECTION_HOST" unless trusted_game_host?(host)
+
+            Lich.log "warn: WebLogin -- #{instance[:web_game_code]} has no pinned host/port yet " \
+                     "(unverified instance); observed host=#{host} port=#{port}. If this login " \
+                     "succeeded, hardcode these into CONFIRMED_INSTANCES."
           end
 
           [host, port, key]

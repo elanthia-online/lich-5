@@ -56,10 +56,19 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       expect(described_class.instance_for('GSF')[:character_list_path]).to eq('/gs4/play/playf.asp')
     end
 
-    it 'raises UNSUPPORTED_GAME_CODE for an unconfirmed instance (fail closed)' do
-      %w[DRF DRX GSX ZZ].each do |code|
+    it 'raises UNSUPPORTED_GAME_CODE for a game code not in the table at all (fail closed)' do
+      %w[GSX ZZ].each do |code|
         expect { described_class.instance_for(code) }
           .to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/), "expected #{code} to be rejected"
+      end
+    end
+
+    it 'accepts DRX/DRF (unverified -- no live account entitlement to confirm host/port yet) with nil expected_host/expected_port' do
+      %w[DRX DRF].each do |code|
+        instance = described_class.instance_for(code)
+        expect(instance[:expected_host]).to be_nil
+        expect(instance[:expected_port]).to be_nil
+        expect(instance[:family]).to eq('dr')
       end
     end
   end
@@ -93,6 +102,8 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
           login_requests << req
           login_okay_response
         when '/dr/play/playdrt.asp' then home_page_response # DRT's character_list_path, not the family's generic home.asp
+        when '/dr/play/playx.asp' then home_page_response # DRX's character_list_path (unverified instance)
+        when '/dr/play/playf.asp' then home_page_response # DRF's character_list_path (unverified instance)
         when '/includes/common/play/goplay2.asp'
           goplay2_requests << req
           goplay2_response
@@ -134,7 +145,7 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
 
     it 'raises for an unsupported game code without making any request' do
       expect {
-        described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRF')
+        described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'GSX')
       }.to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/)
       expect(http).not_to have_received(:request)
     end
@@ -173,6 +184,20 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       it 'raises NO_SUBSCRIPTION rather than a misleading CHARACTER_NOT_FOUND' do
         expect {
           described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /NO_SUBSCRIPTION/)
+      end
+    end
+
+    context 'when the account has no subscription on an instance with its own named subscription page' do
+      # Confirmed live: DR's is plain "subscription_needed.asp", but DRX's
+      # (Platinum) is "subscription_to_plat_needed.asp" and DRF's (Fallen) is
+      # "subscription_to_fall_needed.asp" -- matched by pattern, not an exact
+      # string, so these instance-specific variants are still recognized.
+      let(:home_page_response) { response_double(location: '/dr/play/subscription_to_plat_needed.asp') }
+
+      it 'raises NO_SUBSCRIPTION for the Platinum-specific redirect too' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRX')
         }.to raise_error(described_class::AuthenticationError, /NO_SUBSCRIPTION/)
       end
     end
@@ -340,6 +365,36 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         expect {
           described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
         }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_CONNECTION_INFO/)
+      end
+    end
+
+    context 'for an unverified instance (DRX/DRF -- no live account entitlement to confirm host/port yet)' do
+      context 'when the returned host is a recognized Simutronics game-server domain' do
+        let(:redirect2_response) do
+          response_double(location: 'https://www.play.net/play/home.asp?host=storm.dr.game.play.net&port=11324&key=abc123')
+        end
+
+        it 'accepts it and logs the observed host/port for later promotion into CONFIRMED_INSTANCES' do
+          allow(Lich).to receive(:log)
+
+          result = described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRX')
+
+          expect(result['gamehost']).to eq('storm.dr.game.play.net')
+          expect(result['gameport']).to eq('11324')
+          expect(Lich).to have_received(:log).with(/DRX has no pinned host\/port yet.*observed host=storm\.dr\.game\.play\.net port=11324/)
+        end
+      end
+
+      context 'when the returned host is NOT a recognized Simutronics game-server domain' do
+        let(:redirect2_response) do
+          response_double(location: 'https://www.play.net/play/home.asp?host=attacker.example&port=1&key=abc123')
+        end
+
+        it 'raises UNTRUSTED_CONNECTION_HOST rather than trusting an unverified instance\'s connection data blindly' do
+          expect {
+            described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRF')
+          }.to raise_error(described_class::AuthenticationError, /UNTRUSTED_CONNECTION_HOST/)
+        end
       end
     end
 

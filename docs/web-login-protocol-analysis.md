@@ -21,8 +21,10 @@ A `Lich::Common::Authentication::WebLogin` module implementing this flow has bee
 (`lib/common/authentication/web_login.rb`) and exercised live end-to-end: DR, DR Test, GemStone
 Prime (`GS3`->`GS4` mapping), GemStone Test, GemStone Shattered, and a bad-password failure all
 confirmed working against the real play.net servers, matching the browser-captured hosts/ports
-exactly. Several things were only discovered by building and running a non-browser HTTP client,
-or by testing a second account, not by watching a single browser session:
+exactly. `DRX` (Platinum) and `DRF` (Fallen) are wired in end-to-end too, but as *unverified*
+entries pending an account with real entitlement to confirm the actual host/port -- see
+`CONFIRMED_INSTANCES`. Several things were only discovered by building and running a non-browser
+HTTP client, or by testing more than one account, not by watching a single browser session:
 
 1. **A browser-like `User-Agent` header is required on every request, including the very first
    GET.** play.net's front end (CloudFront/WAF) returns a bare `500` for Ruby's default
@@ -59,8 +61,15 @@ or by testing a second account, not by watching a single browser session:
    response's status: a redirect to `subscription_needed.asp` raises a distinct `NO_SUBSCRIPTION`
    (classified fatal in `Authenticator::FATAL_ERROR_CODES` -- retrying won't help), and any other
    non-200 response raises `UNEXPECTED_CHARACTER_LIST_RESPONSE`.
+6. **The "no subscription" redirect target isn't one fixed path -- it's instance-specific.**
+   Confirmed live with the same unentitled account against `DRX`/`DRF`: DR's is plain
+   `subscription_needed.asp`, but DRX's (Platinum) is `subscription_to_plat_needed.asp` and DRF's
+   (Fallen) is `subscription_to_fall_needed.asp`. `WebLogin` matches this by pattern
+   (`subscription(?:_to_\w+)?_needed\.asp`) rather than an exact string, so an instance-specific
+   variant not seen yet is still recognized as `NO_SUBSCRIPTION` instead of falling through to the
+   generic `UNEXPECTED_CHARACTER_LIST_RESPONSE`.
 
-All five were invisible in a single browser capture and only surfaced by building a standalone
+All six were invisible in a single browser capture and only surfaced by building a standalone
 client and/or testing more than one account -- worth remembering if this flow needs
 re-verifying after a play.net change: reproduce with a non-browser client against more than one
 account (ideally one with an expired/inactive subscription too), not just by re-watching
@@ -191,14 +200,18 @@ charID={CHAR_CODE}
   - `game=GSF` (GemStone IV Shattered) -> host `storm.gs4.game.play.net`, port `10324` --
     matches EAccess `GSF` (like `DR`/`DRT`/`GST`, unlike the `GS3`->`GS4` Prime mismatch)
 
-  Not yet confirmed live: `DRF` (Fallen), `DRX` (Platinum). Given the confirmed `GS3`->`GS4`
-  mismatch, **do not assume these match their EAccess codes either** -- each must be probed
-  individually before being relied on. `GSX` (GemStone Platinum) is not applicable at all -- the
-  instance itself has been retired (confirmed by the account holder; `LoginHelpers.VALID_GAME_CODES`
-  already excludes it independent of this module). `WebLogin` carries its own explicit
-  `CONFIRMED_INSTANCES` table (seeded from EAccess codes where confirmed identical, overridden
-  where not, and simply absent for anything unconfirmed or retired), not reusing EAccess's codes
-  directly.
+  `DRX` (Platinum) and `DRF` (Fallen) are wired in end-to-end (`game=DRX`/`game=DRF`, assumed
+  identical to their EAccess codes as DR/DRT/GSF's do -- only `GS3`->`GS4` has ever diverged) but
+  **not live-confirmed**: no account with these entitlements has been available to test with, so
+  their `expected_host`/`expected_port` are deliberately left unpinned in `CONFIRMED_INSTANCES`
+  (see that constant's comment for what "unverified" relaxes vs. still enforces). Confirmed live
+  with an unentitled account that both reach the real server correctly and fail cleanly (`NO_SUBSCRIPTION`,
+  via each instance's own named subscription page -- `subscription_to_plat_needed.asp` /
+  `subscription_to_fall_needed.asp`, not the generic `subscription_needed.asp` -- see "Implementation
+  Status"), which at least validates `character_list_path` and the request shape; the actual
+  `GAMEHOST`/`GAMEPORT` a real entitled account gets back is still unconfirmed. `GSX` (GemStone
+  Platinum) is not applicable at all -- the instance itself has been retired (confirmed by the
+  account holder; `LoginHelpers.VALID_GAME_CODES` already excludes it independent of this module).
 - `instanceID=0` in both observed cases -- meaning not yet determined (possibly multi-session
   slot, unrelated to which game instance is selected -- that's `game`).
 - Response: `302` to `/{gameName}/play/playing_web.asp`.
@@ -252,10 +265,14 @@ future fallback needs to tunnel the *game* connection itself over HTTPS too (out
 
 ## Open Questions / Not Yet Probed
 
-- `DRF` (Fallen), `DRX` (Platinum) -- no account with these entitlements available for probing
-  yet. **Given the confirmed `GS3`->`GS4` mismatch on GemStone Prime, do not assume these match
-  their EAccess codes -- verify each one live.** `GSF` (Shattered) is now confirmed (see above);
-  `GSX` (GemStone Platinum) is not applicable -- the instance has been retired.
+- `DRF` (Fallen), `DRX` (Platinum) -- enabled in `CONFIRMED_INSTANCES` as *unverified* entries
+  (`expected_host`/`expected_port` left `nil`, see that constant's comment) so a tester with real
+  entitlement can exercise them without a code change. No such account has been available yet, so
+  the actual `GAMEHOST`/`GAMEPORT` -- and whether `game=DRX`/`game=DRF` truly match their EAccess
+  codes, given the confirmed `GS3`->`GS4` mismatch elsewhere -- remain unconfirmed. Once a real
+  result comes back, hardcode the observed host/port here and remove the `nil`s. `GSF` (Shattered)
+  is fully confirmed (see above); `GSX` (GemStone Platinum) is not applicable at all -- the
+  instance has been retired.
 - Full error-code vocabulary on `login_error.asp` -- "Invalid password" and "Invalid account"
   (nonexistent account name) both confirmed; locked account and other failure modes not yet
   probed. Not currently a gap in practice: `WebLogin.login` already takes the coarser approach
