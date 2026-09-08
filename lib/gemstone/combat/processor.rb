@@ -1175,14 +1175,23 @@ module Lich
               # produced by OUR weapon and still belong to our next swing.
               unless current_event[:inbound]
                 unless pending_flares.empty?
-                  # A flare held over from the previous chunk names the BOW
-                  # while the shot names the ARROW; it belongs to this swing
-                  # unless a different weapon's flare already proves otherwise.
-                  claimed, pending_flares = pending_flares.partition do |f|
-                    flare_matches_weapon?(f, current_event[:weapon]) ||
-                      (f[:_held] && !flare_contradicts_weapon?(f, current_event))
+                  # A bow's pre-flare (dispel on the nock) names the BOW while
+                  # the shot names the ARROW, so a weapon-name match cannot be
+                  # required (hunt log 2026-09-07: 16 of 16 dispels became
+                  # their own attacks, in-chunk, right before "You fire"). A
+                  # pre-flare belongs to this swing unless a flare from a
+                  # DIFFERENT weapon already sits on it - the back-to-back
+                  # dual-wield signature (see flare_contradicts_weapon?).
+                  # Sequential so the first claimed flare guards the second.
+                  still_pending = []
+                  pending_flares.each do |f|
+                    if flare_matches_weapon?(f, current_event[:weapon]) || !flare_contradicts_weapon?(f, current_event)
+                      current_event[:flares] << f
+                    else
+                      still_pending << f
+                    end
                   end
-                  current_event[:flares].concat(claimed)
+                  pending_flares = still_pending
                 end
                 unless pending_resolutions.empty?
                   current_event[:resolutions].concat(pending_resolutions)

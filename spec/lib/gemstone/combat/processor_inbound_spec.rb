@@ -979,6 +979,17 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(events.first[:hits].map { |h| h[:damage] }).to eq([88])
     end
 
+    it 'claims an in-chunk dispel-on-nock pre-flare for the shot that follows (raw hunt chunk 21:44:41)' do
+      lines = File.readlines(File.join(__dir__, '../../../fixtures/dispel_on_nock.txt'), chomp: true)
+      events = described_class.parse_events(lines)
+      expect(events.map { |e| e[:name] }).to eq([:fire])
+      fire = events.first
+      expect(fire[:hits].map { |h| h[:damage] }).to eq([90])
+      dispel = fire[:flares].find { |f| f[:name] == :dispel }
+      expect(dispel[:hits].map { |h| h[:damage] }).to eq([15])
+      expect(dispel[:resolutions].map { |r| r[:result] }).to eq([175])
+    end
+
     it 'wraps a held pre-flare as its own event when no swing follows in the next chunk' do
       nock_chunk = [
         " ** Your <a exist=\"125479289\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}! **",
