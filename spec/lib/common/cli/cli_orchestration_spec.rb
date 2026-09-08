@@ -206,4 +206,183 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       expect(Lich::Common::Authentication::WebLogin).not_to have_received(:auth_with_timeout)
     end
   end
+
+  describe '.handle_change_master_password' do
+    before do
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:change_master_password).and_return(0)
+    end
+
+    it 'passes both OLDPASSWORD and NEWPASSWORD through when provided' do
+      stub_const('ARGV', ['--change-master-password', 'oldpass', 'newpass'])
+
+      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
+        .with('oldpass', 'newpass')
+    end
+
+    it 'passes nil for NEWPASSWORD when omitted' do
+      stub_const('ARGV', ['--change-master-password', 'oldpass'])
+
+      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
+        .with('oldpass', nil)
+    end
+
+    it 'accepts the -cmp short flag' do
+      stub_const('ARGV', ['-cmp', 'oldpass', 'newpass'])
+
+      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:change_master_password)
+        .with('oldpass', 'newpass')
+    end
+
+    it 'exits 1 without authenticating when OLDPASSWORD is missing' do
+      stub_const('ARGV', ['--change-master-password'])
+
+      expect { described_class.handle_change_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).not_to have_received(:change_master_password)
+    end
+  end
+
+  describe '.handle_recover_master_password' do
+    before do
+      allow(Lich::Common::Authentication::CLIPassword).to receive(:recover_master_password).and_return(0)
+    end
+
+    it 'passes NEWPASSWORD through when provided' do
+      stub_const('ARGV', ['--recover-master-password', 'recoveredpass'])
+
+      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
+        .with('recoveredpass')
+    end
+
+    it 'passes nil when NEWPASSWORD is omitted, deferring to interactive prompt' do
+      stub_const('ARGV', ['--recover-master-password'])
+
+      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
+        .with(nil)
+    end
+
+    it 'accepts the -rmp short flag' do
+      stub_const('ARGV', ['-rmp', 'recoveredpass'])
+
+      expect { described_class.handle_recover_master_password }.to raise_error(SystemExit)
+      expect(Lich::Common::Authentication::CLIPassword).to have_received(:recover_master_password)
+        .with('recoveredpass')
+    end
+  end
+
+  describe '.handle_convert_entries' do
+    before do
+      allow(Lich::Common::CLI::CLIConversion).to receive(:convert).and_return(true)
+    end
+
+    %w[plaintext standard].each do |mode|
+      it "converts to #{mode} mode without prompting for a master password" do
+        stub_const('ARGV', ['--convert-entries', mode])
+
+        expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+        expect(Lich::Common::CLI::CLIConversion).to have_received(:convert).with(DATA_DIR, mode)
+      end
+    end
+
+    it 'exits 1 without converting when the mode is missing' do
+      stub_const('ARGV', ['--convert-entries'])
+
+      expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+    end
+
+    it 'exits 1 without converting when the mode is not recognized' do
+      stub_const('ARGV', ['--convert-entries', 'bogus'])
+
+      expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+    end
+
+    context 'when converting to enhanced mode' do
+      before do
+        allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_and_confirm_password)
+          .and_return('newmasterpass')
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
+      end
+
+      it 'prompts for and stores a master password before converting' do
+        stub_const('ARGV', ['--convert-entries', 'enhanced'])
+
+        expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+        expect(Lich::Common::Authentication::CLIPassword).to have_received(:prompt_and_confirm_password)
+        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password)
+          .with('newmasterpass')
+        expect(Lich::Common::CLI::CLIConversion).to have_received(:convert).with(DATA_DIR, 'enhanced')
+      end
+
+      it 'exits 1 without converting when password confirmation is cancelled' do
+        allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_and_confirm_password).and_return(nil)
+        stub_const('ARGV', ['--convert-entries', 'enhanced'])
+
+        expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+        expect(Lich::Common::GUI::MasterPasswordManager).not_to have_received(:store_master_password)
+        expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+      end
+
+      it 'exits 1 without converting when storing the password in the keychain fails' do
+        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(false)
+        stub_const('ARGV', ['--convert-entries', 'enhanced'])
+
+        expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+        expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
+      end
+    end
+
+    it 'exits 1 when the underlying conversion fails' do
+      allow(Lich::Common::CLI::CLIConversion).to receive(:convert).and_return(false)
+      stub_const('ARGV', ['--convert-entries', 'plaintext'])
+
+      expect { described_class.handle_convert_entries }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+    end
+  end
+
+  describe '.handle_change_encryption_mode' do
+    before do
+      allow(Lich::Common::CLI::EncryptionModeChange).to receive(:change_mode).and_return(0)
+    end
+
+    it 'passes the mode as a symbol through' do
+      stub_const('ARGV', ['--change-encryption-mode', 'enhanced'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, nil)
+    end
+
+    it 'passes an explicit --master-password through' do
+      stub_const('ARGV', ['--change-encryption-mode', 'enhanced', '--master-password', 'secret'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, 'secret')
+    end
+
+    it 'accepts the -mp short flag for the master password' do
+      stub_const('ARGV', ['--change-encryption-mode', 'enhanced', '-mp', 'secret'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:enhanced, 'secret')
+    end
+
+    it 'accepts the -cem short flag' do
+      stub_const('ARGV', ['-cem', 'standard'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::EncryptionModeChange).to have_received(:change_mode).with(:standard, nil)
+    end
+
+    it 'exits 1 without changing mode when MODE is missing' do
+      stub_const('ARGV', ['--change-encryption-mode'])
+
+      expect { described_class.handle_change_encryption_mode }.to raise_error(SystemExit)
+      expect(Lich::Common::CLI::EncryptionModeChange).not_to have_received(:change_mode)
+    end
+  end
 end

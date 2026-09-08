@@ -113,6 +113,23 @@ RSpec.describe Lich::Common::GameObj do
 
         expect(obj.after_name).to eq('after text')
       end
+
+      it 'refreshes before_name on a name-preserving move to a new container' do
+        # Same id/noun/name -> same identity-index entry, so the instance is
+        # reused. A move must update its command metadata, not keep the stale one.
+        first  = described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #20')
+        second = described_class.new_inv('10', 'gem', 'ruby', '30', 'get #10 in #30')
+
+        expect(second).to equal(first) # reused instance
+        expect(second.before_name).to eq('get #10 in #30')
+      end
+
+      it 'does not let a nil observation blank a known before_name' do
+        obj = described_class.new_inv('11', 'gem', 'opal', '20', 'get #11 in #20')
+        described_class.new_inv('11', 'gem', 'opal', '20', nil) # e.g. a source with no command
+
+        expect(obj.before_name).to eq('get #11 in #20')
+      end
     end
 
     context 'with integer id' do
@@ -1233,6 +1250,171 @@ RSpec.describe Lich::Common::GameObj do
         described_class.commit_all_containers
 
         expect(described_class.containers).to be_empty
+      end
+    end
+
+    describe 'deferred metadata during a staged refresh' do
+      # find_or_create returns the shared, still-published instance, so a
+      # differing before_name/after_name observed mid-refresh must NOT mutate it
+      # until the refresh commits, must roll back if the refresh is discarded, and
+      # must stay scoped to its own staging buffer.
+
+      it 'does not publish a changed after_name until the container refresh commits' do
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+        described_class.begin_container('20')
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new detail)')
+
+        expect(described_class.containers['20'].first.after_name).to eq('(old detail)')
+
+        described_class.commit_container('20')
+        expect(described_class.containers['20'].first.after_name).to eq('(new detail)')
+      end
+
+      it 'defers a worn-inv metadata change until commit_inv' do
+        described_class.new_inv('10', 'gem', 'ruby', nil, 'get #10')
+
+        described_class.begin_inv
+        described_class.new_inv('10', 'gem', 'ruby', nil, 'get #10 fast')
+        expect(described_class.inv.first.before_name).to eq('get #10')
+
+        described_class.commit_inv
+        expect(described_class.inv.first.before_name).to eq('get #10 fast')
+      end
+
+      it 'still refreshes metadata immediately for a non-staged observation' do
+        described_class.new_inv('30', 'gem', 'opal', '40', nil, '(det A)')
+        described_class.new_inv('30', 'gem', 'opal', '40', nil, '(det B)')
+
+        expect(described_class.containers['40'].first.after_name).to eq('(det B)')
+      end
+
+      %i[abort_container discard_staged_refreshes clear_all_containers].each do |discard|
+        it "leaves the published metadata intact when the refresh ends via #{discard}" do
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+          described_class.begin_container('20')
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new detail)')
+          discard == :abort_container ? described_class.abort_container('20') : described_class.public_send(discard)
+
+          # ...and a later unrelated committing refresh of the same instance must
+          # not resurrect the discarded value (the pending entry is dropped, not
+          # merely detached from its buffer).
+          described_class.begin_inv
+          described_class.new_inv('10', 'gem', 'ruby', nil, nil, nil)
+          described_class.commit_inv
+
+          obj = described_class['10']
+          expect(obj.after_name).to eq('(old detail)')
+        end
+      end
+
+      it 'drops the prior buffer\'s deferral when a container refresh is restarted' do
+        # The restart replaces container 20's contents (obj 10 is not re-observed),
+        # so hold the instance directly -- it is no longer in any registry.
+        obj = described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #20')
+
+        described_class.begin_container('20')
+        described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #30') # deferred
+        described_class.begin_container('20')                                # restart drops it
+        described_class.new_inv('99', 'gem', 'other', '20', nil)
+        described_class.commit_container('20')
+
+        expect(obj.before_name).to eq('get #10 in #20')
+      end
+
+      it 'drops the prior buffer\'s deferral when a worn-inv refresh is restarted' do
+        obj = described_class.new_inv('10', 'gem', 'ruby', nil, 'get #10')
+
+        described_class.begin_inv
+        described_class.new_inv('10', 'gem', 'ruby', nil, 'get #10 fast') # deferred
+        described_class.begin_inv                                         # restart drops it
+        described_class.new_inv('10', 'gem', 'ruby', nil, nil)
+        described_class.commit_inv
+
+        expect(obj.before_name).to eq('get #10')
+        # the orphaned entry must not linger (no unbounded @@pending_metadata growth)
+        expect(described_class.class_variable_get(:@@pending_metadata)).to be_empty
+      end
+
+      it 'keeps each open container\'s deferral scoped to its own buffer' do
+        described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #20')
+
+        described_class.begin_container('20')
+        described_class.begin_container('30')
+        described_class.new_inv('10', 'gem', 'ruby', '20', 'get #10 in #20b')
+        described_class.new_inv('10', 'gem', 'ruby', '30', 'get #10 in #30')
+
+        described_class.commit_container('20')
+        expect(described_class.containers['20'].first.before_name).to eq('get #10 in #20b')
+
+        described_class.commit_container('30')
+        expect(described_class.containers['30'].first.before_name).to eq('get #10 in #30')
+      end
+
+      it 'merges before and after fields independently within one refresh' do
+        described_class.new_inv('10', 'gem', 'ruby', '20', 'old ruby', '(old tail)')
+
+        described_class.begin_container('20')
+        described_class.new_inv('10', 'gem', 'ruby', '20', 'new ruby', nil) # before only
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new tail)') # after only
+        described_class.commit_container('20')
+
+        obj = described_class.containers['20'].first
+        expect(obj.before_name).to eq('new ruby')
+        expect(obj.after_name).to eq('(new tail)')
+      end
+
+      it 'lets an observation that returns to the published value supersede an intermediate one' do
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+        described_class.begin_container('20')
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(intermediate detail)')
+        described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+        described_class.commit_container('20')
+
+        expect(described_class.containers['20'].first.after_name).to eq('(old detail)')
+      end
+
+      context 'during a full INV LIST refresh (begin_all_containers)' do
+        it 'defers metadata until commit_all_containers_full' do
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+          described_class.begin_inv
+          described_class.begin_all_containers
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new detail)')
+
+          expect(described_class.containers['20'].first.after_name).to eq('(old detail)')
+
+          described_class.commit_all_containers_full
+          described_class.commit_inv
+          expect(described_class.containers['20'].first.after_name).to eq('(new detail)')
+        end
+
+        it 'rolls the metadata back when the listing is discarded via discard_inv_refresh' do
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+          described_class.begin_inv
+          described_class.begin_all_containers
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new detail)')
+          described_class.discard_inv_refresh
+
+          expect(described_class.containers['20'].first.after_name).to eq('(old detail)')
+          expect(described_class.class_variable_get(:@@pending_metadata)).to be_empty
+        end
+
+        it 'drops the prior buffers\' deferral when the listing is restarted' do
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+
+          described_class.begin_all_containers
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(new detail)') # deferred
+          described_class.begin_all_containers                                    # restart drops it
+          described_class.new_inv('10', 'gem', 'ruby', '20', nil, '(old detail)')
+          described_class.commit_all_containers_full
+
+          expect(described_class.containers['20'].first.after_name).to eq('(old detail)')
+          expect(described_class.class_variable_get(:@@pending_metadata)).to be_empty
+        end
       end
     end
 
