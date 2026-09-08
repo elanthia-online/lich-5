@@ -47,11 +47,24 @@ or by testing a second account, not by watching a single browser session:
    must scrape the specific instance page a user would actually pick that game code from (e.g.
    `/gs4/play/playf.asp` for Shattered), not assume the family's `home.asp` has the full
    account-wide picture. See `CONFIRMED_INSTANCES`' `character_list_path` per entry.
+5. **An account with no active subscription on the requested instance triggers a SECOND
+   redirect, from `okay_page` itself, that a naive client never sees.** Confirmed live with a
+   third test account: `login.asp`'s own redirect still lands on `okay_page` (e.g.
+   `/dr/play/home.asp`) successfully -- login itself does not fail. But `GET`ting that page (the
+   same request `.resolve_char_code` makes to scrape the character list) returns another `302`,
+   to `/{family}/play/subscription_needed.asp`, which a plain (non-redirect-following) HTTP
+   client -- ours included, deliberately, see class doc -- does not follow. Without an explicit
+   check, this silently falls through to an empty body scrape and a misleading
+   `CHARACTER_NOT_FOUND` instead of the real cause. `WebLogin` now inspects the character-list
+   response's status: a redirect to `subscription_needed.asp` raises a distinct `NO_SUBSCRIPTION`
+   (classified fatal in `Authenticator::FATAL_ERROR_CODES` -- retrying won't help), and any other
+   non-200 response raises `UNEXPECTED_CHARACTER_LIST_RESPONSE`.
 
-All four were invisible in a single browser capture and only surfaced by building a standalone
-client and/or testing a second account -- worth remembering if this flow needs re-verifying after
-a play.net change: reproduce with a non-browser client against more than one account, not just by
-re-watching DevTools on one login.
+All five were invisible in a single browser capture and only surfaced by building a standalone
+client and/or testing more than one account -- worth remembering if this flow needs
+re-verifying after a play.net change: reproduce with a non-browser client against more than one
+account (ideally one with an expired/inactive subscription too), not just by re-watching
+DevTools on one login.
 
 ---
 

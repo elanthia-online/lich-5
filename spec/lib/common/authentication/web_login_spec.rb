@@ -161,6 +161,32 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       end
     end
 
+    context 'when the account has no active subscription on the requested instance' do
+      # Confirmed live: login.asp's own redirect still lands on okay_page
+      # successfully (login() does not raise), but okay_page ITSELF then
+      # redirects a second time to subscription_needed.asp -- `get` doesn't
+      # follow that second redirect, so without this check it would
+      # silently fall through to an empty body scrape and a misleading
+      # CHARACTER_NOT_FOUND instead of the real cause.
+      let(:home_page_response) { response_double(location: '/dr/play/subscription_needed.asp') }
+
+      it 'raises NO_SUBSCRIPTION rather than a misleading CHARACTER_NOT_FOUND' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /NO_SUBSCRIPTION/)
+      end
+    end
+
+    context 'when the character-list page redirects somewhere other than subscription_needed.asp' do
+      let(:home_page_response) { response_double(location: '/dr/some_other_redirect.asp') }
+
+      it 'raises UNEXPECTED_CHARACTER_LIST_RESPONSE' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_CHARACTER_LIST_RESPONSE/)
+      end
+    end
+
     context 'when login redirects to the error page' do
       let(:login_okay_response) { response_double(location: '/dr/login_error.asp?error=&returnto=/dr/') }
 

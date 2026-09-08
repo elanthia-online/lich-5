@@ -25,7 +25,8 @@ module Lich
       # PASSWORD = wrong password, CHARACTER_NOT_FOUND = character not in account
       # GENERATOR_NOT_AVAILABLE = account not entitled to create a character on the instance
       # LOGIN_FAILED = WebLogin's credential-rejection signal (see web_login.rb)
-      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND GENERATOR_NOT_AVAILABLE LOGIN_FAILED].freeze
+      # NO_SUBSCRIPTION = WebLogin: account has no active subscription on the requested instance
+      FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND GENERATOR_NOT_AVAILABLE LOGIN_FAILED NO_SUBSCRIPTION].freeze
 
       # Connection-level failures where the endpoint itself didn't respond --
       # retrying the same unreachable endpoint 3 times with backoff wastes

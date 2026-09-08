@@ -228,6 +228,17 @@ RSpec.describe Lich::Common::Authentication do
       expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout).once # not retried
     end
 
+    it 'treats WebLogin NO_SUBSCRIPTION as fatal too, without exhausting retries first' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      web_error = Lich::Common::Authentication::WebLogin::AuthenticationError.new('NO_SUBSCRIPTION')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_raise(web_error)
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'DR')
+      }.to raise_error(Lich::Common::Authentication::FatalAuthError, /NO_SUBSCRIPTION/)
+      expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout).once # not retried
+    end
+
     it 'sets Account.name/game_code/character for auth_provider: :web (WebLogin.auth does not set it itself)' do
       allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
 

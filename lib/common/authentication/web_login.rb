@@ -267,12 +267,27 @@ module Lich
         # @param instance [Hash] a CONFIRMED_INSTANCES entry
         # @param character [String] character name to match (case-insensitive)
         # @return [String] the matched charID (e.g. "W_ACCOUNT_000")
-        # @raise [AuthenticationError] "CHARACTER_NOT_FOUND" if no radio input matches
+        # @raise [AuthenticationError] "NO_SUBSCRIPTION" if the account has no active subscription
+        #   on this instance, "CHARACTER_NOT_FOUND" if no radio input matches, or
+        #   "UNEXPECTED_CHARACTER_LIST_RESPONSE" for any other non-200 response
         # @api private
         def self.resolve_char_code(http, jar, instance:, character:)
           response = get(http, jar, instance[:character_list_path])
-          body = response.body.to_s
 
+          if (300..399).cover?(response.code.to_i)
+            # Confirmed live: an account with no active subscription on this
+            # instance gets a *second* redirect here (the first, from
+            # login.asp, already landed on okay_page successfully) --
+            # `get` doesn't follow it, so this would otherwise silently fall
+            # through to an empty body scrape and a misleading
+            # CHARACTER_NOT_FOUND instead of the real cause.
+            subscription_needed_path = "/#{instance[:family]}/play/subscription_needed.asp"
+            raise AuthenticationError, "NO_SUBSCRIPTION" if response["location"] == subscription_needed_path
+
+            raise AuthenticationError, "UNEXPECTED_CHARACTER_LIST_RESPONSE"
+          end
+
+          body = response.body.to_s
           body.scan(/id="(W_[A-Za-z0-9_]+)"[^>]*>\s*<label for="\1"><span[^>]*>([^<]+)<\/span>/).each do |char_code, name|
             return char_code if name.strip.casecmp?(character)
           end
