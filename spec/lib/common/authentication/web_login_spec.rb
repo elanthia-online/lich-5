@@ -187,12 +187,29 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       end
     end
 
-    context 'when login redirects to the error page' do
+    context 'when login redirects to the error page (bad password on a real account)' do
       let(:login_okay_response) { response_double(location: '/dr/login_error.asp?error=&returnto=/dr/') }
 
       it 'raises LOGIN_FAILED without attempting character resolution' do
         expect {
           described_class.auth(password: 'wrong', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /LOGIN_FAILED/)
+        expect(http).to have_received(:request).twice # preflight + login POST only
+      end
+    end
+
+    context 'when login redirects to the error page (nonexistent account name)' do
+      # Confirmed live with a random fictitious account name (e.g.
+      # "SDLG3kDSKk38"): distinct body heading ("Invalid account." vs
+      # "Invalid password.") but the same login_error.asp redirect target --
+      # classified identically as LOGIN_FAILED. Matters in practice for a
+      # stale/mistyped saved account name: fails fast and fatally, same as a
+      # bad password, rather than hanging or producing an unclear error.
+      let(:login_okay_response) { response_double(location: '/dr/login_error.asp?error=&returnto=/dr/play/home.asp') }
+
+      it 'raises LOGIN_FAILED, identically to a bad password' do
+        expect {
+          described_class.auth(password: 'RandomFakePassword123!', account: 'SDLG3kDSKk38', character: 'Whoever', game_code: 'DRT')
         }.to raise_error(described_class::AuthenticationError, /LOGIN_FAILED/)
         expect(http).to have_received(:request).twice # preflight + login POST only
       end

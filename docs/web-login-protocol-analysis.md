@@ -97,11 +97,19 @@ return_okay_page=%2Fdr%2Fplay%2Fhome.asp
 - On failure: `302` redirect to `return_error_page` instead. **The redirect target itself is the
   pass/fail signal** -- compare the `Location` header's path against the two page params you
   sent, don't parse body text for control flow.
-  - Confirmed failure case: wrong password -> redirects to
-    `/dr/login_error.asp?error=&returnto=/dr/`, page body has heading `"Invalid password."`.
-    Other failure modes (bad account name, locked account, etc.) not yet probed -- likely land on
-    the same `login_error.asp` page with a different heading, analogous to EAccess's
-    `REJECT`/`NORECORD`/`INVALID`/`PASSWORD` codes but not yet enumerated here.
+  - Confirmed failure cases, both landing on the same `login_error.asp` redirect target with only
+    the body heading differing:
+    - Wrong password on a real account -> `/dr/login_error.asp?error=&returnto=/dr/`, heading
+      `"Invalid password."`.
+    - Nonexistent account name (confirmed with a random fictitious name, e.g. `SDLG3kDSKk38`) ->
+      `/dr/login_error.asp?error=&returnto=/dr/play/home.asp`, heading `"Invalid account."`.
+    `WebLogin.login` classifies both identically as `LOGIN_FAILED` (matching the redirect path
+    only, not the heading -- see "AUTH_FAILED" note below) -- this matters in practice for a
+    stale/mistyped saved account name, which resolves the same way a bad password does: a single
+    fast, fatal failure with no wasted retries or fallback loop, not an indefinite hang or a
+    generic/unclear error. Locked account and other failure modes are still not yet probed --
+    likely land on the same page with yet another heading, and would already be handled the same
+    way (any redirect to `login_error.asp`, regardless of heading, is `LOGIN_FAILED`).
 
 `return_okay_page`/`return_error_page` are attacker-controlled-looking (client supplies them) but
 game-specific (`/dr/...` vs presumably `/gs4/...`) -- set them to the game's own home/error page.
@@ -248,14 +256,17 @@ future fallback needs to tunnel the *game* connection itself over HTTPS too (out
   yet. **Given the confirmed `GS3`->`GS4` mismatch on GemStone Prime, do not assume these match
   their EAccess codes -- verify each one live.** `GSF` (Shattered) is now confirmed (see above);
   `GSX` (GemStone Platinum) is not applicable -- the instance has been retired.
-- Full error-code vocabulary on `login_error.asp` (bad account name, locked account, etc.) --
-  only "Invalid password" confirmed. Needed to build the fatal-vs-transient error classification
-  `Authenticator.with_retry` already does for EAccess (`FATAL_ERROR_CODES`).
-  - Body heading (`h4`) appears to carry the specific reason; a client would need to parse it,
-    or accept a coarser "auth failed" signal instead of granular error codes.
-  - Consider whether error handling should instead treat *any* redirect to `return_error_page` as
-    a single "AUTH_FAILED" class initially, refining later if specific messages need distinct
-    retry semantics (e.g. a transient site error vs bad credentials).
+- Full error-code vocabulary on `login_error.asp` -- "Invalid password" and "Invalid account"
+  (nonexistent account name) both confirmed; locked account and other failure modes not yet
+  probed. Not currently a gap in practice: `WebLogin.login` already takes the coarser approach
+  described below (any redirect to `return_error_page` is `LOGIN_FAILED`, regardless of heading),
+  so an unprobed failure mode still fails correctly today -- just without a distinguishing code.
+  - Body heading (`h4`) carries the specific reason if a more granular code is ever wanted; not
+    currently parsed.
+  - **Resolved: `WebLogin.login` treats any redirect to `return_error_page` as a single
+    `LOGIN_FAILED` class**, matching the redirect path only, not the heading. Confirmed this
+    correctly covers both known failure modes (bad password, bad account name) without needing to
+    parse body text.
 - Character-generator equivalent (EAccess's `charID=0` -> character generator entry) -- not
   probed. `goplay2.asp`'s `NEWCHARSUB=TRUE` flag looks adjacent but unconfirmed.
 - Cookie/session details (name, TTL, whether it's IP-pinned) -- not inspected; treated as opaque,
@@ -272,4 +283,4 @@ future fallback needs to tunnel the *game* connection itself over HTTPS too (out
 | `M`/`F`/`G`/`P`/`C` (enumerate) | *(not needed)* | Web flow skips straight to a specific `game`+`charID`; no equivalent enumeration observed/needed for the fallback |
 | `L\t{charID}\tSTORM` | `POST goplay2.asp` + 2 redirects | Same `charID` format; `game` param mostly matches EAccess game code but not always (confirmed mismatch: GS Prime is `GS4` here vs `GS3` in EAccess) |
 | `L\tOK\t...GAMEHOST=...GAMEPORT=...KEY=...` | Final redirect `?host=...&port=...&key=...` | Same three values, different transport |
-| `AuthenticationError` codes (`REJECT`, `NORECORD`, ...) | Redirect target (`return_error_page`) + body heading | Coarser today; only "Invalid password" confirmed |
+| `AuthenticationError` codes (`REJECT`, `NORECORD`, ...) | Redirect target (`return_error_page`) only, as a single `LOGIN_FAILED` | Coarser by design; confirmed to correctly cover both bad-password and bad-account-name |
