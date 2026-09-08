@@ -214,6 +214,7 @@ module Lich
             creature_id INTEGER REFERENCES creatures(id), -- NULL = self or unresolved
             subject     TEXT,                             -- name as printed ('self' for us)
             attack_id   INTEGER REFERENCES attacks(id),   -- window attribution
+            flare_id    INTEGER REFERENCES flares(id),    -- the flare it rode on (glowbark blind), else NULL
             occurred_at REAL NOT NULL,
             kind        TEXT NOT NULL,
             status      TEXT,
@@ -360,7 +361,8 @@ module Lich
           case type
           when :attack then record_attack(data)
           when :status then record_status(kind: 'status', id: data[:id], name: data[:name],
-                                          status: data[:status].to_s, action: data[:action].to_s)
+                                          status: data[:status].to_s, action: data[:action].to_s,
+                                          flare_seq: data[:flare_seq])
           when :stun then record_status(kind: 'stun', id: data[:id], name: data[:name],
                                         status: 'stunned', action: 'add', value: data[:rounds].to_i)
           when :roundtime then record_status(kind: 'roundtime', id: data[:id], name: data[:name],
@@ -553,6 +555,7 @@ module Lich
             end
 
             touched = Set.new([target[:id]].compact.map(&:to_i))
+            flare_ids = []
             (event[:flares] || []).each_with_index do |flare, i|
               f_target = flare[:target_info]
               f_creature = f_target ? ensure_creature(f_target, at) : nil
@@ -566,13 +569,14 @@ module Lich
                 VALUES (?, ?, ?, ?, ?, ?, ?)
               SQL
               flare_id = @db.last_insert_row_id
+              flare_ids << flare_id
               (flare[:resolutions] || []).each { |r| insert_resolution(attack_id, flare_id, res_seq += 1, r) }
               (flare[:hits] || []).each do |hit|
                 insert_hit(attack_id, flare_id, f_creature || creature_row, hit_seq += 1, hit, at)
               end
             end
 
-            @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound] }
+            @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound], flare_ids: flare_ids }
           end
         end
 
@@ -643,7 +647,7 @@ module Lich
         end
 
         def record_status(kind:, id:, name:, status: nil, action: nil, value: nil,
-                          spell: nil, spell_name: nil, cause: nil)
+                          spell: nil, spell_name: nil, cause: nil, flare_seq: nil)
           at = Time.now.to_f
           # Atomic like record_attack: the creature upsert, the status insert
           # and the kill-stamp are one unit, so a mid-write failure can't leave
@@ -653,21 +657,25 @@ module Lich
           in_txn do
             creature_row = id ? ensure_creature({ id: id, name: name }, at) : nil
             attack_id = nil
+            flare_id = nil
             source = 'direct'
             if @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
               attack_id = @open_attack[:id]
               source = 'window'
+              # the processor says which of the attack's flares the status
+              # rode on (1-based position in the event's flare list)
+              flare_id = @open_attack[:flare_ids]&.[](flare_seq - 1) if flare_seq.is_a?(Integer) && flare_seq.positive?
             elsif @open_attack && name == 'self' && @open_attack[:inbound]
               attack_id = @open_attack[:id]
               source = 'window'
             end
 
-            params = [@session_id, creature_row, txt(name), attack_id, at, kind,
+            params = [@session_id, creature_row, txt(name), attack_id, flare_id, at, kind,
                       txt(status), action, value, spell, txt(spell_name), cause, source]
             @db.execute(<<~SQL, params)
-              INSERT INTO statuses (session_id, creature_id, subject, attack_id, occurred_at,
+              INSERT INTO statuses (session_id, creature_id, subject, attack_id, flare_id, occurred_at,
                                     kind, status, action, value, spell, spell_name, cause, source)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
 
             # A death confirmed by the room feed (processor death watch) rather

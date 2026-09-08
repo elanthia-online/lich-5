@@ -284,6 +284,15 @@ module Lich
             # ".+?" not "[^!]+" for target: the cman form appends " and
             # connects!" which a greedy class would swallow into the target
             AttackDef.new(:tackle, [/(?<attacker>.+?) hurls #{MK_PRE}(?:himself|herself|itself)#{MK_POST} at (?<target>.+?)(?: and connects)?!/].freeze),
+            # Creature fear maneuvers (SSR follows, then our save/fail line).
+            # Room-wide, no target named - ROOM_TARGETED classifies them
+            # inbound (hunt log 2026-09-07: Ojandhaart warg / mastodon).
+            AttackDef.new(:howl, [
+              /(?<attacker>.+?) sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine\./
+            ].freeze),
+            AttackDef.new(:trumpet, [
+              /(?<attacker>.+?) raises its trunk and rears back onto its immense hind legs, blaring out a note of sheer fury!/
+            ].freeze),
             # Maneuver-style strike opener (round-14 sweep: 40/40 resolve
             # in the very next line, usually the target's evanescent
             # shield absorb or an outmaneuver outcome, then the swing
@@ -300,7 +309,10 @@ module Lich
             ].freeze),
             # creature natural weapons and maneuvers
             AttackDef.new(:natural, [
-              /(?<attacker>.+?) claws at (?<target>[^!]+)!/,
+              # no comma in the target: "Fear still claws at your heart, but
+              # you stand fast..." is a fear-save outcome, not a claw swing
+              /(?<attacker>.+?) claws at (?<target>[^!,]+)!/,
+              /(?<attacker>.+?) tries to spear (?<target>.+?) with its enormous tusks!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,
@@ -397,7 +409,7 @@ module Lich
           ].freeze
 
           # Environmental / self-inflicted damage. No attacker, no target
-          # capture: the parser classifies every name in SELF_INFLICTED as
+          # capture: the parser classifies every name in ATTACKERLESS as
           # inbound (damage to US), so the "... N points of damage!" line that
           # follows lands on our taken ledger instead of orphaning or, worse,
           # attaching to whatever creature event was open (real-feed
@@ -439,19 +451,33 @@ module Lich
             nil
           end
 
-          # Def names whose lines describe damage to US with no attacker: the
-          # parser reports them inbound without needing a "you" capture.
-          SELF_INFLICTED = %i[frigid_wind thorn_recoil].freeze
+          # Def names whose lines describe damage to US with no creature
+          # attacker: the parser reports them inbound without needing a "you"
+          # capture, and names the attacker for the ledger.
+          #   ENVIRONMENTAL - the world did it (weather ticks); attacker
+          #                   'environment'
+          #   SELF_INFLICTED - our own gear did it (thorn bow recoil);
+          #                    attacker 'self'
+          # (owner 2026-09-07: "frigid wind is environmental, it's not self
+          # inflicted" - the two must stay distinguishable in reports)
+          ENVIRONMENTAL = %i[frigid_wind].freeze
+          SELF_INFLICTED = %i[thorn_recoil].freeze
+          ATTACKERLESS = (ENVIRONMENTAL + SELF_INFLICTED).freeze
+
+          # Creature maneuvers aimed at the whole room, us included: the line
+          # names the attacker and no target, and the SSR that follows is
+          # OUR save. The parser classifies these inbound.
+          ROOM_TARGETED = %i[howl trumpet].freeze
 
           # The tracker's chunk gate only forwards chunks holding a bolded
           # creature link; an environmental tick names no creature, so its
           # chunk was discarded before the parser ever saw it (real-feed
           # 2026-09-07: zero frigid_wind rows against 10 log ticks). This
           # union lets the gate pass such chunks.
-          SELF_INFLICTED_PATTERN = Regexp.union(ENVIRONMENTAL_ATTACKS.flat_map(&:patterns)).freeze
+          ATTACKERLESS_PATTERN = Regexp.union(ENVIRONMENTAL_ATTACKS.flat_map(&:patterns)).freeze
 
-          def self.self_inflicted_line?(line)
-            SELF_INFLICTED_PATTERN.match?(line)
+          def self.attackerless_line?(line)
+            ATTACKERLESS_PATTERN.match?(line)
           end
 
           # AMBUSH PREFIXES - modifiers, not attacks.

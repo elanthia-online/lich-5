@@ -48,18 +48,24 @@ module Lich
                 # fallback below would install the attacker as its own
                 # target and apply its damage/crits to itself. Resolve the
                 # target as us and stop - never fall through.
-                # Environmental / self-inflicted defs (SELF_INFLICTED) are
+                # Environmental / self-inflicted defs (ATTACKERLESS) are
                 # damage to us by construction - no attacker, no "you"
                 # capture - unless this particular pattern named someone
-                # else (a nearby player taking the same tick).
-                self_inflicted = Definitions::Attacks::SELF_INFLICTED.include?(name) &&
-                                 !(match.names.include?('target') && match[:target])
-                if self_target?(match) || self_inflicted
+                # else (a nearby player taking the same tick). They name
+                # their source for the ledger: 'environment' (weather) or
+                # 'self' (our own gear), so reports can tell them apart.
+                attackerless = Definitions::Attacks::ATTACKERLESS.include?(name) &&
+                               !(match.names.include?('target') && match[:target])
+                if self_target?(match) || attackerless || Definitions::Attacks::ROOM_TARGETED.include?(name)
+                  attacker = extract_attacker_from_match(match)
+                  if attackerless
+                    attacker ||= { name: Definitions::Attacks::ENVIRONMENTAL.include?(name) ? 'environment' : 'self' }
+                  end
                   return {
                     name: name,
                     target: {},
                     inbound: true,
-                    attacker: extract_attacker_from_match(match),
+                    attacker: attacker,
                     damaging: true
                   }
                 end
@@ -164,9 +170,9 @@ module Lich
           def inbound_attack?(line)
             return false if Definitions::Attacks.rejects?(line)
 
-            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, _name|
+            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
               if (match = pattern.match(line))
-                return self_target?(match)
+                return self_target?(match) || Definitions::Attacks::ROOM_TARGETED.include?(name)
               end
             end
             false
@@ -181,7 +187,12 @@ module Lich
             text = match[:attacker]
             return nil if text.nil? || text.strip.empty?
 
-            if (link = TARGET_LINK_PATTERN.match(text))
+            # The LAST link: a flavor prefix can carry the attacker's own
+            # pronoun link first ("Froth bubbling on <his> lips, <a tattooed
+            # gigas berserker> swings..." - hunt log 2026-09-07 recorded the
+            # attacker as "his").
+            links = text.to_enum(:scan, TARGET_LINK_PATTERN).map { Regexp.last_match }
+            if (link = links.last)
               { id: link[:id].to_i, noun: link[:noun], name: link[:name] }
             else
               { name: strip_links(text).strip }

@@ -52,7 +52,11 @@ module Lich
               # ground|floor: indoor rooms print "floor" (Ojandhaart great hall,
               # real-feed 2026-09-07) - the ground-only form orphaned every
               # indoor entangle tick as an unknown attack with no target
-              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./,
+              # the miss: same line is the :miss outcome (defs/outcomes.rb).
+              # Without an attack def the SMR before it was orphaned into a
+              # targetless :unknown (hunt log 2026-09-07 19:21:44)
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), but is unable to grasp/
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),

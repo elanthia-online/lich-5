@@ -727,6 +727,118 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(bloom[:name]).to eq(:spectral_bloom)
       expect(bloom[:resolutions].map { |r| r[:result] }).to eq([35])
     end
+
+    # "You blinded X!" rides the flare that blinded X: the primary's blind
+    # on the swing target, the bloom's blind on the bloom creature. The fact
+    # carries the flare's 1-based position so the recorder can file it on
+    # the flare row (owner 2026-09-07: blinds sat on the root attack).
+    it 'emits each blind with the flare_seq of the flare that caused it' do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      { 121654846 => 'a tattooed gigas berserker', 121678494 => 'a heavily armored battle mastodon' }.each do |cid, cname|
+        dbl = instance_double('Creature', id: cid, name: cname)
+        allow(dbl).to receive(:add_status)
+        allow(registry).to receive(:[]).with(cid).and_return(dbl)
+      end
+      emitted = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      described_class.instance_variable_set(:@deferred_emits, nil)
+      described_class.parse_events(chunk)
+      blinds = emitted.select { |t, p| t == :status && p[:status] == :blind }
+      expect(blinds.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[121654846, 1], [121678494, 3]])
+    end
+  end
+
+  describe 'hunt-log defs 2026-09-07 (session 4 audit)' do
+    let(:skald) { bolded(123995203, 'skald', 'a grim gigas skald') }
+    let(:masto) { bolded(123956079, 'mastodon', 'a heavily armored battle mastodon') }
+    let(:warg) { bolded(123985834, 'warg', 'a niveous giant warg') }
+    let(:maiden) { bolded(124194699, 'shield-maiden', 'a brawny gigas shield-maiden') }
+
+    before do
+      allow(Lich::Gemstone::Combat::Tracker).to receive(:settings).and_return(
+        track_statuses: true, track_ucs: false, emit_attacks: true, track_damage: true, track_wounds: true
+      )
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+    end
+
+    it 'names a tangleweed miss (unable to grasp) as a tangleweed attack with its SMR, not a targetless unknown' do
+      events = described_class.parse_events([
+                                              '<pushBold/>[SMR result: 71 (Open d100: -86, Bonus: 62)]<popBold/>',
+                                              "The lashing emerald briar lashes out at #{maiden}, but is unable to grasp her."
+                                            ])
+      expect(events.map { |e| e[:name] }).to eq([:tangleweed])
+      ev = events.first
+      expect(ev[:target][:id]).to eq(124194699)
+      expect(ev[:outcomes]).to include(:miss)
+      expect(ev[:resolutions].map { |r| r[:result] }).to eq([71])
+    end
+
+    it 'records a warg howl as an inbound fear maneuver with its SSR and our save' do
+      events = described_class.parse_events([
+                                              "#{warg} sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine.",
+                                              '<pushBold/>[SSR result: 86 (Open d100: 18)]<popBold/>',
+                                              "Fear still claws at your heart, but you stand fast against the #{bolded(123985834, 'warg', 'warg')}'s unnerving howl!"
+                                            ])
+      expect(events.map { |e| e[:name] }).to eq([:howl])
+      ev = events.first
+      expect(ev[:inbound]).to be(true)
+      expect(ev[:attacker][:id]).to eq(123985834)
+      expect(ev[:resolutions].map { |r| r[:type] }).to eq([:ssr])
+      expect(ev[:outcomes]).to include(:resisted)
+    end
+
+    it 'records a mastodon trumpet as an inbound fear maneuver' do
+      events = described_class.parse_events([
+                                              "#{masto} raises its trunk and rears back onto its immense hind legs, blaring out a note of sheer fury!",
+                                              '<pushBold/>[SSR result: 79 (Open d100: 52)]<popBold/>',
+                                              "You keep your wits amidst the #{bolded(123956079, 'mastodon', 'mastodon')}'s angry trumpeting!"
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:trumpet, true]])
+      expect(events.first[:outcomes]).to include(:resisted)
+    end
+
+    it 'parses the mastodon tusk attack as inbound natural' do
+      events = described_class.parse_events([
+                                              "#{masto} tries to spear you with its enormous tusks!",
+                                              '  AS: +537 vs DS: +516 with AvD: +37 + d100 roll: +10 = +68',
+                                              '   A clean miss.'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:natural, true]])
+      expect(events.first[:outcomes]).to include(:miss)
+    end
+
+    it 'names the attacker from the creature link, not a pronoun link in the flavor prefix' do
+      zerk_his = bolded(123957785, 'berserker', 'his')
+      zerk = bolded(123957785, 'berserker', 'a tattooed gigas berserker')
+      events = described_class.parse_events([
+                                              "Froth bubbling on #{zerk_his} lips, #{zerk} swings an immense fel-hafted handaxe at you in a murderous arc!",
+                                              'You evade the attack by a hair!'
+                                            ])
+      expect(events.size).to eq(1)
+      expect(events.first[:attacker][:name]).to eq('a tattooed gigas berserker')
+    end
+
+    it 'keeps a pre-emptive warg evade on the warg instead of a targetless unknown' do
+      events = described_class.parse_events([
+                                              "With preternatural speed, #{warg} bounds to safety as you move to attack #{bolded(123985834, 'warg', 'it')}, leaving you off-balance!",
+                                              'The arrow streaks off into the distance!'
+                                            ])
+      expect(events.size).to eq(1)
+      expect(events.first[:target][:id]).to eq(123985834)
+      expect(events.first[:outcomes]).to include(:evade)
+    end
+
+    it 'labels environmental and self-inflicted damage by source' do
+      cold = described_class.parse_events(['The burn of the cold tears precious warmth from your flesh.', '   ... 6 points of damage!'])
+      thorn = described_class.parse_events(['As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.',
+                                            '   ... 1 point of damage!'])
+      expect(cold.first.values_at(:name, :inbound)).to eq([:frigid_wind, true])
+      expect(cold.first[:attacker]).to eq({ name: 'environment' })
+      expect(thorn.first.values_at(:name, :inbound)).to eq([:thorn_recoil, true])
+      expect(thorn.first[:attacker]).to eq({ name: 'self' })
+    end
   end
 
   # Parse-phase facts (message statuses, UCS, spell loss) used to be emitted

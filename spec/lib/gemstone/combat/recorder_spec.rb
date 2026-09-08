@@ -386,6 +386,30 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(st['attack_id']).not_to be_nil
     end
 
+    it 'files a status on the flare it rode when the processor names one (flare_seq)' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      ev = attack_event(target_id: 202, target_name: 'an orc')
+      ev[:flares] = [
+        { name: :phosphorescence, damaging: true, target_info: { id: 202, name: 'an orc' }, hits: [{ damage: 5, crit: nil }] },
+        { name: :glowbright, damaging: false, hits: [] },
+        { name: :spectral_bloom, damaging: true, target_info: { id: 303, name: 'a troll' }, hits: [{ damage: 7, crit: nil }] }
+      ]
+      rec.record(:attack, ev)
+      rec.record(:status, { id: 303, name: 'a troll', status: :blind, action: :add, flare_seq: 3 })
+      rec.record(:status, { id: 202, name: 'an orc', status: :blind, action: :add, flare_seq: 1 })
+      rec.record(:status, { id: 202, name: 'an orc', status: :prone, action: :add })
+      rec.close
+
+      rows = query('SELECT s.status, s.subject, f.name AS flare FROM statuses s LEFT JOIN flares f ON f.id = s.flare_id ORDER BY s.id')
+      expect(rows.map { |r| [r['status'], r['subject'], r['flare']] }).to eq([
+                                                                               ['blind', 'a troll', 'spectral_bloom'],
+                                                                               ['blind', 'an orc', 'phosphorescence'],
+                                                                               ['prone', 'an orc', nil]
+                                                                             ])
+      expect(query('SELECT DISTINCT source FROM statuses').map { |r| r['source'] }).to eq(['window'])
+    end
+
     it 'marks a status with no matching open attack as direct' do
       rec = new_recorder
       rec.start_session(at: Time.at(1))

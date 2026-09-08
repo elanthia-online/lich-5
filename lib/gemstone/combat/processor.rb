@@ -406,15 +406,40 @@ module Lich
             # through event_savable? (statuses live on the creature, not the
             # event, so the fields alone can't show it).
             line_status_id = nil
+            # An outcome printed ON an initiation line (tangleweed's "lashes
+            # out at X, but is unable to grasp her") belongs to the event that
+            # line opens below, not to whatever event is open now.
+            same_line_outcome = nil
 
             # Always check for status effects on every line (even outside combat)
             if Tracker.settings[:track_statuses]
               if (status_result = Parser.parse_status(line))
+                # Which of this event's flares the status rides on, as a
+                # 1-based position in event[:flares] (the recorder maps it
+                # to the flare row): the active damaging flare when it names
+                # this creature (or names nobody and the creature is the
+                # swing target), else the latest flare that named it - a
+                # glowbark bloom's "You blinded <bloom creature>!" follows
+                # the bloom. Without this every blind sat on the swing row
+                # (owner 2026-09-07: "tagged to the root attack instead of
+                # the bloom flare").
+                status_flare_seq = lambda do |cid|
+                  next nil unless current_event && cid
+                  flares = current_event[:flares] || []
+                  f = if flare_ctx && flare_ctx[:target_info]
+                        flare_ctx if flare_ctx[:target_info][:id] == cid
+                      elsif flare_ctx && current_event[:target] && current_event[:target][:id] == cid
+                        flare_ctx
+                      end
+                  f ||= flares.reverse.find { |x| x[:target_info] && x[:target_info][:id] == cid }
+                  f && (i = flares.index(f)) ? i + 1 : nil
+                end
                 if line_target && line_target[:id]
                   # Use ID-based lookup - this is most reliable
                   line_status_id = line_target[:id]
                   if status_result.is_a?(Hash)
-                    apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action])
+                    apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action],
+                                           flare_seq: status_flare_seq.call(line_target[:id]))
                   else
                     # Legacy format - status_result is just the status symbol
                     apply_status_to_target(status_result, line_target[:name], line_target[:id], :add)
@@ -436,7 +461,8 @@ module Lich
                   # the creature - the Your?/You guard keeps them out.
                   line_status_id = subject[:id]
                   apply_status_to_target(status_result[:status], subject[:name],
-                                         subject[:id], status_result[:action])
+                                         subject[:id], status_result[:action],
+                                         flare_seq: status_flare_seq.call(subject[:id]))
                 elsif status_result.is_a?(Hash) && line.match?(/\A\s*Your?\b/)
                   # 2p: the status is OURS ("You are stunned!"). Never a
                   # creature application - but it IS a fact (inbound
@@ -730,7 +756,9 @@ module Lich
                 end
                 respond "[Combat] Found resolution: #{resolution[:type]} = #{resolution[:result]}" if Tracker.debug?(:verbose)
               elsif (outcome = Parser.parse_outcome(line))
-                if flare_ctx || current_event
+                if line_attack
+                  same_line_outcome = outcome
+                elsif flare_ctx || current_event
                   (flare_ctx || current_event)[:outcomes] << outcome
                 elsif line_target && line_target[:id]
                   # An outcome with a named target and no event at all: the
@@ -1080,6 +1108,7 @@ module Lich
                 current_event[:hits] << { damage: inline, crit: nil }
                 respond "[Combat] Found inline damage: #{inline}" if Tracker.debug?(:verbose)
               end
+              current_event[:outcomes] << same_line_outcome if same_line_outcome
 
               # A new swing claims any held pre-flares whose weapon matches it
               # (they resolved before this swing but belong to it). An inbound
@@ -1712,7 +1741,7 @@ module Lich
         end
 
         # Apply status effect directly to a creature (outside combat events)
-        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add)
+        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add, flare_seq: nil)
           # Handle both name lookup and direct ID
           if target_id
             creature = Creature[target_id.to_i]
@@ -1748,8 +1777,10 @@ module Lich
               creature.add_status(status)
               respond "[Combat] Applied status #{status} to #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
             end
-            emit_fact(:status, id: creature.id, name: creature.name,
-                               status: status, action: action == :remove ? :remove : :add)
+            payload = { id: creature.id, name: creature.name,
+                        status: status, action: action == :remove ? :remove : :add }
+            payload[:flare_seq] = flare_seq if flare_seq
+            emit_fact(:status, payload)
           else
             respond "[Combat] Could not find creature for status: #{status} -> #{target_name_or_id}" if Tracker.debug?(:verbose)
           end

@@ -42,7 +42,8 @@ module Lich
               /An arrow falls to the (?:ground|floor), narrowly missing (?<target>[^!]+)./,
               /(?<target>.+?) moves at the last moment to avoid an incoming arrow./,
               /The spray of arrows leaves (?<target>.+?) unscathed and undeterred./,
-              /The .+? vine#{MK_POST} (?:lashes out at|grabs at) (?<target>.+?),? (?:but is unable to grasp|unable to find a purchase)/,
+              # 610 tangleweed: "vine" (tangle) or "briar" (Ojandhaart form)
+              /The .+? (?:vine|briar)#{MK_POST} (?:lashes out at|grabs at) (?<target>.+?),? (?:but is unable to grasp|unable to find a purchase)/,
               /Your strike misses its mark./,
               /(?<attacker>.+?) whacks your legs to no effect./,
               /You whack (?<target>.+?'s)#{MK_POST} legs futilely./,
@@ -129,6 +130,9 @@ module Lich
               /You outmaneuver the attack and completely avoid it!/,
               /(?<target>.+?) dodges an incoming arrow!/,
               /Sensing your attack coming, (?<target>.+?) leaps to safety as you move to attack (?:him|her|it), leaving you out of position!/,
+              # pre-emptive evade (warg, hunt log 2026-09-07): prints INSTEAD
+              # of the attack line, so this is the only record of the swing
+              /With preternatural speed, (?<target>.+?) bounds to safety as you move to attack #{MK_PRE}(?:him|her|it)#{MK_POST}, leaving you off-balance!/,
               /Unable to focus clearly, you blindly evade the attack!/,
               /You barely dodge the attack!/,
               /Unfortunately, your aim is off and your attack goes wide!/,
@@ -231,7 +235,11 @@ module Lich
               /(?<target>.+?) aura absorbs some of the damage!/,
               /(?<target>.+?) manages to block some of the (?:elemental )?damage with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/,
               /(?<armor>.+?) partially deflects the onslaught of the \w+ attack\./,
-              /Your body resists the \w+ damage and lessens the severity of the attack!/
+              /Your body resists the \w+ damage and lessens the severity of the attack!/,
+              # creature fear maneuvers we saved against (SSR precedes these;
+              # hunt log 2026-09-07: warg howl, mastodon trumpet)
+              /Fear still claws at your heart, but you stand fast against .+? unnerving howl!/,
+              /You keep your wits amidst .+? angry trumpeting!/
             ].freeze),
             # Immunity: the spell simply has no effect - no CS/TD roll is
             # printed at all (e.g. 501 Sleep vs a troll wraith, forge

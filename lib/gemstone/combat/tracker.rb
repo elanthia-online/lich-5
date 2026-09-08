@@ -373,7 +373,7 @@ module Lich
                 # creature at all (frigid wind, thorn-bow recoil).
                 if chunk.any? { |line|
                   (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
-                  Definitions::Attacks.self_inflicted_line?(line)
+                  Definitions::Attacks.attackerless_line?(line)
                 }
                   process(chunk) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
