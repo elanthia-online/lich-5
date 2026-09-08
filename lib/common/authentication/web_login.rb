@@ -102,14 +102,28 @@ module Lich
         # used to validate the server's own response (.extract_connection_info)
         # rather than trusting whatever host/port comes back unchecked.
         #
-        # DRF/DRX/GSF/GSX are deliberately absent -- add an entry only after
-        # a live probe confirms both the `game` form value this flow expects
-        # and the resulting host/port, the same way these four were.
+        # `character_list_path` matters: confirmed live that a character can
+        # exist on ONE instance of a family but not appear on that family's
+        # generic /home.asp at all (a GemStone Shattered-only character does
+        # not show up on the GemStone Prime page) -- so .resolve_char_code
+        # must scrape the same instance-specific page a user would actually
+        # pick this game code from, not assume the family's home.asp always
+        # has the full account-wide picture (true for DR/DRT/GS3/GST, where
+        # the same character happens to be shared, but not a safe general
+        # assumption).
+        #
+        # DRF/DRX are deliberately absent -- add an entry only after a live
+        # probe confirms both the `game` form value this flow expects and
+        # the resulting host/port, the same way these five were. GSX
+        # (GemStone Platinum) is absent because the instance itself has been
+        # retired -- LoginHelpers.VALID_GAME_CODES already excludes it for
+        # the same reason, independent of this module.
         CONFIRMED_INSTANCES = {
-          "DR"  => { family: "dr",  web_game_code: "DR",  expected_host: "storm.dr.game.play.net",  expected_port: "11024" },
-          "DRT" => { family: "dr",  web_game_code: "DRT", expected_host: "hydra.simutronics.com",   expected_port: "11624" },
-          "GS3" => { family: "gs4", web_game_code: "GS4", expected_host: "storm.gs4.game.play.net", expected_port: "10024" },
-          "GST" => { family: "gs4", web_game_code: "GST", expected_host: "chimera.simutronics.com", expected_port: "10624" },
+          "DR"  => { family: "dr",  web_game_code: "DR",  character_list_path: "/dr/play/home.asp",       expected_host: "storm.dr.game.play.net",  expected_port: "11024" },
+          "DRT" => { family: "dr",  web_game_code: "DRT", character_list_path: "/dr/play/playdrt.asp",    expected_host: "hydra.simutronics.com",   expected_port: "11624" },
+          "GS3" => { family: "gs4", web_game_code: "GS4", character_list_path: "/gs4/play/home.asp",      expected_host: "storm.gs4.game.play.net", expected_port: "10024" },
+          "GST" => { family: "gs4", web_game_code: "GST", character_list_path: "/gs4/play/play_test.asp", expected_host: "chimera.simutronics.com", expected_port: "10624" },
+          "GSF" => { family: "gs4", web_game_code: "GSF", character_list_path: "/gs4/play/playf.asp",     expected_host: "storm.gs4.game.play.net", expected_port: "10324" },
         }.freeze
 
         # @param game_code [String] EAccess-style game instance code
@@ -144,7 +158,7 @@ module Lich
           jar = CookieJar.new
 
           login(http, jar, account: account, password: password, family: instance[:family])
-          char_code = resolve_char_code(http, jar, family: instance[:family], character: character)
+          char_code = resolve_char_code(http, jar, instance: instance, character: character)
           host, port, key = select_character(http, jar, char_code: char_code, instance: instance)
 
           LaunchResult.normalize(
@@ -193,6 +207,18 @@ module Lich
         # an absolute-URL redirect entirely -- and NOT by parsing response
         # body text.
         #
+        # An account that has never set a security question is redirected
+        # here instead of okay_page on an otherwise-successful login --
+        # confirmed live. The session is already fully authenticated at this
+        # point (the account name renders in the page banner; Set-Cookie
+        # already carries the real session), so this is not a login failure
+        # -- .resolve_char_code's own subsequent GET of okay_page picks up
+        # the same authenticated session, matching what manually navigating
+        # straight to the game's play page does in a browser. If that
+        # assumption were ever wrong, resolve_char_code fails safely with
+        # CHARACTER_NOT_FOUND rather than proceeding on bad data.
+        SECURITY_QA_PATH = "/playdotnet/account/security_qa.asp"
+
         # @param http [Net::HTTP] open connection to BASE_HOST
         # @param jar [CookieJar] session cookie jar, mutated in place
         # @param account [String] account name
@@ -226,23 +252,25 @@ module Lich
 
           path = redirect_path(response, malformed_code: "MALFORMED_LOGIN_REDIRECT")
           raise AuthenticationError, "LOGIN_FAILED" if path == error_page
-          raise AuthenticationError, "UNEXPECTED_LOGIN_RESPONSE" unless path == okay_page
+          return if path == okay_page || path == SECURITY_QA_PATH
+
+          raise AuthenticationError, "UNEXPECTED_LOGIN_RESPONSE"
         end
 
-        # Step 1a: scrape the family's home.asp for the charID matching
-        # `character`. See docs/web-login-protocol-analysis.md for the exact
-        # markup this depends on and why it's the most fragile part of this
-        # module.
+        # Step 1a: scrape the requested instance's character-selection page
+        # for the charID matching `character`. See
+        # docs/web-login-protocol-analysis.md for the exact markup this
+        # depends on and why it's the most fragile part of this module.
         #
         # @param http [Net::HTTP] open connection to BASE_HOST
         # @param jar [CookieJar] session cookie jar
-        # @param family [String] game family path segment ("dr" or "gs4")
+        # @param instance [Hash] a CONFIRMED_INSTANCES entry
         # @param character [String] character name to match (case-insensitive)
         # @return [String] the matched charID (e.g. "W_ACCOUNT_000")
         # @raise [AuthenticationError] "CHARACTER_NOT_FOUND" if no radio input matches
         # @api private
-        def self.resolve_char_code(http, jar, family:, character:)
-          response = get(http, jar, "/#{family}/play/home.asp")
+        def self.resolve_char_code(http, jar, instance:, character:)
+          response = get(http, jar, instance[:character_list_path])
           body = response.body.to_s
 
           body.scan(/id="(W_[A-Za-z0-9_]+)"[^>]*>\s*<label for="\1"><span[^>]*>([^<]+)<\/span>/).each do |char_code, name|

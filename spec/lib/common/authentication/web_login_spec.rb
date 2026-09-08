@@ -35,7 +35,7 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
     it 'returns the confirmed instance data for a supported game code' do
       instance = described_class.instance_for('DRT')
       expect(instance).to eq(
-        family: 'dr', web_game_code: 'DRT',
+        family: 'dr', web_game_code: 'DRT', character_list_path: '/dr/play/playdrt.asp',
         expected_host: 'hydra.simutronics.com', expected_port: '11624'
       )
     end
@@ -44,8 +44,20 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       expect(described_class.instance_for('GS3')[:web_game_code]).to eq('GS4')
     end
 
+    it 'confirms GSF matches the EAccess code directly (unlike GS3->GS4)' do
+      expect(described_class.instance_for('GSF')[:web_game_code]).to eq('GSF')
+    end
+
+    it 'gives each instance its own character-selection page (a character can exist on one ' \
+       'instance of a family without appearing on that family\'s generic home.asp -- confirmed ' \
+       'live: a GemStone Shattered-only character does not show up on the GemStone Prime page)' do
+      expect(described_class.instance_for('GS3')[:character_list_path]).to eq('/gs4/play/home.asp')
+      expect(described_class.instance_for('GST')[:character_list_path]).to eq('/gs4/play/play_test.asp')
+      expect(described_class.instance_for('GSF')[:character_list_path]).to eq('/gs4/play/playf.asp')
+    end
+
     it 'raises UNSUPPORTED_GAME_CODE for an unconfirmed instance (fail closed)' do
-      %w[DRF DRX GSF GSX ZZ].each do |code|
+      %w[DRF DRX GSX ZZ].each do |code|
         expect { described_class.instance_for(code) }
           .to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/), "expected #{code} to be rejected"
       end
@@ -58,7 +70,8 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
 
     let(:preflight_response) { response_double(code: '200', set_cookie: ['ASPSESSIONID=abc123; secure; path=/; HttpOnly']) }
     let(:login_okay_response) { response_double(location: '/dr/play/home.asp', set_cookie: ['AWSALB=xyz; Path=/']) }
-    # Real markup captured live from /dr/play/home.asp -- see protocol doc "1a".
+    # Real markup captured live from /dr/play/playdrt.asp (DRT's
+    # character_list_path) -- see protocol doc "1a".
     let(:home_page_body) do
       <<~HTML
         <input type=radio name="charID" id="W_TESTACCOUNT_000" value="W_TESTACCOUNT_000" checked  >
@@ -79,7 +92,7 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         when '/includes/common/login/login.asp'
           login_requests << req
           login_okay_response
-        when '/dr/play/home.asp' then home_page_response
+        when '/dr/play/playdrt.asp' then home_page_response # DRT's character_list_path, not the family's generic home.asp
         when '/includes/common/play/goplay2.asp'
           goplay2_requests << req
           goplay2_response
@@ -124,6 +137,20 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRF')
       }.to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/)
       expect(http).not_to have_received(:request)
+    end
+
+    context 'when login redirects to the account security-question setup gate instead of okay_page' do
+      # Confirmed live: an account that has never set a security question is
+      # redirected to /playdotnet/account/security_qa.asp on an otherwise-
+      # successful login. The session is already authenticated at that point
+      # (Set-Cookie already carries the real session) -- this must not be
+      # treated as a login failure.
+      let(:login_okay_response) { response_double(location: '/playdotnet/account/security_qa.asp') }
+
+      it 'does not raise, and resolve_char_code proceeds using the already-authenticated session' do
+        result = described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        expect(result['gamehost']).to eq('hydra.simutronics.com')
+      end
     end
 
     context 'when the requested character is not on the scraped page' do

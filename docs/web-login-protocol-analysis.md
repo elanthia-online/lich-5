@@ -18,10 +18,11 @@ a game server host, port, and one-time connection key.
 ## Implementation Status
 
 A `Lich::Common::Authentication::WebLogin` module implementing this flow has been built
-(`lib/common/authentication/web_login.rb`) and exercised live end-to-end: DR Test, GemStone Prime
-(`GS3`->`GS4` mapping), GemStone Test, and a bad-password failure all confirmed working against
-the real play.net servers, matching the browser-captured hosts/ports exactly. Two things were
-only discovered by building and running a non-browser HTTP client, not by watching the browser:
+(`lib/common/authentication/web_login.rb`) and exercised live end-to-end: DR, DR Test, GemStone
+Prime (`GS3`->`GS4` mapping), GemStone Test, GemStone Shattered, and a bad-password failure all
+confirmed working against the real play.net servers, matching the browser-captured hosts/ports
+exactly. Several things were only discovered by building and running a non-browser HTTP client,
+or by testing a second account, not by watching a single browser session:
 
 1. **A browser-like `User-Agent` header is required on every request, including the very first
    GET.** play.net's front end (CloudFront/WAF) returns a bare `500` for Ruby's default
@@ -32,10 +33,25 @@ only discovered by building and running a non-browser HTTP client, not by watchi
    cookie) also returns a bare `500`. A real browser always visits the sign-in page before
    submitting the form, so this dependency is invisible in a browser capture alone. The module
    issues this GET itself and carries its cookie into the login POST.
+3. **An account that has never set a security question is redirected to
+   `/playdotnet/account/security_qa.asp` instead of `return_okay_page` on an otherwise-successful
+   login.** Confirmed live with a second test account. The session is already fully authenticated
+   at that point (the account name renders in the page banner; the real session cookie is already
+   set) -- manually navigating straight to the game's play page instead of following that redirect
+   works fine, confirming it's not a login failure. `WebLogin.login` treats this path as a second
+   acceptable redirect target alongside `okay_page`, rather than raising.
+4. **A character can exist on one instance of a family without appearing on that family's generic
+   `home.asp` at all.** Confirmed live: a GemStone Shattered-only character does not show up on
+   the GemStone Prime page. `DR`/`DRT`/`GS3`/`GST` all happened to share characters visible via
+   the same generic per-family page in initial testing, which masked this -- resolving a charID
+   must scrape the specific instance page a user would actually pick that game code from (e.g.
+   `/gs4/play/playf.asp` for Shattered), not assume the family's `home.asp` has the full
+   account-wide picture. See `CONFIRMED_INSTANCES`' `character_list_path` per entry.
 
-Both were invisible in the pure browser capture and only surfaced once a standalone Ruby client
-tried the same requests -- worth remembering if this flow needs re-verifying after a play.net
-change: reproduce with a non-browser client, not just by re-watching DevTools.
+All four were invisible in a single browser capture and only surfaced by building a standalone
+client and/or testing a second account -- worth remembering if this flow needs re-verifying after
+a play.net change: reproduce with a non-browser client against more than one account, not just by
+re-watching DevTools on one login.
 
 ---
 
@@ -61,6 +77,10 @@ return_okay_page=%2Fdr%2Fplay%2Fhome.asp
 - On success: `302` redirect to whatever `return_okay_page` was set to. A session cookie is
   established (not inspected in detail here -- treat as an opaque authenticated session, sent
   automatically by any HTTP client that preserves cookies across the chain).
+  - **Alternate success redirect, confirmed live:** an account that has never set a security
+    question is redirected to `/playdotnet/account/security_qa.asp` instead. The session is
+    already fully authenticated at this point -- treat this the same as a redirect to
+    `return_okay_page`, not a failure. See "Implementation Status" above.
 - On failure: `302` redirect to `return_error_page` instead. **The redirect target itself is the
   pass/fail signal** -- compare the `Location` header's path against the two page params you
   sent, don't parse body text for control flow.
@@ -86,14 +106,30 @@ page (the `return_okay_page` from step 1) as radio inputs, confirmed live:
 <label for="W_TESTACCOUNT_000"><span class="normS1">Raiyen</span></label><br>
 ```
 
-So resolving a `char_name` to the `charID` needed for step 2 means: `GET` the family's
-`home.asp` (or equivalent per-instance page, e.g. `playdrt.asp` for DR Test, `play_test.asp` for
-GS Test -- same character list, different subscription-tier framing) with the session cookie
-from step 1, then regex-scrape `id="(W_[^"]+)"` paired with the following
+So resolving a `char_name` to the `charID` needed for step 2 means: `GET` the specific instance's
+character-selection page -- **not necessarily the family's generic `home.asp`** -- with the
+session cookie from step 1, then regex-scrape `id="(W_[^"]+)"` paired with the following
 `<label for="\1"><span[^>]*>([^<]+)</span>` for the display name. Confirmed the session cookie
 from a single `login.asp` call is valid across both game families (DR and GS4) in the same
-browser session -- one login, both games' `home.asp` pages render correctly without re-posting
-credentials.
+browser session -- one login, both games' pages render correctly without re-posting credentials.
+
+**The right page to scrape is instance-specific, confirmed live:**
+
+| Instance | Page |
+|---|---|
+| `DR` (Prime) | `/dr/play/home.asp` |
+| `DRT` (Test) | `/dr/play/playdrt.asp` |
+| `GS3` (Prime) | `/gs4/play/home.asp` |
+| `GST` (Test) | `/gs4/play/play_test.asp` |
+| `GSF` (Shattered) | `/gs4/play/playf.asp` |
+
+For `DR`/`DRT`/`GS3`/`GST`, the same character happened to be visible via any of these pages in
+initial testing (the account's DR/DRT characters and GS3/GST characters were each shared across
+that pair) -- but that is **not a safe general assumption**. Confirmed live with a Shattered-only
+character: it appears on `/gs4/play/playf.asp` but does **not** appear on `/gs4/play/home.asp`
+(GemStone Prime) at all -- that page shows "Create a new character" as the only option, with no
+indication a Shattered character exists. Always scrape the same page a user would actually pick
+that specific game code from.
 
 This HTML-scrape step is inherently more fragile than EAccess's tab-delimited `C` response --
 any markup change on play.net's end breaks it silently (returns no match) rather than erroring
@@ -131,12 +167,17 @@ charID={CHAR_CODE}
     `GS4` is the confirmed-working value).
   - `game=GST` (GemStone IV Prime Test) -> host `chimera.simutronics.com`, port `10624` --
     matches EAccess `GST`
+  - `game=GSF` (GemStone IV Shattered) -> host `storm.gs4.game.play.net`, port `10324` --
+    matches EAccess `GSF` (like `DR`/`DRT`/`GST`, unlike the `GS3`->`GS4` Prime mismatch)
 
-  Not yet confirmed live: `DRF` (Fallen), `DRX` (Platinum), `GSF` (Shattered), `GSX` (Platinum).
-  Given the confirmed `GS3`->`GS4` mismatch, **do not assume these match their EAccess codes
-  either** -- each must be probed individually before being relied on. A `WebLogin` module should
-  carry its own explicit `game_code` mapping table (seeded from EAccess codes where confirmed
-  identical, overridden where not), not reuse EAccess's codes directly.
+  Not yet confirmed live: `DRF` (Fallen), `DRX` (Platinum). Given the confirmed `GS3`->`GS4`
+  mismatch, **do not assume these match their EAccess codes either** -- each must be probed
+  individually before being relied on. `GSX` (GemStone Platinum) is not applicable at all -- the
+  instance itself has been retired (confirmed by the account holder; `LoginHelpers.VALID_GAME_CODES`
+  already excludes it independent of this module). `WebLogin` carries its own explicit
+  `CONFIRMED_INSTANCES` table (seeded from EAccess codes where confirmed identical, overridden
+  where not, and simply absent for anything unconfirmed or retired), not reusing EAccess's codes
+  directly.
 - `instanceID=0` in both observed cases -- meaning not yet determined (possibly multi-session
   slot, unrelated to which game instance is selected -- that's `game`).
 - Response: `302` to `/{gameName}/play/playing_web.asp`.
@@ -190,10 +231,10 @@ future fallback needs to tunnel the *game* connection itself over HTTPS too (out
 
 ## Open Questions / Not Yet Probed
 
-- `DRF` (Fallen), `DRX`/`GSX` (Platinum), `GSF` (Shattered) -- account used for probing only
-  holds DR/DRT/GS4(Prime)/GST entitlements, so these instance codes are untested against this
-  account's subscription tier. **Given the confirmed `GS3`->`GS4` mismatch on GemStone Prime,
-  do not assume these match their EAccess codes -- verify each one live.**
+- `DRF` (Fallen), `DRX` (Platinum) -- no account with these entitlements available for probing
+  yet. **Given the confirmed `GS3`->`GS4` mismatch on GemStone Prime, do not assume these match
+  their EAccess codes -- verify each one live.** `GSF` (Shattered) is now confirmed (see above);
+  `GSX` (GemStone Platinum) is not applicable -- the instance has been retired.
 - Full error-code vocabulary on `login_error.asp` (bad account name, locked account, etc.) --
   only "Invalid password" confirmed. Needed to build the fatal-vs-transient error classification
   `Authenticator.with_retry` already does for EAccess (`FATAL_ERROR_CODES`).
