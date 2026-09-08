@@ -25,6 +25,30 @@ module Lich
         # When sent via the L command, the game server starts the character creation flow.
         NEW_CHARACTER_CODE = "0"
 
+        # SGE authentication endpoints. Simutronics exposes the same protocol on
+        # a TLS listener (7910) and a legacy cleartext listener (7900). The K/A
+        # password hash is applied identically on both, so the cleartext path
+        # never transmits the raw password -- it only forgoes transport
+        # encryption of an already-obscured exchange. We prefer TLS and fall back
+        # to cleartext when the TLS port is unreachable (e.g. 7910 firewalled or
+        # its SYNs dropped while 7900 stays open, as after the SGE move to AWS).
+        HOST = "eaccess.play.net"
+        TLS_PORT = 7910
+        CLEARTEXT_PORT = 7900
+
+        # Bounds the TCP connect to the TLS endpoint so a silently-dropped SYN on
+        # 7910 fails over to cleartext in seconds instead of hanging on the OS
+        # connect timeout (~75s).
+        TLS_CONNECT_TIMEOUT = 5
+
+        # Failures to *establish* the TLS connection that warrant a cleartext
+        # retry. OpenSSL::SSL::SSLError is deliberately excluded: a
+        # reachable-but-untrusted 7910 is a security signal we refuse on, not one
+        # we silently downgrade around.
+        CONNECT_ERRORS = [SocketError, SystemCallError]
+        CONNECT_ERRORS << IO::TimeoutError if defined?(IO::TimeoutError)
+        CONNECT_ERRORS.freeze
+
         # @api private
         def self.pem
           @pem ||= File.join(DATA_DIR, "simu.pem")
@@ -36,11 +60,12 @@ module Lich
         end
 
         # @api private
-        def self.download_pem(hostname = "eaccess.play.net", port = 7910)
+        def self.download_pem(hostname = HOST, port = TLS_PORT)
           # Create an OpenSSL context
           ctx = OpenSSL::SSL::SSLContext.new
-          # Get remote TCP socket
-          sock = TCPSocket.new(hostname, port)
+          # Get remote TCP socket with a bounded connect so an unreachable TLS
+          # port fails fast instead of hanging on the OS connect timeout.
+          sock = Socket.tcp(hostname, port, connect_timeout: TLS_CONNECT_TIMEOUT)
           # pass that socket to OpenSSL
           ssl = OpenSSL::SSL::SSLSocket.new(sock, ctx)
           # establish connection, if possible
@@ -61,19 +86,47 @@ module Lich
           #     fail Exception, "\nssl peer certificate did not match #{pem}\nwas:\n#{conn.peer_cert}"
         end
 
+        # Opens an SGE connection, preferring the verified TLS endpoint (7910)
+        # and falling back to the legacy cleartext endpoint (7900) when the TLS
+        # port cannot be reached.
+        #
+        # The TLS TCP connect is bounded by {TLS_CONNECT_TIMEOUT}: if 7910 is
+        # firewalled or its SYNs are dropped (as happened after the SGE move to
+        # AWS, where 7910 times out while 7900 still answers) the connect fails
+        # fast and we retry on cleartext rather than hanging on the ~75s OS
+        # connect timeout. Only connection-establishment failures ({CONNECT_ERRORS})
+        # trigger the fallback -- a TLS/cert failure, or a later authentication
+        # failure, is surfaced rather than silently downgraded.
+        #
+        # @return [OpenSSL::SSL::SSLSocket, Socket] the open connection
         # @api private
-        def self.socket(hostname = "eaccess.play.net", port = 7910)
+        def self.socket
+          secure_socket
+        rescue *CONNECT_ERRORS => e
+          Lich.log "warning: EAccess TLS connect to #{HOST}:#{TLS_PORT} failed (#{e.class}: #{e.message}); falling back to cleartext #{HOST}:#{CLEARTEXT_PORT}"
+          cleartext_socket
+        end
+
+        # Opens the verified TLS connection to the SGE endpoint.
+        # @api private
+        def self.secure_socket(hostname = HOST, port = TLS_PORT)
           download_pem unless pem_exist?
-          socket = TCPSocket.open(hostname, port)
+          tcp_socket              = Socket.tcp(hostname, port, connect_timeout: TLS_CONNECT_TIMEOUT)
           cert_store              = OpenSSL::X509::Store.new
           ssl_context             = OpenSSL::SSL::SSLContext.new
           ssl_context.cert_store  = cert_store
           ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
           cert_store.add_file(pem) if pem_exist?
-          ssl_socket = OpenSSL::SSL::SSLSocket.new(socket, ssl_context)
+          ssl_socket = OpenSSL::SSL::SSLSocket.new(tcp_socket, ssl_context)
           ssl_socket.sync_close = true
           EAccess.verify_pem(ssl_socket.connect)
           return ssl_socket
+        end
+
+        # Opens the legacy cleartext connection to the SGE endpoint.
+        # @api private
+        def self.cleartext_socket(hostname = HOST, port = CLEARTEXT_PORT)
+          Socket.tcp(hostname, port, connect_timeout: TLS_CONNECT_TIMEOUT)
         end
 
         # Authenticates with the EAccess server and launches a character session.
@@ -100,9 +153,11 @@ module Lich
 
           conn = EAccess.socket()
           begin
-            # it is vitally important to verify self-signed certs
-            # because there is no chain-of-trust for them
-            EAccess.verify_pem(conn)
+            # It is vitally important to verify self-signed certs because there
+            # is no chain-of-trust for them. socket() already verified the peer on
+            # the TLS path; the cleartext fallback is a plain Socket with no peer
+            # cert, so guard the re-verify to the TLS socket.
+            EAccess.verify_pem(conn) if conn.is_a?(OpenSSL::SSL::SSLSocket)
             conn.puts "K\n"
             hashkey = EAccess.read(conn)
             # pp "hash=%s" % hashkey

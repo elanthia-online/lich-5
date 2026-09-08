@@ -62,6 +62,53 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     end
   end
 
+  describe 'SGE endpoints' do
+    it 'prefers TLS on port 7910' do
+      expect(described_class::TLS_PORT).to eq(7910)
+    end
+
+    it 'falls back to cleartext on port 7900' do
+      expect(described_class::CLEARTEXT_PORT).to eq(7900)
+    end
+
+    it 'targets eaccess.play.net for both' do
+      expect(described_class::HOST).to eq('eaccess.play.net')
+    end
+  end
+
+  describe '.socket TLS-with-cleartext-fallback' do
+    it 'returns the TLS socket when the secure connect succeeds' do
+      tls = double('ssl_socket')
+      allow(described_class).to receive(:secure_socket).and_return(tls)
+      expect(described_class).not_to receive(:cleartext_socket)
+
+      expect(described_class.socket).to be(tls)
+    end
+
+    it 'falls back to cleartext when the TLS port is unreachable' do
+      plain = double('tcp_socket')
+      allow(described_class).to receive(:secure_socket).and_raise(Errno::ETIMEDOUT)
+      allow(described_class).to receive(:cleartext_socket).and_return(plain)
+
+      expect(described_class.socket).to be(plain)
+    end
+
+    it 'falls back to cleartext on DNS/socket errors too' do
+      plain = double('tcp_socket')
+      allow(described_class).to receive(:secure_socket).and_raise(SocketError)
+      allow(described_class).to receive(:cleartext_socket).and_return(plain)
+
+      expect(described_class.socket).to be(plain)
+    end
+
+    it 'does NOT downgrade to cleartext on a TLS certificate failure' do
+      allow(described_class).to receive(:secure_socket).and_raise(OpenSSL::SSL::SSLError.new('cert verify failed'))
+      expect(described_class).not_to receive(:cleartext_socket)
+
+      expect { described_class.socket }.to raise_error(OpenSSL::SSL::SSLError)
+    end
+  end
+
   describe '.pem' do
     it 'returns path to simu.pem in DATA_DIR' do
       expect(described_class.pem).to eq(File.join(DATA_DIR, 'simu.pem'))
