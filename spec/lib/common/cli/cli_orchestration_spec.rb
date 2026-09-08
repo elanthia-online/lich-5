@@ -144,6 +144,69 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
     end
   end
 
+  describe '.handle_web_login_test' do
+    let(:saved_entries) do
+      [{ user_id: 'DOUG', password: 'secret', char_name: 'Raiyen', game_code: 'DRT' }]
+    end
+
+    before do
+      allow(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries).and_return(saved_entries)
+    end
+
+    it 'authenticates via Web using the password from the saved entry, not ARGV' do
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return('gamehost' => 'h', 'gameport' => 'p', 'key' => 'k')
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen', '--game-code', 'DRT'])
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout)
+        .with(account: 'DOUG', password: 'secret', character: 'Raiyen', game_code: 'DRT')
+    end
+
+    it 'never prints the live one-time KEY (a real usable credential) to stdout' do
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout)
+        .and_return('gamehost' => 'h', 'gameport' => 'p', 'key' => 'super-secret-key-value')
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen', '--game-code', 'DRT'])
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect($stdout.string).not_to include('super-secret-key-value')
+      expect($stdout.string).to include('KEY=[scrubbed]')
+      expect($stdout.string).to include('GAMEHOST=h') # non-secret fields still shown
+    end
+
+    it 'exits 1 and reports the error code on authentication failure' do
+      error = Lich::Common::Authentication::WebLogin::AuthenticationError.new('LOGIN_FAILED')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_raise(error)
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen', '--game-code', 'DRT'])
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect($stdout.string).to include('LOGIN_FAILED')
+    end
+
+    it 'exits 1 without authenticating when the account is not in the saved entries' do
+      stub_const('ARGV', ['--web-login-test', 'NOBODY', 'Raiyen', '--game-code', 'DRT'])
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout)
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(Lich::Common::Authentication::WebLogin).not_to have_received(:auth_with_timeout)
+    end
+
+    it 'exits 1 without authenticating when --game-code is missing' do
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen'])
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout)
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(Lich::Common::Authentication::WebLogin).not_to have_received(:auth_with_timeout)
+    end
+
+    it 'exits 1 without authenticating when --game-code is not a recognized code' do
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen', '--game-code', 'ZZ'])
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout)
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
+      expect(Lich::Common::Authentication::WebLogin).not_to have_received(:auth_with_timeout)
+    end
+  end
+
   describe '.handle_change_master_password' do
     before do
       allow(Lich::Common::Authentication::CLIPassword).to receive(:change_master_password).and_return(0)

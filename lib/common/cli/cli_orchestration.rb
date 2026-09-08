@@ -7,6 +7,7 @@ require_relative 'cli_conversion'
 require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
 require_relative '../authentication/login_helpers'
+require_relative '../authentication/web_login'
 require_relative '../gui/game_selection'
 require_relative 'cli_option_validator'
 
@@ -41,6 +42,8 @@ module Lich
               handle_convert_entries
             when /^--change-encryption-mode$/, /^-cem$/
               handle_change_encryption_mode
+            when /^--web-login-test$/
+              handle_web_login_test
             end
           end
 
@@ -277,6 +280,71 @@ module Lich
           master_password = ARGV[mp_index + 1] if mp_index
 
           exit Lich::Common::CLI::EncryptionModeChange.change_mode(new_mode, master_password)
+        end
+
+        # Standalone probe of the HTTPS web-login fallback path (see
+        # docs/web-login-protocol-analysis.md). Exercises
+        # WebLogin.auth_with_timeout directly against play.net -- independent
+        # of the real login path (Authenticator.authenticate), which also
+        # uses WebLogin, either forced via --auth-provider=web or
+        # automatically as a fallback when EAccess is unreachable.
+        #
+        # @return [void] exits the process; never returns normally
+        def self.handle_web_login_test
+          idx = ARGV.index('--web-login-test')
+          account = ARGV[idx + 1]
+          char_name = ARGV[idx + 2]
+
+          lich_script = File.join(LICH_DIR, 'lich.rbw')
+          usage = "Usage: ruby #{lich_script} --web-login-test ACCOUNT CHAR_NAME --game-code CODE\n" \
+                  "Reads the account's password from data/entry.yaml (ACCOUNT must already be saved there).\n" \
+                  'This is a standalone probe of the HTTPS web-login fallback path -- it does NOT ' \
+                  'touch the normal EAccess login flow.'
+
+          account = CliOptionValidator.require_positional(account, name: 'ACCOUNT', usage: usage)
+          char_name = CliOptionValidator.require_positional(char_name, name: 'CHAR_NAME', usage: usage)
+
+          game_code = CliOptionValidator.extract_flag_value(
+            '--game-code',
+            usage: usage,
+            valid_values: Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES
+          )
+          if game_code.nil?
+            $stdout.puts 'error: --game-code is required'
+            $stdout.puts usage
+            exit 1
+          end
+
+          entries = Lich::Common::Authentication::EntryStore.load_saved_entries(DATA_DIR, false)
+          entry = entries.find { |e| e[:user_id].to_s.casecmp?(account) }
+          if entry.nil?
+            $stdout.puts "error: Account '#{account}' not found in #{Lich::Common::Authentication::EntryStore.yaml_file_path(DATA_DIR)}"
+            exit 1
+          end
+
+          $stdout.puts "Probing web login fallback for #{account} / #{char_name} (#{game_code})..."
+
+          begin
+            login_info = Lich::Common::Authentication::WebLogin.auth_with_timeout(
+              account: account,
+              password: entry[:password],
+              character: char_name,
+              game_code: game_code
+            )
+            $stdout.puts 'Success:'
+            # KEY is a live, usable one-time game-server credential -- printing
+            # it would leave a real secret in terminal scrollback/log capture
+            # for a probe that never consumes it. Only non-secret connection
+            # metadata is shown.
+            login_info.each { |k, v| $stdout.puts "  #{k.upcase}=#{k == 'key' ? '[scrubbed]' : v}" }
+            exit 0
+          rescue Lich::Common::Authentication::WebLogin::AuthenticationError => e
+            $stdout.puts "error: web login failed: #{e.error_code}"
+            exit 1
+          rescue StandardError => e
+            $stdout.puts "error: #{e.class}: #{e.message}"
+            exit 1
+          end
         end
       end
     end

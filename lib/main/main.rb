@@ -168,7 +168,8 @@ reconnect_if_wanted = proc {
                             game_code: requested_instance,
                             frontend: requested_fe,
                             custom_launch: requested_custom_launch,
-                            data_dir: DATA_DIR
+                            data_dir: DATA_DIR,
+                            auth_provider: @argv_options[:auth_provider] || :eaccess
                           )
                         else
                           Lich::Common::Authentication::CLI.execute(
@@ -176,7 +177,8 @@ reconnect_if_wanted = proc {
                             game_code: requested_instance,
                             frontend: lookup_frontend,
                             custom_launch: requested_custom_launch,
-                            data_dir: DATA_DIR
+                            data_dir: DATA_DIR,
+                            auth_provider: @argv_options[:auth_provider] || :eaccess
                           )
                         end
 

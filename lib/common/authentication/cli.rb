@@ -21,12 +21,14 @@ module Lich
         # @param frontend [String, nil] Frontend type (stormfront, avalon, wizard)
         # @param custom_launch [String, nil] Custom launch filter (if provided, frontend is ignored for matching)
         # @param data_dir [String] Directory containing saved login entries
+        # @param auth_provider [Symbol] :eaccess (default, with automatic web fallback) or :web to force
+        #   the HTTPS WebLogin path directly -- see Authenticator.authenticate
         # @return [Array<String>, nil] Launch data strings if successful, nil if login fails
         #
         # @example
         #   launch_data = CLI.execute('MyCharacter', game_code: 'GS3', frontend: 'stormfront', data_dir: '/path/to/data')
         #   # => ["GAME=GS3", "GAMEHOST=eaccess.play.net", ...]
-        def self.execute(character_name, game_code: nil, frontend: nil, custom_launch: nil, data_dir: nil)
+        def self.execute(character_name, game_code: nil, frontend: nil, custom_launch: nil, data_dir: nil, auth_provider: :eaccess)
           data_dir ||= DATA_DIR
 
           unless character_name && !character_name.empty?
@@ -47,7 +49,7 @@ module Lich
           return nil unless char_entry
 
           # Decrypt password and authenticate
-          decrypt_and_authenticate(char_entry, entry_data)
+          decrypt_and_authenticate(char_entry, entry_data, auth_provider: auth_provider)
         end
 
         # Resolves a saved character without decrypting its password or
@@ -119,7 +121,7 @@ module Lich
         #
         # @example
         #   launch_data = CLI.execute_new_character('MYACCOUNT', game_code: 'DR', data_dir: '/path/to/data')
-        def self.execute_new_character(account_name, game_code: nil, frontend: nil, custom_launch: nil, custom_launch_dir: nil, data_dir: nil)
+        def self.execute_new_character(account_name, game_code: nil, frontend: nil, custom_launch: nil, custom_launch_dir: nil, data_dir: nil, auth_provider: :eaccess)
           data_dir ||= DATA_DIR
 
           unless account_name && !account_name.empty?
@@ -149,7 +151,7 @@ module Lich
             generator: true,
           }
 
-          decrypt_and_authenticate(char_entry, entry_data)
+          decrypt_and_authenticate(char_entry, entry_data, auth_provider: auth_provider)
         end
 
         # Treats nil and the :__unset CLI sentinel as "value not provided".
@@ -285,8 +287,10 @@ module Lich
         # @param char_entry [Hash] character entry with :username, :password, :char_name, :game_code, :frontend keys
         #   and an optional :generator flag for character-generator entry
         # @param entry_data [Hash] full entry data (needed for encryption mode)
+        # @param auth_provider [Symbol] :eaccess (default, with automatic web fallback) or :web to force
+        #   the HTTPS WebLogin path directly -- see Authenticator.authenticate
         # @return [Array<String>, nil] launch data strings if successful, nil on failure
-        def self.decrypt_and_authenticate(char_entry, entry_data)
+        def self.decrypt_and_authenticate(char_entry, entry_data, auth_provider: :eaccess)
           # Get encryption mode from YAML
           encryption_mode = (entry_data[:encryption_mode] || 'plaintext').to_sym
 
@@ -314,7 +318,8 @@ module Lich
               password: plaintext_password,
               character: char_entry[:char_name],
               game_code: char_entry[:game_code],
-              generator: char_entry[:generator] || false
+              generator: char_entry[:generator] || false,
+              auth_provider: auth_provider
             )
 
             # Format and return launch data

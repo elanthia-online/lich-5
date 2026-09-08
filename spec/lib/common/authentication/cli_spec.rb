@@ -254,7 +254,8 @@ RSpec.describe Lich::Common::Authentication::CLI do
           password: 'testpass',
           character: 'NEW',
           game_code: 'DR',
-          generator: true
+          generator: true,
+          auth_provider: :eaccess
         ).and_return({ 'key' => 'abc' })
 
         result = described_class.execute_new_character('testuser', game_code: 'DR', data_dir: data_dir)
@@ -271,7 +272,8 @@ RSpec.describe Lich::Common::Authentication::CLI do
           password: 'testpass',
           character: 'NEW',
           game_code: 'DR',
-          generator: true
+          generator: true,
+          auth_provider: :eaccess
         ).and_return({ 'key' => 'abc' })
 
         described_class.execute_new_character('TESTUSER', game_code: 'DR', data_dir: data_dir)
