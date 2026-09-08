@@ -1678,11 +1678,20 @@ class DRRoom
   class << self
     attr_accessor :npcs, :pcs, :group_members, :room_objs
 
+    # Clear through the accessors, not the mock's instance variables. When the
+    # production DRRoom (lib/dragonrealms/drinfomon/drroom.rb) is loaded in the
+    # same process it reopens DRRoom and redefines the accessors to read/write
+    # class variables (@@npcs, ...), while this mock's reset! kept assigning the
+    # class-level instance variables (@npcs, ...). The two no longer refer to the
+    # same storage, so reset! silently failed to clear production state and NPCs
+    # leaked between examples (a later cambrinth spec would spin in an endless
+    # retreat loop). Routing through the setters writes to whichever storage the
+    # live accessor uses; respond_to? guards attributes the mock lacks.
     def reset!
-      @npcs = []
-      @pcs = []
-      @group_members = []
-      @room_objs = []
+      %i[npcs pcs group_members room_objs pcs_prone pcs_sitting dead_npcs].each do |attribute|
+        setter = :"#{attribute}="
+        public_send(setter, []) if respond_to?(setter)
+      end
     end
   end
 end unless defined?(DRRoom)
