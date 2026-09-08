@@ -8,10 +8,15 @@
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
@@ -23,7 +28,7 @@
   areas: [
     {
       name: "Glatoph",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -62,13 +67,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: "a skeleton skull",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

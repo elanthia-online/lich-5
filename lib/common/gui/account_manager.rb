@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../frontend'
+
 module Lich
   module Common
     module GUI
@@ -341,6 +343,44 @@ module Lich
             Lich.log "error: Error updating character: #{e.message}"
             false
           end
+        end
+
+        # Reassigns exactly one saved entry without changing account credentials,
+        # favorites or per-entry custom launch settings. Rejects stale selections
+        # and duplicate destinations rather than editing a different entry.
+        #
+        # @param data_dir [String] saved entry directory
+        # @param username [String] account name
+        # @param char_name [String] character name
+        # @param game_code [String] game instance
+        # @param old_frontend [String] frontend of the selected entry
+        # @param custom_launch [String, nil] exact selected custom command
+        # @param frontend [String] new configured frontend identifier
+        # @return [Boolean] whether the change was saved
+        def self.update_launch_settings(data_dir, username, char_name, game_code, old_frontend:, custom_launch:, frontend: old_frontend)
+          definition = Frontend.definition_for(frontend)
+          return false if definition.dig(:metadata, :native_launch_only) && !custom_launch.to_s.strip.empty?
+
+          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+          return false unless File.exist?(yaml_file)
+
+          yaml_data = YAML.load_file(yaml_file)
+          account = yaml_data.fetch('accounts', {}).find { |name, _| name.casecmp?(username) }&.last
+          candidates = account&.fetch('characters', [])&.select do |character|
+            character['char_name'] == char_name && character['game_code'] == game_code &&
+              character['custom_launch'] == custom_launch
+          end || []
+          selected = candidates.select { |character| character['frontend'] == old_frontend }
+          return false unless selected.one?
+
+          character = selected.first
+          return false if candidates.any? { |other| !other.equal?(character) && Frontend.canonical_name(other['frontend']) == definition[:id] }
+
+          character['frontend'] = definition[:id]
+          write_yaml_with_headers(yaml_file, yaml_data)
+        rescue StandardError => e
+          Lich.log "error: Could not change saved frontend: #{e.class}"
+          false
         end
 
         # Converts authentication response data to character format for storage

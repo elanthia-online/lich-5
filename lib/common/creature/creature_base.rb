@@ -69,23 +69,36 @@ module Lich
       #
       # @return [Hash{String=>Integer, nil}]
       STATUS_DURATIONS = {
-        'breeze'      => 6,   # 6 seconds roundtime
-        'bind'        => 10,  # 10 seconds typical
-        'web'         => 8,   # 8 seconds typical
-        'entangle'    => 10,  # 10 seconds typical
-        'hypnotism'   => 12,  # 12 seconds typical
-        'calm'        => 15,  # 15 seconds typical
-        'mass_calm'   => 15,  # 15 seconds typical
-        'sleep'       => 8,   # 8 seconds typical (can wake early)
+        'breeze'       => 6,   # 6 seconds roundtime
+        'bind'         => 10,  # 10 seconds typical
+        'web'          => 8,   # 8 seconds typical
+        'entangle'     => 10,  # 10 seconds typical
+        'hypnotism'    => 12,  # 12 seconds typical
+        'calm'         => 15,  # 15 seconds typical
+        'mass_calm'    => 15,  # 15 seconds typical
+        'sleep'        => 8,   # 8 seconds typical (can wake early)
+        # Crit-derived states. 'roundtime' is set with an explicit duration by
+        # the combat processor (critical tables report it in seconds); these
+        # defaults apply when a source supplies no duration of its own.
+        'roundtime'    => 5,
+        'dazed'        => 10,
         # Statuses with reliable removal messages - no duration needed.
-        'stunned'     => nil,
-        'immobilized' => nil,
-        'prone'       => nil,
-        'blind'       => nil,
-        'sunburst'    => nil,
-        'webbed'      => nil,
-        'poisoned'    => nil,
-        'hidden'      => nil
+        'stunned'      => nil,
+        # Reachable from many sources (Silence 210, silencing flares, UCS
+        # crits / Slow 506, ensorcell) with no single reliable duration, so
+        # they are message-cleared rather than timer-expired.
+        'silenced'     => nil,
+        'slowed'       => nil,
+        'crippled'     => nil,
+        'limb_favored' => nil,
+        'amputated'    => nil,
+        'immobilized'  => nil,
+        'prone'        => nil,
+        'blind'        => nil,
+        'sunburst'     => nil,
+        'webbed'       => nil,
+        'poisoned'     => nil,
+        'hidden'       => nil
       }.freeze
 
       # Maps `<crtrStatus>` transient XML flags to canonical status names.
@@ -427,12 +440,27 @@ module Lich
         #   falls back to {STATUS_DURATIONS} when omitted.
         # @return [void]
         def add_status(status, duration = nil)
-          status = status.to_s
-          return if @status.include?(status)
+          # Canonicalize case at the boundary, not per producer: the crit
+          # tables report position as "PRONE"/"KNEELING"/"SITTING" while
+          # messaging and <crtrStatus> use lowercase, and @status membership
+          # is exact - an uppercase add could never be removed or matched.
+          status = status.to_s.downcase
+          if @status.include?(status)
+            # Re-adding with an explicit duration extends the lock: without
+            # this, a 3s roundtime followed by an overlapping 20s one kept
+            # the 3s expiry and reported the creature free ~19s early.
+            # Never shorten - the longest known source wins.
+            if duration
+              expires = Time.now + duration
+              current = @status_timestamps[status]
+              @status_timestamps[status] = expires if current.nil? || expires > current
+            end
+            return
+          end
 
           @status << status
 
-          duration ||= STATUS_DURATIONS[status.downcase]
+          duration ||= STATUS_DURATIONS[status]
           if duration
             @status_timestamps[status] = Time.now + duration
             debug_log("+status: #{status} (expires in #{duration}s)")
@@ -446,9 +474,13 @@ module Lich
         # @param status [String, Symbol] canonical status name.
         # @return [void]
         def remove_status(status)
-          status = status.to_s
+          status = status.to_s.downcase
           @status.delete(status)
           @status_timestamps.delete(status)
+          # A stun removal (message or <crtrStatus> snapshot) is authoritative
+          # and retires any crit-table duration estimate with it, however much
+          # time that estimate had left. GemStone-only hook.
+          clear_stun_estimate if status == 'stunned' && respond_to?(:clear_stun_estimate)
           debug_log("-status: #{status}")
         end
 
@@ -472,7 +504,7 @@ module Lich
         # @return [Boolean]
         def has_status?(status)
           cleanup_expired_statuses
-          @status.include?(status.to_s)
+          @status.include?(status.to_s.downcase)
         end
 
         # Returns a copy of the currently-active statuses (after expiry).
@@ -493,6 +525,13 @@ module Lich
         # @param attrs [Hash{String=>String}] XML attributes excluding `exist`.
         # @return [void]
         def sync_crtr_status(attrs)
+          # Scoped to CRTR_STATUS_FLAGS on purpose: @status has two writers,
+          # this feed and the combat parser reading messaging. The feed is a
+          # full snapshot only of the states it reports, so it owns removal
+          # for exactly those - and must not touch the rest. blind,
+          # poisoned, natures_decay and the other message-only effects never
+          # appear in the tag; reconciling them here would clear them on the
+          # next one and make them impossible to model.
           CRTR_STATUS_FLAGS.each do |xml_name, status|
             if attrs[xml_name] == '1'
               add_status(status)
@@ -519,6 +558,19 @@ module Lich
         # @return [Boolean]
         def crtr_flag?(key)
           @crtr_flags[key.to_sym] || false
+        end
+
+        # Whether any `<crtrStatus>` classification has been seen for this
+        # creature yet.
+        #
+        # Callers filtering on a flag need to tell "the feed said this is not
+        # hostile" apart from "the feed has not told us anything" - an absent
+        # flag is unknown, not false. A ridden mount, for instance, carries a
+        # bold creature link but never a `<crtrStatus>` of its own.
+        #
+        # @return [Boolean]
+        def crtr_flags?
+          !@crtr_flags.empty?
         end
 
         # Checks whether a status or classification flag is active.

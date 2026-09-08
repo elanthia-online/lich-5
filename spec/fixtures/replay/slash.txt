@@ -1,0 +1,5 @@
+##### slash 0e2577a6e9414172
+# expect: attacks=slash | res=none | flares=none | outcomes=evade | dmg=0 | statuses=
+<pushBold/>A <a exist="41563914" noun="mugger">human mugger</a><popBold/> slashes with a troll-claw at you!
+You move slightly, letting the attack pass harmlessly by!
+

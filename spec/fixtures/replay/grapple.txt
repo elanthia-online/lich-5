@@ -1,0 +1,14 @@
+##### grapple 2d64fa36c8ec651e
+# expect: attacks=grapple | res=uaf_udf | flares=none | outcomes=none | dmg=1 | statuses=
+You attempt to grapple <pushBold/>a <a exist="44861735" noun="banshee">flickering mist-wreathed banshee</a><popBold/>!
+An infernal death knight surges forward like lightning, placing herself between you and the mist-wreathed banshee!
+Your attack is hindered by holding a golvern targe displaying concentric rings of crimson and navy!
+You have good positioning against <pushBold/>a <a exist="44861735" noun="banshee">flickering mist-wreathed banshee</a><popBold/>.
+  UAF: 681 vs UDF: 504 = 1.351 * MM: 99 + d100: 31 = 164
+  ... and hit for 37 points of damage!
+  Quick strike to the left leg!
+   The mist-wreathed banshee makes no bones about it.
+The mist-wreathed banshee starts to favor her wounded left leg!
+Roundtime: 3 sec.
+Roundtime changed to 1 second.
+

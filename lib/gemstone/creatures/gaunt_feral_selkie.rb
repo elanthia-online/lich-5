@@ -1,37 +1,49 @@
 {
   schema_version: 3,
   name: "gaunt feral selkie",
-  noun: "",
+  noun: "selkie",
   url: "https://gswiki.play.net/gaunt_feral_selkie",
   picture: "",
   level: 57,
   family: "Fey",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 259,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "Crawling Shore",
-      rooms: []
+      uids: [4576101..4576126, 4576151..4576160]
+    },
+    {
+      name: "unmapped",
+      uids: [4576127..4576150]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
-    bolt_spells: [
+    physical_attacks: [
       {
         name: "Hand of Tonis (505)"
       },
       {
         name: "Major Cold (907)"
+      },
+      {
+        name: "Charge",
+        as: 298
       }
     ],
     warding_spells: [],
@@ -52,6 +64,9 @@
       },
       {
         name: "Sweep"
+      },
+      {
+        name: "Charge"
       }
     ],
     special_abilities: [],
@@ -60,22 +75,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (246..472),
+    ranged: 264,
+    bolt: 264,
+    udf: (350..511),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: (259..269),
+    emp_td: (252..261),
+    pal_td: (226..235),
+    ran_td: (220..227),
+    sor_td: (272..281),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (279..282),
+    mne_td: (279..282),
+    mjs_td: (251..261),
+    mns_td: (251..261),
+    mnm_td: (210..215),
     defensive_spells: [
       "Iron Skin (1202)",
       "Foresight (1204)",
@@ -88,24 +103,52 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a woven twine necklace adorned with yellowed shark teeth"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Clad in sealskin and sailcloth, the feral selkie is a half-krolvin in his middle years. Her hair is unkempt and her eyes are wild and unfocused. Rattling bones, dried iceblossoms, and bits of kelp adorn her ritualistic attire, held in place by bits of fraying twine. Unwashed and obviously addled, the selkie looks as if she has one foot firmly in a world that you cannot see.\nOr:\nThe selkie's large, dark eyes hold more than a glimmer of unnatural intellect. His fur is soft and sleek over an agile musculature more suited to the water than dry land. The selkie's sharp teeth are yellowed and an overwhelming odor of fish guts rises from his mouth in a noxious cloud. \n\nAppraisal:\nThe feral selkie is medium in size, about six feet high in his current state."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
+    arrival: [
+      "A gaunt feral selkie wanders in, lost in a pall of befuddlement.",
+      "A gaunt feral selkie wanders in, befuddled and seemingly unaware of her injuries."
+    ],
+    flee: [
+      "Lost in a pall of befuddlement, a gaunt feral selkie wanders {direction}.",
+      "Seemingly unaware of {pronoun} injuries, a gaunt feral selkie wanders {direction}."
+    ],
+    death: [
+      "An instant of clarity dawns in a gaunt feral selkie's eyes as {pronoun} succumbs to {pronoun} injuries.  Peace blossoms on {pronoun} face as {pronoun} dies.",
+      "A gaunt feral selkie slumps, {pronoun} flippers twitching as {pronoun} struggles to regain {pronoun} senses."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A gaunt feral selkie mutters an old, guttural chant as the surroundings grow terribly silent."
+    ],
+    stun_break: [
+      "A gaunt feral selkie twists and writhes on the ground before managing to get {pronoun} feet under {pronoun}. {Pronoun} struggles back into a standing position."
+    ],
+    attacks: {
+      attack: [
+        "A gaunt feral selkie balls up a grimy hand and takes a swing at you!",
+        "Leading with {pronoun} shoulder, a gaunt feral selkie barrels into a charge at you!",
+        "Propelling {pronoun} forward with {pronoun} flippers, a gaunt feral selkie charges at you!",
+        "A gaunt feral selkie holds a grimy hand out toward you!",
+        "A gaunt feral selkie unleashes a bolt of churning air at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

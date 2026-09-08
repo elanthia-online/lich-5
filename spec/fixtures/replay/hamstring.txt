@@ -1,0 +1,38 @@
+##### hamstring f282cac926cbcc9d
+# expect: attacks=hamstring | res=smr | flares=none | outcomes=none | dmg=2 | statuses=prone/add,stunned/add
+You lunge forward and try to hamstring <pushBold/>a <a exist="72544739" noun="warden">triton warden</a><popBold/> with your adamantine handaxe and xazkruvrixis handaxe!
+[SMR result: 222 (Open d100: 55, Bonus: 40)]
+Your size contributes considerably to the attack!
+With a vicious double-strike you slash at <pushBold/>a <a exist="72544739" noun="warden">triton warden</a><popBold/>'s right leg!
+   ... 58 points of damage!
+Deft slash to <pushBold/>the <a exist="72544739" noun="warden">triton warden</a><popBold/>'s left leg digs deep!
+   Bone is chipped!
+<pushBold/>A <a exist="72544739" noun="warden">triton warden</a><popBold/> falls to the ground grasping his mangled right leg!
+<pushBold/>The <a exist="72544739" noun="warden">triton warden</a><popBold/> is stunned!
+Blood sprays from <pushBold/>the <a exist="72544739" noun="warden">triton warden</a><popBold/>'s right leg in a crimson arc!
+   ... 15 points of damage!
+Roundtime: 3 sec.
+Roundtime changed to 1 second.
+
+##### hamstring 91e63ca54d7aca3a
+# expect: attacks=hamstring | res=smr | flares=spirit_animal,spirit_animal_echo | outcomes=none | dmg=3 | statuses=prone/add,stunned/add
+You lunge forward and try to hamstring <pushBold/>a <a exist="72544739" noun="warden">triton warden</a><popBold/> with your adamantine handaxe and xazkruvrixis handaxe!
+[SMR result: 234 (Open d100: 60, Bonus: 40)]
+Your size contributes considerably to the attack!
+With a vicious double-strike you slash at <pushBold/>a <a exist="72544739" noun="warden">triton warden</a><popBold/>'s right leg!
+   ... 63 points of damage!
+Weak diagonal slash catches <pushBold/>the <a exist="72544739" noun="warden">triton warden</a><popBold/>'s left knee!
+   It is dislocated.
+<pushBold/>A <a exist="72544739" noun="warden">triton warden</a><popBold/> falls to the ground grasping his mangled right leg!
+<pushBold/>The <a exist="72544739" noun="warden">triton warden</a><popBold/> is stunned!
+Blood sprays from <pushBold/>the <a exist="72544739" noun="warden">triton warden</a><popBold/>'s right leg in a crimson arc!
+   ... 17 points of damage!
+Riotous misty green energy races along the surface of the handaxe, slender tendrils rising up to coalesce into the ethereal form of an angular falcon.
+** Talons extended and wings flared, an angular ethereal falcon dives down with an ear-piercing screech as a flock of wispy misty green falcons roil forth in an angry torrent! **
+   ... 20 points of damage!
+   Fierce arm lock twists <pushBold/>a <a exist="72544739" noun="warden">triton warden</a><popBold/>'s left arm!
+A turbulent cloud of misty green light lashes out from a xazkruvrixis handaxe with an echoing screech!
+Rage fills the warden's eyes as his body tenses up.
+Roundtime: 3 sec.
+Roundtime changed to 1 second.
+

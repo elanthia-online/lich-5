@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "seraceris",
-  noun: "",
+  noun: "seraceris",
   url: "https://gswiki.play.net/seraceris",
   picture: "",
   level: 78,
   family: "Ghost",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: true,
   max_hp: 240,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 7,
+  height: 7,
+  size: "medium",
   areas: [
     {
       name: "The Rift",
-      rooms: []
+      uids: [4566001..4566055]
     }
   ],
   attack_attributes: {
@@ -31,6 +36,10 @@
       {
         name: "Claw (attack)",
         as: 291
+      },
+      {
+        name: "Claw",
+        as: (380..384)
       }
     ],
     bolt_spells: [],
@@ -53,32 +62,43 @@
       {
         name: "Disintegrate (705)",
         cs: 341
+      },
+      {
+        name: "Point",
+        cs: 346
       }
     ],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Air Blast"
+      },
+      {
+        name: "Anti-mana Wave"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "2",
     immunities: [],
-    melee: 311,
-    ranged: nil,
-    bolt: 313,
-    udf: "500+ at times",
+    melee: (273..549),
+    ranged: (279..492),
+    bolt: (279..492),
+    udf: (412..464),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 351,
+    cle_td: (324..333),
+    emp_td: (324..331),
+    pal_td: (277..284),
+    ran_td: (282..291),
+    sor_td: (339..351),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 365,
-    mjs_td: 336,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (364..365),
+    mne_td: (364..365),
+    mjs_td: (317..336),
+    mns_td: (317..336),
+    mnm_td: (289..297),
     defensive_spells: [
       "Elemental Defense I (401)",
       "Elemental Defense II (406)",
@@ -94,24 +114,44 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "some tattered flowing robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The seraceris stands tall and slender, its body appearing almost two-dimensional as it moves. In the creature's angular face sit two pools of blinding white light, and rays extend from the eye sockets in stark beams which arc around it in a nightmarish aurora. Waves of energy shed by the malign magic permeating the seraceris lift its ragged robes in a jagged halo, echoing its long, gnarled fingers as they dance in a constant blur of spell-summoning."
     ],
     arrival: [],
-    flee: [],
-    death: [],
+    flee: [
+      "A seraceris glides {direction}."
+    ],
+    death: [
+      "A seraceris fades into oblivion."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A seraceris exhales the last of a virulent green mist."
+      ],
+      cast: [
+        "A seraceris points a ghostly finger at {target}!"
+      ],
+      claw: [
+        "A seraceris claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

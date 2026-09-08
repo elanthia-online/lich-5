@@ -1,36 +1,41 @@
 {
   schema_version: 3,
   name: "putrefied citadel herald",
-  noun: "",
+  noun: "herald",
   url: "https://gswiki.play.net/putrefied_citadel_herald",
   picture: "",
   level: 60,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "corporeal undead"
   ],
   bcs: true,
-  max_hp: 240,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 241,
+  speed: 7,
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "The Citadel",
-      rooms: []
+      uids: [377013..377015, 377027..377030, 377301..377314, 377320..377344]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Runestaff",
-        as: 302
+        as: (277..302)
       }
     ],
     bolt_spells: [
@@ -79,29 +84,33 @@
         name: "Web (118)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Point"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "2",
     immunities: [],
-    melee: 303,
-    ranged: 279,
-    bolt: 239,
-    udf: nil,
+    melee: (279..472),
+    ranged: (181..332),
+    bolt: (181..332),
+    udf: (341..502),
     bar_td: 232,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: 242,
-    ran_td: nil,
-    sor_td: 280,
+    cle_td: (279..288),
+    emp_td: (268..276),
+    pal_td: (231..236),
+    ran_td: (251..257),
+    sor_td: (268..280),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 283,
-    mjs_td: nil,
-    mns_td: 276,
-    mnm_td: nil,
+    mje_td: (283..296),
+    mne_td: (283..296),
+    mjs_td: (267..276),
+    mns_td: (267..276),
+    mnm_td: 212,
     defensive_spells: [
       "Fasthr's Reward (115)",
       "Lesser Shroud (120)",
@@ -115,24 +124,48 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a polished red steel Hammer of Kai",
+    "an elongated star-topped runestaff",
+    "some worn dark opulent leather robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: "inky necrotic core",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Maggots crawl and writhe in the eye sockets of a putrefied Citadel herald. Replete in immaculate costume, the herald stands stiffly with an expression of disdain on her withered face of grey putrified skin. A large signet ring graces one of her two large wrinkled hands patiently folded one over the other. A polished, leather scroll case hangs at the herald's side, embossed with a large letter \"E.\""
     ],
-    arrival: [],
+    arrival: [
+      "A putrefied Citadel herald strides in confidently.",
+      "A rotting Citadel arbalester strides into the room, {pronoun} crossbow cradled in the crook of an arm.",
+      "A rotting Citadel arbalester strides into the area, {pronoun} crossbow cradled in the crook of an arm."
+    ],
     flee: [],
-    death: [],
+    death: [
+      "A putrefied Citadel herald collapses in upon {pronoun}, leaving behind a pile of dust.",
+      "A spectral howl echoes through the air, resonant with pain and anguish, and then fades into heavy silence.  The scaly veneer covering a putrefied Citadel herald shimmers briefly before melting into {pronoun} skin.",
+      "A putrefied citadel herald collapses in upon {reflexive}, leaving behind a pile of dust."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A putrefied citadel herald mutters a quick incantation then suddenly springs to {pronoun} feet!"
+    ],
+    attacks: {
+      attack: [
+        "A putrefied Citadel herald decisively points at you!",
+        "A putrefied Citadel herald swings {weapon} at you!",
+        "A putrefied citadel herald swings an elongated star-topped runestaff at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

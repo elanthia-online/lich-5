@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "radiant-eyed goliath auramancer",
-  noun: "",
+  noun: "auramancer",
   url: "https://gswiki.play.net/radiant-eyed_goliath_auramancer",
   picture: "",
   level: 115,
   family: "Goliath",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 361,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Empyrean Onslaughts",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -79,13 +84,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -93,10 +101,22 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "A radiant-eyed goliath auramancer's eyes roll up into {pronoun} head as {pronoun} body goes limp on the ground."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A radiant-eyed goliath auramancer traces a brightly prismatic sigil in the air with one finger. It sparkles away into harmless motes."
+    ],
+    attacks: {
+      attack: [
+        "The radiant-eyed goliath auramancer attempts to jab you!",
+        "A radiant-eyed goliath auramancer exhales slowly, rainbowed embers drifting on {pronoun} breath before winking out in the air.",
+        "The radiant-eyed goliath auramancer attempts to punch you!",
+        "A radiant-eyed goliath auramancer raises a glowing palm toward you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

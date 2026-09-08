@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "lesser mummy",
-  noun: "",
+  noun: "mummy",
   url: "https://gswiki.play.net/lesser_mummy",
   picture: "",
   level: 6,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
   muggable: nil,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 91,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 88,
+  speed: 18,
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "The Graveyard",
-      rooms: []
+      uids: [18013..18021, 2138001..2138018]
     }
   ],
   attack_attributes: {
@@ -47,21 +52,21 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: (34..40),
-    ranged: nil,
-    bolt: 33,
-    udf: 60,
+    melee: (34..70),
+    ranged: (18..63),
+    bolt: (18..63),
+    udf: (49..60),
     bar_td: 18,
-    cle_td: nil,
-    emp_td: nil,
+    cle_td: 18,
+    emp_td: 18,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: 18,
     sor_td: nil,
     wiz_td: nil,
     mje_td: 18,
     mne_td: 18,
-    mjs_td: nil,
-    mns_td: nil,
+    mjs_td: 18,
+    mns_td: 18,
     mnm_td: 18,
     defensive_spells: [],
     defensive_abilities: [],
@@ -71,24 +76,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a mummy shroud",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The lesser mummy scrapes slowly across the floor, dragging its form tirelessly in an attempt to find final rest. Its decayed flesh is barely contained in the remnants of its embalming strips, torn and unwrapping in its wake. Once a member of a proud and wealthy family, it has left its sarcophagus to discover someone who can help it and to kill all those who cannot."
     ],
-    arrival: [],
+    arrival: [
+      "A lesser mummy just arrived!",
+      "A lesser mummy just arrived."
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The lesser mummy falls to the ground motionless.",
+      "The lesser mummy screams evilly one last time and goes still."
+    ],
+    decay: [
+      "A lesser mummy turns to dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A lesser mummy tries to ensnare you!"
+      ],
+      claw: [
+        "A lesser mummy claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

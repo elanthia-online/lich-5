@@ -1,27 +1,32 @@
 {
   schema_version: 3,
   name: "amaranthine kraken tentacle",
-  noun: "",
+  noun: "tentacle",
   url: "https://gswiki.play.net/amaranthine_kraken_tentacle",
   picture: "",
   level: 113,
   family: "Kraken",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
-  max_hp: nil,
-  speed: nil,
+  max_hp: 750,
+  speed: 3,
   height: nil,
   size: "",
   areas: [
     {
       name: "Sailor's Grief",
-      rooms: []
+      uids: [7150501..7150535, 7150701..7150719]
     }
   ],
   attack_attributes: {
@@ -39,7 +44,7 @@
     melee: nil,
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: (608..887),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -60,24 +65,39 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
-    magic_items: nil,
-    gems: nil,
+    coins: true,
+    magic_items: true,
+    gems: true,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       ""
     ],
     arrival: [],
-    flee: [],
-    death: [],
+    flee: [
+      "An amaranthine kraken tentacle hurtles away from the colored light, which sears a swathe across the ground!"
+    ],
+    death: [
+      "An amaranthine kraken tentacle writhes, twitches and spasms going down its length before it crumples, going still."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "An amaranthine kraken tentacle crushes you mercilessly!",
+        "An amaranthine kraken tentacle lashes out at your legs, flicking seawater in an arcing spray of droplets!",
+        "The amaranthine kraken tentacle slams into your lower back with a brutal thud!",
+        "An amaranthine kraken tentacle whirls in a violent arc before slamming down toward you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

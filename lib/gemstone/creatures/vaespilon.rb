@@ -1,37 +1,39 @@
 {
   schema_version: 3,
   name: "vaespilon",
-  noun: "",
+  noun: "vaespilon",
   url: "https://gswiki.play.net/vaespilon",
   picture: "",
   level: 93,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead",
     "Extraplanar"
   ],
   bcs: true,
   max_hp: 300,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 8,
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "The Rift",
-      rooms: []
+      uids: [4570001..4570014]
     }
   ],
   attack_attributes: {
-    physical_attacks: [],
-    bolt_spells: [],
-    warding_spells: [],
-    offensive_spells: [
+    physical_attacks: [
       {
         name: "Implosion (720)"
       },
@@ -40,31 +42,42 @@
       },
       {
         name: "Bravery (211)"
+      },
+      {
+        name: "Blackened wooden staff",
+        as: 495
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Skeletal Finger"
+      },
+      {
+        name: "Pounce"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "2",
     immunities: [],
-    melee: (255..400),
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (283..521),
+    ranged: (201..423),
+    bolt: (201..423),
+    udf: (381..617),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: 334,
-    ran_td: nil,
-    sor_td: 421,
+    cle_td: (399..409),
+    emp_td: (385..391),
+    pal_td: (359..362),
+    ran_td: (347..356),
+    sor_td: (416..425),
     wiz_td: nil,
-    mje_td: 434,
-    mne_td: 436,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (434..439),
+    mne_td: (434..439),
+    mjs_td: 419,
+    mns_td: 419,
+    mnm_td: (365..369),
     defensive_spells: [
       "Spirit Warding I (101)",
       "Spirit Defense (103)",
@@ -83,24 +96,48 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a blackened wooden staff",
+    "a scorched black pendant",
+    "a twisted black ring",
+    "some decaying black robes",
+    "some rotting black robes"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Inky necrotic core"
+    other: "Inky necrotic core",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The vaespilon's features are so terribly deformed by death's ravages, her expression is one of almost comical surprise, until her smile widens into a grin that is a study in terror. The skin covering the walking corpse is mottled and stretched unevenly over the bones, and the surface ripples and bulges as if putrescence is bubbling underneath. The vaespilon hisses in glee as she moves, a wave of stench preceding her like an invisible assailant."
     ],
-    arrival: [],
+    arrival: [
+      "A vaespilon crawls in, wailing in pain!"
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The vaespilon falls to the ground motionless.",
+      "The vaespilon wails in terrifying pain one last time and lies still."
+    ],
+    decay: [
+      "All the malice and magic that once held the vaespilon together dissipates, leaving nothing but a husk which crumbles to dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A vaespilon swings {weapon} at you!"
+      ],
+      cast: [
+        "A vaespilon points a skeletal finger at {target}!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

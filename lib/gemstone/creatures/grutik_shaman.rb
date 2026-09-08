@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "grutik shaman",
-  noun: "",
+  noun: "shaman",
   url: "https://gswiki.play.net/grutik_shaman",
   picture: "",
   level: 29,
   family: "Grutik",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: true,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 235,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Zaerthu Tunnels",
-      rooms: []
+      uids: [13009001..13009039]
     }
   ],
   attack_attributes: {
@@ -43,6 +48,14 @@
       {
         name: "Sleep (501)",
         cs: 165
+      },
+      {
+        name: "Burrow Ambush",
+        cs: 165
+      },
+      {
+        name: "Gnarled wooden staff",
+        cs: 165
       }
     ],
     offensive_spells: [
@@ -59,29 +72,33 @@
         name: "Tremors (909)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Gesture"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "5N",
     immunities: [],
-    melee: (221..271),
-    ranged: nil,
-    bolt: (205..255),
-    udf: (230..280),
+    melee: (241..282),
+    ranged: (182..215),
+    bolt: (182..255),
+    udf: (255..339),
     bar_td: 95,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: (105..111),
+    emp_td: (107..115),
+    pal_td: (83..89),
+    ran_td: (83..92),
+    sor_td: (111..117),
     wiz_td: 115,
     mje_td: 115,
     mne_td: 115,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: (104..113),
+    mns_td: (104..113),
+    mnm_td: (93..103),
     defensive_spells: [
       "Prismatic Guard (905)",
       "Mass Blur (911)",
@@ -97,22 +114,52 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a crude roa'ter-toothed necklace",
+    "a dirty tattered robe",
+    "a gnarled wooden staff"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: [
+      "glimmering blue mote of essence",
+      "glimmering blue essence shard"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
+    attacks: {
+      attack: [
+        "A Grutik shaman finishes the chant and gestures at you!"
+      ]
+    },
+    stand: [
+      "A Grutik shaman stands up.",
+      "A grutik shaman stands up."
+    ],
     description: [
       "This misshapen humanoid has large luminous eyes from many years of living underground. It's dressed in scraps of mismatched cloth in an apparent attempt to make a crude patchwork robe. While not overly muscled, its eyes shine with a crude intelligence."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A Grutik shaman shambles in."
+    ],
+    flee: [
+      "A Grutik shaman shambles {direction}.",
+      "A Grutik shaman stands {direction}."
+    ],
+    death: [
+      "The Grutik shaman twitches violently, then dies.",
+      "A Grutik shaman collapses into a lifeless heap upon the ground."
+    ],
+    decay: [
+      "A Grutik shaman collapses into a lifeless heap upon the ground.",
+      "A Grutik shaman's body turns to dust."
+    ],
     search: [],
     spell_prep: [],
     info: {

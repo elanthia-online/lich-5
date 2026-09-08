@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "shelfae warlord",
-  noun: "",
+  noun: "warlord",
   url: "https://gswiki.play.net/shelfae_warlord",
   picture: "",
   level: 18,
   family: "Shelfae",
   type: "Hybrid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: nil,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 160,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 6,
+  size: "medium",
   areas: [
     {
-      name: "Marshtown",
-      rooms: []
+      name: "Plains of Vornavis",
+      uids: [4212301..4212324]
     }
   ],
   attack_attributes: {
@@ -47,22 +52,22 @@
   defense_attributes: {
     asg: "16N",
     immunities: [],
-    melee: 65,
-    ranged: nil,
+    melee: (48..65),
+    ranged: 36,
     bolt: 50,
-    udf: nil,
+    udf: 77,
     bar_td: 54,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    cle_td: (53..54),
+    emp_td: 54,
+    pal_td: (51..54),
+    ran_td: 54,
+    sor_td: 54,
     wiz_td: nil,
     mje_td: 54,
     mne_td: 54,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: (48..54),
+    mns_td: (48..54),
+    mnm_td: (53..54),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,24 +76,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a falchion",
+    "a wooden shield"
+  ],
   treasure: {
     coins: true,
-    magic_items: nil,
-    gems: nil,
+    magic_items: true,
+    gems: true,
     boxes: nil,
     skin: "an orange shelfae scale",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The shelfae warlord is the noble class of the shelfae reptilian society and is highly trained in the art of physical warfare. Its scaly skin carries the bright orange color of the shelfae officers, but it also contains an odd bluish design, which some say is merely a genetic discoloration, and others maintain is a likeness of Charl holding aloft his trident. Either way, the shelfae warlord is a quick, powerful opponent."
     ],
-    arrival: [],
+    arrival: [
+      "A shelfae warlord just arrived."
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The shelfae warlord falls to the ground and dies.",
+      "The shelfae warlord screams one last time and dies."
+    ],
+    decay: [
+      "A warlord crumbles into dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A shelfae warlord swings {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

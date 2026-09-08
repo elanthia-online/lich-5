@@ -1,0 +1,11 @@
+##### shield_strike f554ae3e573f0c62
+# expect: attacks=shield_strike | res=smr | flares=none | outcomes=none | dmg=1 | statuses=
+You launch a quick bash with your spiked imflass shield at <pushBold/>a <a exist="67261937" noun="cyclops">cyclops</a><popBold/>!
+[SMR result: 428 (Open d100: 95, Bonus: 69)]
+Your size greatly hinders your attack!
+Your bash connects!
+   ... 50 points of damage!
+   Awesome strike to the head!  <pushBold/>The <a exist="67261937" noun="cyclops">cyclops</a><popBold/> is knocked to the ground dead.
+<pushBold/>The <a exist="67261937" noun="cyclops">cyclops</a><popBold/> rolls over and dies.
+Roundtime: 9 sec.
+

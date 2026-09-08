@@ -75,6 +75,28 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
       ).to be(false)
     end
 
+    it 'allows a saved registry-backed custom frontend without native discovery' do
+      allow(Lich::Common::Frontend).to receive(:definition_for).with('vellum').and_return(
+        {
+          id: 'vellum',
+          metadata: {
+            launcher_adapter: :custom,
+            launch_command: '/opt/VellumFE/vellum-fe'
+          }
+        }
+      )
+      expect(Lich::Common::FrontendLocator).not_to receive(:launchable?)
+
+      expect(
+        described_class.launchable_frontend?(
+          {
+            frontend: 'vellum',
+            custom_launch: nil
+          }
+        )
+      ).to be(true)
+    end
+
     it 'returns false for an unknown saved frontend' do
       expect(
         described_class.launchable_frontend?(
@@ -123,7 +145,7 @@ RSpec.describe Lich::Common::GUI::LoginTabUtils do
 
       expect(result).to be(true)
       expect(Lich).to have_received(:msgbox).with(
-        message: 'Wrayth is no longer available.',
+        message: 'Wrayth is no longer available. Change the Frontend dropdown in Account Management > Accounts, or configure the client in the Frontends tab.',
         icon: :error
       )
       expect(Lich::Common::Authentication::GUI).not_to have_received(:authenticate_and_launch)

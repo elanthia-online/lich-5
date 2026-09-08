@@ -1,0 +1,12 @@
+##### hurl 3354866231346063
+# expect: attacks=hurl | res=as_ds | flares=none | outcomes=none | dmg=1 | statuses=
+With a quick flick of your wrist, you deftly send a perfect modwir-hafted steel handaxe into flight.
+You take aim and throw a perfect steel handaxe at <pushBold/>a <a exist="58034771" noun="golem">behemothic gorefrost golem</a><popBold/>!
+  AS: +796 vs DS: +257 with AvD: +26 + d100 roll: +93 = +658
+   ... and hit for 173 points of damage!
+A rush of silent thunder explodes outward from the golem as the power animating it disperses.
+You feel the unnatural surge of necrotic power wane away.
+Your steel handaxe spins rapidly through the air, the blade whooshing audibly with each revolution.  As it completes its arc, it reverses direction and lands solidly in your right hand, ready to throw again.
+Roundtime: 4 sec.
+Roundtime changed to 1 second.
+

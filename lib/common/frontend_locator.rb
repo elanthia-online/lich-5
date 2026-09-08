@@ -105,9 +105,22 @@ module Lich
         @application_index_mutex = Mutex.new
       end
 
+      # Resolves a known frontend to a launchable executable.
+      #
+      # @param frontend_id [String, Symbol] registered frontend identifier
+      # @param override [String, nil] explicit executable path for this call
+      # @param refresh [Boolean] bypass the process-local discovery cache
+      # @return [Resolution, nil] nil when the frontend is not installed
+      # @raise [ArgumentError] for blank or unknown identifiers and invalid overrides
       def resolve(frontend_id, override: nil, refresh: false)
         definition = Frontend.definition_for(frontend_id)
         return resolve_override(definition, override) unless override.nil?
+
+        configured = definition.dig(:metadata, :configured_executable)
+        if configured
+          configured_resolution = resolve_configured(definition, configured)
+          return configured_resolution if configured_resolution
+        end
 
         @cache_mutex.synchronize do
           if refresh
@@ -169,14 +182,35 @@ module Lich
         nil
       end
 
-      def resolve_override(definition, override)
+      # Resolves and validates an explicitly configured executable path.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @param override [String] executable path
+      # @param source [Symbol] resolution source marker
+      # @return [Resolution] validated executable resolution
+      # @raise [ArgumentError] when the path is not executable for the frontend
+      # @api private
+      def resolve_override(definition, override, source: :override)
         path = expand_path(override)
         unless executable?(path, definition)
           raise ArgumentError, "frontend override is not executable: #{override}"
         end
 
-        resolution(definition, path, :override) ||
+        resolution(definition, path, source) ||
           raise(ArgumentError, "frontend override is not executable: #{override}")
+      end
+
+      # Resolves a persisted executable override, logging invalid paths.
+      #
+      # @param definition [Hash] immutable frontend definition
+      # @param configured [String] persisted executable path
+      # @return [Resolution, nil] configured resolution when valid
+      # @api private
+      def resolve_configured(definition, configured)
+        resolve_override(definition, configured, source: :configured)
+      rescue ArgumentError => error
+        log_discovery_error(configured, error)
+        nil
       end
 
       def conventional_candidates(definition)

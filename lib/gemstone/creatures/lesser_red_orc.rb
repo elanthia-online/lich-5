@@ -1,40 +1,45 @@
 {
   schema_version: 3,
   name: "lesser red orc",
-  noun: "",
+  noun: "orc",
   url: "https://gswiki.play.net/lesser_red_orc",
   picture: "",
   level: 7,
   family: "Orc",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 100,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 12,
+  height: 6,
+  size: "medium",
   areas: [
     {
       name: "Coastal Cliffs",
-      rooms: []
+      uids: [68001..68004, 68010..68016]
     },
     {
       name: "Yander's Farm",
-      rooms: []
+      uids: [14005023..14005025, 14005027..14005036]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Scimitar",
-        as: 111
+        as: (99..111)
       }
     ],
     bolt_spells: [],
@@ -47,22 +52,22 @@
   defense_attributes: {
     asg: "9",
     immunities: [],
-    melee: (42..107),
-    ranged: 24,
-    bolt: 24,
-    udf: nil,
+    melee: (39..107),
+    ranged: (24..34),
+    bolt: (24..34),
+    udf: (49..114),
     bar_td: 21,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
+    cle_td: 21,
+    emp_td: 21,
+    pal_td: (18..21),
     ran_td: 21,
     sor_td: 21,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 21,
     mne_td: 21,
     mjs_td: 21,
     mns_td: 21,
-    mnm_td: nil,
+    mnm_td: 21,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,24 +76,50 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a leather breastplate",
+    "a leather helm",
+    "a reinforced shield",
+    "a scimitar"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a red orc scalp",
-    other: nil
+    other: nil,
+    armaments: [
+      "steel-banded shield"
+    ],
+    transmogs: nil
   },
   messaging: {
     description: [
       "Erect, the red orc would stand approximately six feet high. However, her hunched shoulders and curved spine bring her head nearly two feet closer to the ground. Thick, matted, deep burgundy fur covers most of the orc's body, probably accounting for the red name applied to her. Her muzzle protrudes from the bony cranium, and her lips seem to be constantly pulled back to reveal pointed, discolored fangs. The evil smile goes well with the malevolent yellow eyes behind it."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "A lesser red orc spins about and then runs {direction}.",
+      "A lesser red orc lopes {direction}.",
+      "A lesser red orc shambles out from the shadows.",
+      "A lesser red orc begins to retreat backwards as {pronoun} gazes about through bloodshot eyes."
+    ],
+    death: [
+      "A lesser red orc collapses in a red mess and dies.",
+      "A lesser red orc collapses into dust."
+    ],
+    decay: [
+      "A lesser red orc collapses into dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A lesser red orc swings {weapon} at you!",
+        "A lesser red orc thrusts {pronoun} scimitar out in front of {pronoun}."
+      ]
+    },
     info: {
       general: [],
       class_tips: {

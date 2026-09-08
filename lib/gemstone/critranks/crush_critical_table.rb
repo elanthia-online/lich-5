@@ -700,7 +700,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /^Whoosh. Several ribs driven into lungs./ },
+                                  :regex           => /^Whoosh.  Several ribs driven into lungs./ },
                            6 =>
                                 { :type            => "crush",
                                   :location        => "chest",
@@ -1157,7 +1157,7 @@ module Lich
                                   :silenced        => false,
                                   :slowed          => false,
                                   :wound_rank      => 3,
-                                  :secondary_wound => { :location => "nerves", "wound_rank" => 3 },
+                                  :secondary_wound => { :location => "nerves", :wound_rank => 3 },
                                   :regex           => /^A mighty blow cleaves a swath through .*? back, taking the spine with it./ } },
           :right_arm  =>
                          { 0 =>

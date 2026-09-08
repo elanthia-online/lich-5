@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "whiptail",
-  noun: "",
+  noun: "whiptail",
   url: "https://gswiki.play.net/whiptail",
   picture: "",
   level: 4,
   family: "Arachnid",
   type: "Arachnid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 50,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 6,
+  height: 1,
+  size: "medium",
   areas: [
     {
       name: "Vornavian Coast",
-      rooms: []
+      uids: [4202401..4202416]
     }
   ],
   attack_attributes: {
@@ -35,12 +40,24 @@
       {
         name: "Pincer (attack)",
         as: 65
+      },
+      {
+        name: "Pincer",
+        as: 65
+      },
+      {
+        name: "Tusk",
+        as: (45..65)
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Web"
+      }
+    ],
     special_abilities: [
       {
         name: "Web"
@@ -51,22 +68,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 29,
-    ranged: nil,
-    bolt: 26,
-    udf: nil,
+    melee: (32..59),
+    ranged: (29..36),
+    bolt: (29..36),
+    udf: (54..60),
     bar_td: 12,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
+    cle_td: 12,
+    emp_td: (6..12),
+    pal_td: (9..12),
     ran_td: 12,
-    sor_td: nil,
+    sor_td: 12,
     wiz_td: nil,
     mje_td: 12,
     mne_td: 12,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: 12,
+    mns_td: 12,
+    mnm_td: 12,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -75,24 +92,44 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a whiptail stinger",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "This creature resembles nothing so much as a giant scorpion, easily capable of hunting prey as large as a man. Longer than a halfling is tall, its giant insectile body scuttles about on 8 swift legs, armed with two pincer claws over a foot long. It gazes at its prey with cold-gleaming faceted eyes, while its segmented tail, tipped with a deadly sting, arches over its body, ready to reach out with poisonous agony."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "A whiptail scurries {direction}."
+    ],
+    death: [
+      "The whiptail falls back and dies.",
+      "The whiptail hisses one last time and dies."
+    ],
+    decay: [
+      "A whiptail decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A whiptail charges at you with {pronoun} tusk!",
+        "A whiptail snaps at you with {pronoun} pincer!",
+        "A whiptail spins a web at you!"
+      ],
+      bite: [
+        "A whiptail snaps at you with {pronoun} pincer!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

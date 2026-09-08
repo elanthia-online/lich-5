@@ -1,40 +1,49 @@
 {
   schema_version: 3,
   name: "vourkha",
-  noun: "",
+  noun: "vourkha",
   url: "https://gswiki.play.net/vourkha",
   picture: "",
   level: 39,
   family: "Wraith",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 240,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 238,
+  speed: 5,
+  height: 5,
+  size: "medium",
   areas: [
     {
-      name: "Black Moor",
-      rooms: []
+      name: "Yegharren Plains",
+      uids: [13036106..13036120, 13036201..13036217, 13036301..13036310]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Bite",
-        as: 252
+        as: (226..252)
       },
       {
         name: "Claw",
-        as: 262
+        as: (235..262)
+      },
+      {
+        name: "Swoop",
+        as: 235
       }
     ],
     bolt_spells: [
@@ -56,22 +65,22 @@
   defense_attributes: {
     asg: "7N",
     immunities: [],
-    melee: (151..243),
-    ranged: nil,
-    bolt: (155..163),
-    udf: 195,
+    melee: (136..283),
+    ranged: (134..180),
+    bolt: (134..180),
+    udf: (163..322),
     bar_td: 135,
-    cle_td: nil,
-    emp_td: 148,
-    pal_td: nil,
-    ran_td: 126,
-    sor_td: 149,
+    cle_td: (148..157),
+    emp_td: (148..154),
+    pal_td: (126..135),
+    ran_td: (122..135),
+    sor_td: (149..164),
     wiz_td: nil,
-    mje_td: 163,
-    mne_td: 162,
-    mjs_td: nil,
-    mns_td: 148,
-    mnm_td: nil,
+    mje_td: (162..163),
+    mne_td: (162..163),
+    mjs_td: (148..157),
+    mns_td: (148..157),
+    mnm_td: (127..136),
     defensive_spells: [
       "Elemental Bias (508)",
       "Thurfel's Ward (503)"
@@ -83,24 +92,53 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye",
+    "a bruised right eye",
+    "a completely severed left arm",
+    "a completely severed left hand"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glowing violet essence dust,"
+    other: [
+      "Glowing violet essence dust",
+      "glowing violet essence shard"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Empty black soulless eyes gaze from the gaunt, grey form of the wraithlike vourkha. His thin-lipped mouth gaped in a silent howl, he grasps at the fetid air with gnarled, clawed hands as he glides just above the ground, trailing tendrils of thick white ectoplasm that seem to seep from his shredded clothing. The creature seems to fade in and out of corporeal existence as if he walked in an eternal patch of shadow."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
+    arrival: [
+      "An evil hiss fills the air as a vourkha stalks in!"
+    ],
+    flee: [
+      "An evil hiss fills the air as a vourkha stalks {direction}.",
+      "A vourkha totters momentarily and then heads {direction}."
+    ],
+    death: [
+      "The vourkha slumps to the ground as the light departs {pronoun} eyes."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A vourkha tosses {pronoun} head back and points towards you!"
+      ],
+      bite: [
+        "A vourkha tries to bite you!"
+      ],
+      claw: [
+        "A vourkha claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

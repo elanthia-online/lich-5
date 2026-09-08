@@ -1,17 +1,22 @@
 {
   schema_version: 3,
-  name: "grimswarm",
+  name: "Grimswarm",
   noun: "",
-  url: "https://gswiki.play.net/grimswarm",
+  url: "https://gswiki.play.net/Grimswarm",
   picture: "",
   level: nil,
   family: "Grimswarm",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
@@ -57,13 +62,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: false,
     boxes: false,
-    skin: "No",
-    other: "a crude bone key"
+    skin: nil,
+    other: "a crude bone key",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

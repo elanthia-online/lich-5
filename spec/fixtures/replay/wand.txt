@@ -1,0 +1,47 @@
+##### wand ffe88373b5501e0a
+# expect: attacks=wand | res=activation,cs_td | flares=none | outcomes=ward_failed | dmg=1 | statuses=
+You wave your aranthium wand at <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>.
+  1d100: 39 + Modifiers: 412 == 451
+  CS: +624 - TD: +522 + CvA: +25 + d125: +2 == +129
+  Warding failed!
+<pushBold/>A <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/> shudders and twists in intense pain!
+   ... 96 points of damage!
+Cast Roundtime 1 Second.
+
+##### wand 1ca5ddac4e767160
+# expect: attacks=wand | res=activation,cs_td | flares=lightning | outcomes=ward_failed | dmg=2 | statuses=
+You wave your aranthium wand at <pushBold/>an <a exist="67479038" noun="tentacle">amaranthine kraken tentacle</a><popBold/>.
+  1d100: 9 + Modifiers: 509 == 518
+  CS: +688 - TD: +489 + CvA: +25 + d125: +43 == +267
+  Warding failed!
+<pushBold/>An <a exist="67479038" noun="tentacle">amaranthine kraken tentacle</a><popBold/> contorts in excruciating agony!
+   ... 200 points of damage!
+ ** Your aranthium wand emits a searing bolt of lightning! **
+   ... 30 points of damage!
+Cast Roundtime 1 Second.
+
+##### wand 1cc7b3d5b24335f1
+# expect: attacks=wand | res=activation,cs_td | flares=gauntlet_tendrils | outcomes=ward_failed | dmg=6 | statuses=burning/add
+You wave your glitter-coated corndog at <pushBold/>an <a exist="28544540" noun="psionicist">ethereal triton psionicist</a><popBold/>.
+  1d100: 15 + Modifiers: 365 == 380
+  CS: +595 - TD: +506 + CvA: +25 + d100: +13 == +127
+  Warding failed!
+Wisps of black smoke swirl around <pushBold/>an <a exist="28544540" noun="psionicist">ethereal triton psionicist</a><popBold/> and she bursts into flame causing 20 points of damage!
+The elemental energy surrounding you amplifies the attack!
+   ... 30 points of damage!
+   Strong hit to the chest!
+   Tendrils of mist explode as the strike passes right through.
+   ... 15 points of damage!
+   Quick strike rips right arm open!
+   To your dismay it quickly closes on its own.
+   ... 5 points of damage!
+   Glancing blow to the left arm leaves a trail of vapor in its wake.
+   ... 3 points of damage!
+   Glancing blow to the right arm leaves a trail of vapor in its wake.
+The flames around <pushBold/>an <a exist="28544540" noun="psionicist">ethereal triton psionicist</a><popBold/> continue to burn!
+ ** Tendrils of energy lash out from your mithglin gauntlet and surge towards <pushBold/>an <a exist="28544540" noun="psionicist">ethereal triton psionicist</a><popBold/>! **
+   ... 15 points of damage!
+   Hit passes right through the midsection.
+   Nothing hurts like an empty stomach.
+Cast Roundtime 1 Second.
+

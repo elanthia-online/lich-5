@@ -473,7 +473,7 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
     let(:account_entry) { double(text: 'testaccount') }
     let(:password_entry) { double(text: 'secret') }
     let(:frontend_selector) do
-      double(selected_id: 'stormfront', resolve_selected: double('resolution'))
+      double(selected_id: 'stormfront', custom?: false, launchable?: true)
     end
     let(:custom_launch_option) { double(active?: false) }
     let(:launch_data) { ['GAME=STORM', 'CHARACTER=Tsetem'] }
@@ -509,6 +509,45 @@ RSpec.describe Lich::Common::GUI::ManualLoginTab do
           saved_entry: true
         )
       )
+    end
+
+    it 'continues launching without saving when the entry reread fails' do
+      prior_entry_data = [{ char_name: 'Existing' }]
+      tab.instance_variable_set(:@entry_data, prior_entry_data)
+      allow(Lich::Common::Authentication::EntryStore).to receive(:load_saved_entries)
+        .and_raise(StandardError, 'read failed')
+
+      expect { @play_handler.call }.not_to raise_error
+
+      expect(tab.instance_variable_get(:@entry_data)).to equal(prior_entry_data)
+      expect(Lich::Common::Authentication::EntryStore).not_to have_received(:save_entries)
+      expect(on_play).to have_received(:call).with(
+        launch_data,
+        hash_including(saved_entry: false)
+      )
+    end
+
+    it 'rejects Custom with a blank command before authentication or saving' do
+      allow(frontend_selector).to receive(:custom?).and_return(true)
+      allow(custom_launch_option).to receive(:active?).and_return(true)
+      tab.instance_variable_set(:@custom_launch_entry, double(child: double(text: '   ')))
+      errors = []
+      tab.instance_variable_set(:@callbacks, Lich::Common::GUI::CallbackParams.new(on_error: proc { |message| errors << message }))
+
+      @play_handler.call
+
+      expect(errors).to eq(['Enter a custom launch command before playing.'])
+      expect(Lich::Common::Authentication).not_to have_received(:authenticate)
+      expect(Lich::Common::Authentication::EntryStore).not_to have_received(:save_entries)
+      expect(play_button).to have_received(:sensitive=).with(true)
+    end
+
+    it 'does not turn an unchecked Custom option into an accidental Wrayth launch' do
+      allow(frontend_selector).to receive(:custom?).and_return(true)
+
+      @play_handler.call
+
+      expect(Lich::Common::Authentication).not_to have_received(:authenticate)
     end
 
     it 'favorites the exact Custom Launch variant that was saved' do

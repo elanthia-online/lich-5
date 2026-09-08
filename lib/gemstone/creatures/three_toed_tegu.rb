@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "three-toed tegu",
-  noun: "",
+  noun: "tegu",
   url: "https://gswiki.play.net/three-toed_tegu",
   picture: "",
   level: 33,
   family: "Reptilian",
   type: "Quadruped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 380,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 2,
+  size: "large",
   areas: [
     {
       name: "Teorainn Dale",
-      rooms: []
+      uids: [13024010..13024027]
     }
   ],
   attack_attributes: {
@@ -34,7 +39,7 @@
       },
       {
         name: "Bite",
-        as: 237
+        as: (227..237)
       },
       {
         name: "Claw",
@@ -55,22 +60,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: (154..175),
-    ranged: 159,
-    bolt: nil,
-    udf: nil,
+    melee: (166..247),
+    ranged: (156..183),
+    bolt: (156..183),
+    udf: (198..250),
     bar_td: (96..99),
-    cle_td: (96..102),
-    emp_td: (103..106),
-    pal_td: 99,
-    ran_td: (99..105),
+    cle_td: (96..105),
+    emp_td: (97..106),
+    pal_td: (99..108),
+    ran_td: (99..108),
     sor_td: (103..120),
     wiz_td: nil,
-    mje_td: 114,
+    mje_td: (111..114),
     mne_td: (111..114),
-    mjs_td: (103..106),
-    mns_td: (103..106),
-    mnm_td: nil,
+    mjs_td: (97..106),
+    mns_td: (97..106),
+    mnm_td: 99,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -79,24 +84,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: "a tailspike",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Despite its lumbering appearance, this heavily plated creature can show surprising bursts of speed. Each of the three toes on the tegu's forelegs are incredibly sharp, capable of slicing through the toughest hide. The armored tail of this male tegu is tipped with pointy spikes."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A three-toed tegu slithers in.",
+      "A three-toed tegu charges in, {pronoun} tail whipping furiously side-to-side!"
+    ],
+    flee: [
+      "A three-toed tegu slithers {direction}.",
+      "A three-toed tegu crashes out of the undergrowth!"
+    ],
+    death: [
+      "The three-toed tegu arches its back in a tortured spasm and dies.",
+      "The three-toed tegu stumbles and falls to the ground, twitches and dies."
+    ],
+    decay: [
+      "A three-toed tegu's leathered hide and scaly armor collapses into dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      bite: [
+        "A three-toed tegu tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

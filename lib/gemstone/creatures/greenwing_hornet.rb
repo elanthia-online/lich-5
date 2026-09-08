@@ -1,35 +1,44 @@
 {
   schema_version: 3,
   name: "greenwing hornet",
-  noun: "",
+  noun: "hornet",
   url: "https://gswiki.play.net/greenwing_hornet",
   picture: "",
   level: 18,
   family: "Wasp",
   type: "Insect",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: false,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: 170,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 165,
+  speed: 5,
+  height: 1,
+  size: "small",
   areas: [
     {
       name: "Castle Anwyn",
-      rooms: []
+      uids: [4285036..4285040, 4285043..4285047, 4285051..4285057]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Stinger (attack)",
+        as: 172
+      },
+      {
+        name: "Stinger",
         as: 172
       }
     ],
@@ -47,22 +56,22 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 132,
-    ranged: nil,
-    bolt: 120,
-    udf: nil,
+    melee: (128..142),
+    ranged: 130,
+    bolt: (120..130),
+    udf: 140,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
+    cle_td: 54,
+    emp_td: 54,
+    pal_td: (51..54),
     ran_td: nil,
-    sor_td: nil,
+    sor_td: 54,
     wiz_td: nil,
     mje_td: 54,
     mne_td: 54,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: 100,
+    mns_td: 100,
+    mnm_td: 54,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,13 +80,20 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye",
+    "a bruised right eye",
+    "a completely severed left leg"
+  ],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a hornet stinger",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -85,10 +101,20 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The greenwing hornet falls back into a heap and dies.",
+      "The greenwing hornet flutters its wings one last time and dies."
+    ],
+    decay: [
+      "A greenwing hornet decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A greenwing hornet stabs at you with {pronoun} stinger!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

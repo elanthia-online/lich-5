@@ -8,20 +8,25 @@
   family: "",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: nil,
+  max_hp: 3004,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Hinterwilds",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -57,9 +62,9 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
+    melee: 711,
+    ranged: (547..711),
+    bolt: (547..711),
     udf: nil,
     bar_td: nil,
     cle_td: nil,
@@ -85,24 +90,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Draped by diaphanous silks that appear so light as to have been woven from shreds of evening mist, a cinereous chthonian sybil is a thin, almost skeletal figure. Wings with iridescent grey feathers enshroud her form. Her face is unsettling in its agelessness, and her eyes are nothing human. They are two pools of luminous mist, and in their depths flit strange shapes and half-formed figures that are at once tantalizingly familiar and distressingly vague."
     ],
-    arrival: [],
+    arrival: [
+      "A cinereous chthonian sybil glides in on a current of air, settling so that {pronoun} feet drift over the ground."
+    ],
     flee: [],
     death: [],
     decay: [],
-    search: [],
-    spell_prep: [],
+    search: [
+      "A cinereous chthonian sybil turns slowly to scan the shadows with {pronoun} misty eyes."
+    ],
+    spell_prep: [
+      "A cinereous chthonian sybil gestures elegantly, {pronoun} bony fingers deftly weaving threads of scintillating mana into a spell."
+    ],
+    stun_break: [
+      "A cinereous chthonian sybil shakes off the magic."
+    ],
+    attacks: {
+      attack: [
+        "A cinereous chthonian sybil rakes long fingers through the air, conjuring a wall of ebon flame that drinks the ambient light as {pronoun} roars toward you!",
+        "A cinereous chthonian sybil illuminates with fell light as {pronoun} raises an open hand toward you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

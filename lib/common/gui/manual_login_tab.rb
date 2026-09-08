@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
-require_relative 'frontend_selector'
+require_relative 'manual_frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'theme_utils'
 
@@ -109,7 +109,27 @@ module Lich
           end
         end
 
+        # Refreshes the shared frontend dropdown after Frontends settings change.
+        # @return [void]
+        def refresh_frontends
+          @frontend_selector&.reload!
+          nil
+        end
+
         private
+
+        # Refreshes saved entries before or after a quick-save operation.
+        # Keeps the existing cache when the entry store cannot be read.
+        #
+        # @return [Boolean] true when saved entries were refreshed
+        # @api private
+        def refresh_entry_data_for_quick_save
+          @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+          true
+        rescue StandardError => e
+          Lich.log "error: Failed to refresh entry data for quick save: #{e.message}"
+          false
+        end
 
         # Applies the current theme state to all UI elements
         #
@@ -285,9 +305,10 @@ module Lich
         # Creates frontend selection components
         #
         # @return [Array] Array containing frontend_box and shared selector
+        # @api private
         def create_frontend_selection
-          selector = FrontendSelector.new
-          [selector.widget, selector]
+          @frontend_selector = ManualFrontendSelector.new
+          [@frontend_selector.widget, @frontend_selector]
         end
 
         # Creates custom launch options
@@ -301,6 +322,8 @@ module Lich
           @custom_launch_dir = LoginTabUtils.create_custom_launch_dir
 
           # Initially hide custom launch options
+          @custom_launch_entry.no_show_all = true
+          @custom_launch_dir.no_show_all = true
           @custom_launch_entry.visible = false
           @custom_launch_dir.visible = false
 
@@ -340,12 +363,17 @@ module Lich
 
         # Disables Custom Launch for catalog entries with native-only launchers.
         #
-        # @param frontend_selector [FrontendSelector]
+        # @param frontend_selector [ManualFrontendSelector]
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
         def setup_native_launch_handler(frontend_selector, custom_launch_option)
           update_custom_launch = lambda do |selector|
-            if selector.native_launch_only?
+            if selector.custom?
+              custom_launch_option.sensitive = true
+              custom_launch_option.active = true
+              @custom_launch_entry.visible = true
+              @custom_launch_dir.visible = true
+            elsif selector.native_launch_only?
               custom_launch_option.active = false
               custom_launch_option.sensitive = false
             else
@@ -457,9 +485,10 @@ module Lich
         # @param treeview [Gtk::TreeView] Tree view for character list
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
-        # @param frontend_selector [FrontendSelector] shared frontend selector
+        # @param frontend_selector [ManualFrontendSelector] available frontend selector
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
+        # @api private
         def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           play_button.signal_connect('clicked') {
             play_button.sensitive = false
@@ -482,7 +511,13 @@ module Lich
               custom_launch_dir = custom_launch ? @custom_launch_dir.child.text.to_s.strip : nil
               custom_launch_dir = nil if custom_launch_dir == ''
 
-              if custom_launch.nil? && frontend_selector.resolve_selected(refresh: true).nil?
+              if (frontend_selector.custom? || custom_launch_option.active?) && custom_launch.nil?
+                @callbacks.on_error&.call('Enter a custom launch command before playing.')
+                play_button.sensitive = true
+                next
+              end
+
+              if custom_launch.nil? && !frontend_selector.launchable?(refresh: true)
                 @callbacks.on_error&.call("#{Frontend.display_name(frontend)} is no longer available.")
                 play_button.sensitive = true
                 next
@@ -510,9 +545,13 @@ module Lich
 
               # Initialize save success tracking for synchronization
               save_success = true
+              quick_save_requested = @make_quick_option.active?
+              # Re-read before the whole-collection save even if a cross-tab
+              # notification was missed. Do not save the tab's opening snapshot.
+              save_success = refresh_entry_data_for_quick_save if quick_save_requested
 
               # Save quick entry if selected
-              if @make_quick_option.active?
+              if quick_save_requested && save_success
                 # Preserve encryption_mode from existing entries to prevent silent downgrade
                 existing_encryption_mode = @entry_data.first&.[](:encryption_mode) || :plaintext
                 entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir, :encryption_mode => existing_encryption_mode }
@@ -559,7 +598,7 @@ module Lich
                   # Reset save flag to prevent duplicate save on window destruction
                   @save_entry_data = false
                   # Refresh local cache with normalized data after successful save
-                  @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+                  refresh_entry_data_for_quick_save
                   # Trigger main GUI cache refresh only once after successful save
                   @callbacks.on_save.call(entry_data) if @callbacks.on_save
                 else
@@ -628,7 +667,7 @@ module Lich
                   game_code: selected_iter[0],
                   frontend: frontend,
                   custom_launch: custom_launch,
-                  saved_entry: @make_quick_option.active? && save_success
+                  saved_entry: quick_save_requested && save_success
                 }
 
                 # Backward compatibility: support both 1-arg and 2-arg callback handlers.
