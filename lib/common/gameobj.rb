@@ -710,9 +710,18 @@ module Lich
       # Whether a staged refresh for one container's contents is currently open.
       # Same purpose as {.inv_refresh_open?}, scoped to a single container id.
       #
+      # A full INV LIST refresh ({.begin_all_containers}) owns *every* container
+      # the instant it opens, but only allocates a per-container buffer when an
+      # item line for that container arrives. A container not yet seen in the
+      # listing therefore has no key in +@@staging_contents+ and would look
+      # unowned -- letting a second writer publish into or delete it mid-refresh.
+      # Report a full refresh as owning all containers so those writers defer.
+      #
       # @param container_id [String]
       # @return [Boolean]
-      def self.container_refresh_open?(container_id) = @@staging_contents.key?(container_id)
+      def self.container_refresh_open?(container_id)
+        @@staging_all_containers || @@staging_contents.key?(container_id)
+      end
 
       # ---------------------------------------------------------------------------
       # Staged registry refresh - begin/commit pairs

@@ -649,6 +649,50 @@ RSpec.describe Lich::Common::Inventory do
       expect(game_obj.containers['ca'].map(&:id)).to eq(['classic-child'])
     end
 
+    # A full INV LIST refresh owns EVERY container the instant it opens, but only
+    # allocates a per-container staging buffer once an item line for that
+    # container streams. A container the listing has not reached yet therefore
+    # has no @@staging_contents key -- container_refresh_open? must still report
+    # it as owned, or the observer publishes into / deletes it mid-refresh.
+    it 'skips a container during an open full INV LIST refresh before it is streamed' do
+      first_snapshot
+      expect(game_obj.containers['ca'].map(&:id)).to eq(['x'])
+
+      # INV LIST opens: owns all containers, but ca has not streamed yet.
+      game_obj.begin_all_containers
+
+      # A snapshot arrives mid-refresh reporting ca with different contents.
+      described_class.observe(
+        "<inventoryManager id='s2' room='1'>" \
+        "<i id='ca' loc='worn,player' name=\"a,leather,pack\" weight='10' in_max='1000'/>" \
+        "<i id='z' loc='in,ca' name=\"a,brass,key\" weight='1'/>" \
+        "</inventoryManager>"
+      )
+
+      # The observer must defer to the open full refresh, leaving the live model
+      # untouched rather than replacing ca's contents with z.
+      expect(game_obj.container_refresh_open?('ca')).to be(true)
+      expect(game_obj.containers['ca'].map(&:id)).to eq(['x'])
+    end
+
+    it 'defers deleting a container during an open full INV LIST refresh before it is streamed' do
+      first_snapshot
+      expect(game_obj.containers).to have_key('ca')
+
+      # INV LIST opens: owns ca, but has not streamed it yet.
+      game_obj.begin_all_containers
+
+      # A snapshot omits ca entirely; the deletion loop must not drop it while the
+      # full refresh (which will re-report ca) is still in flight.
+      described_class.observe(
+        "<inventoryManager id='s2' room='1'>" \
+        "<i id='cb' loc='worn,player' name=\"a,canvas,sack\" weight='8' in_max='1000'/>" \
+        "</inventoryManager>"
+      )
+      expect(game_obj.container_refresh_open?('ca')).to be(true)
+      expect(game_obj.containers).to have_key('ca')
+    end
+
     it 'preserves a descendant hidden behind an ancestor that turned opaque' do
       # A(pk) -> B(pouch) -> gem, all visible.
       described_class.observe(
