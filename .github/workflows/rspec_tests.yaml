@@ -59,6 +59,10 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The suite normally finishes in well under a minute; cap the job so a hung
+    # example (see the DRRoom cross-process state leak fixed in spec_helper) fails
+    # fast instead of occupying a runner up to GitHub's 6h default.
+    timeout-minutes: 15
     env:
       BUNDLE_WITHOUT: 'gtk:vscode:profanity'
     name: Run tests on Ruby
