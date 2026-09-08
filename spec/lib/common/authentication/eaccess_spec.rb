@@ -90,6 +90,39 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     end
   end
 
+  describe 'CONNECT_TIMEOUT' do
+    it 'is 5 seconds' do
+      expect(described_class::CONNECT_TIMEOUT).to eq(5)
+    end
+  end
+
+  describe '.socket' do
+    # A dropped SYN on 7910 (firewalled, no RST) previously hung on the OS
+    # connect timeout (~75s) before TCPSocket.open ever raised. Socket.tcp's
+    # connect_timeout: bounds just the TCP handshake to CONNECT_TIMEOUT --
+    # verified here by making the connect itself fail immediately and
+    # asserting the timeout kwarg was passed and the error propagates
+    # normally (no cleartext fallback, no swallowing).
+    it 'bounds the TCP connect with CONNECT_TIMEOUT instead of an unbounded TCPSocket.open' do
+      allow(described_class).to receive(:pem_exist?).and_return(true)
+      expect(Socket).to receive(:tcp)
+        .with('eaccess.play.net', 7910, connect_timeout: described_class::CONNECT_TIMEOUT)
+        .and_raise(Errno::ETIMEDOUT)
+
+      expect { described_class.socket }.to raise_error(Errno::ETIMEDOUT)
+    end
+  end
+
+  describe '.download_pem' do
+    it 'bounds the TCP connect with CONNECT_TIMEOUT instead of an unbounded TCPSocket.new' do
+      expect(Socket).to receive(:tcp)
+        .with('eaccess.play.net', 7910, connect_timeout: described_class::CONNECT_TIMEOUT)
+        .and_raise(Errno::ETIMEDOUT)
+
+      expect { described_class.download_pem }.to raise_error(Errno::ETIMEDOUT)
+    end
+  end
+
   describe '.auth' do
     # Note: The auth method involves complex network operations (SSL sockets, protocol exchange)
     # and is better tested via integration tests. Unit testing it requires extensive mocking

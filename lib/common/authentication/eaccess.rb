@@ -26,6 +26,15 @@ module Lich
         # When sent via the L command, the game server starts the character creation flow.
         NEW_CHARACTER_CODE = "0"
 
+        # Bounds the TCP connect to eaccess.play.net:7910 so a silently-dropped
+        # SYN (firewalled/blocked, no RST) fails in seconds instead of hanging
+        # on the OS connect timeout (commonly ~75s on Linux, driven by
+        # tcp_syn_retries) -- observed live when the port is unreachable but
+        # not actively refused. This only bounds the TCP handshake itself; it
+        # is not a substitute for auth_with_timeout's overall watchdog, which
+        # also covers the TLS handshake and the K/A/M/F/G/P/C/L exchange.
+        CONNECT_TIMEOUT = 5
+
         # @api private
         def self.pem
           @pem ||= File.join(DATA_DIR, "simu.pem")
@@ -40,8 +49,9 @@ module Lich
         def self.download_pem(hostname = "eaccess.play.net", port = 7910)
           # Create an OpenSSL context
           ctx = OpenSSL::SSL::SSLContext.new
-          # Get remote TCP socket
-          sock = TCPSocket.new(hostname, port)
+          # Get remote TCP socket, bounded so an unreachable port fails fast
+          # instead of hanging on the OS connect timeout -- see CONNECT_TIMEOUT.
+          sock = Socket.tcp(hostname, port, connect_timeout: CONNECT_TIMEOUT)
           # pass that socket to OpenSSL
           ssl = OpenSSL::SSL::SSLSocket.new(sock, ctx)
           # establish connection, if possible
@@ -65,7 +75,8 @@ module Lich
         # @api private
         def self.socket(hostname = "eaccess.play.net", port = 7910)
           download_pem unless pem_exist?
-          socket = TCPSocket.open(hostname, port)
+          # Bounded connect -- see CONNECT_TIMEOUT.
+          socket = Socket.tcp(hostname, port, connect_timeout: CONNECT_TIMEOUT)
           cert_store              = OpenSSL::X509::Store.new
           ssl_context             = OpenSSL::SSL::SSLContext.new
           ssl_context.cert_store  = cert_store
