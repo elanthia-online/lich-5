@@ -1,0 +1,15 @@
+##### relentless_assault 4a9a880d5d34348b
+# expect: attacks=relentless_assault | res=as_ds | flares=ensorcell | outcomes=none | dmg=2 | statuses=disarmed/add
+Relentless in your assault, you unleash a frenzy of violence upon <pushBold/>an <a exist="63531276" noun="champion">imposing minotaur champion</a><popBold/>!
+  AS: +541 vs DS: +367 with AvD: +37 + d100 roll: +94 = +305
+   ... and hit for 69 points of damage!
+   Well aimed strike shatters bone in left arm!
+ ** Necrotic energy from your black ora katar overflows into you! **
+   You feel energized!
+  AS: +566 vs DS: +356 with AvD: +37 + d100 roll: +14 = +261
+   ... and hit for 51 points of damage!
+   Powerful slash just cracks the minotaur champion's shield arm!
+   The champion's reinforced shield falls to the ground.
+You feel the unnatural surge of necrotic power wane away.
+Roundtime: 1 sec.
+

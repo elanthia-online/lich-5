@@ -1,0 +1,12 @@
+##### ethereal_censer f2ed10525b52bdb8
+# expect: attacks=cast,ethereal_censer | res=smr | flares=none | outcomes=none | dmg=1 | statuses=
+# mixed exchange - this def never appears alone in the corpus
+<a exist="-83656576" noun="Xanthippe">Xanthippe</a> gestures at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>.
+Mana swirls into the visible spectrum and manifests as an ethereal, bright white censer swinging pendulously through the air beside <a exist="-83656576" noun="Xanthippe">Xanthippe</a>.  A muted black haze of incense smoke trails in its wake, quickly spreading in sinuous tendrils through the area.
+[SMR result: 357 (Open d100: 170, Bonus: 101)]
+<pushBold/>A <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> becomes enveloped in the incense smoke!
+   ... 70 points of damage!
+   Amazing shot cleaves the torso in half at the waist!
+   You watch agape as the misty form knits itself back together!
+As the fragrant haze settles over <a exist="-83656576" noun="Xanthippe">Xanthippe</a>, she looks revitalized.
+

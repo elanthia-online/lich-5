@@ -98,6 +98,44 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(creature.has_status?('web')).to be false
     end
 
+    # The crit tables report position as "PRONE"/"KNEELING"/"SITTING";
+    # messaging and <crtrStatus> use lowercase. Membership is exact, so an
+    # uncanonicalized uppercase add could never be removed or matched.
+    it 'canonicalizes case at the boundary, whatever the producer sends' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.add_status('PRONE')
+      expect(creature.has_status?('prone')).to be true
+      expect(creature.statuses).to include('prone')
+
+      creature.remove_status('prone')
+      expect(creature.has_status?('PRONE')).to be false
+    end
+
+    # A 3s roundtime followed by an overlapping 20s one kept the 3s expiry
+    # and reported the creature free ~19 seconds early.
+    it 'extends a timed status when re-added with a longer duration' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.add_status('roundtime', 3)
+      creature.add_status('roundtime', 20)
+
+      later = Time.now + 10 # past the first expiry, inside the second
+      allow(Time).to receive(:now).and_return(later)
+      expect(creature.has_status?('roundtime')).to be true
+    end
+
+    it 'never shortens a timed status on re-add' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.add_status('roundtime', 20)
+      creature.add_status('roundtime', 3)
+
+      later = Time.now + 10
+      allow(Time).to receive(:now).and_return(later)
+      expect(creature.has_status?('roundtime')).to be true
+    end
+
     it 'keeps a status with no configured duration until it is removed explicitly' do
       creature = SampleCreature.register('kobold', 1)
 
@@ -149,6 +187,33 @@ RSpec.describe Lich::Common::CreatureBase do
       creature.sync_crtr_status('hostile' => '1')
 
       expect(creature.has_status?('bind')).to be true
+    end
+
+    # Two writers share @status: this feed, and the combat parser reading
+    # messaging. The feed is a full snapshot only of what it reports, so it
+    # owns removal for those states - but it never reports blind, poisoned,
+    # natures_decay and friends. Reconciling those against it would clear
+    # them on the next tag, leaving no way to model them at all.
+    it 'never clears message-only statuses the feed does not report' do
+      creature = SampleCreature.register('kobold', 1)
+      message_only = %w[blind poisoned natures_decay sunburst tangleweed sounds roundtime]
+      message_only.each { |s| creature.add_status(s) }
+      creature.add_status('stunned') # this one the feed DOES own
+
+      creature.sync_crtr_status('hostile' => '1') # a tag with no statuses set
+
+      expect(creature.statuses).to match_array(message_only)
+      expect(creature.has_status?('stunned')).to be false
+    end
+
+    it 'owns removal for every status it can report' do
+      creature = SampleCreature.register('kobold', 1)
+      described = Lich::Common::CreatureBase::CRTR_STATUS_FLAGS
+      described.each_value { |status| creature.add_status(status) }
+
+      creature.sync_crtr_status('hostile' => '1')
+
+      expect(creature.statuses).to be_empty
     end
   end
 

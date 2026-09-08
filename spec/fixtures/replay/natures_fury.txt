@@ -1,0 +1,20 @@
+##### natures_fury 2601f4ed53411b53
+# expect: attacks=natures_fury | res=cs_td | flares=none | outcomes=ward_failed,hit | dmg=2 | statuses=dispelled/add
+The surroundings advance upon <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> with relentless fury!
+The dull golden nimbus surrounding <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> suddenly begins to glow brightly.
+  CS: +484 - TD: +293 + CvA: +25 + d100: +93 == +309
+  Warding failed!
+  <pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> is struck by a sharp piece of mist-covered debris!
+   ... 56 points of damage!
+   ... 55 points of damage!
+   Incredible strike pierces heart and runs <pushBold/>the <a exist="67597902" noun="radical">triton radical</a><popBold/> clean through!
+<pushBold/>The <a exist="67597902" noun="radical">triton radical</a><popBold/> collapses, gurgling once with a wrathful look on his face before expiring.
+The guiding force leaves <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The white light leaves <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The very powerful look leaves <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The brilliant aura fades away from <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The dull golden nimbus fades from around <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+A white glow rushes away from <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The dully illuminated mantle protecting <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> begins to falter, then completely fades away.
+As swiftly as the chaos came to be, it recedes again into the surroundings.
+
