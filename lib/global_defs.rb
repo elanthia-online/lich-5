@@ -996,7 +996,7 @@ def checksaturated
 end
 
 def checkmana(num = nil)
-  Lich.deprecated('checkmana', 'Char.mana')
+  Lich.deprecated('checkmana', 'Char.mana', caller[0])
   if num.nil?
     XMLData.mana
   else
@@ -1005,12 +1005,12 @@ def checkmana(num = nil)
 end
 
 def maxmana
-  Lich.deprecated('maxmana', 'Char.maxmana')
+  Lich.deprecated('maxmana', 'Char.maxmana', caller[0])
   XMLData.max_mana
 end
 
 def percentmana(num = nil)
-  Lich.deprecated('percentmana', 'Char.percent_mana')
+  Lich.deprecated('percentmana', 'Char.percent_mana', caller[0])
   if XMLData.max_mana == 0
     percent = 100
   else
@@ -1024,7 +1024,7 @@ def percentmana(num = nil)
 end
 
 def checkhealth(num = nil)
-  Lich.deprecated('checkhealth', 'Char.health')
+  Lich.deprecated('checkhealth', 'Char.health', caller[0])
   if num.nil?
     XMLData.health
   else
@@ -1033,12 +1033,12 @@ def checkhealth(num = nil)
 end
 
 def maxhealth
-  Lich.deprecated('maxhealth', 'Char.max_health')
+  Lich.deprecated('maxhealth', 'Char.max_health', caller[0])
   XMLData.max_health
 end
 
 def percenthealth(num = nil)
-  Lich.deprecated('percenthealth', 'Char.percent_health')
+  Lich.deprecated('percenthealth', 'Char.percent_health', caller[0])
   if num.nil?
     ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   else
@@ -1047,7 +1047,7 @@ def percenthealth(num = nil)
 end
 
 def checkspirit(num = nil)
-  Lich.deprecated('checkspirit', 'Char.spirit')
+  Lich.deprecated('checkspirit', 'Char.spirit', caller[0])
   if num.nil?
     XMLData.spirit
   else
@@ -1056,12 +1056,12 @@ def checkspirit(num = nil)
 end
 
 def maxspirit
-  Lich.deprecated('maxspirit', 'Char.max_spirit')
+  Lich.deprecated('maxspirit', 'Char.max_spirit', caller[0])
   XMLData.max_spirit
 end
 
 def percentspirit(num = nil)
-  Lich.deprecated('percentspirit', 'Char.percent_spirit')
+  Lich.deprecated('percentspirit', 'Char.percent_spirit', caller[0])
   if num.nil?
     ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   else
@@ -1070,7 +1070,7 @@ def percentspirit(num = nil)
 end
 
 def checkstamina(num = nil)
-  Lich.deprecated('checkstamina', 'Char.stamina')
+  Lich.deprecated('checkstamina', 'Char.stamina', caller[0])
   if num.nil?
     XMLData.stamina
   else
@@ -1079,12 +1079,12 @@ def checkstamina(num = nil)
 end
 
 def maxstamina()
-  Lich.deprecated('maxstamina', 'Char.max_stamina')
+  Lich.deprecated('maxstamina', 'Char.max_stamina', caller[0])
   XMLData.max_stamina
 end
 
 def percentstamina(num = nil)
-  Lich.deprecated('percentstamina', 'Char.percent_stamina')
+  Lich.deprecated('percentstamina', 'Char.percent_stamina', caller[0])
   if XMLData.max_stamina == 0
     percent = 100
   else
@@ -1115,7 +1115,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(num = nil)
-  Lich.deprecated('checkstance', 'Char.stance')
+  Lich.deprecated('checkstance', 'Char.stance', caller[0])
   if num.nil?
     XMLData.stance_text
   elsif (num.is_a?(String)) and (num.to_i == 0)
@@ -1144,7 +1144,7 @@ def checkstance(num = nil)
 end
 
 def percentstance(num = nil)
-  Lich.deprecated('percentstance', 'Char.percent_stance')
+  Lich.deprecated('percentstance', 'Char.percent_stance', caller[0])
   if num.nil?
     XMLData.stance_value
   else
@@ -1153,7 +1153,7 @@ def percentstance(num = nil)
 end
 
 def checkencumbrance(string = nil)
-  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance', caller[0])
   if string.nil?
     XMLData.encumbrance_text
   elsif (string.is_a?(Integer)) or (string =~ /^[0-9]+$/ and (string = string.to_i))
@@ -1169,7 +1169,7 @@ def checkencumbrance(string = nil)
 end
 
 def percentencumbrance(num = nil)
-  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance', caller[0])
   if num.nil?
     XMLData.encumbrance_value
   else
