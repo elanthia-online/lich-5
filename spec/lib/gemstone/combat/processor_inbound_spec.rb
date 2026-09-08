@@ -1001,6 +1001,77 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(blooms.last[:target_info][:name]).to eq('bloody halfling cannibal')
     end
 
+    it "resumes our shot after a disciple's cloak-of-shadows retaliation so our flare stays ours (raw chunk 23:18:38)" do
+      lines = File.readlines(File.join(__dir__, '../../../fixtures/cloak_of_shadows_interrupt.txt'), chomp: true)
+      events = described_class.parse_events(lines)
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:fire, nil], [:cast, true]])
+      fire, cast = events
+      expect(fire[:hits].map { |h| h[:damage] }).to eq([21])
+      phos = fire[:flares].find { |f| f[:name] == :phosphorescence }
+      expect(phos[:hits].map { |h| h[:damage] }).to eq([25])
+      expect(cast[:hits]).to be_empty
+      expect(cast[:flares]).to be_empty
+      expect(cast[:outcomes]).to eq([:warded])
+      expect(cast[:resolutions].map { |r| r[:type] }).to eq([:cs_td])
+      expect(cast[:attacker]).to include(id: 129623615, name: 'flayed gigas disciple')
+    end
+
+    it 'keeps an ooze splitting on the hit off the target switcher (raw chunk 23:19:53)' do
+      lines = File.readlines(File.join(__dir__, '../../../fixtures/ooze_splatter_fire.txt'), chomp: true)
+      events = described_class.parse_events(lines)
+      expect(events.map { |e| [e[:name], e[:hits].map { |h| h[:damage] }] }).to eq([[:fire, [51]]])
+    end
+
+    it 'parses the sanguine ooze pseudopod attacks and their misses' do
+      ooze = bolded(129583295, 'ooze', 'a quivering sanguine ooze')
+      smash = described_class.parse_events([
+                                             "#{ooze} manifests a thick pseudopod and brings it smashing down at you!",
+                                             '  AS: +556 vs DS: +585 with AvD: +38 + d100 roll: +39 = +48',
+                                             '   A clean miss.'
+                                           ])
+      whip = described_class.parse_events([
+                                            '<pushBold/>[SMR result: 47 (Open d100: 70, Penalty: 10)]<popBold/>',
+                                            "#{ooze} whips a thick pseudopod at you!  The goopy appendage flies wide before retracting back into the central mass of #{bolded(129583295, 'ooze', 'the ooze')}."
+                                          ])
+      expect(smash.map { |e| [e[:name], e[:inbound], e[:outcomes]] }).to eq([[:natural, true, [:miss]]])
+      expect(whip.map { |e| [e[:name], e[:inbound], e[:outcomes], e[:resolutions].map { |r| r[:result] }] }).to eq([[:natural, true, [:miss], [47]]])
+    end
+
+    it 'records the ooze shrapnel burst and the disciple rift as inbound room maneuvers with their rolls' do
+      ooze = bolded(129583295, 'ooze', 'a quivering sanguine ooze')
+      shrap = described_class.parse_events([
+                                             "Froth disturbs the surface of #{ooze} as bubbling bulges form over #{bolded(129583295, 'ooze', 'its')} surface, rapidly coagulating into red-black crystalline spikes.  With a convulsive shudder, the ooze flings them outward!",
+                                             '<pushBold/>[SMR result: -32 (Open d100: -36, Penalty: 13)]<popBold/>',
+                                             'Bobbing and weaving, you dodge the spray of shrapnel!'
+                                           ])
+      disc = bolded(129629246, 'disciple', 'a flayed gigas disciple')
+      rift = described_class.parse_events([
+                                            "Zeal twisting #{bolded(129629246, 'disciple', 'her')} features, #{disc} raises a raw and fleshless hand overhead and draws it down, #{bolded(129629246, 'disciple', 'her')} shattered fingernails slicing open a tear in the fabric of the world.",
+                                            'Writhing, milky tentacles burst forth from the tortured spatial anomaly, grasping blindly through the areas they glisten with vile humors.',
+                                            '<pushBold/>[SMR result: 61 (Open d100: 67, Penalty: 53)]<popBold/>'
+                                          ])
+      expect(shrap.map { |e| [e[:name], e[:inbound], e[:outcomes], e[:resolutions].map { |r| r[:result] }] }).to eq([[:shrapnel_spray, true, [:evade], [-32]]])
+      expect(rift.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:resolutions].map { |r| r[:result] }] }).to eq([[:rift_tentacles, true, 129629246, [61]]])
+    end
+
+    it "attributes a nearby player's flaming aura to that player, and a spiritual malady tick once, unowned" do
+      oozeling = bolded(129648792, 'oozeling', 'a quivering sanguine oozeling')
+      aura = described_class.parse_events([
+                                            "The flaming aura surrounding <a exist=\"-10174607\" noun=\"Meb\">Meb</a> lashes out at #{oozeling}!",
+                                            '<pushBold/>[SMR result: 153 (Open d100: 76, Bonus: 8)]<popBold/>',
+                                            '   ... 25 points of damage!'
+                                          ])
+      expect(aura.map { |e| [e[:name], e[:foreign_caster], e[:target][:id], e[:hits].map { |h| h[:damage] }, e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:flaming_aura, true, 129648792, [25], [153]]])
+      mutant = bolded(129575116, 'mutant', 'a squamous reptilian mutant')
+      malady = described_class.parse_events([
+                                              "A spiritual malady wracks #{mutant} causing 5 points of damage!",
+                                              '   ... 5 points of damage!',
+                                              '   Unpleasant wound to right arm!'
+                                            ])
+      expect(malady.map { |e| [e[:name], e[:unowned], e[:target][:id], e[:hits].map { |h| h[:damage] }] }).to eq([[:spiritual_malady, true, 129575116, [5]]])
+    end
+
     it 'wraps a held pre-flare as its own event when no swing follows in the next chunk' do
       nock_chunk = [
         " ** Your <a exist=\"125479289\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}! **",

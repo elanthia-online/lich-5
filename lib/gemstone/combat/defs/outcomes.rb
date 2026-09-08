@@ -55,7 +55,9 @@ module Lich
               /(?<attacker>.+?) stumbles behind you like a top out of control./,
               /The enormous hand attempts to grab you, but you manage to avoid it at the last moment./,
               # shield push whiff (hunt log 2026-09-07)
-              /(?<attacker>.+?) completely misses you, stumbles, and flails around!/
+              /(?<attacker>.+?) completely misses you, stumbles, and flails around!/,
+              # sanguine ooze pseudopod whiff, same line as its initiation
+              /The goopy appendage flies wide before retracting back into the central mass of/
             ].freeze),
             OutcomeDef.new(:hit, [
               /(?:A|Good) hit!/,
@@ -140,6 +142,8 @@ module Lich
               # of the attack line, so this is the only record of the swing
               /With preternatural speed, (?<target>.+?) bounds to safety as you move to attack #{MK_PRE}(?:him|her|it)#{MK_POST}, leaving you off-balance!/,
               /You avoid the push!/,
+              # sanguine ooze shrapnel burst dodged
+              /Bobbing and weaving, you dodge the spray of shrapnel!/,
               # 3p feint we saw through (also the :feint initiation line)
               /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but you aren't fooled for a second\./,
               /Unable to focus clearly, you blindly evade the attack!/,

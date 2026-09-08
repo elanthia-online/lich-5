@@ -83,6 +83,19 @@ module Lich
             AttackDef.new(:fiery_barbs, [
               /Fiery red barbs uncoil from the shadows near (?<attacker>.+?) and lash out at (?<target>[^!]+)!/
             ].freeze),
+            # A nearby player's flaming aura lashing a creature (SMR + damage
+            # follow; hunt log 2026-09-07 23:20, Meb)
+            AttackDef.new(:flaming_aura, [
+              /The flaming aura surrounding (?<attacker>.+?) lashes out at (?<target>[^!]+)!/
+            ].freeze),
+            # DoT tick naming the victim, never the caster (unowned unless
+            # our cast is in the blob - see UNOWNED_TICK_ATTACKS). Its
+            # "causing N" is a summary: the "... N points of damage!" line
+            # that follows carries the hit and its crit, so the inline
+            # number is NOT applied (see SUMMARY_DAMAGE_ATTACKS).
+            AttackDef.new(:spiritual_malady, [
+              /A spiritual malady wracks (?<target>.+?) causing \d+ points? of damage!/
+            ].freeze),
           ].freeze
 
           # Spell initiations catalogued from the wiki Messaging sections

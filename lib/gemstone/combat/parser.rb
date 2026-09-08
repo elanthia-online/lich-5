@@ -21,6 +21,9 @@ module Lich
       module Parser
         # Target link pattern - extract creatures/players from XML
         TARGET_LINK_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>/i.freeze
+        # A link whose closing tag lies beyond the captured text (see
+        # extract_attacker_from_match)
+        OPEN_LINK_TAIL_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)\z/i.freeze
 
         # Bold tag pattern - creatures are wrapped in bold tags
         # Non-greedy match to avoid spanning multiple creatures
@@ -192,6 +195,10 @@ module Lich
             # gigas berserker> swings..." - hunt log 2026-09-07 recorded the
             # attacker as "his").
             links = text.to_enum(:scan, TARGET_LINK_PATTERN).map { Regexp.last_match }
+            # A possessive INSIDE the link ("<a>flayed gigas disciple's</a>
+            # power warps the air") leaves the capture ending mid-link: the
+            # def's 's sits inside the <a>. Take the unterminated link too.
+            links << Regexp.last_match if links.empty? && OPEN_LINK_TAIL_PATTERN.match(text)
             if (link = links.last)
               { id: link[:id].to_i, noun: link[:noun], name: link_name(link) }
             else

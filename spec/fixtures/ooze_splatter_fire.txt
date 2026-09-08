@@ -1,0 +1,10 @@
+You fire a faewood arrow at <pushBold/>a <a exist="129622136" noun="ooze">quivering sanguine ooze</a><popBold/>!
+  AS: +594 vs DS: +468 with AvD: +25 + d100 roll: +58 = +209
+   ... and hit for 51 points of damage!
+Pieces of the ooze splatter across the ground, wobbling disconcertingly as they twitch together to form <pushBold/>a <a exist="129638108" noun="oozeling">quivering sanguine oozeling</a><popBold/>.
+
+ ** Necrotic energy from your <a exist="129604585" noun="bow">glowbark long bow</a> overflows into you! **
+   You feel healed!
+The arrow breaks into tiny fragments.
+Roundtime: 3 sec.
+Roundtime changed to 1 second.

@@ -295,6 +295,15 @@ module Lich
             AttackDef.new(:trumpet, [
               /(?<attacker>.+?) raises #{MK_PRE}its#{MK_POST} trunk and rears back onto #{MK_PRE}its#{MK_POST} immense hind legs, blaring out a note of sheer fury!/
             ].freeze),
+            # Mutant-farm room maneuvers (hunt log 2026-09-07 23:19-23:20):
+            # sanguine ooze crystalline shrapnel burst (SMR, then our dodge)
+            AttackDef.new(:shrapnel_spray, [
+              /Froth disturbs the surface of (?<attacker>.+?) as bubbling bulges form over #{MK_PRE}its#{MK_POST} surface/
+            ].freeze),
+            # flayed gigas disciple's spatial rift (SMR follows)
+            AttackDef.new(:rift_tentacles, [
+              /Zeal twisting #{MK_PRE}(?:his|her|its)#{MK_POST} features, (?<attacker>.+?) raises a raw and fleshless hand overhead and draws it down/
+            ].freeze),
             # Shield-maiden targe push (SMR follows; hunt log 2026-09-07)
             AttackDef.new(:shield_push, [
               /(?<attacker>.+?) raises #{MK_PRE}(?:his|her|its)#{MK_POST} (?<weapon>.+?) and attempts to push (?<target>you|.+?) away!/
@@ -325,6 +334,10 @@ module Lich
               # you stand fast..." is a fear-save outcome, not a claw swing
               /(?<attacker>.+?) claws at (?<target>[^!,]+)!/,
               /(?<attacker>.+?) tries to spear (?<target>.+?) with #{MK_PRE}its#{MK_POST} enormous tusks!/,
+              # sanguine ooze (mutant farm, hunt log 2026-09-07 23:20); the
+              # whip's miss rides the same line (:miss outcome)
+              /(?<attacker>.+?) manifests a thick pseudopod and brings it smashing down at (?<target>you|.+?)!/,
+              /(?<attacker>.+?) whips a thick pseudopod at (?<target>you|.+?)!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,
@@ -494,7 +507,7 @@ module Lich
           # Creature maneuvers aimed at the whole room, us included: the line
           # names the attacker and no target, and the SSR that follows is
           # OUR save. The parser classifies these inbound.
-          ROOM_TARGETED = %i[howl trumpet].freeze
+          ROOM_TARGETED = %i[howl trumpet shrapnel_spray rift_tentacles].freeze
 
           # The tracker's chunk gate only forwards chunks holding a bolded
           # creature link; an environmental tick names no creature, so its

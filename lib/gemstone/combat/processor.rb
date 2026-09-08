@@ -30,7 +30,12 @@ module Lich
         # 2026-09-06). A tick IS ours only when our own cast of that spell
         # is visible in the same blob (see cast_owner tracking below).
         # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
-        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed].freeze
+        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed spiritual_malady].freeze
+
+        # Initiations whose inline "causing N points of damage!" restates the
+        # "... N points of damage!" line that follows (that line carries the
+        # crit) - applying both doubled the tick (hunt log 2026-09-07 23:20).
+        SUMMARY_DAMAGE_ATTACKS = %i[spiritual_malady].freeze
 
         # Sequence brackets (Definitions::Sequences) whose rounds are attack
         # events of the SAME name: a round that prints no initiation line of
@@ -159,6 +164,12 @@ module Lich
           / is forced out of hiding!/,
           # post-kill/rage emotes naming the creature
           / gurgles out an animalistic shriek of rage, /,
+          # a sanguine ooze splitting on the hit - names the new oozeling
+          # between the damage line and the next arrow (hunt log 2026-09-07
+          # 23:19: phantom fires on the oozeling, volley rounds split)
+          / splatter across the ground, wobbling disconcertingly as they twitch together to form /,
+          / pulses larger, bubbling grotesquely with new mass\./,
+          / pulses monstrously as .+? swells to its full size!/,
           /\AYou are now targeting /
         ).freeze
 
@@ -266,6 +277,17 @@ module Lich
         # State machine parser
         def parse_events(lines)
           events = []
+          # Identity-guarded push: an event RESUMED after an inbound
+          # interruption (see interrupted_own) was already saved once.
+          save_event = ->(ev) { events << ev unless events.any? { |e| e.equal?(ev) } }
+          # Our own event that an inbound attack cut into mid-swing. A
+          # creature's reactive cast (cloak of shadows: our arrow lands, its
+          # tendril lashes back, CS/TD, "Warded off!") prints BETWEEN our hit
+          # and our bow's flares; without this the phosphorescence and its
+          # damage/crit attached to the creature's cast as damage to US (hunt
+          # log 2026-09-07 23:18, flayed gigas disciple). Our next own flare
+          # line resumes the interrupted event.
+          interrupted_own = nil
           current_event = nil
           parse_state = :seeking_attack
           current_target = nil
@@ -575,6 +597,17 @@ module Lich
               # The reject clause still matters: when two weapons' flares
               # fire back to back with no attack line between them, the
               # weapon name is the ONLY thing telling them apart.
+              # Our own flare ("your <weapon>") arriving while a creature's
+              # inbound attack is the open event: it belongs to the own swing
+              # that attack interrupted - resume it (see interrupted_own).
+              if current_event && current_event[:inbound] && interrupted_own && line.match?(/\byour\b/i)
+                save_event.call(current_event)
+                current_event = interrupted_own
+                interrupted_own = nil
+                current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                parse_state = :seeking_damage
+                respond "[Combat] Resumed interrupted #{current_event[:name]} for its flare" if Tracker.debug?(:verbose)
+              end
               if current_event && !flare_contradicts_weapon?(flare, current_event)
                 current_event[:flares] << flare
               else
@@ -661,7 +694,7 @@ module Lich
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
                 if event_savable?(current_event)
-                  events << current_event
+                  save_event.call(current_event)
                   respond "[Combat] Saved event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits, #{current_event[:statuses].size} statuses" if Tracker.debug?(:verbose)
                 end
 
@@ -938,8 +971,13 @@ module Lich
               # Save previous event before starting a new one - unless the
               # target-switcher created it on this very line (see _line)
               if event_savable?(current_event) && current_event[:_line] != index
-                events << current_event
+                save_event.call(current_event)
                 respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits" if Tracker.debug?(:verbose)
+                # an inbound attack cutting into our own open swing: remember
+                # the swing so its trailing flares can resume it
+                if attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target])
+                  interrupted_own = current_event
+                end
               end
               # A same-line artifact event may have claimed held rolls in
               # the switch branch above (volley: the arrow's own SMR) -
@@ -1170,7 +1208,7 @@ module Lich
               # No track_damage gate: the main damage branch has none, and
               # gating only here made inline-damage events vanish under
               # configs that omit the key (replay 2026-09-05, pestilence)
-              if (inline = Parser.parse_damage(line))
+              if !SUMMARY_DAMAGE_ATTACKS.include?(current_event[:name]) && (inline = Parser.parse_damage(line))
                 current_event[:hits] << { damage: inline, crit: nil }
                 respond "[Combat] Found inline damage: #{inline}" if Tracker.debug?(:verbose)
               end
@@ -1321,7 +1359,7 @@ module Lich
           if bare_cast?(current_event) && !current_event[:_held] && current_event[:attacker].nil?
             @held_cast = current_event
           elsif event_savable?(current_event)
-            events << current_event
+            save_event.call(current_event)
           end
 
           # Orphaned rolls: no attack ever claimed them (trailing rider
