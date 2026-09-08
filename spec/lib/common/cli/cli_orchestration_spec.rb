@@ -278,7 +278,7 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       allow(Lich::Common::CLI::CLIConversion).to receive(:convert).and_return(false)
       stub_const('ARGV', ['--convert-entries', 'plaintext'])
 
-      expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
+      expect { described_class.handle_convert_entries }.to raise_error(SystemExit) { |e| expect(e.status).to eq(1) }
     end
   end
 
