@@ -397,6 +397,15 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     end
 
     it 'logs which stage was in flight when the watchdog kills a hung attempt' do
+      # timeout: 0.01 was flaky -- the spawned auth_thread isn't guaranteed to
+      # get scheduled and execute the stage-marker assignment within a 10ms
+      # window under CI load, which would make this observe "connect
+      # (pre-stage)" instead of "k_response". 0.05s against a 0.2s stub sleep
+      # gives real margin without meaningfully slowing the suite. (A
+      # Queue-based rendezvous was considered instead, but risks a genuine
+      # test hang if the watchdog's Thread#kill lands between the
+      # stage-marker assignment and the queue push -- a timing margin has no
+      # such failure mode.)
       allow(Lich).to receive(:log)
       allow(described_class).to receive(:auth) do
         Thread.current[:eaccess_stage] = 'k_response'
@@ -404,10 +413,10 @@ RSpec.describe Lich::Common::Authentication::EAccess do
       end
 
       expect {
-        described_class.auth_with_timeout(timeout: 0.01, account: 'A', password: 'p')
+        described_class.auth_with_timeout(timeout: 0.05, account: 'A', password: 'p')
       }.to raise_error(/timed out authenticating with EAccess/)
 
-      expect(Lich).to have_received(:log).with(/timed out after 0.01s while in stage 'k_response'/)
+      expect(Lich).to have_received(:log).with(/timed out after 0.05s while in stage 'k_response'/)
     end
 
     it "reports 'connect (pre-stage)' when the watchdog fires before any stage was entered" do

@@ -152,6 +152,14 @@ RSpec.describe Lich::Common::Authentication do
     before do
       allow(Lich).to receive(:log)
       allow(described_class).to receive(:sleep) # no real backoff delay in tests
+      # Account uses persistent class-level attributes (not reset between
+      # examples by default) -- without this, a real regression in
+      # Authenticator's Account-state-setting could go undetected, since a
+      # later example's assertion could pass on a value a prior example
+      # already left behind rather than one this example's call actually set.
+      Lich::Common::Account.name = nil
+      Lich::Common::Account.game_code = nil
+      Lich::Common::Account.character = nil
     end
 
     it 'forces WebLogin directly when auth_provider: :web, without touching EAccess' do

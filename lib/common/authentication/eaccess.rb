@@ -110,6 +110,12 @@ module Lich
           # establish connection, if possible
           stage("tls_handshake:pem_bootstrap", probable_cause: "TLS termination misconfiguration (not probable on its own)") do
             ssl.connect
+          rescue StandardError
+            # sync_close only closes the underlying TCP socket when the
+            # SSLSocket itself is explicitly closed -- a failed connect never
+            # reaches that point, and would otherwise leak this descriptor.
+            sock.close rescue nil
+            raise
           end
           # write the .pem to disk
           File.write(pem, ssl.peer_cert)
@@ -151,6 +157,13 @@ module Lich
           ssl_socket.sync_close = true
           connected = stage("tls_handshake:main", probable_cause: "TLS termination misconfiguration (not probable on its own)") do
             ssl_socket.connect
+          rescue StandardError
+            # sync_close only closes the underlying TCP socket when the
+            # SSLSocket itself is explicitly closed -- a failed connect never
+            # reaches that point, and would otherwise leak this descriptor
+            # across retries/fallback.
+            socket.close rescue nil
+            raise
           end
           # Not wrapped in the tls_handshake stage above: a cert mismatch is
           # its own distinct stage (cert_pin_mismatch, logged inside
