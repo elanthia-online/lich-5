@@ -24,6 +24,8 @@ for arg in ARGV
     DATA_DIR = $1
   elsif arg =~ /^--(?:lib|lib-dir)=(.+)[\\\/]?$/i
     LIB_DIR = $1
+  elsif arg =~ /^--(?:active-session-dir)=(.+)[\\\/]?$/i
+    ACTIVE_SESSION_DIR = $1
   end
 end
 

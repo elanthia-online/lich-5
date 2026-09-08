@@ -59,6 +59,7 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('Lich Help: automation')
       expect(output).to include('--active-sessions')
       expect(output).to include('--session-info NAME')
+      expect(output).to include('--active-session-dir=PATH')
     end
 
     it 'requires an explicit flag to suppress the default GTK GUI' do
@@ -89,6 +90,7 @@ RSpec.describe Lich::Main::HelpText do
       expect(output).to include('--lib-dir=PATH')
       expect(output).to include('--hosts-dir=PATH')
       expect(output).to include('--hosts-file=PATH')
+      expect(output).to include('--active-session-dir=PATH')
     end
   end
 
