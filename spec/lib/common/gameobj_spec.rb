@@ -136,6 +136,55 @@ RSpec.describe Lich::Common::GameObj do
     end
   end
 
+  describe '.upsert_inv' do
+    it 'adds a new item like new_inv when nothing pre-exists' do
+      described_class.upsert_inv('123', 'gem', 'ruby', 'container1')
+
+      expect(described_class.containers['container1'].map(&:id)).to eq(['123'])
+    end
+
+    it 'refreshes an item in place without duplicating it' do
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+      described_class.upsert_inv('123', 'gem', 'ruby', 'container1')
+
+      expect(described_class.containers['container1'].count { |o| o.id == '123' }).to eq(1)
+    end
+
+    it 'moves an item to its new container, leaving no stale copy' do
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+      described_class.new_inv('999', 'gem', 'opal', 'container1') # bystander stays
+
+      described_class.upsert_inv('123', 'gem', 'ruby', 'container2')
+
+      expect(described_class.containers['container1'].map(&:id)).to eq(['999'])
+      expect(described_class.containers['container2'].map(&:id)).to eq(['123'])
+    end
+
+    it 'removes a prior copy even when the name changed (e.g. gained "(closed)")' do
+      described_class.new_inv('123', nil, 'soft gem pouch', 'container1')
+      described_class.upsert_inv('123', nil, 'soft gem pouch (closed)', 'container1')
+
+      list = described_class.containers['container1']
+      expect(list.map(&:id)).to eq(['123'])
+      expect(list.first.name).to eq('soft gem pouch (closed)')
+    end
+
+    it 'relocates a contained item to worn inv when container is nil' do
+      described_class.new_inv('123', 'gem', 'ruby', 'container1')
+
+      described_class.upsert_inv('123', 'gem', 'ruby', nil)
+
+      expect(described_class.containers['container1'].map(&:id)).to eq([])
+      expect(described_class.inv.map(&:id)).to eq(['123'])
+    end
+
+    it 'converts an integer id to string' do
+      obj = described_class.upsert_inv(12345, 'gem', 'ruby')
+
+      expect(obj.id).to eq('12345')
+    end
+  end
+
   describe '.clear_inv' do
     it 'clears the @@inv array' do
       described_class.new_inv('123', 'gem', 'ruby')
