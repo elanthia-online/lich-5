@@ -152,6 +152,13 @@ module Lich
         NARRATION_PATTERN = Regexp.union(
           / leaps from the back of .+? as .+? topples, narrowly avoiding being pinned/,
           / looks a little bit more wary after that display!/,
+          # a hidden creature revealed by an AoE flare - printed BEFORE the
+          # bloom line that names it, so it switched the target early and the
+          # bloom's damage landed on a phantom `fire` (hunt log 2026-09-07
+          # 22:14:27, the cannibal)
+          / is forced out of hiding!/,
+          # post-kill/rage emotes naming the creature
+          / gurgles out an animalistic shriek of rage, /,
           /\AYou are now targeting /
         ).freeze
 
