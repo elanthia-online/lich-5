@@ -421,7 +421,23 @@ module Lich
       def self.upsert_inv(id, noun, name, container = nil, before = nil, after = nil)
         str_id = id.is_a?(Integer) ? id.to_s : id
         remove_inv_item(str_id)
-        new_inv(str_id, noun, name, container, before, after)
+        obj = new_inv(str_id, noun, name, container, before, after)
+
+        # A name change keys a NEW index entry ("id|noun|newname"); the prior
+        # "id|noun|oldname" instance was just pulled from every registry by
+        # remove_inv_item, but its index key lingers until the TTL prune. On the
+        # cold scrape path, evict any index entry for this id whose instance is no
+        # longer live so a frequently-renamed item (e.g. a pouch toggling
+        # "(closed)") can't accumulate orphaned variants between sweeps. Guarded by
+        # object identity via +live_registry_objects+ (computed outside the lock,
+        # matching +sweep_stale!+) so a variant still held anywhere -- the instance
+        # just re-added, or a hand slot -- is kept.
+        live = live_registry_objects
+        @@index_mutex.synchronize do
+          @@index.delete_if { |_key, (indexed, _ts)| indexed.id == str_id && !live.include?(indexed) }
+        end
+
+        obj
       end
 
       # Removes every placement of +id+ from the worn inventory (+@@inv+) and
