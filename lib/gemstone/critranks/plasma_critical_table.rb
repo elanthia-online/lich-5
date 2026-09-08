@@ -1428,7 +1428,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /^Light burns to .*? leg./ },
+                                  :regex           => /^Light burns to .*? leg.?/ },
                            2 =>
                                 { :type            => "plasma",
                                   :location        => "left leg",
@@ -1619,7 +1619,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 1,
                                   :secondary_wound => nil,
-                                  :regex           => /^Stinging burn to .*? hand./ },
+                                  :regex           => /^Stinging burn to .*? hand.?/ },
                            2 =>
                                 { :type            => "plasma",
                                   :location        => "left hand",
