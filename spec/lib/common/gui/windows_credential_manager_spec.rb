@@ -16,7 +16,11 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
         allow(OS).to receive(:windows?).and_return(true)
       end
 
-      it 'returns true if FFI library loads successfully' do
+      # CredentialStruct and the attach_function-defined API calls are only defined
+      # when the real OS.windows? is true at file-load time (see windows_credential_manager.rb)
+      # so this platform can only be exercised on an actual Windows runtime, not by
+      # stubbing OS.windows? after the fact on this (Linux) CI runner.
+      it 'returns true if FFI library loads successfully', if: OS.windows? do
         expect(described_class.available?).to be true
       end
     end
