@@ -109,6 +109,25 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.close
     end
 
+    it "does not open a session for a nearby player's attack, nor keep one alive with it" do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(name: 'cast', foreign_caster: true))
+      expect(count('sessions')).to eq(0)
+      expect(count('attacks')).to eq(0)
+
+      rec.record(:attack, attack_event)
+      expect(count('sessions')).to eq(1)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 250))
+      rec.record(:attack, attack_event(name: 'cast', foreign_caster: true)) # recorded, but no heartbeat
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 350))
+      rec.check_idle!
+      rec.close
+
+      expect(count('attacks')).to eq(2)
+      expect(query('SELECT ended_at FROM sessions').first['ended_at']).to eq(3_000_000.0)
+    end
+
     it 'closes the session after the idle gap, stamped at the last event time' do
       rec = new_recorder(idle_timeout: 300)
       # first event opens the session; stub Time so last_event_at is controlled

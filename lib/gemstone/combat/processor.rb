@@ -766,21 +766,40 @@ module Lich
                   # outcome, no attack line, at the top of the chunk. Open
                   # the event here (chunk-locally the maneuver name is
                   # unknowable) so the miss and its roll survive.
-                  current_event = {
-                    name: pending_ambush ? :ambush : :unknown,
-                    target: line_target, attacker: nil,
-                    weapon: nil, parent: nil, hits: [],
-                    statuses: [], flares: [], outcomes: [outcome],
-                    # A wholly-negated ambush prints its prefix and then an
-                    # intercept, with no attack line between - this is the
-                    # only record that the ambush was attempted.
-                    ambush: !pending_ambush.nil?,
-                    resolutions: pending_resolutions
-                  }
-                  pending_ambush = nil
-                  pending_resolutions = []
-                  current_target = line_target
-                  parse_state = :seeking_damage
+                  # When the line names who attacked US instead ("the thorny
+                  # barrier ... blocks the attack from <X>"), the swing was
+                  # intercepted before it printed: an INBOUND unknown with X
+                  # as the attacker, never an attack on X.
+                  if Definitions::Outcomes.inbound_line?(line)
+                    # (a creature's wholly-negated ambush on us is this shape
+                    # too: prefix, then the intercept, no attack line)
+                    current_event = {
+                      name: pending_ambush ? :ambush : :unknown, target: {}, inbound: true,
+                      attacker: line_target, weapon: nil, parent: nil,
+                      hits: [], statuses: [], flares: [], outcomes: [outcome],
+                      ambush: !pending_ambush.nil?,
+                      resolutions: pending_resolutions
+                    }
+                    pending_ambush = nil
+                    pending_resolutions = []
+                    parse_state = :seeking_damage
+                  else
+                    current_event = {
+                      name: pending_ambush ? :ambush : :unknown,
+                      target: line_target, attacker: nil,
+                      weapon: nil, parent: nil, hits: [],
+                      statuses: [], flares: [], outcomes: [outcome],
+                      # A wholly-negated ambush prints its prefix and then an
+                      # intercept, with no attack line between - this is the
+                      # only record that the ambush was attempted.
+                      ambush: !pending_ambush.nil?,
+                      resolutions: pending_resolutions
+                    }
+                    pending_ambush = nil
+                    pending_resolutions = []
+                    current_target = line_target
+                    parse_state = :seeking_damage
+                  end
                 else
                   # No event, no named target: an outcome for an
                   # initiation we have no def for. Orphan-sink it.
@@ -1123,6 +1142,14 @@ module Lich
                   current_event[:resolutions].concat(pending_resolutions)
                   pending_resolutions = []
                 end
+              end
+              # Exception: an inbound maneuver whose initiation IS its result
+              # line (3p feint: "[SMR] X feints high, but you aren't fooled")
+              # rolled BEFORE it printed - that held maneuver roll is its own,
+              # not our next swing's.
+              if current_event[:inbound] && same_line_outcome && !pending_resolutions.empty?
+                mine, pending_resolutions = pending_resolutions.partition { |r| %i[smr ssr maneuver_roll].include?(r[:type]) }
+                current_event[:resolutions].concat(mine)
               end
               flare_ctx = nil
 

@@ -287,11 +287,23 @@ module Lich
             # Creature fear maneuvers (SSR follows, then our save/fail line).
             # Room-wide, no target named - ROOM_TARGETED classifies them
             # inbound (hunt log 2026-09-07: Ojandhaart warg / mastodon).
+            # (the pronouns are links in the live feed: "sits back on <its>
+            # haunches" - hence MK_PRE/MK_POST; the bare form never matched)
             AttackDef.new(:howl, [
-              /(?<attacker>.+?) sits back on its haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine\./
+              /(?<attacker>.+?) sits back on #{MK_PRE}its#{MK_POST} haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine\./
             ].freeze),
             AttackDef.new(:trumpet, [
-              /(?<attacker>.+?) raises its trunk and rears back onto its immense hind legs, blaring out a note of sheer fury!/
+              /(?<attacker>.+?) raises #{MK_PRE}its#{MK_POST} trunk and rears back onto #{MK_PRE}its#{MK_POST} immense hind legs, blaring out a note of sheer fury!/
+            ].freeze),
+            # Shield-maiden targe push (SMR follows; hunt log 2026-09-07)
+            AttackDef.new(:shield_push, [
+              /(?<attacker>.+?) raises #{MK_PRE}(?:his|her|its)#{MK_POST} (?<weapon>.+?) and attempts to push (?<target>you|.+?) away!/
+            ].freeze),
+            # 3p feint: the result line is the only line ("X feints high, but
+            # you aren't fooled") - target captured as "you" so it classifies
+            # inbound; the same line is the :evade outcome
+            AttackDef.new(:feint, [
+              /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but (?<target>you) aren't fooled for a second\./
             ].freeze),
             # Maneuver-style strike opener (round-14 sweep: 40/40 resolve
             # in the very next line, usually the target's evanescent
@@ -312,7 +324,7 @@ module Lich
               # no comma in the target: "Fear still claws at your heart, but
               # you stand fast..." is a fear-save outcome, not a claw swing
               /(?<attacker>.+?) claws at (?<target>[^!,]+)!/,
-              /(?<attacker>.+?) tries to spear (?<target>.+?) with its enormous tusks!/,
+              /(?<attacker>.+?) tries to spear (?<target>.+?) with #{MK_PRE}its#{MK_POST} enormous tusks!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,

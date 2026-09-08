@@ -74,6 +74,13 @@ module Lich
             AttackDef.new(:weapon_infusion, [
               /As (?<attacker>.+?) attempts to strike with .+?, a surge of power flows out of it, through .+?, and leaps out at (?<target>[^!]+)!/
             ].freeze),
+            # A nearby player's shadow-barb spell (SMR + damage follow; the
+            # caster is the player link, so foreign_caster). Hunt log
+            # 2026-09-07: Burns vs a shield-maiden, recorded as a targetless
+            # unknown with an orphaned SMR.
+            AttackDef.new(:fiery_barbs, [
+              /Fiery red barbs uncoil from the shadows near (?<attacker>.+?) and lash out at (?<target>[^!]+)!/
+            ].freeze),
           ].freeze
 
           # Spell initiations catalogued from the wiki Messaging sections

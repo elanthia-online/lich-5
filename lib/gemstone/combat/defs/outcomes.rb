@@ -53,10 +53,16 @@ module Lich
               /Your (?<weapon>.+?) flies wide, narrowly missing (?<target>[^!]+)./,
               /The net flies past you and collapses into a useless heap./,
               /(?<attacker>.+?) stumbles behind you like a top out of control./,
-              /The enormous hand attempts to grab you, but you manage to avoid it at the last moment./
+              /The enormous hand attempts to grab you, but you manage to avoid it at the last moment./,
+              # shield push whiff (hunt log 2026-09-07)
+              /(?<attacker>.+?) completely misses you, stumbles, and flails around!/
             ].freeze),
             OutcomeDef.new(:hit, [
               /(?:A|Good) hit!/,
+              # creature fear maneuvers that got us (SSR precedes; the save
+              # forms are :resisted)
+              /(?<attacker>.+?)'s#{MK_POST} angry trumpeting startles you!/,
+              /Your heart quavers in your chest and you find yourself unable to focus on defending yourself!/,
               # Nature's Fury per-target hit lines (round-13 sweep: 52/52
               # follow the natures_fury initiation + Warding failed! in
               # the same chunk, damage always follows). The adjective is
@@ -133,6 +139,8 @@ module Lich
               # pre-emptive evade (warg, hunt log 2026-09-07): prints INSTEAD
               # of the attack line, so this is the only record of the swing
               /With preternatural speed, (?<target>.+?) bounds to safety as you move to attack #{MK_PRE}(?:him|her|it)#{MK_POST}, leaving you off-balance!/,
+              # 3p feint we saw through (also the :feint initiation line)
+              /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but you aren't fooled for a second\./,
               /Unable to focus clearly, you blindly evade the attack!/,
               /You barely dodge the attack!/,
               /Unfortunately, your aim is off and your attack goes wide!/,
@@ -321,6 +329,23 @@ module Lich
 
             OUTCOME_LOOKUP.each { |rx, type| return type if rx.match?(line) }
             nil
+          end
+
+          # True when the outcome line names who attacked US ("The thorny
+          # barrier surrounding you blocks the attack from <X>!"): the def
+          # carries an (?<attacker>) capture. A fully-intercepted inbound
+          # swing prints no initiation line, so this is the only record of
+          # it - the processor opens it inbound, not as an attack ON X
+          # (hunt log 2026-09-07: barrier blocks filed as unknown vs warg).
+          def self.inbound_line?(line)
+            return false unless GATE.match?(line) || ALWAYS_SCAN.any? { |rx| rx.match?(line) }
+
+            OUTCOME_LOOKUP.each do |rx, _type|
+              next unless rx.match?(line)
+
+              return rx.names.include?('attacker')
+            end
+            false
           end
         end
 

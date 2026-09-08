@@ -349,12 +349,24 @@ module Lich
           @mutex.synchronize { record_locked(type, data) }
         end
 
+        # An event that is not ours: a nearby player's attack, a creature
+        # swinging at a third party, an orphan. Recorded for context inside
+        # a hunt, but it neither opens a session nor keeps one alive
+        # (2026-09-07: Tijay's cast in town opened "session 2" of a hunt
+        # that had ended).
+        def foreign_event?(type, data)
+          return true unless type == :attack
+
+          !!(data[:foreign_caster] || data[:foreign_target] || data[:unowned] || data[:_orphan])
+        end
+
         def record_locked(type, data)
           if @idle_timeout
             now = Time.now
             check_idle_locked!(now)
-            start_session_locked(character: @character, source: @source, at: now) unless @session_id
-            @last_event_at = now
+            ours = !foreign_event?(type, data)
+            start_session_locked(character: @character, source: @source, at: now) if ours && !@session_id
+            @last_event_at = now if ours
           end
           return unless @session_id
 

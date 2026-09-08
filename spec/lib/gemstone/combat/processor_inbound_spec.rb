@@ -830,6 +830,68 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(events.first[:outcomes]).to include(:evade)
     end
 
+    it 'matches the live trumpet line, whose pronouns are links, and takes the fail line as a hit' do
+      its = bolded(123956079, 'mastodon', 'its')
+      events = described_class.parse_events([
+                                              "#{masto} raises #{its} trunk and rears back onto #{its} immense hind legs, blaring out a note of sheer fury!",
+                                              '<pushBold/>[SSR result: 174 (Open d100: 182)]<popBold/>',
+                                              "The #{bolded(123956079, 'mastodon', 'mastodon')}'s angry trumpeting startles you!",
+                                              'Roundtime: 20 sec.'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:trumpet, true]])
+      expect(events.first[:outcomes]).to include(:hit)
+      expect(events.first[:resolutions].map { |r| r[:result] }).to eq([174])
+    end
+
+    it 'records a 3p feint we saw through as an inbound feint with an evade outcome' do
+      events = described_class.parse_events([
+                                              '<pushBold/>[SMR result: 20 (Open d100: 134, Penalty: 4)]<popBold/>',
+                                              "#{maiden} feints high, but you aren't fooled for a second."
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:feint, true]])
+      expect(events.first[:outcomes]).to include(:evade)
+      expect(events.first[:resolutions].map { |r| r[:result] }).to eq([20])
+    end
+
+    it 'records a shield push and its whiff' do
+      her = bolded(124194699, 'shield-maiden', 'her')
+      events = described_class.parse_events([
+                                              "#{maiden} raises #{her} <a exist=\"124194700\" noun=\"targe\">golden targe</a> and attempts to push you away!",
+                                              '<pushBold/>[SMR result: 17 (Open d100: 9, Penalty: 3)]<popBold/>',
+                                              "#{maiden} completely misses you, stumbles, and flails around!"
+                                            ])
+      expect(events.map { |e| [e[:name], e[:inbound]] }).to eq([[:shield_push, true]])
+      expect(events.first[:outcomes]).to include(:miss)
+    end
+
+    it "attributes a nearby player's fiery barbs to that player (foreign_caster), with its SMR and damage" do
+      events = described_class.parse_events([
+                                              "Fiery red barbs uncoil from the shadows near <a exist=\"-11152917\" noun=\"Burns\">Burns</a> and lash out at #{maiden}!",
+                                              '<pushBold/>[SMR result: 104 (Open d100: 40, Bonus: 15)]<popBold/>',
+                                              '   ... 15 points of damage!',
+                                              '   Burst of flames to right arm toasts skin to elbows.'
+                                            ])
+      expect(events.size).to eq(1)
+      ev = events.first
+      expect(ev[:name]).to eq(:fiery_barbs)
+      expect(ev[:foreign_caster]).to be(true)
+      expect(ev[:target][:id]).to eq(124194699)
+      expect(ev[:hits].map { |h| h[:damage] }).to eq([15])
+      expect(ev[:resolutions].map { |r| r[:result] }).to eq([104])
+    end
+
+    it 'opens a barrier block with no attack line as an INBOUND unknown, not an attack on the creature' do
+      events = described_class.parse_events([
+                                              "The thorny barrier surrounding you blocks the attack from the #{bolded(123985834, 'warg', 'giant warg')}!"
+                                            ])
+      expect(events.size).to eq(1)
+      ev = events.first
+      expect(ev[:inbound]).to be(true)
+      expect(ev[:target]).to eq({})
+      expect(ev[:attacker][:id]).to eq(123985834)
+      expect(ev[:outcomes]).to eq([:intercept])
+    end
+
     it 'labels environmental and self-inflicted damage by source' do
       cold = described_class.parse_events(['The burn of the cold tears precious warmth from your flesh.', '   ... 6 points of damage!'])
       thorn = described_class.parse_events(['As a darkened ruic longbow etched with thorns leaves your left hand, the thorns embedded in your skin painfully rip away, vines quickly retreating.',
