@@ -162,6 +162,17 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         .with(account: 'DOUG', password: 'secret', character: 'Raiyen', game_code: 'DRT')
     end
 
+    it 'never prints the live one-time KEY (a real usable credential) to stdout' do
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout)
+        .and_return('gamehost' => 'h', 'gameport' => 'p', 'key' => 'super-secret-key-value')
+      stub_const('ARGV', ['--web-login-test', 'DOUG', 'Raiyen', '--game-code', 'DRT'])
+
+      expect { described_class.handle_web_login_test }.to raise_error(SystemExit) { |e| expect(e.status).to eq(0) }
+      expect($stdout.string).not_to include('super-secret-key-value')
+      expect($stdout.string).to include('KEY=[scrubbed]')
+      expect($stdout.string).to include('GAMEHOST=h') # non-secret fields still shown
+    end
+
     it 'exits 1 and reports the error code on authentication failure' do
       error = Lich::Common::Authentication::WebLogin::AuthenticationError.new('LOGIN_FAILED')
       allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_raise(error)

@@ -38,6 +38,20 @@ module Lich
   end
 end unless defined?(Lich::Common::Authentication::EAccess)
 
+# Account state -- same accessor shape EAccess.auth sets internally (see
+# eaccess.rb); Authenticator.authenticate now sets the same state at a
+# provider-neutral boundary so WebLogin gets it too (see "Account state"
+# specs below).
+module Lich
+  module Common
+    module Account
+      class << self
+        attr_accessor :name, :game_code, :character, :subscription, :members
+      end
+    end
+  end
+end unless defined?(Lich::Common::Account)
+
 # Require the actual authenticator code
 require_relative '../../../../lib/common/authentication/authenticator'
 
@@ -212,6 +226,61 @@ RSpec.describe Lich::Common::Authentication do
         described_class.authenticate(account: 'testuser', password: 'wrong', character: 'TestChar', game_code: 'GS3')
       }.to raise_error(Lich::Common::Authentication::FatalAuthError, /LOGIN_FAILED/)
       expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout).once # not retried
+    end
+
+    it 'sets Account.name/game_code/character for auth_provider: :web (WebLogin.auth does not set it itself)' do
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
+
+      described_class.authenticate(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3', auth_provider: :web
+      )
+
+      expect(Lich::Common::Account.name).to eq('testuser')
+      expect(Lich::Common::Account.game_code).to eq('GS3')
+      expect(Lich::Common::Account.character).to eq('TestChar')
+    end
+
+    it 'sets Account.name/game_code/character on fallback to WebLogin too' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
+
+      described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3')
+
+      expect(Lich::Common::Account.character).to eq('TestChar')
+    end
+
+    it 'does not retry a SocketError 3 times before falling back -- fails fast on an unreachable endpoint' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'getaddrinfo failed')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
+
+      described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3')
+
+      expect(Lich::Common::Authentication::EAccess).to have_received(:auth).once
+      expect(described_class).not_to have_received(:sleep)
+    end
+  end
+
+  describe '.unreachable_error?' do
+    it 'is true for connection-level errors' do
+      [
+        SocketError.new, Errno::ECONNREFUSED.new, Errno::ECONNRESET.new, Errno::ETIMEDOUT.new,
+        Errno::EHOSTUNREACH.new, Errno::ENETUNREACH.new, OpenSSL::SSL::SSLError.new
+      ].each do |error|
+        expect(described_class.unreachable_error?(error)).to be(true), "expected #{error.class} to be unreachable"
+      end
+    end
+
+    it 'is true for the auth_with_timeout watchdog timeout (a black-holed connection times out rather than refusing)' do
+      error = RuntimeError.new('error: timed out authenticating with EAccess after 30s')
+      expect(described_class.unreachable_error?(error)).to be true
+    end
+
+    it 'is false for a protocol-level error on a reachable endpoint' do
+      expect(described_class.unreachable_error?(StandardError.new('weird response'))).to be false
+    end
+
+    it 'is false for an unrelated RuntimeError that is not the timeout watchdog' do
+      expect(described_class.unreachable_error?(RuntimeError.new('some other runtime error'))).to be false
     end
   end
 

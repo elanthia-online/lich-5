@@ -21,43 +21,42 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
     allow(http).to receive(:verify_mode=)
   end
 
-  def response_double(location: nil, set_cookie: [], body: nil)
+  def response_double(code: '302', location: nil, set_cookie: [], body: nil)
     instance_double(
       Net::HTTPResponse,
+      code: code,
       :[] => location,
       get_fields: set_cookie,
       body: body
     )
   end
 
-  describe '.web_game_code' do
-    it 'maps GS3 to GS4 (confirmed live mismatch from EAccess)' do
-      expect(described_class.web_game_code('GS3')).to eq('GS4')
+  describe '.instance_for' do
+    it 'returns the confirmed instance data for a supported game code' do
+      instance = described_class.instance_for('DRT')
+      expect(instance).to eq(
+        family: 'dr', web_game_code: 'DRT',
+        expected_host: 'hydra.simutronics.com', expected_port: '11624'
+      )
     end
 
-    it 'passes through codes confirmed identical to EAccess' do
-      expect(described_class.web_game_code('DR')).to eq('DR')
-      expect(described_class.web_game_code('DRT')).to eq('DRT')
-      expect(described_class.web_game_code('GST')).to eq('GST')
-    end
-  end
-
-  describe '.game_family' do
-    it 'maps DR-family codes to "dr"' do
-      %w[DR DRT DRF DRX].each { |code| expect(described_class.game_family(code)).to eq('dr') }
+    it 'maps GS3 to the web layer\'s own GS4 code (confirmed live mismatch from EAccess)' do
+      expect(described_class.instance_for('GS3')[:web_game_code]).to eq('GS4')
     end
 
-    it 'maps GS-family codes to "gs4"' do
-      %w[GS3 GST GSF GSX].each { |code| expect(described_class.game_family(code)).to eq('gs4') }
-    end
-
-    it 'raises for an unknown game code' do
-      expect { described_class.game_family('ZZ') }.to raise_error(described_class::AuthenticationError, /UNKNOWN_GAME_CODE/)
+    it 'raises UNSUPPORTED_GAME_CODE for an unconfirmed instance (fail closed)' do
+      %w[DRF DRX GSF GSX ZZ].each do |code|
+        expect { described_class.instance_for(code) }
+          .to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/), "expected #{code} to be rejected"
+      end
     end
   end
 
   describe '.auth' do
-    let(:preflight_response) { response_double(set_cookie: ['ASPSESSIONID=abc123; secure; path=/; HttpOnly']) }
+    let(:login_requests) { [] }
+    let(:goplay2_requests) { [] }
+
+    let(:preflight_response) { response_double(code: '200', set_cookie: ['ASPSESSIONID=abc123; secure; path=/; HttpOnly']) }
     let(:login_okay_response) { response_double(location: '/dr/play/home.asp', set_cookie: ['AWSALB=xyz; Path=/']) }
     # Real markup captured live from /dr/play/home.asp -- see protocol doc "1a".
     let(:home_page_body) do
@@ -66,7 +65,7 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         <label for="W_TESTACCOUNT_000"><span class="normS1">Raiyen</span></label><br>
       HTML
     end
-    let(:home_page_response) { response_double(body: home_page_body) }
+    let(:home_page_response) { response_double(code: '200', body: home_page_body) }
     let(:goplay2_response) { response_double(location: '/dr/play/playing_web.asp') }
     let(:redirect1_response) { response_double(location: '/includes/common/play/goplay_web.asp') }
     let(:redirect2_response) do
@@ -74,10 +73,21 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
     end
 
     before do
-      allow(http).to receive(:request).and_return(
-        preflight_response, login_okay_response, home_page_response,
-        goplay2_response, redirect1_response, redirect2_response
-      )
+      allow(http).to receive(:request) do |req|
+        case req.path
+        when '/dr/signin_needed.asp' then preflight_response
+        when '/includes/common/login/login.asp'
+          login_requests << req
+          login_okay_response
+        when '/dr/play/home.asp' then home_page_response
+        when '/includes/common/play/goplay2.asp'
+          goplay2_requests << req
+          goplay2_response
+        when '/dr/play/playing_web.asp' then redirect1_response
+        when '/includes/common/play/goplay_web.asp' then redirect2_response
+        else raise "unstubbed request to #{req.path}"
+        end
+      end
     end
 
     it 'returns the confirmed host/port/key plus synthesized STORM/Wrayth launch fields' do
@@ -99,6 +109,23 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       expect(result['gamehost']).to eq('hydra.simutronics.com')
     end
 
+    it 'GETs the sign-in page before POSTing credentials (login.asp cold gets a bare 500 -- see protocol doc)' do
+      described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+      expect(http).to have_received(:request).with(an_object_having_attributes(path: '/dr/signin_needed.asp')).ordered
+    end
+
+    it 'includes NEWCHARSUB=TRUE on the goplay2.asp POST (present in every confirmed capture but GS Test\'s)' do
+      described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+      expect(goplay2_requests.first.body).to include('NEWCHARSUB=TRUE')
+    end
+
+    it 'raises for an unsupported game code without making any request' do
+      expect {
+        described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRF')
+      }.to raise_error(described_class::AuthenticationError, /UNSUPPORTED_GAME_CODE/)
+      expect(http).not_to have_received(:request)
+    end
+
     context 'when the requested character is not on the scraped page' do
       it 'raises CHARACTER_NOT_FOUND' do
         expect {
@@ -118,6 +145,26 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       end
     end
 
+    context 'when login redirects to an absolute URL on the error page path (not just a relative one)' do
+      let(:login_okay_response) { response_double(location: 'https://www.play.net/dr/login_error.asp?error=1') }
+
+      it 'still classifies it as LOGIN_FAILED by comparing the parsed path, not a raw prefix match' do
+        expect {
+          described_class.auth(password: 'wrong', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /LOGIN_FAILED/)
+      end
+    end
+
+    context 'when login redirects to an unrelated page that merely shares the error page as a string prefix' do
+      let(:login_okay_response) { response_double(location: '/dr/login_error.aspSOMETHINGELSE') }
+
+      it 'does NOT misclassify it as LOGIN_FAILED (path comparison, not prefix match)' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_LOGIN_RESPONSE/)
+      end
+    end
+
     context 'when login redirects somewhere unexpected' do
       let(:login_okay_response) { response_double(location: '/dr/some_other_page.asp') }
 
@@ -125,6 +172,16 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
         expect {
           described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
         }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_LOGIN_RESPONSE/)
+      end
+    end
+
+    context 'when the login response is not a redirect at all (no Location, or non-3xx)' do
+      let(:login_okay_response) { response_double(code: '200', location: nil) }
+
+      it 'raises UNEXPECTED_NON_REDIRECT_RESPONSE rather than treating a blank location as a path' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_NON_REDIRECT_RESPONSE/)
       end
     end
 
@@ -148,7 +205,65 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
       it 'raises rather than following a non-https redirect' do
         expect {
           described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
-        }.to raise_error(described_class::AuthenticationError)
+        }.to raise_error(described_class::AuthenticationError, /UNTRUSTED_REDIRECT_HOST/)
+      end
+    end
+
+    context 'when the final redirect carries userinfo, a non-default port, and the wrong path' do
+      let(:redirect2_response) do
+        response_double(location: 'https://user@www.play.net:444/not-the-launch-page?host=&port=&key=')
+      end
+
+      it 'raises UNTRUSTED_REDIRECT_HOST' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNTRUSTED_REDIRECT_HOST/)
+      end
+    end
+
+    context 'when the final redirect has a duplicate query key' do
+      let(:redirect2_response) do
+        response_double(location: 'https://www.play.net/play/home.asp?host=hydra.simutronics.com&port=11624&key=abc123&key=evil')
+      end
+
+      it 'raises DUPLICATE_QUERY_PARAM rather than silently taking one of the two key values' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /DUPLICATE_QUERY_PARAM/)
+      end
+    end
+
+    context 'when the final redirect has a blank connection value' do
+      let(:redirect2_response) do
+        response_double(location: 'https://www.play.net/play/home.asp?host=hydra.simutronics.com&port=&key=abc123')
+      end
+
+      it 'raises NO_CONNECTION_INFO' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /NO_CONNECTION_INFO/)
+      end
+    end
+
+    context 'when the returned host/port do not match the requested instance\'s confirmed values' do
+      let(:redirect2_response) do
+        response_double(location: 'https://www.play.net/play/home.asp?host=unexpected.example&port=1&key=abc123')
+      end
+
+      it 'raises UNEXPECTED_CONNECTION_INFO rather than trusting arbitrary connection data' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /UNEXPECTED_CONNECTION_INFO/)
+      end
+    end
+
+    context 'when a redirect never resolves to an absolute URL' do
+      let(:redirect2_response) { response_double(location: '/includes/common/play/goplay_web.asp') } # loops back on itself
+
+      it 'raises TOO_MANY_REDIRECTS rather than looping forever' do
+        expect {
+          described_class.auth(password: 'pw', account: 'TESTACCOUNT', character: 'Raiyen', game_code: 'DRT')
+        }.to raise_error(described_class::AuthenticationError, /TOO_MANY_REDIRECTS/)
       end
     end
   end
@@ -180,9 +295,9 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
     end
 
     it 'returns the result of .auth on success' do
-      allow(described_class).to receive(:auth).and_return({ 'gamehost' => 'h' })
+      allow(described_class).to receive(:auth).and_return('key' => 'k')
       result = described_class.auth_with_timeout(password: 'pw', account: 'A', character: 'C', game_code: 'DRT')
-      expect(result).to eq({ 'gamehost' => 'h' })
+      expect(result).to eq('key' => 'k')
     end
   end
 end

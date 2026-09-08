@@ -27,6 +27,32 @@ module Lich
       # LOGIN_FAILED = WebLogin's credential-rejection signal (see web_login.rb)
       FATAL_ERROR_CODES = %w[REJECT NORECORD INVALID PASSWORD CHARACTER_NOT_FOUND GENERATOR_NOT_AVAILABLE LOGIN_FAILED].freeze
 
+      # Connection-level failures where the endpoint itself didn't respond --
+      # retrying the same unreachable endpoint 3 times with backoff wastes
+      # time (and, when a web fallback is available, delays it) compared to a
+      # protocol-level hiccup on an endpoint that IS reachable, which is
+      # still worth retrying. with_retry stops after the first attempt for
+      # these instead of exhausting MAX_AUTH_RETRIES.
+      UNREACHABLE_ERROR_CLASSES = [
+        SocketError, Errno::ECONNREFUSED, Errno::ECONNRESET, Errno::ETIMEDOUT,
+        Errno::EHOSTUNREACH, Errno::ENETUNREACH, OpenSSL::SSL::SSLError
+      ].freeze
+
+      # @api private
+      # True for a connection-level failure (see UNREACHABLE_ERROR_CLASSES),
+      # or the "timed out authenticating" RuntimeError EAccess/WebLogin's own
+      # auth_with_timeout watchdogs raise when the endpoint never responds at
+      # all (a black-holed connection times out rather than refusing
+      # immediately, so it never raises one of the Errno classes).
+      #
+      # @param error [StandardError] the error caught by with_retry
+      # @return [Boolean]
+      def self.unreachable_error?(error)
+        return true if UNREACHABLE_ERROR_CLASSES.any? { |klass| error.is_a?(klass) }
+
+        error.is_a?(RuntimeError) && error.message.to_s.start_with?('error: timed out authenticating')
+      end
+
       # Authenticates a user with the game server.
       #
       # By default, authenticates via EAccess (eaccess.play.net:7910). If
@@ -55,6 +81,19 @@ module Lich
       # @return [Hash, Array] Authentication data containing connection information
       # @raise [StandardError] Re-raises the last error after all retries (and fallback, if applicable) exhausted
       def self.authenticate(account:, password:, character: nil, game_code: nil, legacy: false, generator: false, auth_provider: :eaccess)
+        # Provider-neutral: EAccess.auth also sets this internally (before
+        # its own protocol exchange even starts, so it's visible mid-attempt
+        # for the eaccess path), but WebLogin.auth does not, and the forced
+        # auth_provider: :web / fallback-to-web paths would otherwise skip
+        # EAccess entirely and leave this unset -- breaking session-file
+        # creation, setup-file resolution, and active-session lifecycle
+        # naming, which all read Account.character.
+        if defined?(Lich::Common::Account)
+          Lich::Common::Account.name = account
+          Lich::Common::Account.game_code = game_code
+          Lich::Common::Account.character = character
+        end
+
         if auth_provider == :web
           unless web_fallback_supported?(character: character, game_code: game_code, legacy: legacy, generator: generator)
             raise ArgumentError, "auth_provider: :web requires character and game_code, and supports neither legacy nor generator"
@@ -88,6 +127,16 @@ module Lich
         end
       end
 
+      # Dispatches to the appropriate EAccess.auth_with_timeout call shape
+      # based on which of character/game_code/legacy/generator were given.
+      #
+      # @param account [String] account name
+      # @param password [String] account password
+      # @param character [String, nil] character name
+      # @param game_code [String, nil] game instance code
+      # @param legacy [Boolean] use the legacy multi-game enumeration mode
+      # @param generator [Boolean] enter the character generator
+      # @return [Hash, Array] see EAccess.auth
       # @api private
       def self.authenticate_via_eaccess(account:, password:, character:, game_code:, legacy:, generator:)
         with_retry do
@@ -114,12 +163,18 @@ module Lich
         end
       end
 
-      # @api private
       # WebLogin only implements a normal single-character login -- no
       # equivalent yet for legacy multi-game enumeration or character
       # generator entry (see docs/web-login-protocol-analysis.md).
+      #
+      # @param character [String, nil] character name
+      # @param game_code [String, nil] game instance code
+      # @param legacy [Boolean] legacy multi-game enumeration mode requested
+      # @param generator [Boolean] character generator entry requested
+      # @return [Boolean] true if this request shape has a WebLogin equivalent
+      # @api private
       def self.web_fallback_supported?(character:, game_code:, legacy:, generator:)
-        character && game_code && !legacy && !generator
+        !!(character && game_code && !legacy && !generator)
       end
 
       # Executes a block with retry logic for transient errors
@@ -153,9 +208,18 @@ module Lich
               raise FatalAuthError, e.message
             end
 
-            # Transient auth error - allow retry
             last_error = e
 
+            if unreachable_error?(e)
+              # The endpoint itself didn't respond -- retrying it again
+              # immediately isn't going to help, and (when a web fallback is
+              # available) every retry here directly delays it. Stop now
+              # instead of exhausting MAX_AUTH_RETRIES.
+              Lich.log "warn: Authentication endpoint unreachable (#{e.class}: #{e.message}); not retrying the same endpoint"
+              break
+            end
+
+            # Transient (but reachable) auth error - allow retry
             if attempt < MAX_AUTH_RETRIES - 1
               delay = AUTH_RETRY_BASE_DELAY * (2**attempt)
               Lich.log "warn: Authentication attempt #{attempt + 1}/#{MAX_AUTH_RETRIES} failed: " \

@@ -283,10 +283,11 @@ module Lich
         end
 
         # Standalone probe of the HTTPS web-login fallback path (see
-        # docs/web-login-protocol-analysis.md). Deliberately NOT wired into
-        # Authenticator/EAccess -- this exercises Web.auth_with_timeout in
-        # isolation so the fallback can be validated against play.net before
-        # any real login path depends on it.
+        # docs/web-login-protocol-analysis.md). Exercises
+        # WebLogin.auth_with_timeout directly against play.net -- independent
+        # of the real login path (Authenticator.authenticate), which also
+        # uses WebLogin, either forced via --auth-provider=web or
+        # automatically as a fallback when EAccess is unreachable.
         def self.handle_web_login_test
           idx = ARGV.index('--web-login-test')
           account = ARGV[idx + 1]
@@ -329,7 +330,11 @@ module Lich
               game_code: game_code
             )
             $stdout.puts 'Success:'
-            login_info.each { |k, v| $stdout.puts "  #{k.upcase}=#{v}" }
+            # KEY is a live, usable one-time game-server credential -- printing
+            # it would leave a real secret in terminal scrollback/log capture
+            # for a probe that never consumes it. Only non-secret connection
+            # metadata is shown.
+            login_info.each { |k, v| $stdout.puts "  #{k.upcase}=#{k == 'key' ? '[scrubbed]' : v}" }
             exit 0
           rescue Lich::Common::Authentication::WebLogin::AuthenticationError => e
             $stdout.puts "error: web login failed: #{e.error_code}"
