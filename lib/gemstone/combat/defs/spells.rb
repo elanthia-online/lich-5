@@ -56,7 +56,9 @@ module Lich
               # the miss: same line is the :miss outcome (defs/outcomes.rb).
               # Without an attack def the SMR before it was orphaned into a
               # targetless :unknown (hunt log 2026-09-07 19:21:44)
-              /The (?<weed>.+?) lashes out at (?<target>[^,]+), but is unable to grasp/
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), but is unable to grasp/,
+              # the other miss form (no SMR printed; hunt log 2026-09-07 21:30)
+              /The (?<weed>.+?) grabs at (?<target>[^,]+), unable to find a purchase\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),

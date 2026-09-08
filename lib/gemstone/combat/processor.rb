@@ -367,6 +367,17 @@ module Lich
             current_target = held[:target] if held[:target] && held[:target][:id]
             parse_state = :seeking_damage
           end
+          # Pre-flares held over from the previous chunk (see the end of this
+          # method): a bow's dispel fires on the NOCK, resolves (SMR, damage,
+          # crit) and the chunk ends at the prompt before "You fire" prints.
+          # Re-seed them so this chunk's swing claims them like any pre-flare
+          # (hunt log 2026-09-07: eight dispels recorded as their own
+          # "dispel" attacks instead of riding the shot).
+          if (held_flares = @held_pre_flares)
+            @held_pre_flares = nil
+            held_flares.each { |f| f[:_held] = true }
+            pending_flares.concat(held_flares)
+          end
 
           lines.each_with_index do |line, index|
             next if line.strip.empty?
@@ -1164,7 +1175,13 @@ module Lich
               # produced by OUR weapon and still belong to our next swing.
               unless current_event[:inbound]
                 unless pending_flares.empty?
-                  claimed, pending_flares = pending_flares.partition { |f| flare_matches_weapon?(f, current_event[:weapon]) }
+                  # A flare held over from the previous chunk names the BOW
+                  # while the shot names the ARROW; it belongs to this swing
+                  # unless a different weapon's flare already proves otherwise.
+                  claimed, pending_flares = pending_flares.partition do |f|
+                    flare_matches_weapon?(f, current_event[:weapon]) ||
+                      (f[:_held] && !flare_contradicts_weapon?(f, current_event))
+                  end
                   current_event[:flares].concat(claimed)
                 end
                 unless pending_resolutions.empty?
@@ -1324,9 +1341,14 @@ module Lich
           end
 
           # Pre-flares no swing claimed (e.g. the chunk ended first). Ones
-          # that resolved damage against a known target still count - wrap
-          # each as its own event so the damage is applied, not dropped.
-          pending_flares.each do |f|
+          # that resolved damage against a known target still count. First
+          # time round they are HELD for one chunk - the swing they belong
+          # to is usually the next chunk's first line (dispel-on-nock). A
+          # flare already held once is wrapped as its own event so the
+          # damage is applied, not dropped.
+          hold, wrap = pending_flares.partition { |f| f[:target_info] && !f[:hits].empty? && !f[:_held] }
+          @held_pre_flares = hold unless hold.empty?
+          wrap.each do |f|
             next unless f[:target_info] && !f[:hits].empty?
 
             # Data stays on the flare (persist_event applies flare damage

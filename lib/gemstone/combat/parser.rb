@@ -208,8 +208,10 @@ module Lich
           # the possessive INSIDE the link ("<a>grim gigas skald's</a> mastery
           # of music"), which registered a second creature named "grim gigas
           # skald's" (hunt log 2026-09-07). Same id, same creature: strip it.
+          # A hidden adjective leaves a doubled space ("halfling  cannibal"),
+          # squeezed for the same reason.
           def link_name(link)
-            link[:name].sub(/'s\z/, '')
+            link[:name].sub(/'s\z/, '').squeeze(' ').strip
           end
 
           # Parse damage amounts using damage definitions

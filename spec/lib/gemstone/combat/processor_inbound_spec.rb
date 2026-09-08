@@ -31,7 +31,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
     # cross-chunk state lives in module ivars; never let one example's
     # death watch or held cast leak into another
-    %i[@death_watch @death_announced @held_cast @deferred_emits].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits].each do |iv|
       described_class.instance_variable_set(iv, nil)
     end
   end
@@ -951,6 +951,55 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                               "The thorny barrier surrounding you blocks the attack from the #{bolded(126564429, 'skald', "gigas skald's")}!"
                                             ])
       expect(events.first[:attacker][:name]).to eq('gigas skald')
+    end
+
+    it 'holds a dispel-on-nock pre-flare across the chunk boundary so the next shot claims it' do
+      nock_chunk = [
+        'You nock a faewood <a exist="127300001" noun="arrow">arrow</a> fletched with plain white feathers in your <a exist="125479289" noun="bow">glowbark long bow</a>.',
+        'You feel drained.',
+        " ** Your <a exist=\"125479289\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}! **",
+        ' <pushBold/>[SMR result: 225 (Open d100: 40, Bonus: 110)]<popBold/>',
+        '   ... 20 points of damage!',
+        "   The #{bolded(123956079, 'mastodon', 'armored battle mastodon')}'s neck bones snap.",
+        '   Head looks precariously balanced now.'
+      ]
+      fire_chunk = [
+        "You fire a faewood arrow at #{masto}!",
+        '  AS: +644 vs DS: +301 with AvD: +20 + d100 roll: +90 = +453',
+        '   ... and hit for 88 points of damage!',
+        "   Quick, powerful slash to the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}'s left knee!"
+      ]
+      expect(described_class.parse_events(nock_chunk)).to eq([])
+      events = described_class.parse_events(fire_chunk)
+      expect(events.map { |e| e[:name] }).to eq([:fire])
+      dispel = events.first[:flares].find { |f| f[:name] == :dispel }
+      expect(dispel).not_to be_nil
+      expect(dispel[:hits].map { |h| h[:damage] }).to eq([20])
+      expect(dispel[:resolutions].map { |r| r[:result] }).to eq([225])
+      expect(events.first[:hits].map { |h| h[:damage] }).to eq([88])
+    end
+
+    it 'wraps a held pre-flare as its own event when no swing follows in the next chunk' do
+      nock_chunk = [
+        " ** Your <a exist=\"125479289\" noun=\"bow\">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the #{bolded(123956079, 'mastodon', 'armored battle mastodon')}! **",
+        '   ... 20 points of damage!'
+      ]
+      expect(described_class.parse_events(nock_chunk)).to eq([])
+      events = described_class.parse_events(['You are now in a defensive stance.'])
+      expect(events.map { |e| [e[:name], e[:target][:id]] }).to eq([[:dispel, 123956079]])
+    end
+
+    it 'names the "grabs at ... unable to find a purchase" tangleweed miss' do
+      golem = bolded(127053510, 'golem', 'a behemothic gorefrost golem')
+      events = described_class.parse_events(["The lashing emerald briar grabs at #{golem}, unable to find a purchase."])
+      expect(events.map { |e| [e[:name], e[:target][:id], e[:outcomes]] }).to eq([[:tangleweed, 127053510, [:miss]]])
+    end
+
+    it 'squeezes the doubled space a hidden adjective leaves in a creature link' do
+      events = described_class.parse_events([
+                                              'The thorny barrier surrounding you blocks the attack from the <pushBold/><a exist="127089942" noun=" cannibal">halfling  cannibal</a><popBold/>!'
+                                            ])
+      expect(events.first[:attacker][:name]).to eq('halfling cannibal')
     end
 
     it 'labels environmental and self-inflicted damage by source' do
