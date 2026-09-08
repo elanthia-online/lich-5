@@ -96,6 +96,61 @@ RSpec.describe Lich::Common::Authentication::EAccess do
     end
   end
 
+  describe '.stage' do
+    before { allow(Lich).to receive(:log) }
+
+    it 'returns the block value on success without logging' do
+      result = described_class.stage('test_stage', probable_cause: 'n/a') { 42 }
+      expect(result).to eq(42)
+      expect(Lich).not_to have_received(:log)
+    end
+
+    it 'records the stage name on the current thread while the block runs' do
+      recorded = nil
+      described_class.stage('test_stage', probable_cause: 'n/a') do
+        recorded = Thread.current[:eaccess_stage]
+      end
+      expect(recorded).to eq('test_stage')
+    end
+
+    it 'logs the stage name, duration, exception, and a fixed probable-cause hint, then re-raises' do
+      expect {
+        described_class.stage('test_stage', probable_cause: 'a fixed hint') { raise StandardError, 'boom' }
+      }.to raise_error(StandardError, 'boom')
+
+      expect(Lich).to have_received(:log)
+        .with(/EAccess stage 'test_stage' failed after [\d.]+s \(StandardError: boom\) -- likely cause: a fixed hint/)
+    end
+
+    it 'derives the probable-cause hint from a callable, passing it the raised error' do
+      classify = ->(e) { "classified: #{e.message}" }
+
+      expect {
+        described_class.stage('test_stage', probable_cause: classify) { raise StandardError, 'boom' }
+      }.to raise_error(StandardError)
+
+      expect(Lich).to have_received(:log).with(/likely cause: classified: boom/)
+    end
+  end
+
+  describe '.classify_a_response_failure' do
+    it 'classifies a known Simutronics rejection token as a normal, expected rejection' do
+      %w[REJECT NORECORD INVALID PASSWORD].each do |token|
+        error = described_class::AuthenticationError.new(token)
+        expect(described_class.classify_a_response_failure(error)).to match(/recognized credential rejection \(#{token}\)/)
+      end
+    end
+
+    it 'classifies an unrecognized error_code as a possible backend divergence' do
+      error = described_class::AuthenticationError.new('')
+      expect(described_class.classify_a_response_failure(error)).to match(/unrecognized\/malformed response/)
+    end
+
+    it 'classifies an error with no error_code at all as a possible backend divergence' do
+      expect(described_class.classify_a_response_failure(StandardError.new('boom'))).to match(/unrecognized\/malformed response/)
+    end
+  end
+
   describe '.socket' do
     # A dropped SYN on 7910 (firewalled, no RST) previously hung on the OS
     # connect timeout (~75s) before TCPSocket.open ever raised. Socket.tcp's
@@ -276,6 +331,18 @@ RSpec.describe Lich::Common::Authentication::EAccess do
       end
     end
 
+    context 'when the K response is empty' do
+      it 'raises MALFORMED_K_RESPONSE at the k_response stage instead of silently hashing garbage password bytes' do
+        allow(Lich).to receive(:log)
+        allow(described_class).to receive(:read).and_return('')
+
+        expect {
+          described_class.auth(account: 'ACCT', password: 'pass', character: 'X', game_code: 'DR')
+        }.to raise_error(described_class::AuthenticationError, /MALFORMED_K_RESPONSE/)
+        expect(Lich).to have_received(:log).with(/EAccess stage 'k_response' failed/)
+      end
+    end
+
     context 'when the server refuses generator entry with L PROBLEM' do
       # Unsubscribed Fallen/Shattered: F is NEW_TO_GAME and the server returns
       # "L\tPROBLEM\t1" because the account is not entitled to create there.
@@ -327,6 +394,31 @@ RSpec.describe Lich::Common::Authentication::EAccess do
       expect {
         described_class.auth_with_timeout(timeout: 1, account: 'ACCT', password: 'pass')
       }.to raise_error(described_class::AuthenticationError, /REJECT/)
+    end
+
+    it 'logs which stage was in flight when the watchdog kills a hung attempt' do
+      allow(Lich).to receive(:log)
+      allow(described_class).to receive(:auth) do
+        Thread.current[:eaccess_stage] = 'k_response'
+        sleep 0.2
+      end
+
+      expect {
+        described_class.auth_with_timeout(timeout: 0.01, account: 'A', password: 'p')
+      }.to raise_error(/timed out authenticating with EAccess/)
+
+      expect(Lich).to have_received(:log).with(/timed out after 0.01s while in stage 'k_response'/)
+    end
+
+    it "reports 'connect (pre-stage)' when the watchdog fires before any stage was entered" do
+      allow(Lich).to receive(:log)
+      allow(described_class).to receive(:auth) { sleep 0.2 }
+
+      expect {
+        described_class.auth_with_timeout(timeout: 0.01, account: 'A', password: 'p')
+      }.to raise_error(/timed out authenticating with EAccess/)
+
+      expect(Lich).to have_received(:log).with(/timed out after 0.01s while in stage 'connect \(pre-stage\)'/)
     end
   end
 end
