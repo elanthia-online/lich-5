@@ -132,6 +132,89 @@ RSpec.describe Lich::Common::Authentication do
     end
   end
 
+  describe '.authenticate web fallback' do
+    let(:auth_result) { { 'key' => 'abc123', 'gamehost' => 'h', 'gameport' => 'p' } }
+
+    before do
+      allow(Lich).to receive(:log)
+      allow(described_class).to receive(:sleep) # no real backoff delay in tests
+    end
+
+    it 'forces WebLogin directly when auth_provider: :web, without touching EAccess' do
+      expect(Lich::Common::Authentication::EAccess).not_to receive(:auth)
+      expect(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).with(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3'
+      ).and_return(auth_result)
+
+      result = described_class.authenticate(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3', auth_provider: :web
+      )
+      expect(result).to eq(auth_result)
+      expect(Lich).to have_received(:log).with(/authenticated via web login \(forced by auth_provider: :web\)/)
+    end
+
+    it 'logs which provider succeeded on a plain EAccess login' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_return(auth_result)
+
+      described_class.authenticate(account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3')
+
+      expect(Lich).to have_received(:log).with('info: authenticated via eaccess')
+    end
+
+    it 'falls back to WebLogin when EAccess raises a non-fatal (transport) error' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'getaddrinfo failed')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_return(auth_result)
+
+      result = described_class.authenticate(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3'
+      )
+      expect(result).to eq(auth_result)
+      expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout).with(
+        account: 'testuser', password: 'testpass', character: 'TestChar', game_code: 'GS3'
+      )
+      expect(Lich).to have_received(:log).with(/authenticated via web login \(fallback from eaccess\)/)
+    end
+
+    it 'does NOT fall back to WebLogin when EAccess rejects credentials (fatal)' do
+      error = Lich::Common::Authentication::EAccess::AuthenticationError.new('PASSWORD')
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(error)
+      expect(Lich::Common::Authentication::WebLogin).not_to receive(:auth_with_timeout)
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'wrong', character: 'TestChar', game_code: 'GS3')
+      }.to raise_error(Lich::Common::Authentication::FatalAuthError, /PASSWORD/)
+    end
+
+    it 'does not fall back for legacy (no WebLogin equivalent)' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      expect(Lich::Common::Authentication::WebLogin).not_to receive(:auth_with_timeout)
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'testpass', legacy: true)
+      }.to raise_error(SocketError)
+    end
+
+    it 'does not fall back for generator entry (no WebLogin equivalent)' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      expect(Lich::Common::Authentication::WebLogin).not_to receive(:auth_with_timeout)
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'testpass', game_code: 'GS3', generator: true)
+      }.to raise_error(SocketError)
+    end
+
+    it 'treats a WebLogin credential rejection as fatal too (LOGIN_FAILED), without exhausting retries first' do
+      allow(Lich::Common::Authentication::EAccess).to receive(:auth).and_raise(SocketError, 'unreachable')
+      web_error = Lich::Common::Authentication::WebLogin::AuthenticationError.new('LOGIN_FAILED')
+      allow(Lich::Common::Authentication::WebLogin).to receive(:auth_with_timeout).and_raise(web_error)
+
+      expect {
+        described_class.authenticate(account: 'testuser', password: 'wrong', character: 'TestChar', game_code: 'GS3')
+      }.to raise_error(Lich::Common::Authentication::FatalAuthError, /LOGIN_FAILED/)
+      expect(Lich::Common::Authentication::WebLogin).to have_received(:auth_with_timeout).once # not retried
+    end
+  end
+
   describe '.with_retry' do
     before do
       allow(Lich).to receive(:log)

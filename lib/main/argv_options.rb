@@ -82,6 +82,8 @@ module Lich
               @argv_options[:gui] = true
             when /^--game=(.+)$/i
               @argv_options[:game] = $1
+            when /^--auth-provider=(eaccess|web)$/i
+              @argv_options[:auth_provider] = $1.downcase.to_sym
             when /^--account=(.+)$/i
               @argv_options[:account] = $1
             when /^--password=(.+)$/i

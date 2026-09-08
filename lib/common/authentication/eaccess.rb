@@ -2,6 +2,7 @@
 
 require "openssl"
 require "socket"
+require_relative "launch_result"
 
 module Lich
   module Common
@@ -172,6 +173,7 @@ module Lich
                                      k, v = kv.split("=")
                                      [k.downcase, v]
                                    }.to_h
+              login_info = LaunchResult.normalize(login_info)
             else
               login_info = Array.new
               for game in response.sub(/^M\t/, '').scan(/[^\t]+\t[^\t\n]+/)
