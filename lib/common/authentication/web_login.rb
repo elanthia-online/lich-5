@@ -52,6 +52,13 @@ module Lich
         # without allowing an unbounded loop on an unexpected response.
         MAX_REDIRECTS = 5
 
+        # Bounds each individual HTTP request's connect and read phases (see
+        # .auth) so a single black-holed request fails in seconds instead of
+        # relying entirely on auth_with_timeout's 30s overall watchdog --
+        # mirrors EAccess::CONNECT_TIMEOUT's rationale.
+        OPEN_TIMEOUT = 5
+        READ_TIMEOUT = 10
+
         # Minimal in-memory cookie jar, private to a single .auth call (a
         # fresh instance per call -- never shared across accounts/sessions).
         # Only tracks name=value pairs; attributes (Path/HttpOnly/Secure/
@@ -183,29 +190,38 @@ module Lich
         #   character, or a server response that doesn't match the confirmed protocol shape
         def self.auth(password:, account:, character:, game_code:)
           instance = instance_for(game_code)
-          http = Net::HTTP.new(BASE_HOST, 443)
-          http.use_ssl = true
-          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
           jar = CookieJar.new
 
-          login(http, jar, account: account, password: password, family: instance[:family])
-          char_code = resolve_char_code(http, jar, instance: instance, character: character)
-          host, port, key = select_character(http, jar, char_code: char_code, instance: instance)
+          # Block form: Net::HTTP.start finishes (closes) the connection in
+          # an ensure regardless of how the block exits, on every path --
+          # previously a bare Net::HTTP.new was never explicitly closed on
+          # success or failure, leaving the socket open until GC finalized
+          # it. open_timeout/read_timeout also bound each individual
+          # request's connect/read phases, so a single black-holed request
+          # fails in seconds instead of relying entirely on
+          # auth_with_timeout's 30s overall watchdog to unstick it --
+          # mirrors EAccess::CONNECT_TIMEOUT's rationale.
+          Net::HTTP.start(BASE_HOST, 443, use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_PEER,
+                                           open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT) do |http|
+            login(http, jar, account: account, password: password, family: instance[:family])
+            char_code = resolve_char_code(http, jar, instance: instance, character: character)
+            host, port, key = select_character(http, jar, char_code: char_code, instance: instance)
 
-          LaunchResult.normalize(
-            "gamehost"     => host,
-            "gameport"     => port,
-            "key"          => key,
-            # Not returned by this flow -- synthesized to match EAccess's
-            # STORM/Wrayth defaults (see class doc). LaunchData.prepare
-            # already overrides GAME/GAMEFILE/FULLGAMENAME per-frontend for
-            # wizard/avalon/saga/suks, so this only needs to be a correct
-            # default for the Stormfront/Wrayth case.
-            "game"         => "STORM",
-            "gamecode"     => game_code,
-            "fullgamename" => "Wrayth",
-            "gamefile"     => "WRAYTH.EXE",
-          )
+            LaunchResult.normalize(
+              "gamehost"     => host,
+              "gameport"     => port,
+              "key"          => key,
+              # Not returned by this flow -- synthesized to match EAccess's
+              # STORM/Wrayth defaults (see class doc). LaunchData.prepare
+              # already overrides GAME/GAMEFILE/FULLGAMENAME per-frontend for
+              # wizard/avalon/saga/suks, so this only needs to be a correct
+              # default for the Stormfront/Wrayth case.
+              "game"         => "STORM",
+              "gamecode"     => game_code,
+              "fullgamename" => "Wrayth",
+              "gamefile"     => "WRAYTH.EXE",
+            )
+          end
         end
 
         # @param timeout [Integer, Float] seconds to wait for the full exchange

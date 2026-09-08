@@ -16,9 +16,7 @@ RSpec.describe Lich::Common::Authentication::WebLogin do
   let(:http) { instance_double(Net::HTTP) }
 
   before do
-    allow(Net::HTTP).to receive(:new).and_return(http)
-    allow(http).to receive(:use_ssl=)
-    allow(http).to receive(:verify_mode=)
+    allow(Net::HTTP).to receive(:start).and_yield(http)
   end
 
   def response_double(code: '302', location: nil, set_cookie: [], body: nil)
