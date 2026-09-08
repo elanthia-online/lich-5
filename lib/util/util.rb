@@ -12,9 +12,13 @@ module Lich
     # Normalizes and performs a lookup for an effect based on the provided value.
     #
     # Depending on the type of `val`, this method will:
-    # - For String: Check if the normalized string matches any key in the effect's hash (case-insensitive, underscores replaced with spaces).
+    # - For String: Check if the normalized string matches any key in the effect's hash (case-insensitive, underscores/colons replaced with spaces).
     # - For Integer: Check if the effect is active for the given integer value.
-    # - For Symbol: Check if the normalized symbol matches any key in the effect's hash (case-insensitive, underscores replaced with spaces).
+    # - For Symbol: Check if the normalized symbol matches any key in the effect's hash (case-insensitive, underscores/colons replaced with spaces).
+    #
+    # Both the lookup value and the effect's hash keys are normalized the same way, so a
+    # punctuation-free lookup (e.g. PSM feat names like "covert_art_escape_artist") still
+    # matches an effect key that contains punctuation (e.g. "Covert Art: Escape Artist").
     #
     # @param effect [String] The name of the effect class (without the "Effects::" prefix).
     # @param val [String, Integer, Symbol] The value to look up; can be a string, integer, or symbol.
@@ -23,13 +27,12 @@ module Lich
     def self.normalize_lookup(effect, val)
       caller_type = "Effects::#{effect}"
       case val
-      when String
-        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.downcase.gsub('_', ' '))
+      when String, Symbol
+        normalize = ->(str) { str.to_s.downcase.gsub(':', ' ').gsub('_', ' ').squeeze(' ').strip }
+        (eval caller_type).to_h.transform_keys { |k| normalize.call(k) }.include?(normalize.call(val))
       when Integer
         #      seek = mappings.fetch(val, nil)
         (eval caller_type).active?(val)
-      when Symbol
-        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.to_s.downcase.gsub('_', ' '))
       else
         fail "invalid lookup case #{val.class.name}"
       end
