@@ -48,6 +48,282 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     script_class.class_variable_set(:@@stopping, [])
   end
 
+  describe 'named-script lifetime execution guards' do
+    def guarded_fixture(source)
+      Dir.mktmpdir('script-lifetime-guard') do |root|
+        FileUtils.mkdir_p(File.join(root, 'custom'))
+        File.write(File.join(root, 'custom', 'guarded.lic'), "# quiet\n#{source}\nDone:\nnil\n")
+        stub_const('SCRIPT_DIR', root)
+        stub_const('LIFETIME_GUARD_EVENTS', Queue.new)
+        yield root
+      end
+    end
+
+    it 'guards the first child command after exact parent adoption, and closes after cleanup' do
+      guarded_fixture(<<~RUBY) do
+        script.at_exit_procs << proc {
+          script.check_execution_guard!(command: 'cleanup')
+          LIFETIME_GUARD_EVENTS << :cleanup
+        }
+        script.check_execution_guard!(command: 'first')
+        LIFETIME_GUARD_EVENTS << :body
+      RUBY
+        parent = build_script('parent')
+        script_class.class_variable_set(:@@running, [parent])
+        parent.thread_group.add(Thread.current)
+        observations = Queue.new
+        policy = lambda do |command|
+          current = script_class.current
+          observations << [command, current, parent.child_scripts.include?(current)] if command
+          true
+        end
+        child = script_class.start_child('guarded', { execution_guard: policy })
+        ThreadGroup::Default.add(Thread.current)
+        expect(child.join(2)).to equal(child)
+        expect(observations.size).to eq(2)
+        expected_observations = [['first', child, true], ['cleanup', child, true]]
+        expect([observations.pop, observations.pop]).to eq(expected_observations)
+        expect([LIFETIME_GUARD_EVENTS.pop, LIFETIME_GUARD_EVENTS.pop]).to eq([:body, :cleanup])
+        expect(child).to be_completed_successfully
+        expect(child).not_to be_execution_guard_active
+        expect(parent.child_scripts).to be_empty
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
+    end
+
+    it 'refuses a first command without executing it or allowing cleanup to bypass cancellation' do
+      guarded_fixture(<<~RUBY) do
+        script.at_exit_procs << proc {
+          script.check_execution_guard!(command: 'cleanup')
+          LIFETIME_GUARD_EVENTS << :cleanup
+        }
+        script.check_execution_guard!(command: 'first')
+        LIFETIME_GUARD_EVENTS << :body
+      RUBY
+        child = script_class.start_child('guarded', { execution_guard: ->(command) { command.nil? } })
+        expect(child.join(2)).to equal(child)
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(child.exit_error).to be_a(Lich::Common::ScriptExecutionGuard::Interrupted)
+        expect(child).not_to be_completed_successfully
+        expect(child).not_to be_execution_guard_active
+      end
+    end
+
+    it 'records a denied startup checkpoint before any script body runs' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        child = script_class.start_child('guarded', { execution_guard: ->(_) { false } })
+        expect(child.join(2)).to equal(child)
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(child.exit_error.reason).to eq(:checkpoint_rejected)
+        expect(child).not_to be_execution_guard_active
+      end
+    end
+
+    ["nil", "exit"].each do |completion|
+      it "does not report success after a rescued denial followed by #{completion}" do
+        guarded_fixture(<<~RUBY) do
+          begin
+            script.check_execution_guard!(command: 'first')
+          rescue Lich::Common::ScriptExecutionGuard::Interrupted
+          end
+          #{completion}
+        RUBY
+          child = script_class.start_child('guarded', execution_guard: ->(command) { command.nil? })
+          expect(child.join(2)).to equal(child)
+          expect(child).not_to be_completed_successfully
+          expect(child.exit_error.reason).to eq(:command_rejected)
+        end
+      end
+    end
+
+    it 'keeps the policy installed in before-dying callbacks after an external kill' do
+      guarded_fixture(<<~RUBY) do
+        script.at_exit_procs << proc {
+          script.check_execution_guard!(command: 'cleanup')
+          LIFETIME_GUARD_EVENTS << :cleanup
+        }
+        LIFETIME_GUARD_EVENTS << :ready
+        Queue.new.pop
+      RUBY
+        allowed = true
+        child = script_class.start_child('guarded', { execution_guard: ->(_) { allowed } })
+        Timeout.timeout(2) { expect(LIFETIME_GUARD_EVENTS.pop).to eq(:ready) }
+        allowed = false
+        child.kill_sync
+        expect(child.join(2)).to equal(child)
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(child.exit_error).to be_a(Lich::Common::ScriptExecutionGuard::Interrupted)
+        expect(child).not_to be_execution_guard_active
+      end
+    end
+
+    %i[start run run_child].each do |method|
+      it "accepts the existing options hash for #{method}" do
+        guarded_fixture("script.check_execution_guard!(command: 'first')\nLIFETIME_GUARD_EVENTS << :body") do
+          child = script_class.public_send(method, 'guarded', { execution_guard: ->(command) { command.nil? } })
+          expect(child.join(2)).to equal(child)
+          expect(LIFETIME_GUARD_EVENTS).to be_empty
+          expect(child.exit_error).to be_a(Lich::Common::ScriptExecutionGuard::Interrupted)
+        end
+      end
+    end
+
+    it 'accepts run_child execution_guard alongside its timeout keyword' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        child = script_class.run_child('guarded', timeout: 2, execution_guard: ->(_) { false })
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(child.exit_error.reason).to eq(:checkpoint_rejected)
+      end
+    end
+
+    it 'rejects invalid policies before creating a worker' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        expect { script_class.start_child('guarded', execution_guard: true) }.to raise_error(ArgumentError, /Proc/)
+        expect(script_class.list).to be_empty
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+      end
+    end
+
+    it 'does not install a policy for ordinary child scripts' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << script.execution_guard_active?') do
+        child = script_class.start_child('guarded')
+        expect(child.join(2)).to equal(child)
+        expect(LIFETIME_GUARD_EVENTS.pop).to be(false)
+        expect(child).to be_completed_successfully
+      end
+    end
+
+    it 'disposes a policy when worker allocation fails before startup' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        constructed = nil
+        allow(script_class).to receive(:new).and_wrap_original do |original, *args|
+          constructed = original.call(*args)
+        end
+        allow(Thread).to receive(:new).and_raise(ThreadError, 'allocation refused')
+        expect { script_class.start_child('guarded', execution_guard: ->(_) { true }) }
+          .to raise_error(ThreadError, /allocation refused/)
+        expect(constructed).not_to be_execution_guard_active
+        expect(script_class.list).to be_empty
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+      end
+    end
+
+    it 'disposes a policy when the parent refuses child adoption' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        constructed = nil
+        allow(script_class).to receive(:new).and_wrap_original do |original, *args|
+          constructed = original.call(*args)
+        end
+        parent = build_script('parent')
+        script_class.class_variable_set(:@@running, [parent])
+        parent.thread_group.add(Thread.current)
+        allow(parent).to receive(:__adopt_child).and_return(false)
+        expect(script_class.start_child('guarded', execution_guard: ->(_) { true })).to be_nil
+        expect(constructed).not_to be_execution_guard_active
+        expect(parent.child_scripts).to be_empty
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
+    end
+
+    {
+      'start'                       => "Script.start('descendant')",
+      'run with force'              => "Script.run('descendant', { force: true })",
+      'start_child with force'      => "Script.start_child('descendant', { force: true })",
+      'run_child'                   => "Script.run_child('descendant')",
+      'subscript'                   => "Script.subscript { LIFETIME_GUARD_EVENTS << :descendant }",
+      'explicit detached SubScript' => "Lich::Common::SubScript.start(parent: nil) { LIFETIME_GUARD_EVENTS << :descendant }",
+      'ExecScript'                  => "Lich::Common::ExecScript.start('LIFETIME_GUARD_EVENTS << :descendant')"
+    }.each do |label, launch|
+      it "rejects #{label} before a descendant worker is created when explicitly restricted" do
+        guarded_fixture("#{launch}\nLIFETIME_GUARD_EVENTS << :after_launch") do |root|
+          File.write(File.join(root, 'custom', 'descendant.lic'), "# quiet\nLIFETIME_GUARD_EVENTS << :descendant\nDone:\nnil\n")
+          existing = build_script('descendant') if label.include?('force')
+          script_class.class_variable_set(:@@running, [existing]) if existing
+          child = script_class.start_child('guarded', execution_guard: ->(_) { true }, allow_script_starts: false)
+          expect(child.join(2)).to equal(child)
+          expect(child.exit_error).to be_a(Lich::Common::ScriptExecutionGuard::Interrupted)
+          expect(child.exit_error.reason).to eq(:script_start_rejected)
+          expect(child).not_to be_completed_successfully
+          expect(LIFETIME_GUARD_EVENTS).to be_empty
+          expect(script_class.list).to eq(existing ? [existing] : [])
+          expect(existing).not_to be_stopping if existing
+        end
+      end
+    end
+
+    it 'applies explicit no-start policy to block scopes before any launch side effects' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        owner = build_script('owner')
+        script_class.class_variable_set(:@@running, [owner])
+        owner.thread_group.add(Thread.current)
+        expect do
+          owner.with_execution_guard(->(_) { true }, allow_script_starts: false) do
+            script_class.start_child('guarded')
+          end
+        end.to raise_error(Lich::Common::ScriptExecutionGuard::Interrupted) { |error| expect(error.reason).to eq(:script_start_rejected) }
+        expect(script_class.list).to eq([owner])
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(owner).not_to be_execution_guard_active
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
+    end
+
+    it 'does not restrict starts in an ordinary execution guard' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        owner = build_script('owner')
+        script_class.class_variable_set(:@@running, [owner])
+        owner.thread_group.add(Thread.current)
+        owner.with_execution_guard(->(_) { true }) do
+          child = script_class.start_child('guarded')
+          expect(child.join(2)).to equal(child)
+          expect(child).to be_completed_successfully
+        end
+        expect(LIFETIME_GUARD_EVENTS.pop).to eq(:body)
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
+    end
+
+    it 'keeps the no-start restriction active during normal teardown callbacks' do
+      guarded_fixture("script.at_exit_procs << proc { Script.start('descendant') }") do |root|
+        File.write(File.join(root, 'custom', 'descendant.lic'), "# quiet\nLIFETIME_GUARD_EVENTS << :descendant\nDone:\nnil\n")
+        child = script_class.start_child('guarded', execution_guard: ->(_) { true }, allow_script_starts: false)
+        expect(child.join(2)).to equal(child)
+        expect(child.exit_error.reason).to eq(:script_start_rejected)
+        expect(child).not_to be_completed_successfully
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+        expect(script_class.list).to be_empty
+      end
+    end
+
+    it 'rejects a callback attempting to start a script during read-only admission' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        owner = build_script('owner')
+        script_class.class_variable_set(:@@running, [owner])
+        owner.thread_group.add(Thread.current)
+        expect do
+          owner.with_execution_guard(->(_) { script_class.start('guarded'); true }, allow_script_starts: false) {}
+        end.to raise_error(Lich::Common::ScriptExecutionGuard::Interrupted) { |error| expect(error.reason).to eq(:script_start_rejected) }
+        expect(script_class.list).to eq([owner])
+        expect(LIFETIME_GUARD_EVENTS).to be_empty
+      ensure
+        ThreadGroup::Default.add(Thread.current)
+      end
+    end
+
+    it 'requires a policy when startup permission is explicitly disabled' do
+      guarded_fixture('LIFETIME_GUARD_EVENTS << :body') do
+        expect { script_class.start_child('guarded', allow_script_starts: false) }
+          .to raise_error(ArgumentError, /requires an execution guard/)
+        expect(script_class.list).to be_empty
+      end
+    end
+  end
+
   describe '.start' do
     it 'constructs and starts an ordinary Ruby script' do
       Dir.mktmpdir('script-start') do |root|
@@ -2588,7 +2864,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
     end
 
     it 'adopts a completed forced generation ahead of an older running generation' do
-      old_generation = instance_double(script_class, :name => 'libutil', :running? => false)
+      old_generation = instance_double(script_class, :name => 'libutil', :running? => false, :has_thread? => false)
       allow(old_generation).to receive(:join) { raise 'older generation should not be joined' }
       new_generation = instance_double(
         script_class,
@@ -2676,6 +2952,7 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       failed_rerun = instance_double(
         script_class,
         :name                    => 'libutil',
+        :has_thread?             => false,
         :exit_error              => error,
         :completed_successfully? => false
       )
