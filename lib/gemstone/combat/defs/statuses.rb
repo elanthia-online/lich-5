@@ -180,9 +180,12 @@ module Lich
 
             # Dispel landing - a spell stripped from the target (round-6:
             # 44k; follows the dispel/sigil_dispel flare + its SMR)
+            # "A white glow rushes away from X." is NOT a dispel: it is
+            # 303 Prayer of Protection ending (effect-list end message
+            # "A white glow rushes away from you."), most often printed as
+            # a creature's buffs drop on death - see spell_losses.rb
             StatusDef.new(:dispelled,
                           [
-                            /A white glow rushes away from (?<target>[^.]+)\./,
                             # dispel-flare landing confirmation (exchange
                             # evidence 2026-09-03: directly follows dispel/
                             # sigil_dispel flares in all captured exchanges;

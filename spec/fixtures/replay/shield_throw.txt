@@ -1,5 +1,5 @@
 ##### shield_throw c697c02779ed78c5
-# expect: attacks=shield_throw | res=smr | flares=none | outcomes=none | dmg=7 | statuses=dispelled/add,prone/add,stunned/add
+# expect: attacks=shield_throw | res=smr | flares=none | outcomes=none | dmg=7 | statuses=prone/add,stunned/add
 Your faewood buckler flashes toward <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>!
 [SMR result: 302 (Open d100: 71, Bonus: 133)]
    ... 100 points of damage!
