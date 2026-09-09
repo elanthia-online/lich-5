@@ -44,6 +44,16 @@ module Lich
         :message        => 'MSG '
       }.freeze
 
+      # Matches a per-run filename: a second-resolution timestamp followed by a
+      # zero-padded, monotonically increasing sequence number (see
+      # {__open_unique_file}) so two runs in the same second still sort
+      # newest-last alongside each other. The suffix is optional only so a
+      # bare-timestamp file predating this format is still recognised by
+      # {__prune}; such a file necessarily predates (and so sorts before) any
+      # same-second suffixed one, which keeps the lexicographic ordering
+      # {__prune} relies on intact.
+      RUN_FILENAME_PATTERN = /\A\d{8}-\d{6}(-\d+)?\.log\z/
+
       # Buffered stream lines are flushed once this many are pending.
       FLUSH_LINE_THRESHOLD = 64
 
@@ -225,8 +235,7 @@ module Lich
         FileUtils.mkdir_p(directory)
         self.class.__send__(:__prune, directory)
 
-        @path = File.join(directory, "#{Time.now.strftime('%Y%m%d-%H%M%S')}.log")
-        @io = File.open(@path, 'a')
+        @path, @io = self.class.__send__(:__open_unique_file, directory)
         __write_header(script)
       end
 
@@ -389,14 +398,14 @@ module Lich
           segment.empty? ? 'unknown' : segment
         end
 
-        # Keeps the newest {retained_runs} logs in +directory+. Filenames encode a
-        # timestamp, so a lexicographic sort is newest-last.
+        # Keeps the newest {retained_runs} logs in +directory+. Filenames sort
+        # newest-last lexicographically -- see {RUN_FILENAME_PATTERN}.
         #
         # @param directory [String]
         # @return [void]
         def __prune(directory)
           limit = retained_runs
-          existing = Dir.children(directory).select { |name| name.match?(/\A\d{8}-\d{6}\.log\z/) }
+          existing = Dir.children(directory).select { |name| name.match?(RUN_FILENAME_PATTERN) }
           return if existing.length < limit
 
           existing.sort.reverse[(limit - 1)..-1].to_a.each do |name|
@@ -407,6 +416,29 @@ module Lich
           nil
         rescue StandardError
           nil
+        end
+
+        # Opens a brand-new file for this run. The timestamp alone only has
+        # second resolution, so a zero-padded sequence number disambiguates a
+        # same-second collision (e.g. closing and immediately reopening a
+        # script's log) instead of silently appending to the prior run's file.
+        # +File::EXCL+ makes the existence check and the create atomic, so two
+        # writers racing to open the same script's log (see {open_for}'s
+        # double-checked locking) cannot both win the same name.
+        #
+        # @param directory [String]
+        # @return [Array(String, File)] the path and the opened handle
+        def __open_unique_file(directory)
+          base = Time.now.strftime('%Y%m%d-%H%M%S')
+          sequence = 0
+          loop do
+            path = File.join(directory, format('%<base>s-%<sequence>03d.log', base: base, sequence: sequence))
+            begin
+              return [path, File.open(path, File::WRONLY | File::CREAT | File::EXCL)]
+            rescue Errno::EEXIST
+              sequence += 1
+            end
+          end
         end
       end
 

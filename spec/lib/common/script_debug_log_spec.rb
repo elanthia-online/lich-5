@@ -73,7 +73,7 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       script.debug_log = true
 
       expect(File.dirname(script.debug_log_path)).to eq(script_dir('bigshot'))
-      expect(File.basename(script.debug_log_path)).to match(/\A\d{8}-\d{6}\.log\z/)
+      expect(File.basename(script.debug_log_path)).to match(/\A\d{8}-\d{6}-\d{3}\.log\z/)
       expect(File.exist?(script.debug_log_path)).to be true
     end
 
@@ -132,6 +132,24 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
 
       expect { script.debug_log = false }.not_to raise_error
       expect(script.debug_log?).to be false
+    end
+
+    it 'creates a distinct file when reopened within the same wall-clock second' do
+      frozen = Time.now
+      allow(Time).to receive(:now).and_return(frozen)
+      script = build_script('bigshot')
+
+      script.debug_log = true
+      first_path = script.debug_log_path
+      script.debug_log = false
+
+      script.debug_log = true
+      second_path = script.debug_log_path
+
+      expect(second_path).not_to eq(first_path)
+      expect(File.read(first_path)).to include('debug log closed')
+      expect(File.read(second_path)).to include('debug log opened')
+      expect(File.read(second_path)).not_to include('debug log closed')
     end
   end
 
@@ -381,6 +399,19 @@ RSpec.describe 'Lich::Common::ScriptDebugLog' do
       build_script('bigshot').debug_log = true
 
       expect(described_class.retained_runs).to eq(Lich::Common::ScriptDebugLog::DEFAULT_RETAINED_RUNS)
+    end
+
+    it 'prunes same-second collision filenames alongside plain ones' do
+      allow(described_class).to receive(:retained_runs).and_return(2)
+      directory = script_dir('bigshot')
+      FileUtils.mkdir_p(directory)
+      %w[20200101-000001.log 20200101-000001-1.log].each do |name|
+        File.write(File.join(directory, name), 'old')
+      end
+
+      build_script('bigshot').debug_log = true
+
+      expect(Dir.children(directory).length).to eq(2)
     end
 
     it 'leaves unrelated files in the directory alone' do
