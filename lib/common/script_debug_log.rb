@@ -148,7 +148,10 @@ module Lich
           nil
         end
 
-        # Closes every open log. Used by specs and process shutdown.
+        # Closes every open log. A bulk safety net for specs (each log is
+        # otherwise closed individually via the {ScriptDeath} handler below,
+        # which normal shutdown always routes through since Lich kills every
+        # running script before exit) -- not called during normal operation.
         #
         # @return [void]
         def close_all
