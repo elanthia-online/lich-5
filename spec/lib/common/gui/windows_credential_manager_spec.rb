@@ -3,6 +3,17 @@
 require_relative '../../../spec_helper'
 require 'os'
 require 'ffi'
+
+# spec_helper.rb's own Lich::Util stub doesn't define install_gem_requirements, and
+# this file may load without spec/login_spec_helper.rb (which does) ever having run.
+# `os`/`ffi` are already required unconditionally above, so this only needs to satisfy
+# the call - it isn't standing in for the real gem-install behavior.
+module Lich
+  module Util
+    def self.install_gem_requirements(*); true; end unless respond_to?(:install_gem_requirements)
+  end
+end
+
 require 'common/gui/windows_credential_manager'
 
 RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
@@ -56,6 +67,35 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
       expect(Lich::Util).not_to receive(:install_gem_requirements)
 
       load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
+    end
+  end
+
+  describe 'module load on Windows' do
+    # Real ffi_lib/attach_function calls try to dlopen advapi32/kernel32, which only
+    # exist on an actual Windows machine. Double them so this exercises the Windows
+    # branch's call sequence - installer, DLL names, function bindings - without
+    # needing real Windows, instead of skipping this branch on CI entirely.
+    it 'installs ffi, loads the Windows DLLs, and binds the expected Credential Manager functions' do
+      ffi_lib_calls = []
+      attach_function_calls = []
+      original_ffi_lib = FFI::Library.instance_method(:ffi_lib)
+      original_attach_function = FFI::Library.instance_method(:attach_function)
+      FFI::Library.define_method(:ffi_lib) { |*libs| ffi_lib_calls << libs }
+      FFI::Library.define_method(:attach_function) do |name, *_args|
+        attach_function_calls << name
+        define_singleton_method(name) { |*_a| nil }
+      end
+
+      allow(OS).to receive(:windows?).and_return(true)
+      expect(Lich::Util).to receive(:install_gem_requirements).with({ 'ffi' => true }).and_call_original
+
+      load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
+
+      expect(ffi_lib_calls).to eq([%w[advapi32 kernel32]])
+      expect(attach_function_calls).to eq(%i[CredReadW CredWriteW CredDeleteW CredFree GetLastError])
+    ensure
+      FFI::Library.define_method(:ffi_lib, original_ffi_lib)
+      FFI::Library.define_method(:attach_function, original_attach_function)
     end
   end
 
