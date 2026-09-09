@@ -626,33 +626,73 @@ module Lich
         #
         # Thread-safe via mutex. Silently absorbs fatal connection errors
         # so callers (scripts) are not killed by a broken server link.
+        # A calling script's execution guard receives an immutable copy of the
+        # exact wire command: puts has already added $cmd_prefix, while direct
+        # _puts callers supply their own prefix. Checks run under the write lock
+        # and are charged once here, never again in puts.
         #
         # @param str [String] the raw command to send upstream
         # @return [true, nil] true when written; nil on connection error
+        # @raise [Common::ScriptExecutionGuard::Interrupted] if the calling
+        #   script's installed policy rejects the write
         def _puts(str)
-          @mutex.synchronize do
-            @socket.puts(str)
+          script = Script.current
+          # A guard callback must not reenter the socket. Let Script's guard
+          # recursion check reject it before Ruby attempts to relock the mutex.
+          if @mutex.owned? && script.respond_to?(:check_execution_guard!) &&
+             script.respond_to?(:execution_guard_active?) && script.execution_guard_active?
+            script.check_execution_guard!(command: str.to_s.dup.freeze)
           end
-          true
-        rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
-          Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
-          nil
+          @mutex.synchronize do
+            # Script.current may wait for a paused script. Resolve it before
+            # taking the shared socket lock so a pause cannot stall other
+            # scripts' writes. Recheck the captured owner's current policy here
+            # after lock contention; do not retain an earlier permission result.
+            guarded = script.respond_to?(:check_execution_guard!) &&
+                      script.respond_to?(:execution_guard_active?) && script.execution_guard_active?
+            command = guarded ? str.to_s.dup.freeze : str
+            script.check_execution_guard!(command: command) if guarded
+            begin
+              @socket.puts(command)
+              true
+            rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
+              Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
+              nil
+            end
+          end
         end
 
+        # Send a prefixed command and record its script-labelled client display.
+        # Guarded callers pass policy checks before a command is displayed.
+        # @param str [String] command without the client prefix
+        # @return [String] upstream display record; not proof of game acceptance
+        # @raise [Common::ScriptExecutionGuard::Interrupted] if the calling
+        #   script's installed policy rejects continuation or dispatch
         def puts(str)
-          if Script.current&.file_name
-            script_name = "#{Script.current.custom? ? 'custom/' : ''}#{Script.current&.name}"
+          script = Script.current
+          if script&.file_name
+            script_name = "#{script.custom? ? 'custom/' : ''}#{script.name}"
           else
-            script_name = Script.current&.name || '(unknown script)'
+            script_name = script&.name || '(unknown script)'
           end
 
-          $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{$cmd_prefix}#{str}\r\n"
+          guarded = script.respond_to?(:check_execution_guard!) &&
+                    script.respond_to?(:execution_guard_active?) && script.execution_guard_active?
+          if guarded
+            # Rejected guarded commands must not appear as sent. Snapshot both
+            # display and wire strings so callback edits cannot change history.
+            str = str.to_s.dup.freeze
+            wire_command = "#{$cmd_prefix}#{str}".freeze
+            _puts wire_command
+          end
 
-          unless Script.current&.silent
+          $_CLIENTBUFFER_.push "[#{script_name}]#{$SEND_CHARACTER}#{guarded ? wire_command : "#{$cmd_prefix}#{str}"}\r\n"
+
+          unless script&.silent
             respond "[#{script_name}]#{$SEND_CHARACTER}#{str}\r\n"
           end
 
-          _puts "#{$cmd_prefix}#{str}"
+          _puts "#{$cmd_prefix}#{str}" unless guarded
           $_LASTUPSTREAM_ = "[#{script_name}]#{$SEND_CHARACTER}#{str}"
         end
 
