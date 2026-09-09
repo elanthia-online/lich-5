@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'os'
 require 'ffi'
 require 'common/gui/windows_credential_manager'
 
@@ -33,6 +34,23 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
       it 'returns false when not on Windows' do
         expect(described_class.available?).to be false
       end
+    end
+  end
+
+  describe 'module load (regression for #1542)' do
+    # The bug this guards against: this file used to call
+    # Lich::Util.install_gem_requirements and extend FFI::Library unconditionally
+    # at load time on every platform. That made loading it depend on some other
+    # file having already loaded ffi/install_gem_requirements first, so a spec-stub
+    # race elsewhere in the suite could make it raise on non-Windows CI. Now the
+    # whole FFI-dependent block is gated behind OS.windows?, so this file must
+    # never touch Lich::Util.install_gem_requirements off Windows, regardless of
+    # whether a real or stubbed version of that method exists.
+    it 'never calls Lich::Util.install_gem_requirements off Windows' do
+      allow(OS).to receive(:windows?).and_return(false)
+      expect(Lich::Util).not_to receive(:install_gem_requirements)
+
+      load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
     end
   end
 
