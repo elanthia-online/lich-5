@@ -1,0 +1,18 @@
+##### divine_fury 78d3c46a85ddb662
+# expect: attacks=wand,divine_fury | res=activation,cs_td | flares=none | outcomes=ward_failed | dmg=4 | statuses=
+# mixed exchange - this def never appears alone in the corpus
+You wave your aranthium wand at <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/>.
+  1d100: 31 + Modifiers: 381 == 412
+Particles of dust and soot rise from the ground at your feet as you release a pulsating, platinum ripple of energy toward <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/>!
+The evanescent shield shrouding <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> fades briefly.
+  CS: +567 - TD: +471 + CvA: +25 + d100: +16 == +137
+  Warding failed!
+  The basalt grotesque is cloaked in a blinding platinum light and assailed for 65 points of damage!
+   ... 10 points of damage!
+   Burst of brilliant energy to head stuns the basalt grotesque for an instant.
+   ... 10 points of damage!
+   Searing bolt of energy strikes the basalt grotesque, scorching a wide swath of flesh!
+   ... 15 points of damage!
+   Minor muscle tearing on the basalt grotesque's left leg.
+Cast Roundtime 1 Second.
+

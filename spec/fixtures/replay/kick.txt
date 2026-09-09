@@ -1,0 +1,42 @@
+##### kick 52e05b214dc6983d
+# expect: attacks=ambush,kick | res=uaf_udf,smr | flares=none | outcomes=none | dmg=1 | statuses=prone/add,stunned/add
+You boldly accost <pushBold/>an <a exist="49780331" noun="hinterboar">immense gold-bristled hinterboar</a><popBold/>, your attack masking your larcenous intent!
+You leap from hiding to strike!
+You attempt to kick <pushBold/>an <a exist="49780331" noun="hinterboar">immense gold-bristled hinterboar</a><popBold/>!
+Your attack is hindered by holding a tapered spiral-wrought aranthium wand!
+You have good positioning against <pushBold/>an <a exist="49780331" noun="hinterboar">immense gold-bristled hinterboar</a><popBold/>.
+  UAF: 746 vs UDF: 575 = 1.297 * MM: 90 + d100: 83 = 199
+  ... and hit for 65 points of damage!
+  Low axe kick drives into side of right knee, shattering the joint!
+  <pushBold/>The <a exist="34859375" noun="hinterboar">gold-bristled hinterboar</a><popBold/> is knocked to the ground!
+  <pushBold/>The <a exist="34859375" noun="hinterboar">gold-bristled hinterboar</a><popBold/> is stunned!
+<pushBold/>The <a exist="34859375" noun="hinterboar">gold-bristled hinterboar</a><popBold/> starts to favor its wounded right leg!
+[SMR result: 210 (Open d100: 42, Bonus: 66)]
+Taking advantage of the scuffle, you roughly pat <pushBold/>the <a exist="34859375" noun="hinterboar">gold-bristled hinterboar</a><popBold/> down for hidden valuables!
+In your hasty search, you don't find anything worth taking.
+Roundtime: 2 sec.
+Roundtime changed to 1 second.
+
+##### kick 6769cb3ec5de7214
+# expect: attacks=ambush,kick | res=ssr,uaf_udf,smr | flares=somnis | outcomes=none | dmg=1 | statuses=unconscious/add,stunned/add
+You boldly accost <pushBold/>a <a exist="13914958" noun="disir">shining winged disir</a><popBold/>, your attack masking your larcenous intent!
+You leap from hiding to strike!
+You attempt to kick <pushBold/>a <a exist="13914958" noun="disir">shining winged disir</a><popBold/>!
+ ** For a split second, the striations of your somnis boots expand into a sinuous pearlescent mist that rushes towards <pushBold/>the <a exist="95618061" noun="disir">winged disir</a><popBold/>, enveloping her entirely! **
+ [SSR result: 111 (Open d100: 17)]
+   <pushBold/>A <a exist="13914958" noun="disir">shining winged disir</a><popBold/> goes limp as she is rendered unconscious!
+Your attack is hindered by holding a tapered spiral-wrought aranthium wand!
+You have good positioning against <pushBold/>a <a exist="13914958" noun="disir">shining winged disir</a><popBold/>.
+  UAF: 706 vs UDF: 811 = 0.870 * MM: 107 + d100: 78 = 171
+  ... and hit for 62 points of damage!
+  Flying kick impacts center of chest!
+  <pushBold/>The <a exist="95618061" noun="disir">winged disir</a><popBold/> is stunned!
+[SMR result: 151 (Open d100: -28, Bonus: 102)]
+Taking advantage of the scuffle, you roughly pat <pushBold/>the <a exist="95618061" noun="disir">winged disir</a><popBold/> down for hidden valuables!
+As you go to loot the disir, you see a gigas artifact fragment lying nearby.  You gingerly collect the relic and stow it away.
+She had a feras falchion tucked away!
+She didn't hide a bluish black razern-bloom well enough!
+Your hasty search scatters <pushBold/>the <a exist="95618061" noun="disir">winged disir</a><popBold/>'s riches to the floor!
+Roundtime: 2 sec.
+Roundtime changed to 1 second.
+

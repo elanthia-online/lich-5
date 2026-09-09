@@ -1,6 +1,6 @@
 {
   schema_version: 3,
-  name: "sheruvian warlock",
+  name: "Sheruvian warlock",
   noun: "",
   url: "https://gswiki.play.net/sheruvian_warlock",
   picture: "",
@@ -8,10 +8,15 @@
   family: "Humanoid",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
   max_hp: 240,
@@ -21,7 +26,7 @@
   areas: [
     {
       name: "The Broken Lands",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -65,13 +70,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: true,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

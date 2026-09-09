@@ -1,38 +1,43 @@
 {
   schema_version: 3,
   name: "firephantom",
-  noun: "",
+  noun: "firephantom",
   url: "https://gswiki.play.net/firephantom",
   picture: "",
   level: 6,
   family: "Elemental",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead",
     "Element-based"
   ],
   bcs: nil,
-  max_hp: 70,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 73,
+  speed: 6,
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Glatoph",
-      rooms: []
+      uids: [35010..35024]
     },
     {
       name: "Vornavian Coast",
-      rooms: []
+      uids: [4202301..4202320]
     },
     {
       name: "The Citadel",
-      rooms: []
+      uids: [2102001..2102006, 2102059..2102069]
     }
   ],
   attack_attributes: {
@@ -61,22 +66,22 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: "-64",
-    ranged: nil,
-    bolt: "-61",
-    udf: nil,
+    melee: (-69..7),
+    ranged: (-75..-61),
+    bolt: (-75..-61),
+    udf: (1..13),
     bar_td: 18,
     cle_td: 18,
     emp_td: 18,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    pal_td: (15..18),
+    ran_td: 18,
+    sor_td: 18,
     wiz_td: nil,
     mje_td: 18,
     mne_td: 18,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: 48,
+    mns_td: 48,
+    mnm_td: 18,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -85,24 +90,37 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: nil
+    other: "ayanad crystal",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "A billowing pillar of searing fire, the firephantom darts about quickly to set aflame any that would stand in its way. Although it has a vaguely humanoid appearance, its form is entirely composed of fire, with the legs a dark red. The darker red slowly gives way to blazing red in the torso and bright yellow in the cranial area. Where the eyes and mouth should be only empty holes exist, floating eerily in the head of this mobile conflagration."
     ],
-    arrival: [],
+    arrival: [
+      "A firephantom just arrived."
+    ],
     flee: [],
-    death: [],
+    death: [
+      "The firephantom slowly settles to the ground and begins to dissipate."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A firephantom swings {weapon} at you!",
+        "A firephantom gestures at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

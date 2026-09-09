@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "vapor hound",
-  noun: "",
+  noun: "hound",
   url: "https://gswiki.play.net/vapor_hound",
   picture: "",
   level: 24,
   family: "Canine",
   type: "Quadruped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
-  max_hp: 210,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 211,
+  speed: 7,
+  height: 3,
+  size: "medium",
   areas: [
     {
       name: "Stormpeak",
-      rooms: []
+      uids: [13150101..13150120]
     }
   ],
   attack_attributes: {
@@ -51,22 +56,22 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (126..141),
+    ranged: (107..131),
+    bolt: (107..131),
+    udf: (141..145),
     bar_td: nil,
     cle_td: 99,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    emp_td: 101,
+    pal_td: (94..97),
+    ran_td: 97,
     sor_td: 104,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 107,
+    mje_td: (106..107),
+    mne_td: (106..107),
     mjs_td: 101,
     mns_td: 101,
-    mnm_td: nil,
+    mnm_td: 97,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
@@ -77,24 +82,52 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye",
+    "a bruised right eye",
+    "a completely severed right foreleg"
+  ],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "vapor hound tail",
-    other: "Essence of air"
+    other: [
+      "Essence of air",
+      "elemental core"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "You have never seen anything quite like a vapor hound, so you are not really sure what to make of it or how dangerous it might be.\n\n;Assess\nThe vapor hound is medium in size and about three feet high in its current state."
-    ],
+    description: [],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
-    search: [],
+    flee: [
+      "A vapor hound pads {direction}, a fog of green vapor puffing from {pronoun} nostrils."
+    ],
+    death: [
+      "The vapor hound lets out one last whimpering sigh of chartreuse vapors and dies."
+    ],
+    decay: [
+      "A vapor hound decays into a compost of fur and fangs."
+    ],
+    search: [
+      "The vapor hound sniffs at the air and growls low in the throat."
+    ],
     spell_prep: [],
+    stun_break: [
+      "A vapor hound howls in rage as {pronoun} shakes off the stun.",
+      "A vapor hound howls silently in rage as {pronoun} shakes off the stun."
+    ],
+    attacks: {
+      attack: [
+        "A vapor hound opens {pronoun} mouth with a yawning sigh, letting out a blast of green vapors at you!"
+      ],
+      bite: [
+        "A vapor hound tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

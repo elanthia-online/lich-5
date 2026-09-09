@@ -119,6 +119,13 @@ RSpec.configure do |config|
         g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
       end
       g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
+      g.class_variable_set(:@@staging_all_contents, {}) if g.class_variable_defined?(:@@staging_all_contents)
+      # Full-container INV LIST refresh flag: reset so a refresh opened (and not
+      # committed/discarded) by one example never leaks into the next, where it
+      # would silently route new_inv into staging instead of the live registry.
+      g.class_variable_set(:@@staging_all_containers, false) if g.class_variable_defined?(:@@staging_all_containers)
+      # Identity-keyed like the production initializer; a plain {} would break buffer scoping.
+      g.class_variable_set(:@@pending_metadata, {}.compare_by_identity) if g.class_variable_defined?(:@@pending_metadata)
     end
 
     # DR mocks from spec_helper - these have reset! defined in the mock (not production)
@@ -1678,11 +1685,20 @@ class DRRoom
   class << self
     attr_accessor :npcs, :pcs, :group_members, :room_objs
 
+    # Clear through the accessors, not the mock's instance variables. When the
+    # production DRRoom (lib/dragonrealms/drinfomon/drroom.rb) is loaded in the
+    # same process it reopens DRRoom and redefines the accessors to read/write
+    # class variables (@@npcs, ...), while this mock's reset! kept assigning the
+    # class-level instance variables (@npcs, ...). The two no longer refer to the
+    # same storage, so reset! silently failed to clear production state and NPCs
+    # leaked between examples (a later cambrinth spec would spin in an endless
+    # retreat loop). Routing through the setters writes to whichever storage the
+    # live accessor uses; respond_to? guards attributes the mock lacks.
     def reset!
-      @npcs = []
-      @pcs = []
-      @group_members = []
-      @room_objs = []
+      %i[npcs pcs group_members room_objs pcs_prone pcs_sitting dead_npcs].each do |attribute|
+        setter = :"#{attribute}="
+        public_send(setter, []) if respond_to?(setter)
+      end
     end
   end
 end unless defined?(DRRoom)
@@ -1708,6 +1724,21 @@ module DRCT
     end
   end
 end unless defined?(DRCT)
+
+# -----------------------------------------------------------------------------
+# DRCM - Money module
+# -----------------------------------------------------------------------------
+module DRCM
+  class << self
+    def ensure_copper_on_hand(_copper, _settings = nil, _hometown = nil)
+      true
+    end
+
+    def town_currency(_hometown)
+      'Kronars'
+    end
+  end
+end unless defined?(DRCM)
 
 # -----------------------------------------------------------------------------
 # DRCMM - Moon mage module
@@ -1768,6 +1799,7 @@ Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSp
 Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
 Lich::DragonRealms::DRExpMonitor = DRExpMonitor unless defined?(Lich::DragonRealms::DRExpMonitor)
 Lich::DragonRealms::DRCA = DRCA unless defined?(Lich::DragonRealms::DRCA)
+Lich::DragonRealms::DRCM = DRCM unless defined?(Lich::DragonRealms::DRCM)
 Lich::DragonRealms::DRCT = DRCT unless defined?(Lich::DragonRealms::DRCT)
 Lich::DragonRealms::DRCMM = DRCMM unless defined?(Lich::DragonRealms::DRCMM)
 Lich::DragonRealms::DRCTH = DRCTH unless defined?(Lich::DragonRealms::DRCTH)

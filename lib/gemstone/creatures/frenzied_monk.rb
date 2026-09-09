@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "frenzied monk",
-  noun: "",
+  noun: "monk",
   url: "https://gswiki.play.net/frenzied_monk",
   picture: "",
   level: 27,
   family: "Humanoid",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: nil,
+  muggable: true,
+  sleepable: false,
   boss: true,
+  boss_type: "pack",
   otherclass: [
     "corporeal undead",
     "Boss"
@@ -19,12 +24,12 @@
   bcs: true,
   max_hp: 220,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Lunule Weald",
-      rooms: []
+      uids: [14016039..14016057, 14016059..14016082]
     }
   ],
   attack_attributes: {
@@ -53,22 +58,22 @@
   defense_attributes: {
     asg: "6",
     immunities: [],
-    melee: 229,
-    ranged: nil,
-    bolt: 210,
-    udf: nil,
+    melee: (174..250),
+    ranged: (140..182),
+    bolt: (140..210),
+    udf: (197..269),
     bar_td: (96..107),
-    cle_td: 114,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: 105,
-    sor_td: 120,
+    cle_td: 104,
+    emp_td: (105..113),
+    pal_td: (86..95),
+    ran_td: (86..105),
+    sor_td: (112..120),
     wiz_td: nil,
     mje_td: nil,
     mne_td: (115..126),
-    mjs_td: nil,
-    mns_td: 115,
-    mnm_td: nil,
+    mjs_td: (105..115),
+    mns_td: (105..115),
+    mnm_td: (75..84),
     defensive_spells: [
       "Prayer of Protection (303)",
       "Prismatic Guard (905)",
@@ -83,24 +88,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "some moss-covered leathers"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glimmering blue essence shardGlimmering blue mote of essence"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "A muddy black cowl obscures the monk's face. Given the burning green eyes and foul stench he exudes, perhaps that is for the best. Tattered black rags cloak his form, while the only marking visible on his ragged clothing is that of a haphazardly stitched crescent moon symbol."
     ],
     arrival: [],
-    flee: [],
+    flee: [
+      "A frenzied monk seethes in pain as he limps {direction}."
+    ],
     death: [],
-    decay: [],
+    decay: [
+      "A frenzied monk dissolves into a foul-smelling miasma.",
+      "A nebulous frenzied monk dissolves into a foul-smelling miasma.",
+      "An unyielding frenzied monk dissolves into a foul-smelling miasma.",
+      "An adroit frenzied monk dissolves into a foul-smelling miasma.",
+      "The frenzied monk seems to collapse in upon {reflexive}, leaving only a withered husk."
+    ],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A frenzied monk utters an arcane incantation."
+    ],
+    stun_break: [
+      "A frenzied monk's eyes flash with a baleful green light as {pronoun} shakes off the stun!"
+    ],
     info: {
       general: [],
       class_tips: {

@@ -800,25 +800,63 @@ def watchhealth(value, theproc = nil, &block)
   }
 end
 
+# Blocks until the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   not already true on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   true, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_until(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or yield
     respond(announce)
   end
-  until yield
+  loop do
+    script&.wait_while_paused!
+    if yield
+      # The predicate may have blocked or yielded control for a while (e.g.
+      # waiting on another thread); re-check pause before honoring its
+      # result and returning to the caller, without re-invoking a
+      # potentially stateful predicate a second time.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
 end
 
+# Blocks while the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   already false on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   false, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_while(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or !yield
     respond(announce)
   end
-  while yield
+  loop do
+    script&.wait_while_paused!
+    unless yield
+      # See wait_until: re-check pause after the predicate resolves, before
+      # returning control, without re-invoking the predicate.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
@@ -958,7 +996,7 @@ def checksaturated
 end
 
 def checkmana(num = nil)
-  Lich.deprecated('checkmana', 'Char.mana')
+  Lich.deprecated('checkmana', 'Char.mana', caller[0])
   if num.nil?
     XMLData.mana
   else
@@ -967,12 +1005,12 @@ def checkmana(num = nil)
 end
 
 def maxmana
-  Lich.deprecated('maxmana', 'Char.maxmana')
+  Lich.deprecated('maxmana', 'Char.maxmana', caller[0])
   XMLData.max_mana
 end
 
 def percentmana(num = nil)
-  Lich.deprecated('percentmana', 'Char.percent_mana')
+  Lich.deprecated('percentmana', 'Char.percent_mana', caller[0])
   if XMLData.max_mana == 0
     percent = 100
   else
@@ -986,7 +1024,7 @@ def percentmana(num = nil)
 end
 
 def checkhealth(num = nil)
-  Lich.deprecated('checkhealth', 'Char.health')
+  Lich.deprecated('checkhealth', 'Char.health', caller[0])
   if num.nil?
     XMLData.health
   else
@@ -995,12 +1033,12 @@ def checkhealth(num = nil)
 end
 
 def maxhealth
-  Lich.deprecated('maxhealth', 'Char.max_health')
+  Lich.deprecated('maxhealth', 'Char.max_health', caller[0])
   XMLData.max_health
 end
 
 def percenthealth(num = nil)
-  Lich.deprecated('percenthealth', 'Char.percent_health')
+  Lich.deprecated('percenthealth', 'Char.percent_health', caller[0])
   if num.nil?
     ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   else
@@ -1009,7 +1047,7 @@ def percenthealth(num = nil)
 end
 
 def checkspirit(num = nil)
-  Lich.deprecated('checkspirit', 'Char.spirit')
+  Lich.deprecated('checkspirit', 'Char.spirit', caller[0])
   if num.nil?
     XMLData.spirit
   else
@@ -1018,12 +1056,12 @@ def checkspirit(num = nil)
 end
 
 def maxspirit
-  Lich.deprecated('maxspirit', 'Char.max_spirit')
+  Lich.deprecated('maxspirit', 'Char.max_spirit', caller[0])
   XMLData.max_spirit
 end
 
 def percentspirit(num = nil)
-  Lich.deprecated('percentspirit', 'Char.percent_spirit')
+  Lich.deprecated('percentspirit', 'Char.percent_spirit', caller[0])
   if num.nil?
     ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   else
@@ -1032,7 +1070,7 @@ def percentspirit(num = nil)
 end
 
 def checkstamina(num = nil)
-  Lich.deprecated('checkstamina', 'Char.stamina')
+  Lich.deprecated('checkstamina', 'Char.stamina', caller[0])
   if num.nil?
     XMLData.stamina
   else
@@ -1041,12 +1079,12 @@ def checkstamina(num = nil)
 end
 
 def maxstamina()
-  Lich.deprecated('maxstamina', 'Char.max_stamina')
+  Lich.deprecated('maxstamina', 'Char.max_stamina', caller[0])
   XMLData.max_stamina
 end
 
 def percentstamina(num = nil)
-  Lich.deprecated('percentstamina', 'Char.percent_stamina')
+  Lich.deprecated('percentstamina', 'Char.percent_stamina', caller[0])
   if XMLData.max_stamina == 0
     percent = 100
   else
@@ -1077,7 +1115,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(num = nil)
-  Lich.deprecated('checkstance', 'Char.stance')
+  Lich.deprecated('checkstance', 'Char.stance', caller[0])
   if num.nil?
     XMLData.stance_text
   elsif (num.is_a?(String)) and (num.to_i == 0)
@@ -1106,7 +1144,7 @@ def checkstance(num = nil)
 end
 
 def percentstance(num = nil)
-  Lich.deprecated('percentstance', 'Char.percent_stance')
+  Lich.deprecated('percentstance', 'Char.percent_stance', caller[0])
   if num.nil?
     XMLData.stance_value
   else
@@ -1115,7 +1153,7 @@ def percentstance(num = nil)
 end
 
 def checkencumbrance(string = nil)
-  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance', caller[0])
   if string.nil?
     XMLData.encumbrance_text
   elsif (string.is_a?(Integer)) or (string =~ /^[0-9]+$/ and (string = string.to_i))
@@ -1131,7 +1169,7 @@ def checkencumbrance(string = nil)
 end
 
 def percentencumbrance(num = nil)
-  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance', caller[0])
   if num.nil?
     XMLData.encumbrance_value
   else

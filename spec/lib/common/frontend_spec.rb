@@ -32,6 +32,34 @@ FE = Lich::Common::Frontend unless defined?(FE)
 RSpec.describe Lich::Common::Frontend do
   let(:frontend) { Lich::Common::Frontend }
 
+  describe 'built-in definition files' do
+    it 'loads the complete catalog in its stable order' do
+      expect(frontend::BUILT_IN_DEFINITION_FILES).to eq(
+        [
+          %w[stormfront wrayth],
+          %w[profanity profanity],
+          %w[genie genie],
+          %w[frostbite frostbite],
+          %w[suks suks],
+          %w[wizard wizard],
+          %w[avalon avalon],
+          %w[saga saga]
+        ]
+      )
+      expect(frontend.built_in_frontends).to eq(
+        %w[stormfront profanity genie frostbite suks wizard avalon saga]
+      )
+    end
+
+    it 'keeps the ordered legacy capability constants unchanged' do
+      expect(frontend::XML_FRONTENDS).to eq(%w[stormfront profanity genie frostbite saga wrayth])
+      expect(frontend::GSL_FRONTENDS).to eq(%w[wizard avalon])
+      expect(frontend::STREAM_FRONTENDS).to eq(%w[stormfront profanity saga wrayth])
+      expect(frontend::MONO_FRONTENDS).to eq(%w[stormfront genie saga wrayth])
+      expect(frontend::SENTINEL_FRONTENDS).to eq(%w[saga])
+    end
+  end
+
   describe '.definition_for' do
     it 'returns immutable catalog metadata for Saga' do
       definition = frontend.definition_for(:saga)
@@ -185,7 +213,13 @@ RSpec.describe Lich::Common::Frontend do
     it 'exposes the first-tier GUI frontend catalog from one registry' do
       ids = frontend.definitions(gui_selectable: true).map { |definition| definition[:id] }
 
-      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga')
+      expect(ids).to contain_exactly('stormfront', 'wizard', 'avalon', 'saga', 'profanity')
+    end
+
+    it 'keeps historical Wrayth and Wizard GUI choices available on macOS' do
+      expect(frontend.definition_for('stormfront').dig(:metadata, :gui_platforms)).to include(:darwin)
+      expect(frontend.definition_for('wizard').dig(:metadata, :gui_platforms)).to include(:darwin)
+      expect(frontend.definition_for('avalon').dig(:metadata, :gui_platforms)).to eq([:darwin])
     end
   end
 
@@ -810,6 +844,16 @@ RSpec.describe Lich::Common::Frontend do
       # Both should return nil (no metadata set) but should not raise
       expect(frontend.metadata_for('WRAYTH', :client_string)).to be_nil
       expect(frontend.metadata_for('Wrayth', :client_string)).to be_nil
+    end
+
+    it 'does not expose mutable registry-owned metadata' do
+      launch_plans = frontend.metadata_for('saga', :launch_plans)
+
+      expect(launch_plans).to be_frozen
+      expect(launch_plans.fetch(:darwin).fetch(:arguments)).to be_frozen
+      expect do
+        launch_plans.fetch(:darwin).fetch(:arguments) << '--mutated'
+      end.to raise_error(FrozenError)
     end
   end
 

@@ -1,0 +1,12 @@
+##### thrash e8799a846ee9ae5b
+# expect: attacks=thrash | res=smr,as_ds | flares=none | outcomes=miss | dmg=1 | statuses=
+<a exist="-76912630" noun="Trog">Trog</a> rushes <pushBold/>an <a exist="49780331" noun="hinterboar">immense gold-bristled hinterboar</a><popBold/>, raising his xazkruvrixis katana high to deliver a sound thrashing!
+[SMR result: 145 (Open d100: 71, Bonus: 30)]
+<a exist="-76912630" noun="Trog">Trog</a> brings his katana around in a tight arc to batter <pushBold/>an <a exist="49780331" noun="hinterboar">immense gold-bristled hinterboar</a><popBold/> into submission!
+  AS: +709 vs DS: +649 with AvD: +32 + d100 roll: +77 = +169
+   ... and hits for 33 points of damage!
+   Banged the gold-bristled hinterboar's right shin.
+   That'll raise a good welt.
+  AS: +662 vs DS: +632 with AvD: +34 + d100 roll: +4 = +68
+   A clean miss.
+

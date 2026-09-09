@@ -1,34 +1,35 @@
 {
   schema_version: 3,
   name: "spiked cavern urchin",
-  noun: "",
+  noun: "urchin",
   url: "https://gswiki.play.net/spiked_cavern_urchin",
   picture: "",
   level: 17,
   family: "Urchin",
   type: "Globoid",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: true,
+  boss_type: "pack",
   otherclass: [
     "Living",
     "Boss"
   ],
   bcs: true,
   max_hp: 160,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 11,
+  height: 1,
+  size: "tiny",
   areas: [
     {
-      name: "Thurfel's Keep",
-      rooms: []
-    },
-    {
-      name: "Hornwort Cavern",
-      rooms: []
+      name: "Thurfel's Island",
+      uids: [7532001..7532033]
     }
   ],
   attack_attributes: {
@@ -41,10 +42,12 @@
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
-    special_abilities: [
+    maneuvers: [
       {
         name: "Barbed spines"
+      },
+      {
+        name: "Spine Barrage"
       }
     ],
     special_notes: []
@@ -52,22 +55,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 92,
-    ranged: nil,
-    bolt: nil,
-    udf: 125,
+    melee: (62..100),
+    ranged: (62..80),
+    bolt: (62..80),
+    udf: (105..139),
     bar_td: 51,
-    cle_td: 51,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 54,
+    cle_td: (51..57),
+    emp_td: (51..59),
+    pal_td: (45..54),
+    ran_td: (45..54),
+    sor_td: (48..57),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 51,
-    mjs_td: nil,
-    mns_td: 51,
-    mnm_td: nil,
+    mje_td: (51..54),
+    mne_td: (51..54),
+    mjs_td: (48..57),
+    mns_td: (48..57),
+    mnm_td: (51..54),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -76,13 +79,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a long fiery red spine",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -91,9 +97,21 @@
     arrival: [],
     flee: [],
     death: [],
-    decay: [],
+    decay: [
+      "Spines litter the ground as the cavern urchin crumbles into a pile of splinters and skin.",
+      "A spiked cavern urchin simply withers away, bits of grayish dust scattered about in its wake."
+    ],
     search: [],
     spell_prep: [],
+    stun_break: [
+      "A spiked cavern urchin clatters {pronoun} spines together in a feeble attempt to shake off the stun."
+    ],
+    attacks: {
+      attack: [
+        "A spiked cavern urchin thrusts {pronoun} barbed spines at you!",
+        "A spiked cavern urchin launches a barrage of spines, the barbs exploding outward at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

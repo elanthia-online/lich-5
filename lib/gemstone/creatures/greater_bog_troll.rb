@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "greater bog troll",
-  noun: "",
+  noun: "troll",
   url: "https://gswiki.play.net/greater_bog_troll",
   picture: "",
   level: 39,
   family: "Troll",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: true,
   boss: true,
+  boss_type: "miniboss",
   otherclass: [
     "Living",
     "Boss"
@@ -19,12 +24,16 @@
   bcs: true,
   max_hp: 400,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 11,
+  size: "large",
   areas: [
     {
       name: "Miasmal Forest",
-      rooms: []
+      uids: [5003039..5003050, 5004035..5004044, 5004049..5004053]
+    },
+    {
+      name: "unmapped",
+      uids: [5004045..5004048, 5004054..5004054]
     }
   ],
   attack_attributes: {
@@ -54,22 +63,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: 163,
+    melee: (113..166),
     ranged: 97,
-    bolt: (150..163),
-    udf: nil,
+    bolt: (97..195),
+    udf: (266..286),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: 102,
+    cle_td: 121,
+    emp_td: 121,
+    pal_td: (114..117),
+    ran_td: (102..117),
     sor_td: 130,
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 135,
-    mjs_td: 121,
-    mns_td: 121,
-    mnm_td: nil,
+    mje_td: (135..136),
+    mne_td: (135..136),
+    mjs_td: (121..158),
+    mns_td: (121..158),
+    mnm_td: (127..134),
     defensive_spells: [
       "Mobility (618)",
       "Natural Colors (601)",
@@ -87,24 +96,50 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a rusted peat axe",
+    "some weed-covered brigandine"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a cracked troll jawbone",
-    other: nil
+    other: [
+      "small troll tooth",
+      "large troll tooth",
+      "glowing violet mote of essence"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "Similar to its smaller cousin, the bog troll, the greater bog troll's skin is a dark yellow mottled with patches of brownish green. However, where the bog troll is hairless, the greater bog troll displays a thick mane of oily, dark brown hair that flows both down the center of its back and across its shoulders. Its head is barren, and bulbous green eyes sit nearly atop the flat cranium. Sharp claws extend from its oversized, webbed hands and feet, and long, jagged teeth glint menacingly within its wide mouth."
     ],
-    arrival: [],
+    arrival: [
+      "A greater bog troll just arrived!",
+      "A belligerent greater bog troll just arrived!",
+      "A greater bog troll charges in, breath steaming from {pronoun} nose and mouth!"
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The greater bog troll's body goes rigid and {pronoun} eyes roll back into {pronoun} head as {pronoun} dies.",
+      "The greater bog troll's body goes rigid and collapses to the ground, dead."
+    ],
+    decay: [
+      "A greater bog troll decays into compost.",
+      "A tenebrous greater bog troll decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A greater bog troll swings {weapon} at you!",
+        "A greater bog troll grunts, pointing at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

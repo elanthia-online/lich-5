@@ -1,0 +1,6 @@
+##### weapon_cast 47a49e78552be40a
+# expect: attacks=weapon_cast | res=none | flares=none | outcomes=none | dmg=0 | statuses=
+As you attempt to strike with your Excalibur, it sends a surge of power through you that quickly leaps out at <pushBold/>the <a exist="49036992" noun="ghast">ghast</a><popBold/>!
+You summon forth additional strength to aid your spell in penetrating the defenses surrounding the tatterdemalion <pushBold/><a exist="49036992" noun="ghast">ghast</a><popBold/>.
+Calling upon your patron to aid your cause, a brilliant aura begins to radiate from you!
+

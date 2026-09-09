@@ -1,27 +1,32 @@
 {
   schema_version: 3,
   name: "enormous mosquito",
-  noun: "",
+  noun: "mosquito",
   url: "https://gswiki.play.net/enormous_mosquito",
   picture: "",
   level: 22,
   family: "",
   type: "Insect",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: true,
-  max_hp: 200,
-  speed: nil,
+  max_hp: 214,
+  speed: 10,
   height: nil,
   size: "",
   areas: [
     {
       name: "Monsoon Jungle",
-      rooms: []
+      uids: [3218001..3218046, 3218049..3218054]
     }
   ],
   attack_attributes: {
@@ -29,15 +34,21 @@
       {
         name: "Dive",
         as: 216
+      },
+      {
+        name: "(quarantine-recovered)",
+        as: 216
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
-    special_abilities: [
+    maneuvers: [
       {
         name: "Blood drain"
+      },
+      {
+        name: "Dive"
       }
     ],
     special_notes: []
@@ -45,18 +56,18 @@
   defense_attributes: {
     asg: "8N",
     immunities: [],
-    melee: 140,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: (108..140),
+    ranged: (103..112),
+    bolt: (103..112),
+    udf: (262..300),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
     pal_td: nil,
-    ran_td: nil,
+    ran_td: (63..66),
     sor_td: 70,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 72,
     mne_td: 72,
     mjs_td: nil,
     mns_td: 68,
@@ -69,13 +80,19 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a blinded left eye",
+    "a possible mild concussion"
+  ],
   treasure: {
-    coins: false,
+    coins: true,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "diaphanous mosquito wing",
-    other: "No"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -84,9 +101,16 @@
     arrival: [],
     flee: [],
     death: [],
-    decay: [],
+    decay: [
+      "Growing brittle, the enormous mosquito's body suddenly caves in and turns to dust."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "An enormous mosquito suddenly dives at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

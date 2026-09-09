@@ -126,6 +126,37 @@ module Lich
       @@staging_fam_pcs       = nil
       @@staging_contents      = {}
 
+      # Dedicated buffer for a full-replacement container refresh (DR +INV LIST+),
+      # kept separate from +@@staging_contents+ so the whole-buffer swap/discard of
+      # a full refresh can never clobber an unrelated per-container
+      # +begin_container+ refresh that happens to be in flight at the same time.
+      @@staging_all_contents   = {}
+
+      # True while a full-replacement container refresh (DR +INV LIST+) is open.
+      # While set, +new_inv+ routes container placements not already owned by an
+      # open per-container refresh into +@@staging_all_contents+ instead of the
+      # live +@@contents+, so an interrupted listing never mutates the published
+      # model. See {.begin_all_containers}.
+      @@staging_all_containers = false
+
+      # Deferred +before_name+/+after_name+ refreshes for objects observed while a
+      # staged registry refresh is open. +find_or_create+ returns the shared,
+      # still-published instance, so mutating its metadata mid-refresh would leak
+      # an uncommitted value to readers and could not be rolled back if the refresh
+      # is discarded. Instead the change is recorded here and applied by the
+      # matching +commit_*+ (see {.apply_pending_metadata}), or dropped by every
+      # discard path (+abort_*+, {.delete_container}, {.clear_all_containers}, an
+      # +begin_inv+/+begin_container+ restart, {.discard_inv_refresh}, and
+      # {.discard_staged_refreshes}).
+      #
+      # Scoped PER staging buffer: the outer hash is keyed by the buffer Array's
+      # identity (+compare_by_identity+ -- two empty Arrays are +==+, so content
+      # keying would collide), the inner by GameObj identity. Buffer scoping is
+      # what keeps two concurrently-open refreshes of the same object from
+      # overwriting each other's pending values and lets a discard drop exactly
+      # its own buffer's entries and no others.
+      @@pending_metadata = {}.compare_by_identity
+
       # ---------------------------------------------------------------------------
       # Instance interface
       # ---------------------------------------------------------------------------
@@ -215,7 +246,16 @@ module Lich
       #
       # @return [String, nil]
       def type
-        GameObj.load_data if @@type_data.empty?
+        # +load_data+ nils +@@type_data+ (not +{}+) when the data file is missing
+        # or corrupt, and returns false rather than raising. Only attempt the load
+        # from the pristine +{}+ state (a nil is falsy under +&&+, so a failed load
+        # isn't retried on every call -- it echoes its error once, then degrades),
+        # and guard the lookup so a broken +gameobj-data.xml+ yields +nil+ instead
+        # of crashing every +#type+ caller -- including every Inventory::Item,
+        # which now exposes this as public API.
+        GameObj.load_data if @@type_data && @@type_data.empty?
+        return nil if @@type_data.nil?
+
         cache_key = "#{@noun}|#{@name}|#{full_name}"
         return @@type_cache[cache_key] if @@type_cache.key?(cache_key)
 
@@ -235,7 +275,11 @@ module Lich
       #
       # @return [String, nil]
       def sellable
-        GameObj.load_data if @@sellable_data.empty?
+        # See +#type+: degrade to +nil+ (loudly once, then quietly) when the data
+        # file is missing/corrupt rather than raising on +nil.empty?+/+nil.keys+.
+        GameObj.load_data if @@sellable_data && @@sellable_data.empty?
+        return nil if @@sellable_data.nil?
+
         matches = matching_data_keys(@@sellable_data)
         matches.empty? ? nil : matches.join(',')
       end
@@ -342,12 +386,115 @@ module Lich
       # @param after     [String, nil]
       # @return [GameObj]
       def self.new_inv(id, noun, name, container = nil, before = nil, after = nil)
+        # A write is "staged" when it targets an open staging buffer rather than
+        # the live registry. Metadata refreshes are then deferred into that same
+        # buffer so an uncommitted (or later discarded) value is never published
+        # on the shared instance -- see +@@pending_metadata+.
         if container
-          target = @@staging_contents[container] || (@@contents[container] ||= [])
-          find_or_create(target, id, noun, name, before, after)
+          staged =
+            if @@staging_contents.key?(container)
+              # An explicit per-container refresh (+begin_container+, e.g. a
+              # +clearContainer+ fill) already owns this container -- stage into
+              # it even during a full INV LIST refresh so the two paths never
+              # share a buffer.
+              @@staging_contents[container]
+            elsif @@staging_all_containers
+              # Full INV LIST refresh: stage every other container into the
+              # dedicated buffer so nothing touches the live model until the
+              # listing commits cleanly.
+              @@staging_all_contents[container] ||= []
+            end
+          # +staged+ is the target staging buffer (either kind) or nil for a live
+          # write; either way it is both the placement target and the deferral
+          # scope, so an uncommitted metadata change lands in that same buffer.
+          target = staged || (@@contents[container] ||= [])
+          find_or_create(target, id, noun, name, before, after, defer_to: staged)
         else
-          find_or_create(@@staging_inv || @@inv, id, noun, name, before, after)
+          find_or_create(@@staging_inv || @@inv, id, noun, name, before, after, defer_to: @@staging_inv)
         end
+      end
+
+      # Upserts an inventory item by id for a PARTIAL (filtered) scrape -- e.g.
+      # +INV SEARCH <word>+ or +INV <category> full+, which list only the
+      # matching items and so must not clear unrelated inventory the way a full
+      # +INV LIST+ refresh does. Any prior placement of +id+ is removed from
+      # +@@inv+ and every +@@contents+ list first, so an item that moved
+      # containers (or whose name changed, e.g. gained "(closed)") is refreshed
+      # in exactly one place with neither a duplicate nor a stale copy left
+      # behind. It is then (re)placed via {.new_inv}: worn (+container+ nil) into
+      # +@@inv+, otherwise into +@@contents[container]+.
+      #
+      # Because a filtered scrape only reports matches, it can add or relocate
+      # items but can never prove an item is gone -- removals are left to the
+      # next full refresh.
+      #
+      # The removal runs under +@@index_mutex+ (the same lock +find_or_create+
+      # holds for registry writes) so it cannot race the off-thread
+      # +prune_index!+ sweep that walks +@@inv+/+@@contents+. It is a separate
+      # acquisition from the +new_inv+ that follows -- Ruby's Mutex is not
+      # reentrant, and +new_inv+ takes the lock itself -- so remove and re-add
+      # are not one atomic step; that is fine because the parser thread is the
+      # sole writer and a reader can at worst momentarily not see the item.
+      #
+      # @param id        [Integer, String]
+      # @param noun      [String, nil]
+      # @param name      [String, nil]
+      # @param container [String, nil]
+      # @param before    [String, nil]
+      # @param after     [String, nil]
+      # @return [GameObj]
+      def self.upsert_inv(id, noun, name, container = nil, before = nil, after = nil)
+        str_id = id.is_a?(Integer) ? id.to_s : id
+        remove_inv_item(str_id)
+        obj = new_inv(str_id, noun, name, container, before, after)
+
+        # A name change keys a NEW index entry ("id|noun|newname"); the prior
+        # "id|noun|oldname" instance was just pulled from every registry by
+        # remove_inv_item, but its index key lingers until the TTL prune. On the
+        # cold scrape path, evict any index entry for this id whose instance is no
+        # longer live so a frequently-renamed item (e.g. a pouch toggling
+        # "(closed)") can't accumulate orphaned variants between sweeps. Guarded by
+        # object identity via +live_registry_objects+ (computed outside the lock,
+        # matching +sweep_stale!+) so a variant still held anywhere -- the instance
+        # just re-added, or a hand slot -- is kept.
+        live = live_registry_objects
+        @@index_mutex.synchronize do
+          @@index.delete_if { |_key, (indexed, _ts)| indexed.id == str_id && !live.include?(indexed) }
+        end
+
+        obj
+      end
+
+      # Removes every placement of +id+ from the worn inventory (+@@inv+) and
+      # from all container contents (+@@contents+). Used as the removal half of
+      # {.upsert_inv} and to reconcile the model when an item leaves inventory
+      # for a hand (a held item is neither worn nor in a container). Leaves
+      # +@@right_hand+/+@@left_hand+ and the shared identity index untouched.
+      #
+      # A +nil+ or empty id is an explicit no-op: empty hands stream a hand tag
+      # with no +exist+ id, so this is called constantly with +nil+, and matching
+      # +obj.id == nil+ would wrongly wipe any (future) nil-id entry -- and also
+      # scan the whole inventory for nothing. The +reject!+ runs under
+      # +@@index_mutex+ (the lock +find_or_create+ holds for registry writes) so
+      # it cannot race the off-thread prune sweep that walks these registries.
+      #
+      # @param id [Integer, String, nil]
+      # @return [void]
+      def self.remove_inv_item(id)
+        str_id = id.is_a?(Integer) ? id.to_s : id
+        return if str_id.nil? || str_id.empty?
+
+        @@index_mutex.synchronize do
+          @@inv.reject! { |obj| obj.id == str_id }
+          @@contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
+          # Scrub any in-flight staging buffers too: a hand pickup during a full
+          # INV LIST refresh must not be resurrected in its old container when the
+          # staged listing commits.
+          @@staging_inv&.reject! { |obj| obj.id == str_id }
+          @@staging_contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
+          @@staging_all_contents.each_value { |list| list.reject! { |obj| obj.id == str_id } }
+        end
+        nil
       end
 
       # Creates and registers a new reserve slot item.
@@ -455,8 +602,9 @@ module Lich
       # based garbage collection.
       #
       # When a matching entry is found, +before_name+ and +after_name+ are
-      # backfilled if they were previously +nil+ and the incoming values are
-      # non-nil. Existing non-nil values are never overwritten.
+      # refreshed from a differing non-nil incoming value; a nil observation
+      # never clobbers a known value. (Hand slots pass no before/after, so in
+      # practice this path only ever backfills.)
       #
       # @example Replace a bare GameObj.new call
       #   # Before:
@@ -468,8 +616,8 @@ module Lich
       # @param id     [Integer, String]
       # @param noun   [String, nil]
       # @param name   [String, nil]
-      # @param before [String, nil]   backfills +before_name+ if previously unset
-      # @param after  [String, nil]   backfills +after_name+ if previously unset
+      # @param before [String, nil]   sets +before_name+ from a differing non-nil observation
+      # @param after  [String, nil]   sets +after_name+ from a differing non-nil observation
       # @return [GameObj]
       # @api private Internal identity-index plumbing. No compatibility guarantee.
       def self.index_or_create(id, noun, name, before = nil, after = nil)
@@ -481,8 +629,13 @@ module Lich
           if (entry = @@index[key])
             existing, _ts        = entry
             @@index[key]         = [existing, now]
-            existing.before_name = before if existing.before_name.nil? && !before.nil?
-            existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+            # Refresh command metadata whenever a differing non-nil observation
+            # arrives -- e.g. a name-preserving move updates +before_name+ from
+            # "get #id in #old" to "get #id in #new". A nil observation never
+            # clobbers a known value (a sighting from a source that carries no
+            # command, such as the hand slot, must not blank it).
+            existing.before_name = before if !before.nil? && existing.before_name != before
+            existing.after_name  = after  if !after.nil?  && existing.after_name  != after
             existing
           else
             new_obj      = GameObj.new(id, noun, name, before, after)
@@ -532,8 +685,15 @@ module Lich
       # @return [Array<GameObj>, nil]
       def self.fam_pcs     = registry_or_nil(@@fam_pcs)
 
+      # Returns a snapshot of all container contents: the outer hash and every
+      # inner array are duplicated, so a caller iterating +containers[id]+ is not
+      # affected by concurrent in-place mutation of the live registry (e.g. a hand
+      # pickup's +remove_inv_item+ +reject!+, or +new_inv+'s +push+). Matches the
+      # dup-on-read contract of the other registry accessors and instance
+      # +#contents+. The GameObj elements themselves are shared, not copied.
+      #
       # @return [Hash{String => Array<GameObj>}]
-      def self.containers  = @@contents.dup
+      def self.containers  = @@contents.transform_values(&:dup)
 
       # ---------------------------------------------------------------------------
       # Class-level clear methods
@@ -575,7 +735,11 @@ module Lich
       #
       # @return [void]
       def self.clear_all_containers
+        @@staging_contents.each_value { |staged| drop_pending_metadata(staged) }
+        @@staging_all_contents.each_value { |staged| drop_pending_metadata(staged) }
         @@staging_contents.clear
+        @@staging_all_contents.clear
+        @@staging_all_containers = false
         @@contents.clear
       end
 
@@ -596,8 +760,33 @@ module Lich
       # @param container_id [String]
       # @return [GameObj, nil]
       def self.delete_container(container_id)
-        @@staging_contents.delete(container_id)
+        staged = @@staging_contents.delete(container_id)
+        drop_pending_metadata(staged) if staged
         @@contents.delete(container_id)
+      end
+
+      # Whether a top-level inventory (+@@inv+) staged refresh is currently open.
+      # Lets a second writer (e.g. the {Lich::Common::Inventory} read-model) skip
+      # its own +begin_inv+/+commit_inv+ cycle so it cannot prematurely publish or
+      # truncate an in-flight classic +@@inv+ refresh.
+      #
+      # @return [Boolean]
+      def self.inv_refresh_open? = !@@staging_inv.nil?
+
+      # Whether a staged refresh for one container's contents is currently open.
+      # Same purpose as {.inv_refresh_open?}, scoped to a single container id.
+      #
+      # A full INV LIST refresh ({.begin_all_containers}) owns *every* container
+      # the instant it opens, but only allocates a per-container buffer when an
+      # item line for that container arrives. A container not yet seen in the
+      # listing therefore has no key in +@@staging_contents+ and would look
+      # unowned -- letting a second writer publish into or delete it mid-refresh.
+      # Report a full refresh as owning all containers so those writers defer.
+      #
+      # @param container_id [String]
+      # @return [Boolean]
+      def self.container_refresh_open?(container_id)
+        @@staging_all_containers || @@staging_contents.key?(container_id)
       end
 
       # ---------------------------------------------------------------------------
@@ -619,14 +808,65 @@ module Lich
       # staged part.
       # ---------------------------------------------------------------------------
 
+      # Applies the metadata deferred for one staging +buffer+ to its objects and
+      # clears that buffer's pending entries. Called by each +commit_*+ just before
+      # it publishes the buffer, so the new +before_name+/+after_name+ become
+      # visible together with the new membership rather than mid-refresh. No-op for
+      # a buffer that deferred nothing.
+      #
+      # @param buffer [Array, nil] the staging buffer being committed
+      # @return [void]
+      def self.apply_pending_metadata(buffer)
+        pending = @@pending_metadata.delete(buffer)
+        return unless pending
+
+        pending.each do |obj, (before, after)|
+          obj.before_name = before unless before.nil?
+          obj.after_name  = after  unless after.nil?
+        end
+      end
+
+      # Drops the metadata deferred for one staging +buffer+ without applying it --
+      # the abort counterpart to {.apply_pending_metadata}. Called by every path
+      # that discards a buffer so a rolled-back refresh cannot later publish its
+      # staged values. No-op for a buffer that deferred nothing.
+      #
+      # @param buffer [Array, nil] the staging buffer being discarded
+      # @return [void]
+      def self.drop_pending_metadata(buffer)
+        @@pending_metadata.delete(buffer)
+      end
+
+      # Opens a refresh of worn inventory. Restarting an already-open refresh (a
+      # second +begin_inv+ before commit) discards the prior buffer, so drop its
+      # deferred metadata too rather than orphan it (mirrors {.begin_container}).
+      #
       # @return [Array]
-      def self.begin_inv = @@staging_inv = []
+      def self.begin_inv
+        drop_pending_metadata(@@staging_inv)
+        @@staging_inv = []
+      end
 
       # @return [void]
       def self.commit_inv
         return if @@staging_inv.nil?
 
+        apply_pending_metadata(@@staging_inv)
         @@inv         = @@staging_inv
+        @@staging_inv = nil
+      end
+
+      # Discards an open +@@inv+ staging buffer WITHOUT publishing it, leaving the
+      # previously published +@@inv+ visible. Rolls back a +begin_inv+ whose fill
+      # failed partway (e.g. a second writer's mirror raised mid-registration) so a
+      # later cycle does not see {.inv_refresh_open?} stuck open. No-op when none is
+      # open. Symmetric with {.commit_inv}.
+      #
+      # @return [void]
+      def self.abort_inv
+        return if @@staging_inv.nil?
+
+        drop_pending_metadata(@@staging_inv)
         @@staging_inv = nil
       end
 
@@ -715,11 +955,16 @@ module Lich
         @@staging_fam_pcs       = nil
       end
 
-      # Opens a refresh of a single container's contents.
+      # Opens a refresh of a single container's contents. Restarting an
+      # already-open refresh (a second +begin_container+ before commit) discards
+      # the prior buffer, so drop its deferred metadata too rather than orphan it.
       #
       # @param container_id [String]
       # @return [Array]
-      def self.begin_container(container_id) = @@staging_contents[container_id] = []
+      def self.begin_container(container_id)
+        drop_pending_metadata(@@staging_contents[container_id])
+        @@staging_contents[container_id] = []
+      end
 
       # @param container_id [String]
       # @return [void]
@@ -727,7 +972,20 @@ module Lich
         staged = @@staging_contents.delete(container_id)
         return if staged.nil?
 
+        apply_pending_metadata(staged)
         @@contents[container_id] = staged
+      end
+
+      # Discards one container's open staging buffer WITHOUT publishing it, leaving
+      # the previously published +@@contents[id]+ visible. Rolls back a
+      # +begin_container+ whose fill failed partway; no-op when none is open. Unlike
+      # {.delete_container} it does NOT remove the published contents.
+      #
+      # @param container_id [String]
+      # @return [void]
+      def self.abort_container(container_id)
+        staged = @@staging_contents.delete(container_id)
+        drop_pending_metadata(staged) if staged
       end
 
       # Publishes every open container staging buffer. Called at the +prompt+
@@ -735,12 +993,75 @@ module Lich
       # +clearContainer+ ... +inv+ fill sequence (which has no closing tag).
       # No-op when no container refresh is open.
       #
+      # A full INV LIST refresh ({.begin_all_containers}) uses its own dedicated
+      # buffer (+@@staging_all_contents+) and is published only through its clean
+      # path ({.commit_all_containers_full}) or discarded on interruption
+      # ({.discard_inv_refresh}) -- never here. While one is open this defers the
+      # ordinary per-container publish until the listing closes, so the two commit
+      # paths never interleave at an interrupting +prompt+.
+      #
       # @return [void]
       def self.commit_all_containers
+        return if @@staging_all_containers
         return if @@staging_contents.empty?
 
-        @@staging_contents.each { |id, staged| @@contents[id] = staged }
+        @@staging_contents.each do |id, staged|
+          apply_pending_metadata(staged)
+          @@contents[id] = staged
+        end
         @@staging_contents.clear
+      end
+
+      # Opens a full-replacement refresh of ALL container contents, used by DR's
+      # +INV LIST+ (a complete recursive scrape). Staging goes into a dedicated
+      # buffer (+@@staging_all_contents+), separate from the ordinary per-container
+      # +@@staging_contents+, so an unrelated +begin_container+ refresh in flight
+      # at the same time is never clobbered by this refresh's discard/commit. While
+      # open, +new_inv+ stages every not-already-owned container placement (see
+      # {.new_inv}) and the live +@@contents+ is left visible to readers.
+      # {.commit_all_containers_full} then swaps the whole buffer in one reference
+      # assignment, so containers absent from the listing are dropped -- matching
+      # the old clear-then-fill semantics -- while an interrupted listing that
+      # never commits leaves the previous model intact (see {.discard_inv_refresh}).
+      # Pair with {.begin_inv} for worn items.
+      #
+      # @return [void]
+      def self.begin_all_containers
+        # Restarting an already-open full refresh discards the prior buffers, so
+        # drop their deferred metadata rather than orphan it (mirrors begin_inv).
+        @@staging_all_contents.each_value { |buf| drop_pending_metadata(buf) }
+        @@staging_all_contents = {}
+        @@staging_all_containers = true
+      end
+
+      # Publishes a full container refresh opened by {.begin_all_containers} with
+      # a single reference swap and closes it. No-op if no full refresh is open,
+      # so an interrupted listing simply keeps the previous published model.
+      #
+      # @return [void]
+      def self.commit_all_containers_full
+        return unless @@staging_all_containers
+
+        @@staging_all_contents.each_value { |buf| apply_pending_metadata(buf) }
+        @@contents = @@staging_all_contents
+        @@staging_all_contents = {}
+        @@staging_all_containers = false
+      end
+
+      # Discards an in-flight INV LIST refresh (worn + full container staging)
+      # without publishing it, leaving the previously published model visible.
+      # Unlike {.discard_staged_refreshes} this touches only the INV LIST buffers,
+      # so it will not abort an unrelated in-flight room/familiar refresh -- nor an
+      # unrelated per-container +begin_container+ refresh, which lives in the
+      # separate +@@staging_contents+ hash and commits on its own at the next prompt.
+      #
+      # @return [void]
+      def self.discard_inv_refresh
+        drop_pending_metadata(@@staging_inv)
+        @@staging_all_contents.each_value { |buf| drop_pending_metadata(buf) }
+        @@staging_inv = nil
+        @@staging_all_contents = {}
+        @@staging_all_containers = false
       end
 
       # Discards every in-flight staged refresh without publishing it.
@@ -772,6 +1093,11 @@ module Lich
         @@staging_fam_npcs      = nil
         @@staging_fam_pcs       = nil
         @@staging_contents.clear
+        @@staging_all_contents.clear
+        @@staging_all_containers = false
+        # Every open buffer is being discarded, so no deferred metadata can still
+        # belong to a refresh that will commit; drop all of it.
+        @@pending_metadata.clear
       end
 
       # ---------------------------------------------------------------------------
@@ -831,8 +1157,8 @@ module Lich
           npc = @@npcs.find { |n| n.id == id }
           next unless npc
           next if npc.status.to_s =~ /dead|gone/i
-          next if npc.name  =~ /^animated\b/i && npc.name !~ /^animated slush/i
-          next if npc.noun  =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i &&
+          next if npc.name =~ /^animated\b/i && npc.name !~ /^animated slush/i
+          next if npc.noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i &&
                   npc.name !~ /(?:amaranthine|ghostly|grizzled|ancient) kraken tentacle/i
           npc
         end
@@ -1256,17 +1582,20 @@ module Lich
         # and it is re-added to the cleared registry - no allocation required.
         #
         # When a duplicate is found, +before_name+ and +after_name+ are
-        # backfilled if they were previously +nil+ and the incoming values are
-        # non-nil. Existing non-nil values are never overwritten.
+        # refreshed from a differing non-nil observation; a nil observation
+        # never clobbers a known value.
         #
         # @param registry [Array<GameObj>]  the target registry array
         # @param id       [Integer, String]
         # @param noun     [String, nil]
         # @param name     [String, nil]
-        # @param before   [String, nil]   backfills +before_name+ if previously unset
-        # @param after    [String, nil]   backfills +after_name+ if previously unset
+        # @param before   [String, nil]   sets +before_name+ from a differing non-nil observation
+        # @param after    [String, nil]   sets +after_name+ from a differing non-nil observation
+        # @param defer_to [Array, nil]    the open staging buffer this write targets, or +nil+ for a
+        #                                  live write; when set, the metadata refresh is deferred into
+        #                                  that buffer's +@@pending_metadata+ and applied at commit
         # @return [GameObj]
-        def find_or_create(registry, id, noun, name, before = nil, after = nil)
+        def find_or_create(registry, id, noun, name, before = nil, after = nil, defer_to: nil)
           str_id = id.is_a?(Integer) ? id.to_s : id
           key    = "#{str_id}|#{noun}|#{name}"
           now    = Process.clock_gettime(Process::CLOCK_MONOTONIC)
@@ -1275,8 +1604,28 @@ module Lich
             if (entry = @@index[key])
               existing, _ts        = entry
               @@index[key]         = [existing, now] # refresh last-seen timestamp
-              existing.before_name = before if existing.before_name.nil? && !before.nil?
-              existing.after_name  = after  if existing.after_name.nil?  && !after.nil?
+              # Refresh command metadata whenever a differing non-nil observation
+              # arrives -- e.g. a name-preserving move updates +before_name+ from
+              # "get #id in #old" to "get #id in #new". A nil observation never
+              # clobbers a known value (a sighting from a source that carries no
+              # command must not blank it).
+              #
+              # During a staged refresh the shared instance is still published, so
+              # the change is deferred into the buffer's pending map instead of
+              # mutated in place. Each field is merged independently against the
+              # effective pending value (seeded from the currently published one),
+              # so a before-only then after-only observation keeps both, and a
+              # value that returns to the published one supersedes an earlier
+              # intermediate. commit_* applies it; any discard drops it.
+              if defer_to
+                pending      = (@@pending_metadata[defer_to] ||= {}.compare_by_identity)
+                current      = (pending[existing] ||= [existing.before_name, existing.after_name])
+                current[0]   = before unless before.nil?
+                current[1]   = after  unless after.nil?
+              else
+                existing.before_name = before if !before.nil? && existing.before_name != before
+                existing.after_name  = after  if !after.nil?  && existing.after_name  != after
+              end
               registry.push(existing) unless registry.include?(existing)
               existing
             else
@@ -1346,6 +1695,7 @@ module Lich
             *Array(@@staging_fam_loot), *Array(@@staging_fam_npcs),
             *Array(@@staging_fam_pcs), *Array(@@staging_fam_room_desc),
             *@@staging_contents.values.flatten,
+            *@@staging_all_contents.values.flatten,
             @@right_hand, @@left_hand
           ].compact
           defined?(Set) ? Set.new(objs) : objs

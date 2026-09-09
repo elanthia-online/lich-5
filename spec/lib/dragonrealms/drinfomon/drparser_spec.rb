@@ -6,6 +6,12 @@ require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lic
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
+# so it observes the actual container contents. spec_helper installs a
+# lightweight GameObj double; requiring the production file reopens it with the
+# real implementation. This is idempotent -- in the combined suite gameobj_spec
+# has already loaded it -- and mirrors how gameobj_spec obtains the real class.
+require_relative '../../../../lib/common/gameobj'
 
 # Stub DRBanking to avoid loading its dependencies
 module Lich
@@ -667,45 +673,209 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
   end
 
-  describe 'inventory search parsing' do
+  describe 'inventory scrape parsing' do
     before(:each) do
       allow(GameObj).to receive(:clear_inv)
       allow(GameObj).to receive(:clear_all_containers)
+      described_class.class_variable_set(:@@parsing_inventory_get, false)
+      described_class.class_variable_set(:@@inventory_partial, false)
     end
 
-    describe 'when InventoryGetStart pattern matches' do
-      let(:inv_search_line) { 'You rummage about your person, looking for' }
-
-      it 'calls GameObj.clear_inv' do
-        expect(GameObj).to receive(:clear_inv)
-
-        described_class.parse(inv_search_line)
+    describe 'headers' do
+      it 'InventoryListStart matches the INV LIST header only' do
+        expect('You take a moment and rummage about your person, taking stock of your possessions...')
+          .to match(described_class::Pattern::InventoryListStart)
+        expect('You rummage about your person, looking for pouch...')
+          .not_to match(described_class::Pattern::InventoryListStart)
       end
 
-      it 'calls GameObj.clear_all_containers' do
-        expect(GameObj).to receive(:clear_all_containers)
-
-        described_class.parse(inv_search_line)
+      it 'InventorySearchStart matches the INV SEARCH / category header' do
+        expect('You rummage about your person, looking for pouch...')
+          .to match(described_class::Pattern::InventorySearchStart)
+        expect('You rummage about your person, looking for armor and shields...')
+          .to match(described_class::Pattern::InventorySearchStart)
       end
 
-      it 'sets @@parsing_inventory_get to true' do
-        described_class.parse(inv_search_line)
+      it 'InventorySearchStart matches the real <roundTime/>-prefixed header' do
+        expect("<roundTime value='1788496743'/>You rummage about your person, looking for pouch...")
+          .to match(described_class::Pattern::InventorySearchStart)
+      end
+
+      # Adversarial: a header quoted mid-line (speech/thought/book) must NOT open
+      # a scrape -- for the SEARCH header this would open a *mutating* upsert.
+      # This is why both patterns are anchored to the stream-line start.
+      it 'neither header matches the phrase quoted mid-line in speech' do
+        line = %(Someone says, "You rummage about your person, looking for trouble.")
+        expect(line).not_to match(described_class::Pattern::InventorySearchStart)
+        expect(line).not_to match(described_class::Pattern::InventoryListStart)
+      end
+
+      it 'neither header matches the phrase embedded after prose' do
+        line = 'She watched as you take a moment and rummage about your person, taking stock of your possessions.'
+        expect(line).not_to match(described_class::Pattern::InventoryListStart)
+      end
+
+      it 'does NOT match an arbitrary non-roundTime tag glued before the search header' do
+        expect("<pushStream id='thought'/>You rummage about your person, looking for pouch...")
+          .not_to match(described_class::Pattern::InventorySearchStart)
+      end
+    end
+
+    describe 'when the INV LIST (complete) header matches' do
+      let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
+
+      it 'opens a staged full refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
+        # The full replacement is now staged so the live model stays visible until
+        # a clean terminator commits it -- the header must not wipe anything.
+        expect(GameObj).not_to receive(:clear_inv)
+        expect(GameObj).not_to receive(:clear_all_containers)
+        expect(GameObj).to receive(:begin_inv)
+        expect(GameObj).to receive(:begin_all_containers)
+
+        described_class.parse(inv_list_line)
 
         # NOTE: class_variable_get is acceptable here - we're verifying the parser
-        # correctly transitions to inventory parsing state after matching the trigger line.
+        # correctly transitions to inventory parsing state after the trigger line.
         expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be false
       end
     end
 
-    describe 'InventoryGetStart pattern' do
-      it 'matches inv search command output' do
-        line = 'You rummage about your person, looking for'
-        expect(line).to match(described_class::Pattern::InventoryGetStart)
+    describe 'when the INV SEARCH (partial) header matches' do
+      let(:inv_search_line) { 'You rummage about your person, looking for pouch...' }
+
+      it 'enters parsing in partial mode WITHOUT clearing the model' do
+        expect(GameObj).not_to receive(:clear_inv)
+        expect(GameObj).not_to receive(:clear_all_containers)
+
+        described_class.parse(inv_search_line)
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be true
+      end
+    end
+
+    describe 'scrape safety valve (interrupted stream)' do
+      it 'resets an unclosed scrape on the next <prompt> so later <d cmd> links are not hijacked' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+
+        # Stream is interrupted -- no <output class=""/> arrives, just a prompt.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+
+        # A later stray get-link in ordinary output must NOT be parsed as inventory.
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.parse("<d cmd='get #999'>a random link</d>")
       end
 
-      it 'matches partial inv search output' do
-        line = 'You rummage about your person, looking for all items'
-        expect(line).to match(described_class::Pattern::InventoryGetStart)
+      it 'also clears PARTIAL mode when a prompt ends an interrupted search scrape' do
+        described_class.parse("<roundTime value='1'/>You rummage about your person, looking for pouch...")
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be true
+
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be false
+
+        # A stray get-link afterward must NOT be upserted into the live model.
+        expect(GameObj).not_to receive(:upsert_inv)
+        described_class.parse("<d cmd='get #999'>a random link</d>")
+      end
+    end
+
+    # Non-mocked, drives the REAL GameObj end-to-end to prove the COMPLETE INV
+    # LIST path is atomic: the previous model stays visible until a clean
+    # terminator commits the staged replacement, and an interrupted listing
+    # keeps the old model instead of leaving it half-updated.
+    describe 'atomic full INV LIST refresh (real GameObj)' do
+      before do
+        GameObj.class_variable_set(:@@inv, [])
+        GameObj.class_variable_set(:@@contents, {})
+        GameObj.class_variable_set(:@@staging_inv, nil)
+        GameObj.class_variable_set(:@@staging_contents, {})
+        GameObj.class_variable_set(:@@staging_all_containers, false)
+        GameObj.class_variable_set(:@@index, {})
+        described_class.class_variable_set(:@@parsing_inventory_get, false)
+        described_class.class_variable_set(:@@inventory_partial, false)
+        allow(Lich::Messaging).to receive(:msg)
+
+        # Seed a known model: a worn cloak (#10) holding a gem (#11).
+        GameObj.new_inv('10', nil, 'cloak', nil, 'remove #10')
+        GameObj.new_inv('11', nil, 'gem', '10', 'get #11 in #10')
+      end
+
+      def ids(list) = Array(list).map(&:id)
+
+      it 'leaves the previous model visible while the listing streams (no up-front wipe)' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        # Nothing committed yet: the old cloak+gem are still the published model.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(GameObj.containers).to have_key('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      it 'atomically replaces the model on the clean terminator, dropping absent containers' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+        described_class.parse('<output class=""/>')
+
+        expect(ids(GameObj.inv)).to contain_exactly('20')
+        # The cloak was not in the new listing, so its container entry is dropped.
+        expect(GameObj.containers).not_to have_key('10')
+      end
+
+      it 'keeps the previous model and warns when the listing is interrupted by a prompt' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Interrupted: a prompt arrives with no closing <output class=""/>.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # Old model intact; the half-streamed backpack was discarded.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      # Regression: in production Game.process_xml_data runs XMLParser BEFORE
+      # DRParser, so the interrupting <prompt> first fires
+      # GameObj.commit_all_containers (the ordinary per-container publish) and
+      # only afterwards does DRParser discard the refresh. commit_all_containers
+      # must refuse to publish while a full refresh is open, or it commits the
+      # partial listing before the discard can run -- corrupting the model while
+      # still warning that the previous inventory was kept.
+      it 'does not commit a partial full refresh when XMLParser commits at the prompt first' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # Listing streams the cloak with a DIFFERENT child (#12) than published (#11).
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #12 in #10'>a coin</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Production order at the prompt: XMLParser publishes containers first...
+        GameObj.commit_all_containers
+        # ...then DRParser sees the interrupted scrape and discards it.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # The premature commit must NOT have replaced #11 with #12.
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+      end
+
+      it 'does not resurrect an item picked into a hand mid-listing when the staged list commits' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # The listing streams the gem (#11) as still inside the cloak...
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #11 in #10'>a gem</d>")
+        # ...but it is then picked into a hand before the list commits.
+        GameObj.remove_inv_item('11')
+        described_class.parse('<output class=""/>')
+
+        # The commit must not re-add the picked-up gem to the cloak.
+        expect(ids(GameObj.containers['10'] || [])).not_to include('11')
       end
     end
   end
@@ -865,7 +1035,10 @@ RSpec.describe Lich::DragonRealms::DRParser do
   describe '.populate_inventory_get' do
     before(:each) do
       allow(GameObj).to receive(:new_inv)
+      allow(GameObj).to receive(:upsert_inv)
       described_class.class_variable_set(:@@parsing_inventory_get, true)
+      # Default to COMPLETE (INV LIST) mode for the existing add cases.
+      described_class.class_variable_set(:@@inventory_partial, false)
     end
 
     it 'parses a top-level item, stripping a leading article' do
@@ -873,19 +1046,147 @@ RSpec.describe Lich::DragonRealms::DRParser do
       described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
     end
 
+    it 'strips a capitalized leading article (e.g. from INV SEARCH output)' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', nil, 'get #12345', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345'>A soft gem pouch</d>")
+    end
+
     it 'parses a nested item with its container' do
       expect(GameObj).to receive(:new_inv).with('1', nil, 'sack', '2', 'get #1 in #2', nil)
       described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
     end
 
-    it 'parses an item line with trailing location prose' do
-      expect(GameObj).to receive(:new_inv).with('8761784', nil, 'seagull feather quill', nil, 'get #8761784', nil)
+    it 'parses an item line with trailing location prose after the </d> element' do
+      expect(GameObj).to receive(:new_inv).with('8286821', nil, 'papyrus parchment', '8286816', 'get #8286821 in #8286816', nil)
+      described_class.populate_inventory_get("<d cmd='get #8286821 in #8286816'>a papyrus parchment</d> is in a black winter cloak.")
+    end
+
+    it 'does NOT store a held item ("... is in your right hand") as worn inventory' do
+      # The item is in a hand, tracked by the <right> stream -- storing it here
+      # (cmd has no container -> worn inv) would recreate the held/worn duplicate.
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
       described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
     end
 
-    it 'stops parsing on the output-class-empty tag' do
+    it 'also skips the worn store for a left-hand item' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
+    end
+
+    it 'parses an inv list worn item linked with a remove command into inv' do
+      expect(GameObj).to receive(:new_inv).with('10859433', nil, 'hooded electroweave cloak', nil, 'remove #10859433', nil)
+      described_class.populate_inventory_get("  <d cmd='remove #10859433'>a hooded electroweave cloak</d>")
+    end
+
+    it 'parses an inv list nested item despite the leading dash and indentation' do
+      expect(GameObj).to receive(:new_inv).with('10859466', nil, 'dirty inkpot', '10859433', 'get #10859466 in #10859433', nil)
+      described_class.populate_inventory_get("     -<d cmd='get #10859466 in #10859433'>a dirty inkpot</d>")
+    end
+
+    # A doubly-nested line establishes ONLY the item -> immediate parent
+    # (#10956107) edge. It must NOT also synthesize the middle-container ->
+    # grandparent ('a watery portal') edge with a nil name: INV LIST lists
+    # #10956107 on its own line with its real name, so a second nil-name
+    # placement would be a phantom duplicate (find_or_create dedups on
+    # "id|noun|name", so the nil-name copy never collides). See the non-mocked
+    # regression below for the duplicate itself.
+    it 'parses a doubly-nested inv list item without re-registering the middle container' do
+      expect(GameObj).to receive(:new_inv).with('10956111', nil, 'rosemary-dusted pumpkin and apple tart drizzled with an amber glaze', '10956107', 'get #10956111 in #10956107 in a watery portal', nil)
+      # The middle container (#10956107) is never re-added from this child line.
+      expect(GameObj).not_to receive(:new_inv).with('10956107', anything, anything, anything, anything, anything)
+      described_class.populate_inventory_get("        -<d cmd='get #10956111 in #10956107 in a watery portal'>a rosemary-dusted pumpkin and apple tart drizzled with an amber glaze</d>")
+    end
+
+    it 'stops parsing and clears partial mode on the output-class-empty tag' do
+      described_class.class_variable_set(:@@inventory_partial, true)
       described_class.populate_inventory_get('<output class=""/>')
       expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+      expect(described_class.class_variable_get(:@@inventory_partial)).to be false
+    end
+
+    context 'in PARTIAL (INV SEARCH / category) mode' do
+      before(:each) { described_class.class_variable_set(:@@inventory_partial, true) }
+
+      it 'upserts a matched item instead of a plain add' do
+        expect(GameObj).to receive(:upsert_inv).with('11404650', nil, 'soft gem pouch', '11404639', 'get #11404650 in #11404639', nil)
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.populate_inventory_get("  <d cmd='get #11404650 in #11404639'>A soft gem pouch</d> is in a sky blue thigh quiver.")
+      end
+
+      it 'upserts a matched worn item (remove link) into inv' do
+        expect(GameObj).to receive(:upsert_inv).with('11404268', nil, 'red pouch embroidered with a pork chop', nil, 'remove #11404268', nil)
+        described_class.populate_inventory_get("  <d cmd='remove #11404268'>A red pouch embroidered with a pork chop</d> is being worn.")
+      end
+
+      # Adversarial (#5): a filtered scrape of a deeply-nested item must NOT touch
+      # the intermediate container. Routing it through upsert_inv with name=nil
+      # would blank that container's real name and pull a worn parent out of
+      # GameObj.inv. So the middle container is left alone in partial mode.
+      it 'does NOT upsert the intermediate container for a doubly-nested match' do
+        # Only the matched item itself is upserted...
+        expect(GameObj).to receive(:upsert_inv).with('10956111', nil, 'rosemary-dusted pumpkin and apple tart drizzled with an amber glaze', '10956107', 'get #10956111 in #10956107 in a watery portal', nil)
+        # ...never the middle container (#10956107) with a nil name.
+        expect(GameObj).not_to receive(:upsert_inv).with('10956107', anything, anything, anything, anything, anything)
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.populate_inventory_get("        -<d cmd='get #10956111 in #10956107 in a watery portal'>a rosemary-dusted pumpkin and apple tart drizzled with an amber glaze</d>")
+      end
+    end
+  end
+
+  # Regression (NON-MOCKED): drives the real GameObj model end-to-end. Kept in
+  # its own describe -- OUTSIDE '.populate_inventory_get', whose before(:each)
+  # stubs new_inv -- precisely so new_inv is NOT stubbed here. This is the case
+  # the mocked tests cannot see: they stub new_inv, so they never observe the
+  # resulting duplicate in GameObj.containers. We feed a real doubly-nested
+  # INV LIST fragment (middle container listed on its own line AND as the parent
+  # of nested items, exactly as DR emits it) and assert each id lands in its
+  # parent container exactly once, with its real name and no nil phantom.
+  describe 'doubly-nested INV LIST against the real GameObj (duplicate regression)' do
+    before(:each) do
+      # GameObj has no reset! -- clear the production registries and identity
+      # index this test touches so it is isolated from earlier examples.
+      %i[@@inv @@contents @@index].each do |cv|
+        GameObj.class_variable_get(cv).clear if GameObj.class_variable_defined?(cv)
+      end
+      described_class.class_variable_set(:@@parsing_inventory_get, true)
+      # COMPLETE (INV LIST) mode. Harmless where the flag is not yet read; keeps
+      # the scrape in replace-not-upsert mode once partial scrapes are added.
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    # Raw INV LIST lines: a single leading dash + indentation at every depth.
+    # #10783170 is the middle container -- it appears on its own line and as the
+    # parent of the two nested items.
+    let(:inv_list_lines) do
+      [
+        "      -<d cmd='get #10783170 in a watery portal'>a deep-green square tin (closed)</d>",
+        "         -<d cmd='get #10783174 in #10783170 in a watery portal'>a sheet of red parchment</d>",
+        "         -<d cmd='get #10783173 in #10783170 in a watery portal'>a tart</d>"
+      ]
+    end
+
+    it 'registers the middle container in its parent exactly once (no nil-name phantom)' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      portal = GameObj.containers['a watery portal'] || []
+      mids = portal.select { |o| o.id == '10783170' }
+
+      # Before the fix this was 2: the real 'deep-green square tin (closed)' plus
+      # a nil-name phantom synthesized from the nested item lines.
+      expect(mids.size).to eq(1)
+      expect(mids.first.name).to eq('deep-green square tin (closed)')
+      expect(portal.map(&:name)).not_to include(nil)
+    end
+
+    it 'places the nested contents under the middle container once each' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      contents = GameObj.containers['10783170'] || []
+      expect(contents.map(&:id)).to contain_exactly('10783174', '10783173')
+      expect(contents.map(&:name)).to contain_exactly('sheet of red parchment', 'tart')
     end
   end
 end

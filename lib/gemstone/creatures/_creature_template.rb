@@ -10,10 +10,15 @@
   family: "",                   # e.g., "canine", "gigas"
   type: "",                     # e.g., "biped", "quadruped", "avian", "ooze"
   undead: "",                   # boolean
-  has_blood: nil,               # true/false/nil if unknown - corporeal, flesh & blood
-  has_bones: nil,               # true/false/nil if unknown - has a skeletal structure
-  muggable: nil,                # true/false/nil if unknown - typically humanoid + carries coin
+  blood: nil,               # true/false/nil if unknown - corporeal, flesh & blood
+  bones: nil,               # true/false/nil if unknown - has a skeletal structure
+  limbs: nil,               # true/false/nil - has limbs Limb Disruption (708) can target ("has no limbs left!" on a fresh target = false)
+  witherable: nil,           # true/false/nil - has a body Wither (1115) can attack
+  sympathy: nil,             # true/false/nil - can be affected by Sympathy (1120)
+  muggable: nil, # true/false/nil if unknown - typically humanoid + carries coin
+  sleepable: nil, # true/false/nil - can be put to sleep ("does not seem to be affected" = false)
   boss: false,                  # special encounter flag (optional)
+  boss_type: nil,               # nil | "pack" | "miniboss" | "boss" - bestiary classification
   otherclass: [],               # any extra tags you keep (optional)
   bcs: nil,                     # true/false/nil if unknown
 
@@ -24,9 +29,12 @@
   size: "",                     # "small" | "medium" | "large" | "huge" | ...
 
   # ---------- Habitat / Locations ----------
-  # Multiple areas, each with its own room list
+  # Multiple areas, each with the game room UIDs the creature is found
+  # in, as ascending Integer Ranges. UIDs are the game's stable
+  # identifiers, never Lich mapdb ids (Map.ids_from_uid converts at time
+  # of use). Empty uids = wiki presence info without measured room data.
   areas: [
-    # { name: "Hinterwilds", rooms: [/* room ids */] }
+    # { name: "Hinterwilds", uids: [7503301..7503312] }
   ],
 
   # ---------- Offense / Capabilities ----------
@@ -84,6 +92,15 @@
     # }
   ],
 
+  # ---------- Equipment ----------
+  # Items the creature is seen with, from the LOOK gear line ("It has a
+  # wooden shield, a broadsword and some reinforced leather."). Flat
+  # list; the game's own "(worn)" marker is not kept here (re-derivable
+  # from session logs if it is ever wanted).
+  equipment: [
+    # "a crude zorchar khopesh"
+  ],
+
   # ---------- Crafting / Misc ----------
   alchemy: [],
   abilities_misc: [], # keep if you want to separate non-combat traits
@@ -97,7 +114,13 @@
     # prefer object form so we can carry flags
     # { name: "inky black valravn plume", blunt_required: false }
     skin: nil,
-    other: nil # string or [strings]
+    other: nil, # string or [strings]
+    # equipment drops that are real loot, NOT collapsed into "You discard
+    # the creature's useless equipment."
+    armaments: nil,
+    # equipment drops that ANALYZE reveals to be a transmog. No confirmed
+    # examples yet - stays nil until one is analyzed in the wild.
+    transmogs: nil
   },
 
   # ---------- Messaging ----------
@@ -111,6 +134,14 @@
     decay: [],
     search: [],
     spell_prep: [],
+    # ALL attack messaging lives here, keyed by attack name (snake_case
+    # of the attack/maneuver/spell name). The generic weapon swing is
+    # itself a name: attack. No flat bucket.
+    #   attacks: { attack: [...], bite: [...], charge: [...], impale: [...] }
+    attacks: {},
+    stand: [],                   # rising from prone
+    stun_break: [],              # shaking off a stun / status recovery
+    ambient: [],                 # idle flavor with no mechanical event (howls, clicking, questing)
 
     # Optional informational block for human tips (NOT triggers)
     info: {

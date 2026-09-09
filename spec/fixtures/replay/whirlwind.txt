@@ -1,0 +1,9 @@
+##### whirlwind 4c0a456f8f2bae92
+# expect: attacks=whirlwind | res=smr | flares=none | outcomes=evade | dmg=0 | statuses=
+You are beginning to feel a little fatigued.
+Twisting and spinning among your foes, you lash out again and again with the force of a reaping whirlwind!
+[SMR result: 35 (Open d100: -66, Bonus: 19)]
+<pushBold/>An <a exist="43076032" noun="incubus">athletic dark-eyed incubus</a><popBold/> is struck in your flurry of sweeping strikes!
+The dark-eyed incubus barely dodges the attack!
+You could use this opportunity to Overpower!
+

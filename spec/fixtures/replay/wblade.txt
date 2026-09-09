@@ -1,0 +1,18 @@
+##### wblade 6c3a44d24f0ccb3a
+# expect: attacks=wblade | res=as_ds | flares=none | outcomes=none | dmg=3 | statuses=
+Your blade licks out at <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> in a blurred arc!
+  AS: +618 vs DS: +334 with AvD: +12 + d100 roll: +52 = +348
+   ... and hit for 41 points of damage!
+   Strike connects with shoulder blade!
+You turn, blade spinning in your hand toward <pushBold/>a <a exist="39300001" noun="executioner">triton executioner</a><popBold/>!
+  AS: +618 vs DS: +313 with AvD: +23 + d100 roll: +82 = +410
+   ... and hit for 78 points of damage!
+   Impressive shot shatters wrist!
+In a fluid whirl, you sweep your blade at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>!
+  AS: +618 vs DS: +220 with AvD: -15 + d100 roll: +57 = +440
+   ... and hit for 37 points of damage!
+   Banged <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s left shin.
+   That'll raise a good welt.
+You remain alert and nimble, ready to move.
+Roundtime: 2 sec.
+

@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "gnoll guard",
-  noun: "",
+  noun: "guard",
   url: "https://gswiki.play.net/gnoll_guard",
   picture: "",
   level: 17,
   family: "Gnoll",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: nil,
+  bones: true,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 126,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 3,
+  size: "small",
   areas: [
     {
-      name: "Zeltoph",
-      rooms: []
+      name: "Foothills of Zeltoph",
+      uids: [10009..10060, 11201..11221]
     }
   ],
   attack_attributes: {
@@ -39,21 +44,21 @@
     asg: nil,
     immunities: [],
     melee: nil,
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    ranged: (84..86),
+    bolt: (84..86),
+    udf: 223,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
+    cle_td: (48..51),
+    emp_td: (32..51),
+    pal_td: (48..54),
     ran_td: nil,
     sor_td: nil,
     wiz_td: nil,
     mje_td: nil,
     mne_td: nil,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mjs_td: (51..57),
+    mns_td: (51..57),
+    mnm_td: 51,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
@@ -64,24 +69,43 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a broadsword",
+    "a wooden shield",
+    "some full leather"
+  ],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
-    gems: nil,
+    gems: true,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The outfit this gnoll is dressed in couldn't exactly be called a uniform, but there is a badge pinned on the front, signifying him as a member of the guard. The faint scent of fermented mushrooms wafts from the guard."
     ],
-    arrival: [],
+    arrival: [
+      "A gnoll guard marches in."
+    ],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "The gnoll guard rolls over and dies.",
+      "The gnoll guard falls to the ground and dies."
+    ],
+    decay: [
+      "A gnoll guard's remains dissolve into the ground."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A gnoll guard swings a broadsword at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

@@ -1,54 +1,67 @@
 {
   schema_version: 3,
   name: "caedera",
-  noun: "",
+  noun: "caedera",
   url: "https://gswiki.play.net/caedera",
   picture: "",
   level: 82,
   family: "Worm",
   type: "Worm",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living",
     "Magical"
   ],
   bcs: true,
   max_hp: 600,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 10,
+  height: 3,
+  size: "large",
   areas: [
     {
       name: "The Rift",
-      rooms: []
+      uids: [4567001..4567055]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
         name: "Bite",
-        as: (420..440)
+        as: (369..411)
       },
       {
-        name: "Charge (attack)",
-        as: (420..440)
+        name: "Charge (attack)"
       },
       {
-        name: "Ensnare (attack)",
-        as: (420..440)
+        name: "Ensnare (attack)"
+      },
+      {
+        name: "Charge",
+        as: 421
+      },
+      {
+        name: "Ensnare",
+        as: 421
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
-    special_abilities: [
+    maneuvers: [
       {
         name: "Burrow"
+      },
+      {
+        name: "Burrow Ambush"
       }
     ],
     special_notes: []
@@ -56,22 +69,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: nil,
-    ranged: "+321",
-    bolt: nil,
-    udf: nil,
+    melee: (301..414),
+    ranged: (288..388),
+    bolt: (288..388),
+    udf: (380..450),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: 323,
+    emp_td: (305..311),
+    pal_td: (261..267),
+    ran_td: 264,
     sor_td: (326..338),
     wiz_td: nil,
-    mje_td: 345,
-    mne_td: nil,
-    mjs_td: nil,
-    mns_td: 308,
-    mnm_td: nil,
+    mje_td: (345..354),
+    mne_td: (345..354),
+    mjs_td: (305..311),
+    mns_td: (305..311),
+    mnm_td: (246..252),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -80,13 +93,19 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a bruised left eye",
+    "a bruised right eye"
+  ],
   treasure: {
     coins: false,
     magic_items: false,
     gems: false,
     boxes: false,
-    skin: "a caedera skin",
-    other: "No"
+    skin: "a caedera's ",
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -98,6 +117,15 @@
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A caedera charges at you!",
+        "A caedera tries to ensnare you!"
+      ],
+      bite: [
+        "A caedera tries to bite you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

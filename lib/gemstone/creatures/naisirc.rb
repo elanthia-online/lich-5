@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "naisirc",
-  noun: "",
+  noun: "naisirc",
   url: "https://gswiki.play.net/naisirc",
   picture: "",
   level: 75,
   family: "Ghost",
   type: "Hybrid",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: true,
   max_hp: 240,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "large",
   areas: [
     {
       name: "The Rift",
-      rooms: []
+      uids: [4566001..4566055]
     }
   ],
   attack_attributes: {
@@ -35,6 +40,14 @@
       {
         name: "Ensnare (attack)",
         as: 396
+      },
+      {
+        name: "Charge",
+        as: 374
+      },
+      {
+        name: "Ensnare",
+        as: (366..370)
       }
     ],
     bolt_spells: [],
@@ -47,29 +60,33 @@
         name: "Tangleweed (610)"
       }
     ],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Lash"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 397,
-    ranged: nil,
-    bolt: 330,
-    udf: nil,
-    bar_td: "274 to 280",
-    cle_td: 301,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 315,
+    melee: (261..550),
+    ranged: (221..373),
+    bolt: (221..373),
+    udf: (416..693),
+    bar_td: (274..280),
+    cle_td: (301..307),
+    emp_td: (293..308),
+    pal_td: (258..267),
+    ran_td: (258..264),
+    sor_td: (315..327),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 330,
-    mjs_td: nil,
-    mns_td: nil,
-    mnm_td: nil,
+    mje_td: (330..332),
+    mne_td: (330..332),
+    mjs_td: 317,
+    mns_td: 317,
+    mnm_td: (249..258),
     defensive_spells: [
       "Elemental Targeting (425)",
       "Natural Colors (601)",
@@ -82,13 +99,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Inky necrotic core"
+    other: "Inky necrotic core",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -96,10 +116,22 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "A naisirc fades into oblivion."
+    ],
     decay: [],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A naisirc glows with an eerie green light.",
+      "A naisirc glows with a bright green light!"
+    ],
+    attacks: {
+      attack: [
+        "A naisirc charges at you!",
+        "A naisirc lashes out at {target}!",
+        "A naisirc tries to ensnare {target}!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

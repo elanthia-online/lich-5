@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "white vysan",
-  noun: "",
+  noun: "vysan",
   url: "https://gswiki.play.net/white_vysan",
   picture: "",
   level: 3,
   family: "Vysan",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 50,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 12,
+  height: 4,
+  size: "small",
   areas: [
     {
-      name: "Icemule Environs",
-      rooms: []
+      name: "Southern Snowfields",
+      uids: [4128058..4128070]
     }
   ],
   attack_attributes: {
@@ -34,6 +39,14 @@
       },
       {
         name: "Pound",
+        as: 44
+      },
+      {
+        name: "Fist",
+        as: (34..44)
+      },
+      {
+        name: "Unknown",
         as: 44
       }
     ],
@@ -47,22 +60,22 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: (4..18),
-    ranged: nil,
-    bolt: nil,
-    udf: nil,
+    melee: 18,
+    ranged: 13,
+    bolt: 13,
+    udf: 51,
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
+    cle_td: 9,
+    emp_td: 9,
+    pal_td: (6..9),
+    ran_td: 9,
     sor_td: 9,
     wiz_td: nil,
-    mje_td: nil,
+    mje_td: 9,
     mne_td: 9,
-    mjs_td: nil,
-    mns_td: 9,
-    mnm_td: nil,
+    mjs_td: (9..15),
+    mns_td: (9..15),
+    mnm_td: 9,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,13 +84,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Yes"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -85,10 +101,19 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "The white vysan falls to the ground motionless.",
+      "The white vysan screams evilly one last time and goes still."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A white vysan pounds at you with {pronoun} fist!",
+        "A white vysan tries to ensnare you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

@@ -1,0 +1,26 @@
+##### judgment 10b794b71116d183
+# expect: attacks=judgment | res=cs_td | flares=none | outcomes=ward_failed | dmg=6 | statuses=kneeling/add
+A blast of multihued plasma flares out from the center of the ethereal sphere, striking <pushBold/>an <a exist="62656906" noun="knight">infernal death knight</a><popBold/>!
+  CS: +489 - TD: +372 + CvA: -12 + d100: +31 == +136
+  Warding failed!
+  The death knight is stricken for 35 points of damage!
+   ... 5 points of damage!
+   Searing strike to back causes the death knight to grunt in pain.
+   The death knight strains as if burdened by some invisible force.
+A blast of multihued plasma flares out from the center of the ethereal sphere, striking <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/>!
+  CS: +489 - TD: +436 + CvA: +25 + d100: +72 == +150
+  Warding failed!
+  <pushBold/>The <a exist="40797680" noun="grotesque">basalt grotesque</a><popBold/> is stricken for 25 points of damage!
+   ... 5 points of damage!
+   Plasma scalds <pushBold/>the <a exist="40797680" noun="grotesque">basalt grotesque</a><popBold/>'s stomach leaving painful red streaks.
+   <pushBold/>The <a exist="40797680" noun="grotesque">basalt grotesque</a><popBold/> is driven to its knees!
+   <pushBold/>The <a exist="40797680" noun="grotesque">basalt grotesque</a><popBold/> strains as if burdened by some invisible force.
+A blast of multihued plasma flares out from the center of the ethereal sphere, striking <pushBold/>an <a exist="75445853" noun="vampire">ashen patrician vampire</a><popBold/>!
+  CS: +489 - TD: +446 + CvA: +25 + d100: +52 == +120
+  Warding failed!
+  The patrician vampire is stricken for 33 points of damage!
+   ... 15 points of damage!
+   Plasma scorches a hole in the patrician vampire's shield arm!
+The ethereal sphere vanishes from sight.
+Cast Roundtime 3 Seconds.
+

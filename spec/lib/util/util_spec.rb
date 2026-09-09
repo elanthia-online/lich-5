@@ -182,4 +182,60 @@ RSpec.describe Lich::Util do
       expect(captured_proc[:action].call(end_chunk)).to eq(end_chunk)
     end
   end
+
+  describe '.normalize_lookup' do
+    # normalize_lookup evals "Effects::#{effect}" to reach a
+    # Lich::Gemstone::Effects::Registry (Effects::Cooldowns, Effects::Debuffs, ...).
+    # Production resolves the bare `Effects` constant via `include Lich::Gemstone`
+    # at the top level (see lib/main/main.rb), so stub a bare top-level
+    # Effects::<name> double here rather than pulling in the full
+    # Registry/XMLData.dialogs dependency chain.
+    def stub_effect(name, hash)
+      registry = Object.new
+      registry.define_singleton_method(:to_h) { hash }
+      registry.define_singleton_method(:active?) { |val| hash.key?(val) }
+      stub_const('Effects', Module.new)
+      stub_const("Effects::#{name}", registry)
+    end
+
+    it 'matches an underscored PSM lookup value against an effect key containing a colon' do
+      # Regression: PSM feat names never encode punctuation ("covert_art_escape_artist"),
+      # but some effect keys do ("Covert Art: Escape Artist"). Underscore-to-space
+      # substitution alone can't reconstruct the colon, so both the lookup value and the
+      # effect keys must be normalized the same way (colons included) before comparing.
+      stub_effect('Cooldowns', 'Covert Art: Escape Artist' => Time.now)
+
+      expect(described_class.normalize_lookup('Cooldowns', 'covert_art_escape_artist')).to be true
+    end
+
+    it 'still matches a plain underscored lookup against a punctuation-free effect key' do
+      stub_effect('Cooldowns', 'Bulwark' => Time.now)
+
+      expect(described_class.normalize_lookup('Cooldowns', 'bulwark')).to be true
+    end
+
+    it 'matches a Symbol lookup value the same way as an equivalent String' do
+      stub_effect('Cooldowns', 'Covert Art: Escape Artist' => Time.now)
+
+      expect(described_class.normalize_lookup('Cooldowns', :covert_art_escape_artist)).to be true
+    end
+
+    it 'returns false when no effect key matches' do
+      stub_effect('Cooldowns', 'Bulwark' => Time.now)
+
+      expect(described_class.normalize_lookup('Cooldowns', 'nonexistent_maneuver')).to be false
+    end
+
+    it 'delegates to the effect registry\'s active? for an Integer lookup value' do
+      stub_effect('Cooldowns', 119_818_740 => Time.now)
+
+      expect(described_class.normalize_lookup('Cooldowns', 119_818_740)).to be true
+    end
+
+    it 'raises for an unsupported lookup value type' do
+      stub_effect('Cooldowns', {})
+
+      expect { described_class.normalize_lookup('Cooldowns', 1.5) }.to raise_error(RuntimeError, /invalid lookup case/)
+    end
+  end
 end

@@ -1,0 +1,8 @@
+##### bone_shatter 89773198ba6660ec
+# expect: attacks=cast,bone_shatter | res=cs_td | flares=none | outcomes=warded | dmg=0 | statuses=
+# mixed exchange - this def never appears alone in the corpus
+<pushBold/>A <a exist="36687863" noun="skald">grim gigas skald</a><popBold/> directs the force of his voice at you!
+<pushBold/>A <a exist="36687863" noun="skald">grim gigas skald</a><popBold/> concentrates intently on you, and a pulse of pearlescent energy ripples toward you!
+  CS: +453 - TD: +575 + CvA: -36 + d100: +58 == -100
+  Warded off!
+

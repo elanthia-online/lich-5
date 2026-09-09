@@ -1,0 +1,32 @@
+##### shield_throw c697c02779ed78c5
+# expect: attacks=shield_throw | res=smr | flares=none | outcomes=none | dmg=7 | statuses=dispelled/add,prone/add,stunned/add
+Your faewood buckler flashes toward <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>!
+[SMR result: 302 (Open d100: 71, Bonus: 133)]
+   ... 100 points of damage!
+<pushBold/>The <a exist="67597902" noun="radical">triton radical</a><popBold/> gurgles once and goes still, a wrathful look on his face.
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> seems slightly different.
+The white light leaves <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The very powerful look leaves <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The brilliant aura fades away from <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The dull golden nimbus fades from around <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+A white glow rushes away from <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>.
+The dully illuminated mantle protecting <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> begins to falter, then completely fades away.
+Your faewood buckler ricochets off <pushBold/>the <a exist="67597902" noun="radical">triton radical</a><popBold/> and flashes toward <pushBold/>a <a exist="39300001" noun="executioner">triton executioner</a><popBold/>!
+[SMR result: 257 (Open d100: 51, Bonus: 112)]
+   ... 75 points of damage!
+   ... 35 points of damage!
+   Massive blow removes <pushBold/>the <a exist="39300001" noun="executioner">triton executioner</a><popBold/>'s right foot!
+   <pushBold/>A <a exist="39300001" noun="executioner">triton executioner</a><popBold/> falls to the ground grasping her mangled right leg!
+   <pushBold/>The <a exist="39300001" noun="executioner">triton executioner</a><popBold/> is stunned!
+   ... 30 points of damage!
+   Leg jerked violently.  <pushBold/>The <a exist="39300001" noun="executioner">triton executioner</a><popBold/> is stunned.
+Your faewood buckler ricochets off <pushBold/>the <a exist="39300001" noun="executioner">triton executioner</a><popBold/> and flashes toward <pushBold/>a <a exist="61408069" noun="siren">siren</a><popBold/>!
+[SMR result: 315 (Open d100: 70, Bonus: 112)]
+   ... 107 points of damage!
+   ... 45 points of damage!
+   It is knocked to the ground!
+   <pushBold/>The <a exist="61408069" noun="siren">siren</a><popBold/> is stunned!
+   ... 35 points of damage!
+You deftly catch your faewood buckler on the rebound.
+Roundtime: 3 sec.
+

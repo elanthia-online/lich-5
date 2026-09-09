@@ -1,37 +1,42 @@
 {
   schema_version: 3,
   name: "pale crab",
-  noun: "",
+  noun: "crab",
   url: "https://gswiki.play.net/pale_crab",
   picture: "",
   level: 2,
   family: "Crab",
   type: "Crustacean",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
   max_hp: 36,
-  speed: nil,
-  height: nil,
-  size: "",
+  speed: 12,
+  height: 1,
+  size: "small",
   areas: [
     {
       name: "Coastal Cliffs",
-      rooms: []
-    },
-    {
-      name: "River Tunnels",
-      rooms: []
+      uids: [2163601..2163628]
     },
     {
       name: "Vornavian Coast",
-      rooms: []
+      uids: [4202401..4202416]
+    },
+    {
+      name: "The Citadel",
+      uids: [2103018..2103034]
     }
   ],
   attack_attributes: {
@@ -42,7 +47,7 @@
       },
       {
         name: "Ensnare",
-        as: 43
+        as: (23..53)
       }
     ],
     bolt_spells: [],
@@ -55,22 +60,22 @@
   defense_attributes: {
     asg: "1N",
     immunities: [],
-    melee: 27,
-    ranged: 49,
+    melee: (36..57),
+    ranged: (34..54),
     bolt: 24,
-    udf: nil,
+    udf: 44,
     bar_td: 6,
-    cle_td: nil,
+    cle_td: 6,
     emp_td: 6,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: nil,
+    pal_td: (3..6),
+    ran_td: 6,
+    sor_td: 6,
     wiz_td: nil,
     mje_td: 6,
     mne_td: 6,
-    mjs_td: 6,
-    mns_td: 6,
-    mnm_td: nil,
+    mjs_td: (6..12),
+    mns_td: (6..12),
+    mnm_td: 6,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -79,24 +84,42 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: false,
     skin: "pale crab pincer",
-    other: nil
+    other: "ayanad crystal",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The giant pale crab is about a foot across and has large pincers at the end of each of its two arms. Its multiple legs make a skittering noise as it walks. The pale color seems to be the result of living in dark, wet caves for its entire life."
     ],
     arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    flee: [
+      "The crab skitters {direction}."
+    ],
+    death: [
+      "The pale crab falls back into a heap and dies.",
+      "The pale crab hisses one last time and dies."
+    ],
+    decay: [
+      "A pale crab decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A pale crab tries to ensnare you!"
+      ],
+      claw: [
+        "A pale crab claws at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

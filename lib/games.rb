@@ -911,6 +911,11 @@ module Lich
           # Process XML data
           process_xml_data(server_string) unless server_string =~ /^<settings /
 
+          # Passively capture the inventoryManager extended feed (read-only tap;
+          # returns the string unchanged and never raises -- see
+          # Lich::Common::Inventory.observe). Runs on this parser thread.
+          Lich::Common::Inventory.observe(server_string) if defined?(Lich::Common::Inventory)
+
           # Run downstream hooks
           process_downstream_hooks(server_string)
         end

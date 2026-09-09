@@ -1,36 +1,44 @@
 {
   schema_version: 3,
   name: "blackened decaying tumbleweed",
-  noun: "",
+  noun: "tumbleweed",
   url: "https://gswiki.play.net/blackened_decaying_tumbleweed",
   picture: "",
   level: 39,
   family: "Tumbleweed",
   type: "Plantlife",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: nil,
+  witherable: true,
+  sympathy: false,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "corporeal undead"
   ],
   bcs: true,
-  max_hp: 380,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 381,
+  speed: 7,
+  height: 3,
+  size: "medium",
   areas: [
     {
-      name: "Frozen Bramble",
-      rooms: []
+      name: "Abandoned Farm",
+      uids: [4124050..4124062]
     }
   ],
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Stinger (attack)",
-        as: "201 252"
+        name: "Stinger (attack)"
+      },
+      {
+        name: "Stinger",
+        as: 252
       }
     ],
     bolt_spells: [],
@@ -47,22 +55,22 @@
   defense_attributes: {
     asg: "12N",
     immunities: [],
-    melee: 265,
-    ranged: nil,
-    bolt: nil,
-    udf: 250,
+    melee: (105..309),
+    ranged: (123..148),
+    bolt: (123..148),
+    udf: (149..349),
     bar_td: nil,
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: "130 to 160",
+    cle_td: (138..147),
+    emp_td: (138..147),
+    pal_td: (108..117),
+    ran_td: (111..117),
+    sor_td: (130..160),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: "137 to 167",
-    mjs_td: nil,
-    mns_td: "123 to 153",
-    mnm_td: nil,
+    mje_td: 150,
+    mne_td: (137..167),
+    mjs_td: (183..192),
+    mns_td: (123..153),
+    mnm_td: (114..123),
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -71,24 +79,35 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: "desiccated stem",
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      ";Description\nNot exactly the best representative of its Species, let alone its Genus, none-the-less, the inclusion of this particular tumbleweed would make a fine addition to anyone's tumbleweed collection. Just for its uniqueness if nothing else. Of course unlike most tumbleweed, this one might object to being collected, VIGOUROUSLY.\n\n;Assess\nThe decaying tumbleweed is medium in size and about three feet high in its current state."
+    description: [],
+    arrival: [
+      "A blackened decaying tumbleweed spins in kicking up snow as it arrives!"
     ],
-    arrival: [],
-    flee: [],
+    flee: [
+      "A blackened decaying tumbleweed rolls {direction}."
+    ],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A blackened decaying tumbleweed stabs at you with {pronoun} stinger!",
+        "A blackened decaying tumbleweed stabs at {target} with {pronoun} stinger!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

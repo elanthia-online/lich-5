@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "spectral black warhorse",
-  noun: "",
+  noun: "warhorse",
   url: "https://gswiki.play.net/spectral_black_warhorse",
   picture: "",
   level: nil,
   family: "",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
   max_hp: nil,
@@ -22,12 +27,15 @@
   attack_attributes: {
     physical_attacks: [
       {
-        name: "Charge (attack)",
-        as: "265 = 330"
+        name: "Charge (attack)"
       },
       {
         name: "Stomp",
         as: 250
+      },
+      {
+        name: "Charge",
+        as: 190
       }
     ],
     bolt_spells: [],
@@ -68,24 +76,30 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
     skin: nil,
-    other: nil
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
-    description: [
-      "You are not quite sure what to make of the black warhorse, as you have never seen anything that looks quite like it. Stopping a moment, you try to commit this creature to memory so that you can tell tales of it to your fellow adventurers back in the safety of the local tavern."
-    ],
+    description: [],
     arrival: [],
     flee: [],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A spectral black warhorse charges at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

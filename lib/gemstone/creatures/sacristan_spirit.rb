@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "sacristan spirit",
-  noun: "",
+  noun: "spirit",
   url: "https://gswiki.play.net/sacristan_spirit",
   picture: "",
   level: 25,
   family: "Ghost",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: false,
+  bones: false,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: true,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Non-corporeal undead"
   ],
   bcs: true,
   max_hp: 205,
   speed: nil,
-  height: nil,
-  size: "",
+  height: 5,
+  size: "medium",
   areas: [
     {
       name: "Lunule Weald",
-      rooms: []
+      uids: [14016001..14016038]
     }
   ],
   attack_attributes: {
@@ -31,6 +36,10 @@
       {
         name: "a twisted black steel half moon",
         as: 211
+      },
+      {
+        name: "Twisted black steel half moon",
+        as: (172..207)
       }
     ],
     bolt_spells: [],
@@ -50,6 +59,10 @@
       {
         name: "Silence (210)",
         cs: 142
+      },
+      {
+        name: "Twisted black steel half moon",
+        cs: 145
       }
     ],
     offensive_spells: [
@@ -64,22 +77,22 @@
   defense_attributes: {
     asg: "8",
     immunities: [],
-    melee: 205,
-    ranged: nil,
-    bolt: 137,
-    udf: nil,
+    melee: (103..219),
+    ranged: (103..116),
+    bolt: (103..116),
+    udf: (160..243),
     bar_td: (81..92),
-    cle_td: nil,
-    emp_td: nil,
-    pal_td: nil,
-    ran_td: nil,
-    sor_td: 96,
+    cle_td: (88..98),
+    emp_td: (90..100),
+    pal_td: (81..87),
+    ran_td: (80..87),
+    sor_td: (96..103),
     wiz_td: nil,
-    mje_td: nil,
-    mne_td: 103,
-    mjs_td: nil,
-    mns_td: 92,
-    mnm_td: nil,
+    mje_td: (98..103),
+    mne_td: (98..103),
+    mjs_td: (90..100),
+    mns_td: (90..100),
+    mnm_td: (75..80),
     defensive_spells: [
       "Prayer of Protection",
       "Prismatic Guard",
@@ -94,13 +107,19 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a twisted black steel half moon",
+    "some tanned dark grey leathers"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: nil,
-    other: "Glimmering blue essence shardGlimmering blue mote of essence"
+    other: "Glimmering blue essence shardGlimmering blue mote of essence",
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -108,10 +127,22 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
-    decay: [],
+    death: [
+      "A sacristan spirit fades into oblivion."
+    ],
+    decay: [
+      "A sacristan spirit fades into oblivion."
+    ],
     search: [],
-    spell_prep: [],
+    spell_prep: [
+      "A sacristan spirit chants eerily for a moment before rising to {pronoun} feet!",
+      "A sacristan spirit utters an arcane incantation."
+    ],
+    attacks: {
+      attack: [
+        "A sacristan spirit swings {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

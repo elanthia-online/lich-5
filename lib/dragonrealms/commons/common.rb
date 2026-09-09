@@ -983,23 +983,35 @@ module Lich
         @safe_pause_prev_ignore_pause = @safe_pause_holder&.ignore_pause
         @safe_pause_holder&.ignore_pause = true
 
-        paused_script_list = []
+        # Capture the exact Script objects we pause -- not their names. The
+        # matching safe_unpause_list restores from this list directly instead of
+        # re-scanning Script.running by name. A name + live-rescan restore
+        # silently drops any script that has left Script.running between pause
+        # and unpause (gone hidden, or mid start/teardown) or whose pause flags
+        # changed, stranding it paused forever while the log still claims it was
+        # unpaused. Holding the objects makes the restore undo exactly what the
+        # pause did.
+        paused_scripts = []
         Script.running.find_all { |s| !s.paused? && !s.no_pause_all && s.name != Script.self.name }.each do |s|
           s.pause
-          paused_script_list << s.name
+          paused_scripts << s
         end
-        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_script_list} to run #{Script.self.name}")
-        return paused_script_list
+        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_scripts.map(&:name)} to run #{Script.self.name}")
+        return paused_scripts
       end
 
-      def safe_unpause_list(scripts_to_unpause)
+      def safe_unpause_list(paused_scripts)
         return false unless $safe_pause_lock.owned?
 
-        if scripts_to_unpause.empty?
+        if paused_scripts.empty?
           Lich::Messaging.msg("plain", "DRC: #{Script.self.name} has finished.")
         else
-          Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
-          Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+          Lich::Messaging.msg("plain", "DRC: Unpausing #{paused_scripts.map(&:name)}, #{Script.self.name} has finished.")
+          # Unpause exactly the objects we paused, regardless of their current
+          # Script.running visibility or flags. Skip any a peer already unpaused
+          # so we neither emit spurious "is not paused" noise nor fight another
+          # coordinator that has since taken ownership of the pause.
+          paused_scripts.each { |s| s.unpause if s.paused? }
         end
         # Restore the holder's pre-lock pause immunity before releasing the lock,
         # so we never leave a script permanently unpausable.

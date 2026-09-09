@@ -143,9 +143,9 @@ module Lich
           begin
             if file_name =~ /\.(?:cmd|wiz)(?:\.gz)?$/i
               trusted = false
-              script_obj = WizardScript.new("#{SCRIPT_DIR}/#{file_name}", script_args, false)
+              script_obj = WizardScript.new(File.join(SCRIPT_DIR, file_name), script_args, false)
             else
-              script_obj = Script.new(:file => "#{SCRIPT_DIR}/#{file_name}", :args => script_args, :quiet => options[:quiet], :publish => false)
+              script_obj = Script.new(:file => File.join(SCRIPT_DIR, file_name), :args => script_args, :quiet => options[:quiet], :publish => false)
               trusted = script_obj.labels.length <= 1
             end
             if trusted
@@ -243,17 +243,17 @@ module Lich
         if script_name =~ /\\|\//
           nil
         elsif script_name =~ /\.(?:lic|lich|rb|cmd|wiz)(?:\.gz)?$/i
-          File.exist?("#{SCRIPT_DIR}/#{script_name}") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}")
+          File.exist?(File.join(SCRIPT_DIR, script_name)) || File.exist?(File.join(SCRIPT_DIR, "custom", script_name))
         else
-          File.exist?("#{SCRIPT_DIR}/#{script_name}.lic") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.lich") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lich") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.rb") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.lic.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.lic.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.rb.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.rb.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.cmd.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.cmd.gz") ||
-            File.exist?("#{SCRIPT_DIR}/#{script_name}.wiz.gz") || File.exist?("#{SCRIPT_DIR}/custom/#{script_name}.wiz.gz")
+          File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lic")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lic")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lich")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lich")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.rb")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.rb")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.cmd")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.cmd")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.wiz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.wiz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.lic.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.lic.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.rb.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.rb.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.cmd.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.cmd.gz")) ||
+            File.exist?(File.join(SCRIPT_DIR, "#{script_name}.wiz.gz")) || File.exist?(File.join(SCRIPT_DIR, "custom", "#{script_name}.wiz.gz"))
         end
       }
       @@elevated_log = proc { |data|
@@ -262,8 +262,8 @@ module Lich
             nil
           else
             begin
-              Dir.mkdir("#{LICH_DIR}/logs") unless File.exist?("#{LICH_DIR}/logs")
-              File.open("#{LICH_DIR}/logs/#{script.name}.log", 'a') { |f| f.puts data }
+              Dir.mkdir(LOG_DIR) unless File.exist?(LOG_DIR)
+              File.open(File.join(LOG_DIR, "#{script.name}.log"), 'a') { |f| f.puts data }
               true
             rescue
               respond "--- Lich: error: Script.log: #{$!}"
@@ -284,7 +284,7 @@ module Lich
             respond '--- error: Script.db cannot be used by exec scripts'
             nil
           else
-            SQLite3::Database.new("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.db3")
+            SQLite3::Database.new(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.db3"))
           end
         else
           respond '--- error: Script.db called by an unknown script'
@@ -303,12 +303,12 @@ module Lich
             respond '--- error: Script.open_file cannot be used by exec scripts'
             nil
           elsif ext.downcase == 'db3'
-            SQLite3::Database.new("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.db3")
+            SQLite3::Database.new(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.db3"))
             # fixme: block gets elevated... why?
             #         elsif block
             #            File.open("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}", mode, &block)
           else
-            File.open("#{DATA_DIR}/#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}", mode)
+            File.open(File.join(DATA_DIR, "#{script.name.gsub(/\/|\\/, '_')}.#{ext.gsub(/\/|\\/, '_')}"), mode)
           end
         else
           respond '--- error: Script.open_file called by an unknown script'
@@ -400,7 +400,7 @@ module Lich
           Dir.children(dir)
              .select { |f| f =~ /\.(lic|rb|cmd|wiz)(\.(gz|Z))?$/i }
              .sort_by { |fn| fn.sub(/\.[^.]+$/, '') }
-             .map { |s| "#{prefix}/#{s}" }
+             .map { |s| File.join(prefix, s) }
         } + Dir.children(SCRIPT_DIR).sort_by { |fn| fn.sub(/[.](lic|rb|cmd|wiz)$/, '') }
         file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}\.(?:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/i } ||
           file_list.find { |val| val =~ /^(?:\/custom\/(?:[^\/]+\/)?)?#{escaped}[^.]+\.(?i:lic|rb|cmd|wiz)(?:\.gz|\.Z)?$/ } ||
@@ -476,7 +476,7 @@ module Lich
       # @return [Array<String>, nil] the header comment lines, or nil when no file matches
       def Script.__header_lines_for(script_name)
         file_name = __find_script_file(script_name.sub(/[.](lic|rb|cmd|wiz)$/, ''))
-        file_name && __read_header_comments("#{SCRIPT_DIR}/#{file_name}")
+        file_name && __read_header_comments(File.join(SCRIPT_DIR, file_name))
       end
       private_class_method :__header_lines_for
 
@@ -1020,22 +1020,59 @@ module Lich
         script
       end
 
-      def Script.current
+      # Resolves the script bound to the current thread, without waiting out
+      # any pause. Used by Script.current and by other checkpoints that need
+      # to know "who's calling" before gating on that caller's pause state.
+      #
+      # @return [Script, nil] the script bound to Thread.current, or nil
+      # @api private
+      def Script.__resolve_current
         script = Thread.current.thread_variable_get(CLEANUP_SCRIPT_THREAD_KEY)
         script ||= __running_snapshot.find { |candidate| candidate.has_thread?(Thread.current) }
-        if script
-          sleep 0.2 while script.paused? and not script.ignore_pause
-          script
-        else
-          nil
-        end
+        script
+      end
+      private_class_method :__resolve_current
+
+      # Returns the script bound to the calling thread.
+      #
+      # Blocks the calling thread while that script is paused (unless it has
+      # opted out via +ignore_pause+) before returning, so callers cannot
+      # observe or act past a pause. This includes indirect callers such as
+      # {.running?}, {.start}, and {.run} that use it (or the equivalent
+      # {#wait_while_paused!} checkpoint) internally.
+      #
+      # @return [Script, nil] the calling script, or nil when called with no
+      #   script bound to the current thread (e.g. from the core/CLI)
+      def Script.current
+        script = __resolve_current
+        script&.wait_while_paused!
+        script
       end
 
+      # Starts a script, blocking first if the calling script is paused.
+      #
+      # @param args [Array] arguments forwarded to the underlying script
+      #   start machinery (script name, params, flags -- see callers for the
+      #   accepted shapes)
+      # @return [Script, nil] the started script, or nil on failure
+      # @note Blocks the calling thread while it is itself paused (unless
+      #   exempt via +ignore_pause+) before starting anything; a no-op wait
+      #   when called with no script bound to the current thread.
       def Script.start(*args)
+        __resolve_current&.wait_while_paused!
         @@elevated_script_start.call(args, nil)
       end
 
+      # Starts a script and blocks the calling thread until it finishes.
+      #
+      # @param args [Array] arguments forwarded to {.start}
+      # @return [Script, nil] the started script's own return value from
+      #   {Script#join}, or nil if it failed to start
+      # @note Blocks the calling thread while it is itself paused (unless
+      #   exempt via +ignore_pause+) before starting anything, the same as
+      #   {.start}.
       def Script.run(*args)
+        __resolve_current&.wait_while_paused!
         if (s = @@elevated_script_start.call(args, nil))
           s.join
         end
@@ -1312,7 +1349,17 @@ module Lich
       end
       private_class_method :__prune_library_waits_locked
 
+      # Checks whether a script by that name is currently running.
+      #
+      # @param name [String] script name (case-insensitive)
+      # @return [Boolean] true if a running script matches
+      # @note Blocks the calling thread while it is itself paused (unless
+      #   exempt via +ignore_pause+) before checking; a no-op wait when
+      #   called with no script bound to the current thread. A paused caller
+      #   can therefore block here indefinitely -- this is not a plain,
+      #   always-immediate predicate.
       def Script.running?(name)
+        __resolve_current&.wait_while_paused!
         __running_snapshot.any? { |i| (i.name =~ /^#{name}$/i) }
       end
 
@@ -1352,10 +1399,16 @@ module Lich
       # @param context [Symbol] kill context forwarded to {Script#kill}
       #   (:runtime or :shutdown)
       # @return [Boolean] true when a matching running script was found and stopped
+      # @note Blocks the calling thread while it is itself paused (unless
+      #   exempt via +ignore_pause+) before taking effect on the named
+      #   script; a no-op wait when called with no script bound to the
+      #   current thread (e.g. from the core/CLI).
       def Script.kill(name, context: :runtime)
         unless VALID_KILL_CONTEXTS.include?(context)
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
+
+        __resolve_current&.wait_while_paused!
 
         running = __running_snapshot
         if (s = (running.find { |i| i.name == name }) || (running.find { |i| i.name =~ /^#{name}$/i }))
@@ -1373,10 +1426,15 @@ module Lich
       # @param force [Boolean] include hidden and kill-all-protected scripts
       # @param context [Symbol] lifecycle context forwarded to {Script#kill}
       # @return [Integer] number of scripts selected
+      # @note Blocks the calling thread while it is itself paused (unless
+      #   exempt via +ignore_pause+) before selecting scripts to kill; a
+      #   no-op wait when called with no script bound to the current thread.
       def Script.kill_all(force: false, context: :runtime)
         unless VALID_KILL_CONTEXTS.include?(context)
           raise ArgumentError, "invalid script kill context: #{context.inspect}"
         end
+
+        __resolve_current&.wait_while_paused!
 
         scripts = force ? Script.list : Script.running.reject(&:no_kill_all)
         scripts.each { |script| script.kill(context: context) }
@@ -2056,13 +2114,19 @@ module Lich
                 __stop_children(children, context)
                 raise cleanup_group_error if cleanup_group_error
 
+                # Clear pause state before die_with propagation: this cleanup
+                # thread identifies as `self` (CLEANUP_SCRIPT_THREAD_KEY), so
+                # Script.kill's calling-script pause checkpoint would
+                # otherwise wait on a paused script's own teardown to unpause
+                # it -- which never happens, deadlocking cleanup and leaving
+                # die_with dependents unstopped.
+                @paused = false
                 @die_with ||= []
                 __run_cleanup_queue(@die_with) do |script_name|
                   failed = true unless __run_cleanup_callback do
                     Script.kill(script_name, context: context)
                   end
                 end
-                @paused = false
                 @at_exit_procs ||= []
                 __run_cleanup_queue(@at_exit_procs) do |callback|
                   failed = true unless __run_cleanup_callback { callback.call }
@@ -2743,6 +2807,16 @@ module Lich
 
       def paused?
         @paused
+      end
+
+      # Blocks the calling thread until this script is no longer paused (or
+      # is exempt via ignore_pause). Extracted so every pause checkpoint --
+      # Script.current and any other blocking/mutating call site -- shares
+      # one implementation instead of inlining the sleep loop.
+      #
+      # @return [void]
+      def wait_while_paused!
+        sleep 0.2 while paused? and not ignore_pause
       end
 
       def get_next_label

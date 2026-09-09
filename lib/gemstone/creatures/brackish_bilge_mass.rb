@@ -1,26 +1,41 @@
 {
   schema_version: 3,
   name: "brackish bilge mass",
-  noun: "",
+  noun: "mass",
   url: "https://gswiki.play.net/brackish_bilge_mass",
   picture: "",
   level: 104,
   family: "",
   type: "",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [],
   bcs: nil,
-  max_hp: nil,
+  max_hp: 327,
   speed: nil,
   height: nil,
   size: "",
-  areas: [],
+  areas: [
+    {
+      name: "Sailor's Grief",
+      uids: [7150501..7150535]
+    }
+  ],
   attack_attributes: {
-    physical_attacks: [],
+    physical_attacks: [
+      {
+        name: "Huge black alloy greatsword",
+        as: 592
+      }
+    ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
@@ -34,7 +49,7 @@
     melee: nil,
     ranged: nil,
     bolt: nil,
-    udf: nil,
+    udf: (663..766),
     bar_td: nil,
     cle_td: nil,
     emp_td: nil,
@@ -55,13 +70,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: false,
-    magic_items: nil,
+    coins: true,
+    magic_items: true,
     gems: true,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

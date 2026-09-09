@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "soul golem",
-  noun: "",
+  noun: "golem",
   url: "https://gswiki.play.net/soul_golem",
   picture: "",
   level: 63,
   family: "Golem",
   type: "Biped",
   undead: true,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: false,
+  limbs: nil,
+  witherable: false,
+  sympathy: false,
   muggable: nil,
+  sleepable: false,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Corporeal undead"
   ],
   bcs: true,
   max_hp: 500,
-  speed: nil,
+  speed: 9,
   height: nil,
   size: "",
   areas: [
     {
-      name: "Temple of Luukos",
-      rooms: []
+      name: "Dark Palisade",
+      uids: [3041016..3041025]
     }
   ],
   attack_attributes: {
@@ -60,7 +65,7 @@
     bolt: nil,
     udf: nil,
     bar_td: nil,
-    cle_td: 250,
+    cle_td: (250..253),
     emp_td: nil,
     pal_td: nil,
     ran_td: nil,
@@ -79,13 +84,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
-    coins: nil,
+    coins: true,
     magic_items: nil,
     gems: nil,
     boxes: true,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
@@ -93,10 +101,19 @@
     ],
     arrival: [],
     flee: [],
-    death: [],
+    death: [
+      "The soul golem falls to the floor dead, {pronoun} husk still pulsating with a blinding white hue."
+    ],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A soul golem pounds at you with {pronoun} glaes gauntleted left fist!",
+        "A soul golem pounds at you with {pronoun} glaes gauntleted right fist!",
+        "A soul golem tries to ensnare you in {pronoun} solid glaes arms!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

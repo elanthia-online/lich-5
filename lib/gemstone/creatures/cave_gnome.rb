@@ -1,41 +1,42 @@
 {
   schema_version: 3,
   name: "cave gnome",
-  noun: "",
+  noun: "gnome",
   url: "https://gswiki.play.net/cave_gnome",
   picture: "",
   level: 2,
   family: "Humanoid",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
-  muggable: nil,
+  blood: true,
+  bones: true,
+  limbs: true,
+  witherable: true,
+  sympathy: true,
+  muggable: false,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: 51,
-  speed: nil,
-  height: nil,
-  size: "",
+  max_hp: 50,
+  speed: 15,
+  height: 3,
+  size: "small",
   areas: [
     {
-      name: "Wehnimer's Landing",
-      rooms: []
+      name: "Catacombs",
+      uids: [46029..46033, 46035..46037]
     },
     {
-      name: "Icemule Environs",
-      rooms: []
+      name: "Upper Dragonsclaw",
+      uids: [2121015..2121024]
     },
     {
-      name: "Old Mine Road",
-      rooms: []
-    },
-    {
-      name: "Wehnimer's Environs",
-      rooms: []
+      name: "Subterranean Tunnels",
+      uids: [4045120..4045141]
     }
   ],
   attack_attributes: {
@@ -50,7 +51,15 @@
       },
       {
         name: "Short sword",
+        as: (46..52)
+      },
+      {
+        name: "Unknown",
         as: 52
+      },
+      {
+        name: "Closed fist",
+        as: 42
       }
     ],
     bolt_spells: [],
@@ -63,22 +72,22 @@
   defense_attributes: {
     asg: nil,
     immunities: [],
-    melee: (2..25),
-    ranged: nil,
-    bolt: nil,
-    udf: (39..57),
+    melee: (0..94),
+    ranged: (7..10),
+    bolt: (7..10),
+    udf: (37..61),
     bar_td: nil,
     cle_td: 6,
-    emp_td: nil,
-    pal_td: nil,
+    emp_td: 6,
+    pal_td: (3..6),
     ran_td: 6,
-    sor_td: nil,
+    sor_td: 6,
     wiz_td: nil,
     mje_td: 6,
     mne_td: 6,
     mjs_td: 6,
     mns_td: 6,
-    mnm_td: nil,
+    mnm_td: 6,
     defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
@@ -87,24 +96,53 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [
+    "a handaxe",
+    "a leather breastplate",
+    "a reinforced shield",
+    "a short sword",
+    "a wooden shield"
+  ],
   treasure: {
     coins: true,
     magic_items: true,
     gems: true,
     boxes: true,
     skin: "a gnome scalp",
-    other: "Alchemy (common)"
+    other: [
+      "Alchemy (common)",
+      "ayanad crystal"
+    ],
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "This very short creature resembles, if anything, a misshapen dwarf. Whereas dwarves carry themselves upright, the cave gnome scampers about in a hunched over fashion, peering malignantly up at intruders through bulging purple eyes set on a head seemingly a few sizes too big for the associated body. Do not mistake their size as a limitation, though. The cave gnome regularly bounces high enough in combat to strike giantmen square in the head."
     ],
-    arrival: [],
-    flee: [],
-    death: [],
-    decay: [],
+    arrival: [
+      "A cave gnome just arrived.",
+      "A cave gnome just arrived, limping.",
+      "A cave gnome ambles in."
+    ],
+    flee: [
+      "A cave gnome heads {direction}.",
+      "A cave gnome limps {direction}."
+    ],
+    death: [
+      "The cave gnome falls to the ground and dies.",
+      "The cave gnome screams one last time and dies."
+    ],
+    decay: [
+      "A cave gnome decays into compost."
+    ],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A cave gnome swings {weapon} at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {

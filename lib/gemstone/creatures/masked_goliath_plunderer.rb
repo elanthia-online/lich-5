@@ -1,29 +1,34 @@
 {
   schema_version: 3,
   name: "masked goliath plunderer",
-  noun: "",
+  noun: "plunderer",
   url: "https://gswiki.play.net/masked_goliath_plunderer",
   picture: "",
   level: 115,
   family: "Goliath",
   type: "Biped",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
   bcs: true,
-  max_hp: nil,
+  max_hp: 450,
   speed: nil,
   height: nil,
   size: "",
   areas: [
     {
       name: "Empyrean Onslaughts",
-      rooms: []
+      uids: []
     }
   ],
   attack_attributes: {
@@ -90,13 +95,16 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: nil,
     magic_items: nil,
     gems: nil,
     boxes: nil,
-    skin: "No",
-    other: nil
+    skin: nil,
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [

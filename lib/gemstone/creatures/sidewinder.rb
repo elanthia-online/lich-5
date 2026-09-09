@@ -1,17 +1,22 @@
 {
   schema_version: 3,
   name: "sidewinder",
-  noun: "",
+  noun: "sidewinder",
   url: "https://gswiki.play.net/sidewinder",
   picture: "",
-  level: 96,
+  level: 98,
   family: "Reptilian",
   type: "Ophidian",
   undead: false,
-  has_blood: nil,
-  has_bones: nil,
+  blood: nil,
+  bones: nil,
+  limbs: nil,
+  witherable: nil,
+  sympathy: nil,
   muggable: nil,
+  sleepable: nil,
   boss: false,
+  boss_type: nil,
   otherclass: [
     "Living"
   ],
@@ -22,8 +27,12 @@
   size: "",
   areas: [
     {
-      name: "Sanctum",
-      rooms: []
+      name: "Shadow of the Sanctum",
+      uids: [4216141..4216141, 4216148..4216148]
+    },
+    {
+      name: "unmapped",
+      uids: [4216142..4216147]
     }
   ],
   attack_attributes: {
@@ -31,12 +40,20 @@
       {
         name: "Bite",
         as: 459
+      },
+      {
+        name: "Strike",
+        as: 469
       }
     ],
     bolt_spells: [],
     warding_spells: [],
     offensive_spells: [],
-    maneuvers: [],
+    maneuvers: [
+      {
+        name: "Strike"
+      }
+    ],
     special_abilities: [],
     special_notes: []
   },
@@ -67,24 +84,37 @@
   abilities: [],
   alchemy: [],
   abilities_misc: [],
+  equipment: [],
   treasure: {
     coins: false,
     magic_items: false,
     gems: false,
     boxes: false,
     skin: "a sidewinder scale",
-    other: "no"
+    other: nil,
+    armaments: nil,
+    transmogs: nil
   },
   messaging: {
     description: [
       "The swiftly writhing coils and flared, triangular head tells one all they need to know about the sidewinder: it is fast, and it is deadly. Scales as white as ivory flakes proceed in a sinuous pattern down the sidewinder's back, the muscles beneath undulating from side to side to propel it forward."
     ],
-    arrival: [],
-    flee: [],
+    arrival: [
+      "A white sidewinder slithers in, silent as a pale shadow."
+    ],
+    flee: [
+      "A white sidewinder cuts a winding path across the floor as it slithers {direction}."
+    ],
     death: [],
     decay: [],
     search: [],
     spell_prep: [],
+    attacks: {
+      attack: [
+        "A sheen of venom glistening from {pronoun} needle-sharp fangs, a white sidewinder strikes at you!",
+        "A sidewinder darts in for a quick strike at you!"
+      ]
+    },
     info: {
       general: [],
       class_tips: {
