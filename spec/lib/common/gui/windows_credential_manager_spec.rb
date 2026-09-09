@@ -48,6 +48,11 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     # whether a real or stubbed version of that method exists.
     it 'never calls Lich::Util.install_gem_requirements off Windows' do
       allow(OS).to receive(:windows?).and_return(false)
+      # This file's own `require 'ffi'` above already defines FFI, which would mask
+      # a regression where extend FFI::Library/CredentialStruct escaped the guard
+      # without calling install_gem_requirements. Hide it so a reload only succeeds
+      # if the guard keeps every FFI reference out of the non-Windows load path.
+      hide_const('FFI')
       expect(Lich::Util).not_to receive(:install_gem_requirements)
 
       load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
