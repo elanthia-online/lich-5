@@ -1118,6 +1118,26 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(rift.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:resolutions].map { |r| r[:result] }] }).to eq([[:rift_tentacles, true, 129629246, [61]]])
     end
 
+    it 'marks a spell wearing off in the same chunk as the fatal crit as a death drop, not a dispel' do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      emitted = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      described_class.instance_variable_set(:@deferred_emits, nil)
+      skald = bolded(160902365, 'skald', 'a grim gigas skald')
+      described_class.parse_events([
+                                     "You take aim and fire a faewood arrow at #{skald}!",
+                                     '  AS: +632 vs DS: +500 with AvD: +32 + d100 roll: +70 = +234',
+                                     '   ... and hit for 75 points of damage!',
+                                     '   Incredible shot to the eye penetrates deep into skull!',
+                                     "#{skald} raises a hand as if to grasp for support as he collapses, life going out of his form.",
+                                     "A white glow rushes away from #{skald}."
+                                   ])
+      loss = emitted.find { |t, _| t == :spell_loss }&.last
+      expect(loss).to include(id: 160902365, spell: 303, spell_name: 'Prayer of Protection', cause: :death)
+      expect(emitted.none? { |t, p| t == :status && p[:status].to_s == 'dispelled' }).to be(true)
+    end
+
     it "keeps nearby players' gigas-village spells foreign: spellsong (and its sonic kill), fear cry, golden waves, 3p moonbeam" do
       kal = '<a exist="-10930001" noun="Kalithra">Kalithra</a>'
       skald = bolded(130610001, 'skald', 'a grim gigas skald')

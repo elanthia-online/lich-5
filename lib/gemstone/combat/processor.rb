@@ -372,6 +372,13 @@ module Lich
           # spell_loss cause - a wear-off riding a dispel strip means
           # something different from natural expiry or death cleanup.
           chunk_dispels = []
+          # Creatures THIS chunk killed (fatal crit, coup kill), by exist id.
+          # The registry learns of the death only when the chunk persists,
+          # but the wear-off lines that follow a death line are already in
+          # this chunk - without this a skald's 303 dropping on her death
+          # was a cause-less loss (owner 2026-09-09: "spells falling off
+          # during death versus being removed by a dispel").
+          chunk_deaths = []
           # Ownership of DoT/effect casts we saw in this blob, keyed PER VICTIM
           # as [spell_name, target_key] (target_key = the victim's exist id, or
           # its name when unresolved). :self when our 2p cast line fired ("You
@@ -590,8 +597,9 @@ module Lich
                 cause = nil
                 if chunk_dispels.include?(loss[:id]) || chunk_dispels.include?(:any)
                   cause = :dispel
-                elsif loss[:id] && defined?(Creature) && (c = Creature[loss[:id]]) &&
-                      (c.dead? || (c.respond_to?(:crtr_flag?) && c.crtr_flag?(:dead)))
+                elsif chunk_deaths.include?(loss[:id]) ||
+                      (loss[:id] && defined?(Creature) && (c = Creature[loss[:id]]) &&
+                       (c.dead? || (c.respond_to?(:crtr_flag?) && c.crtr_flag?(:dead))))
                   cause = :death
                 end
                 emit_fact(:spell_loss, id: loss[:id], name: loss[:name],
@@ -1345,6 +1353,7 @@ module Lich
                  (coup_loc = Definitions::Attacks.coup_kill_location(line))
                 current_event[:hits] << { damage: 0, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
                                                              wound_rank: nil, fatal: true } }
+                chunk_deaths << current_event[:target][:id] if current_event[:target] && current_event[:target][:id]
                 respond '[Combat] Coup de grace kill' if Tracker.debug?(:verbose)
               elsif (damage = Parser.parse_damage(line))
                 # a one-hit side effect already has its hit: this damage is
@@ -1411,6 +1420,10 @@ module Lich
                       # documents which table row matched, and it makes the
                       # payload unserialisable for any recorder downstream.
                       hit[:crit] = c.reject { |k, _| k == :regex }
+                      if c[:fatal]
+                        victim = flare_ctx ? flare_ctx[:target_info] : (sink[:target_info] || sink[:target])
+                        chunk_deaths << victim[:id] if victim && victim[:id]
+                      end
                       respond "[Combat] Found critical hit: #{c[:location]} rank #{c[:wound_rank]}" if Tracker.debug?(:verbose)
                       break # Only take first crit found after this damage
                     end
