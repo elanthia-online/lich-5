@@ -41,6 +41,8 @@ module Lich
       CLEANUP_SCRIPT_THREAD_KEY = :lich_cleanup_script
       EXECUTION_GUARD_MUTEX_INITIALIZER = Mutex.new
       EXECUTION_GUARD_POLL_INTERVAL = 0.05
+      # Script instances expose cooperative execution guard scopes/checkpoints.
+      EXECUTION_GUARD_PROTOCOL = 1
       # Named-script starts accept a policy installed before the worker runs.
       START_EXECUTION_GUARD_PROTOCOL = 1
       # Guards can explicitly prohibit native script starts by their workers.

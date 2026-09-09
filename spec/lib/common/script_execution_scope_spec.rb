@@ -51,6 +51,10 @@ RSpec.describe 'Lich::Common::Script execution guard scope' do
     end.tap { |thread| @workers << thread }
   end
 
+  it 'advertises the script-instance execution guard protocol' do
+    expect(script_class::EXECUTION_GUARD_PROTOCOL).to eq(1)
+  end
+
   def joined_value(thread)
     expect(thread.join(1)).to equal(thread)
     thread.value

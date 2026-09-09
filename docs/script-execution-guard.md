@@ -74,7 +74,10 @@ child.join
 raise 'go2 failed' unless child.completed_successfully?
 ```
 
-`Script::START_EXECUTION_GUARD_PROTOCOL == 1` identifies support. `Script.start`,
+`Script::EXECUTION_GUARD_PROTOCOL == 1` identifies the instance guard API
+(`with_execution_guard`, `execution_guard_active?`, `check_execution_guard!`,
+and `execution_sleep`). `Script::START_EXECUTION_GUARD_PROTOCOL == 1`
+separately identifies guarded named-script startup support. `Script.start`,
 `Script.run`, and `Script.run_child` accept the same options hash; `run_child`
 also accepts `execution_guard: policy` alongside its `timeout:` keyword.
 Omitting the option (or passing `nil`) keeps ordinary launch behavior.
