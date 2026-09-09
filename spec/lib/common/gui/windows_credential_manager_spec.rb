@@ -58,6 +58,10 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     # never touch Lich::Util.install_gem_requirements off Windows, regardless of
     # whether a real or stubbed version of that method exists.
     it 'never calls Lich::Util.install_gem_requirements off Windows' do
+      # Reload into a disposable module rather than the real WindowsCredentialManager
+      # constant, so this doesn't leave load-time state (or, in the Windows test below,
+      # fake singleton bindings) on the module every other example in this file shares.
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', Module.new)
       allow(OS).to receive(:windows?).and_return(false)
       # This file's own `require 'ffi'` above already defines FFI, which would mask
       # a regression where extend FFI::Library/CredentialStruct escaped the guard
@@ -76,6 +80,12 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     # branch's call sequence - installer, DLL names, function bindings - without
     # needing real Windows, instead of skipping this branch on CI entirely.
     it 'installs ffi, loads the Windows DLLs, and binds the expected Credential Manager functions' do
+      # The fake attach_function below defines singleton methods (CredReadW, etc.) on
+      # whatever module it's called on. Reload into a disposable module instead of the
+      # real WindowsCredentialManager constant so those fakes don't leak into it and
+      # get exercised by later examples in this file instead of the real bindings.
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', Module.new)
+
       ffi_lib_calls = []
       attach_function_calls = []
       original_ffi_lib = FFI::Library.instance_method(:ffi_lib)
