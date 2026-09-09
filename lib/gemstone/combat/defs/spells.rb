@@ -178,7 +178,13 @@ module Lich
             # matched OUR OWN limb ("Your right leg explodes!") and opened an
             # attack event against us.
             AttackDef.new(:limb_disruption, [/The (?<target>.+?)'s#{MK_POST} (?:right|left) (?:leg|arm|hand|eye) explodes!/].freeze),
-            AttackDef.new(:moonbeam, [/You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [
+              /You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/,
+              # 611 evoked: "Tapping the moons above, you draw down a shaft of
+              # swirling moonlight and bathe X in its muted glow." then SMR
+              # (hunt log 2026-09-09 10:45); the moon adjectives vary
+              /you draw down a shaft of \w+ moonlight and bathes? (?<target>.+?) in its \w+ glow\./
+            ].freeze),
             AttackDef.new(:pestilence, [
               /You exhale a virulent green mist toward (?<target>[^,]+), instantly infecting/,
               # 3p: a group member casts it. Without this the per-target
@@ -274,6 +280,19 @@ module Lich
               /(?<attacker>.+?) directs the force of #{MK_PRE}(?:his|her|its)#{MK_POST} voice at (?<target>[^!]+)!/
             ].freeze),
             AttackDef.new(:channel, [/(?<attacker>.+?) channels at (?<target>[^.]+)\./].freeze),
+            # Nearby players' spells on creatures we can see (hunt log
+            # 2026-09-09, gigas village). Each names the caster, so the
+            # foreign latch keeps the CS/TD, SMR/SSR and damage lines that
+            # follow off our ledger - a bard's sonic disruption kill was
+            # credited to us before the 3p spellsong form existed.
+            AttackDef.new(:spellsong, [
+              /(?<attacker>.+?) skillfully weaves another verse into #{MK_PRE}(?:his|her)#{MK_POST} harmony, directing the sound of #{MK_PRE}(?:his|her)#{MK_POST} voice at (?<target>[^.]+)\./
+            ].freeze),
+            # bard fear AoE: one cry, then an SSR + "X looks at <bard> in
+            # utter terror!" per creature in the room
+            AttackDef.new(:fear_cry, [/(?<attacker>.+?) lets loose an eerie, modulating cry!/].freeze),
+            AttackDef.new(:golden_waves, [/Golden brown waves billow outward from (?<attacker>.+?) to buffet (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [/(?<attacker>.+?) draws down a shaft of \w+ moonlight and bathes (?<target>.+?) in its \w+ glow\./].freeze),
             # creature wand flourish - the erupt tail rides the same line
             AttackDef.new(:wand, [/(?<attacker>.+?) flourishes (?<weapon>.+?) at (?<target>[^.]+)\.\s+A .+? erupts toward/].freeze),
             # "hurls a/an <bolt>" - bolt spells from players AND creatures;

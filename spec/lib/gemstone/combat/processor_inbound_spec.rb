@@ -1118,6 +1118,66 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(rift.map { |e| [e[:name], e[:inbound], e[:attacker][:id], e[:resolutions].map { |r| r[:result] }] }).to eq([[:rift_tentacles, true, 129629246, [61]]])
     end
 
+    it "keeps nearby players' gigas-village spells foreign: spellsong (and its sonic kill), fear cry, golden waves, 3p moonbeam" do
+      kal = '<a exist="-10930001" noun="Kalithra">Kalithra</a>'
+      skald = bolded(130610001, 'skald', 'a grim gigas skald')
+      song = described_class.parse_events([
+                                            "#{kal} skillfully weaves another verse into her harmony, directing the sound of her voice at #{skald}.",
+                                            '  CS: +527 - TD: +469 + CvA: +19 + d100: +68 == +145',
+                                            '  Warding failed!',
+                                            "#{skald} reels under the force of the sonic vibrations!",
+                                            '   Sound waves disrupt for 63 damage!',
+                                            '   ... 70 points of damage!',
+                                            "   #{bolded(130610001, 'skald', "The gigas skald's")} midsection swells painfully then bursts, sending the gigas skald everywhere."
+                                          ])
+      expect(song.map { |e| [e[:name], !!e[:foreign_caster], e[:outcomes], e[:hits].map { |h| h[:damage] }] })
+        .to eq([[:spellsong, true, [:ward_failed], []], [:sonic_disruption, true, [], [63, 70]]])
+
+      rain = '<a exist="-10930002" noun="Raincail">Raincail</a>'
+      masto = bolded(130610002, 'mastodon', 'a heavily armored battle mastodon')
+      maiden = bolded(130610003, 'shield-maiden', 'a brawny gigas shield-maiden')
+      cry = described_class.parse_events([
+                                           "#{rain} lets loose an eerie, modulating cry!",
+                                           '<pushBold/>[SSR result: 67 (Open d100: -62)]<popBold/>',
+                                           "#{masto} is unaffected!",
+                                           '<pushBold/>[SSR result: 162 (Open d100: 45)]<popBold/>',
+                                           "#{maiden} looks at #{rain} in utter terror!",
+                                           "#{bolded(130610003, 'shield-maiden', 'The gigas shield-maiden')} freezes in place, quivering with fright!"
+                                         ])
+      expect(cry.map { |e| e[:name] }.uniq).to eq([:fear_cry])
+      expect(cry).to all(satisfy { |e| e[:foreign_caster] })
+      expect(cry.sum { |e| e[:resolutions].size }).to eq(2)
+
+      emyle = '<a exist="-10930003" noun="Emyle">Emyle</a>'
+      warg = bolded(130610004, 'warg', 'a niveous giant warg')
+      waves = described_class.parse_events([
+                                             "Golden brown waves billow outward from #{emyle} to buffet #{warg}!",
+                                             '<pushBold/>[SMR result: 118 (Open d100: 18, Bonus: 46)]<popBold/>',
+                                             '   ... 5 points of damage!',
+                                             '   Minor puncture to the back.'
+                                           ])
+      expect(waves.map { |e| [e[:name], !!e[:foreign_caster], e[:target][:id], e[:hits].map { |h| h[:damage] }, e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:golden_waves, true, 130610004, [5], [118]]])
+
+      gal = '<a exist="-10930004" noun="Galactic">Galactic</a>'
+      beam = described_class.parse_events([
+                                            "#{gal} draws down a shaft of dappled moonlight and bathes #{masto} in its lambent glow.",
+                                            '<pushBold/>[SMR result: 243 (Open d100: 75, Bonus: 56)]<popBold/>',
+                                            "#{masto} is caught fast, the light of Liabo arresting its movements."
+                                          ])
+      expect(beam.map { |e| [e[:name], !!e[:foreign_caster], e[:target][:id], e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:moonbeam, true, 130610002, [243]]])
+
+      own = described_class.parse_events([
+                                           "You gesture at #{maiden}.",
+                                           "Tapping the moons above, you draw down a shaft of swirling moonlight and bathe #{maiden} in its muted glow.",
+                                           '<pushBold/>[SMR result: 322 (Open d100: 61, Bonus: 159)]<popBold/>',
+                                           "#{maiden} is caught fast, the light of Lornon arresting her movements."
+                                         ])
+      expect(own.map { |e| [e[:name], e[:via], e[:target][:id], e[:resolutions].map { |r| r[:result] }] })
+        .to eq([[:moonbeam, :cast, 130610003, [322]]])
+    end
+
     it "attributes a nearby player's flaming aura to that player, and a spiritual malady tick once, unowned" do
       oozeling = bolded(129648792, 'oozeling', 'a quivering sanguine oozeling')
       aura = described_class.parse_events([
