@@ -387,6 +387,18 @@ module Lich
       class << self
         attr_reader :thread, :reader_thread, :server_queue, :buffer, :_buffer, :game_instance
 
+        # Timestamp already attached by the socket reader before queueing.
+        # Available only during this exact parser thread's current dispatch;
+        # delayed subscribers and legacy direct calls cannot mint provenance.
+        # @return [Numeric, nil] monotonic receipt time, or nil outside a valid
+        #   socket-origin parser dispatch
+        def current_ingress_time
+          return nil unless Thread.current.equal?(@thread)
+
+          value = Thread.current.thread_variable_get(:lich_game_ingress_time)
+          value if value.is_a?(Numeric) && value.real? && value.finite? && value >= 0
+        end
+
         def autostarted?
           @@autostarted
         end
@@ -839,7 +851,12 @@ module Lich
                 server_string, enqueued_monotonic_at = unwrap_server_queue_item(item)
                 record_server_queue_dequeue(enqueued_monotonic_at)
                 parse_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-                process_server_string(server_string)
+                begin
+                  Thread.current.thread_variable_set(:lich_game_ingress_time, enqueued_monotonic_at)
+                  process_server_string(server_string)
+                ensure
+                  Thread.current.thread_variable_set(:lich_game_ingress_time, nil)
+                end
                 record_server_parser_timing(Process.clock_gettime(Process::CLOCK_MONOTONIC) - parse_started)
               end
             rescue StandardError => e
