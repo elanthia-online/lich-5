@@ -33,9 +33,19 @@ module Lich
         # group and is killed when the script exits. process_async runs on
         # the downstream-hook (game) thread, so a worker respawned here
         # survives script death.
-        def process_async(chunk)
+        # @param chunk [Array<String>] game lines to process in arrival order
+        # @param source [Hash, nil] optional ingestion context; permitted scalar
+        #   fields are copied before queueing and validated by Processor
+        # @return [nil] after enqueueing, or when the chunk is empty
+        def process_async(chunk, source: nil)
           return if chunk.empty?
-          @queue.push(chunk)
+          if source.is_a?(Hash)
+            source = source.slice(:connection_id, :game, :character, :room_epoch, :sequence, :received_at)
+                           .transform_values { |value| value.is_a?(String) ? value.dup.freeze : value }.freeze
+          else
+            source = nil
+          end
+          @queue.push([chunk, source])
           ensure_worker
           nil
         end
@@ -77,13 +87,14 @@ module Lich
 
         def run_loop
           loop do
-            chunk = @queue.pop
-            break if chunk == :shutdown
+            work = @queue.pop
+            break if work == :shutdown
+            chunk, source = work
 
             @processing = true
             started = Time.now
             begin
-              Processor.process(chunk)
+              source ? Processor.process(chunk, source: source) : Processor.process(chunk)
 
               elapsed = Time.now - started
               if elapsed > 0.5 && Tracker.debug?

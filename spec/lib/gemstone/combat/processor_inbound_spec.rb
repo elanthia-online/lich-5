@@ -29,6 +29,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
     stub_const('Lich::Gemstone::Combat::Observers', Module.new)
     allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
+    allow(Lich::Gemstone::Combat::Observers).to receive(:any_for?).with(:attack).and_return(false)
     # cross-chunk state lives in module ivars; never let one example's
     # death watch or held cast leak into another
     %i[@death_watch @death_announced @held_cast @deferred_emits].each do |iv|
@@ -577,6 +578,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
   # supersedes the bare :cast; across the boundary the cast used to emit as a
   # fact-less phantom first. It is now held for one chunk.
   describe 'bare cast held across a chunk boundary' do
+    let(:source) { { connection_id: 123, game: 'GSIV', character: 'Testmage', room_epoch: 4, sequence: 8, received_at: 10.0 } }
     let(:zerk) { bolded(121654846, 'berserker', 'a tattooed gigas berserker') }
     let(:gesture_chunk) { ["You gesture at #{zerk}.", 'Cast Roundtime 1 Second.'] }
     let(:lash_chunk) do
@@ -593,6 +595,22 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       registry = Class.new { def self.[](_id); end }
       stub_const('Lich::Gemstone::Combat::Creature', registry)
       described_class.instance_variable_set(:@held_cast, nil)
+    end
+
+    it 'preserves the initiating ingress source when a later same-room spell result supersedes the held cast' do
+      expect(described_class.parse_events(gesture_chunk, source: source)).to be_empty
+      events = described_class.parse_events(lash_chunk, source: source.merge(sequence: 9, received_at: 20.0))
+      expect(events.first[:source]).to eq(source)
+      expect(events.first[:source]).to be_frozen
+      expect(events.first[:source][:character]).to be_frozen
+    end
+
+    it 'does not rebind a held attack to the next room or to missing provenance' do
+      [source.merge(room_epoch: 5), nil].each do |later|
+        described_class.parse_events(gesture_chunk, source: source)
+        events = described_class.parse_events(lash_chunk, source: later)
+        expect(events.first[:source]).to be_nil
+      end
     end
 
     it 'holds the gesture and lets the next chunk\'s spell result supersede it (one tangleweed via :cast)' do

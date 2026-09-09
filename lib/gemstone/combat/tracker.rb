@@ -41,6 +41,9 @@ module Lich
         @buffer = []
         @chunks_processed = 0
         @initialized = false
+        @source_sequence = 0
+        @buffer_source = nil
+        @buffer_source_invalid = false
         # Thread count to restore when debug mode is turned off. Deliberately
         # an ivar rather than a setting: `configure` persists settings to
         # DB_Store, so stashing it there would write max_threads: 0 to disk
@@ -82,6 +85,20 @@ module Lich
           # Unsubscribe a handler returned by {on}, or by its name:.
           def off(handler_or_name)
             Observers.off(handler_or_name)
+          end
+
+          # Binding-only observation. Never initializes/enables the tracker or
+          # stamps delayed parser work. Game.thread is the stream parser owner.
+          # @return [Hash, nil] frozen connection/game/character/room binding,
+          #   or nil when unavailable or changed during observation; not a receipt
+          #   timestamp or proof that any combat event belongs to this context
+          def observation_context
+            first = observation_binding
+            return nil unless first && first == observation_binding
+
+            first.freeze
+          rescue StandardError
+            nil
           end
 
           # Check if combat tracking is enabled
@@ -214,8 +231,10 @@ module Lich
           # Triggers periodic cleanup of old creature instances.
           #
           # @param chunk [Array<String>] Game lines to process
+          # @param source [Hash, nil] optional ingestion context forwarded to the
+          #   processor; omission preserves the legacy unverified-source path
           # @return [void]
-          def process(chunk)
+          def process(chunk, source: nil)
             return unless enabled?
             return if chunk.empty?
 
@@ -223,9 +242,9 @@ module Lich
             return unless chunk.any? { |line| combat_relevant?(line) }
 
             if @async_processor
-              @async_processor.process_async(chunk)
+              source ? @async_processor.process_async(chunk, source: source) : @async_processor.process_async(chunk)
             else
-              Processor.process(chunk)
+              source ? Processor.process(chunk, source: source) : Processor.process(chunk)
             end
 
             # Periodic cleanup of old creature instances
@@ -316,6 +335,42 @@ module Lich
 
           private
 
+          # A room/stream change can occur inside one input string BEFORE our
+          # hook sees it, because XML parsing runs first. Such fragments cannot
+          # safely be labelled with their post-parse room. Ordinary links,
+          # pushBold/popBold and prompt delimiters are intentionally allowed.
+          SOURCE_TRANSITION = /<\/?(?:pushStream|popStream|clearStream|streamWindow|compDef|compass|app|nav)\b|<(?:component|style)\b[^>]*\bid=['"]room|<[^>]*\z/i.freeze
+
+          # Read the current parser owner and XML character/room identity.
+          # @return [Hash, nil] scalar binding, or nil if identity is unavailable
+          # @api private
+          def observation_binding
+            thread = Game.thread if defined?(Game) && Game.respond_to?(:thread)
+            return nil unless thread.is_a?(Thread) && thread.alive?
+
+            game, character, epoch = XMLData.game, XMLData.name, XMLData.room_count
+            return nil unless game.is_a?(String) && !game.empty? && character.is_a?(String) && !character.empty? && epoch.is_a?(Integer) && epoch >= 0
+
+            { connection_id: thread.object_id, game: game.dup.freeze,
+              character: character.dup.freeze, room_epoch: epoch }
+          end
+
+          # Attach receipt provenance only to unambiguous main-stream fragments.
+          # @param server_string [String] fragment currently handled by the hook
+          # @return [Hash, nil] frozen ingestion source, or nil for ambiguous data
+          # @api private
+          def ingest_source(server_string)
+            context = observation_context
+            @source_sequence = (@source_sequence || 0) + 1
+            return nil unless context && Game.thread.equal?(Thread.current) && XMLData.in_stream == false && !SOURCE_TRANSITION.match?(server_string)
+            received_at = Game.current_ingress_time
+            return nil unless received_at.is_a?(Numeric) && received_at.real? && received_at.finite? && received_at >= 0
+
+            context.merge(sequence: @source_sequence, received_at: received_at).freeze
+          rescue StandardError
+            nil
+          end
+
           def cleanup_creatures
             return unless defined?(Creature)
 
@@ -360,11 +415,20 @@ module Lich
             @hook_id = 'Combat::Tracker::downstream'
 
             segment_buffer = proc do |server_string|
+              incoming_source = ingest_source(server_string)
+              if @buffer.empty?
+                @buffer_source, @buffer_source_invalid = incoming_source, incoming_source.nil?
+              elsif !incoming_source || !@buffer_source ||
+                    !%i[connection_id game character room_epoch].all? { |key| incoming_source[key] == @buffer_source[key] }
+                @buffer_source_invalid = true
+              end
               @buffer << server_string
 
               # Process on prompt (natural break in game flow)
               if server_string.include?('<prompt time=')
                 chunk = @buffer.slice!(0, @buffer.size)
+                source = @buffer_source_invalid ? nil : @buffer_source
+                @buffer_source, @buffer_source_invalid = nil, false
 
                 # Check if THIS chunk contains creatures (no persistent state).
                 # Substring checks are equivalent to the old backtracking regex
@@ -375,7 +439,7 @@ module Lich
                   (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
                   Definitions::Attacks.self_inflicted_line?(line)
                 }
-                  process(chunk) unless chunk.empty?
+                  source ? process(chunk, source: source) : process(chunk) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else
                   respond "[Combat] Discarded non-combat chunk (#{chunk.size} lines)" if debug?
@@ -385,6 +449,7 @@ module Lich
               # Prevent buffer overflow
               if @buffer.size > @settings[:buffer_size]
                 @buffer.shift(@buffer.size - @settings[:buffer_size])
+                @buffer_source_invalid = true
               end
 
               server_string
@@ -396,6 +461,8 @@ module Lich
           def remove_downstream_hook
             DownstreamHook.remove(@hook_id) if @hook_id
             @hook_id = nil
+            @buffer.clear
+            @buffer_source, @buffer_source_invalid = nil, false
           end
 
           # Initialize tracker from saved settings

@@ -33,6 +33,28 @@ module Lich
 
         module_function
 
+        # Include attack details for persistent recording or transient observers.
+        # @return [Boolean] whether attack events are currently requested
+        def attack_events_requested?
+          Tracker.settings[:emit_attacks] || Observers.any_for?(:attack)
+        end
+
+        # Scalar allowlist copied before any event retains it. Metadata is not
+        # invented for legacy/replay callers which supply no ingestion source.
+        # @param value [Object] proposed ingestion metadata
+        # @return [Hash, nil] frozen validated context, or nil when incomplete
+        def observation_source(value)
+          return nil unless value.is_a?(Hash)
+          integers = %i[connection_id room_epoch sequence]
+          return nil unless integers.all? { |key| value[key].is_a?(Integer) && value[key] >= 0 } && value[:connection_id].positive? && value[:sequence].positive?
+          return nil unless %i[game character].all? { |key| value[key].is_a?(String) && !value[key].empty? }
+          at = value[:received_at]
+          return nil unless at.is_a?(Numeric) && at.real? && at.finite? && at >= 0
+
+          value.slice(*integers, :game, :character, :received_at)
+               .transform_values { |item| item.is_a?(String) ? item.dup.freeze : item }.freeze
+        end
+
         # Process a chunk of game lines for combat events. Parses the chunk
         # into events, resolves their in-blob spawn-tree links (event-object
         # refs -> stable per-chunk uids the recorder maps to row ids), stamps
@@ -42,11 +64,15 @@ module Lich
         # @param at [Time, nil] server time for this chunk (from the chunk's
         #   <prompt time=>). Duration estimates are anchored to this rather
         #   than to parse time, which the async worker can lag under load.
-        def process(chunk, at: nil)
+        # @param source [Hash, nil] optional socket-ingestion context; invalid or
+        #   absent metadata leaves events without verified source provenance
+        # @return [void]
+        # @note Calls must be serialized; production uses the ordered async worker
+        def process(chunk, at: nil, source: nil)
           # Parse-phase fact emits (:status/:ucs/:spell_loss) queue up here
           # and go out AFTER this chunk's :attack emits - see emit_fact.
           @deferred_emits = []
-          events = parse_events(chunk)
+          events = source ? parse_events(chunk, source: source) : parse_events(chunk)
           # Death sweep runs AFTER this chunk's attacks emit, never before:
           # the async worker lags the game stream, so the creature registry
           # already shows a death that THIS chunk's attack caused. Sweeping
@@ -66,8 +92,10 @@ module Lich
           # THIS chunk (or self for a root). A ref to an event not in the emit
           # set (should not happen) degrades to self-root / no-parent.
           uids = {}.compare_by_identity
+          @observation_batch_id = (@observation_batch_id || 0) + 1
           events.each_with_index { |ev, i| uids[ev] = i }
           events.each_with_index do |event, i|
+            event[:observation_batch] = { id: @observation_batch_id, index: i, size: events.length }.freeze
             event[:_uid] = i
             root = event[:root_ref]
             event[:root_uid] = root ? (uids[root] || i) : i
@@ -204,13 +232,13 @@ module Lich
             return false unless event[:inbound] || event[:foreign_target] ||
                                 event[:_attack_born]
 
-            return Tracker.settings[:emit_attacks] &&
+            return attack_events_requested? &&
                    (event[:_attack_born] || !event[:outcomes].empty? ||
                     !event[:resolutions].empty? || !event[:hits].empty?)
           end
 
           event_worth_saving?(event) ||
-            (Tracker.settings[:emit_attacks] &&
+            (attack_events_requested? &&
              (event[:_attack_born] ||
               !event[:outcomes].empty? || !event[:resolutions].empty? ||
               !event[:flares].empty? || event[:_had_status]))
@@ -250,8 +278,12 @@ module Lich
           end
         end
 
-        # State machine parser
-        def parse_events(lines)
+        # Parse combat lines into events without inventing ingestion provenance.
+        # @param lines [Array<String>] game lines for one parser chunk
+        # @param source [Hash, nil] optional ingestion context to validate and copy
+        # @return [Array<Hash>] parsed attack and related outcome events
+        def parse_events(lines, source: nil)
+          source = observation_source(source)
           events = []
           current_event = nil
           parse_state = :seeking_attack
@@ -352,6 +384,9 @@ module Lich
           # first line.
           if (held = @held_cast)
             @held_cast = nil
+            unless held[:source] && source && %i[connection_id game character room_epoch].all? { |key| held[:source][key] == source[key] }
+              held[:source] = nil
+            end
             held[:_held] = true
             held[:_line] = nil
             current_event = held
@@ -606,6 +641,7 @@ module Lich
                 # lineage from previous - a target switch mid-AoE stays inside
                 # the same spawned sequence)
                 current_event = {
+                  source: current_event ? current_event[:source] : source,
                   name: current_event ? current_event[:name] : :unknown,
                   target: line_target,
                   weapon: current_event && current_event[:weapon],
@@ -668,7 +704,7 @@ module Lich
             # ("the warg evades!"), so the switch must happen first or the
             # outcome lands on the previous target's event.
             # Only parsed when a recorder-class subscriber wants the blob.
-            if Tracker.settings[:emit_attacks]
+            if attack_events_requested?
               if (resolution = Parser.parse_resolution(line))
                 # Most rolls FOLLOW their attack line (swing -> AS/DS), but
                 # volley's SMR PRECEDES each arrow line. A roll claims the
@@ -729,6 +765,7 @@ module Lich
                   # the event here (chunk-locally the maneuver name is
                   # unknowable) so the miss and its roll survive.
                   current_event = {
+                    source: source,
                     name: pending_ambush ? :ambush : :unknown,
                     target: line_target, attacker: nil,
                     weapon: nil, parent: nil, hits: [],
@@ -820,6 +857,7 @@ module Lich
               #     fresh 2p initiation of our own ("You fire ...") - that is
               #     the next action, not this cast's effect.
               superseded_cast = nil
+              superseded_source = nil
               if bare_cast?(current_event) &&
                  (attack[:attacker].nil? ||
                   (current_event[:attacker] && attack[:attacker][:name] == current_event[:attacker][:name])) &&
@@ -829,6 +867,7 @@ module Lich
                 # gesture) belong to the spell event that replaces it
                 pending_flares.concat(current_event[:flares])
                 superseded_cast = true
+                superseded_source = current_event[:source]
                 current_event = nil
               end
               # Save previous event before starting a new one - unless the
@@ -873,6 +912,7 @@ module Lich
                             (foreign_latch && attack[:attacker].nil? && !our_2p) || nil
 
               current_event = {
+                source: superseded_cast ? superseded_source : source,
                 name: attack[:name],
                 target: attack[:target] || {},
                 attacker: attack[:attacker], # nil for our own (2nd-person) attacks
@@ -1133,7 +1173,7 @@ module Lich
                 # enables only emit_attacks) of every crit - the emit carried a
                 # crit-shaped hole.
                 if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses] ||
-                   Tracker.settings[:emit_attacks]
+                   attack_events_requested?
                   (1..3).each do |offset|
                     next_line_index = index + offset
                     break if next_line_index >= lines.size
@@ -1207,6 +1247,7 @@ module Lich
             anchor = current_target || (events.last && events.last[:target])
             if anchor && anchor[:id]
               events << {
+                source: source,
                 name: :unknown, target: anchor, attacker: nil, weapon: nil,
                 parent: nil, hits: [], statuses: [],
                 flares: [], outcomes: [], resolutions: pending_resolutions
@@ -1221,6 +1262,7 @@ module Lich
           # exists for recorders, same rationale as inbound events.
           if !orphan_hits.empty? || !orphan_outcomes.empty? || !pending_resolutions.empty?
             events << {
+              source: source,
               name: :unknown, target: {}, attacker: nil, weapon: nil,
               parent: nil, hits: orphan_hits, statuses: [],
               flares: [], outcomes: orphan_outcomes,
@@ -1238,6 +1280,7 @@ module Lich
             # separately); duplicating it into the event arrays would
             # double-apply it.
             events << {
+              source: source,
               name: f[:name], target: f[:target_info], weapon: f[:weapon] && f[:weapon][:name],
               parent: nil, hits: [], statuses: [], flares: [f],
               outcomes: [], resolutions: []
@@ -1262,7 +1305,7 @@ module Lich
           #     complete regardless of settings - and therefore BEFORE the
           #     creature is mutated (an :attack subscriber reading
           #     Creature[id] sees pre-swing state; per-fact emits see post).
-          Observers.emit(:attack, event) if Tracker.settings[:emit_attacks]
+          Observers.emit(:attack, event) if attack_events_requested?
 
           # A nearby player's attack (foreign_caster) DOES resolve onto a
           # creature we can see, so unlike inbound/foreign_target it passes
