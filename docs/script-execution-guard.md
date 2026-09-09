@@ -1,7 +1,9 @@
 # Script execution guards
 
-For the motivating casting example, existing retry behavior, and verification
-boundaries, see [Spell casting in bounded test sequences](spell-cast-testing-use-case.md).
+This API lets a supervising script place cooperative command, time, and
+cancellation boundaries around existing helpers without changing their normal
+unguarded behavior. Spell-specific integration is intentionally documented and
+reviewed separately.
 
 `Script#with_execution_guard(policy)` installs an optional cooperative policy
 for that script until its block exits. `policy` must be a `Proc` accepting one
