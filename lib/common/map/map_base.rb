@@ -523,12 +523,13 @@ module Lich
         # Class-level dijkstra dispatcher
         # @param source [Integer, String, Object] room, room id or lookup string
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
+        # @param static_only [Boolean] skip executable/dynamic edges without evaluating them
         # @return [Array<Hash>, nil] see Room#dijkstra
-        def dijkstra(source, destination = nil)
+        def dijkstra(source, destination = nil, static_only: false)
           if source.is_a?(self)
-            source.dijkstra(destination)
+            static_only ? source.dijkstra(destination, static_only: true) : source.dijkstra(destination)
           elsif (room = self[source])
-            room.dijkstra(destination)
+            static_only ? room.dijkstra(destination, static_only: true) : room.dijkstra(destination)
           else
             echo 'Map.dijkstra: error: invalid source room'
             nil
@@ -769,9 +770,12 @@ module Lich
         # rooms actually reached rather than the highest id plus one, and
         # iteration yields pairs rather than slots.
         # @param destination [Integer, Array, nil] Target room(s) or nil for full graph
+        # @param static_only [Boolean] use only plain String wayto edges with
+        #   finite, nonnegative real Numeric weights; never evaluate StringProc
+        #   weights in this mode. This is route selection, not command validation.
         # @return [Array<Hash>, nil] [previous, distances] keyed by room id, or
         #   nil when the search failed
-        def dijkstra(destination = nil)
+        def dijkstra(destination = nil, static_only: false)
           self.class.load unless self.class.loaded?
           source = @id
           visited = {}
@@ -811,7 +815,13 @@ module Lich
               adj_room_i = adj_room.to_i
               next if visited[adj_room_i]
 
-              edge_weight = if room.timeto[adj_room].is_a?(StringProc)
+              edge_weight = if static_only
+                              weight = room.timeto[adj_room]
+                              next unless room.wayto[adj_room].instance_of?(String) && weight.is_a?(Numeric) &&
+                                          weight.real? && weight.finite? && weight >= 0
+
+                              weight
+                            elsif room.timeto[adj_room].is_a?(StringProc)
                               room.timeto[adj_room].call
                             else
                               room.timeto[adj_room]

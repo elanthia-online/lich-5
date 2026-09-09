@@ -406,6 +406,66 @@ RSpec.shared_examples 'a game Map class' do |game|
       expect(previous[2]).to eq(1)
     end
 
+    it 'skips executable weights before calling them in static routing only' do
+      dynamic = StringProc.new('0.1')
+      calls = 0
+      allow(dynamic).to receive(:call) { calls += 1; 0.1 }
+      map_class[1].timeto['2'] = dynamic
+
+      expect(map_class.dijkstra(1, 2, static_only: true).last[2]).to be_nil
+      expect(map_class.dijkstra_hashes(map_class[1], 2, static_only: true).last[2]).to be_nil
+      expect(map_class[1].dijkstra_hashes(2, static_only: true).last[2]).to be_nil
+      expect(calls).to eq(0)
+      expect(map_class.dijkstra(1, 2).last[2]).to eq(0.1)
+      expect(map_class.dijkstra(1, 2, static_only: false).last[2]).to eq(0.1)
+      expect(calls).to eq(2)
+    end
+
+    it 'finds an existing static alternative without changing default route preference' do
+      shared_room(3, title: '[Three]', description: 'third')
+      map_class[1].wayto['3'] = 'east'
+      map_class[1].timeto['3'] = 1
+      map_class[3].wayto['2'] = 'north'
+      map_class[3].timeto['2'] = 1
+      map_class[1].wayto['2'] = StringProc.new('raise "must not execute movement during planning"')
+
+      expect(map_class.dijkstra(1, 2).first[2]).to eq(1)
+      previous, distances = map_class.dijkstra(1, 2, static_only: true)
+      expect(previous[2]).to eq(3)
+      expect(previous[3]).to eq(1)
+      expect(distances[2]).to eq(2)
+    end
+
+    it 'uses the captured static weight without rereading an executable replacement' do
+      dynamic = StringProc.new('raise "must not evaluate replacement"')
+      weights = map_class[1].timeto
+      allow(weights).to receive(:[]).with('2').and_return(0.5, dynamic)
+      expect(dynamic).not_to receive(:call)
+      expect(map_class[1].dijkstra(2, static_only: true).last[2]).to eq(0.5)
+      expect(weights).to have_received(:[]).with('2').once
+    end
+
+    it 'rejects nonplain string edges and invalid static weights without coercion' do
+      [nil, :north, proc { raise 'not a string' }, Class.new(String).new('north')].each do |way|
+        map_class[1].wayto['2'] = way
+        expect(map_class[1].dijkstra(2, static_only: true).last[2]).to be_nil
+      end
+      map_class[1].wayto['2'] = 'north'
+      [nil, true, '0.5', -1, Float::INFINITY, -Float::INFINITY, Float::NAN, Complex(1, 1)].each do |weight|
+        map_class[1].timeto['2'] = weight
+        expect(map_class[1].dijkstra(2, static_only: true).last[2]).to be_nil
+      end
+      map_class[1].timeto['2'] = 0
+      expect(map_class[1].dijkstra(2, static_only: true).last[2]).to eq(0)
+    end
+
+    it 'keeps legacy positional instance overrides compatible in default class dispatch' do
+      room = map_class[1]
+      room.define_singleton_method(:dijkstra) { |destination| destination }
+      expect(map_class.dijkstra(room, 2)).to eq(2)
+      expect(map_class.dijkstra(1, 2, static_only: false)).to eq(2)
+    end
+
     it 'yields nil for a room it never reached' do
       _, distances = map_class[1].dijkstra
 
