@@ -211,26 +211,38 @@ module Lich
       # @param amount [Integer, :all]
       # @param stow [GameObj, nil] where notes go; the STOW default container
       # @return [Integer, nil] silver put away in total, nil when the bank refused
+      #   before anything was deposited
       def self.deposit_f2p(amount = :all, stow: StowList.default)
         total = 0
+        refused = false
+        remaining = amount == :all ? nil : amount
         loop do
           info = account
-          return nil if info.nil?
+          if info.nil?
+            refused = true
+            break
+          end
           carried = Currency.silver(refresh: true).to_i
-          carried = [carried, amount].min unless amount == :all
+          carried = [carried, remaining].min if remaining
           break unless carried.positive?
 
           max = info[:max]
           if max.nil? || info[:balance] + carried < max
-            dothistimeout("deposit #{carried}", 3, Pattern::DEPOSIT)
-            total += carried
+            got = deposited(dothistimeout("deposit #{carried}", 3, Pattern::DEPOSIT))
+            refused = got.nil?
+            total += got.to_i
             break
           end
 
           room = max - info[:balance]
           if room.positive?
-            dothistimeout("deposit #{room}", 3, Pattern::DEPOSIT)
-            total += room
+            got = deposited(dothistimeout("deposit #{room}", 3, Pattern::DEPOSIT))
+            if got.nil?
+              refused = true
+              break
+            end
+            total += got
+            remaining -= got if remaining
           end
           carried = Currency.silver(refresh: true).to_i
           note_size = carried >= F2P_NOTE_BUFFER ? max : max - (F2P_NOTE_BUFFER - carried)
@@ -240,7 +252,7 @@ module Lich
           Lich::Stash.add_to_bag(stow, note)
         end
         Currency.refresh
-        total
+        refused && total.zero? ? nil : total
       end
 
       # Free-to-play withdrawal: the balance may be short of +amount+ while notes
@@ -254,18 +266,23 @@ module Lich
         return nil if info.nil?
         bal = info[:balance]
         if bal >= amount
-          dothistimeout("withdraw #{amount} silver", 3, Pattern::WITHDRAW)
+          got = withdraw_silver(amount)
           Currency.refresh
-          return amount
+          return got
         end
 
         taken = 0
         want = amount
+        refused = false
         notes_in(stow).each do
           if bal.positive?
-            dothistimeout("withdraw #{bal} silver", 3, Pattern::WITHDRAW)
-            taken += bal
-            want -= bal
+            got = withdraw_silver(bal)
+            if got.nil?
+              refused = true
+              break
+            end
+            taken += got
+            want -= got
             bal = 0
           end
           note = notes_in(stow).first
@@ -273,14 +290,17 @@ module Lich
           fput "get ##{note.id}"
           value = deposit_note(note)
           break if value.nil?
-          take = [value, want].min
-          dothistimeout("withdraw #{take} silver", 3, Pattern::WITHDRAW)
-          taken += take
-          want -= take
+          got = withdraw_silver([value, want].min)
+          if got.nil?
+            refused = true
+            break
+          end
+          taken += got
+          want -= got
           break if want <= 0
         end
         Currency.refresh
-        taken
+        refused && taken.zero? ? nil : taken
       end
 
       # The Pinefar banker wanders; give him a moment to be at the counter.
@@ -295,6 +315,17 @@ module Lich
         end
         true
       end
+
+      # WITHDRAW N SILVER, confirmed.
+      #
+      # @api private
+      # @return [Integer, nil] silver handed over, nil when refused or unanswered
+      def self.withdraw_silver(amount)
+        result = dothistimeout("withdraw #{amount} silver", 3, Pattern::WITHDRAW)
+        return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
+        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : amount
+      end
+      private_class_method :withdraw_silver
 
       # @api private
       def self.deposited(result)

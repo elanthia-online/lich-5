@@ -193,6 +193,32 @@ RSpec.describe Lich::Gemstone::Bank do
         expect(sent).to eq(['deposit 5000', 'withdraw 100000 note', 'deposit 15000'])
       end
 
+      it 'never deposits more than the requested amount across passes' do
+        balances = [
+          ['You currently have an account in the amount of 95,000 silver.', 'Your account may hold a maximum of 100,000 silvers.'],
+          ['You currently have an account in the amount of 0 silver.', 'Your account may hold a maximum of 100,000 silvers.'],
+        ]
+        allow(Lich::Util).to receive(:issue_command) { balances.shift }
+        carried = [20_000, 15_000, 15_000]
+        allow(Lich::Gemstone::Currency).to receive(:silver) { carried.shift }
+        replies('You deposit 5,000 silvers into your account.',
+                'The teller carefully records the transaction, and then hands you a note.',
+                'You deposit 5,000 silvers into your account.',
+                before: ->(cmd) { hands[:right] = note if cmd =~ /note/ })
+        expect(described_class.deposit(10_000)).to eq(10_000)
+        expect(sent).to eq(['deposit 5000', 'withdraw 100000 note', 'deposit 5000'])
+      end
+
+      it 'counts only what the bank confirmed' do
+        allow(Lich::Util).to receive(:issue_command).and_return(
+          ['You currently have an account in the amount of 10,000 silver.',
+           'Your account may hold a maximum of 100,000 silvers.']
+        )
+        Lich::Gemstone::Currency.silver = 5_000
+        replies(nil)
+        expect(described_class.deposit).to be_nil
+      end
+
       it 'is nil without access' do
         allow(Lich::Util).to receive(:issue_command).and_return(["you don't have access to an account here."])
         expect(described_class.deposit).to be_nil
@@ -257,6 +283,19 @@ RSpec.describe Lich::Gemstone::Bank do
         replies('The teller carefully records the transaction, and then hands you 8,000 silver.')
         expect(described_class.withdraw(8000)).to eq(8000)
         expect(sent).to eq(['withdraw 8000 silver'])
+      end
+
+      it 'is nil when the teller refuses' do
+        allow(Lich::Util).to receive(:issue_command).and_return(['You currently have an account in the amount of 9,000 silver.'])
+        replies("The teller says, \"You don't seem to have that much in your account.\"")
+        expect(described_class.withdraw(8000)).to be_nil
+      end
+
+      it 'reports only what was actually handed over when a later step fails' do
+        allow(Lich::Util).to receive(:issue_command).and_return(['You currently have an account in the amount of 3,000 silver.'])
+        allow(sack).to receive(:contents).and_return([note])
+        replies('The teller hands you 3,000 silver.', nil)
+        expect(described_class.withdraw(8000)).to eq(3000)
       end
 
       it 'drains the balance, deposits a stowed note, and withdraws the rest' do
