@@ -19,6 +19,14 @@ FogSpell = Struct.new(:num, :known, :affordable, keyword_init: true) do
   def on_cast(&block) = @on_cast = block
 end
 
+# Fog confirms a move on the server's room counter and room id; the spec
+# helper's XMLData carries room_id but not the counter.
+module XMLData
+  class << self
+    attr_accessor :room_count unless method_defined?(:room_count)
+  end
+end
+
 RSpec.describe Lich::Gemstone::Fog do
   let(:spells) { {} }
   let(:voln) { double('OrderOfVoln', known?: false, available?: false) }
@@ -29,8 +37,12 @@ RSpec.describe Lich::Gemstone::Fog do
     spells[num] = FogSpell.new(num: num, known: known, affordable: affordable)
   end
 
-  def arrive(id)
-    Room.current = Room.room_double(id: id)
+  # A move as the server reports it: the room counter steps and the
+  # server room id changes; the map id follows when the room is mapped.
+  def arrive(id, mapped: true)
+    XMLData.room_count = XMLData.room_count.to_i + 1
+    XMLData.room_id = "u#{id}"
+    Room.current = mapped ? Room.room_double(id: id) : nil
   end
 
   before do
@@ -45,6 +57,7 @@ RSpec.describe Lich::Gemstone::Fog do
     allow(described_class).to receive(:waitcastrt?)
     allow(described_class).to receive(:fput) { |cmd| sent << cmd }
     allow(described_class).to receive(:dothistimeout) { |cmd, *_| sent << cmd; 'An invigorating rush of mana pulses through you.' }
+    XMLData.room_count = 0
     arrive(100)
   end
 
@@ -119,6 +132,31 @@ RSpec.describe Lich::Gemstone::Fog do
       s.on_cast { arrive(s.casts == 1 ? described_class::RIFT_ROOM : 4) }
       expect(described_class.return(:spirit_guide, rift: true, resting_room: 4)).to be true
       expect(s.casts).to eq(2)
+    end
+
+    it 'pulses mana again before the second cast out of the Rift' do
+      s = spell(130)
+      s.on_cast do
+        if s.casts == 1
+          s.affordable = false # the first cast took the mana
+          arrive(described_class::RIFT_ROOM)
+        else
+          arrive(4)
+        end
+      end
+      allow(described_class).to receive(:dothistimeout) { |cmd, *_| sent << cmd; s.affordable = true; 'An invigorating rush of mana pulses through you.' }
+      expect(described_class.return(:spirit_guide, rift: true, resting_room: 4)).to be true
+      expect(sent).to eq(['mana pulse'])
+      expect(s.casts).to eq(2)
+      expect(Room.current.id).to eq(4)
+    end
+
+    it 'confirms a move between unmapped rooms on the server room, not the map' do
+      Room.current = nil
+      spell(130).on_cast { arrive(9, mapped: false) }
+      allow(voln).to receive(:known?).with('return').and_return(true)
+      expect(described_class.return(:spirit_guide)).to be true
+      expect(sent).to be_empty # no fallback symbol after a move that worked
     end
 
     it 'stays in the Rift when that is the destination' do

@@ -85,7 +85,7 @@ module Lich
         method = normalize(method)
         return false if method.nil?
 
-        start = room_id
+        start = here
         sleep 0.5
         waitcastrt?
         waitrt?
@@ -103,11 +103,15 @@ module Lich
 
       # @api private
       def self.spirit_guide(rift: false, resting_room: nil, from_voln: false)
-        start = room_id
+        start = here
         pulse_mana(130)
         if available?(:spirit_guide)
           cast_and_settle(130)
-          second_cast_from_rift(rift, resting_room, start) { cast_and_settle(130) if available?(:spirit_guide) }
+          second_cast_from_rift(rift, resting_room, start) do
+            # the first cast may have spent the mana the second needs (bigshot pulses again here)
+            pulse_mana(130)
+            cast_and_settle(130) if available?(:spirit_guide)
+          end
         end
         return true if moved_from?(start)
 
@@ -118,11 +122,15 @@ module Lich
 
       # @api private
       def self.symbol_of_return(rift: false, resting_room: nil, from_spirit: false)
-        start = room_id
+        start = here
         if known?(:symbol_of_return)
           fput 'symbol of return'
           wait_for_move(start)
-          second_cast_from_rift(rift, resting_room, start) { fput 'symbol of return'; wait_for_move(RIFT_ROOM) }
+          second_cast_from_rift(rift, resting_room, start) do
+            rift_mark = here
+            fput 'symbol of return'
+            wait_for_move(rift_mark)
+          end
         end
         return true if moved_from?(start)
 
@@ -163,7 +171,7 @@ module Lich
 
       # @api private
       def self.cast_and_settle(num)
-        start = room_id
+        start = here
         Spell[num].cast
         sleep 0.5
         waitcastrt?
@@ -196,9 +204,17 @@ module Lich
         moved_from?(start)
       end
 
+      # Where we are, as the server reports it: the room counter (which
+      # steps on every move) and the server room id. Both are set for an
+      # unmapped room, where Room.current is nil and a map id would compare
+      # nil to nil and call a real move a failure.
       # @api private
-      def self.moved_from?(start) = room_id != start
+      def self.here = [XMLData.room_count, XMLData.room_id]
 
+      # @api private
+      def self.moved_from?(start) = here != start
+
+      # The map id, for the Rift check only.
       # @api private
       def self.room_id = Room.current&.id
 
