@@ -358,6 +358,15 @@ RSpec.describe Lich::Stash, 'named items' do
       described_class.hands(right: sword, left: shield)
     end
 
+    it 'refuses to swap an item out of a hand asked to be kept' do
+      hold(:right, shield)
+      hold(:left, sword)
+      expect(described_class).not_to receive(:dothistimeout)
+      expect(described_class).not_to receive(:fput)
+      expect { described_class.hands(right: sword) }.to raise_error(ArgumentError, /left hand, which was asked to be kept/)
+      expect(GameObj.left_hand.id).to eq('101')
+    end
+
     it 'resolves names before touching anything, so an unknown name changes nothing' do
       hold(:right, dagger)
       expect(described_class).not_to receive(:stash_hands)

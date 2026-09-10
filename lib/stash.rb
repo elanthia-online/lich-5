@@ -453,6 +453,15 @@ module Lich
       wanted = { right: right, left: left }
       resolved = wanted.transform_values { |want| want == :keep || want.nil? ? want : find_item(want) }
 
+      # A wanted item sitting in the hand the caller asked to keep can only be
+      # moved by a swap, which would change that hand. Refuse before touching anything.
+      HANDS.each do |hand|
+        other = hand == :right ? :left : :right
+        item = resolved[hand]
+        next unless item.is_a?(GameObj) && wanted[other] == :keep && hand_holding(item) == other
+        raise ArgumentError, "hands: #{item.name} is in the #{other} hand, which was asked to be kept"
+      end
+
       # Both wanted items are present but in each other's hands: one swap.
       if resolved[:right].is_a?(GameObj) && resolved[:left].is_a?(GameObj) &&
          hand_holding(resolved[:right]) == :left && hand_holding(resolved[:left]) == :right
