@@ -295,21 +295,35 @@ def checkcastrt
   [0, XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f].max
 end
 
-def waitrt?
-  sleep checkrt
-  return true if checkrt > 0.0
-  return false if checkrt == 0
+# @param interrupt [#call, nil] checked every tenth of a second; true ends
+#   the wait early
+# @param cap [Numeric, nil] the longest wait allowed, in seconds
+# @return [Boolean] whether there was roundtime to wait out
+def waitrt?(interrupt: nil, cap: nil)
+  had_rt = checkrt > 0.0
+  stop_at = cap ? Time.now + cap : nil
+  while checkrt > 0.0
+    return had_rt if interrupt && interrupt.call
+    return had_rt if stop_at && Time.now >= stop_at
+
+    sleep([checkrt, 0.1].min)
+  end
+  had_rt
 end
 
-def waitcastrt?
-  #  sleep checkcastrt
-  current_castrt = checkcastrt
-  if current_castrt.to_f > 0.0
-    sleep(current_castrt)
-    return true
-  else
-    return false
+# @param interrupt [#call, nil] checked every tenth of a second
+# @param cap [Numeric, nil] the longest wait allowed, in seconds
+# @return [Boolean] whether there was cast roundtime to wait out
+def waitcastrt?(interrupt: nil, cap: nil)
+  had_rt = checkcastrt.to_f > 0.0
+  stop_at = cap ? Time.now + cap : nil
+  while checkcastrt.to_f > 0.0
+    return had_rt if interrupt && interrupt.call
+    return had_rt if stop_at && Time.now >= stop_at
+
+    sleep([checkcastrt.to_f, 0.1].min)
   end
+  had_rt
 end
 
 def checkpoison
@@ -1644,11 +1658,52 @@ def fput(message, *waitingfor)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   waitingfor.flatten!
 
-  # Optional timeout via trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
-  # Default 60s prevents infinite hangs when the game stops responding.
-  # Use timeout: 0 to disable (original behavior).
+  # Options via a trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
+  #   timeout:          seconds with no game response before giving up (60;
+  #                     0 disables, the original behavior)
+  #   max_resends:      how many times a refusal ("...wait 3", "struggle to
+  #                     stand", stunned) may trigger a resend before giving
+  #                     up (nil, the original: unbounded)
+  #   interrupt:        a callable checked on every wait; true ends the
+  #                     send at once (nil: never)
+  #   resend_transient: on a transient refusal that is not a stun or a
+  #                     web (a "can't seem", "don't seem"), resend after a
+  #                     quarter second instead of giving up (false, the
+  #                     original; bigshot's bs_put resends)
+  #   failures:         :false (the original: every failure returns false)
+  #                     or :symbol - :no_response, :too_many_resends,
+  #                     :interrupted, :dead, :refused - so a caller can
+  #                     tell them apart
   options = (waitingfor.pop if waitingfor.last.is_a?(Hash)) || {}
-  timeout = options[:timeout] || options['timeout'] || 60
+  option = ->(key) { options[key] || options[key.to_s] }
+  timeout = option.call(:timeout) || 60
+  max_resends = option.call(:max_resends)
+  interrupt = option.call(:interrupt)
+  resend_transient = option.call(:resend_transient) ? true : false
+  symbols = option.call(:failures) == :symbol
+  fail_with = ->(reason) { symbols ? reason : false }
+  interrupted = -> { interrupt && interrupt.call ? true : false }
+  # With an interrupt, sleep in slices so it lands within a tenth of a
+  # second; without one, the plain sleep of before. True when interrupted.
+  wait = lambda do |seconds|
+    if interrupt.nil?
+      sleep(seconds)
+      return false
+    end
+    slices = (seconds / 0.1).ceil
+    slices.times do
+      return true if interrupted.call
+
+      sleep(0.1)
+    end
+    false
+  end
+  resends = 0
+  # a refusal that asks for a resend: false when the cap allows it
+  over_cap = lambda do
+    resends += 1
+    !max_resends.nil? && resends > max_resends
+  end
 
   clear
   put(message)
@@ -1658,9 +1713,11 @@ def fput(message, *waitingfor)
     string = get?
 
     if string.nil?
+      return fail_with.call(:interrupted) if interrupted.call
+
       if timeout > 0 && (Time.now - timer > timeout)
         echo "fput: No game response for #{timeout}s to '#{message}'"
-        return false
+        return fail_with.call(:no_response)
       end
       pause 0.1
       next
@@ -1669,36 +1726,51 @@ def fput(message, *waitingfor)
     timer = Time.now # Reset timeout on any game response
 
     if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+      return fail_with.call(:too_many_resends) if over_cap.call
+
       hold_up = Regexp.last_match[:wait_time].to_i
-      sleep(hold_up) unless hold_up.nil?
+      return fail_with.call(:interrupted) if wait.call(hold_up)
+
       clear
       put(message)
       next
     elsif string =~ /^You.+struggle.+stand/
+      return fail_with.call(:too_many_resends) if over_cap.call
+
       clear
-      fput 'stand'
+      stood = fput('stand', options)
+      return stood if symbols && stood.is_a?(Symbol)
+
       next
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
         echo "You're dead...! You can't do that!"
         sleep 1
         script.downstream_buffer.unshift(string)
-        return false
+        return fail_with.call(:dead)
       elsif checkstunned
         while checkstunned
+          return fail_with.call(:interrupted) if interrupted.call
+
           sleep("0.25".to_f)
         end
       elsif checkwebbed
         while checkwebbed
+          return fail_with.call(:interrupted) if interrupted.call
+
           sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
         sleep 1
+      elsif resend_transient
+        sleep 0.25
       else
         sleep 0.1
         script.downstream_buffer.unshift(string)
-        return false
+        return fail_with.call(:refused)
       end
+      return fail_with.call(:too_many_resends) if over_cap.call
+
       clear
       put(message)
       next
@@ -1711,7 +1783,9 @@ def fput(message, *waitingfor)
           script.downstream_buffer.unshift(string)
           return foundit
         end
-        sleep 1
+        return fail_with.call(:too_many_resends) if over_cap.call
+        return fail_with.call(:interrupted) if wait.call(1)
+
         clear
         put(message)
         next
@@ -2026,13 +2100,17 @@ def dothis(action, success_line)
   }
 end
 
-def dothistimeout(action, timeout, success_line)
+# @param interrupt [#call, nil] checked on every read; true ends the wait
+#   at once and returns nil, the way a timeout does
+def dothistimeout(action, timeout, success_line, interrupt: nil)
   end_time = Time.now.to_f + timeout
   line = nil
   loop {
     Script.current.clear
     put action unless action.nil?
     loop {
+      return nil if interrupt && interrupt.call
+
       line = get?
       if line.nil?
         sleep 0.1
