@@ -1,8 +1,9 @@
 # Combat observation provenance
 
-This additive native contract supports consumers such as Bigshot Quick Combat
-without another combat parser, listener, or persisted configuration change.
-It describes source-backed offline tests, not live gameplay certification.
+This additive native contract supports bounded supervised controllers and
+Recorder consumers without another combat parser, listener, or persisted
+configuration change. It describes source-backed offline tests, not live
+gameplay certification.
 
 ## Source and batch
 
@@ -81,7 +82,7 @@ leave halfway through a batch. Subscribing requests complete native attack
 outcomes beginning with the next processing invocation; unsubscribing restores
 the previous setting-driven behavior after the current invocation. This does
 **not** turn a
-disabled tracker on or write settings. Quick consumers must require the
+disabled tracker on or write settings. Consumers must require the
 tracker to be enabled explicitly and unsubscribe on completion.
 
 Callbacks must remain bounded and command-free: copy relevant data into a
