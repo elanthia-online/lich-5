@@ -341,16 +341,18 @@ module Lich
       end
 
       # The command {Weapon.use} sends for a technique, without sending it. A
-      # technique without a usage word is sent by its normalized name.
+      # technique without a usage word is sent by its normalized name, and an
+      # assault-style technique never takes FORCERT.
       #
       # @param name [String] The name of the Weapon technique
       # @param target [String, Integer, GameObj] The target (optional)
-      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0); ignored for assaults
       # @return [String] e.g. "weapon twinhammer #12345"
       def Weapon.command(name, target = "", forcert_count: 0)
         name_normalized = PSMS.name_normal(name)
         technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
         usage = technique.key?(:usage) ? technique[:usage] : name_normalized
+        forcert_count = 0 if technique.key?(:assault_rx)
         PSMS.command("weapon", usage, target, forcert_count: forcert_count)
       end
 

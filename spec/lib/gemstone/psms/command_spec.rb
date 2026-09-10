@@ -83,6 +83,8 @@ RSpec.describe 'PSM category commands' do
   it 'Weapon sends WEAPON <usage> and waits on the assault line for assault techniques' do
     expect(Lich::Gemstone::Weapon.command('twinhammer', orc)).to eq('weapon twinhammer #12345')
     expect(Lich::Gemstone::Weapon.results_regex('twinhammer')).to match('Roundtime: 5 sec.')
+    expect(Lich::Gemstone::Weapon.command('twinhammer', orc, forcert_count: 1)).to eq('weapon twinhammer #12345 forcert')
+    expect(Lich::Gemstone::Weapon.command('barrage', orc, forcert_count: 1)).to eq('weapon barrage #12345')
     assault = Lich::Gemstone::Weapon.results_regex('barrage')
     expect(assault).to match('Your satisfying display of dexterity bolsters you and inspires those around you!')
     expect(assault).not_to match('Roundtime: 5 sec.')
