@@ -45,9 +45,12 @@ module Lich
         # Replies that mean the withdrawal did not happen.
         WITHDRAW_REFUSED = /seem to have that much|looks at you suspiciously|chuckles at you|taps her quill|purses her lips/.freeze
 
-        ACCOUNT_START   = /You currently have an account|you don't have access/i.freeze
+        ACCOUNT_START   = /You currently have the following amounts on deposit|You currently have an account|you don't have access/i.freeze
+        ACCOUNT_LINE    = /^\s+(?<bank>.+?) Bank: (?<silver>[\d,]+)$/.freeze
+        ACCOUNT_TOTAL   = /^\s+Total: (?<silver>[\d,]+)$/.freeze
         ACCOUNT_BALANCE = /in the amount of (?<silver>[\d,]+) silver/.freeze
         ACCOUNT_MAX     = /a maximum of (?<silver>[\d,]+) silvers/.freeze
+        ACCOUNT_END     = /urchin bank runner uses remaining|a maximum of|you don't have access|<prompt/i.freeze
         NO_ACCESS       = /you don't have access/i.freeze
         NOTE_VALUE      = /has a value of (?<silver>[\d,]+) silver and reads/.freeze
         NOTE_READ       = /Hold in right hand to use|has a value of/.freeze
@@ -75,21 +78,50 @@ module Lich
         Lich::Common::Account.type.to_s == 'FREE'
       end
 
-      # BANK ACCOUNT, parsed.
+      # BANK ACCOUNT, parsed. The listing covers every town's account, so
+      # +balance+ is the one for the town the character is standing in, picked
+      # by matching the bank's name against the room's location.
       #
-      # @return [Hash{Symbol => Integer, nil}, nil] +{ balance:, max: }+ (+max+ nil
-      #   when the account has no cap), or nil when this town's bank refuses access
+      # @return [Hash, nil] +{ balance:, max:, banks:, total: }+ where +banks+ maps
+      #   town name to silver, +max+ is the f2p cap (nil without one), or nil
+      #   when this town's bank refuses access
       def self.account
-        lines = Lich::Util.issue_command('bank account', Pattern::ACCOUNT_START, silent: true, quiet: true)
+        lines = Lich::Util.issue_command('bank account', Pattern::ACCOUNT_START, Pattern::ACCOUNT_END, silent: true, quiet: true)
         return nil if lines.any? { |l| l =~ Pattern::NO_ACCESS }
-        balance = lines.find { |l| l =~ Pattern::ACCOUNT_BALANCE } ? Regexp.last_match[:silver].delete(',').to_i : 0
-        max = lines.find { |l| l =~ Pattern::ACCOUNT_MAX } ? Regexp.last_match[:silver].delete(',').to_i : nil
-        { balance: balance, max: max }
+        banks = {}
+        total = nil
+        max = nil
+        balance = nil
+        lines.each do |line|
+          if line =~ Pattern::ACCOUNT_LINE
+            banks[Regexp.last_match[:bank]] = Regexp.last_match[:silver].delete(',').to_i
+          elsif line =~ Pattern::ACCOUNT_TOTAL
+            total = Regexp.last_match[:silver].delete(',').to_i
+          elsif line =~ Pattern::ACCOUNT_BALANCE
+            balance = Regexp.last_match[:silver].delete(',').to_i
+          elsif line =~ Pattern::ACCOUNT_MAX
+            max = Regexp.last_match[:silver].delete(',').to_i
+          end
+        end
+        balance ||= banks[local_bank(banks.keys)] || 0
+        { balance: balance, max: max, banks: banks, total: total || banks.values.sum }
       end
 
-      # @return [Integer, nil] account balance, nil without access
+      # @return [Integer, nil] balance at this town's bank, nil without access
       def self.balance
         account&.fetch(:balance)
+      end
+
+      # The bank named for the town the character is in ("Four Winds" for a room
+      # located on Four Winds Isle), or the only bank listed.
+      #
+      # @param names [Array<String>] bank names from BANK ACCOUNT
+      # @return [String, nil]
+      def self.local_bank(names)
+        return names.first if names.size == 1
+        location = Room.current&.location.to_s
+        return nil if location.empty?
+        names.find { |n| location.start_with?(n) } || names.find { |n| location.include?(n) || n.include?(location) }
       end
 
       # @return [GameObj, nil] a bank note in either hand

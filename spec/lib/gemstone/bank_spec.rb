@@ -11,7 +11,18 @@ RSpec.describe Lich::Gemstone::Bank do
   let(:note) { MockGameObj.new(id: '500', noun: 'note', name: 'bank note') }
   let(:sack) { MockGameObj.new(id: '105', noun: 'sack', name: 'leather sack') }
   let(:hands) { { right: nil, left: nil } }
-  let(:room) { double('Room', tags: ['bank']) }
+  let(:room) { double('Room', tags: ['bank'], location: 'Icemule Trace') }
+  let(:listing) do
+    ['You currently have the following amounts on deposit:',
+     '',
+     '             Icemule Trace Bank: 52,138',
+     '                Four Winds Bank: 616,853,785',
+     '                          Total: 616,905,923',
+     '',
+     'You currently have 0 inter-town bank transfer options available.',
+     '',
+     'You currently have 10 urchin bank runner uses remaining.']
+  end
   let(:sent) { [] }
 
   # A scripted game: each dothistimeout call returns the next reply in order.
@@ -73,17 +84,34 @@ RSpec.describe Lich::Gemstone::Bank do
   end
 
   describe '.account' do
-    it 'parses balance and cap' do
+    it 'parses the per-town listing and picks the local bank' do
+      allow(Lich::Util).to receive(:issue_command).and_return(listing)
+      info = described_class.account
+      expect(info[:banks]).to eq('Icemule Trace' => 52_138, 'Four Winds' => 616_853_785)
+      expect(info[:total]).to eq(616_905_923)
+      expect(info[:balance]).to eq(52_138)
+      expect(info[:max]).to be_nil
+      expect(described_class.balance).to eq(52_138)
+    end
+
+    it 'matches the bank by location prefix' do
+      allow(room).to receive(:location).and_return('Four Winds Isle')
+      allow(Lich::Util).to receive(:issue_command).and_return(listing)
+      expect(described_class.balance).to eq(616_853_785)
+    end
+
+    it 'is 0 with no account in this town' do
+      allow(room).to receive(:location).and_return("Wehnimer's Landing")
+      allow(Lich::Util).to receive(:issue_command).and_return(listing)
+      expect(described_class.balance).to eq(0)
+    end
+
+    it 'parses the single-account wording with a cap' do
       allow(Lich::Util).to receive(:issue_command).and_return(
         ['You currently have an account in the amount of 45,000 silver.',
          'Your account may hold a maximum of 100,000 silvers.']
       )
-      expect(described_class.account).to eq(balance: 45_000, max: 100_000)
-    end
-
-    it 'has no cap for a normal account' do
-      allow(Lich::Util).to receive(:issue_command).and_return(['You currently have an account in the amount of 45,000 silver.'])
-      expect(described_class.account).to eq(balance: 45_000, max: nil)
+      expect(described_class.account).to include(balance: 45_000, max: 100_000)
     end
 
     it 'is nil without access' do
