@@ -4,25 +4,38 @@ module Lich
   module Gemstone
     # Injured class for checking ability to perform actions based on wounds and scars
     class Injured < Gemstone::CharacterStatus
-      class << self
-        BODY_PART_GROUPS = {
-          eyes: %i[leftEye rightEye],
-          arms: %i[leftArm rightArm],
-          hands: %i[leftHand rightHand],
-          legs: %i[leftLeg rightLeg],
-          feet: %i[leftFoot rightFoot],
-          head_and_nerves: %i[head nsys]
-        }.freeze
+      BODY_PART_GROUPS = {
+        eyes: %i[leftEye rightEye],
+        arms: %i[leftArm rightArm],
+        hands: %i[leftHand rightHand],
+        legs: %i[leftLeg rightLeg],
+        feet: %i[leftFoot rightFoot],
+        head_and_nerves: %i[head nsys]
+      }.freeze
 
-        # Cache variables
-        @injury_cache_key = nil
-        @wounds_cache = nil
-        @scars_cache = nil
-        @cache_mutex = Mutex.new
+      # Cache variables. These must live on Injured itself (the class body),
+      # not inside `class << self`, where they would land on the singleton
+      # class and the methods below would read nil.
+      @injury_cache_key = nil
+      @wounds_cache = nil
+      @scars_cache = nil
+      @cache_mutex = Mutex.new
+
+      class << self
+        # Build an immutable fingerprint of the current injury state.
+        # XMLData.injuries is mutated in place by the parser, so the hash itself
+        # cannot serve as a cache key: it would always compare equal to itself.
+        # Note: this runs in injury mode 2 ('both'), where a scar underneath an
+        # active wound is not visible, so such a scar changing will not invalidate
+        # the cache. That is a narrow case and acceptable given each cache miss
+        # costs two _injury round trips in Scars.all_scars.
+        def injury_fingerprint
+          XMLData.injuries.map { |part, v| [part, v['wound'], v['scar']] }.freeze
+        end
 
         # Get cached or fresh injury data
         def get_injury_data
-          current_key = XMLData.injuries
+          current_key = injury_fingerprint
 
           # Fast path: return cached data if key hasn't changed
           if @injury_cache_key == current_key && @wounds_cache && @scars_cache
@@ -77,6 +90,11 @@ module Lich
         def bypasses_injuries?
           Effects::Buffs.active?("Sigil of Determination")
         end
+
+        # NOTE: every able_to_*? predicate calls fix_injury_mode('both') and, on a
+        # cache miss, Scars.all_scars toggles the injury mode. Each of those can
+        # send an _injury command and block for up to 7.5 seconds waiting on the
+        # game. These are not instantaneous checks; avoid calling them in tight loops.
 
         # Check if character is able to cast spells
         def able_to_cast?
