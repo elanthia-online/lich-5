@@ -100,6 +100,14 @@ RSpec.describe Lich::Gemstone::Bank do
       expect(described_class.balance).to eq(616_853_785)
     end
 
+    it 'does not take a lone account elsewhere for the local one' do
+      allow(room).to receive(:location).and_return("Wehnimer's Landing")
+      allow(Lich::Util).to receive(:issue_command).and_return(
+        ['You currently have the following amounts on deposit:', '', '             Icemule Trace Bank: 52,138', '                          Total: 52,138']
+      )
+      expect(described_class.balance).to eq(0)
+    end
+
     it 'is 0 with no account in this town' do
       allow(room).to receive(:location).and_return("Wehnimer's Landing")
       allow(Lich::Util).to receive(:issue_command).and_return(listing)
@@ -207,6 +215,16 @@ RSpec.describe Lich::Gemstone::Bank do
                 before: ->(cmd) { hands[:right] = note if cmd =~ /note/ })
         expect(described_class.deposit(10_000)).to eq(10_000)
         expect(sent).to eq(['deposit 5000', 'withdraw 100000 note', 'deposit 5000'])
+      end
+
+      it 'stops once the requested amount is in, without converting savings to a note' do
+        allow(Lich::Util).to receive(:issue_command).and_return(
+          ['You currently have an account in the amount of 95,000 silver.', 'Your account may hold a maximum of 100,000 silvers.']
+        )
+        Lich::Gemstone::Currency.silver = 20_000
+        replies('You deposit 5,000 silvers into your account.')
+        expect(described_class.deposit(5_000)).to eq(5_000)
+        expect(sent).to eq(['deposit 5000'])
       end
 
       it 'counts only what the bank confirmed' do

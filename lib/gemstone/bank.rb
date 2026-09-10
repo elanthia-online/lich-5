@@ -113,12 +113,11 @@ module Lich
       end
 
       # The bank named for the town the character is in ("Four Winds" for a room
-      # located on Four Winds Isle), or the only bank listed.
+      # located on Four Winds Isle).
       #
       # @param names [Array<String>] bank names from BANK ACCOUNT
       # @return [String, nil]
       def self.local_bank(names)
-        return names.first if names.size == 1
         location = Room.current&.location.to_s
         return nil if location.empty?
         names.find { |n| location.start_with?(n) } || names.find { |n| location.include?(n) || n.include?(location) }
@@ -245,6 +244,7 @@ module Lich
             remaining -= got if remaining
           end
           carried = Currency.silver(refresh: true).to_i
+          break if (remaining && remaining <= 0) || !carried.positive?
           note_size = carried >= F2P_NOTE_BUFFER ? max : max - (F2P_NOTE_BUFFER - carried)
           break if withdraw(note_size, note: true).nil?
           note = note_in_hand
