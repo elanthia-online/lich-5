@@ -358,6 +358,11 @@ RSpec.describe Lich::Stash, 'named items' do
       described_class.hands(right: sword, left: shield)
     end
 
+    it 'refuses the same item in both hands' do
+      expect(described_class).not_to receive(:fput)
+      expect { described_class.hands(right: sword, left: 'broadsword') }.to raise_error(ArgumentError, /both hands/)
+    end
+
     it 'refuses to swap an item out of a hand asked to be kept' do
       hold(:right, shield)
       hold(:left, sword)

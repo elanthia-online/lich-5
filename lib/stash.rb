@@ -452,6 +452,9 @@ module Lich
     def self.hands(right: :keep, left: :keep)
       wanted = { right: right, left: left }
       resolved = wanted.transform_values { |want| want == :keep || want.nil? ? want : find_item(want) }
+      if resolved[:right].is_a?(GameObj) && resolved[:left].is_a?(GameObj) && resolved[:right].id == resolved[:left].id
+        raise ArgumentError, "hands: #{resolved[:right].name} was asked for in both hands"
+      end
 
       # A wanted item sitting in the hand the caller asked to keep can only be
       # moved by a swap, which would change that hand. Refuse before touching anything.
