@@ -281,10 +281,9 @@ module Lich
     #   ready-list slot (:weapon, :shield, ...); or a name matched the way
     #   find_container matches, case-insensitive and with words allowed to be
     #   non-adjacent ("vultite broadsword" matches "vultite hand-forged broadsword")
-    # @param loud_fail [Boolean] raise when not found or ambiguous
-    # @return [GameObj, nil]
-    # @raise [RuntimeError] when loud_fail and the item is missing, or a name
-    #   matches more than one item (that is a profile bug the user should see)
+    # @param loud_fail [Boolean] raise when nothing matches
+    # @return [GameObj, nil] the best candidate from find_items for a name
+    # @raise [RuntimeError] when loud_fail and the item is missing
     def self.find_item(param, loud_fail: true)
       return param if param.is_a?(GameObj)
 
@@ -292,17 +291,28 @@ module Lich
               when Integer then GameObj[param.to_s]
               when Symbol then find_ready_item(param)
               when String
-                if param =~ /\A\d+\z/
-                  GameObj[param]
-                else
-                  matches = known_items.select { |obj| name_matches?(obj, param) }.uniq(&:id)
-                  matches = inventory_matches(param) if matches.empty?
-                  fail "Item[name: #{param}] matches #{matches.size} items: #{matches.map(&:name).join(', ')}" if matches.size > 1 && loud_fail
-                  matches.first
-                end
+                param =~ /\A\d+\z/ ? GameObj[param] : find_items(param).first
               end
       fail "could not find Item[#{param.inspect}]" if found.nil? && loud_fail
       found
+    end
+
+    # Every distinct item a name could mean, best first, without sending
+    # anything. Ordered by how specific the match is (whole name, then part
+    # of the name, then noun only) and then by where the item is (hands,
+    # ready list, worn, containers), which is the order the game itself
+    # resolves a bare noun in. Items with identical names are interchangeable
+    # and collapse to the first.
+    #
+    # @param name [String]
+    # @return [Array<GameObj>] empty when nothing matches
+    def self.find_items(name)
+      ranked = known_items_ranked.select { |obj, _loc| name_matches?(obj, name) }
+      ranked = inventory_matches(name).map { |obj| [obj, 4] } if ranked.empty?
+      ranked.sort_by.with_index { |(obj, loc), i| [match_specificity(obj, name), loc, i] }
+                    .map(&:first)
+            .uniq(&:id)
+            .uniq(&:name)
     end
 
     # The full inventory tree, refreshed on request through the game's
@@ -380,7 +390,14 @@ module Lich
     # @raise [RuntimeError] when the item cannot be found or never arrives
     def self.wield(param, hand: nil)
       fail "wield: hand must be :right, :left or nil, got #{hand.inspect}" unless hand.nil? || HANDS.include?(hand)
-      item = find_item(param)
+      if param.is_a?(String) && param !~ /\A\d+\z/
+        candidates = find_items(param)
+        fail "could not find Item[#{param.inspect}]" if candidates.empty?
+        item = candidates.first
+        echo "wield: #{param} -> #{item.name} (of #{candidates.size} kinds: #{candidates.map(&:name).join(', ')})" if candidates.size > 1
+      else
+        item = find_item(param)
+      end
 
       holding = hand_holding(item)
       if holding
@@ -503,6 +520,28 @@ module Lich
       ReadyList.ready_list[slot]
     end
 
+    # known_items with a location rank: 0 hands, 1 ready list, 2 worn, 3 in a container.
+    #
+    # @return [Array<Array(GameObj, Integer)>]
+    def self.known_items_ranked
+      hands = [GameObj.right_hand, GameObj.left_hand].compact.reject { |obj| obj.id.nil? }
+      ready = ReadyList.checked? ? ReadyList.ready_list.values.compact : []
+      hands.map { |obj| [obj, 0] } +
+        ready.map { |obj| [obj, 1] } +
+        GameObj.inv.to_a.map { |obj| [obj, 2] } +
+        GameObj.containers.values.flatten.map { |obj| [obj, 3] }
+    end
+
+    # 0 when the name is the whole item name, 1 when it is a run of whole
+    # words inside it, 2 when only the noun (or a loose match) hit.
+    def self.match_specificity(obj, name)
+      wanted = name.strip.downcase
+      actual = obj.name.to_s.downcase
+      return 0 if actual == wanted
+      return 1 if actual =~ /(?:\A|\s)#{Regexp.escape(wanted)}(?:\s|\z)/ && wanted.include?(' ')
+      2
+    end
+
     # Every item Lich currently knows the character has: hands, worn, and the
     # contents of containers that have been looked in.
     #
@@ -518,7 +557,7 @@ module Lich
       obj.name =~ %r[#{param.strip}]i || obj.name =~ %r[#{param.sub(' ', ' .*')}]i
     end
 
-    private_class_method :find_ready_item, :known_items, :name_matches?, :inventory_matches
+    private_class_method :find_ready_item, :known_items, :known_items_ranked, :match_specificity, :name_matches?, :inventory_matches
 
     def self.equip_hands(left: false, right: false, both: false)
       if both

@@ -62,6 +62,7 @@ RSpec.describe Lich::Stash, 'named items' do
         attr_accessor :ready_list, :valid
 
         def valid?(*) = valid
+        def checked? = true
         def check(*); end
       end
     end)
@@ -121,13 +122,54 @@ RSpec.describe Lich::Stash, 'named items' do
       expect { described_class.find_item(:hat) }.to raise_error(RuntimeError, /unknown ready-list slot/)
     end
 
-    it 'raises when a name matches more than one item' do
-      expect { described_class.find_item('steel') }.to raise_error(RuntimeError, /matches 2 items/)
+    it 'takes the best candidate when a name matches more than one item' do
+      GameObj.set_left_hand(dagger)
+      expect(described_class.find_item('steel').id).to eq('102')
     end
 
     it 'raises when nothing matches, or returns nil when asked not to' do
       expect { described_class.find_item('halberd') }.to raise_error(RuntimeError, /could not find/)
       expect(described_class.find_item('halberd', loud_fail: false)).to be_nil
+    end
+  end
+
+  describe '.find_items' do
+    let(:rod_worn)   { StashItem.new(id: '301', noun: 'rod', name: 'iridian-woven rod', type: 'wand') }
+    let(:rod_sack1)  { StashItem.new(id: '302', noun: 'rod', name: 'slender wooden rod', type: 'wand') }
+    let(:rod_sack2)  { StashItem.new(id: '303', noun: 'rod', name: 'slender wooden rod', type: 'wand') }
+    let(:rod_tree)   { StashItem.new(id: '304', noun: 'rod', name: 'prickle-clad sandbox tree rod', type: 'wand') }
+
+    before do
+      allow(GameObj).to receive(:inv).and_return([cloak, sack, rod_worn])
+      allow(GameObj).to receive(:containers).and_return({ '105' => [rod_sack1, rod_sack2, rod_tree] })
+    end
+
+    it 'orders by location for a noun-only match and collapses identical names' do
+      expect(described_class.find_items('rod').map(&:id)).to eq(%w[301 302 304])
+    end
+
+    it 'puts a hand item first' do
+      GameObj.set_right_hand(rod_tree)
+      expect(described_class.find_items('rod').first.id).to eq('304')
+    end
+
+    it 'puts a ready-list item ahead of worn' do
+      ready_list[:wand] = rod_sack2
+      expect(described_class.find_items('rod').map(&:id)).to eq(%w[303 301 304])
+    end
+
+    it 'prefers a whole-name match over a partial one' do
+      expect(described_class.find_items('slender wooden rod').first.id).to eq('302')
+      expect(described_class.find_items('sandbox tree rod').first.id).to eq('304')
+    end
+
+    it 'prefers whole words inside the name over a noun-only hit' do
+      GameObj.set_right_hand(rod_worn)
+      expect(described_class.find_items('wooden rod').first.id).to eq('302')
+    end
+
+    it 'is empty when nothing matches' do
+      expect(described_class.find_items('halberd')).to eq([])
     end
   end
 
@@ -260,6 +302,12 @@ RSpec.describe Lich::Stash, 'named items' do
       expect(inventory.refreshes).to eq(1)
     end
 
+    it 'says which item it picked when the name meant more than one kind' do
+      expect(described_class).to receive(:echo).with(/wield: steel -> steel shield \(of 2 kinds/)
+      on_fput('remove #103', shield, :right)
+      described_class.wield('steel')
+    end
+
     it 'rejects a bad hand' do
       expect { described_class.wield(sword, hand: :both) }.to raise_error(RuntimeError, /hand must be/)
     end
@@ -300,10 +348,10 @@ RSpec.describe Lich::Stash, 'named items' do
       described_class.hands(right: sword, left: shield)
     end
 
-    it 'resolves names before touching anything, so an ambiguous name changes nothing' do
+    it 'resolves names before touching anything, so an unknown name changes nothing' do
       GameObj.set_right_hand(dagger)
       expect(described_class).not_to receive(:stash_hands)
-      expect { described_class.hands(right: nil, left: 'steel') }.to raise_error(RuntimeError, /matches 2 items/)
+      expect { described_class.hands(right: nil, left: 'halberd') }.to raise_error(RuntimeError, /could not find/)
     end
   end
 end
