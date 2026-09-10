@@ -51,8 +51,18 @@ RSpec.describe Lich::Stash, 'named items' do
 
   let(:ready_list) { { weapon: nil, shield: nil, sheath: nil } }
 
+  # Hands are stubbed rather than set through the spec_helper mock: in a full
+  # run the production GameObj is loaded by other specs and reads its hands
+  # from class variables the mock setters never touch.
+  let(:hands) { { right: nil, left: nil } }
+
+  def hold(hand, item)
+    hands[hand] = item
+  end
+
   before do
-    GameObj.clear_hands
+    allow(GameObj).to receive(:right_hand) { hands[:right] }
+    allow(GameObj).to receive(:left_hand) { hands[:left] }
     allow(GameObj).to receive(:inv).and_return([cloak, sack, shield])
     allow(GameObj).to receive(:containers).and_return({ '105' => [sword, dagger] })
     allow(GameObj).to receive(:[]) { |id| [sword, dagger, shield, cloak, sack].find { |o| o.id == id.to_s } }
@@ -82,7 +92,7 @@ RSpec.describe Lich::Stash, 'named items' do
   # Make the next fput of `command` land `item` in `hand`, the way the game would.
   def on_fput(command, item, hand)
     allow(described_class).to receive(:fput).with(command) do
-      hand == :right ? GameObj.set_right_hand(item) : GameObj.set_left_hand(item)
+      hold(hand, item)
     end
   end
 
@@ -101,7 +111,7 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'searches hands, worn items, and known container contents' do
-      GameObj.set_right_hand(dagger)
+      hold(:right, dagger)
       expect(described_class.find_item('dagger').id).to eq('102')
       expect(described_class.find_item('cloak')).to be(cloak)
       expect(described_class.find_item('broadsword')).to be(sword)
@@ -123,7 +133,7 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'takes the best candidate when a name matches more than one item' do
-      GameObj.set_left_hand(dagger)
+      hold(:left, dagger)
       expect(described_class.find_item('steel').id).to eq('102')
     end
 
@@ -149,7 +159,7 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'puts a hand item first' do
-      GameObj.set_right_hand(rod_tree)
+      hold(:right, rod_tree)
       expect(described_class.find_items('rod').first.id).to eq('304')
     end
 
@@ -164,7 +174,7 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'prefers whole words inside the name over a noun-only hit' do
-      GameObj.set_right_hand(rod_worn)
+      hold(:right, rod_worn)
       expect(described_class.find_items('wooden rod').first.id).to eq('302')
     end
 
@@ -175,7 +185,7 @@ RSpec.describe Lich::Stash, 'named items' do
 
   describe '.hand_holding / .in_hand?' do
     it 'reports which hand holds the item' do
-      GameObj.set_left_hand(shield)
+      hold(:left, shield)
       expect(described_class.hand_holding(shield)).to eq(:left)
       expect(described_class.hand_holding(sword)).to be_nil
       expect(described_class.in_hand?(shield)).to be true
@@ -185,16 +195,16 @@ RSpec.describe Lich::Stash, 'named items' do
 
   describe '.wield' do
     it 'is a no-op when the item is already in a hand and no hand was asked for' do
-      GameObj.set_left_hand(sword)
+      hold(:left, sword)
       expect(described_class).not_to receive(:fput)
       expect(described_class.wield('broadsword').id).to eq('101')
     end
 
     it 'swaps when the item is in the other hand' do
-      GameObj.set_left_hand(sword)
+      hold(:left, sword)
       expect(described_class).to receive(:dothistimeout).with('swap', 3, anything) do
-        GameObj.set_right_hand(sword)
-        GameObj.set_left_hand(empty)
+        hold(:right, sword)
+        hold(:left, empty)
       end
       expect(described_class.wield('broadsword', hand: :right).id).to eq('101')
     end
@@ -257,7 +267,7 @@ RSpec.describe Lich::Stash, 'named items' do
       calls = 0
       allow(described_class).to receive(:fput).with('get #101') do
         calls += 1
-        GameObj.set_right_hand(sword) if calls == 2
+        hold(:right, sword) if calls == 2
       end
       # The refresh after the first miss is what reveals the sack was closed meanwhile.
       allow(inventory).to receive(:refresh) { sack_entry.flags = ['closed']; inventory }
@@ -273,16 +283,16 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'empties the target hand first when it is occupied' do
-      GameObj.set_right_hand(dagger)
-      expect(described_class).to receive(:stash_hands).with(right: true) { GameObj.set_right_hand(empty) }
+      hold(:right, dagger)
+      expect(described_class).to receive(:stash_hands).with(right: true) { hold(:right, empty) }
       on_fput('get #101', sword, :right)
       described_class.wield(sword, hand: :right)
     end
 
     it 'frees the right hand when both are full and no hand was asked for' do
-      GameObj.set_right_hand(dagger)
-      GameObj.set_left_hand(shield)
-      expect(described_class).to receive(:stash_hands).with(right: true) { GameObj.set_right_hand(empty) }
+      hold(:right, dagger)
+      hold(:left, shield)
+      expect(described_class).to receive(:stash_hands).with(right: true) { hold(:right, empty) }
       on_fput('get #101', sword, :right)
       described_class.wield(sword)
     end
@@ -290,8 +300,8 @@ RSpec.describe Lich::Stash, 'named items' do
     it 'swaps after fetching when the game put it in the wrong hand' do
       on_fput('get #101', sword, :right)
       expect(described_class).to receive(:dothistimeout).with('swap', 3, anything) do
-        GameObj.set_left_hand(sword)
-        GameObj.set_right_hand(empty)
+        hold(:left, sword)
+        hold(:right, empty)
       end
       expect(described_class.wield(sword, hand: :left).id).to eq('101')
     end
@@ -315,7 +325,7 @@ RSpec.describe Lich::Stash, 'named items' do
 
   describe '.hands' do
     it 'leaves both hands alone by default' do
-      GameObj.set_right_hand(dagger)
+      hold(:right, dagger)
       expect(described_class).not_to receive(:fput)
       expect(described_class).not_to receive(:stash_hands)
       result = described_class.hands
@@ -324,8 +334,8 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'empties a hand given nil' do
-      GameObj.set_right_hand(dagger)
-      expect(described_class).to receive(:stash_hands).with(right: true) { GameObj.set_right_hand(empty) }
+      hold(:right, dagger)
+      expect(described_class).to receive(:stash_hands).with(right: true) { hold(:right, empty) }
       expect(described_class.hands(right: nil)[:right]).to be_nil
     end
 
@@ -338,18 +348,18 @@ RSpec.describe Lich::Stash, 'named items' do
     end
 
     it 'swaps once when the two wanted items are in each other\'s hands' do
-      GameObj.set_right_hand(shield)
-      GameObj.set_left_hand(sword)
+      hold(:right, shield)
+      hold(:left, sword)
       expect(described_class).to receive(:dothistimeout).with('swap', 3, anything).once do
-        GameObj.set_right_hand(sword)
-        GameObj.set_left_hand(shield)
+        hold(:right, sword)
+        hold(:left, shield)
       end
       expect(described_class).not_to receive(:fput)
       described_class.hands(right: sword, left: shield)
     end
 
     it 'resolves names before touching anything, so an unknown name changes nothing' do
-      GameObj.set_right_hand(dagger)
+      hold(:right, dagger)
       expect(described_class).not_to receive(:stash_hands)
       expect { described_class.hands(right: nil, left: 'halberd') }.to raise_error(RuntimeError, /could not find/)
     end
