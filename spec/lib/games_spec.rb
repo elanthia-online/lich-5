@@ -211,7 +211,7 @@ RSpec.describe Lich::GameBase do
           release.pop if line == 'old queued attack'
         end
         described_class.start_server_processor_thread
-        described_class.server_queue << ['old queued attack', 1.0]
+        described_class.enqueue_server_string('old queued attack', 9.0, ingress_monotonic_at: 1.0)
         entered.pop
         expect(described_class.current_ingress_time).to be_nil
         release << true

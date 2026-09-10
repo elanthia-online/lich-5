@@ -26,8 +26,8 @@ The native downstream hook attaches `event[:source]`:
 ```
 
 The hash and strings are frozen. Sequence is a positive increasing ingress
-counter; it can have gaps. `received_at` is the existing monotonic timestamp
-attached by the socket reader before the parser queue, after socket-read hooks.
+counter; it can have gaps. `received_at` is the monotonic timestamp captured
+immediately after the socket read, before socket-read hooks and the parser queue.
 It is not wall-clock time, server time, command acknowledgment, or proof that
 an attack was caused by a particular command.
 
@@ -75,9 +75,12 @@ production already does this through the ordered `AsyncProcessor` worker.
 ## Transient demand and consumer obligations
 
 Existing attack parsing/emission gates use
-`settings[:emit_attacks] || Observers.any_for?(:attack)`. Subscribing requests
-complete native attack outcomes while that subscriber exists; unsubscribing
-restores the previous setting-driven behavior. This does **not** turn a
+`settings[:emit_attacks] || Observers.any_for?(:attack)`. Demand is snapshotted
+once per complete `Processor.process` invocation, so a subscriber cannot join or
+leave halfway through a batch. Subscribing requests complete native attack
+outcomes beginning with the next processing invocation; unsubscribing restores
+the previous setting-driven behavior after the current invocation. This does
+**not** turn a
 disabled tracker on or write settings. Quick consumers must require the
 tracker to be enabled explicitly and unsubscribe on completion.
 

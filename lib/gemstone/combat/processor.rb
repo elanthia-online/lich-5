@@ -72,7 +72,8 @@ module Lich
           # Parse-phase fact emits (:status/:ucs/:spell_loss) queue up here
           # and go out AFTER this chunk's :attack emits - see emit_fact.
           @deferred_emits = []
-          events = source ? parse_events(chunk, source: source) : parse_events(chunk)
+          include_attack_events = attack_events_requested?
+          events = parse_events(chunk, source: source, include_attack_events: include_attack_events)
           # Death sweep runs AFTER this chunk's attacks emit, never before:
           # the async worker lags the game stream, so the creature registry
           # already shows a death that THIS chunk's attack caused. Sweeping
@@ -106,7 +107,7 @@ module Lich
           end
           events.each do |event|
             event[:at] = at
-            persist_event(event)
+            persist_event(event, include_attack_events: include_attack_events)
           end
           sweep_death_watch
 
@@ -208,7 +209,7 @@ module Lich
         # emit is a fact-less SWITCH ARTIFACT: guard-intercept and
         # UCS-positioning lines spawn empty inherited events that used to
         # emit as phantom attacks (real-feed replay, logs/examples/fury.txt).
-        def event_savable?(event)
+        def event_savable?(event, include_attack_events: attack_events_requested?)
           return false unless event
 
           unless event[:target][:id]
@@ -232,13 +233,13 @@ module Lich
             return false unless event[:inbound] || event[:foreign_target] ||
                                 event[:_attack_born]
 
-            return attack_events_requested? &&
+            return include_attack_events &&
                    (event[:_attack_born] || !event[:outcomes].empty? ||
                     !event[:resolutions].empty? || !event[:hits].empty?)
           end
 
           event_worth_saving?(event) ||
-            (attack_events_requested? &&
+            (include_attack_events &&
              (event[:_attack_born] ||
               !event[:outcomes].empty? || !event[:resolutions].empty? ||
               !event[:flares].empty? || event[:_had_status]))
@@ -281,9 +282,12 @@ module Lich
         # Parse combat lines into events without inventing ingestion provenance.
         # @param lines [Array<String>] game lines for one parser chunk
         # @param source [Hash, nil] optional ingestion context to validate and copy
+        # @param include_attack_events [Boolean, nil] fixed transient attack
+        #   demand for this parse, or nil to snapshot current demand
         # @return [Array<Hash>] parsed attack and related outcome events
-        def parse_events(lines, source: nil)
+        def parse_events(lines, source: nil, include_attack_events: nil)
           source = observation_source(source)
+          include_attack_events = attack_events_requested? if include_attack_events.nil?
           events = []
           current_event = nil
           parse_state = :seeking_attack
@@ -632,7 +636,7 @@ module Lich
               # Check if this is a real target switch (different creature)
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
-                if event_savable?(current_event)
+                if event_savable?(current_event, include_attack_events: include_attack_events)
                   events << current_event
                   respond "[Combat] Saved event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits, #{current_event[:statuses].size} statuses" if Tracker.debug?(:verbose)
                 end
@@ -704,7 +708,7 @@ module Lich
             # ("the warg evades!"), so the switch must happen first or the
             # outcome lands on the previous target's event.
             # Only parsed when a recorder-class subscriber wants the blob.
-            if attack_events_requested?
+            if include_attack_events
               if (resolution = Parser.parse_resolution(line))
                 # Most rolls FOLLOW their attack line (swing -> AS/DS), but
                 # volley's SMR PRECEDES each arrow line. A roll claims the
@@ -872,7 +876,7 @@ module Lich
               end
               # Save previous event before starting a new one - unless the
               # target-switcher created it on this very line (see _line)
-              if event_savable?(current_event) && current_event[:_line] != index
+              if event_savable?(current_event, include_attack_events: include_attack_events) && current_event[:_line] != index
                 events << current_event
                 respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits" if Tracker.debug?(:verbose)
               end
@@ -1173,7 +1177,7 @@ module Lich
                 # enables only emit_attacks) of every crit - the emit carried a
                 # crit-shaped hole.
                 if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses] ||
-                   attack_events_requested?
+                   include_attack_events
                   (1..3).each do |offset|
                     next_line_index = index + offset
                     break if next_line_index >= lines.size
@@ -1232,7 +1236,7 @@ module Lich
           # supersedes it or emits it as it stands.
           if bare_cast?(current_event) && !current_event[:_held] && current_event[:attacker].nil?
             @held_cast = current_event
-          elsif event_savable?(current_event)
+          elsif event_savable?(current_event, include_attack_events: include_attack_events)
             events << current_event
           end
 
@@ -1291,7 +1295,7 @@ module Lich
         end
 
         # Apply combat event to creature instance (same as before)
-        def persist_event(event)
+        def persist_event(event, include_attack_events: attack_events_requested?)
           target = event[:target]
 
           # The whole parsed event as one emit: swing + flares + spawned-cast
@@ -1305,7 +1309,7 @@ module Lich
           #     complete regardless of settings - and therefore BEFORE the
           #     creature is mutated (an :attack subscriber reading
           #     Creature[id] sees pre-swing state; per-fact emits see post).
-          Observers.emit(:attack, event) if attack_events_requested?
+          Observers.emit(:attack, event) if include_attack_events
 
           # A nearby player's attack (foreign_caster) DOES resolve onto a
           # creature we can see, so unlike inbound/foreign_target it passes

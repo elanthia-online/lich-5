@@ -692,8 +692,8 @@ module Lich
           nil
         end
 
-        def enqueue_server_string(server_string, enqueued_monotonic_at)
-          @server_queue.push([server_string, enqueued_monotonic_at], true)
+        def enqueue_server_string(server_string, enqueued_monotonic_at, ingress_monotonic_at: enqueued_monotonic_at)
+          @server_queue.push([server_string, enqueued_monotonic_at, ingress_monotonic_at], true)
           record_server_queue_enqueue
         rescue ThreadError
           raise ServerQueueOverflow, "game parser queue exceeded #{SERVER_QUEUE_CAPACITY} records"
@@ -738,10 +738,12 @@ module Lich
         end
 
         def unwrap_server_queue_item(item)
-          if item.is_a?(Array) && item.length == 2 && item[1].is_a?(Numeric)
+          if item.is_a?(Array) && item.length == 3 && item[1].is_a?(Numeric)
             item
+          elsif item.is_a?(Array) && item.length == 2 && item[1].is_a?(Numeric)
+            [item[0], item[1], item[1]]
           else
-            [item, nil]
+            [item, nil, nil]
           end
         end
 
@@ -781,7 +783,11 @@ module Lich
                   ) if defined?(Lich::Common::SocketReadHook)
                   hook_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                   enqueue_started = hook_finished
-                  enqueue_server_string(server_string, enqueue_started)
+                  enqueue_server_string(
+                    server_string,
+                    enqueue_started,
+                    ingress_monotonic_at: monotonic_received_at
+                  )
                   enqueue_finished = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                   record_server_reader_timing(
                     hook_time: hook_finished - hook_started,
@@ -848,11 +854,11 @@ module Lich
                 item = @server_queue.pop
                 break if item.nil?
 
-                server_string, enqueued_monotonic_at = unwrap_server_queue_item(item)
+                server_string, enqueued_monotonic_at, ingress_monotonic_at = unwrap_server_queue_item(item)
                 record_server_queue_dequeue(enqueued_monotonic_at)
                 parse_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                 begin
-                  Thread.current.thread_variable_set(:lich_game_ingress_time, enqueued_monotonic_at)
+                  Thread.current.thread_variable_set(:lich_game_ingress_time, ingress_monotonic_at)
                   process_server_string(server_string)
                 ensure
                   Thread.current.thread_variable_set(:lich_game_ingress_time, nil)

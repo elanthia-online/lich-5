@@ -22,7 +22,9 @@ RSpec.describe 'Combat observation provenance' do
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
     stub_const('Lich::Gemstone::Combat::Creature', Class.new { def self.[](_id); end })
-    %i[@death_watch @death_announced @held_cast @deferred_emits].each { |iv| processor.instance_variable_set(iv, nil) }
+    %i[@death_watch @death_announced @held_cast @deferred_emits @observation_batch_id].each do |iv|
+      processor.instance_variable_set(iv, nil)
+    end
     observers.clear!
   end
 
@@ -38,6 +40,17 @@ RSpec.describe 'Combat observation provenance' do
     expect(Lich::Gemstone::Combat::Tracker.settings[:emit_attacks]).to be(false)
     observers.off(handler)
     expect(processor.parse_events(chunk)).to be_empty
+  end
+
+  it 'snapshots transient attack demand once for the whole processing invocation' do
+    seen = []
+    observers.on(:attack) { |_type, event| seen << event }
+    expect(processor).to receive(:attack_events_requested?).once.and_return(true)
+
+    processor.process(chunk, source: source)
+
+    expect(seen.length).to eq(1)
+    expect(seen.first).to include(outcomes: [:miss])
   end
 
   it 'marks the whole emission batch before the first callback and assigns a new id next time' do
