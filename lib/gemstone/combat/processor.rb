@@ -318,6 +318,12 @@ module Lich
           last_inbound_attacker = nil
           # the event a SINGLE_HIT_ATTACKS side effect cut in front of (see decl)
           single_hit_parent = nil
+          # Weapon named by a "You nock <ammo> in your <bow>." line this chunk,
+          # cleared by the swing that follows. A pre-emptive evade ("bounds
+          # to safety as you move to attack it") prints INSTEAD of the fire
+          # line, so the only clue that the swing was a fire is the nock
+          # (hunt log 2026-09-09 16:00: the shroud then rode an "unknown").
+          nocked = nil
           current_event = nil
           parse_state = :seeking_attack
           current_target = nil
@@ -663,6 +669,17 @@ module Lich
               # ("Vital energy infuses you") lines, which name no weapon
               # (hunt log 2026-09-07 23:50). A creature's cast has no flares
               # of its own; anything the swing could own resumes it.
+              # A one-hit side effect (mount collapse) has its hit: the flare
+              # that follows is the interrupted swing's (see SINGLE_HIT_ATTACKS;
+              # hunt log 2026-09-09 13:44, chameleon shroud on the pin row)
+              if current_event && single_hit_parent && SINGLE_HIT_ATTACKS.include?(current_event[:name]) &&
+                 current_event[:hits].any?
+                save_event.call(current_event)
+                current_event = single_hit_parent
+                single_hit_parent = nil
+                current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                respond "[Combat] Resumed #{current_event[:name]} after its one-hit side effect (flare)" if Tracker.debug?(:verbose)
+              end
               if current_event && current_event[:inbound] && interrupted_own &&
                  !flare_contradicts_weapon?(flare, interrupted_own)
                 save_event.call(current_event)
@@ -922,10 +939,13 @@ module Lich
                     # it and seat it in the volley's spawn tree (the first arrow
                     # of the round becomes the root the later arrows point at).
                     round_name = SEQUENCE_ROUND_NAMES.include?(active_sequence) ? active_sequence : nil
+                    # a nocked bow with no fire line printed: the outcome IS
+                    # the fire (pre-emptive evade, see nocked decl)
+                    nock_fire = nocked && !pending_ambush && round_name.nil?
                     current_event = {
-                      name: pending_ambush ? :ambush : (round_name || :unknown),
+                      name: pending_ambush ? :ambush : (round_name || (nock_fire ? :fire : :unknown)),
                       target: line_target, attacker: nil,
-                      weapon: nil, parent: nil, hits: [],
+                      weapon: nock_fire ? nocked : nil, parent: nil, hits: [],
                       statuses: [], flares: [], outcomes: [outcome],
                       # A wholly-negated ambush prints its prefix and then an
                       # intercept, with no attack line between - this is the
@@ -941,6 +961,7 @@ module Lich
                     end
                     pending_ambush = nil
                     pending_resolutions = []
+                    nocked = nil if nock_fire
                     current_target = line_target
                     parse_state = :seeking_damage
                   end
@@ -1003,6 +1024,9 @@ module Lich
             # above on the same line and double-applied their effects.
             attack = (amb || rdr) ? nil : line_attack
 
+            if (nock = line.gsub(/<[^>]+>/, '').match(/\AYou nock .+? in your (?<weapon>[^.]+)\.\s*\z/))
+              nocked = nock[:weapon]
+            end
             if attack
               # A bare gesture :cast event is the WRAPPER for whatever
               # spell-specific initiation follows in the same chunk (searing
@@ -1164,6 +1188,7 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
+              nocked = nil # the swing the nock announced has printed (see decl)
               # see last_inbound_attacker decl
               if current_event[:inbound] && current_event[:attacker].nil? && last_inbound_attacker &&
                  !Definitions::Attacks.attackerless_line?(line)

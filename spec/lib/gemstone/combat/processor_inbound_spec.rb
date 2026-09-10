@@ -874,6 +874,35 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(events.size).to eq(1)
       expect(events.first[:target][:id]).to eq(123985834)
       expect(events.first[:outcomes]).to include(:evade)
+      expect(events.first[:name]).to eq(:unknown)
+    end
+
+    it 'names a nocked-then-pre-empted swing as the fire it was, and keeps the shroud on it' do
+      events = described_class.parse_events([
+                                              'You nock a faewood arrow fletched with plain white feathers in your <a exist="129604585" noun="bow">glowbark long bow</a>.',
+                                              "With preternatural speed, #{warg} bounds to safety as you move to attack #{bolded(123985834, 'warg', 'it')}, leaving you off-balance!",
+                                              'A tenebrous shroud stitches itself into existence around you as you gracefully retreat into the shadows!',
+                                              'The arrow streaks off into the distance!'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:weapon], e[:target][:id], e[:outcomes].first, e[:flares].map { |f| f[:name] }] })
+        .to eq([[:fire, 'glowbark long bow', 123985834, :evade, [:chameleon_shroud]]])
+    end
+
+    it "gives the swing, not the pinned rider's one-hit row, the flare that follows the pin" do
+      masto2 = bolded(130490001, 'mastodon', 'a heavily armored battle mastodon')
+      bers = bolded(130490002, 'berserker', 'a tattooed gigas berserker')
+      events = described_class.parse_events([
+                                              "You take aim and fire a faewood arrow at #{masto2}!",
+                                              '  AS: +651 vs DS: +355 with AvD: +20 + d100 roll: +49 = +365',
+                                              '   ... and hit for 70 points of damage!',
+                                              '   Attack punctures the eye and connects with something really vital!',
+                                              "#{bers} is pinned beneath #{masto2} as it falls!",
+                                              '   ... 5 points of damage!',
+                                              "   Blow leaves an imprint on #{bolded(130490002, 'berserker', "the gigas berserker's")} chest!",
+                                              'A tenebrous shroud stitches itself into existence around you as you gracefully retreat into the shadows!'
+                                            ])
+      expect(events.map { |e| [e[:name], e[:target][:id], e[:hits].map { |h| h[:damage] }, e[:flares].map { |f| f[:name] }] })
+        .to contain_exactly([:fire, 130490001, [70], [:chameleon_shroud]], [:mount_collapse, 130490002, [5], []])
     end
 
     it 'matches the live trumpet line, whose pronouns are links, and takes the fail line as a hit' do
