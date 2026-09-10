@@ -296,12 +296,61 @@ module Lich
                   GameObj[param]
                 else
                   matches = known_items.select { |obj| name_matches?(obj, param) }.uniq(&:id)
+                  matches = inventory_matches(param) if matches.empty?
                   fail "Item[name: #{param}] matches #{matches.size} items: #{matches.map(&:name).join(', ')}" if matches.size > 1 && loud_fail
                   matches.first
                 end
               end
       fail "could not find Item[#{param.inspect}]" if found.nil? && loud_fail
       found
+    end
+
+    # The full inventory tree, refreshed on request through the game's
+    # inventory manager. This is what knows about items in containers Lich
+    # has never looked in, and whether each container is closed right now.
+    #
+    # @param refresh [Boolean] ask the game for a fresh tree (one command)
+    # @return [Lich::Common::Inventory::Snapshot, nil]
+    def self.inventory(refresh: true)
+      return nil unless defined?(Lich::Common::Inventory)
+      refresh ? Lich::Common::Inventory.refresh : Lich::Common::Inventory.current
+    rescue StandardError
+      nil
+    end
+
+    # Open every closed container between the item and the player, outermost
+    # first, confirming each. Locked containers are left alone.
+    #
+    # @param item [GameObj]
+    # @return [Boolean] false when a container on the way is locked or would not open
+    def self.open_path_to(item)
+      snapshot = inventory(refresh: false) || inventory
+      entry = snapshot && snapshot[item.id]
+      return true if entry.nil? # Inventory does not know it; nothing to open
+
+      chain = []
+      parent = entry.parent_item
+      while parent
+        chain.unshift(parent)
+        parent = parent.parent_item
+      end
+      chain.each do |container|
+        next unless container.closed?
+        return false if container.locked?
+        return false unless open_container(container.id)
+      end
+      true
+    end
+
+    OPEN_CONFIRM = /^You open|^That is already open|^It is already open|^You can't|^You don't seem|^You need|is locked/.freeze
+
+    # @param id [String] container id
+    # @return [Boolean] whether the container is open afterwards
+    def self.open_container(id)
+      waitrt?
+      result = dothistimeout("open ##{id}", 3, OPEN_CONFIRM)
+      return true if result =~ /^You open|already open/
+      false
     end
 
     # @return [Symbol, nil] :right or :left when the item is in that hand
@@ -349,15 +398,20 @@ module Lich
         stash_hands(right: true)
       end
 
-      container = container_holding(item)
-      self.container(container) if container # opens it when it is closed
+      fail "wield: a container holding #{item.name} is locked or would not open" unless open_path_to(item)
 
-      if worn?(item)
-        fput "remove ##{item.id}"
-      else
-        fput "get ##{item.id}"
-      end
+      fetch = worn?(item) ? "remove ##{item.id}" : "get ##{item.id}"
+      fput fetch
       ITEM_CONFIRM_TRIES.times { break if in_hand?(item); sleep ITEM_CONFIRM_SLEEP }
+
+      # Did not arrive: the usual cause is a container closed since Lich last
+      # saw inside it. Ask the game for the current tree, open, try once more.
+      unless in_hand?(item)
+        inventory
+        fail "wield: a container holding #{item.name} is locked or would not open" unless open_path_to(item)
+        fput fetch
+        ITEM_CONFIRM_TRIES.times { break if in_hand?(item); sleep ITEM_CONFIRM_SLEEP }
+      end
       fail "wield: #{item.name} did not arrive in hand" unless in_hand?(item)
 
       if hand && hand_holding(item) != hand
@@ -417,11 +471,29 @@ module Lich
       GameObj.inv.to_a.any? { |obj| obj.id == item.id }
     end
 
-    # @return [GameObj, nil] the container Lich knows the item to be inside
+    # @return [GameObj, nil] the container Lich knows the item to be inside,
+    #   from the looked-in registries or the inventory tree
     def self.container_holding(item)
       entry = GameObj.containers.find { |_id, items| items.to_a.any? { |obj| obj.id == item.id } }
-      return nil if entry.nil?
-      GameObj.inv.to_a.find { |obj| obj.id == entry.first } || GameObj[entry.first]
+      return GameObj.inv.to_a.find { |obj| obj.id == entry.first } || GameObj[entry.first] if entry
+
+      snapshot = inventory(refresh: false)
+      parent = snapshot && snapshot[item.id]&.parent_item
+      parent && GameObj[parent.id]
+    end
+
+    # Items from the inventory tree whose name matches, as GameObjs. Inventory
+    # registers a GameObj for every item it sees, so the id lookup succeeds
+    # even for items in containers nobody has looked in.
+    #
+    # @return [Array<GameObj>]
+    def self.inventory_matches(param)
+      snapshot = inventory
+      return [] if snapshot.nil?
+      snapshot.all.select { |item| name_matches?(item, param) }
+                  .reject { |item| item.in_room? || item.at_feet? }
+                  .map { |item| GameObj[item.id] }
+                  .compact
     end
 
     # @return [GameObj, nil] the item in a ready-list slot, checking the list once if needed
@@ -446,7 +518,7 @@ module Lich
       obj.name =~ %r[#{param.strip}]i || obj.name =~ %r[#{param.sub(' ', ' .*')}]i
     end
 
-    private_class_method :find_ready_item, :known_items, :name_matches?
+    private_class_method :find_ready_item, :known_items, :name_matches?, :inventory_matches
 
     def self.equip_hands(left: false, right: false, both: false)
       if both

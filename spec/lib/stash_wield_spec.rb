@@ -18,6 +18,29 @@ class StashItem < Lich::Common::GameObj
   end
 end
 
+# The inventory tree as Stash sees it: a snapshot answering [] and all, holding
+# items that know their parent and their closed / locked flags.
+InvItem = Struct.new(:id, :noun, :name, :parent_item, :flags, :relation, keyword_init: true) do
+  def closed? = flags.include?('closed')
+  def locked? = flags.include?('locked')
+  def in_room? = relation == 'room'
+  def at_feet? = relation == 'atfeet'
+end
+
+class FakeInventory
+  attr_accessor :items, :refreshes
+
+  def initialize(items = [])
+    @items = items
+    @refreshes = 0
+  end
+
+  def refresh(*) = (@refreshes += 1; self)
+  def current = self
+  def [](id) = @items.find { |i| i.id == id.to_s }
+  def all = @items
+end
+
 RSpec.describe Lich::Stash, 'named items' do
   let(:sword)  { StashItem.new(id: '101', noun: 'broadsword', name: 'vultite hand-forged broadsword', type: 'weapon') }
   let(:dagger) { StashItem.new(id: '102', noun: 'dagger', name: 'steel dagger', type: 'weapon') }
@@ -49,9 +72,11 @@ RSpec.describe Lich::Stash, 'named items' do
     allow(described_class).to receive(:waitrt?)
     allow(described_class).to receive(:dothistimeout)
     allow(described_class).to receive(:stash_hands)
-    allow(described_class).to receive(:container)
     allow(described_class).to receive(:sleep)
+    stub_const('Lich::Common::Inventory', inventory)
   end
+
+  let(:inventory) { FakeInventory.new }
 
   # Make the next fput of `command` land `item` in `hand`, the way the game would.
   def on_fput(command, item, hand)
@@ -132,11 +157,71 @@ RSpec.describe Lich::Stash, 'named items' do
       expect(described_class.wield('broadsword', hand: :right).id).to eq('101')
     end
 
-    it 'fetches from a container by id, opening the container first' do
-      expect(described_class).to receive(:container).with(sack)
+    it 'fetches from a container by id without opening when it is open' do
+      inventory.items = [InvItem.new(id: '105', noun: 'sack', name: 'leather sack', flags: []),
+                         InvItem.new(id: '101', noun: 'broadsword', name: 'vultite hand-forged broadsword', flags: [])]
+      inventory.items[1].parent_item = inventory.items[0]
+      expect(described_class).not_to receive(:dothistimeout)
       on_fput('get #101', sword, :right)
       expect(described_class.wield('broadsword').id).to eq('101')
       expect(GameObj.right_hand.id).to eq('101')
+    end
+
+    context 'with closed containers' do
+      let(:chest) { InvItem.new(id: '200', noun: 'chest', name: 'oak chest', flags: ['closed']) }
+      let(:pouch) { InvItem.new(id: '201', noun: 'pouch', name: 'silk pouch', flags: ['closed'], parent_item: nil) }
+      let(:gem)   { StashItem.new(id: '202', noun: 'ruby', name: 'blood-red ruby', type: 'gem') }
+
+      before do
+        pouch.parent_item = chest
+        inventory.items = [chest, pouch, InvItem.new(id: '202', noun: 'ruby', name: 'blood-red ruby', flags: [], parent_item: pouch)]
+        allow(GameObj).to receive(:[]) { |id| ([sword, dagger, shield, cloak, sack, gem]).find { |o| o.id == id.to_s } }
+      end
+
+      it 'opens each closed container on the way, outermost first, then gets' do
+        expect(described_class).to receive(:dothistimeout).with('open #200', 3, described_class::OPEN_CONFIRM).ordered.and_return('You open an oak chest.')
+        expect(described_class).to receive(:dothistimeout).with('open #201', 3, described_class::OPEN_CONFIRM).ordered.and_return('You open a silk pouch.')
+        on_fput('get #202', gem, :right)
+        expect(described_class.wield(gem).id).to eq('202')
+      end
+
+      it 'treats "already open" as open' do
+        chest.flags.clear
+        allow(described_class).to receive(:dothistimeout).with('open #201', anything, anything).and_return('That is already open.')
+        on_fput('get #202', gem, :right)
+        expect(described_class.wield(gem).id).to eq('202')
+      end
+
+      it 'raises without sending get when a container is locked' do
+        chest.flags << 'locked'
+        expect(described_class).not_to receive(:fput)
+        expect { described_class.wield(gem) }.to raise_error(RuntimeError, /locked or would not open/)
+      end
+
+      it 'raises when the open is refused' do
+        allow(described_class).to receive(:dothistimeout).with('open #200', anything, anything).and_return("You can't open that.")
+        expect { described_class.wield(gem) }.to raise_error(RuntimeError, /locked or would not open/)
+      end
+
+      it 'finds an item by name that only the inventory tree knows about' do
+        expect(described_class.find_item('blood-red ruby').id).to eq('202')
+        expect(inventory.refreshes).to eq(1)
+      end
+    end
+
+    it 'refreshes, opens, and retries once when the item does not arrive' do
+      sack_entry = InvItem.new(id: '105', noun: 'sack', name: 'leather sack', flags: [])
+      inventory.items = [sack_entry, InvItem.new(id: '101', noun: 'broadsword', name: 'vultite hand-forged broadsword', flags: [], parent_item: sack_entry)]
+      calls = 0
+      allow(described_class).to receive(:fput).with('get #101') do
+        calls += 1
+        GameObj.set_right_hand(sword) if calls == 2
+      end
+      # The refresh after the first miss is what reveals the sack was closed meanwhile.
+      allow(inventory).to receive(:refresh) { sack_entry.flags = ['closed']; inventory }
+      expect(described_class).to receive(:dothistimeout).with('open #105', anything, anything).and_return('You open a leather sack.')
+      expect(described_class.wield(sword).id).to eq('101')
+      expect(calls).to eq(2)
     end
 
     it 'removes a worn item instead of getting it' do
@@ -169,9 +254,10 @@ RSpec.describe Lich::Stash, 'named items' do
       expect(described_class.wield(sword, hand: :left).id).to eq('101')
     end
 
-    it 'raises when the item never arrives' do
+    it 'raises when the item never arrives, after one refresh and retry' do
       allow(described_class).to receive(:fput)
       expect { described_class.wield(sword) }.to raise_error(RuntimeError, /did not arrive/)
+      expect(inventory.refreshes).to eq(1)
     end
 
     it 'rejects a bad hand' do
