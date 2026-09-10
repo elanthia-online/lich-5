@@ -261,6 +261,193 @@ module Lich
       $fill_right_hand_actions.push(actions) if right
     end
 
+    # -------------------------------------------------------------------------
+    # Named items: find, wield, and reconcile both hands to a wanted state.
+    #
+    # stash_hands / equip_hands remember and restore whatever was held. The
+    # methods below are the other half: "put THIS item in my hand", where the
+    # item is named by a profile string, an id, a GameObj, or a ready-list slot.
+    # Every command is sent by id, so an ambiguous noun never reaches the game.
+    # -------------------------------------------------------------------------
+
+    HANDS = %i[right left].freeze
+
+    ITEM_CONFIRM_TRIES = 20
+    ITEM_CONFIRM_SLEEP = 0.1
+
+    # Resolve an item reference to a GameObj without sending anything.
+    #
+    # @param param [GameObj, Integer, String, Symbol] a GameObj; an id; a
+    #   ready-list slot (:weapon, :shield, ...); or a name matched the way
+    #   find_container matches, case-insensitive and with words allowed to be
+    #   non-adjacent ("vultite broadsword" matches "vultite hand-forged broadsword")
+    # @param loud_fail [Boolean] raise when not found or ambiguous
+    # @return [GameObj, nil]
+    # @raise [RuntimeError] when loud_fail and the item is missing, or a name
+    #   matches more than one item (that is a profile bug the user should see)
+    def self.find_item(param, loud_fail: true)
+      return param if param.is_a?(GameObj)
+
+      found = case param
+              when Integer then GameObj[param.to_s]
+              when Symbol then find_ready_item(param)
+              when String
+                if param =~ /\A\d+\z/
+                  GameObj[param]
+                else
+                  matches = known_items.select { |obj| name_matches?(obj, param) }.uniq(&:id)
+                  fail "Item[name: #{param}] matches #{matches.size} items: #{matches.map(&:name).join(', ')}" if matches.size > 1 && loud_fail
+                  matches.first
+                end
+              end
+      fail "could not find Item[#{param.inspect}]" if found.nil? && loud_fail
+      found
+    end
+
+    # @return [Symbol, nil] :right or :left when the item is in that hand
+    def self.hand_holding(item)
+      id = item.is_a?(GameObj) ? item.id : item.to_s
+      return nil if id.nil?
+      return :right if GameObj.right_hand&.id == id
+      return :left if GameObj.left_hand&.id == id
+      nil
+    end
+
+    # @return [Boolean]
+    def self.in_hand?(item)
+      !hand_holding(item).nil?
+    end
+
+    # Get a named item into a hand.
+    #
+    # Worn items are removed, items in containers are fetched (opening the
+    # container first when Lich knows it is closed), and the target hand is
+    # emptied through stash_hands beforehand so nothing is dropped. When no
+    # hand is given the item goes wherever the game puts it.
+    #
+    # @param param [GameObj, Integer, String, Symbol] see find_item
+    # @param hand [Symbol, nil] :right, :left, or nil for either
+    # @return [GameObj] the item now in hand
+    # @raise [RuntimeError] when the item cannot be found or never arrives
+    def self.wield(param, hand: nil)
+      fail "wield: hand must be :right, :left or nil, got #{hand.inspect}" unless hand.nil? || HANDS.include?(hand)
+      item = find_item(param)
+
+      holding = hand_holding(item)
+      if holding
+        return item if hand.nil? || holding == hand
+        waitrt?
+        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
+        return item if hand_holding(item) == hand
+        fail "wield: could not move #{item.name} to the #{hand} hand"
+      end
+
+      waitrt?
+      if hand
+        stash_hands(**{ hand => true }) unless empty_hand?(hand)
+      elsif !empty_hand?(:right) && !empty_hand?(:left)
+        stash_hands(right: true)
+      end
+
+      container = container_holding(item)
+      self.container(container) if container # opens it when it is closed
+
+      if worn?(item)
+        fput "remove ##{item.id}"
+      else
+        fput "get ##{item.id}"
+      end
+      ITEM_CONFIRM_TRIES.times { break if in_hand?(item); sleep ITEM_CONFIRM_SLEEP }
+      fail "wield: #{item.name} did not arrive in hand" unless in_hand?(item)
+
+      if hand && hand_holding(item) != hand
+        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
+        fail "wield: could not move #{item.name} to the #{hand} hand" unless hand_holding(item) == hand
+      end
+      item
+    end
+
+    # Reconcile both hands to a wanted state without dropping anything.
+    #
+    #   Stash.hands(right: 'broadsword', left: :shield)   # wield both
+    #   Stash.hands(right: nil)                           # empty the right hand, leave left alone
+    #   Stash.hands(left: :keep, right: 'runestaff')
+    #
+    # Each hand takes :keep (leave it, the default), nil (empty it), or any item
+    # reference find_item accepts. An item already in the other hand is swapped
+    # across rather than stashed and fetched.
+    #
+    # @return [Hash{Symbol => GameObj, nil}] what each hand holds afterwards
+    def self.hands(right: :keep, left: :keep)
+      wanted = { right: right, left: left }
+      resolved = wanted.transform_values { |want| want == :keep || want.nil? ? want : find_item(want) }
+
+      # Both wanted items are present but in each other's hands: one swap.
+      if resolved[:right].is_a?(GameObj) && resolved[:left].is_a?(GameObj) &&
+         hand_holding(resolved[:right]) == :left && hand_holding(resolved[:left]) == :right
+        waitrt?
+        dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
+      end
+
+      # Empty first, so a wanted item can land in a freed hand.
+      HANDS.each do |hand|
+        next unless resolved[hand].nil? && wanted.key?(hand) && !(wanted[hand] == :keep)
+        stash_hands(**{ hand => true }) unless empty_hand?(hand)
+      end
+
+      HANDS.each do |hand|
+        item = resolved[hand]
+        next unless item.is_a?(GameObj)
+        wield(item, hand: hand)
+      end
+
+      { right: GameObj.right_hand&.id ? GameObj.right_hand : nil,
+        left: GameObj.left_hand&.id ? GameObj.left_hand : nil }
+    end
+
+    # @param hand [Symbol] :right or :left
+    # @return [Boolean]
+    def self.empty_hand?(hand)
+      obj = hand == :right ? GameObj.right_hand : GameObj.left_hand
+      obj.nil? || obj.id.nil?
+    end
+
+    # @return [Boolean] whether the item is in worn inventory (needs REMOVE, not GET)
+    def self.worn?(item)
+      GameObj.inv.to_a.any? { |obj| obj.id == item.id }
+    end
+
+    # @return [GameObj, nil] the container Lich knows the item to be inside
+    def self.container_holding(item)
+      entry = GameObj.containers.find { |_id, items| items.to_a.any? { |obj| obj.id == item.id } }
+      return nil if entry.nil?
+      GameObj.inv.to_a.find { |obj| obj.id == entry.first } || GameObj[entry.first]
+    end
+
+    # @return [GameObj, nil] the item in a ready-list slot, checking the list once if needed
+    def self.find_ready_item(slot)
+      fail "unknown ready-list slot #{slot.inspect}" unless ReadyList.ready_list.key?(slot)
+      ReadyList.check(silent: true, quiet: true) unless ReadyList.valid?
+      ReadyList.ready_list[slot]
+    end
+
+    # Every item Lich currently knows the character has: hands, worn, and the
+    # contents of containers that have been looked in.
+    #
+    # @return [Array<GameObj>]
+    def self.known_items
+      hands = [GameObj.right_hand, GameObj.left_hand].compact.reject { |obj| obj.id.nil? }
+      hands + GameObj.inv.to_a + GameObj.containers.values.flatten
+    end
+
+    # Same matching find_container uses, so a profile string means the same
+    # thing whether it names a bag or a weapon.
+    def self.name_matches?(obj, param)
+      obj.name =~ %r[#{param.strip}]i || obj.name =~ %r[#{param.sub(' ', ' .*')}]i
+    end
+
+    private_class_method :find_ready_item, :known_items, :name_matches?
+
     def self.equip_hands(left: false, right: false, both: false)
       if both
         for action in $fill_hands_actions.pop
