@@ -29,21 +29,27 @@ module Lich
           /^You hand your notes to the teller/,
         ).freeze
 
-        WITHDRAW = Regexp.union(
+        # The teller's answer to a withdrawal, without the debt notice: that
+        # comes first and the real answer follows it.
+        WITHDRAW_RESULT = Regexp.union(
           /^Very well, a withdrawal of (?<silver>[\d,]+) silver/,
           /teller scribbles the transaction into a book and hands you (?<silver>[\d,]+) silver/,
           /teller carefully records the transaction, (?:and then )?hands you (?<silver>[\d,]+) silver/,
           /^The banker nods and says, "Alright, here ye go/,
           /^The teller (?:carefully|hands you|makes|taps her quill|purses her lips)/,
-          /I have a bill of (?<debt>[\d,]+) silvers?/,
           /seem to have that much/,
           /debt collector/,
           /looks at you suspiciously/,
           /chuckles at you/,
         ).freeze
 
+        DEBT     = /I have a bill of (?<debt>[\d,]+) silvers?/.freeze
+        WITHDRAW = Regexp.union(WITHDRAW_RESULT, DEBT).freeze
+
         # Replies that mean the withdrawal did not happen.
         WITHDRAW_REFUSED = /seem to have that much|looks at you suspiciously|chuckles at you|taps her quill|purses her lips/.freeze
+        NOTE_HANDED      = /hands you a (?:bank )?note/.freeze
+        PINEFAR_HANDED   = /Alright, here ye go/.freeze
 
         ACCOUNT_START   = /You currently have the following amounts on deposit|You currently have an account|you don't have access/i.freeze
         ACCOUNT_LINE    = /^\s+(?<bank>.+?) Bank: (?<silver>[\d,]+)$/.freeze
@@ -189,19 +195,17 @@ module Lich
         waitrt?
         result = if pinefar?
                    wait_for_banker
-                   dothistimeout("ask banker for #{amount} silvers", 3, Pattern::WITHDRAW)
+                   withdraw_reply("ask banker for #{amount} silvers", 3)
                  elsif note
-                   dothistimeout("withdraw #{amount} note", 5, Pattern::WITHDRAW)
+                   withdraw_reply("withdraw #{amount} note", 5)
                  else
-                   dothistimeout("withdraw #{amount} silvers", 3, Pattern::WITHDRAW)
+                   withdraw_reply("withdraw #{amount} silvers", 3)
                  end
         Currency.refresh unless note
         return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
-        if result =~ /(?<debt>[\d,]+) silvers? (?:presented by your creditors|that I suggest you pay)/
-          Lich::Messaging.msg('warn', "Bank: a debt of #{Regexp.last_match[:debt]} silver was collected first")
-        end
-        return amount if note
-        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : amount
+        return (result =~ Pattern::NOTE_HANDED ? amount : nil) if note
+        return amount if result =~ Pattern::PINEFAR_HANDED
+        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : nil
       end
 
       # Free-to-play deposit: fill the account to its cap, convert the overflow to
@@ -316,14 +320,28 @@ module Lich
         true
       end
 
+      # Send a withdrawal and return the teller's answer to it. A debt notice
+      # is not an answer: warn about it and keep waiting for the line that is.
+      #
+      # @api private
+      # @return [String, nil]
+      def self.withdraw_reply(command, timeout)
+        result = dothistimeout(command, timeout, Pattern::WITHDRAW)
+        return result unless result =~ Pattern::DEBT
+        Lich::Messaging.msg('warn', "Bank: a debt of #{Regexp.last_match[:debt]} silver was collected first")
+        matchtimeout(timeout, Pattern::WITHDRAW_RESULT) || nil
+      end
+      private_class_method :withdraw_reply
+
       # WITHDRAW N SILVER, confirmed.
       #
       # @api private
-      # @return [Integer, nil] silver handed over, nil when refused or unanswered
+      # @return [Integer, nil] silver the teller said was handed over, nil when
+      #   refused or unanswered
       def self.withdraw_silver(amount)
-        result = dothistimeout("withdraw #{amount} silver", 3, Pattern::WITHDRAW)
+        result = withdraw_reply("withdraw #{amount} silver", 3)
         return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
-        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : amount
+        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : nil
       end
       private_class_method :withdraw_silver
 

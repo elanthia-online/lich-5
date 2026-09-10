@@ -5,6 +5,7 @@ require 'gemstone/bank'
 
 module Kernel
   def dothistimeout(_action, _timeout, _success_line); end unless method_defined?(:dothistimeout)
+  def matchtimeout(_secs, *_strings); end unless method_defined?(:matchtimeout)
 end
 
 RSpec.describe Lich::Gemstone::Bank do
@@ -276,6 +277,27 @@ RSpec.describe Lich::Gemstone::Bank do
     it 'is nil when refused' do
       replies("The teller says, \"You don't seem to have that much in your account.\"")
       expect(described_class.withdraw(8000)).to be_nil
+    end
+
+    it 'is nil when a note was asked for and none was handed over' do
+      replies("The teller says, \"You don't seem to have that much in your account.\"")
+      expect(described_class.withdraw(8000, note: true)).to be_nil
+    end
+
+    it 'warns about a debt notice and waits for the real answer' do
+      replies("The teller says, \"I have a bill of 1,500 silvers presented by your creditors that I suggest you pay.\"")
+      allow(described_class).to receive(:matchtimeout).with(3, anything)
+                                                      .and_return('The teller carefully records the transaction, and then hands you 6,500 silver.')
+      expect(Lich::Messaging).to receive(:msg).with('warn', /debt of 1,500 silver/)
+      expect(described_class.withdraw(8000)).to eq(6500)
+    end
+
+    it 'is nil when nothing follows the debt notice' do
+      replies("The teller says, \"I have a bill of 1,500 silvers presented by your creditors that I suggest you pay.\"")
+      allow(described_class).to receive(:matchtimeout).and_return(false)
+      allow(Lich::Messaging).to receive(:msg)
+      expect(described_class.withdraw(8000)).to be_nil
+      expect(described_class.withdraw(8000, note: true)).to be_nil
     end
 
     it 'asks the banker at Pinefar' do
