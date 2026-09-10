@@ -8,6 +8,7 @@
 require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
+require_relative 'messages'
 require_relative '../../common/db_store'
 
 module Lich
@@ -70,6 +71,10 @@ module Lich
           # Subscribe to parsed combat events (see Combat::Observers for
           # event types, payloads, and the subscriber contract - callbacks
           # may run on worker threads; never send game commands from one).
+          # Message events (:disarm_seen, :ambusher, :bolted ... see
+          # Combat::Messages) subscribe the same way and need the tracker
+          # neither enabled nor scanning creatures: their hook goes up with
+          # the first subscription.
           #
           # @example
           #   Combat::Tracker.on(:damage) { |type, data| queue << data }
