@@ -73,6 +73,8 @@ module Lich
           TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
+          WealthSilverTotal = /^You are carrying a total of (?<silver>[\d,]+) silver\.$/.freeze
+          WealthNotes = /^Total note value: (?<silver>[\d,]+)$/.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
           AccountSubscription = /^Account Type:     (?<subscription>F2P|Standard|Premium|Platinum)(?: with Shattered)?(?: \(\w+\))?$/.freeze
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
@@ -134,7 +136,7 @@ module Lich
                       SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                       Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                       TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, TicketAevit,
-                      WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
+                      WealthSilver, WealthSilverContainer, WealthSilverTotal, WealthNotes, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
                       ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
                       AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
                       ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
@@ -550,6 +552,14 @@ module Lich
             when Pattern::WealthSilverContainer
               match = Regexp.last_match
               Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
+              :ok
+            when Pattern::WealthSilverTotal
+              match = Regexp.last_match
+              Infomon.set('currency.silver_total', match[:silver].delete(',').to_i)
+              :ok
+            when Pattern::WealthNotes
+              match = Regexp.last_match
+              Infomon.set('currency.notes', match[:silver].delete(',').to_i)
               :ok
             when Pattern::AccountName
               if Lich::Common::Account.name.nil?

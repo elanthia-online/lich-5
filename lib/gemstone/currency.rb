@@ -12,18 +12,50 @@ module Lich
         Lich::Gemstone::Infomon.get('currency.silver')
       end
 
-      # Send WEALTH QUIET so Infomon re-reads the silver carried. The response
-      # is parsed on the game thread before hooks run, so hiding it from the
-      # front end does not hide it from Infomon.
+      # Send WEALTH so Infomon re-reads the silver carried (WEALTH is quiet by
+      # default; LOUD is the option that echoes to the room). The response is
+      # parsed on the game thread before hooks run, so hiding it from the front
+      # end does not hide it from Infomon.
       #
+      # @param all [Boolean] WEALTH ALL, which also refreshes gigas fragments,
+      #   redsteel marks and gemstone dust
       # @return [Integer, nil] the refreshed silver
-      def self.refresh
-        Lich::Util.issue_command('wealth quiet', Lich::Gemstone::Infomon::Parser::Pattern::WealthSilver, silent: true, quiet: true)
+      def self.refresh(all: false)
+        Lich::Util.issue_command(all ? 'wealth all' : 'wealth', Lich::Gemstone::Infomon::Parser::Pattern::WealthSilver, silent: true, quiet: true)
         Lich::Gemstone::Infomon.get('currency.silver')
       end
 
+      # Silver stored in worn containers, as WEALTH last reported it.
+      #
+      # @return [Integer, nil]
       def self.silver_container
         Lich::Gemstone::Infomon.get('currency.silver_container')
+      end
+
+      # Carried plus container silver, the "carrying a total of" line.
+      #
+      # @param refresh [Boolean]
+      # @return [Integer, nil]
+      def self.silver_total(refresh: false)
+        self.refresh if refresh
+        Lich::Gemstone::Infomon.get('currency.silver_total')
+      end
+
+      # Total value of accessible bank notes, from WEALTH NOTES.
+      #
+      # @param refresh [Boolean]
+      # @return [Integer, nil]
+      def self.notes(refresh: false)
+        refresh_notes if refresh
+        Lich::Gemstone::Infomon.get('currency.notes')
+      end
+
+      # Send WEALTH NOTES so Infomon re-reads the note total.
+      #
+      # @return [Integer, nil]
+      def self.refresh_notes
+        Lich::Util.issue_command('wealth notes', /^Listing accessible bank notes/, /^Total note value:/, silent: true, quiet: true)
+        Lich::Gemstone::Infomon.get('currency.notes')
       end
 
       def self.redsteel_marks
