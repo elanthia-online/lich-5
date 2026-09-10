@@ -218,6 +218,50 @@ module Lich
         /^You can't reach .+!$/,
         / attempting to .+ would be a rather awkward proposition\.$/,
       )
+
+      # The command a technique is sent with, as each category's +use+ sends
+      # it: the verb, the technique's usage word, an optional target, and
+      # FORCERT. Exposed so a script that sends and confirms on its own
+      # terms (an engine with its own roundtime and timeout discipline)
+      # still gets the exact command +use+ would send.
+      #
+      # @param verb [String, nil] "cman", "shield", ... or nil for a bare command (FEAT GUARD)
+      # @param usage [String] the technique's usage word
+      # @param target [String, Integer, GameObj] a GameObj or id is sent as #id; a String as given
+      # @param forcert_count [Integer] more than 0 appends FORCERT
+      # @return [String]
+      #
+      # @example
+      #   PSMS.command("cman", "bullrush", GameObj.targets.first)  # => "cman bullrush #12345"
+      def self.command(verb, usage, target = "", forcert_count: 0)
+        cmd = verb.nil? || verb.to_s.empty? ? usage.to_s : "#{verb} #{usage}"
+        if target.is_a?(GameObj)
+          cmd += " ##{target.id}"
+        elsif target.is_a?(Integer)
+          cmd += " ##{target}"
+        elsif target.to_s != ""
+          cmd += " #{target}"
+        end
+        cmd += " forcert" if forcert_count > 0
+        cmd
+      end
+
+      # Every line that answers a technique command: the shared failures, the
+      # "X what?" and cooldown refusals for this technique, its own result
+      # messaging, and any extra patterns. This is the regex each category's
+      # +use+ waits on, so a caller confirming the command itself matches the
+      # same lines +use+ would.
+      #
+      # @param name [String] the technique name as the caller gave it
+      # @param patterns [Array<Regexp, nil>] the technique's result regex and friends; nils are skipped
+      # @param results_of_interest [Regexp, nil] extra lines the caller wants to see
+      # @return [Regexp]
+      def self.results_regex(name, *patterns, results_of_interest: nil)
+        parts = [FAILURES_REGEXES, /^#{name} what\?$/i, /^#{name} is still in cooldown\./i]
+        parts.concat(patterns.compact)
+        parts << results_of_interest if results_of_interest.is_a?(Regexp)
+        Regexp.union(*parts)
+      end
     end
   end
 end
