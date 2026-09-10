@@ -182,6 +182,21 @@ RSpec.describe 'Lich::Common::Script execution guard scope' do
     end.to raise_error(interrupted) { |error| expect(error.reason).to eq(:room_changed) }
   end
 
+  it 'rechecks cancellation after a non-blocking buffer read' do
+    buffer.push('must not be returned')
+    expect do
+      script.with_execution_guard(->(_) { true }) do |guard|
+        allow(buffer).to receive(:try_shift).and_wrap_original do |original, *args|
+          line = original.call(*args)
+          guard.cancel!(:room_changed)
+          line
+        end
+        script.gets?
+        raise 'cancelled non-blocking read returned a line'
+      end
+    end.to raise_error(interrupted) { |error| expect(error.reason).to eq(:room_changed) }
+  end
+
   it 'matches unguarded gets for zero, expired and coercible timeouts with buffered input' do
     [0, -1, '0', '-1', '0.001'].each do |timeout|
       buffer.push('ordinary')

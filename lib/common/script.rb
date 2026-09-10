@@ -2894,12 +2894,12 @@ module Lich
         guard = execution_guard_mutex.synchronize { @execution_guard }
         return if guard&.checking?
 
-        check_execution_guard!
-        while paused? && !ignore_pause
-          Kernel.sleep(EXECUTION_GUARD_POLL_INTERVAL)
+        loop do
           check_execution_guard!
+          break unless paused? && !ignore_pause
+
+          Kernel.sleep(EXECUTION_GUARD_POLL_INTERVAL)
         end
-        check_execution_guard!
       end
 
       # Attach a named script's launch policy before releasing its worker gate.
@@ -3072,8 +3072,10 @@ module Lich
               # reading an already-buffered line. Zero only prevents waiting.
               interval = remaining ? [[remaining, 0].max, EXECUTION_GUARD_POLL_INTERVAL].min : EXECUTION_GUARD_POLL_INTERVAL
               line = @downstream_buffer.wait_shift(interval)
-              check_execution_guard!
-              return line unless line.nil?
+              unless line.nil?
+                check_execution_guard!
+                return line
+              end
               return nil if deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
             end
           else
@@ -3093,7 +3095,9 @@ module Lich
       def gets?
         check_execution_guard!
         if @want_downstream or @want_downstream_xml or @want_script_output
-          @downstream_buffer.try_shift
+          line = @downstream_buffer.try_shift
+          check_execution_guard!
+          line
         else
           echo 'this script is set as unique but is waiting for game data...'
           execution_sleep 2

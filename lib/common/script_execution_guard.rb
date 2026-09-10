@@ -92,6 +92,8 @@ module Lich
         self
       end
 
+      # Permanently close this guard using the standard lifecycle reason.
+      # @return [self] this guard with :closed latched unless already cancelled
       def close!
         cancel!(:closed)
       end

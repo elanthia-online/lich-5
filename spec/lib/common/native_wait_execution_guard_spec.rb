@@ -167,7 +167,7 @@ RSpec.describe 'Native command and roundtime execution guard checkpoints' do
         owner.with_execution_guard(->(_command) { true }) do |guard|
           harness.public_send(method) do
             guard.cancel!(:cancelled)
-            method == :wait_until
+            owner.check_execution_guard!
           end
         end
       end.to raise_error(interrupted)
