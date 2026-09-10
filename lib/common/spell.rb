@@ -740,19 +740,7 @@ module Lich
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
               if ((@stance && force_stance != false) || force_stance == true)
-                if @@after_stance
-                  if Char.stance !~ /#{@@after_stance}/
-                    waitrt?
-                    dothistimeout "stance #{@@after_stance}", 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  end
-                elsif Char.stance !~ /^guarded$|^defensive$/
-                  waitrt?
-                  if checkcastrt > 0
-                    dothistimeout 'stance guarded', 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  else
-                    dothistimeout 'stance defensive', 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  end
-                end
+                restore_stance_after_cast
               end
               if cast_result =~ /^Cast at what\?$|^Be at peace my child, there is no need for spells of war in here\.$|^Provoking a GameMaster is not such a good idea\.$/
                 dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
@@ -773,6 +761,22 @@ module Lich
           @@cast_lock.delete(script)
         end
       end
+
+      # After a stance spell is cast, put the character back into the stance
+      # they asked for (Spell.after_stance), or the safest one the game allows.
+      # Stance.change no-ops when already there and waits out roundtime itself.
+      #
+      # @return [void]
+      def restore_stance_after_cast
+        if @@after_stance
+          Lich::Gemstone::Stance.change(@@after_stance)
+        elsif Char.stance !~ /^guarded$|^defensive$/
+          Lich::Gemstone::Stance.change(Lich::Gemstone::Stance.safest)
+        end
+      rescue ArgumentError => e
+        echo "cast: #{e.message}"
+      end
+      private :restore_stance_after_cast
 
       def force_cast(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?

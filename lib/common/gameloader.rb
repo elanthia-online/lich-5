@@ -28,6 +28,7 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'enhancive.rb')
         require File.join(LIB_DIR, 'gemstone', 'society.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'status.rb')
+        require File.join(LIB_DIR, 'gemstone', 'stance.rb')
         require File.join(LIB_DIR, 'gemstone', 'experience.rb')
         require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
