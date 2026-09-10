@@ -143,6 +143,17 @@ module Lich
         # self # rubocop Lint/Void: self used in void context
       end
 
+      # Every line that answers a cast: the regex {#cast} waits on, exposed
+      # so a caller that sends and confirms on its own terms can wait on
+      # the same lines instead of copying them.
+      #
+      # @param results_of_interest [Regexp, nil] extra lines to match, as {#cast} takes
+      # @return [Regexp]
+      def Spell.results_regex(results_of_interest: nil)
+        return @@results_regex unless results_of_interest.is_a?(Regexp)
+        Regexp.union(@@results_regex, results_of_interest)
+      end
+
       def Spell.after_stance=(val)
         @@after_stance = val
       end
