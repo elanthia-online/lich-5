@@ -633,7 +633,10 @@ module Lich
               spell = Spell.list.find do |s|
                 line =~ /^#{s.msgup}$/
               end
-              spell.putup unless spell.active?
+              # A start message while the spell is already up is the game
+              # refreshing it: a refreshable timer resets to its full
+              # duration, anything else keeps the timer it has.
+              spell.putup if !spell.active? || spell.refreshable?
               # add various cooldowns back without affecting parse speed
               Spells.require_cooldown(spell)
               :ok
