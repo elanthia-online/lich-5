@@ -159,6 +159,19 @@ RSpec.describe Lich::Gemstone::Fog do
       expect(sent).to be_empty # no fallback symbol after a move that worked
     end
 
+    it 'does not mistake a room refresh for a move' do
+      spell(130).on_cast { XMLData.room_count += 1 } # the parser refreshed the same room
+      allow(voln).to receive(:known?).with('return').and_return(true)
+      expect(described_class.return(:spirit_guide)).to be false
+      expect(sent).to eq(['symbol of return']) # the fallback still fires
+    end
+
+    it 'falls back to the room counter only when the server gives no room id' do
+      XMLData.room_id = nil
+      spell(130).on_cast { XMLData.room_count += 1 }
+      expect(described_class.return(:spirit_guide)).to be true
+    end
+
     it 'stays in the Rift when that is the destination' do
       s = spell(130)
       s.on_cast { arrive(described_class::RIFT_ROOM) }

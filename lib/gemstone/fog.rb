@@ -204,15 +204,24 @@ module Lich
         moved_from?(start)
       end
 
-      # Where we are, as the server reports it: the room counter (which
-      # steps on every move) and the server room id. Both are set for an
-      # unmapped room, where Room.current is nil and a map id would compare
-      # nil to nil and call a real move a failure.
+      # Where we are, as the server reports it: the server room id, which
+      # is set for an unmapped room too (Room.current is nil there, and a
+      # map id would compare nil to nil and call a real move a failure),
+      # with the room counter alongside for the rare stream that carries
+      # no id.
       # @api private
-      def self.here = [XMLData.room_count, XMLData.room_id]
+      def self.here = { id: XMLData.room_id.to_s, count: XMLData.room_count }
 
+      # A move is a different server room id. The counter alone is not
+      # evidence: it steps on every room refresh, moved or not, so it is
+      # consulted only when an id is missing on either side.
       # @api private
-      def self.moved_from?(start) = here != start
+      def self.moved_from?(start)
+        now = here
+        return now[:id] != start[:id] unless now[:id].empty? || start[:id].empty?
+
+        now[:count] != start[:count]
+      end
 
       # The map id, for the Rift check only.
       # @api private
