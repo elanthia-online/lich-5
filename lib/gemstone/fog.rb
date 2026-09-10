@@ -2,11 +2,10 @@
 
 # Fog: the ways home. Spirit Guide (130), Symbol of Return (Voln), Traveler's
 # Song (1020), Sigil of Escape (Sunfist) and Familiar Gate (930) each take a
-# character out of the field to a known room. Every hunting script carries a
-# copy of the same routine (bigshot's fog_return family, and the copies in the
-# scripts that grew out of it); this is that routine once, on the spell and
-# society readers, with the answer confirmed on the room changing rather than
-# assumed.
+# character out of the field to a known room. Getting home is a thing any
+# script may need, not a hunting rule, so it belongs in core: this is
+# bigshot's fog_return routine on the spell and society readers, with the
+# answer confirmed on the room changing rather than assumed.
 #
 #   Lich::Gemstone::Fog.available                        # => [:spirit_guide, :symbol_of_return]
 #   Lich::Gemstone::Fog.return(:spirit_guide)            # => true when the room changed
