@@ -1,7 +1,24 @@
 module Lich
   module Gemstone
     module Currency
-      def self.silver
+      # Silver carried, as Infomon last saw it. Infomon updates it whenever a
+      # WEALTH or INFO response goes by, so the value is only as fresh as the
+      # last of those; pass +refresh: true+ to send WEALTH QUIET first.
+      #
+      # @param refresh [Boolean]
+      # @return [Integer, nil]
+      def self.silver(refresh: false)
+        self.refresh if refresh
+        Lich::Gemstone::Infomon.get('currency.silver')
+      end
+
+      # Send WEALTH QUIET so Infomon re-reads the silver carried. The response
+      # is parsed on the game thread before hooks run, so hiding it from the
+      # front end does not hide it from Infomon.
+      #
+      # @return [Integer, nil] the refreshed silver
+      def self.refresh
+        Lich::Util.issue_command('wealth quiet', Lich::Gemstone::Infomon::Parser::Pattern::WealthSilver, silent: true, quiet: true)
         Lich::Gemstone::Infomon.get('currency.silver')
       end
 
