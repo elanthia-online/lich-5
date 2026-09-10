@@ -26,7 +26,13 @@ RSpec.describe Lich::Gemstone::Society do
   describe 'the readers' do
     # The readers' [] resolves every lambda in an entry (durations and
     # costs read the level), so a level has to exist to build a command.
-    before { stub_const('Stats', double('Stats', level: 20)) }
+    # Inside the readers `Stats` is Lich::Gemstone::Stats once another
+    # spec has loaded it, and the bare constant otherwise; stub both.
+    before do
+      stats = double('Stats', level: 20)
+      stub_const('Stats', stats)
+      stub_const('Lich::Gemstone::Stats', stats)
+    end
 
     it 'build the same string use sends, by short or long name, nil for an unknown ability' do
       expect(Lich::Gemstone::Societies::CouncilOfLight.command('striking')).to eq('sign of striking')
