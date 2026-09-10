@@ -41,6 +41,12 @@
 #                 chunk), :death (subject already known dead - stack
 #                 cleanup, not meaningful expiry), or nil (natural
 #                 expiry, or cause not visible in this chunk)
+#   :recorded_attack { protocol:, recorder_id:, database:, file_identity:,
+#                      session_id:, attack_id:, source: } - emitted by
+#                 Combat::Recorder only after the complete attack transaction
+#                 commits. Local observers can use the opaque IDs and trusted
+#                 local database identity to read that exact row. source is
+#                 validated ingestion provenance when available, otherwise nil.
 #
 # @example
 #   Combat::Tracker.on(:damage) { |type, data| my_queue << data }

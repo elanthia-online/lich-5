@@ -87,12 +87,19 @@
 # town time never pads a hunt's duration.
 
 require 'sqlite3'
+require 'securerandom'
 
 module Lich
   module Gemstone
     module Combat
       class Recorder
         HANDLER_NAME = 'combat_recorder'
+        # :recorded_attack is an optional post-commit observer receipt. Its
+        # recorder/session/attack IDs identify rows; :source retains validated
+        # ingestion context (nil for legacy/replay input). :database and
+        # :file_identity are trusted-local locators, not remote protocol data.
+        # Receipts neither enable recording nor prove an encounter is complete.
+        RECEIPT_PROTOCOL = 1
 
         SCHEMA = <<~SQL
           CREATE TABLE IF NOT EXISTS sessions (
@@ -241,6 +248,10 @@ module Lich
         # one (see check_idle!). nil = explicit start_session/finish_session.
         def initialize(db_path, character: nil, source: 'live', idle_timeout: nil)
           @db = SQLite3::Database.new(db_path)
+          @receipt_path = File.realpath(db_path) if File.file?(db_path)
+          stat = File.stat(@receipt_path) if @receipt_path
+          @receipt_file = [stat.dev, stat.ino].freeze if stat
+          @recorder_id = SecureRandom.hex(16).freeze
           @db.busy_timeout = 5_000
           @db.execute('PRAGMA journal_mode = WAL')
           @db.execute('PRAGMA synchronous = NORMAL')
@@ -344,8 +355,28 @@ module Lich
           end
         end
 
+        # Persist one observer event. Attack events return and publish a frozen
+        # post-commit receipt; other event types preserve their existing return.
+        # Receipt delivery is optional and cannot roll back committed data.
+        #
+        # @param type [Symbol] observer event type
+        # @param data [Hash] observer event payload
+        # @return [Hash, Object, nil] an attack receipt, or the existing result
+        #   for non-attack events
         def record(type, data)
-          @mutex.synchronize { record_locked(type, data) }
+          result = @mutex.synchronize { record_locked(type, data) }
+          # Receipts name committed rows, never pending writes. Emit outside the
+          # recorder lock so consumers may inspect the database without deadlock.
+          # This is evidence only, not command ownership or a combat-complete flag.
+          if type == :attack && result.is_a?(Hash) && result[:protocol] == RECEIPT_PROTOCOL
+            begin
+              Lich::Gemstone::Combat::Observers.emit(:recorded_attack, result)
+            rescue StandardError
+              # Optional receipt delivery cannot undo or break a committed record.
+              nil
+            end
+          end
+          result
         end
 
         def record_locked(type, data)
@@ -509,6 +540,7 @@ module Lich
           parent_row = (parent_uid && chunk_row(parent_uid))
           parent_conf = event[:parent_confidence]&.to_s
 
+          receipt = nil
           in_txn do
             @seq += 1
             params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, txt(parent_weapon),
@@ -573,7 +605,17 @@ module Lich
             end
 
             @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound] }
+            provenance = if defined?(Processor) && Processor.respond_to?(:observation_source)
+                           Processor.observation_source(event[:source])
+                         end
+            receipt = {
+              protocol: RECEIPT_PROTOCOL, recorder_id: @recorder_id,
+              database: @receipt_path&.dup&.freeze, file_identity: @receipt_file,
+              session_id: @session_id, attack_id: attack_id,
+              source: provenance
+            }.freeze
           end
+          receipt
         end
 
         def insert_resolution(attack_id, flare_id, seq, res)
