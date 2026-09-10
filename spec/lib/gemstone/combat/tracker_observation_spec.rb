@@ -87,6 +87,52 @@ RSpec.describe 'Tracker ingestion observations' do
     expect(@seen.last.last).to be_nil
   end
 
+  it 'does not poison combat provenance with a standalone room roster refresh' do
+    refresh = '<component id="room objs">You also see <pushBold/><a exist="123" noun="rat">a giant rat</a><popBold/>.</component>'
+    expect(@hook.call(refresh)).to eq(refresh)
+    @hook.call(attack)
+    @hook.call(prompt)
+    expect(@seen.first.last).to include(room_epoch: 4, character: 'Testmage')
+    expect(@seen.first.first).not_to include(refresh)
+  end
+
+  it 'ignores standalone player refreshes without dropping combat already buffered' do
+    @hook.call(attack)
+    @hook.call("<component id='room players'>Also here: a visitor.</component>\r\n")
+    @hook.call(prompt)
+    expect(@seen.first.last).to include(room_epoch: 4)
+    expect(@seen.first.first).to eq([attack, prompt])
+  end
+
+  it 'does not exempt partial, nested or transition-bearing room refresh fragments' do
+    [
+      '<component id="room objs">',
+      '<component id="room objs"><component id="room players"></component></component>',
+      '<component id="room objs"><nav rm="10"/></component>',
+      '<component id="room objs"></component><nav rm="10"/>',
+      '<pushStream id="room"/><component id="room objs"></component>',
+      '<component id="room objs"></component>' + attack
+    ].each do |refresh|
+      @hook.call(refresh)
+      @hook.call(attack + prompt)
+      expect(@seen.last.last).to be_nil
+    end
+  end
+
+  it 'still rejects room and stream changes across an ignored roster refresh' do
+    refresh = '<component id="room objs"></component>'
+    @hook.call(attack)
+    allow(XMLData).to receive(:room_count).and_return(5)
+    @hook.call(refresh)
+    @hook.call(prompt)
+    expect(@seen.last.last).to be_nil
+
+    @hook.call(refresh)
+    allow(XMLData).to receive(:in_stream).and_return(true)
+    @hook.call(attack + prompt)
+    expect(@seen.last.last).to be_nil
+  end
+
   it 'invalidates partial protocol tags instead of overlooking a split room transition' do
     @hook.call(attack + '<nav ')
     @hook.call('rm="10"/>' + prompt)

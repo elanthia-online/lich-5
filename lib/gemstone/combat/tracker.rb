@@ -340,6 +340,16 @@ module Lich
           # safely be labelled with their post-parse room. Ordinary links,
           # pushBold/popBold and prompt delimiters are intentionally allowed.
           SOURCE_TRANSITION = /<\/?(?:pushStream|popStream|clearStream|streamWindow|compDef|compass|app|nav)\b|<(?:component|style)\b[^>]*\bid=['"]room|<[^>]*\z/i.freeze
+          ROOM_ROSTER_REFRESH = /\A<component id=(['"])room (?:objs|players)\1>(?:(?!<\/?component\b).)*<\/component>\s*\z/m.freeze
+
+          # The processor already discards component lines. A complete roster
+          # refresh does not change XMLParser's room epoch, so keep it out of
+          # the combat buffer rather than invalidating the next real attack.
+          # Mixed, nested, split and transition-bearing fragments remain guarded.
+          def room_roster_refresh?(server_string)
+            ROOM_ROSTER_REFRESH.match?(server_string) &&
+              !SOURCE_TRANSITION.match?(server_string.sub(/\A<component[^>]*>/, ''))
+          end
 
           # Read the current parser owner and XML character/room identity.
           # @return [Hash, nil] scalar binding, or nil if identity is unavailable
@@ -415,6 +425,8 @@ module Lich
             @hook_id = 'Combat::Tracker::downstream'
 
             segment_buffer = proc do |server_string|
+              next server_string if room_roster_refresh?(server_string)
+
               incoming_source = ingest_source(server_string)
               if @buffer.empty?
                 @buffer_source, @buffer_source_invalid = incoming_source, incoming_source.nil?
