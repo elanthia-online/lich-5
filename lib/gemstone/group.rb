@@ -191,9 +191,20 @@ module Lich
         seconds = spell.group_cooldown
         return nil if seconds.nil? || seconds <= 0
 
-        expires = Time.now + seconds
+        now = Time.now
+        expires = now + seconds
         store = (@@spell_cooldowns[spell.num] ||= {})
-        members.each { |member| store[member.noun] = expires }
+        # _members, not members: this runs on the parser thread, and members
+        # would send GROUP and block waiting for a reply that only this thread
+        # can parse -- after clearing the list the stamps are drawn from.
+        _members.each do |member|
+          # A member still locked out did not receive this casting, so their
+          # own cooldown keeps running rather than being extended by it.
+          current = store[member.noun]
+          next if current && current > now
+
+          store[member.noun] = expires
+        end
         nil
       end
 

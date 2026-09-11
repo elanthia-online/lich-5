@@ -39,7 +39,9 @@ RSpec.describe Lich::Gemstone::Group, 'per-target group spell cooldowns' do
 
   before do
     Lich::Gemstone::Group.spell_cooldowns.clear
-    allow(Lich::Gemstone::Group).to receive(:members).and_return([member('Grhim'), member('Painz')])
+    grouped = [member('Grhim'), member('Painz')]
+    allow(Lich::Gemstone::Group).to receive(:_members).and_return(grouped)
+    allow(Lich::Gemstone::Group).to receive(:members).and_return(grouped)
     allow(spell).to receive(:group_cooldown).and_return(180)
   end
 
@@ -77,6 +79,28 @@ RSpec.describe Lich::Gemstone::Group, 'per-target group spell cooldowns' do
     expect(described_class.spell_cooldown_ready(spell)).to eq ['Bransen']
   end
 
+  it 'leaves a member who is still locked out on their own cooldown' do
+    described_class.record_spell_cooldown(spell)
+    # 60 of the 180 seconds gone, then a casting for someone who just joined
+    described_class.spell_cooldowns[spell.num]['Grhim'] = Time.now + 120
+    described_class.record_spell_cooldown(spell)
+    expect(described_class.spell_cooldown_left(spell, 'Grhim')).to be_within(2).of(120)
+  end
+
+  it 'stamps a member whose cooldown has run out' do
+    described_class.record_spell_cooldown(spell)
+    described_class.spell_cooldowns[spell.num]['Grhim'] = Time.now - 1
+    described_class.record_spell_cooldown(spell)
+    expect(described_class.spell_cooldown_left(spell, 'Grhim')).to be_within(2).of(180)
+  end
+
+  it 'does not send GROUP from the parser thread' do
+    expect(described_class).not_to receive(:check)
+    expect(described_class).not_to receive(:maybe_check)
+    described_class.record_spell_cooldown(spell)
+    expect(described_class.spell_cooldown_left(spell, 'Grhim')).to be > 0
+  end
+
   it 'records nothing for a spell with no per-target cooldown' do
     allow(spell).to receive(:group_cooldown).and_return(nil)
     described_class.record_spell_cooldown(spell)
@@ -91,11 +115,11 @@ RSpec.describe Lich::Gemstone::Group, 'per-target group spell cooldowns' do
     expect(described_class.spell_cooldown_ready?(other, 'Grhim')).to be true
   end
 
-  it 'refreshes the stamp when a later casting lands' do
+  it 'keeps a nearly-expired stamp rather than extending it' do
     described_class.record_spell_cooldown(spell)
     described_class.spell_cooldowns[spell.num]['Grhim'] = Time.now + 5
     described_class.record_spell_cooldown(spell)
-    expect(described_class.spell_cooldown_left(spell, 'Grhim')).to be_within(2).of(180)
+    expect(described_class.spell_cooldown_left(spell, 'Grhim')).to be_within(2).of(5)
   end
 end
 
@@ -116,7 +140,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, 'group casting messages' do
     allow(XMLData).to receive(:level).and_return(100)
     allow(XMLData).to receive(:name).and_return('Nisugi')
     allow(Lich::Gemstone::Spells).to receive(:majorspiritual).and_return(50)
-    allow(Lich::Gemstone::Group).to receive(:members).and_return([member('Grhim')])
+    allow(Lich::Gemstone::Group).to receive(:_members).and_return([member('Grhim')])
     allow(heroism).to receive(:group_cooldown).and_return(180)
     allow(spell_shield).to receive(:group_cooldown).and_return(360)
     Lich::Gemstone::Group.spell_cooldowns.clear
