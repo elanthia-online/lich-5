@@ -8,12 +8,13 @@
   - Base YAML files (base.yaml, base-empty.yaml)
   - Character-specific YAML files ({character}-setup.yaml)
   - Include files with recursive resolution and circular dependency protection
-  - Automatic caching with modification-time checking
+  - Automatic caching with content-hash freshness checking
   - Deep-clone protection against in-memory mutation
 
   @see https://elanthipedia.play.net/Lich_script_development#dependency
 =end
 
+require 'digest'
 require 'monitor'
 require 'ostruct'
 require 'set' # rubocop:disable Lint/RedundantRequireStatement -- needed for Ruby < 3.2
@@ -27,13 +28,14 @@ module Lich
       include MonitorMixin
 
       class FileInfo
-        attr_reader :path, :name, :mtime
+        attr_reader :path, :name, :mtime, :digest
 
-        def initialize(path:, name:, data:, mtime:)
+        def initialize(path:, name:, data:, mtime:, digest: nil)
           @path = path
           @name = name
           @data = data
           @mtime = mtime
+          @digest = digest
         end
 
         # Deep clone of data to prevent scripts from mutating cached settings.
@@ -51,7 +53,7 @@ module Lich
         end
 
         def inspect
-          "#<SetupFiles::FileInfo @name=#{@name}, @path=#{@path}, @mtime=#{@mtime}>"
+          "#<SetupFiles::FileInfo @name=#{@name}, @path=#{@path}, @mtime=#{@mtime}, @digest=#{@digest}>"
         end
       end
 
@@ -254,26 +256,47 @@ module Lich
           end
 
           current_files.each do |filename, filepath|
-            last_modified_date = File.mtime(filepath)
+            # Freshness is decided by file content (SHA256), not mtime. mtime is
+            # unreliable: two writes within one filesystem timestamp tick share
+            # an mtime, so an mtime-only check serves stale data after a fast
+            # rewrite (see issue #1596). We also reload when the winning source
+            # path changes (e.g. a scripts/data/custom override is removed and
+            # the same basename now resolves to scripts/data), which an
+            # mtime-only check masks when the two files share an mtime.
+            current_digest = file_digest(filepath)
             cached_file = cache_get_by_filename(filename)
-            safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, last_modified_date=#{last_modified_date}, cached_file=#{cached_file.inspect}" if @debug
-            if cached_file.nil? || cached_file.mtime != last_modified_date
-              cache_put_by_filepath(filepath)
+            safe_log "#{self.class}::#{__callee__} filepath=#{filepath}, current_digest=#{current_digest}, cached_file=#{cached_file.inspect}" if @debug
+            if cached_file.nil? ||
+               cached_file.path != File.dirname(filepath) ||
+               cached_file.digest != current_digest
+              cache_put_by_filepath(filepath, digest: current_digest)
             end
           end
         end
       end
 
-      def cache_put_by_filepath(filepath)
+      def cache_put_by_filepath(filepath, digest: nil)
         synchronize do
           safe_log "#{self.class}::#{__callee__} filepath=#{filepath}" if @debug
           @files_cache[File.basename(filepath)] = FileInfo.new(
             path: File.dirname(filepath),
             name: File.basename(filepath),
             mtime: File.mtime(filepath),
+            digest: digest || file_digest(filepath),
             data: safe_load_yaml(filepath)
           )
         end
+      end
+
+      # Content hash used as the cache freshness signal. Returns nil when the
+      # file cannot be read (e.g. it vanished between the glob and here); a nil
+      # digest never equals a stored digest, so the entry is treated as changed
+      # and reloaded on the next pass.
+      def file_digest(filepath)
+        Digest::SHA256.file(filepath).hexdigest
+      rescue => e
+        safe_log "#{self.class}::#{__callee__} could not hash #{filepath}: #{e.message}" if @debug
+        nil
       end
 
       def cache_get_by_filename(filename)
