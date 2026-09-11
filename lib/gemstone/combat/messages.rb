@@ -56,11 +56,17 @@ module Lich
           # Recompute the active families from the subscriptions and put the
           # hook up or take it down to match. Observers calls this on every
           # change; harmless to call again.
+          #
+          # The whole read-decide-act sequence is held under @mutex: two
+          # scripts subscribing at once would otherwise interleave so that
+          # the last @active write is non-empty while the last hook call is
+          # uninstall!, silently leaving a live subscriber with no hook.
           def refresh!
-            active = families.select { |f| f.events.any? { |e| Observers.any_for?(e) } }
-            @mutex.synchronize { @active = active.freeze }
-            active.empty? ? uninstall! : install!
-            @active
+            @mutex.synchronize do
+              @active = families.select { |f| f.events.any? { |e| Observers.any_for?(e) } }.freeze
+              @active.empty? ? uninstall! : install!
+              @active
+            end
           end
 
           # What one line yields, synchronously, over the given families

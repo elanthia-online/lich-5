@@ -36,8 +36,6 @@ module Lich
             def rejects?(line) = PatternGate.rejects?(gate, always_scan, line)
           end
 
-          LINK = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">[^<]+<\/a>/i.freeze
-
           # Build a family from [event, pattern, data] rows.
           def self.family(name, rows)
             defs = rows.map { |event, pattern, data| MessageDef.new(event, pattern, data) }
