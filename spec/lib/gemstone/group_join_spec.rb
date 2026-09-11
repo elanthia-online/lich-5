@@ -13,6 +13,11 @@ RSpec.describe Lich::Gemstone::Group do
 
   before do
     allow(GameObj).to receive(:pcs).and_return([leader])
+    @members = described_class.class_variable_get(:@@members)
+  end
+
+  after do
+    described_class.class_variable_set(:@@members, @members)
   end
 
   def answer(line)
@@ -26,13 +31,23 @@ RSpec.describe Lich::Gemstone::Group do
     expect(sent).to eq(['join #-1001', 'join #-1001'])
   end
 
-  it 'reports a closed group, a missing player and no answer as errors, and already a member as a noop' do
+  it 'reports a closed group and no answer as errors, and already a member as a noop' do
     answer("Etanamir's group status is closed.")
     expect(described_class.join('Etanamir')).to eq({ err: leader })
     answer("You are already a member of Etanamir's group.")
     expect(described_class.join('Etanamir')).to eq({ noop: leader })
-    answer(false)
+    answer(nil)
     expect(described_class.join('Etanamir')).to eq({ err: leader })
-    expect(described_class.join('Nobody')).to eq({ err: nil })
+  end
+
+  it 'only treats an already-a-member answer about the named leader as a noop' do
+    answer("You are already a member of Someoneelse's group.")
+    expect(described_class.join('Etanamir')).to eq({ err: leader })
+  end
+
+  it 'delegates a separator that names no PC in the room to Array#join' do
+    expect(described_class).not_to receive(:dothistimeout)
+    described_class.class_variable_set(:@@members, %w[Etanamir Oreh])
+    expect(described_class.join(', ')).to eq('Etanamir, Oreh')
   end
 end

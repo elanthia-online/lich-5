@@ -234,25 +234,34 @@ module Lich
       # Sends JOIN and reads the game's answer; the observer records the
       # new leader and the roster from the "You join" line itself.
       #
+      # A String that does not name a PC in the room is treated as a
+      # separator and delegated to +Array#join+ over the cached roster, the
+      # behavior {Group} used to reach through +method_missing+.
+      #
       # @param leader [String, GameObj] the leader's noun or GameObj
       # @return [Hash] {ok: leader} joined, {noop: leader} already a member,
-      #   {err: leader} closed, gone, or no answer; {err: nil} when no such
-      #   player is in the room
+      #   {err: leader} closed, gone, or no answer
+      # @return [String] the joined roster when given a separator
       # @example
       #   Group.join("Etanamir")
       def self.join(leader)
-        leader = GameObj.pcs.find { |pc| pc.noun.eql?(leader) } if leader.is_a?(String)
+        if leader.is_a?(String)
+          pc = GameObj.pcs.find { |member| member.noun.eql?(leader) }
+          return @@members.join(leader) if pc.nil?
+
+          leader = pc
+        end
         return { err: nil } if leader.nil?
 
         result = dothistimeout("join ##{leader.id}", 3, Regexp.union(
                                                           %r{^You join #{leader.noun}},
                                                           %r{^#{leader.noun}'s group status is closed},
-                                                          %r{already a member of},
+                                                          %r{already a member of #{leader.noun}'s group},
                                                           %r{^What were you referring to\?}
                                                         ))
         case result
         when %r{^You join} then { ok: leader }
-        when %r{already a member} then { noop: leader }
+        when %r{already a member of #{leader.noun}'s group} then { noop: leader }
         else { err: leader }
         end
       end
