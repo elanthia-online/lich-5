@@ -15,7 +15,7 @@ module Lich
       @@cost_list ||= Array.new
       @@load_mutex = Mutex.new
       @@after_stance = nil
-      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast
+      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast, :group_cooldown
       attr_accessor :stance, :channel
 
       @@prepare_regex = Regexp.union(
@@ -134,6 +134,10 @@ module Lich
           end
         }
         @cast_proc = xml_spell.locate('cast-proc').first&.text
+        # Seconds a target is immune to another group casting of this spell.
+        # Only the group (EVOKE) versions of a few spells carry one; nil means
+        # the spell has no per-target cooldown. See Group.spell_cooldown.
+        @group_cooldown = xml_spell['group-cooldown']&.to_i
         @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0

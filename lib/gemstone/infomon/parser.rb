@@ -636,6 +636,12 @@ module Lich
               spell.putup unless spell.active?
               # add various cooldowns back without affecting parse speed
               Spells.require_cooldown(spell)
+              # The group (EVOKE) version of a spell says so in the caster's
+              # own start message; every other view of the same spell (a
+              # self-cast, or being on the receiving end) leaves the clause
+              # out. That is the only notice the caster gets that a group
+              # casting landed, so it is where the per-target cooldowns start.
+              Group.record_spell_cooldown(spell) if line.include?('your group')
               :ok
             when Pattern::SpellDnMsgs
               spell = Spell.list.find do |s|
