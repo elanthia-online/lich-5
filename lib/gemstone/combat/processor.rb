@@ -925,9 +925,21 @@ module Lich
                 end
                 respond "[Combat] Found resolution: #{resolution[:type]} = #{resolution[:result]}" if Tracker.debug?(:verbose)
               elsif (outcome = Parser.parse_outcome(line))
+                # A pre-emptive evade ("bounds to safety as you move to attack
+                # it") is OUR swing resolving, and it names the creature we
+                # swung at. A creature's inbound swing is never closed by the
+                # target-switcher, so one left open across the nock swallowed
+                # the evade and our own swing was never opened - the nocked
+                # bow had nothing to name. Scoped to a live nock: only there
+                # do we know an outbound swing is outstanding, so inbound
+                # maneuvers whose resist line names their own caster
+                # possessively ("the warg's unnerving howl") still attach.
+                preempts_open_inbound = nocked && current_event && current_event[:inbound] &&
+                                        !flare_ctx && line_target && line_target[:id] &&
+                                        !Definitions::Outcomes.inbound_line?(line)
                 if line_attack
                   same_line_outcome = outcome
-                elsif flare_ctx || current_event
+                elsif flare_ctx || (current_event && !preempts_open_inbound)
                   (flare_ctx || current_event)[:outcomes] << outcome
                 elsif line_target && line_target[:id]
                   # An outcome with a named target and no event at all: the
@@ -1206,7 +1218,14 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
-              nocked = nil # the swing the nock announced has printed (see decl)
+              # The swing the nock announced has printed (see decl). Only OUR
+              # own attack can be that swing - "You nock" is first-person - so
+              # a creature's inbound swing or another player's attack
+              # interleaving between the nock and the fire must not clear it,
+              # or the fire (or the pre-emptive evade standing in for it)
+              # loses its weapon and falls back to :unknown, which is the very
+              # failure the nock tracking exists to prevent.
+              nocked = nil unless current_event[:inbound] || eff_foreign
               # see last_inbound_attacker decl
               if current_event[:inbound] && current_event[:attacker].nil? && last_inbound_attacker &&
                  !Definitions::Attacks.attackerless_line?(line)

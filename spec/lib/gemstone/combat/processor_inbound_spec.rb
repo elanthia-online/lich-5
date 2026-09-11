@@ -888,6 +888,25 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
         .to eq([[:fire, 'glowbark long bow', 123985834, :evade, [:chameleon_shroud]]])
     end
 
+    # Regression: the nock used to be cleared by ANY new attack event, so a
+    # creature's inbound swing landing between our nock and our fire lost the
+    # bow and the pre-empted swing fell back to :unknown. "You nock" is
+    # first-person, so only our own outbound attack can be the swing it
+    # announced.
+    it "keeps the nocked bow when a creature's inbound swing interleaves before the fire" do
+      other = bolded(123985999, 'warg', 'A warg')
+      events = described_class.parse_events([
+                                              'You nock a faewood arrow fletched with plain white feathers in your <a exist="129604585" noun="bow">glowbark long bow</a>.',
+                                              "#{other} claws at you!",
+                                              '   ... but the attack is foiled by your armor.',
+                                              "With preternatural speed, #{warg} bounds to safety as you move to attack #{bolded(123985834, 'warg', 'it')}, leaving you off-balance!",
+                                              'The arrow streaks off into the distance!'
+                                            ])
+      fire = events.find { |e| !e[:inbound] }
+      expect(fire).not_to be_nil
+      expect([fire[:name], fire[:weapon], fire[:target][:id]]).to eq([:fire, 'glowbark long bow', 123985834])
+    end
+
     it "gives the swing, not the pinned rider's one-hit row, the flare that follows the pin" do
       masto2 = bolded(130490001, 'mastodon', 'a heavily armored battle mastodon')
       bers = bolded(130490002, 'berserker', 'a tattooed gigas berserker')
@@ -1255,6 +1274,14 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                          ])
       expect(own.map { |e| [e[:name], e[:via], e[:target][:id], e[:resolutions].map { |r| r[:result] }] })
         .to eq([[:moonbeam, :cast, 130610003, [322]]])
+
+      # the "Tapping the moons above," prefix is not guaranteed - sentence-
+      # initial "You draw down..." must name the spell too, not fall to :unknown
+      sentence_initial = described_class.parse_events([
+                                                        "You draw down a shaft of swirling moonlight and bathe #{maiden} in its muted glow.",
+                                                        '<pushBold/>[SMR result: 322 (Open d100: 61, Bonus: 159)]<popBold/>'
+                                                      ])
+      expect(sentence_initial.map { |e| [e[:name], e[:target][:id]] }).to eq([[:moonbeam, 130610003]])
     end
 
     it "attributes a nearby player's flaming aura to that player, and a spiritual malady tick once, unowned" do

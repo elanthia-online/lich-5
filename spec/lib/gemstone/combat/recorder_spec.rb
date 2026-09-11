@@ -128,6 +128,50 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(query('SELECT ended_at FROM sessions').first['ended_at']).to eq(3_000_000.0)
     end
 
+    # Regression: foreign_event? used to call EVERY non-:attack type foreign,
+    # so a death confirmed by the room feed after the idle gap (exactly what
+    # the processor's watch-until-death sweep emits, as a bare :status) was
+    # dropped outright - no status row, no killed_at.
+    it 'records a delayed death for a creature this session fought, into that same session' do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(at: Time.at(3_000_000)))
+
+      # the room feed confirms the kill well past the idle gap
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 301))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: :add)
+
+      expect(count('sessions')).to eq(1) # no spurious second session
+      expect(query("SELECT status FROM statuses WHERE kind = 'status'").map { |r| r['status'] }).to eq(['dead'])
+      # the kill lands on the SAME creature row the attack created, not a
+      # duplicate under a new session
+      creatures = query('SELECT id, exist_id, killed_at FROM creatures')
+      expect(creatures.size).to eq(1)
+      expect(creatures.first['killed_at']).to eq(3_000_301.0)
+      rec.close
+    end
+
+    it 'does not let a trailing fact extend the hunt or resurrect it for a stranger' do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(at: Time.at(3_000_000)))
+
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 301))
+      # a bystander's creature we never touched: still foreign, still dropped
+      rec.record(:status, id: 999, name: 'a passing sprite', status: 'stunned', action: :add)
+      expect(query("SELECT * FROM statuses WHERE kind = 'status'")).to be_empty
+
+      # our own creature's delayed fact is kept, but does not push ended_at out
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: :add)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 900))
+      rec.check_idle!
+      rec.close
+
+      expect(count('sessions')).to eq(1)
+      # ended_at is still the last real attack - town time never pads a hunt
+      expect(query('SELECT ended_at FROM sessions').first['ended_at']).to eq(3_000_000.0)
+    end
+
     it 'closes the session after the idle gap, stamped at the last event time' do
       rec = new_recorder(idle_timeout: 300)
       # first event opens the session; stub Time so last_event_at is controlled

@@ -292,6 +292,7 @@ module Lich
           @session_id = @db.last_insert_row_id
           @seq = 0
           @creature_cache = {}
+          @closed_session = nil # a new hunt: the previous one takes no more facts
           @session_id
         end
 
@@ -305,6 +306,11 @@ module Lich
 
           @db.execute('UPDATE sessions SET ended_at = ? WHERE id = ?', [at.to_f, @session_id])
           finished = @session_id
+          # Remember what the closed session fought. A death confirmed by the
+          # room feed can arrive after the idle gap has already closed the
+          # hunt, and that kill belongs to THIS session's creature rows - see
+          # trailing_fact? / reopen_closed_session_locked!.
+          @closed_session = { id: finished, ended_at: at.to_f, cache: (@creature_cache || {}).dup }
           @session_id = nil
           @open_attack = nil
           # A closed session's rows are not addressable by the next session's
@@ -364,19 +370,79 @@ module Lich
         # a hunt, but it neither opens a session nor keeps one alive
         # (2026-09-07: Tijay's cast in town opened "session 2" of a hunt
         # that had ended).
+        #
+        # A non-attack event is a bare fact (:status/:stun/:roundtime/
+        # :spell_loss/:ucs) with no ownership flags of its own, so it cannot
+        # be judged on its own contents. It counts as ours when it is keyed
+        # to a creature THIS session already touched - see known_creature?.
+        # Blanket-treating every non-attack as foreign dropped the delayed
+        # room-feed death confirmation that sweep_death_watch exists to emit:
+        # a creature someone else finished minutes later reports `dead` as a
+        # bare :status long after our last swing, and with the session idled
+        # out that row (and the creature's killed_at) was lost outright.
         def foreign_event?(type, data)
-          return true unless type == :attack
+          return !known_creature?(data) unless type == :attack
 
           !!(data[:foreign_caster] || data[:foreign_target] || data[:unowned] || data[:_orphan])
+        end
+
+        # True when this event is keyed to a creature we have already recorded
+        # against - in the open session, or in the one the idle gap just
+        # closed (@closed_session, so a lagged death confirmation still finds
+        # its own hunt). A bystander's fact about a creature we never fought
+        # matches neither and stays foreign, opening nothing.
+        def known_creature?(data)
+          exist_id = data[:id]
+          return false unless exist_id
+
+          key = exist_id.to_i
+          return true if @creature_cache&.key?(key) || @pending_cache&.key?(key)
+
+          !!@closed_session&.fetch(:cache, nil)&.key?(key)
+        end
+
+        # A bare fact (not an :attack) about a creature we fought. It belongs
+        # to the hunt that fought it, so it must never open a fresh session:
+        # killed_at has to land on the creature row the attack already wrote.
+        def trailing_fact?(type, ours)
+          ours && type != :attack
+        end
+
+        # Re-open the session the idle gap just closed so a trailing fact
+        # files against its rows. ended_at is left where finish_session_locked
+        # put it - the last real attack - and re-stamped on the next close, so
+        # a lagged death never pads the hunt's duration.
+        def reopen_closed_session_locked!
+          return false unless @closed_session
+
+          @session_id = @closed_session[:id]
+          # Re-stamped by the next finish_session_locked, which closes at
+          # @last_event_at - untouched by a trailing fact, so ended_at comes
+          # back to the last real attack.
+          @db.execute('UPDATE sessions SET ended_at = NULL WHERE id = ?', [@session_id])
+          # Restore the cache so the trailing fact resolves to the creature
+          # row the attack wrote, instead of inserting a duplicate.
+          @creature_cache = @closed_session[:cache].dup
+          true
         end
 
         def record_locked(type, data)
           if @idle_timeout
             now = Time.now
-            check_idle_locked!(now)
+            # Judge ownership BEFORE the idle close: check_idle_locked! ends
+            # the session and start_session_locked wipes @creature_cache, so
+            # asking afterwards would call every delayed fact foreign.
             ours = !foreign_event?(type, data)
+            trailing = trailing_fact?(type, ours)
+            # A trailing fact holds the open session rather than letting the
+            # idle gap split it; if the gap already closed the hunt, re-open
+            # that same session instead of starting a new one.
+            check_idle_locked!(now) unless trailing && @session_id
+            reopen_closed_session_locked! if trailing && !@session_id
             start_session_locked(character: @character, source: @source, at: now) if ours && !@session_id
-            @last_event_at = now if ours
+            # A trailing fact does not extend the hunt: ended_at stays at the
+            # last real attack, so town time never pads a session.
+            @last_event_at = now if ours && !trailing
           end
           return unless @session_id
 
