@@ -152,3 +152,44 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, 'group casting messages' do
     expect(Lich::Gemstone::Group.spell_cooldown_left(spell_shield, 'Grhim')).to be_within(2).of(360)
   end
 end
+
+# A spell that names the character it lands on. The cooldown belongs to that
+# character however it got there, so the third-person line is enough on its
+# own -- no need to know who cast it.
+RSpec.describe Lich::Gemstone::Group, 'per-character cooldowns from a named target' do
+  let(:wall) { Spell[140] }
+
+  before do
+    Lich::Gemstone::Group.spell_cooldowns.clear
+    allow(wall).to receive(:target_cooldown).and_return(270)
+  end
+
+  after { Lich::Gemstone::Group.spell_cooldowns.clear }
+
+  it 'puts the named character on cooldown' do
+    described_class.record_target_cooldown(wall, 'Dicate')
+    expect(described_class.spell_cooldown_ready?(wall, 'Dicate')).to be false
+    expect(described_class.spell_cooldown_left(wall, 'Dicate')).to be_within(2).of(270)
+  end
+
+  it 'leaves everyone else alone' do
+    described_class.record_target_cooldown(wall, 'Dicate')
+    expect(described_class.spell_cooldown_ready?(wall, 'Nisugi')).to be true
+  end
+
+  it 'records nothing for a spell with no per-character cooldown' do
+    allow(wall).to receive(:target_cooldown).and_return(nil)
+    described_class.record_target_cooldown(wall, 'Dicate')
+    expect(described_class.spell_cooldowns[wall.num]).to be_nil
+  end
+
+  it 'ignores a nil name' do
+    described_class.record_target_cooldown(wall, nil)
+    expect(described_class.spell_cooldowns[wall.num]).to be_nil
+  end
+
+  it 'shares the store with group castings, so either source answers' do
+    described_class.record_target_cooldown(wall, 'Dicate')
+    expect(described_class.spell_cooldown_left(wall, 'Dicate')).to be > 0
+  end
+end

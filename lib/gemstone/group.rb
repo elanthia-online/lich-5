@@ -197,6 +197,23 @@ module Lich
         nil
       end
 
+      # Records that a spell landed on one character, from the third-person
+      # message that names them. The cooldown belongs to the character the
+      # spell landed on rather than to the pair, so it counts no matter who
+      # cast it -- seeing someone else put a target on cooldown is as useful
+      # as doing it yourself, and the target need not be in the group.
+      #
+      # @param spell [Lich::Common::Spell] the spell that landed
+      # @param name [String] the character it landed on
+      # @return [nil]
+      def self.record_target_cooldown(spell, name)
+        seconds = spell.target_cooldown
+        return nil if seconds.nil? || seconds <= 0 || name.nil?
+
+        (@@spell_cooldowns[spell.num] ||= {})[name] = Time.now + seconds
+        nil
+      end
+
       # Seconds left before a group casting of the spell can affect the member
       # again. Zero when the member is ready, including when nothing has been
       # recorded for them.

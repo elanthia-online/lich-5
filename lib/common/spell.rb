@@ -15,7 +15,7 @@ module Lich
       @@cost_list ||= Array.new
       @@load_mutex = Mutex.new
       @@after_stance = nil
-      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast, :group_cooldown
+      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast, :group_cooldown, :target_cooldown, :target_msgup
       attr_accessor :stance, :channel
 
       @@prepare_regex = Regexp.union(
@@ -138,6 +138,14 @@ module Lich
         # Only the group (EVOKE) versions of a few spells carry one; nil means
         # the spell has no per-target cooldown. See Group.spell_cooldown.
         @group_cooldown = xml_spell['group-cooldown']&.to_i
+        # Seconds a character is immune to this spell after it lands on them,
+        # regardless of who cast it, paired with the third-person message that
+        # names them. See Group.spell_cooldown_ready?.
+        @target_cooldown = xml_spell['target-cooldown']&.to_i
+        @target_msgup = xml_spell.locate('message')
+                                 .select { |e| e['type'].to_s.downcase == 'target-start' }
+                                 .collect { |e| e.text }.join('$|^')
+        @target_msgup = nil if @target_msgup.empty?
         @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0
@@ -244,6 +252,13 @@ module Lich
       def Spell.upmsgs
         Spell.load unless @@loaded
         @@list.collect { |spell| spell.msgup }.compact
+      end
+
+      # Third-person start messages, for spells that name the character they
+      # land on. Empty until the effect list carries target-start messages.
+      def Spell.target_upmsgs
+        Spell.load unless @@loaded
+        @@list.collect { |spell| spell.target_msgup }.compact
       end
 
       def Spell.dnmsgs
