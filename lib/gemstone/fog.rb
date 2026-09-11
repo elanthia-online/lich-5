@@ -21,9 +21,16 @@ module Lich
       # (bigshot fog_return_spirit, fog_return_voln).
       RIFT_ROOM = 2635
 
-      # Seconds to wait for the room to change after a send. A fog resolves
-      # in one server pulse; a Traveler's Song walk takes longer.
+      # Seconds to wait for the room to change after a send. A fog resolves in
+      # one server pulse, so 8 is generous for the four that fog; a Traveler's
+      # Song is a walk to the destination and gets its own, longer budget.
       CONFIRM_TIMEOUT = 8
+      TRAVELERS_SONG_TIMEOUT = 60
+
+      # Real room UIDs are small integers. Above this the id is xmlparser's
+      # MD5 stand-in for a room that arrived with no UID (xmlparser.rb, the
+      # <compass> branch), which is not unique across same-text rooms.
+      MAX_ROOM_UID = 1_000_000_000
 
       METHODS = %i[spirit_guide symbol_of_return travelers_song sigil_of_escape familiar_gate].freeze
 
@@ -44,8 +51,9 @@ module Lich
 
       # Does this character have the method at all.
       def self.known?(method)
-        case normalize(method)
-        when :spirit_guide, :travelers_song, :familiar_gate then spell_known?(SPELLS[normalize(method)])
+        name = normalize(method)
+        case name
+        when :spirit_guide, :travelers_song, :familiar_gate then spell_known?(SPELLS[name])
         when :symbol_of_return then voln&.known?('return') || false
         when :sigil_of_escape then sunfist&.known?('escape') || false
         else false
@@ -54,9 +62,10 @@ module Lich
 
       # Known and affordable right now.
       def self.available?(method)
-        case normalize(method)
+        name = normalize(method)
+        case name
         when :spirit_guide, :travelers_song, :familiar_gate
-          num = SPELLS[normalize(method)]
+          num = SPELLS[name]
           spell_known?(num) && Spell[num].affordable?
         when :symbol_of_return then voln&.available?('return') || false
         when :sigil_of_escape then sunfist&.available?('escape') || false
@@ -142,7 +151,7 @@ module Lich
       # @api private
       def self.travelers_song
         pulse_mana(1020)
-        cast_and_settle(1020) if available?(:travelers_song)
+        cast_and_settle(1020, timeout: TRAVELERS_SONG_TIMEOUT) if available?(:travelers_song)
       end
 
       # @api private
@@ -170,12 +179,12 @@ module Lich
       # --- helpers ---------------------------------------------------------------
 
       # @api private
-      def self.cast_and_settle(num)
+      def self.cast_and_settle(num, timeout: CONFIRM_TIMEOUT)
         start = here
         Spell[num].cast
         sleep 0.5
         waitcastrt?
-        wait_for_move(start)
+        wait_for_move(start, timeout: timeout)
       end
 
       # A fog into the Rift with the destination elsewhere is cast again
@@ -198,29 +207,42 @@ module Lich
       end
 
       # @api private
-      def self.wait_for_move(start)
-        deadline = Time.now + CONFIRM_TIMEOUT
+      def self.wait_for_move(start, timeout: CONFIRM_TIMEOUT)
+        deadline = Time.now + timeout
         sleep 0.25 until moved_from?(start) || Time.now > deadline
         moved_from?(start)
       end
 
-      # Where we are, as the server reports it: the server room id, which
-      # is set for an unmapped room too (Room.current is nil there, and a
-      # map id would compare nil to nil and call a real move a failure),
-      # with the room counter alongside for the rare stream that carries
-      # no id.
+      # Where we are, as the server reports it. XMLData.room_id is set for an
+      # unmapped room too - Room.current is nil there, and a map id would
+      # compare nil to nil and call a real move a failure - so it is the
+      # primary mark. It is never absent (xmlparser defaults it to 0 and every
+      # write goes through to_i), but it is not always unique: a room with no
+      # UID gets an MD5 of its title, description and exits, so two unmapped
+      # rooms whose text reads the same share an id. The room counter, which
+      # steps once per room stream, breaks that tie.
       # @api private
-      def self.here = { id: XMLData.room_id.to_s, count: XMLData.room_count }
+      def self.here = { id: XMLData.room_id.to_s, count: XMLData.room_count.to_i }
 
-      # A move is a different server room id. The counter alone is not
-      # evidence: it steps on every room refresh, moved or not, so it is
-      # consulted only when an id is missing on either side.
+      # A move is a different server room id. When the id is unchanged it may
+      # still be a move between two same-text unmapped rooms, so the counter
+      # decides: an MD5 id means the room has no UID, and a counter that has
+      # stepped there is a new room stream rather than a refresh of this one.
+      # A real UID is unique, so an unchanged one is never a move.
       # @api private
       def self.moved_from?(start)
         now = here
-        return now[:id] != start[:id] unless now[:id].empty? || start[:id].empty?
+        return true if now[:id] != start[:id]
+        return false unless uidless?(now[:id])
 
-        now[:count] != start[:count]
+        now[:count] > start[:count]
+      end
+
+      # A server room id that is not a real room UID: xmlparser substitutes an
+      # MD5 of the room text, far above any UID, when <nav> carries none.
+      # @api private
+      def self.uidless?(id)
+        id.to_i > MAX_ROOM_UID
       end
 
       # The map id, for the Rift check only.

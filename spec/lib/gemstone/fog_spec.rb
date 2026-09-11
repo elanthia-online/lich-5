@@ -19,8 +19,9 @@ FogSpell = Struct.new(:num, :known, :affordable, keyword_init: true) do
   def on_cast(&block) = @on_cast = block
 end
 
-# Fog confirms a move on the server's room counter and room id; the spec
-# helper's XMLData carries room_id but not the counter.
+# Fog confirms a move on the server's room id, with the room counter breaking
+# the tie between same-text rooms that have no UID; the spec helper's XMLData
+# carries room_id but not the counter.
 module XMLData
   class << self
     attr_accessor :room_count unless method_defined?(:room_count)
@@ -32,6 +33,7 @@ RSpec.describe Lich::Gemstone::Fog do
   let(:voln) { double('OrderOfVoln', known?: false, available?: false) }
   let(:sunfist) { double('GuardiansOfSunfist', known?: false, available?: false) }
   let(:sent) { [] }
+  let(:waits) { [] }
 
   def spell(num, known: true, affordable: true)
     spells[num] = FogSpell.new(num: num, known: known, affordable: affordable)
@@ -41,8 +43,16 @@ RSpec.describe Lich::Gemstone::Fog do
   # server room id changes; the map id follows when the room is mapped.
   def arrive(id, mapped: true)
     XMLData.room_count = XMLData.room_count.to_i + 1
-    XMLData.room_id = "u#{id}"
+    XMLData.room_id = id
     Room.current = mapped ? Room.room_double(id: id) : nil
+  end
+
+  # A room that arrived with no UID: xmlparser hands out an MD5 of the room
+  # text, which two rooms reading the same way share. The counter still steps.
+  def arrive_uidless(text_hash)
+    XMLData.room_count = XMLData.room_count.to_i + 1
+    XMLData.room_id = described_class::MAX_ROOM_UID + text_hash
+    Room.current = nil
   end
 
   before do
@@ -51,8 +61,12 @@ RSpec.describe Lich::Gemstone::Fog do
     allow(described_class).to receive(:voln).and_return(voln)
     allow(described_class).to receive(:sunfist).and_return(sunfist)
     allow(described_class).to receive(:sleep)
-    # the confirm wait polls the clock; answer at once from the room
-    allow(described_class).to receive(:wait_for_move) { |start| described_class.moved_from?(start) }
+    # the confirm wait polls the clock; answer at once from the room, keeping
+    # the budget each leg asked for so a spec can assert on it
+    allow(described_class).to receive(:wait_for_move) do |start, timeout: described_class::CONFIRM_TIMEOUT|
+      waits << timeout
+      described_class.moved_from?(start)
+    end
     allow(described_class).to receive(:waitrt?)
     allow(described_class).to receive(:waitcastrt?)
     allow(described_class).to receive(:fput) { |cmd| sent << cmd }
@@ -108,6 +122,19 @@ RSpec.describe Lich::Gemstone::Fog do
       expect(described_class.return(:travelers_song)).to be false
       expect(sent).to eq(['mana pulse'])
       expect(spells[1020].casts).to eq(0)
+    end
+
+    it 'gives a Travelers Song walk a longer budget than a one-pulse fog' do
+      spell(1020).on_cast { arrive(4) }
+      expect(described_class.return(:travelers_song)).to be true
+      expect(waits).to eq([described_class::TRAVELERS_SONG_TIMEOUT])
+      expect(described_class::TRAVELERS_SONG_TIMEOUT).to be > described_class::CONFIRM_TIMEOUT
+    end
+
+    it 'confirms a fog on the shorter budget' do
+      spell(130).on_cast { arrive(4) }
+      expect(described_class.return(:spirit_guide)).to be true
+      expect(waits).to eq([described_class::CONFIRM_TIMEOUT])
     end
 
     it 'falls back from Spirit Guide to the Symbol of Return, once' do
@@ -166,10 +193,20 @@ RSpec.describe Lich::Gemstone::Fog do
       expect(sent).to eq(['symbol of return']) # the fallback still fires
     end
 
-    it 'falls back to the room counter only when the server gives no room id' do
-      XMLData.room_id = nil
-      spell(130).on_cast { XMLData.room_count += 1 }
+    it 'confirms a move between two unmapped rooms whose text hashes the same' do
+      arrive_uidless(7)
+      spell(130).on_cast { arrive_uidless(7) } # a different room, the same id
+      allow(voln).to receive(:known?).with('return').and_return(true)
       expect(described_class.return(:spirit_guide)).to be true
+      expect(sent).to be_empty
+    end
+
+    it 'does not call a refresh of an unmapped room a move' do
+      arrive_uidless(7)
+      spell(130).on_cast {} # no new room stream, so no counter step
+      allow(voln).to receive(:known?).with('return').and_return(true)
+      expect(described_class.return(:spirit_guide)).to be false
+      expect(sent).to eq(['symbol of return'])
     end
 
     it 'stays in the Rift when that is the destination' do
