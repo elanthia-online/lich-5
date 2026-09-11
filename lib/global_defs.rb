@@ -295,11 +295,24 @@ def checkcastrt
   [0, XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f].max
 end
 
-# @param interrupt [#call, nil] checked every tenth of a second; true ends
-#   the wait early
+# Waits out hard roundtime.
+#
+# With no options this is the legacy call, unchanged for every existing
+# caller: one sleep, then report whether roundtime REMAINS. Passing an
+# option opts into the bounded contract: poll in tenth-of-a-second slices,
+# stop early on +interrupt+ or +cap+, and report whether there was
+# roundtime to wait out when the call began.
+#
+# @param interrupt [#call, nil] checked each slice; true ends the wait early
 # @param cap [Numeric, nil] the longest wait allowed, in seconds
-# @return [Boolean] whether there was roundtime to wait out
+# @return [Boolean] bounded: whether there was roundtime to wait out;
+#   legacy (no options): whether roundtime remains after the sleep
 def waitrt?(interrupt: nil, cap: nil)
+  if interrupt.nil? && cap.nil?
+    sleep checkrt
+    return checkrt > 0.0
+  end
+
   had_rt = checkrt > 0.0
   stop_at = cap ? Time.now + cap : nil
   while checkrt > 0.0
@@ -311,10 +324,23 @@ def waitrt?(interrupt: nil, cap: nil)
   had_rt
 end
 
-# @param interrupt [#call, nil] checked every tenth of a second
+# Waits out cast (soft) roundtime; see {waitrt?} for the two contracts.
+#
+# @param interrupt [#call, nil] checked each slice; true ends the wait early
 # @param cap [Numeric, nil] the longest wait allowed, in seconds
-# @return [Boolean] whether there was cast roundtime to wait out
+# @return [Boolean] bounded: whether there was cast roundtime to wait out;
+#   legacy (no options): whether there was cast roundtime to sleep on
 def waitcastrt?(interrupt: nil, cap: nil)
+  if interrupt.nil? && cap.nil?
+    current_castrt = checkcastrt
+    if current_castrt.to_f > 0.0
+      sleep(current_castrt)
+      return true
+    else
+      return false
+    end
+  end
+
   had_rt = checkcastrt.to_f > 0.0
   stop_at = cap ? Time.now + cap : nil
   while checkcastrt.to_f > 0.0

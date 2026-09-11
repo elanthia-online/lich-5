@@ -590,10 +590,18 @@ RSpec.describe 'global_defs.rb built-in script commands' do
   end
 end
 
-# waitrt? / waitcastrt? with an interrupt and a cap - mirrored from
-# lib/global_defs.rb for the reason given at the top of this file.
+# waitrt? / waitcastrt? - mirrored from lib/global_defs.rb for the reason
+# given at the top of this file. Two contracts: with no options the legacy
+# call (one sleep, then whether roundtime REMAINS), unchanged for every
+# existing caller; with an interrupt or a cap the bounded call (poll in
+# slices, whether there WAS roundtime to wait out).
 RSpec.describe '#waitrt?' do
   def waitrt?(interrupt: nil, cap: nil)
+    if interrupt.nil? && cap.nil?
+      sleep checkrt
+      return checkrt > 0.0
+    end
+
     had_rt = checkrt > 0.0
     stop_at = cap ? Time.now + cap : nil
     while checkrt > 0.0
@@ -605,14 +613,32 @@ RSpec.describe '#waitrt?' do
     had_rt
   end
 
-  it 'returns false with no roundtime and true after waiting one out' do
+  it 'legacy: sleeps once and reports whether roundtime remains' do
     allow(self).to receive(:checkrt).and_return(0.0)
     expect(waitrt?).to be(false)
+    left = [8.0, 0.0]
+    allow(self).to receive(:checkrt) { left.first }
+    allow(self).to receive(:sleep) { left.shift }
+    expect(waitrt?).to be(false) # slept the 8 out, nothing remains
+    expect(left).to eq([0.0])
+  end
+
+  it 'legacy: roundtime that outlasts the one sleep reads as still present' do
+    allow(self).to receive(:checkrt).and_return(8.0)
+    sleeps = []
+    allow(self).to receive(:sleep) { |n| sleeps << n }
+    expect(waitrt?).to be(true)
+    expect(sleeps).to eq([8.0]) # one sleep, no polling
+  end
+
+  it 'bounded: waits a roundtime out in slices and reports there was one' do
     left = [0.25, 0.15, 0.05, 0.0]
     allow(self).to receive(:checkrt) { left.first }
     allow(self).to receive(:sleep) { left.shift }
-    expect(waitrt?).to be(true)
+    expect(waitrt?(cap: 60)).to be(true)
     expect(left).to eq([0.0])
+    allow(self).to receive(:checkrt).and_return(0.0)
+    expect(waitrt?(cap: 60)).to be(false)
   end
 
   it 'ends early on the interrupt' do
@@ -631,5 +657,47 @@ RSpec.describe '#waitrt?' do
     allow(self).to receive(:sleep) { ticks += 1 }
     expect(waitrt?(cap: 3)).to be(true)
     expect(ticks).to eq(3)
+  end
+end
+
+RSpec.describe '#waitcastrt?' do
+  def waitcastrt?(interrupt: nil, cap: nil)
+    if interrupt.nil? && cap.nil?
+      current_castrt = checkcastrt
+      if current_castrt.to_f > 0.0
+        sleep(current_castrt)
+        return true
+      else
+        return false
+      end
+    end
+
+    had_rt = checkcastrt.to_f > 0.0
+    stop_at = cap ? Time.now + cap : nil
+    while checkcastrt.to_f > 0.0
+      return had_rt if interrupt && interrupt.call
+      return had_rt if stop_at && Time.now >= stop_at
+
+      sleep([checkcastrt.to_f, 0.1].min)
+    end
+    had_rt
+  end
+
+  it 'legacy: one sleep of the whole cast roundtime, true when there was one' do
+    allow(self).to receive(:checkcastrt).and_return(3.0)
+    sleeps = []
+    allow(self).to receive(:sleep) { |n| sleeps << n }
+    expect(waitcastrt?).to be(true)
+    expect(sleeps).to eq([3.0])
+    allow(self).to receive(:checkcastrt).and_return(0)
+    expect(waitcastrt?).to be(false)
+  end
+
+  it 'bounded: ends early on the interrupt' do
+    allow(self).to receive(:checkcastrt).and_return(3.0)
+    calls = 0
+    allow(self).to receive(:sleep) { calls += 1 }
+    expect(waitcastrt?(interrupt: -> { calls >= 1 })).to be(true)
+    expect(calls).to eq(1)
   end
 end
