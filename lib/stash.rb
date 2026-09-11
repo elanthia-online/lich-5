@@ -377,6 +377,25 @@ module Lich
       !hand_holding(item).nil?
     end
 
+    # Free a hand for an item we are about to put there.
+    #
+    # stash_hands is the public empty_hand/empty_right_hand API: it pushes a
+    # "put this back" action onto the process-wide $fill_*_hand_actions stacks
+    # that equip_hands / fill_hand pop. wield and hands displace an item on
+    # purpose and never restore it, so leaving an entry behind would corrupt
+    # the stack another script is using. Stash, then drop the entry we just
+    # added, leaving any pre-existing entries untouched.
+    #
+    # @param hand [Symbol] :right or :left
+    # @return [void]
+    def self.free_hand(hand)
+      return if empty_hand?(hand)
+      stack = hand == :right ? ($fill_right_hand_actions ||= []) : ($fill_left_hand_actions ||= [])
+      depth = stack.length
+      stash_hands(**{ hand => true })
+      stack.pop while stack.length > depth
+    end
+
     # Get a named item into a hand.
     #
     # Worn items are removed, items in containers are fetched (opening the
@@ -410,9 +429,9 @@ module Lich
 
       waitrt?
       if hand
-        stash_hands(**{ hand => true }) unless empty_hand?(hand)
+        free_hand(hand)
       elsif !empty_hand?(:right) && !empty_hand?(:left)
-        stash_hands(right: true)
+        free_hand(:right)
       end
 
       fail "wield: a container holding #{item.name} is locked or would not open" unless open_path_to(item)
@@ -472,10 +491,21 @@ module Lich
         dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
       end
 
-      # Empty first, so a wanted item can land in a freed hand.
+      # Empty first, so a wanted item can land in a freed hand. A hand asked to
+      # be emptied that is holding the item wanted in the OTHER hand needs a
+      # swap, not a stash: stashing would drag the item into a container only
+      # for the wield below to fetch it straight back out.
       HANDS.each do |hand|
         next unless resolved[hand].nil? && wanted.key?(hand) && !(wanted[hand] == :keep)
-        stash_hands(**{ hand => true }) unless empty_hand?(hand)
+        next if empty_hand?(hand)
+        other = hand == :right ? :left : :right
+        other_item = resolved[other]
+        if other_item.is_a?(GameObj) && hand_holding(other_item) == hand && empty_hand?(other)
+          waitrt?
+          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
+          next if empty_hand?(hand)
+        end
+        free_hand(hand)
       end
 
       HANDS.each do |hand|
@@ -563,10 +593,17 @@ module Lich
       hands + GameObj.inv.to_a + GameObj.containers.values.flatten
     end
 
-    # Same matching find_container uses, so a profile string means the same
-    # thing whether it names a bag or a weapon.
+    # Same matching find_container uses (substring, and words that may be
+    # non-adjacent), so a profile string means the same thing whether it names
+    # a bag or a weapon. Unlike find_container the pattern is escaped, so an
+    # item name or profile string carrying regex metacharacters cannot raise.
     def self.name_matches?(obj, param)
-      obj.name =~ %r[#{param.strip}]i || obj.name =~ %r[#{param.sub(' ', ' .*')}]i
+      wanted = param.to_s.strip
+      return false if wanted.empty?
+      name = obj.name.to_s
+      return true if name =~ /#{Regexp.escape(wanted)}/i
+      loose = wanted.split(/ /, 2).map { |part| Regexp.escape(part) }.join(' .*')
+      name =~ /#{loose}/i ? true : false
     end
 
     private_class_method :find_ready_item, :known_items, :known_items_ranked, :match_specificity, :name_matches?, :inventory_matches

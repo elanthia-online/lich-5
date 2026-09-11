@@ -377,5 +377,74 @@ RSpec.describe Lich::Stash, 'named items' do
       expect(described_class).not_to receive(:stash_hands)
       expect { described_class.hands(right: nil, left: 'halberd') }.to raise_error(RuntimeError, /could not find/)
     end
+
+    it 'swaps instead of stashing when the hand being emptied holds the other wanted item' do
+      hold(:left, sword)
+      expect(described_class).to receive(:dothistimeout).with('swap', 3, anything).once do
+        hold(:right, sword)
+        hold(:left, empty)
+      end
+      expect(described_class).not_to receive(:stash_hands)
+      expect(described_class).not_to receive(:fput)
+      result = described_class.hands(right: sword, left: nil)
+      expect(result[:right].id).to eq('101')
+      expect(result[:left]).to be_nil
+    end
+
+    it 'still stashes when the hand being emptied holds something unwanted' do
+      hold(:left, dagger)
+      hold(:right, shield)
+      expect(described_class).to receive(:stash_hands).with(left: true) { hold(:left, empty) }
+      described_class.hands(left: nil)
+    end
+  end
+
+  describe 'hand-restore stacks' do
+    before do
+      $fill_right_hand_actions = []
+      $fill_left_hand_actions = []
+      # The real stash_hands pushes a restore action; imitate that here.
+      allow(described_class).to receive(:stash_hands) do |right: false, left: false, **|
+        $fill_right_hand_actions.push([-> {}]) if right
+        $fill_left_hand_actions.push([-> {}]) if left
+        hold(:right, empty) if right
+        hold(:left, empty) if left
+      end
+    end
+
+    it 'leaves no leftover restore action when wield frees a hand' do
+      hold(:right, dagger)
+      on_fput('get #101', sword, :right)
+      described_class.wield(sword, hand: :right)
+      expect($fill_right_hand_actions).to be_empty
+    end
+
+    it 'leaves no leftover restore action when hands empties a hand' do
+      hold(:left, dagger)
+      described_class.hands(left: nil)
+      expect($fill_left_hand_actions).to be_empty
+    end
+
+    it 'does not disturb a restore action another script already pushed' do
+      mine = [-> {}]
+      $fill_right_hand_actions.push(mine)
+      hold(:right, dagger)
+      on_fput('get #101', sword, :right)
+      described_class.wield(sword, hand: :right)
+      expect($fill_right_hand_actions).to eq([mine])
+    end
+  end
+
+  describe '.find_items regex safety' do
+    it 'does not raise on a name carrying regex metacharacters' do
+      weird = StashItem.new(id: '901', noun: 'rod', name: 'a rod (unbalanced', type: 'weapon')
+      GameObj.containers['99'] = [weird]
+      expect { described_class.find_items('a rod (unbalanced') }.not_to raise_error
+      expect(described_class.find_items('a rod (unbalanced').map(&:id)).to include('901')
+    end
+
+    it 'does not raise when the search string is a bare metacharacter' do
+      expect { described_class.find_items('+') }.not_to raise_error
+    end
   end
 end
