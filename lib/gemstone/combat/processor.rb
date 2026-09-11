@@ -298,6 +298,9 @@ module Lich
 
         # State machine parser
         def parse_events(lines)
+          # Position recoveries are per chunk: a stand-up here must not
+          # suppress a knockdown crit in the NEXT chunk.
+          @position_recovered = nil
           events = []
           # Identity-guarded push: an event RESUMED after an inbound
           # interruption (see interrupted_own) was already saved once.
@@ -1740,6 +1743,40 @@ module Lich
         # nobody - so watching longer only fixes killed_at. Bounded FIFO.
         DEATH_WATCH_MAX = 256
 
+        # --- position recovery within one chunk ---------------------------
+        # Message statuses mutate the creature while the chunk is parsed;
+        # crit-derived statuses mutate it afterwards, in persist_event. So a
+        # knockdown crit is applied AFTER a stand-up message that came later
+        # in the same chunk, and would re-prone a creature the game just said
+        # got up. These note which creatures a message stood up, so the crit
+        # pass can leave them alone. Per chunk: cleared at the top of
+        # parse_events, before this chunk's messages are read.
+
+        # @param id [Integer, String, nil] the creature a message stood up
+        def note_position_recovery(id)
+          return unless id
+
+          @position_recovered ||= {}
+          @position_recovered[id.to_i] = true
+        end
+
+        # A later knockdown MESSAGE outranks the recovery: the crit pass may
+        # act again.
+        # @param id [Integer, String, nil]
+        def clear_position_recovery(id)
+          return unless id
+
+          @position_recovered&.delete(id.to_i)
+        end
+
+        # @param id [Integer, String, nil]
+        # @return [Boolean] a message in this chunk already stood the creature up
+        def position_recovered?(id)
+          return false unless id && @position_recovered
+
+          @position_recovered.key?(id.to_i)
+        end
+
         def watch_for_death(id)
           return unless id
 
@@ -1978,7 +2015,11 @@ module Lich
           # Position changes carry better provenance than the messaging
           # equivalents: /It is knocked to the ground!/ has no target
           # capture, while this crit is already bound to a creature id.
-          if (pos = crit[:position])
+          # A recovery message later in this chunk already said the creature
+          # is up. Messages apply during the parse and crits during persist,
+          # so without this the EARLIER knockdown would overwrite the LATER
+          # stand-up and latch the creature prone.
+          if (pos = crit[:position]) && !position_recovered?(creature.id)
             # Tables report "PRONE"/"KNEELING"/"SITTING"; the status
             # canon (messaging, <crtrStatus>, consumers) is lowercase.
             # add_status canonicalizes too, but the observer payload
@@ -2070,6 +2111,13 @@ module Lich
               # one the pattern happened to name.
               if POSITION_STATUSES.include?(status.to_s)
                 POSITION_STATUSES.each { |s| creature.remove_status(s) }
+                # Message statuses apply HERE, during the parse; crit-derived
+                # statuses apply later, in persist_event. A creature knocked
+                # down by a crit and standing up afterwards in the same chunk
+                # would be re-proned by that later pass, because the crit is
+                # earlier in the chunk but applied last. Note the recovery so
+                # the crit pass leaves it standing (see apply_hit_crit_statuses).
+                note_position_recovery(creature.id)
               else
                 creature.remove_status(status)
               end
@@ -2079,6 +2127,10 @@ module Lich
               # sitting is prone, not both.
               if POSITION_STATUSES.include?(status.to_s)
                 (POSITION_STATUSES - [status.to_s]).each { |s| creature.remove_status(s) }
+                # A later knockdown MESSAGE outranks an earlier recovery, so
+                # the crit pass is free to act again (stood up, then knocked
+                # down again inside one chunk).
+                clear_position_recovery(creature.id)
               end
               creature.add_status(status)
               respond "[Combat] Applied status #{status} to #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
