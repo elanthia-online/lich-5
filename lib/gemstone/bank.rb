@@ -137,7 +137,10 @@ module Lich
       # @param names [Array<String>] bank names from BANK ACCOUNT
       # @return [String, nil]
       def self.local_bank(names)
-        location = Room.current&.location.to_s
+        # Map#location can be false for a room that has not been surveyed, and
+        # false.to_s is "false" -- a non-empty string that matches no bank.
+        location = Room.current&.location
+        return nil unless location.is_a?(String)
         return nil if location.empty?
         names.find { |n| location.start_with?(n) } || names.find { |n| location.include?(n) || n.include?(location) }
       end
@@ -166,7 +169,9 @@ module Lich
       #
       # @param amount [Integer, :all]
       # @return [Integer, nil] silver deposited as the bank reported it, 0 when
-      #   there was nothing to deposit, nil when the bank refused
+      #   there was nothing to deposit, nil when the bank refused. The Pinefar
+      #   banker confirms without echoing a figure, so a successful deposit
+      #   there reports 0; do not sum these to track silver banked.
       def self.deposit(amount = :all)
         return deposit_f2p(amount) if f2p? && !pinefar?
 

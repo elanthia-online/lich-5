@@ -118,6 +118,12 @@ RSpec.describe Lich::Gemstone::Bank do
       expect(described_class.balance).to eq(0)
     end
 
+    it 'is 0, not a match on "false", for an unsurveyed room' do
+      allow(room).to receive(:location).and_return(false)
+      allow(Lich::Util).to receive(:issue_command).and_return(listing)
+      expect(described_class.balance).to eq(0)
+    end
+
     it 'parses the single-account wording with a cap' do
       allow(Lich::Util).to receive(:issue_command).and_return(
         ['You currently have an account in the amount of 45,000 silver.',
