@@ -1109,6 +1109,36 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(blind).not_to have_key(:_event)
     end
 
+    it "leaves an ambient recovery line off the current attack's event (review 2026-09-10)" do
+      registry = Class.new { def self.[](_id); end }
+      stub_const('Lich::Gemstone::Combat::Creature', registry)
+      # explicit doubles: a null object answers crtr_flag?(:dead) truthily
+      # and the death watch would bury the orc
+      live = { add_damage: nil, add_status: nil, remove_status: nil, add_injury: nil, add_stun_estimate: nil,
+               mark_fatal_crit!: nil, dead?: false, crtr_flag?: false, has_status?: false }
+      allow(registry).to receive(:[]).with(700001).and_return(double('Creature', id: 700001, name: 'a grizzled orc', **live))
+      allow(registry).to receive(:[]).with(700002).and_return(double('Creature', id: 700002, name: 'a hulking troll', **live))
+      emitted = []
+      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      orc = bolded(700001, 'orc', 'a grizzled orc')
+      troll = bolded(700002, 'troll', 'a hulking troll')
+      described_class.process([
+                                "You fire a faewood arrow at #{orc}!",
+                                '  AS: +651 vs DS: +355 with AvD: +20 + d100 roll: +49 = +365',
+                                '   ... and hit for 70 points of damage!',
+                                '   Strike pierces forearm!',
+                                "   The #{orc} is stunned!",
+                                "#{troll} shakes off the stun!"
+                              ])
+      statuses = emitted.select { |t, _| t == :status }.map(&:last)
+      orc_stun = statuses.find { |s| s[:id] == 700001 }
+      troll_rec = statuses.find { |s| s[:id] == 700002 }
+      # the orc's stun is the fire's; the troll's recovery names no event
+      expect(orc_stun).to include(status: :stunned, action: :add, attack_uid: 0)
+      expect(troll_rec).to include(status: :stunned, action: :remove)
+      expect(troll_rec[:attack_uid]).to be_nil
+    end
+
     it 'keeps an ooze splitting on the hit off the target switcher (raw chunk 23:19:53)' do
       lines = File.readlines(File.join(__dir__, '../../../fixtures/ooze_splatter_fire.txt'), chomp: true)
       events = described_class.parse_events(lines)

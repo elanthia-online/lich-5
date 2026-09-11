@@ -545,12 +545,29 @@ module Lich
                   f ||= flares.reverse.find { |x| !x[:_pre] && x[:target_info] && x[:target_info][:id] == cid }
                   f && (i = flares.index(f)) ? i + 1 : nil
                 end
+                # The event a status rides on (the recorder's attack_uid) -
+                # ONLY when that event touched the subject: it is the
+                # target, the attacker of an inbound swing, a flare named
+                # it, or the flare-and-status line about to be appended
+                # did (seq). An ambient line sharing the chunk ("A troll
+                # shakes off the stun!" while we shoot an orc) belongs to
+                # no event and stays an independent observation - the
+                # recorder must not be told otherwise (review 2026-09-10).
+                status_event_for = lambda do |cid, seq|
+                  next nil unless current_event && cid
+                  next current_event if seq
+                  ids = [current_event[:target] && current_event[:target][:id],
+                         current_event[:attacker].is_a?(Hash) ? current_event[:attacker][:id] : nil]
+                  ids.concat((current_event[:flares] || []).map { |x| x[:target_info] && x[:target_info][:id] })
+                  ids.compact.include?(cid) ? current_event : nil
+                end
                 if line_target && line_target[:id]
                   # Use ID-based lookup - this is most reliable
                   line_status_id = line_target[:id]
                   if status_result.is_a?(Hash)
+                    seq = status_flare_seq.call(line_target[:id])
                     apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action],
-                                           flare_seq: status_flare_seq.call(line_target[:id]), event: current_event)
+                                           flare_seq: seq, event: status_event_for.call(line_target[:id], seq))
                   else
                     # Legacy format - status_result is just the status symbol
                     apply_status_to_target(status_result, line_target[:name], line_target[:id], :add)
@@ -571,9 +588,10 @@ module Lich
                   # 2p lines ("You are stunned!") describe US, never
                   # the creature - the Your?/You guard keeps them out.
                   line_status_id = subject[:id]
+                  seq = status_flare_seq.call(subject[:id])
                   apply_status_to_target(status_result[:status], subject[:name],
                                          subject[:id], status_result[:action],
-                                         flare_seq: status_flare_seq.call(subject[:id]), event: current_event)
+                                         flare_seq: seq, event: status_event_for.call(subject[:id], seq))
                 elsif status_result.is_a?(Hash) && line.match?(/\A\s*Your?\b/)
                   # 2p: the status is OURS ("You are stunned!"). Never a
                   # creature application - but it IS a fact (inbound
