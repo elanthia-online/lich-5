@@ -391,6 +391,23 @@ RSpec.describe Lich::Stash, 'named items' do
       expect(result[:left]).to be_nil
     end
 
+    it 'stashes the unwanted item and swaps, never stashing the wanted one' do
+      hold(:left, sword)   # wanted in the right hand
+      hold(:right, dagger) # unwanted
+      expect(described_class).to receive(:stash_hands).with(right: true).once do
+        hold(:right, empty)
+      end
+      expect(described_class).not_to receive(:stash_hands).with(left: true)
+      expect(described_class).to receive(:dothistimeout).with('swap', 3, anything).once do
+        hold(:right, sword)
+        hold(:left, empty)
+      end
+      expect(described_class).not_to receive(:fput)
+      result = described_class.hands(right: sword, left: nil)
+      expect(result[:right].id).to eq('101')
+      expect(result[:left]).to be_nil
+    end
+
     it 'still stashes when the hand being emptied holds something unwanted' do
       hold(:left, dagger)
       hold(:right, shield)

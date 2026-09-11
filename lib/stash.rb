@@ -493,17 +493,22 @@ module Lich
 
       # Empty first, so a wanted item can land in a freed hand. A hand asked to
       # be emptied that is holding the item wanted in the OTHER hand needs a
-      # swap, not a stash: stashing would drag the item into a container only
-      # for the wield below to fetch it straight back out.
+      # swap, not a stash: stashing would drag the wanted item into a container
+      # only for the wield below to fetch it straight back out. If the other
+      # hand is occupied by something unwanted, stash THAT and then swap, so
+      # the item the caller asked for never goes into a container.
       HANDS.each do |hand|
         next unless resolved[hand].nil? && wanted.key?(hand) && !(wanted[hand] == :keep)
         next if empty_hand?(hand)
         other = hand == :right ? :left : :right
         other_item = resolved[other]
-        if other_item.is_a?(GameObj) && hand_holding(other_item) == hand && empty_hand?(other)
-          waitrt?
-          dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
-          next if empty_hand?(hand)
+        if other_item.is_a?(GameObj) && hand_holding(other_item) == hand
+          free_hand(other) unless empty_hand?(other)
+          if empty_hand?(other)
+            waitrt?
+            dothistimeout 'swap', 3, /^You don't have anything to swap!|^You swap/
+            next if empty_hand?(hand)
+          end
         end
         free_hand(hand)
       end
