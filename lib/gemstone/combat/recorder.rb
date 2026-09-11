@@ -251,6 +251,7 @@ module Lich
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
           @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
           @chunk_flares = {} # per-chunk _uid -> [flare row ids], for status attack_uid/flare_seq
+          @chunk_batch = nil # the processor's observation_batch id for the chunk above
           @pending_cache = nil      # creature-cache entries staged during a txn (see in_txn)
           @pending_chunk_rows = nil # chunk-row entries staged during a txn (see in_txn)
           @character = character
@@ -306,6 +307,14 @@ module Lich
           finished = @session_id
           @session_id = nil
           @open_attack = nil
+          # A closed session's rows are not addressable by the next session's
+          # per-chunk uids. Leaving these populated let an event in the new
+          # session resolve a uid to the OLD session's attack row (real db:
+          # a status linked to the previous hunt's attack across an idle
+          # timeout).
+          @chunk_rows = {}
+          @chunk_flares = {}
+          @chunk_batch = nil
           finished
         end
 
@@ -516,14 +525,28 @@ module Lich
           # Spawn-tree links: the processor stamps a per-chunk _uid on every
           # event and points :root_uid/:parent_uid at other events in the same
           # chunk (root/parent always emit BEFORE their children). We map uid ->
-          # row id in @chunk_rows, resetting when a new chunk's first event
-          # (_uid == 0) arrives. A root points at itself; an ambiguous spawn has
-          # parent_uid nil.
+          # row id in @chunk_rows. A root points at itself; an ambiguous spawn
+          # has parent_uid nil.
+          #
+          # The chunk is identified by the processor's monotonic
+          # observation_batch id when the payload carries one, NOT by "a uid-0
+          # event arrived": the first event of a chunk can be one we never
+          # record (a foreign cast, an orphan), and the uid-0 reset then never
+          # ran, leaving the previous chunk's - or the previous SESSION's - map
+          # addressable by this chunk's uids. The uid-0 test remains the
+          # fallback for payloads with no batch stamp.
           uid = event[:_uid]
-          if uid.nil? || uid.zero?
+          batch = event[:observation_batch].is_a?(Hash) ? event[:observation_batch][:id] : nil
+          new_chunk = if batch
+                        batch != @chunk_batch
+                      else
+                        uid.nil? || uid.zero?
+                      end
+          if new_chunk
             @chunk_rows = {}
             @chunk_flares = {}
           end
+          @chunk_batch = batch
           root_uid = event[:root_uid]
           parent_uid = event[:parent_uid]
           # parent/root were committed by an earlier record in this chunk (they

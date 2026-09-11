@@ -270,6 +270,37 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(chunk_b['parent_attack_id']).to be_nil
     end
 
+    # A session boundary is a chunk boundary: rows from the closed session
+    # are not addressable by this one's uids. The maps used to survive it,
+    # so a chunk whose FIRST event never reached record_attack (a foreign
+    # event, skipped before the uid-0 reset) left the previous session's
+    # uid -> row map in place for the next event to link into.
+    it 'never links across a session boundary, even when a foreign event held uid 0' do
+      rec = new_recorder(idle_timeout: 300)
+      now = Time.now
+      # hunt one: a real chunk, root at uid 0
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0))
+      first_session = query('SELECT id FROM attacks ORDER BY id').size
+      expect(first_session).to eq(1)
+
+      # idle past the timeout, then a new chunk whose first event is foreign
+      # (recorded by nobody: it neither opens a session nor resets the maps)
+      allow(Time).to receive(:now).and_return(now + 301)
+      rec.record(:attack, attack_event(name: 'cast', _uid: 0, root_uid: 0, foreign_caster: true))
+      # ...and our own event, uid 1, which opens hunt two
+      rec.record(:attack, attack_event(name: 'jab', _uid: 1, root_uid: 0, parent_uid: 0))
+      rec.close
+
+      rows = query('SELECT id, session_id, name, root_attack_id, parent_attack_id FROM attacks ORDER BY id')
+      expect(rows.size).to eq(2)
+      old_row, new_row = rows
+      expect(new_row['session_id']).not_to eq(old_row['session_id'])
+      expect(new_row['parent_attack_id']).not_to eq(old_row['id']),
+                                                 'linked to the previous session\'s attack'
+      expect(new_row['root_attack_id']).not_to eq(old_row['id']),
+                                               'rooted in the previous session\'s attack'
+    end
+
     it 'leaves an ambiguous echo (no parent_uid) rooted but parentless' do
       rec = new_recorder
       rec.start_session(at: Time.at(1))
