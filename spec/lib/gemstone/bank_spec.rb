@@ -25,6 +25,9 @@ RSpec.describe Lich::Gemstone::Bank do
      'You currently have 10 urchin bank runner uses remaining.']
   end
   let(:sent) { [] }
+  let(:no_account_line) do
+    "[Because your account is free, you don't have access to bank accounts in multiple towns.]"
+  end
 
   # A scripted game: each dothistimeout call returns the next reply in order.
   # +before+ runs with the command first, to change hands the way the game would.
@@ -362,6 +365,31 @@ RSpec.describe Lich::Gemstone::Bank do
         expect(described_class.withdraw(8000)).to be_nil
         expect(sent).to be_empty
       end
+    end
+
+    it 'is nil, and does not wait out the timeout, without an account here' do
+      replies(no_account_line)
+      expect(described_class.withdraw(10_000)).to be_nil
+    end
+  end
+
+  # The replies helper stubs dothistimeout and ignores the regex it is handed,
+  # so which lines actually end the wait can only be checked on the patterns.
+  describe 'Pattern::WITHDRAW' do
+    it 'ends the wait on a no-access refusal rather than timing out' do
+      expect(no_account_line).to match(described_class::Pattern::WITHDRAW)
+    end
+
+    it 'counts a no-access refusal as refused' do
+      expect(no_account_line).to match(described_class::Pattern::WITHDRAW_REFUSED)
+    end
+
+    it 'still ends the wait on a handover' do
+      expect('The teller hands you 3,000 silver.').to match(described_class::Pattern::WITHDRAW)
+    end
+
+    it 'does not count a handover as refused' do
+      expect('The teller hands you 3,000 silver.').not_to match(described_class::Pattern::WITHDRAW_REFUSED)
     end
   end
 

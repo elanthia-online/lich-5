@@ -43,11 +43,25 @@ module Lich
           /chuckles at you/,
         ).freeze
 
-        DEBT     = /I have a bill of (?<debt>[\d,]+) silvers?/.freeze
-        WITHDRAW = Regexp.union(WITHDRAW_RESULT, DEBT).freeze
+        DEBT      = /I have a bill of (?<debt>[\d,]+) silvers?/.freeze
+        NO_ACCESS = /you don't have access/i.freeze
 
-        # Replies that mean the withdrawal did not happen.
-        WITHDRAW_REFUSED = /seem to have that much|looks at you suspiciously|chuckles at you|taps her quill|purses her lips/.freeze
+        # A bank the character has no account at answers a WITHDRAW with the
+        # no-access line, so it has to end the wait like any other answer.
+        WITHDRAW = Regexp.union(WITHDRAW_RESULT, DEBT, NO_ACCESS).freeze
+
+        # Replies that mean the withdrawal did not happen. The teller's
+        # non-committal lines ("makes a note", "taps her quill") carry no silver
+        # figure, so anything that is not an explicit handover counts as refused.
+        WITHDRAW_REFUSED = Regexp.union(
+          /seem to have that much/,
+          /looks at you suspiciously/,
+          /chuckles at you/,
+          /taps her quill/,
+          /purses her lips/,
+          /^The teller makes/,
+          NO_ACCESS,
+        ).freeze
         NOTE_HANDED      = /hands you a (?:bank )?note/.freeze
         PINEFAR_HANDED   = /Alright, here ye go/.freeze
 
@@ -57,7 +71,6 @@ module Lich
         ACCOUNT_BALANCE = /in the amount of (?<silver>[\d,]+) silver/.freeze
         ACCOUNT_MAX     = /a maximum of (?<silver>[\d,]+) silvers/.freeze
         ACCOUNT_END     = /urchin bank runner uses remaining|a maximum of|you don't have access|<prompt/i.freeze
-        NO_ACCESS       = /you don't have access/i.freeze
         NOTE_VALUE      = /has a value of (?<silver>[\d,]+) silver and reads/.freeze
         NOTE_READ       = /Hold in right hand to use|has a value of/.freeze
       end
