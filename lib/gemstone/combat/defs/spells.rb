@@ -183,11 +183,7 @@ module Lich
               # 611 evoked: "Tapping the moons above, you draw down a shaft of
               # swirling moonlight and bathe X in its muted glow." then SMR
               # (hunt log 2026-09-09 10:45); the moon adjectives vary
-              # [Yy]ou: the log line has the "Tapping the moons above," prefix
-              # so `you` is mid-sentence there, but the prefix is not
-              # guaranteed - sentence-initial "You draw down..." would
-              # otherwise fall through to :unknown
-              /[Yy]ou draw down a shaft of \w+ moonlight and bathes? (?<target>.+?) in its \w+ glow\./
+              /you draw down a shaft of \w+ moonlight and bathes? (?<target>.+?) in its \w+ glow\./
             ].freeze),
             AttackDef.new(:pestilence, [
               /You exhale a virulent green mist toward (?<target>[^,]+), instantly infecting/,

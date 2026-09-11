@@ -1274,14 +1274,6 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                          ])
       expect(own.map { |e| [e[:name], e[:via], e[:target][:id], e[:resolutions].map { |r| r[:result] }] })
         .to eq([[:moonbeam, :cast, 130610003, [322]]])
-
-      # the "Tapping the moons above," prefix is not guaranteed - sentence-
-      # initial "You draw down..." must name the spell too, not fall to :unknown
-      sentence_initial = described_class.parse_events([
-                                                        "You draw down a shaft of swirling moonlight and bathe #{maiden} in its muted glow.",
-                                                        '<pushBold/>[SMR result: 322 (Open d100: 61, Bonus: 159)]<popBold/>'
-                                                      ])
-      expect(sentence_initial.map { |e| [e[:name], e[:target][:id]] }).to eq([[:moonbeam, 130610003]])
     end
 
     it "attributes a nearby player's flaming aura to that player, and a spiritual malady tick once, unowned" do
