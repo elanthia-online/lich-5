@@ -321,6 +321,43 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
     end
   end
 
+  # statuses.flare_id ships in the SCHEMA and every status INSERT names it,
+  # so a database created BEFORE the column existed has to gain it on open -
+  # otherwise the first status of the hunt fails with "no column named
+  # flare_id" and the whole status stream is lost on upgrade.
+  describe 'statuses.flare_id migration' do
+    def legacy_database_without_flare_id
+      legacy = SQLite3::Database.new(@db_path)
+      pre = described_class::SCHEMA.gsub(/\n\s*flare_id    INTEGER REFERENCES flares\(id\),[^\n]*/, '')
+      expect(pre).not_to include('flare_id')
+      legacy.execute_batch(pre)
+      cols = legacy.execute('PRAGMA table_info(statuses)').map { |r| r[1] }
+      legacy.close
+      expect(cols).not_to include('flare_id')
+    end
+
+    it 'adds the column to a database created before it existed' do
+      legacy_database_without_flare_id
+
+      rec = new_recorder
+      rec.close
+      expect(query('PRAGMA table_info(statuses)').map { |r| r['name'] }).to include('flare_id')
+    end
+
+    it 'records a status into an upgraded database instead of failing the insert' do
+      legacy_database_without_flare_id
+
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'prone', action: 'add')
+      rec.close
+
+      row = query('SELECT status, action, flare_id FROM statuses').first
+      expect(row['status']).to eq('prone')
+      expect(row['flare_id']).to be_nil
+    end
+  end
+
   describe 'creature-cache rollback safety' do
     # Re-review finding (PR #1559): ensure_creature cached a creature id inside
     # a transaction; if that transaction rolled back, the DB row was undone but

@@ -399,8 +399,14 @@ module Lich
         # existed. CREATE TABLE IF NOT EXISTS never alters an existing table,
         # so each column added after first release is listed here and ALTERed
         # in when absent. Keep entries append-only.
+        # Columns added to the schema after the first release. A database
+        # created before one existed gains it on open; every column here must
+        # be nullable, since existing rows cannot supply a value. Anything the
+        # SCHEMA gained but this map did not would fail on the first INSERT
+        # that names it (statuses.flare_id did exactly that).
         ADDED_COLUMNS = {
-          'attacks' => { 'redirected_from' => 'TEXT' }
+          'attacks'  => { 'redirected_from' => 'TEXT' },
+          'statuses' => { 'flare_id' => 'INTEGER REFERENCES flares(id)' }
         }.freeze
 
         def migrate!
