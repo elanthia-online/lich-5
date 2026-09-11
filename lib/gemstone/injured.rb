@@ -92,9 +92,11 @@ module Lich
         end
 
         # NOTE: every able_to_*? predicate calls fix_injury_mode('both') and, on a
-        # cache miss, Scars.all_scars toggles the injury mode. Each of those can
-        # send an _injury command and block for up to 7.5 seconds waiting on the
-        # game. These are not instantaneous checks; avoid calling them in tight loops.
+        # cache miss, Scars.all_scars toggles the injury mode to 'scar' and back.
+        # Each of those sends an _injury command and waits up to 7.5 seconds for the
+        # game to answer, so one cache miss can block for roughly 15 seconds if the
+        # round trips time out. These are not instantaneous checks; avoid calling
+        # them in tight loops.
 
         # Check if character is able to cast spells
         def able_to_cast?
