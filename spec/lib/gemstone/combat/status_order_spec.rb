@@ -110,6 +110,31 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     expect(creature.statuses).to include('prone')
   end
 
+  # A single per-chunk flag could not tell a crit that came BEFORE the
+  # stand-up from one that came after it, so a second genuine knockdown was
+  # dropped - the mirror image of the bug above. Ordering is compared by
+  # line, so each crit is judged against where the recovery actually sat.
+  it 'lets a knockdown crit after the stand-up win, being later still' do
+    lizard = bolded(777, 'lizard', 'a cave lizard')
+    chunk = [
+      "You swing a broadsword at #{lizard}!",
+      '  AS: +300 vs DS: +100 with AvD: +30 + d100 roll: +50 = +280',
+      '   ... and hit for 40 points of damage!',
+      '   Hit on the leg chars the skin and eats into the underlying muscles.',
+      "#{lizard} stands up.",
+      "You swing a broadsword at #{lizard}!",
+      '  AS: +300 vs DS: +100 with AvD: +30 + d100 roll: +50 = +280',
+      '   ... and hit for 40 points of damage!',
+      '   Hit on the leg chars the skin and eats into the underlying muscles.',
+      '<prompt time="100">&gt;</prompt>'
+    ]
+    events = described_class.parse_events(chunk)
+    events.each { |event| described_class.persist_event(event) }
+
+    expect(creature.statuses).to include('prone'),
+                                 'the later knockdown crit was suppressed by the earlier stand-up'
+  end
+
   it 'still applies a knockdown crit when nothing later reverses it' do
     lizard = bolded(777, 'lizard', 'a cave lizard')
     chunk = [
