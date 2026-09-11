@@ -217,3 +217,46 @@ RSpec.describe Lich::Gemstone::Group, 'per-character cooldowns from a named targ
     expect(described_class.spell_cooldown_left(wall, 'Dicate')).to be > 0
   end
 end
+
+# The cooldown values and the third-person message come straight out of
+# effect-list.xml, so a typo in an element name or type would leave every
+# spell looking like it simply has no cooldown. These read the parsed fixture
+# rather than stubbing, so that mistake fails here instead of going unnoticed.
+RSpec.describe Lich::Common::Spell, 'cooldowns parsed from effect-list.xml' do
+  it 'reads a group cooldown off a <cooldown type="group"> element' do
+    expect(Spell[215].group_cooldown).to eq 180
+    expect(Spell[219].group_cooldown).to eq 360
+  end
+
+  it 'reads a target cooldown off a <cooldown type="target"> element' do
+    expect(Spell[140].target_cooldown).to eq 270
+    expect(Spell[506].target_cooldown).to eq 240
+  end
+
+  it 'leaves both cooldowns nil for a spell that declares neither' do
+    expect(Spell[202].group_cooldown).to be_nil
+    expect(Spell[202].target_cooldown).to be_nil
+  end
+
+  it 'keeps the two cooldown kinds separate' do
+    expect(Spell[215].target_cooldown).to be_nil
+    expect(Spell[140].group_cooldown).to be_nil
+  end
+
+  it 'reads the third-person message off a <message type="target-start"> element' do
+    expect(Spell[140].target_msgup).to eq 'A wall of force surrounds (?<noun>[A-Z][a-z]+)\.'
+  end
+
+  it 'leaves target_msgup nil for a spell with no target-start message' do
+    expect(Spell[215].target_msgup).to be_nil
+  end
+
+  # Parser#parse calls Regexp.last_match(:noun) on any line matching the
+  # union of these, which raises IndexError unless the name is declared.
+  it 'declares a :noun capture in every target-start message' do
+    expect(described_class.target_upmsgs).not_to be_empty
+    described_class.target_upmsgs.each do |msg|
+      expect(Regexp.new(msg).names).to include('noun'), "missing (?<noun>) in: #{msg}"
+    end
+  end
+end

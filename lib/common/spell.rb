@@ -134,14 +134,20 @@ module Lich
           end
         }
         @cast_proc = xml_spell.locate('cast-proc').first&.text
-        # Seconds a target is immune to another group casting of this spell.
-        # Only the group (EVOKE) versions of a few spells carry one; nil means
-        # the spell has no per-target cooldown. See Group.spell_cooldown.
-        @group_cooldown = xml_spell['group-cooldown']&.to_i
-        # Seconds a character is immune to this spell after it lands on them,
-        # regardless of who cast it, paired with the third-person message that
-        # names them. See Group.spell_cooldown_ready?.
-        @target_cooldown = xml_spell['target-cooldown']&.to_i
+        # Seconds a character is locked out of this spell, by kind. A 'group'
+        # cooldown covers another group (EVOKE) casting of it; a 'target'
+        # cooldown covers the spell landing on them from any caster, paired
+        # with the third-person message that names them. Both are nil when the
+        # spell declares no cooldown of that kind. See Group.spell_cooldown and
+        # Group.spell_cooldown_ready?.
+        xml_spell.locate('cooldown').each { |xml_cooldown|
+          case xml_cooldown['type'].to_s.downcase
+          when 'group'
+            @group_cooldown = xml_cooldown.text.to_i
+          when 'target'
+            @target_cooldown = xml_cooldown.text.to_i
+          end
+        }
         @target_msgup = xml_spell.locate('message')
                                  .select { |e| e['type'].to_s.downcase == 'target-start' }
                                  .collect { |e| e.text }.join('$|^')
