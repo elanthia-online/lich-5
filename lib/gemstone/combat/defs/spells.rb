@@ -41,7 +41,11 @@ module Lich
               /Accompanied by a particularly impressive gust of wind, a fleeting golden blur flashes past (?<target>[^.]+)\./,
               /Shimmering black flames lash out toward (?<target>[^,]+), encircling the .+? in their deadly grasp\./,
               /Long, spectral talons materialize from midair to tear viciously at the body of (?<target>[^!]+)!/,
+              # Marlu, not Gosaena (GSWiki lists this line under Marlu; Gosaena has
+              # a separate, still-unfilled section). Confirmed via a live groupmate
+              # cast where the second mention was a pronoun, not the creature name.
               /A tendril of black mist suddenly senses the proximity of (?<target>[^.]+)\. The mist expands into a large, quickly moving, highly lethal cloud that rapidly surrounds .+?, obliterating it from view\./,
+              # Not present on GSWiki as of this writing - log-sourced only.
               /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage\./,
               /The ethereal barbed whip that lies loosely coiled around you uncoils at terrifying speed\. It snaps out toward (?<target>[^!]+)!/,
               /Suddenly, (?<target>.+?) tries to bolt away, but instead smashes into a wall of spectral force hidden within the shadows!/,
@@ -50,12 +54,19 @@ module Lich
               /You notice (?<target>.+?) nearby\. How marvelous! You command (?:the moon Liabo|some lilies of the valley|the bartender|seventeen will'o'the'wisps) to /,
               /Suddenly, a long, leafy vine shoots out and tries to wrap around (?:a |an )?(?<target>[^.]+)\./,
               /[Aa] tendril of scarlet mist lashes away from you to coil around (?<target>.+?) with a suddenly razor-sharp edge\./,
+              # Ghezresh's GSWiki section is an unfilled stub; log-sourced only,
+              # confirmed via a live self-cast (target repeated verbatim both times).
               /A strand of barnacle-laced kelp suddenly lashes out at (?<target>[^!]+)!(?:  As the slippery skein connects, strands of silvery mist coil around .+? furiously\.)?/,
               /A silver-bladed scythe materializes from thin air, spinning end over end as it hurtles toward (?<target>[^!]+)!/,
               /One of the vines suddenly whips about and lashes out at (?<target>[^!]+)! Despite its slightly ethereal appearance, the vine moves with every evidence of heavy, solid weight\./,
-              /A shadowy black rose touches (?<target>.+?) and wraps immediately about it, struggling to force its long, barbed thorns into the .+?\./,
+              # Laethe, not Onar (GSWiki has this under Laethe; Onar's line is the
+              # bone-shafted crossbow bolt below). The wiki's 3p form ends "...into
+              # it." rather than repeating the target, so the tail accepts either.
+              /A shadowy black rose touches (?<target>.+?) and wraps immediately about it, struggling to force its long, barbed thorns into (?:the .+?|it)\./,
               /A dagger of ivory light suddenly flashes away from the aura surrounding you to strike at (?<target>[^.]+)\./,
               /^(?:.*, )?[Tt]he intense waves of elegant sound focus upon (?<target>[^.]+)\./,
+              # Onar - confirmed via a live self-cast (cast message and strike
+              # line both observed against real targets).
               /A bone-shafted crossbow bolt flies out of the shadows toward (?<target>[^!]+)!/,
               /Listening carefully to the quiet harmony around you, you give voice to wordless song, and the notes of your song ring discordantly against the sounds of the world that relate to (?:a |an )?(?<target>[^.]+)\./,
               /A glowing golden rose touches (?<target>.+?) and bursts into scarlet flame!/,
