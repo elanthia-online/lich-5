@@ -345,6 +345,14 @@ module Lich
         (self.timeleft > 0) and @active
       end
 
+      # The cast-type predicates below (stackable?, refreshable?, multicastable?)
+      # and the duration formulas resolve against the 'self' cast-type unless a
+      # :caster or :target naming someone else is supplied. A bare call therefore
+      # answers for a self-cast only, which is not the same answer for spells
+      # whose target cast-type differs: in the current effect list 14 group buffs
+      # (Bravery 211 and Heroism 215 among them) are stackable when self-cast but
+      # refreshable when cast on someone else. Pass :caster/:target whenever the
+      # spell may have come from another character.
       def stackable?(options = {})
         if options[:caster] and (options[:caster] !~ /^(?:self|#{XMLData.name})$/i)
           if options[:target] and (options[:target].downcase == options[:caster].downcase)
