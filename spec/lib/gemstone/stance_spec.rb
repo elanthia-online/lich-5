@@ -63,6 +63,43 @@ RSpec.describe Lich::Gemstone::Stance do
       expect { described_class.normalize('') }.to raise_error(ArgumentError)
       expect { described_class.normalize(nil) }.to raise_error(ArgumentError)
     end
+
+    it 'rejects words that merely share the first three letters of a stance name' do
+      expect { described_class.normalize('guardian') }.to raise_error(ArgumentError)
+      expect { described_class.normalize('advertised') }.to raise_error(ArgumentError)
+      expect { described_class.normalize('foreclosure') }.to raise_error(ArgumentError)
+      expect { described_class.normalize('definitely') }.to raise_error(ArgumentError)
+      expect { described_class.normalize('neuralgic') }.to raise_error(ArgumentError)
+      expect { described_class.normalize('offer') }.to raise_error(ArgumentError)
+    end
+
+    it 'accepts prefixes of every length, not just three characters' do
+      expect(described_class.normalize('defe')).to eq(['defensive', nil])
+      expect(described_class.normalize('defens')).to eq(['defensive', nil])
+      expect(described_class.normalize('guard')).to eq(['guarded', nil])
+    end
+  end
+
+  describe 'CONFIRM and REFUSED' do
+    it 'matches every refusal line in both constants' do
+      described_class::DECLINED.each do |pattern|
+        line = case pattern.source
+               when /unable/ then 'You are unable to change your stance.'
+               else 'Cast Roundtime in effect for 3 seconds.'
+               end
+        expect(line).to match(described_class::CONFIRM)
+        expect(line).to match(described_class::REFUSED)
+      end
+    end
+
+    it 'matches acceptance lines in CONFIRM but not REFUSED' do
+      ['You are now in a defensive stance.',
+       'You move into an offensive stance.',
+       'You fall back into a guarded stance.'].each do |line|
+        expect(line).to match(described_class::CONFIRM)
+        expect(line).not_to match(described_class::REFUSED)
+      end
+    end
   end
 
   describe '.at?' do

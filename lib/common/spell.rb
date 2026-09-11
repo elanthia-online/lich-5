@@ -768,8 +768,13 @@ module Lich
       #
       # @return [void]
       def restore_stance_after_cast
-        if @@after_stance
-          Lich::Gemstone::Stance.change(@@after_stance)
+        # after_stance can be a blank string when a script captured Char.stance
+        # before the first pbarStance update arrived. Treat that as "no
+        # preference" rather than letting it raise, which is what the old
+        # inline regex check did.
+        after = @@after_stance.to_s.strip
+        if !after.empty?
+          Lich::Gemstone::Stance.change(after)
         elsif Char.stance !~ /^guarded$|^defensive$/
           Lich::Gemstone::Stance.change(Lich::Gemstone::Stance.safest)
         end

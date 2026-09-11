@@ -36,16 +36,25 @@ module Lich
         'defensive' => (81..100),
       }.freeze
 
-      # Every line the game can answer a stance change with. Shared with
-      # Spell#cast, which used to carry its own copy.
-      CONFIRM = Regexp.union(
+      # The lines that mean the stance change took effect.
+      ACCEPTED = [
         /^You (?:are now in|move into) an? \w+ stance/,
         /^You fall back into an? \w+ stance/,
+      ].freeze
+
+      # The lines that mean the game declined to change stance.
+      DECLINED = [
         /^You are unable to change your stance\./,
         /^Cast Roundtime in effect/,
-      ).freeze
+      ].freeze
 
-      REFUSED = /^You are unable to change your stance\.|^Cast Roundtime in effect/.freeze
+      # Every line the game can answer a stance change with. Shared with
+      # Spell#cast, which used to carry its own copy. Derived from ACCEPTED and
+      # DECLINED so the set dothistimeout waits on can never drift out of sync
+      # with the set change treats as a refusal.
+      CONFIRM = Regexp.union(*ACCEPTED, *DECLINED).freeze
+
+      REFUSED = Regexp.union(*DECLINED).freeze
 
       DEFAULT_TIMEOUT = 3
 
@@ -92,7 +101,7 @@ module Lich
         when String
           stripped = target.strip.downcase
           return normalize_percent(stripped.to_i) if stripped =~ /\A\d+\z/
-          name = NAMES.find { |n| n.start_with?(stripped[0, 3]) } if stripped.length >= 3
+          name = NAMES.find { |n| n.start_with?(stripped) } if stripped.length >= 3
           raise ArgumentError, "Stance: unknown stance #{target.inspect}" if name.nil?
           [name, nil]
         else
@@ -102,10 +111,20 @@ module Lich
 
       # @return [Boolean] whether the character is already in the target stance
       def self.at?(target)
-        name, percent = normalize(target)
+        at_normalized?(*normalize(target))
+      end
+
+      # at? for a target that has already been through normalize, so change
+      # does not re-parse the same input twice.
+      #
+      # @param name [String]
+      # @param percent [Integer, nil]
+      # @return [Boolean]
+      def self.at_normalized?(name, percent)
         return value == percent unless percent.nil?
         current.to_s.downcase == name
       end
+      private_class_method :at_normalized?
 
       # Change stance and, by default, wait for the game to confirm.
       #
@@ -118,7 +137,7 @@ module Lich
       def self.change(target, wait: true, force: false, timeout: DEFAULT_TIMEOUT)
         name, percent = normalize(target)
         return false if Status.dead?
-        return true if !force && at?(target)
+        return true if !force && at_normalized?(name, percent)
 
         command = if percent && perfection?
                     "cman stance #{percent}"
