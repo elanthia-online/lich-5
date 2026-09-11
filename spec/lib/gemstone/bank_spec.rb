@@ -274,7 +274,7 @@ RSpec.describe Lich::Gemstone::Bank do
     it 'withdraws silver and reports the amount' do
       replies('The teller carefully records the transaction, and then hands you 8,000 silver.')
       expect(described_class.withdraw(8000)).to eq(8000)
-      expect(sent).to eq(['withdraw 8000 silvers'])
+      expect(sent).to eq(['withdraw 8000 silver'])
     end
 
     it 'withdraws a note' do

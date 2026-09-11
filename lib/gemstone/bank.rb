@@ -21,9 +21,9 @@ module Lich
       module Pattern
         DEPOSIT = Regexp.union(
           /^You deposit (?<silver>[\d,]+) silvers? into your account/,
-          /^That's a total of (?<silver>[\d,]+) silver/,
+          /^That's a total of (?<silver>[\d,]+) silvers?/,
           /^You deposit your note worth (?<silver>[\d,]+) into your account/,
-          /They add up to (?<silver>[\d,]+) (?:silver|silvers)/,
+          /They add up to (?<silver>[\d,]+) silvers?/,
           /^You have no coins to deposit/,
           /takes your silvers?/,
           /^You hand your notes to the teller/,
@@ -32,9 +32,9 @@ module Lich
         # The teller's answer to a withdrawal, without the debt notice: that
         # comes first and the real answer follows it.
         WITHDRAW_RESULT = Regexp.union(
-          /^Very well, a withdrawal of (?<silver>[\d,]+) silver/,
-          /teller scribbles the transaction into a book and hands you (?<silver>[\d,]+) silver/,
-          /teller carefully records the transaction, (?:and then )?hands you (?<silver>[\d,]+) silver/,
+          /^Very well, a withdrawal of (?<silver>[\d,]+) silvers?/,
+          /teller scribbles the transaction into a book and hands you (?<silver>[\d,]+) silvers?/,
+          /teller carefully records the transaction, (?:and then )?hands you (?<silver>[\d,]+) silvers?/,
           /^The banker nods and says, "Alright, here ye go/,
           /^The teller (?:carefully|hands you|makes|taps her quill|purses her lips)/,
           /seem to have that much/,
@@ -68,10 +68,10 @@ module Lich
         ACCOUNT_START   = /You currently have the following amounts on deposit|You currently have an account|you don't have access/i.freeze
         ACCOUNT_LINE    = /^\s+(?<bank>.+?) Bank: (?<silver>[\d,]+)$/.freeze
         ACCOUNT_TOTAL   = /^\s+Total: (?<silver>[\d,]+)$/.freeze
-        ACCOUNT_BALANCE = /in the amount of (?<silver>[\d,]+) silver/.freeze
-        ACCOUNT_MAX     = /a maximum of (?<silver>[\d,]+) silvers/.freeze
+        ACCOUNT_BALANCE = /in the amount of (?<silver>[\d,]+) silvers?/.freeze
+        ACCOUNT_MAX     = /a maximum of (?<silver>[\d,]+) silvers?/.freeze
         ACCOUNT_END     = /urchin bank runner uses remaining|a maximum of|you don't have access|<prompt/i.freeze
-        NOTE_VALUE      = /has a value of (?<silver>[\d,]+) silver and reads/.freeze
+        NOTE_VALUE      = /has a value of (?<silver>[\d,]+) silvers? and reads/.freeze
         NOTE_READ       = /Hold in right hand to use|has a value of/.freeze
       end
 
@@ -211,19 +211,24 @@ module Lich
         return withdraw_f2p(amount) if f2p? && !note && !pinefar?
 
         waitrt?
-        result = if pinefar?
-                   wait_for_banker
-                   withdraw_reply("ask banker for #{amount} silvers", 3)
-                 elsif note
-                   withdraw_reply("withdraw #{amount} note", 5)
-                 else
-                   withdraw_reply("withdraw #{amount} silvers", 3)
-                 end
-        Currency.refresh unless note
-        return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
-        return (result =~ Pattern::NOTE_HANDED ? amount : nil) if note
-        return amount if result =~ Pattern::PINEFAR_HANDED
-        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : nil
+        if note
+          result = withdraw_reply("withdraw #{amount} note", 5)
+          return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
+          return result =~ Pattern::NOTE_HANDED ? amount : nil
+        end
+
+        if pinefar?
+          wait_for_banker
+          result = withdraw_reply("ask banker for #{amount} silvers", 3)
+          Currency.refresh
+          return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
+          # The banker confirms without echoing a figure.
+          return result =~ Pattern::PINEFAR_HANDED ? amount : nil
+        end
+
+        got = withdraw_silver(amount)
+        Currency.refresh
+        got
       end
 
       # Free-to-play deposit: fill the account to its cap, convert the overflow to
@@ -368,7 +373,7 @@ module Lich
       def self.withdraw_silver(amount)
         result = withdraw_reply("withdraw #{amount} silver", 3)
         return nil if result.nil? || result =~ Pattern::WITHDRAW_REFUSED
-        result =~ /(?<silver>[\d,]+) silver/ ? Regexp.last_match[:silver].delete(',').to_i : nil
+        result =~ /(?<silver>[\d,]+) silvers?/ ? Regexp.last_match[:silver].delete(',').to_i : nil
       end
       private_class_method :withdraw_silver
 
