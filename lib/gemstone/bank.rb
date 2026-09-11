@@ -278,22 +278,31 @@ module Lich
         taken = 0
         want = amount
         refused = false
-        notes_in(stow).each do
-          if bal.positive?
-            got = withdraw_silver(bal)
-            if got.nil?
-              refused = true
-              break
-            end
+
+        # Drain what the account already holds before touching any notes: that
+        # has to happen even when the stow container is empty.
+        if bal.positive?
+          got = withdraw_silver(bal)
+          if got.nil?
+            refused = true
+          else
             taken += got
             want -= got
-            bal = 0
           end
+        end
+
+        until refused || want <= 0
           note = notes_in(stow).first
-          break if note.nil?
+          if note.nil?
+            refused = true
+            break
+          end
           fput "get ##{note.id}"
           value = deposit_note(note)
-          break if value.nil?
+          if value.nil?
+            refused = true
+            break
+          end
           got = withdraw_silver([value, want].min)
           if got.nil?
             refused = true
@@ -301,8 +310,8 @@ module Lich
           end
           taken += got
           want -= got
-          break if want <= 0
         end
+
         Currency.refresh
         refused && taken.zero? ? nil : taken
       end

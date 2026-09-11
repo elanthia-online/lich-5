@@ -347,6 +347,21 @@ RSpec.describe Lich::Gemstone::Bank do
         expect(described_class.withdraw(8000)).to eq(8000)
         expect(sent).to eq(['withdraw 3000 silver', 'deposit #500', 'withdraw 5000 silver'])
       end
+
+      it 'still drains the balance when the stow container holds no notes' do
+        allow(Lich::Util).to receive(:issue_command).and_return(['You currently have an account in the amount of 2,000 silver.'])
+        allow(sack).to receive(:contents).and_return([])
+        replies('The teller hands you 2,000 silver.')
+        expect(described_class.withdraw(8000)).to eq(2000)
+        expect(sent).to eq(['withdraw 2000 silver'])
+      end
+
+      it 'is nil with no balance and no notes, rather than reporting 0' do
+        allow(Lich::Util).to receive(:issue_command).and_return(['You currently have an account in the amount of 0 silver.'])
+        allow(sack).to receive(:contents).and_return([])
+        expect(described_class.withdraw(8000)).to be_nil
+        expect(sent).to be_empty
+      end
     end
   end
 
