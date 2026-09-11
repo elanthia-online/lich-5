@@ -80,6 +80,11 @@ RSpec.describe 'PSM category commands' do
     expect(Lich::Gemstone::Warcry.results_regex('holler')).to match('You throw back your head and let out a thundering holler!')
   end
 
+  it 'every category rejects an unknown technique name' do
+    expect { Lich::Gemstone::CMan.command('bullrus') }.to raise_error(StandardError)
+    expect { Lich::Gemstone::Warcry.command('hollar') }.to raise_error(StandardError)
+  end
+
   it 'Weapon sends WEAPON <usage> and waits on the assault line for assault techniques' do
     expect(Lich::Gemstone::Weapon.command('twinhammer', orc)).to eq('weapon twinhammer #12345')
     expect(Lich::Gemstone::Weapon.results_regex('twinhammer')).to match('Roundtime: 5 sec.')

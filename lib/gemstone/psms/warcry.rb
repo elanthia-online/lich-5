@@ -205,7 +205,11 @@ module Lich
       # @param target [String, Integer, GameObj] The target (optional)
       # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
       # @return [String] e.g. "warcry holler"
+      # @raise [StandardError] if the name matches no warcry
       def Warcry.command(name, target = "", forcert_count: 0)
+        # Warcries carry no :usage, so the command word is the normalized name itself.
+        # The fetch is here to reject an unknown name, as the other categories' .command do.
+        @@warcries.fetch(PSMS.find_name(PSMS.name_normal(name), "Warcry")[:long_name])
         PSMS.command("warcry", PSMS.name_normal(name), target, forcert_count: forcert_count)
       end
 
