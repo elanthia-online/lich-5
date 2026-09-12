@@ -57,7 +57,10 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         MODE: ${{ inputs.mode }}
-        CONTRACT_SHA: "95f8f517411f9058bc92706310677db8cbba97fbd296bc853f2181274cb0e8bb"
+        # Bumped for the pull-link-vs-issue-link harvest fix below; this invalidates the
+        # sentinel on any already-formatted, still-open RP PR so it gets reformatted with
+        # the fix instead of being skipped by the old, matching sentinel.
+        CONTRACT_SHA: "2aa1c6bdb379fa50f77ca249ac4a19f7eef93e606f77d61dcbf1fc14107891a5"
         BREAK_AUTO: ${{ inputs.break_autolinks_in_bullets }}
         PR_NUMBER: ${{ inputs.pr_number }}
       with:
@@ -121,11 +124,16 @@ runs:
           const headerLine = versionStr ? `Lich ${versionStr} (${dateStr})` : `Lich (${dateStr})`;
           // ---------------------------------------------------------
 
-          // Harvest PR numbers from existing RP bullets (lines starting with '* ' and containing '#NNN')
+          // Harvest PR numbers from existing RP bullets (lines starting with '* ' and containing '#NNN').
+          // RP bullets that close an issue link BOTH the issue and the merging PR, e.g.:
+          //   * **all:** desc ([#1596](.../issues/1596)) ([#1599](.../pull/1599)) ([sha](...))
+          // Prefer a "/pull/<N>" link (the actual PR, which pulls.get() below can resolve) over
+          // a bare "#<N>" match, which would grab the issue number first and 404 on pulls.get().
           const prNums = [];
           for (const l of body.split(/\r?\n/)) {
             if (/^\s*\*\s+/.test(l)) {
-              const m = l.match(/#(\d+)/);
+              const pullLink = l.match(/\(https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)\)/);
+              const m = pullLink || l.match(/#(\d+)/);
               if (m) prNums.push(parseInt(m[1], 10));
             }
           }
