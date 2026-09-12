@@ -463,7 +463,37 @@ RSpec.shared_examples 'a game Map class' do |game|
       room = map_class[1]
       room.define_singleton_method(:dijkstra) { |destination| destination }
       expect(map_class.dijkstra(room, 2)).to eq(2)
+      expect(map_class.dijkstra(1, 2)).to eq(2)
+      expect(map_class.dijkstra(room, 2, static_only: false)).to eq(2)
       expect(map_class.dijkstra(1, 2, static_only: false)).to eq(2)
+    end
+
+    it 'requires legacy positional instance overrides to accept the static routing keyword before opting in' do
+      room = map_class[1]
+      room.define_singleton_method(:dijkstra) { |destination| destination }
+
+      expect { map_class.dijkstra(room, 2, static_only: true) }.to raise_error(ArgumentError)
+      expect { map_class.dijkstra(1, 2, static_only: true) }.to raise_error(ArgumentError)
+    end
+
+    it 'forwards the static routing opt-in to keyword-aware instance overrides' do
+      room = map_class[1]
+      room.define_singleton_method(:dijkstra) { |destination, static_only: false| [destination, static_only] }
+
+      expect(map_class.dijkstra(room, 2, static_only: true)).to eq([2, true])
+      expect(map_class.dijkstra(1, 2, static_only: true)).to eq([2, true])
+    end
+
+    it 'echoes an error and returns nil for an invalid source room' do
+      expect(map_class).to receive(:echo).with('Map.dijkstra: error: invalid source room')
+
+      expect(map_class.dijkstra(999_999)).to be_nil
+    end
+
+    it 'echoes the same error and returns nil for an invalid source room with static routing' do
+      expect(map_class).to receive(:echo).with('Map.dijkstra: error: invalid source room')
+
+      expect(map_class.dijkstra(999_999, static_only: true)).to be_nil
     end
 
     it 'yields nil for a room it never reached' do

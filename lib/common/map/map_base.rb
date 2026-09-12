@@ -526,9 +526,8 @@ module Lich
         # @param static_only [Boolean] skip executable/dynamic edges without evaluating them
         # @return [Array<Hash>, nil] see Room#dijkstra
         def dijkstra(source, destination = nil, static_only: false)
-          if source.is_a?(self)
-            static_only ? source.dijkstra(destination, static_only: true) : source.dijkstra(destination)
-          elsif (room = self[source])
+          room = source.is_a?(self) ? source : self[source]
+          if room
             static_only ? room.dijkstra(destination, static_only: true) : room.dijkstra(destination)
           else
             echo 'Map.dijkstra: error: invalid source room'

@@ -7,9 +7,14 @@ real Numeric. StringProc weights are skipped before evaluation. The existing
 `dijkstra_hashes` aliases accept the same keyword.
 
 Omitting the keyword, or passing `false`, preserves normal route selection and
-dynamic weight evaluation. Existing positional instance overrides remain
-compatible with default class dispatch. No preference weights or map entries
-are changed. Return values remain the existing predecessor/distance hashes.
+dynamic weight evaluation. In both cases, class dispatch passes only the
+positional destination, so existing positional-only `Room#dijkstra` overrides
+remain compatible. Explicitly passing `static_only: true` forwards that keyword
+to the instance method. Custom overrides must accept and honor the keyword to
+support static routing; an override accepting only the positional destination
+raises `ArgumentError` when called with this opt-in. No preference weights or
+map entries are changed. Return values remain the existing predecessor/distance
+hashes.
 
 Static routing can find a longer ordinary route or leave the destination
 unreachable when dynamic edges are necessary. It does not execute movement,
