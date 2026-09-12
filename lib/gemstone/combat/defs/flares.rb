@@ -416,6 +416,9 @@ module Lich
 
               result = { name: name, damaging: damaging, aoe: aoe, spawns: spawns }
               result[:target] = match[:target] if match.names.include?('target') && match[:target]
+              # 3p forms name whose item flared; a 2p flare ("Your ...") has
+              # no attacker and is ours - the recorder writes flares.ours off it
+              result[:attacker] = match[:attacker] if match.names.include?('attacker') && match[:attacker]
               if (weapon = WEAPON_LINK.match(line))
                 result[:weapon] = { id: weapon[:id].to_i, name: weapon[:name] }
               end
