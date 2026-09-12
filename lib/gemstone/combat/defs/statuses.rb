@@ -6,6 +6,7 @@
 #
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -432,12 +433,15 @@ module Lich
                           ].freeze)
           ].freeze
 
+          # Shipped defs first, then player supplements (defs/supplements.rb).
+          ALL_STATUSES = (STATUS_EFFECTS + Supplements.statuses).freeze
+
           # Create lookup tables for fast pattern matching
-          ADD_LOOKUP = STATUS_EFFECTS.flat_map do |status_def|
+          ADD_LOOKUP = ALL_STATUSES.flat_map do |status_def|
             status_def.add_patterns.compact.map { |pattern| [pattern, status_def.name, :add] }
           end.freeze
 
-          REMOVE_LOOKUP = STATUS_EFFECTS.flat_map do |status_def|
+          REMOVE_LOOKUP = ALL_STATUSES.flat_map do |status_def|
             status_def.remove_patterns.compact.map { |pattern| [pattern, status_def.name, :remove] }
           end.freeze
 
@@ -451,13 +455,18 @@ module Lich
           # Literal-substring gate (~7us/line, measured on session logs)
           STATUS_GATE, STATUS_ALWAYS_SCAN = PatternGate.build(ALL_LOOKUP.map(&:first))
 
+          # Lookup and gate as one frozen table, bound last in a single
+          # assignment; parse reads it once per call (see Definitions::Table).
+          TABLE = Table.new(ALL_LOOKUP, STATUS_GATE, STATUS_ALWAYS_SCAN).freeze
+
           # Parse status effect from line
           def self.parse(line)
+            table = TABLE
             # Fast rejection: a line can only match a status pattern if it
             # contains that pattern's literal fragment.
-            return nil if PatternGate.rejects?(STATUS_GATE, STATUS_ALWAYS_SCAN, line)
+            return nil if table.rejects?(line)
 
-            ALL_LOOKUP.each do |pattern, name, action|
+            table.lookup.each do |pattern, name, action|
               if (match = pattern.match(line))
                 result = {
                   status: name,

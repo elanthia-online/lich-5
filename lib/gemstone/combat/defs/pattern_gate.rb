@@ -31,6 +31,26 @@ module Lich
         MK_PRE  = '(?:<pushBold/>)?(?:<a [^>]*>)?'
         MK_POST = '(?:</a>)?(?:<popBold/>)?'
 
+        # One assembled pattern table: the flattened lookup rows (pattern
+        # first, then whatever the def kind carries) together with the
+        # PatternGate derived from them. Each def module binds one of these
+        # to a constant in a SINGLE assignment and its consumers read that
+        # constant once per call, so a hot reload (`;hmr combat/defs/`,
+        # Tracker.reload_defs!) never pairs a lookup from one build with a
+        # gate from another, and a load that fails part-way leaves the
+        # previous complete table live.
+        Table = Struct.new(:lookup, :gate, :always_scan) do
+          # @param lookup [Array<Array>] rows whose first element is the Regexp
+          # @return [Table] frozen
+          def self.build(lookup)
+            gate, always = PatternGate.build(lookup.map(&:first))
+            new(lookup.freeze, gate, always).freeze
+          end
+
+          # True when the line cannot match any pattern in this table.
+          def rejects?(line) = PatternGate.rejects?(gate, always_scan, line)
+        end
+
         module PatternGate
           module_function
 
