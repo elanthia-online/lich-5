@@ -42,9 +42,12 @@ module Lich
         class << self
           # Parse attack initiation
           def parse_attack(line)
-            return nil if Definitions::Attacks.rejects?(line)
+            # One table read per call: lookup and gate from the same build
+            # even if the defs are hot-reloaded mid-chunk.
+            table = Definitions::Attacks.table
+            return nil if table.rejects?(line)
 
-            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
+            table.lookup.each do |pattern, name|
               if (match = pattern.match(line))
                 # An inbound attack (creature -> us) names US as its target.
                 # Its only creature link is the ATTACKER, so the line-scan
@@ -171,9 +174,10 @@ module Lich
           # processor to keep the attacker's own link out of the
           # target-switcher (see the inbound_line note there).
           def inbound_attack?(line)
-            return false if Definitions::Attacks.rejects?(line)
+            table = Definitions::Attacks.table
+            return false if table.rejects?(line)
 
-            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
+            table.lookup.each do |pattern, name|
               if (match = pattern.match(line))
                 return self_target?(match) || Definitions::Attacks::ROOM_TARGETED.include?(name)
               end

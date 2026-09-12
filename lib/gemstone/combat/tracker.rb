@@ -341,6 +341,22 @@ module Lich
             @async_processor = nil
           end
 
+          # Hot-reloads the combat definitions with the player's supplement
+          # file (DATA_DIR/combat/defs.yaml) re-read: the in-session path
+          # after editing that file, equivalent to `;hmr combat/defs/` but
+          # quiet. The async worker is drained first so no chunk is mid-parse
+          # while the tables rebind, then restarted if tracking is on.
+          #
+          # @return [Array<String>] the def files that reloaded cleanly
+          def reload_defs!
+            was_running = !@async_processor.nil?
+            shutdown_processor
+            reloaded = Definitions::Supplements.reload_defs!
+            initialize_processor if was_running && enabled?
+            respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
+            reloaded
+          end
+
           def add_downstream_hook
             @hook_id = 'Combat::Tracker::downstream'
 
@@ -402,6 +418,10 @@ module Lich
 
             @initialized = true
             load_settings
+            # A relog always reflects the current supplement file: the def
+            # tables were assembled at require time, so if the file changed
+            # since, rebuild them now (no-op when it has not).
+            Definitions::Supplements.reload_defs! if Definitions::Supplements.stale?
 
             # Auto-enable if settings indicate it was previously enabled
             if @settings[:enabled]

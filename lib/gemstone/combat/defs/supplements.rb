@@ -88,6 +88,14 @@ module Lich
             # True when the file exists on disk.
             def present? = File.file?(path)
 
+            # True when the file on disk (present or not) differs from what
+            # the current def tables were assembled from, so a reload_defs!
+            # would change something. Cheap: one stat.
+            def stale?
+              current = present? ? File.mtime(path) : nil
+              @loaded_mtime != current
+            end
+
             # Supplemental attack defs for one slot.
             #
             # @param slot [Symbol] one of ATTACK_SLOTS
@@ -118,6 +126,37 @@ module Lich
                 statuses: statuses.size,
                 outcomes: outcomes.size
               }
+            end
+
+            # Every loaded def file, in load order: what `;hmr combat/defs/`
+            # matches, minus this module's own file (re-reading it would
+            # reset the memo a second time and re-extend UserDefs for no gain).
+            DEF_FILE_PATTERN = %r{[/\\]gemstone[/\\]combat[/\\]defs[/\\](?!supplements\.rb\z)[^/\\]+\.rb\z}.freeze
+
+            # Re-reads the supplement file and re-executes every loaded def
+            # file so each rebinds its TABLE from shipped defs plus the
+            # current supplements. Equivalent to `;hmr combat/defs/` with
+            # Ruby's constant-redefinition warnings silenced. A file that
+            # fails to load is reported and skipped; because each def module
+            # binds its table last and in one assignment, its previous
+            # complete table stays live.
+            #
+            # @return [Array<String>] the files that reloaded cleanly
+            def reload_defs!
+              reset!
+              files = $LOADED_FEATURES.grep(DEF_FILE_PATTERN)
+              reloaded = []
+              verbose = $VERBOSE
+              $VERBOSE = nil
+              files.each do |file|
+                load(file)
+                reloaded << file
+              rescue ScriptError, StandardError => e
+                report("#{File.basename(file)} failed to reload: #{e.class}: #{e.message}. Its previous definitions remain in effect.")
+              end
+              $VERBOSE = verbose
+              report_debug("reloaded #{reloaded.size} def files; supplements: #{summary}")
+              reloaded
             end
 
             private
