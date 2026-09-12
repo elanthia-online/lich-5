@@ -1,6 +1,21 @@
 ##### weapon_cast 47a49e78552be40a
-# expect: attacks=weapon_cast | res=none | flares=none | outcomes=none | dmg=0 | statuses=
-As you attempt to strike with your Excalibur, it sends a surge of power through you that quickly leaps out at <pushBold/>the <a exist="49036992" noun="ghast">ghast</a><popBold/>!
-You summon forth additional strength to aid your spell in penetrating the defenses surrounding the tatterdemalion <pushBold/><a exist="49036992" noun="ghast">ghast</a><popBold/>.
-Calling upon your patron to aid your cause, a brilliant aura begins to radiate from you!
-
+# expect: attacks=pummel,templars_verdict | res=smr,cs_td,as_ds | flares=weapon_cast | outcomes=ward_failed | dmg=5 | statuses=vulnerable/add
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='25%' top='0%' width='25%' height='100%'/><progressBar id='mana' value='100' text='mana 212/212' left='25%' customText='t' top='0%' width='25%' height='100%'/></dialogData><castTime value='1789190400'/><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='50%' top='0%' width='25%' height='100%'/><progressBar id='stamina' value='72' text='stamina 78/107' left='50%' customText='t' top='0%' width='25%' height='100%'/></dialogData>You take a menacing step toward <pushBold/>a <a exist="212657781" noun="troll">bog troll</a><popBold/>, sweeping your <a exist="212333157" noun="mace">mithril mace</a> out low to your side in your advance.
+[SMR result: 165 (Open d100: 43, Bonus: 65)]
+With deliberate brutality, you bring your <a exist="212333157" noun="mace">mace</a> around to pummel <pushBold/>a <a exist="212657781" noun="troll">bog troll</a><popBold/>!
+As you attempt to strike with your <a exist="212333157" noun="mace">mithril mace</a>, it sends a surge of power through you that quickly leaps out at <pushBold/>the <a exist="212657781" noun="troll">troll</a><popBold/>!
+Violet flames erupt from beneath <pushBold/>a <a exist="212657781" noun="troll">bog troll</a><popBold/>.
+  CS: +149 - TD: +120 + CvA: +17 + d100: +85 == +131
+  Warding failed!
+A column of seething violet flame envelops <pushBold/>a <a exist="212657781" noun="troll">bog troll</a><popBold/> in its searing embrace!
+   ... 5 points of damage!
+   Minor burns to <pushBold/>the <a exist="212657781" noun="troll">bog troll</a><popBold/>'s weapon arm.
+   ... 20 points of damage!
+<pushBold/>A <a exist="212657781" noun="troll">bog troll's</a><popBold/> defenses are diminished in the wake of the flames.
+  <pushBold/>The <a exist="212657781" noun="troll">bog troll</a><popBold/> suffers an additional 3 damage!
+A wisp of smoke rises up from your <a exist="212333157" noun="mace">mithril mace</a> as the violet flames surrounding it are extinguished.
+  AS: +273 vs DS: +80 with AvD: +35 + d100 roll: +2 = +230
+   ... and hit for 79 points of damage!
+   Crushing blow to head closes that eye for good.
+  <pushBold/>The <a exist="212657781" noun="troll">bog troll</a><popBold/> suffers an additional 2 damage!
+Roundtime: 2 sec.

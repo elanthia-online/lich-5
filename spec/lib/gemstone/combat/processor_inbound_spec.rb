@@ -434,17 +434,26 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       expect(Lich::Gemstone::Combat::Observers).to have_received(:emit).with(:attack, event)
     end
 
+    # The Holy Weapon (1625) release line is a pre-FLARE on our swing, not
+    # an attack of its own (it used to be, and then swallowed the swing's
+    # roll). "through you" is what keeps it ours rather than a nearby
+    # player's; the swing line that follows carries the target.
     it 'keeps our OWN weapon infusion (through you) as ours' do
       chunk = [
         "As you attempt to strike with your star, it sends a surge of power through you that quickly leaps out at #{maiden}!",
+        "You swing a spiked star at #{maiden}!",
         '  AS: +400 vs DS: +200 with AvD: +30 + d100 roll: +50 = +280',
         '   ... and hits for 30 points of damage!',
         '<prompt time="1757183316">&gt;</prompt>'
       ]
 
-      event = described_class.parse_events(chunk).first
+      events = described_class.parse_events(chunk)
+      expect(events.size).to eq(1)
+      event = events.first
       expect(event[:foreign_caster]).to be_falsey
       expect(event[:target][:id]).to eq(555001)
+      expect(event[:flares].map { |f| f[:name] }).to eq([:weapon_cast])
+      expect(event[:hits].size).to eq(1)
     end
   end
 

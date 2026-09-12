@@ -211,7 +211,7 @@ module Lich
               /(?<target>.+?) harmlessly deflects the charge!/,
               /You gauge the attack and expertly deflect it with your .+?!/,
               /At the last moment, you block the missile with your .+?!/,
-              /In the nick of time, you interpose your .+? between yourself and the (?:missile|blow)!/,
+              /In the nick of time, you interpose your .+? between yourself and the (?:missile|blow|attack)!/,
               /Though dazed, you easily deflect the .+? with your .+?!/,
               /Although completely oblivious, you instinctively block the .+? with your .+?!/,
               /You skillfully block the missile with your .+?!/,

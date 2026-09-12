@@ -172,7 +172,6 @@ module Lich
             # Excalibur-style weapon spell surge: opens its own CS/TD (the
             # patron-aura flavor rides between); the actual swing opens
             # separately after. The fizzle form is a prefix - no def.
-            AttackDef.new(:weapon_cast, [/As you attempt to strike with your (?<weapon>.+?), it sends a surge of power through you that quickly leaps out at (?:the )?(?<target>[^!]+)!/].freeze),
             AttackDef.new(:elemental_strike, [/A vortex of elemental energy suddenly strikes (?<target>[^!]+)!/].freeze),
             AttackDef.new(:fervent_reproach, [/With a quick flick of your wrists, the orbs dance through the air toward (?<target>[^!]+)!/].freeze),
             AttackDef.new(:force_projection, [/A translucent force moves outward from you and toward (?<target>[^.]+)\./].freeze),
@@ -267,7 +266,15 @@ module Lich
             # shared cast line of targeted bard attack songs (1008, 1016...)
             AttackDef.new(:spellsong, [/You weave another verse into your harmony, directing the sound of your voice at (?<target>[^.]+)\./].freeze),
             AttackDef.new(:sunburst, [/A sudden burst of bright light emanates from your hand toward (?<target>[^!]+)!/].freeze),
-            AttackDef.new(:templars_verdict, [/A column of violet flame envelops (?<target>.+?) in its searing embrace!/].freeze),
+            # 1603. The ERUPT line is the cast (wiki messaging: "You gesture
+            # at X. Violet flames erupt from beneath X." then the CS/TD roll);
+            # the envelops line that follows is its HIT line, deliberately
+            # not a def. On a paladin the spell is usually RELEASED by a Holy
+            # Weapon (1625) infusion mid-swing rather than gestured: the proc
+            # is a flare (:weapon_cast, defs/flares) and the processor treats
+            # the cast that follows it as an interruption of the swing - the
+            # swing resumes when its own AS/DS arrives (SPELL_RELEASING_FLARES).
+            AttackDef.new(:templars_verdict, [/Violet flames erupt from beneath (?<target>.+?)\./].freeze),
             AttackDef.new(:thought_lash, [/A crackling whip of energy lashes out at (?:the )?(?<target>[^!]+)!/].freeze),
             AttackDef.new(:web_bolt, [/You shoot strands of webbing at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:wither, [/A nebulous haze shimmers into view around (?<target>[^,.]+)/].freeze),

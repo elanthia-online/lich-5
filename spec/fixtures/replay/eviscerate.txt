@@ -1,5 +1,5 @@
 ##### eviscerate 15aea6f22534cf2c
-# expect: attacks=eviscerate | res=smr,ssr | flares=none | outcomes=none | dmg=3 | statuses=terrified/add
+# expect: attacks=eviscerate | res=smr,ssr | flares=none | outcomes=none | dmg=3 | statuses=terrified/add,demoralized/add
 You uncoil from the shadows, your mithril dagger poised to eviscerate <pushBold/>an <a exist="86648608" noun="bandit">elven bandit</a><popBold/>!
 [SMR result: 177 (Open d100: 76, Bonus: 6)]
 Catching him unaware, you carve into <pushBold/>an <a exist="86648608" noun="bandit">elven bandit</a><popBold/> with a ruthlessness calculated to terrorize onlookers!

@@ -403,8 +403,14 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
   describe 'statuses.flare_id migration' do
     def legacy_database_without_flare_id
       legacy = SQLite3::Database.new(@db_path)
-      pre = described_class::SCHEMA.gsub(/\n\s*flare_id    INTEGER REFERENCES flares\(id\),[^\n]*/, '')
-      expect(pre).not_to include('flare_id')
+      # drop ONLY the statuses column: hits and resolutions have always had a
+      # flare_id (and hits is indexed on it), so a blanket strip built a
+      # legacy table the shipped index could not be created on
+      statuses_ddl = /CREATE TABLE IF NOT EXISTS statuses \(.*?\);/m
+      pre = described_class::SCHEMA.sub(statuses_ddl) do |ddl|
+        ddl.gsub(/\n\s*flare_id    INTEGER REFERENCES flares\(id\),[^\n]*/, '')
+      end
+      expect(pre[statuses_ddl]).not_to include('flare_id')
       legacy.execute_batch(pre)
       cols = legacy.execute('PRAGMA table_info(statuses)').map { |r| r[1] }
       legacy.close

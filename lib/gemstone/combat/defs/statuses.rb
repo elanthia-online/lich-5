@@ -333,7 +333,23 @@ module Lich
                             # Evil Eye result (round-5)
                             /(?<target>.+?) is frightened into utter immobility!/
                           ].freeze,
-                          [/You regain control of your senses!/].freeze),
+                          [
+                            /You regain control of your senses!/,
+                            # Creature expiry (Rysk logs 2026-09-11). The self
+                            # line above never names a target, so without this
+                            # a creature's terror never cleared.
+                            /(?<target>.+?) gathers #{MK_PRE}(?:himself|herself|itself)#{MK_POST} and shakes off the fear\./
+                          ].freeze),
+
+            # Eviscerate (rogue CMAN) applies Terrified OR Demoralized with
+            # power 15 to every onlooker that witnesses the attack, each
+            # rolling its own SSR - so this is a SEPARATE status from
+            # :terrified, not flavor riding along with it. Both landed on
+            # both bystanders in the Rysk logs 2026-09-11 (11 occurrences),
+            # but the wiki's "or" means they can arrive apart.
+            StatusDef.new(:demoralized,
+                          [/Upon witnessing your vicious display, (?<target>.+?) appears profoundly unsettled\./].freeze,
+                          [/(?<target>.+?) composes #{MK_PRE}(?:himself|herself|itself)#{MK_POST}, shedding #{MK_PRE}(?:his|her|its)#{MK_POST} apparent demoralization\./].freeze),
 
             StatusDef.new(:silenced,
                           [/(?<target>.+?) chokes, momentarily unable to speak!/].freeze,

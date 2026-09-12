@@ -268,10 +268,14 @@ module Lich
           # The weapon a swing line names, in plain text (swing lines do
           # not link the weapon):  "You swing a kelyn-edged slim short
           # sword at <pushBold/>..." - used to claim pre-flares by weapon.
-          SWING_WEAPON_PATTERN = /You(?: take aim and)? (?:swing|fire) (?:an? |your |some )?(?<weapon>[^<]+?) at </.freeze
+          # The weapon itself may be linked ("You swing a perfect <a ...>mithril
+          # mace</a> at ..."), so anchor tags are dropped before matching and
+          # the capture ends at the " at " that precedes the target (linked or
+          # plain) rather than at a literal "<".
+          SWING_WEAPON_PATTERN = /You(?: take aim and)? (?:swing|fire) (?:an? |your |some )?(?<weapon>[^<]+?) at (?=<|\S)/.freeze
 
           def parse_swing_weapon(line)
-            SWING_WEAPON_PATTERN.match(line)&.[](:weapon)
+            SWING_WEAPON_PATTERN.match(line.gsub(%r{</?a\b[^>]*>}, ''))&.[](:weapon)
           end
 
           # Parse status effects (optional - performance setting)
@@ -341,8 +345,15 @@ module Lich
             target_text = match[:target]
             return nil if target_text.nil? || target_text.strip.empty?
 
-            # Look for creature in target text
-            if (target_match = TARGET_LINK_PATTERN.match(target_text))
+            # Look for creature in target text. A possessive capture ends at
+            # the apostrophe INSIDE the link text ("<a ...>human robber" + "'s"
+            # outside), so the closing tag falls beyond the capture and
+            # TARGET_LINK_PATTERN cannot match - bleed/trickle ticks were
+            # resolving to no target and recording as foreign (Rysk logs
+            # 2026-09-11: 10 bleed ticks on named creatures, all unattributed).
+            # Fall back to the open-tail form, as the attacker path does.
+            if (target_match = TARGET_LINK_PATTERN.match(target_text) ||
+                               OPEN_LINK_TAIL_PATTERN.match(target_text))
               id = target_match[:id].to_i
               return nil if id < 0
 
