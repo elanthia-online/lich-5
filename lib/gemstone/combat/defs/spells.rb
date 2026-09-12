@@ -21,9 +21,58 @@ module Lich
             AttackDef.new(:blood_burst, [/Blood sprays from (?<target>.+?) neck in a crimson arc!/].freeze),
             AttackDef.new(:cold_snap, [/An airy mist rolls into the area, carrying a harsh chill with it./].freeze),
             AttackDef.new(:ethereal_censer, [/(?<target>.+?) becomes enveloped in the incense smoke!/].freeze),
+            # 335 Divine Wrath. The manifestation and strike lines are
+            # deity-specific (~35 catalogued forms from wiki and game logs).
             AttackDef.new(:divine_wrath, [
-              /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage./,
-              /Within the reddish haze, the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./
+              /The sounds of crashing waves increase to an almost deafening level until, suddenly, a powerful wave surges into the area, violently slamming directly into (?<target>[^.]+)\./,
+              /White sparks flicker around you, and you sense electrical energy gathering in the instant before a massive bolt of lightning spears toward (?<target>[^.]+)\./,
+              /A throwing knife formed of shimmering golden light hurtles from the hand of one of the spirit jesters toward (?<target>[^.]+)\./,
+              /Within the reddish haze swirling beside (?<target>[^,]+), the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./,
+              /Within the reddish haze, the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./,
+              /A brown stag materializes in midair, leaping out of nowhere to try to impale (?<target>[^!]+) upon its magnificent antlers!/,
+              /A beam of vermilion light lances away from the rainbow around you to strike (?<target>[^,]+), bathing the .+? in colored radiance\./,
+              /A beam of cerulean light lances away from the rainbow around you to strike (?<target>[^,]+), bathing the .+? in colored radiance\./,
+              /The ground shakes powerfully directly underneath (?<target>.+?) as a beam of golden light lances away from (?:you|.+?) to transfix .+?\./,
+              /As several faintly glowing snowflakes settle upon (?<target>[^,]+), they ignite with cold white flame\./,
+              /Guided by the knowledge within you, you concentrate upon (?<target>[^,]+), and, by strength of will alone, you expose the natural weaknesses of .+?\./,
+              /A shroud of pale pink light suddenly encircles (?:a |an )?(?<target>[^,]+), and tiny tongues of pure white flame flicker at the heart of the shroud\./,
+              /As your gaze falls across (?:a |an )?(?<target>[^,]+), brilliant radiance suddenly surrounds (?:him|her|it), burning as brightly as the sun\./,
+              /Seen only by your spirit gaze, one of the dream unicorns lowers its head and charges fiercely toward (?<target>[^!]+)! Just before impact, the unicorn's horn glows fiercely amber in hue\./,
+              /Accompanied by a particularly impressive gust of wind, a fleeting golden blur flashes past (?<target>[^.]+)\./,
+              /Shimmering black flames lash out toward (?<target>[^,]+), encircling the .+? in their deadly grasp\./,
+              /Long, spectral talons materialize from midair to tear viciously at the body of (?<target>[^!]+)!/,
+              # Marlu, not Gosaena (GSWiki lists this line under Marlu; Gosaena has
+              # a separate, still-unfilled section). 1p form, per the wiki.
+              /A tendril of black mist suddenly senses the proximity of (?<target>[^.]+)\. The mist expands into a large, quickly moving, highly lethal cloud that rapidly surrounds .+?, obliterating it from view\./,
+              # Marlu 3p: a groupmate's cast landing on a nearby creature. Log-
+              # confirmed; the second and third mentions were pronouns ("her"),
+              # not the creature name, hence the .+? tails.
+              /As (?<target>.+?) comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds .+?, obliterating .+? from view\./,
+              # Not present on GSWiki as of this writing - log-sourced only.
+              /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage\./,
+              /The ethereal barbed whip that lies loosely coiled around you uncoils at terrifying speed\. It snaps out toward (?<target>[^!]+)!/,
+              /Suddenly, (?<target>.+?) tries to bolt away, but instead smashes into a wall of spectral force hidden within the shadows!/,
+              /Divine will surges through you, and you command the scimitar to strike at (?<target>[^.]+)\./,
+              /An ethereal pair of feathered white wings materializes from midair and closes around (?<target>[^.]+)\./,
+              /You notice (?<target>.+?) nearby\. How marvelous! You command (?:the moon Liabo|some lilies of the valley|the bartender|seventeen will'o'the'wisps) to /,
+              /Suddenly, a long, leafy vine shoots out and tries to wrap around (?:a |an )?(?<target>[^.]+)\./,
+              /[Aa] tendril of scarlet mist lashes away from you to coil around (?<target>.+?) with a suddenly razor-sharp edge\./,
+              # Ghezresh's GSWiki section is an unfilled stub; log-sourced only,
+              # confirmed via a live self-cast (target repeated verbatim both times).
+              /A strand of barnacle-laced kelp suddenly lashes out at (?<target>[^!]+)!(?:  As the slippery skein connects, strands of silvery mist coil around .+? furiously\.)?/,
+              /A silver-bladed scythe materializes from thin air, spinning end over end as it hurtles toward (?<target>[^!]+)!/,
+              /One of the vines suddenly whips about and lashes out at (?<target>[^!]+)! Despite its slightly ethereal appearance, the vine moves with every evidence of heavy, solid weight\./,
+              # Laethe, not Onar (GSWiki has this under Laethe; Onar's line is the
+              # bone-shafted crossbow bolt below). The wiki's 3p form ends "...into
+              # it." rather than repeating the target, so the tail accepts either.
+              /A shadowy black rose touches (?<target>.+?) and wraps immediately about it, struggling to force its long, barbed thorns into (?:the .+?|it)\./,
+              /A dagger of ivory light suddenly flashes away from the aura surrounding you to strike at (?<target>[^.]+)\./,
+              /^(?:.*, )?[Tt]he intense waves of elegant sound focus upon (?<target>[^.]+)\./,
+              # Onar - confirmed via a live self-cast (cast message and strike
+              # line both observed against real targets).
+              /A bone-shafted crossbow bolt flies out of the shadows toward (?<target>[^!]+)!/,
+              /Listening carefully to the quiet harmony around you, you give voice to wordless song, and the notes of your song ring discordantly against the sounds of the world that relate to (?:a |an )?(?<target>[^.]+)\./,
+              /A glowing golden rose touches (?<target>.+?) and bursts into scarlet flame!/,
             ].freeze),
             AttackDef.new(:earthen_fury, [
               /Fiery debris explodes from the ground beneath (?<target>[^!]+)!/,

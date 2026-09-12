@@ -108,6 +108,32 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:target][:id]).to eq(452450877)
     end
 
+    it 'matches 335 Divine Wrath shadowy black rose with a pronoun tail (Laethe 3p form)' do
+      # GSWiki's 3p form ends "...into it." rather than repeating the target.
+      line = "A shadowy black rose touches #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')} and wraps immediately about it, struggling to force its long, barbed thorns into it."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
+    it 'matches 335 Divine Wrath Marlu black mist 3p form (groupmate cast, pronoun tails)' do
+      # Log-confirmed: named once, then "her" twice.
+      line = "As #{bolded(452450877, 'conjurer', 'a gaudy phantasmic conjurer')} comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds her, obliterating her from view."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
+    it 'matches 335 Divine Wrath shadowy black rose with a repeated-target tail' do
+      line = "A shadowy black rose touches #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')} and wraps immediately about it, struggling to force its long, barbed thorns into the tattooed gigas berserker."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
     it 'does not claim ambient spell messaging with no caster attribution' do
       # "Bloodstained light" fires identically for ANY caster's spell (seen
       # after both "Dicate gestures at..." and "You gesture at..." in logs),
