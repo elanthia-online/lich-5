@@ -6,7 +6,8 @@ RSpec.describe Lich::Util::Update::FileUpdater do
   let(:tmpdir) { Dir.mktmpdir('fu-test') }
   let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
   let(:resolver) { instance_double(Lich::Util::Update::ChannelResolver) }
-  let(:updater) { described_class.new(client, resolver) }
+  let(:snapshot_manager) { instance_double(Lich::Util::Update::SnapshotManager) }
+  let(:updater) { described_class.new(client, resolver, snapshot_manager) }
 
   before do
     stub_const('SCRIPT_DIR', tmpdir)

@@ -17,9 +17,19 @@ module Lich
           map.lic repository.lic vars.lic version.lic
         ].freeze
 
+        # Creates a fresh timestamped directory under BACKUP_DIR using the
+        # same L5-snapshot-<DATE-TIME> naming convention as #snapshot.
+        #
+        # @return [String] path to the newly created directory
+        def new_snapshot_dir
+          dir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}")
+          FileUtils.mkdir_p(dir)
+          dir
+        end
+
         # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
         #
-        # @return [void]
+        # @return [String] path to the created snapshot directory
         def snapshot
           respond
           respond 'Creating a snapshot of current Lich core files ONLY.'
@@ -28,8 +38,7 @@ module Lich
           respond 'another location for additional safety, after any'
           respond 'additional requested updates are completed.'
 
-          snapshot_subdir = File.join(BACKUP_DIR, "L5-snapshot-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}")
-          FileUtils.mkdir_p(snapshot_subdir)
+          snapshot_subdir = new_snapshot_dir
 
           FileUtils.cp(File.join(LICH_DIR, File.basename($PROGRAM_NAME)),
                        File.join(snapshot_subdir, File.basename($PROGRAM_NAME)))
@@ -46,6 +55,8 @@ module Lich
           respond
           respond 'Current Lich ecosystem files (only) backed up to:'
           respond "    #{snapshot_subdir}"
+
+          snapshot_subdir
         end
 
         # Restores most recent snapshot from BACKUP_DIR.

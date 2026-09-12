@@ -49,7 +49,7 @@ module Lich
           respond "This will download from GitHub and extract over your current installation."
           respond
 
-          @snapshot_manager.snapshot
+          snapshot_dir = @snapshot_manager.snapshot
 
           require 'erb'
           encoded_branch_name = ERB::Util.url_encode(branch_name)
@@ -95,7 +95,7 @@ module Lich
               respond "Detected version from branch: #{extracted_version}"
             end
 
-            @release_installer.perform_update(source_dir, extracted_version)
+            @release_installer.perform_update(source_dir, extracted_version, snapshot_dir)
 
             Lich::Util::Update.store_branch_tracking(branch_name, repo, extracted_version)
 

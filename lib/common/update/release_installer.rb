@@ -215,7 +215,7 @@ module Lich
               respond
             end
           else
-            file_updater = FileUpdater.new(@client, @resolver)
+            file_updater = FileUpdater.new(@client, @resolver, @snapshot_manager)
             file_updater.update_file(type, requested_file, 'beta')
           end
         end
@@ -234,7 +234,7 @@ module Lich
             respond 'Getting ready to update.  First we will create a'
             respond 'snapshot in case there are problems with the update.'
 
-            @snapshot_manager.snapshot
+            snapshot_dir = @snapshot_manager.snapshot
 
             respond
             respond "Downloading Lich5 version #{@update_to}"
@@ -260,7 +260,7 @@ module Lich
               return
             end
 
-            unless perform_update(source_dir, @update_to)
+            unless perform_update(source_dir, @update_to, snapshot_dir)
               FileUtils.remove_dir(source_dir) if File.directory?(source_dir)
               FileUtils.rm(File.join(TEMP_DIR, "#{filename}.tar.gz")) if File.exist?(File.join(TEMP_DIR, "#{filename}.tar.gz"))
               return
@@ -282,8 +282,10 @@ module Lich
         #
         # @param source_dir [String] extracted tarball directory
         # @param version [String] version string
+        # @param snapshot_dir [String, nil] snapshot directory created for this
+        #   update run, reused for data-file backups instead of creating a new one
         # @return [Boolean] true if update succeeded
-        def perform_update(source_dir, version)
+        def perform_update(source_dir, version, snapshot_dir = nil)
           unless validate_lich_structure(source_dir)
             respond "Error: extracted source is missing required files. Aborting update to protect installation."
             return false
@@ -301,8 +303,8 @@ module Lich
 
           copy_top_level_files(source_dir)
 
-          file_updater = FileUpdater.new(@client, @resolver)
-          file_updater.update_core_data_and_scripts(version)
+          file_updater = FileUpdater.new(@client, @resolver, @snapshot_manager)
+          file_updater.update_core_data_and_scripts(version, snapshot_dir)
 
           lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
           update_to_lich = File.join(source_dir, "lich.rbw")

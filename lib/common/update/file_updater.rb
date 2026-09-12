@@ -14,9 +14,13 @@ module Lich
       class FileUpdater
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
-        def initialize(client, resolver)
+        # @param snapshot_manager [SnapshotManager] snapshot manager instance,
+        #   used to place data-file backups under a shared L5-snapshot-<DATE-TIME>
+        #   directory instead of accumulating them in DATA_DIR
+        def initialize(client, resolver, snapshot_manager)
           @client = client
           @resolver = resolver
+          @snapshot_manager = snapshot_manager
         end
 
         # Updates a file from a specific repository.
@@ -200,8 +204,14 @@ module Lich
         # Updates core data files (effect-list.xml) after version upgrade.
         #
         # @param version [String] version string (default: LICH_VERSION)
+        # @param snapshot_dir [String, nil] snapshot directory to back data files
+        #   up into, e.g. one just created by the active update flow's
+        #   SnapshotManager#snapshot call. When nil (a standalone call not part
+        #   of a full update, such as the login autostart path), a fresh
+        #   directory is created so this never reuses a snapshot from an
+        #   earlier, unrelated update run.
         # @return [void]
-        def update_core_data_and_scripts(version = LICH_VERSION)
+        def update_core_data_and_scripts(version = LICH_VERSION, snapshot_dir = nil)
           if XMLData.game !~ /^GS|^DR/
             respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
             return
@@ -209,11 +219,12 @@ module Lich
 
           if XMLData.game =~ /^GS/
             ["effect-list.xml"].each do |file|
-              transition_filename = "#{file}".sub(".xml", '')
-              newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
               if File.exist?(File.join(DATA_DIR, file))
+                data_backup_dir = File.join(snapshot_dir || @snapshot_manager.new_snapshot_dir, "data")
+                FileUtils.mkdir_p(data_backup_dir)
+                newfilename = File.join(data_backup_dir, file)
                 File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-                respond "The prior version of #{file} was renamed to #{newfilename}."
+                respond "The prior version of #{file} was backed up to #{newfilename}."
               end
               update_file('data', file)
             end
