@@ -168,10 +168,10 @@ module Lich
             # reentrant, and the builders run inside it.
             def memoize(key)
               refresh_if_changed
-              @cache[key] || begin
-                doc = document
-                super(key) { build(key, doc) }
-              end
+              return @cache[key] if @cache.key?(key)
+
+              doc = document
+              super(key) { build(key, doc) }
             end
 
             def build(key, doc)
