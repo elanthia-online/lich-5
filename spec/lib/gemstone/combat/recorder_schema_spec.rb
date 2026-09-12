@@ -112,9 +112,9 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.close
       rows = query('SELECT a.name AS atk, f.name AS flare, f.ours FROM flares f JOIN attacks a ON a.id = f.attack_id ORDER BY f.id')
       expect(rows.map { |r| [r['atk'], r['flare'], r['ours']] }).to eq([
-        ['own', 'fire', 1], ['own', 'acid', 0],
-        ['claw', 'shield_spike', 1], ['claw', 'acid', 0]
-      ])
+                                                                         ['own', 'fire', 1], ['own', 'acid', 0],
+                                                                         ['claw', 'shield_spike', 1], ['claw', 'acid', 0]
+                                                                       ])
     end
   end
 

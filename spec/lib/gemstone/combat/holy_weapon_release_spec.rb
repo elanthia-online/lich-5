@@ -55,9 +55,9 @@ RSpec.describe 'Holy Weapon release' do
   it 'parents the released spell to the swing and returns the swing its roll' do
     events = processor.parse_events(pummel_with_verdict + ['<prompt time="1">&gt;</prompt>'])
     expect(summary(events)).to eq([
-      [:pummel, %i[smr as_ds], [79], nil],
-      [:templars_verdict, %i[cs_td], [20], :pummel]
-    ])
+                                    [:pummel, %i[smr as_ds], [79], nil],
+                                    [:templars_verdict, %i[cs_td], [20], :pummel]
+                                  ])
   end
 
   it 'does not read a later swing in the chunk as another released spell' do
@@ -69,10 +69,10 @@ RSpec.describe 'Holy Weapon release' do
     ]
     events = processor.parse_events(chunk)
     expect(summary(events)).to eq([
-      [:pummel, %i[smr as_ds], [79], nil],
-      [:templars_verdict, %i[cs_td], [20], :pummel],
-      [:attack, %i[as_ds], [40], nil]
-    ])
+                                    [:pummel, %i[smr as_ds], [79], nil],
+                                    [:templars_verdict, %i[cs_td], [20], :pummel],
+                                    [:attack, %i[as_ds], [40], nil]
+                                  ])
     expect(events.last[:_released]).to be_falsey
   end
 
@@ -97,9 +97,9 @@ RSpec.describe 'Holy Weapon release' do
     ]
     events = processor.parse_events(chunk)
     expect(summary(events)).to eq([
-      [:attack, %i[as_ds], [79], nil],
-      [:templars_verdict, %i[cs_td], [20], :attack]
-    ])
+                                    [:attack, %i[as_ds], [79], nil],
+                                    [:templars_verdict, %i[cs_td], [20], :attack]
+                                  ])
     expect(events.first[:flares].map { |f| f[:name] }).to eq([:weapon_cast])
     expect(events.first[:weapon]).to eq('perfect mithril mace')
   end
@@ -116,10 +116,10 @@ RSpec.describe 'Holy Weapon release' do
     ]
     events = processor.parse_events(chunk)
     expect(summary(events)).to eq([
-      [:attack, %i[as_ds], [79], nil],
-      [:templars_verdict, %i[cs_td], [20], :attack],
-      [:bolt, %i[as_ds], [15], nil]
-    ])
+                                    [:attack, %i[as_ds], [79], nil],
+                                    [:templars_verdict, %i[cs_td], [20], :attack],
+                                    [:bolt, %i[as_ds], [15], nil]
+                                  ])
     expect(events.last[:_released]).to be_falsey
   end
 
@@ -136,10 +136,10 @@ RSpec.describe 'Holy Weapon release' do
     ]
     events = processor.parse_events(chunk)
     expect(summary(events)).to eq([
-      [:attack, %i[as_ds], [10], nil],
-      [:attack, %i[as_ds], [79], nil],
-      [:templars_verdict, %i[cs_td], [20], :attack]
-    ])
+                                    [:attack, %i[as_ds], [10], nil],
+                                    [:attack, %i[as_ds], [79], nil],
+                                    [:templars_verdict, %i[cs_td], [20], :attack]
+                                  ])
     expect(events[0][:flares]).to be_empty
     expect(events[1][:flares].map { |f| f[:name] }).to eq([:weapon_cast])
     expect(events[2][:parent_ref]).to equal(events[1])
@@ -160,8 +160,8 @@ RSpec.describe 'Holy Weapon release' do
     ]
     events = processor.parse_events(chunk)
     expect(summary(events)).to eq([
-      [:pummel, %i[smr as_ds], [79], nil],
-      [:bolt, %i[as_ds], [15], :pummel]
-    ])
+                                    [:pummel, %i[smr as_ds], [79], nil],
+                                    [:bolt, %i[as_ds], [15], :pummel]
+                                  ])
   end
 end
