@@ -21,6 +21,7 @@ module Lich
       @@leader  ||= nil
       @@checked ||= false
       @@status  ||= :closed
+      @@spell_cooldowns ||= {}
 
       # Clears all group members and resets the checked flag.
       # Does not change leader status.
@@ -161,6 +162,98 @@ module Lich
       # @return [Array<GameObj>, nil] members array if check was needed, nil otherwise
       def self.maybe_check
         Group.check unless checked?
+      end
+
+      # Per-target cooldowns started by group (EVOKE) castings, keyed by
+      # spell number then by member name: @@spell_cooldowns[215]["Grhim"].
+      # Values are the Time the target becomes castable again.
+      #
+      # The game gives the caster no messaging about who a group casting
+      # actually landed on, so these are recorded optimistically for everyone
+      # in the group at the time of the cast. A member who was out of range,
+      # or who was already on cooldown from an earlier casting, gets a stamp
+      # that is too early -- the next casting corrects it, so the error is
+      # bounded by one cooldown and does not accumulate. Someone who joins
+      # after a casting has no stamp and reads as ready, which is correct.
+      #
+      # @return [Hash] the cooldown store
+      def self.spell_cooldowns
+        @@spell_cooldowns
+      end
+
+      # Records a group casting of a spell against everyone currently grouped.
+      # Called when the caster's own group-casting message is seen; does
+      # nothing for spells with no per-target cooldown.
+      #
+      # @param spell [Lich::Common::Spell] the spell that was group cast
+      # @return [nil]
+      def self.record_spell_cooldown(spell)
+        seconds = spell.group_cooldown
+        return nil if seconds.nil? || seconds <= 0
+
+        now = Time.now
+        expires = now + seconds
+        store = (@@spell_cooldowns[spell.num] ||= {})
+        # _members, not members: this runs on the parser thread, and members
+        # would send GROUP and block waiting for a reply that only this thread
+        # can parse -- after clearing the list the stamps are drawn from.
+        _members.each do |member|
+          # A member still locked out did not receive this casting, so their
+          # own cooldown keeps running rather than being extended by it.
+          current = store[member.noun]
+          next if current && current > now
+
+          store[member.noun] = expires
+        end
+        nil
+      end
+
+      # Records that a spell landed on one character, from the third-person
+      # message that names them. The cooldown belongs to the character the
+      # spell landed on rather than to the pair, so it counts no matter who
+      # cast it -- seeing someone else put a target on cooldown is as useful
+      # as doing it yourself, and the target need not be in the group.
+      #
+      # @param spell [Lich::Common::Spell] the spell that landed
+      # @param name [String] the character it landed on
+      # @return [nil]
+      def self.record_target_cooldown(spell, name)
+        seconds = spell.target_cooldown
+        return nil if seconds.nil? || seconds <= 0 || name.nil?
+
+        (@@spell_cooldowns[spell.num] ||= {})[name] = Time.now + seconds
+        nil
+      end
+
+      # Seconds left before a group casting of the spell can affect the member
+      # again. Zero when the member is ready, including when nothing has been
+      # recorded for them.
+      #
+      # @param spell [Lich::Common::Spell] the spell to check
+      # @param name [String] the member's name
+      # @return [Float] seconds remaining, never negative
+      def self.spell_cooldown_left(spell, name)
+        expires = @@spell_cooldowns.dig(spell.num, name)
+        return 0.0 if expires.nil?
+
+        [expires - Time.now, 0.0].max.to_f
+      end
+
+      # Whether a group casting of the spell can affect the member now.
+      #
+      # @param spell [Lich::Common::Spell] the spell to check
+      # @param name [String] the member's name
+      # @return [Boolean] true when the member is off cooldown
+      def self.spell_cooldown_ready?(spell, name)
+        spell_cooldown_left(spell, name).zero?
+      end
+
+      # Names of the current group members a group casting would affect.
+      #
+      # @param spell [Lich::Common::Spell] the spell to check
+      # @return [Array<String>] member names that are off cooldown
+      def self.spell_cooldown_ready(spell)
+        members.map(&:noun).compact.select { |name| spell_cooldown_ready?(spell, name) }
       end
 
       # Returns all PCs in the room who are not in the group.
