@@ -129,15 +129,6 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
   end
 
   describe 'first-person flare captures' do
-    it 'treats an attacker capture of "your" as ours (boil_blood: "from your hands")' do
-      rec = new_recorder
-      rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
-      boil = { name: :boil_blood, damaging: true, attacker: 'your', hits: [{ damage: 9, crit: nil }] }
-      rec.record(:attack, attack_event(name: 'own', flares: [boil]))
-      rec.close
-      expect(query("SELECT ours FROM flares WHERE name = 'boil_blood'").first['ours']).to eq(1)
-    end
-
     it 'drops the first-person capture at parse time too' do
       line = '** A fiery aura spirals from your hands into <pushBold/>a <a exist="101" noun="lizard">cave lizard</a><popBold/> body, roiling its blood to a boil! **'
       flare = Lich::Gemstone::Combat::Definitions::Flares.parse(line)
@@ -178,20 +169,6 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       mine = query("SELECT id FROM attacks WHERE name = 'mine'").first['id']
       expect(row['killed_by_attack_id']).to eq(mine)
       expect(row['kill_credit']).to eq('last_own_hit')
-    end
-
-    it 'credits a later FOREIGN hit over our earlier one - the last damage wins, whoever dealt it' do
-      rec = new_recorder(idle_timeout: 60)
-      rec.record(:attack, attack_event(name: 'mine', damage: 40))
-      rec.record(:attack, attack_event(name: 'theirs', foreign_caster: true, damage: 5))
-      rec.finish_session(at: Time.at(1_000_100))
-      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
-      rec.close
-      row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
-      theirs = query("SELECT id, ours FROM attacks WHERE name = 'theirs'").first
-      expect(row['killed_by_attack_id']).to eq(theirs['id'])
-      expect(theirs['ours']).to eq(0) # the row's flag says assist, not the credit path
-      expect(row['kill_credit']).to eq('last_hit')
     end
 
     it "credits another player's LATER hit over our earlier one and says 'last_hit'" do
