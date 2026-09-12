@@ -39,6 +39,24 @@ attacks:
       - 'You hurl a lance of ice at (?<target>[^!]+)!'
 
 flares:
+  # A flare is a proc that rides on an attack: weapon scripts, enchants,
+  # gloves, flourishes. Besides its patterns a flare carries three flags
+  # that tell the tracker how to read the lines that follow it:
+  #
+  #   damaging: true when a damage line follows the flare line, so the
+  #             tracker attributes that damage to the flare instead of the
+  #             swing. Buff and utility flares (acuity, tailwind) are false.
+  #   aoe:      false when the flare is strictly single-target even if its
+  #             parent attack hits several creatures. true lets it own hits
+  #             on every target in the attack.
+  #   spawns:   true when the flare casts an imbedded spell as a SEPARATE
+  #             attack (Blink is the shipped example), so the attack lines
+  #             that follow in the same chunk are its children rather than
+  #             independent casts.
+  #
+  # Timing is not a flag. Whether a flare lands before or after its swing
+  # is read from where the line sits in the log.
+
   # A shipped flare with bespoke text. damaging/aoe/spawns are inherited
   # from the shipped acid flare; setting one to a different value is an
   # error, because one name must never carry two behaviours.
@@ -47,9 +65,12 @@ flares:
       - '\*\* Your .+? spits a gob of acid at (?<target>.+?)! \*\*'
       - '\*\* (?<attacker>.+?)''s{{MK_POST}} .+? spits a gob of acid! \*\*'
 
-  # A new flare. Omitted flags default to false.
+  # A new flare. Omitted flags default to false, so a flare whose damage
+  # you want tracked must say damaging: true.
   - name: frost_flare
     damaging: true
+    aoe: false
+    spawns: false
     patterns:
       - '\*\* Your .+? flares with frost, striking (?<target>.+?)! \*\*'
 
