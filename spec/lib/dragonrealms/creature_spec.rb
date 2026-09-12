@@ -426,6 +426,16 @@ RSpec.describe Lich::DragonRealms::Creature do
 
       expect(described_class.cleanup_old).to eq(1)
     end
+
+    it 'defaults to the configured cleanup_max_age, not a fixed 600s' do
+      described_class.configure(cleanup_max_age: 3600)
+      recent = described_class.register('an orc', 1)
+      recent.instance_variable_set(:@last_seen_at, Time.now - 900)
+      described_class.clear_room
+
+      expect(described_class.cleanup_old).to eq(0)
+      expect(described_class[1]).not_to be_nil
+    end
   end
 
   # Data-driven over the ACTUAL vocabularies so every flag/balance value is

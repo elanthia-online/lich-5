@@ -549,6 +549,20 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature.size).to eq(2)
     end
 
+    it 'runs housekeeping on a known-creature refresh, not only on new registrations' do
+      stale = SampleCreature.register('stale', 1)
+      stale.instance_variable_set(:@last_seen_at, Time.now - 3600)
+      SampleCreature.register('current', 2)
+      SampleCreature.clear_room
+      SampleCreature.register('current', 2) # back in the room, alone
+
+      SampleCreature.instance_variable_set(:@last_housekeeping, Time.now - 61)
+      SampleCreature.register('current', 2) # refresh of the only known creature
+
+      expect(SampleCreature[1]).to be_nil
+      expect(SampleCreature[2]).not_to be_nil
+    end
+
     it 'defaults cleanup_old to the configured 600s cutoff when called with no argument' do
       old = SampleCreature.register('old', 1)
       old.instance_variable_set(:@last_seen_at, Time.now - 601)

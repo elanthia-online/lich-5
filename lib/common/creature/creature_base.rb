@@ -203,14 +203,16 @@ module Lich
           entered_room = mark_in_room(id)
           return nil unless auto_register?
 
+          # Before the known-creature return: a session that only refreshes
+          # creatures it already knows must still sweep stale out-of-room ones.
+          housekeep
+
           existing = instances[id.to_i]
           if existing
             existing.touch_seen
             respond "--- #{name} (#{id}): in room" if entered_room && $creature_debug
             return existing
           end
-
-          housekeep
 
           if full?
             # Housekeeping should keep this from ever happening; if it does,
