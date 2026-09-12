@@ -699,7 +699,7 @@ module Lich
               # around X flares causing 58 points of damage!") - the same
               # shape as inline attack damage (replay 2026-09-05)
               if (inline = Parser.parse_damage(line))
-                flare[:hits] << { damage: inline, crit: nil }
+                flare[:hits] << { damage: inline, crit: nil, line: index }
                 respond "[Combat] Found inline flare damage: #{inline}" if Tracker.debug?(:verbose)
               end
 
@@ -1481,7 +1481,7 @@ module Lich
               # gating only here made inline-damage events vanish under
               # configs that omit the key (replay 2026-09-05, pestilence)
               if !SUMMARY_DAMAGE_ATTACKS.include?(current_event[:name]) && (inline = Parser.parse_damage(line))
-                current_event[:hits] << { damage: inline, crit: nil }
+                current_event[:hits] << { damage: inline, crit: nil, line: index }
                 respond "[Combat] Found inline damage: #{inline}" if Tracker.debug?(:verbose)
               end
               current_event[:outcomes] << same_line_outcome if same_line_outcome
@@ -1587,7 +1587,7 @@ module Lich
               # 2026-09-07); the room-feed death that follows agrees.
               if current_event && current_event[:name] == :coup_de_grace &&
                  (coup_loc = Definitions::Attacks.coup_kill_location(line))
-                current_event[:hits] << { damage: 0, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
+                current_event[:hits] << { damage: 0, line: index, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
                                                              wound_rank: nil, fatal: true } }
                 chunk_deaths << current_event[:target][:id] if current_event[:target] && current_event[:target][:id]
                 respond '[Combat] Coup de grace kill' if Tracker.debug?(:verbose)
@@ -1615,7 +1615,7 @@ module Lich
                 # "... 5 points of damage!"; the 65 is concussion and takes no
                 # crit (the lookahead breaks on the next damage line), the 5
                 # carries the fire crit.
-                hit = { damage: damage, crit: nil }
+                hit = { damage: damage, crit: nil, line: index }
                 sink[:hits] << hit
                 respond "[Combat] Found damage: #{damage}#{flare_ctx ? " (flare: #{flare_ctx[:name]})" : ''}" if Tracker.debug?(:verbose)
 
@@ -1670,7 +1670,7 @@ module Lich
               # Damage while seeking an attack: its initiation had no def
               # (or lived in a prior chunk we cannot see). Orphan-sink it
               # rather than dropping the fact.
-              orphan_hits << { damage: orphan_dmg, crit: nil }
+              orphan_hits << { damage: orphan_dmg, crit: nil, line: index }
               respond "[Combat] Orphan damage: #{orphan_dmg}" if Tracker.debug?(:verbose)
             end
 

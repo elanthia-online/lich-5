@@ -202,7 +202,8 @@ module Lich
             fatal       INTEGER NOT NULL DEFAULT 0,
             amputated   INTEGER NOT NULL DEFAULT 0,
             secondary_location TEXT,
-            secondary_rank     INTEGER                    -- secondary wound severity (:wound_rank)
+            secondary_rank     INTEGER,                   -- secondary wound severity (:wound_rank)
+            line_seq    INTEGER                           -- feed position of the damage line within its chunk: COMBAT order. Row id is insertion order, which a released cast (emitted after its swing) breaks; attacks.occurred_at orders across chunks
           );
           CREATE INDEX IF NOT EXISTS idx_hits_attack ON hits(attack_id);
           CREATE INDEX IF NOT EXISTS idx_hits_creature ON hits(session_id, creature_id);
@@ -551,6 +552,7 @@ module Lich
           'attacks'   => { 'redirected_from' => 'TEXT', 'attack_kind' => 'TEXT',
                            'ours' => 'INTEGER NOT NULL DEFAULT 0' },
           'flares'    => { 'ours' => 'INTEGER NOT NULL DEFAULT 0' },
+          'hits'      => { 'line_seq' => 'INTEGER' },
           'creatures' => { 'kill_credit' => 'TEXT' },
           'statuses'  => { 'flare_id' => 'INTEGER REFERENCES flares(id)' }
         }.freeze
@@ -840,12 +842,13 @@ module Lich
                     hit[:damage].to_i, crit[:location], map_body_part(crit[:location]),
                     crit[:type]&.to_s, crit[:rank], crit[:wound_rank], fatal,
                     crit[:amputated] ? 1 : 0,
-                    secondary[:location], secondary[:wound_rank] || secondary[:rank]]
+                    secondary[:location], secondary[:wound_rank] || secondary[:rank],
+                    hit[:line]]
           @db.execute(<<~SQL, params)
             INSERT INTO hits (attack_id, flare_id, session_id, creature_id, seq, damage, location,
                               body_part, crit_type, crit_rank, wound_rank, fatal, amputated,
-                              secondary_location, secondary_rank)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              secondary_location, secondary_rank, line_seq)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           SQL
 
           return unless fatal == 1 && creature_row
@@ -975,8 +978,13 @@ module Lich
                   JOIN attacks a ON a.id = h.attack_id
                   LEFT JOIN flares f ON f.id = h.flare_id
                   WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
-                  ORDER BY h.id DESC LIMIT 1
+                  ORDER BY a.occurred_at DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
                 SQL
+                # ordering: the chunk's time, then the damage line's position
+                # in the chunk (COMBAT order), then insertion. Row id alone
+                # credited a released spell over the swing that landed after
+                # it - the cast is emitted after its swing for lineage
+                # (review of cb68bb90).
                 if last
                   credit_id = last[0]
                   credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
