@@ -268,6 +268,7 @@ RSpec.describe Lich::Common::CreatureBase do
       old.instance_variable_set(:@last_seen_at, Time.now - 3600)
       SampleCreature.register('fresh kobold', 2)
       SampleCreature.clear_room # neither is in the current room any more
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
 
       removed = SampleCreature.cleanup_old(600)
 
@@ -289,6 +290,7 @@ RSpec.describe Lich::Common::CreatureBase do
       veteran.instance_variable_set(:@created_at, Time.now - 3600)
       SampleCreature.register('kobold', 1) # room refresh re-touches it
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(SampleCreature.cleanup_old(600)).to eq(0)
       expect(SampleCreature[1]).to equal(veteran)
@@ -521,6 +523,7 @@ RSpec.describe Lich::Common::CreatureBase do
       older.instance_variable_set(:@last_seen_at, Time.now - 30)
       SampleCreature.register('newer', 2)
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
       SampleCreature.register('newer', 2) # only 2 is in the room now
       expect(SampleCreature.full?).to be true
 
@@ -537,6 +540,7 @@ RSpec.describe Lich::Common::CreatureBase do
       stale = SampleCreature.register('stale', 1)
       stale.instance_variable_set(:@last_seen_at, Time.now - 3600)
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
 
       # First housekeeping pass already ran during the registration above, so
       # the next call within the interval is throttled and the stale one stays.
@@ -549,11 +553,45 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature.size).to eq(2)
     end
 
+    it 'does not sweep a creature mid-refresh: the previous roster shields it until the next clear' do
+      first = SampleCreature.register('first', 1)
+      second = SampleCreature.register('second', 2)
+      second.add_status('stunned')
+      first.instance_variable_set(:@last_seen_at, Time.now - 700)
+      second.instance_variable_set(:@last_seen_at, Time.now - 700)
+      SampleCreature.instance_variable_set(:@last_housekeeping, Time.now - 61)
+
+      # The parser's refresh: clear, then re-mark one creature at a time.
+      SampleCreature.clear_room
+      SampleCreature.register('first', 1) # housekeeping fires here
+      expect(SampleCreature[2]).to equal(second)
+
+      SampleCreature.register('second', 2)
+      expect(SampleCreature[2]).to equal(second)
+      expect(second.has_status?('stunned')).to be true
+    end
+
+    it 'sweeps a creature that stayed absent across two refreshes' do
+      gone = SampleCreature.register('gone', 1)
+      gone.instance_variable_set(:@last_seen_at, Time.now - 700)
+      SampleCreature.register('stays', 2)
+
+      SampleCreature.clear_room
+      SampleCreature.register('stays', 2)
+      SampleCreature.clear_room # 1 is no longer in the previous roster either
+      SampleCreature.instance_variable_set(:@last_housekeeping, Time.now - 61)
+      SampleCreature.register('stays', 2)
+
+      expect(SampleCreature[1]).to be_nil
+      expect(SampleCreature[2]).not_to be_nil
+    end
+
     it 'runs housekeeping on a known-creature refresh, not only on new registrations' do
       stale = SampleCreature.register('stale', 1)
       stale.instance_variable_set(:@last_seen_at, Time.now - 3600)
       SampleCreature.register('current', 2)
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
       SampleCreature.register('current', 2) # back in the room, alone
 
       SampleCreature.instance_variable_set(:@last_housekeeping, Time.now - 61)
@@ -568,6 +606,7 @@ RSpec.describe Lich::Common::CreatureBase do
       old.instance_variable_set(:@last_seen_at, Time.now - 601)
       SampleCreature.register('fresh', 2)
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(SampleCreature.cleanup_max_age).to eq(600)
       expect(SampleCreature.cleanup_old).to eq(1)
@@ -580,6 +619,7 @@ RSpec.describe Lich::Common::CreatureBase do
       old = SampleCreature.register('old', 1)
       old.instance_variable_set(:@last_seen_at, Time.now - 6)
       SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(SampleCreature.cleanup_old).to eq(1)
 

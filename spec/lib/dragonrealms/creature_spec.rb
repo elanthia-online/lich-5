@@ -407,6 +407,7 @@ RSpec.describe Lich::DragonRealms::Creature do
       old.instance_variable_set(:@last_seen_at, Time.now - 10_800) # unseen 3 hours
       described_class.register('a kobold', 2)
       described_class.clear_room
+      described_class.clear_room # second refresh: out of the previous roster's shelter too
 
       # A keyword-only facade would raise ArgumentError against the positional
       # base method; the fix keeps the facade positional.
@@ -423,6 +424,7 @@ RSpec.describe Lich::DragonRealms::Creature do
       old.instance_variable_set(:@last_seen_at, Time.now - 601)
       described_class.register('a kobold', 2)
       described_class.clear_room
+      described_class.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(described_class.cleanup_old).to eq(1)
     end
@@ -432,6 +434,7 @@ RSpec.describe Lich::DragonRealms::Creature do
       recent = described_class.register('an orc', 1)
       recent.instance_variable_set(:@last_seen_at, Time.now - 900)
       described_class.clear_room
+      described_class.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(described_class.cleanup_old).to eq(0)
       expect(described_class[1]).not_to be_nil

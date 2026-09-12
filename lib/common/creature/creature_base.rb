@@ -252,6 +252,11 @@ module Lich
         # @return [void]
         def clear_room
           count = room_roster.size
+          # Keep the outgoing roster as a shield: the parser rebuilds the new
+          # one a creature at a time, so a creature late in the refresh is
+          # briefly absent from the live roster. Housekeeping must not sweep
+          # it in that window (see {#sheltered_ids}).
+          @previous_room_ids = room_roster
           @current_room_ids = []
           respond "--- room: roster cleared (#{count} creature#{'s' unless count == 1})" if $creature_debug && count > 0
         end
@@ -287,22 +292,34 @@ module Lich
         def clear
           instances.clear
           clear_room
+          @previous_room_ids = []
         end
 
         # Removes instances not seen within the given age.
         #
         # Ages against `last_seen_at`, not creation time, so a creature that
         # has been in a long fight is not discarded mid-fight and re-registered
-        # as a blank stranger. Creatures in the current-room roster are never
-        # removed: the roster is proof they are still present.
+        # as a blank stranger. Creatures in the current or immediately previous
+        # room roster are never removed ({#sheltered_ids}).
         #
         # @param max_age_seconds [Integer] age cutoff in seconds.
         # @return [Integer] number of instances removed.
         def cleanup_old(max_age_seconds = cleanup_max_age)
           cutoff = Time.now - max_age_seconds
+          shelter = sheltered_ids
           before = instances.size
-          instances.reject! { |id, instance| instance.last_seen_at < cutoff && !room_roster.include?(id) }
+          instances.reject! { |id, instance| instance.last_seen_at < cutoff && !shelter.include?(id) }
           before - instances.size
+        end
+
+        # Ids housekeeping must never evict: the live roster plus the roster
+        # that {#clear_room} just replaced. The previous roster covers the
+        # window in which the parser is still re-marking creatures from a
+        # fresh room refresh; it is superseded on the next {#clear_room}.
+        #
+        # @return [Array<Integer>]
+        def sheltered_ids
+          room_roster | (@previous_room_ids || [])
         end
 
         # Seconds between wall-clock housekeeping passes from {#register}.
@@ -331,8 +348,9 @@ module Lich
         # @return [Object, nil] the evicted instance, or nil when every
         #   instance is in the current room.
         def evict_stalest
+          shelter = sheltered_ids
           id, instance = instances
-                         .reject { |candidate_id, _| room_roster.include?(candidate_id) }
+                         .reject { |candidate_id, _| shelter.include?(candidate_id) }
                          .min_by { |_, candidate| candidate.last_seen_at }
           return nil unless id
 

@@ -644,6 +644,7 @@ RSpec.describe Lich::Gemstone::Creature, 'facade delegation and cleanup_old (F4)
       old.instance_variable_set(:@last_seen_at, Time.now - 10_800) # unseen 3 hours
       described_class.register('fresh thing', 2)
       described_class.clear_room
+      described_class.clear_room # second refresh: out of the previous roster's shelter too
 
       # A keyword-only facade once raised ArgumentError on a positional age;
       # keep the facade positional to match the shared base contract.
@@ -660,6 +661,7 @@ RSpec.describe Lich::Gemstone::Creature, 'facade delegation and cleanup_old (F4)
       old.instance_variable_set(:@last_seen_at, Time.now - 601)
       described_class.register('fresh thing', 2)
       described_class.clear_room
+      described_class.clear_room # second refresh: out of the previous roster's shelter too
 
       expect(described_class.cleanup_old).to eq(1)
     end
