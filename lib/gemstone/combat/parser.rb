@@ -21,6 +21,9 @@ module Lich
       module Parser
         # Target link pattern - extract creatures/players from XML
         TARGET_LINK_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)<\/a>/i.freeze
+        # A link whose closing tag lies beyond the captured text (see
+        # extract_attacker_from_match)
+        OPEN_LINK_TAIL_PATTERN = /<a exist="(?<id>[^"]+)" noun="(?<noun>[^"]+)">(?<name>[^<]+)\z/i.freeze
 
         # Bold tag pattern - creatures are wrapped in bold tags
         # Non-greedy match to avoid spanning multiple creatures
@@ -48,18 +51,24 @@ module Lich
                 # fallback below would install the attacker as its own
                 # target and apply its damage/crits to itself. Resolve the
                 # target as us and stop - never fall through.
-                # Environmental / self-inflicted defs (SELF_INFLICTED) are
+                # Environmental / self-inflicted defs (ATTACKERLESS) are
                 # damage to us by construction - no attacker, no "you"
                 # capture - unless this particular pattern named someone
-                # else (a nearby player taking the same tick).
-                self_inflicted = Definitions::Attacks::SELF_INFLICTED.include?(name) &&
-                                 !(match.names.include?('target') && match[:target])
-                if self_target?(match) || self_inflicted
+                # else (a nearby player taking the same tick). They name
+                # their source for the ledger: 'environment' (weather) or
+                # 'self' (our own gear), so reports can tell them apart.
+                attackerless = Definitions::Attacks::ATTACKERLESS.include?(name) &&
+                               !(match.names.include?('target') && match[:target])
+                if self_target?(match) || attackerless || Definitions::Attacks::ROOM_TARGETED.include?(name)
+                  attacker = extract_attacker_from_match(match)
+                  if attackerless
+                    attacker ||= { name: Definitions::Attacks::ENVIRONMENTAL.include?(name) ? 'environment' : 'self' }
+                  end
                   return {
                     name: name,
                     target: {},
                     inbound: true,
-                    attacker: extract_attacker_from_match(match),
+                    attacker: attacker,
                     damaging: true
                   }
                 end
@@ -164,9 +173,9 @@ module Lich
           def inbound_attack?(line)
             return false if Definitions::Attacks.rejects?(line)
 
-            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, _name|
+            Definitions::Attacks::ATTACK_LOOKUP.each do |pattern, name|
               if (match = pattern.match(line))
-                return self_target?(match)
+                return self_target?(match) || Definitions::Attacks::ROOM_TARGETED.include?(name)
               end
             end
             false
@@ -181,8 +190,17 @@ module Lich
             text = match[:attacker]
             return nil if text.nil? || text.strip.empty?
 
-            if (link = TARGET_LINK_PATTERN.match(text))
-              { id: link[:id].to_i, noun: link[:noun], name: link[:name] }
+            # The LAST link: a flavor prefix can carry the attacker's own
+            # pronoun link first ("Froth bubbling on <his> lips, <a tattooed
+            # gigas berserker> swings..." - hunt log 2026-09-07 recorded the
+            # attacker as "his").
+            links = text.to_enum(:scan, TARGET_LINK_PATTERN).map { Regexp.last_match }
+            # A possessive INSIDE the link ("<a>flayed gigas disciple's</a>
+            # power warps the air") leaves the capture ending mid-link: the
+            # def's 's sits inside the <a>. Take the unterminated link too.
+            links << Regexp.last_match if links.empty? && OPEN_LINK_TAIL_PATTERN.match(text)
+            if (link = links.last)
+              { id: link[:id].to_i, noun: link[:noun], name: link_name(link) }
             else
               { name: strip_links(text).strip }
             end
@@ -191,6 +209,16 @@ module Lich
           # Drop XML link/bold markup from a captured fragment
           def strip_links(text)
             text.gsub(/<[^>]+>/, '')
+          end
+
+          # A creature's display name from its link. The game sometimes puts
+          # the possessive INSIDE the link ("<a>grim gigas skald's</a> mastery
+          # of music"), which registered a second creature named "grim gigas
+          # skald's" (hunt log 2026-09-07). Same id, same creature: strip it.
+          # A hidden adjective leaves a doubled space ("halfling  cannibal"),
+          # squeezed for the same reason.
+          def link_name(link)
+            link[:name].sub(/'s\z/, '').squeeze(' ').strip
           end
 
           # Parse damage amounts using damage definitions
@@ -303,7 +331,7 @@ module Lich
             {
               id: id,
               noun: link_match[:noun],
-              name: link_match[:name]
+              name: link_name(link_match)
             }
           end
 
@@ -321,7 +349,7 @@ module Lich
               return {
                 id: id,
                 noun: target_match[:noun],
-                name: target_match[:name]
+                name: link_name(target_match)
               }
             end
 

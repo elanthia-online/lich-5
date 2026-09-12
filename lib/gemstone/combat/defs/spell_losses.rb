@@ -62,6 +62,11 @@ module Lich
             # "You become solid again." - 911 only, no standalone Blur
             # entry exists; 1605's end names the same warmth+spiritual
             # force around the arms the third person describes)
+            # effect-list end message "A white glow rushes away from you."
+            # (owner report 2026-09-09: a skald's death dropped it and the
+            # report showed a "dispelled" status with no dispel flare)
+            SpellLossDef.new(303, 'Prayer of Protection',
+                             [/A white glow rushes away from (?<target>[^.]+)\./].freeze),
             SpellLossDef.new(513, 'Elemental Focus',
                              [/(?<target>.+?) no longer bristles with energy\./].freeze),
             SpellLossDef.new(911, 'Mass Blur',

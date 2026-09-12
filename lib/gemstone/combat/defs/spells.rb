@@ -52,7 +52,13 @@ module Lich
               # ground|floor: indoor rooms print "floor" (Ojandhaart great hall,
               # real-feed 2026-09-07) - the ground-only form orphaned every
               # indoor entangle tick as an unknown attack with no target
-              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./,
+              # the miss: same line is the :miss outcome (defs/outcomes.rb).
+              # Without an attack def the SMR before it was orphaned into a
+              # targetless :unknown (hunt log 2026-09-07 19:21:44)
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), but is unable to grasp/,
+              # the other miss form (no SMR printed; hunt log 2026-09-07 21:30)
+              /The (?<weed>.+?) grabs at (?<target>[^,]+), unable to find a purchase\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),
@@ -69,6 +75,26 @@ module Lich
             # is ours. foreign_caster is set downstream from the attacker.
             AttackDef.new(:weapon_infusion, [
               /As (?<attacker>.+?) attempts to strike with .+?, a surge of power flows out of it, through .+?, and leaps out at (?<target>[^!]+)!/
+            ].freeze),
+            # A nearby player's shadow-barb spell (SMR + damage follow; the
+            # caster is the player link, so foreign_caster). Hunt log
+            # 2026-09-07: Burns vs a shield-maiden, recorded as a targetless
+            # unknown with an orphaned SMR.
+            AttackDef.new(:fiery_barbs, [
+              /Fiery red barbs uncoil from the shadows near (?<attacker>.+?) and lash out at (?<target>[^!]+)!/
+            ].freeze),
+            # A nearby player's flaming aura lashing a creature (SMR + damage
+            # follow; hunt log 2026-09-07 23:20, Meb)
+            AttackDef.new(:flaming_aura, [
+              /The flaming aura surrounding (?<attacker>.+?) lashes out at (?<target>[^!]+)!/
+            ].freeze),
+            # DoT tick naming the victim, never the caster (unowned unless
+            # our cast is in the blob - see UNOWNED_TICK_ATTACKS). Its
+            # "causing N" is a summary: the "... N points of damage!" line
+            # that follows carries the hit and its crit, so the inline
+            # number is NOT applied (see SUMMARY_DAMAGE_ATTACKS).
+            AttackDef.new(:spiritual_malady, [
+              /A spiritual malady wracks (?<target>.+?) causing \d+ points? of damage!/
             ].freeze),
           ].freeze
 
@@ -152,7 +178,13 @@ module Lich
             # matched OUR OWN limb ("Your right leg explodes!") and opened an
             # attack event against us.
             AttackDef.new(:limb_disruption, [/The (?<target>.+?)'s#{MK_POST} (?:right|left) (?:leg|arm|hand|eye) explodes!/].freeze),
-            AttackDef.new(:moonbeam, [/You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [
+              /You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/,
+              # 611 evoked: "Tapping the moons above, you draw down a shaft of
+              # swirling moonlight and bathe X in its muted glow." then SMR
+              # (hunt log 2026-09-09 10:45); the moon adjectives vary
+              /you draw down a shaft of \w+ moonlight and bathes? (?<target>.+?) in its \w+ glow\./
+            ].freeze),
             AttackDef.new(:pestilence, [
               /You exhale a virulent green mist toward (?<target>[^,]+), instantly infecting/,
               # 3p: a group member casts it. Without this the per-target
@@ -248,6 +280,19 @@ module Lich
               /(?<attacker>.+?) directs the force of #{MK_PRE}(?:his|her|its)#{MK_POST} voice at (?<target>[^!]+)!/
             ].freeze),
             AttackDef.new(:channel, [/(?<attacker>.+?) channels at (?<target>[^.]+)\./].freeze),
+            # Nearby players' spells on creatures we can see (hunt log
+            # 2026-09-09, gigas village). Each names the caster, so the
+            # foreign latch keeps the CS/TD, SMR/SSR and damage lines that
+            # follow off our ledger - a bard's sonic disruption kill was
+            # credited to us before the 3p spellsong form existed.
+            AttackDef.new(:spellsong, [
+              /(?<attacker>.+?) skillfully weaves another verse into #{MK_PRE}(?:his|her)#{MK_POST} harmony, directing the sound of #{MK_PRE}(?:his|her)#{MK_POST} voice at (?<target>[^.]+)\./
+            ].freeze),
+            # bard fear AoE: one cry, then an SSR + "X looks at <bard> in
+            # utter terror!" per creature in the room
+            AttackDef.new(:fear_cry, [/(?<attacker>.+?) lets loose an eerie, modulating cry!/].freeze),
+            AttackDef.new(:golden_waves, [/Golden brown waves billow outward from (?<attacker>.+?) to buffet (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [/(?<attacker>.+?) draws down a shaft of \w+ moonlight and bathes (?<target>.+?) in its \w+ glow\./].freeze),
             # creature wand flourish - the erupt tail rides the same line
             AttackDef.new(:wand, [/(?<attacker>.+?) flourishes (?<weapon>.+?) at (?<target>[^.]+)\.\s+A .+? erupts toward/].freeze),
             # "hurls a/an <bolt>" - bolt spells from players AND creatures;

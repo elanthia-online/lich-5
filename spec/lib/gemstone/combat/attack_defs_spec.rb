@@ -65,8 +65,8 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
 
     it 'flags environmental tick lines for the tracker chunk gate (they carry no creature link)' do
       defs = Lich::Gemstone::Combat::Definitions::Attacks
-      expect(defs.self_inflicted_line?('Bitter cold leaches warmth from your skin.')).to be true
-      expect(defs.self_inflicted_line?('You feel more refreshed.')).to be false
+      expect(defs.attackerless_line?('Bitter cold leaches warmth from your skin.')).to be true
+      expect(defs.attackerless_line?('You feel more refreshed.')).to be false
     end
 
     it 'reports the thorn bow recoil as inbound damage to us' do

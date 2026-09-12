@@ -284,6 +284,36 @@ module Lich
             # ".+?" not "[^!]+" for target: the cman form appends " and
             # connects!" which a greedy class would swallow into the target
             AttackDef.new(:tackle, [/(?<attacker>.+?) hurls #{MK_PRE}(?:himself|herself|itself)#{MK_POST} at (?<target>.+?)(?: and connects)?!/].freeze),
+            # Creature fear maneuvers (SSR follows, then our save/fail line).
+            # Room-wide, no target named - ROOM_TARGETED classifies them
+            # inbound (hunt log 2026-09-07: Ojandhaart warg / mastodon).
+            # (the pronouns are links in the live feed: "sits back on <its>
+            # haunches" - hence MK_PRE/MK_POST; the bare form never matched)
+            AttackDef.new(:howl, [
+              /(?<attacker>.+?) sits back on #{MK_PRE}its#{MK_POST} haunches and unleashes a long, high-pitched howl that sends a shiver of primal terror down your spine\./
+            ].freeze),
+            AttackDef.new(:trumpet, [
+              /(?<attacker>.+?) raises #{MK_PRE}its#{MK_POST} trunk and rears back onto #{MK_PRE}its#{MK_POST} immense hind legs, blaring out a note of sheer fury!/
+            ].freeze),
+            # Mutant-farm room maneuvers (hunt log 2026-09-07 23:19-23:20):
+            # sanguine ooze crystalline shrapnel burst (SMR, then our dodge)
+            AttackDef.new(:shrapnel_spray, [
+              /Froth disturbs the surface of (?<attacker>.+?) as bubbling bulges form over #{MK_PRE}its#{MK_POST} surface/
+            ].freeze),
+            # flayed gigas disciple's spatial rift (SMR follows)
+            AttackDef.new(:rift_tentacles, [
+              /Zeal twisting #{MK_PRE}(?:his|her|its)#{MK_POST} features, (?<attacker>.+?) raises a raw and fleshless hand overhead and draws it down/
+            ].freeze),
+            # Shield-maiden targe push (SMR follows; hunt log 2026-09-07)
+            AttackDef.new(:shield_push, [
+              /(?<attacker>.+?) raises #{MK_PRE}(?:his|her|its)#{MK_POST} (?<weapon>.+?) and attempts to push (?<target>you|.+?) away!/
+            ].freeze),
+            # 3p feint: the result line is the only line ("X feints high, but
+            # you aren't fooled") - target captured as "you" so it classifies
+            # inbound; the same line is the :evade outcome
+            AttackDef.new(:feint, [
+              /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but (?<target>you) aren't fooled for a second\./
+            ].freeze),
             # Maneuver-style strike opener (round-14 sweep: 40/40 resolve
             # in the very next line, usually the target's evanescent
             # shield absorb or an outmaneuver outcome, then the swing
@@ -300,7 +330,22 @@ module Lich
             ].freeze),
             # creature natural weapons and maneuvers
             AttackDef.new(:natural, [
-              /(?<attacker>.+?) claws at (?<target>[^!]+)!/,
+              # no comma in the target: "Fear still claws at your heart, but
+              # you stand fast..." is a fear-save outcome, not a claw swing
+              /(?<attacker>.+?) claws at (?<target>[^!,]+)!/,
+              /(?<attacker>.+?) tries to spear (?<target>.+?) with #{MK_PRE}its#{MK_POST} enormous tusks!/,
+              # sanguine ooze (mutant farm, hunt log 2026-09-07 23:20); the
+              # whip's miss rides the same line (:miss outcome)
+              /(?<attacker>.+?) manifests a thick pseudopod and brings it smashing down at (?<target>you|.+?)!/,
+              /(?<attacker>.+?) whips a thick pseudopod at (?<target>you|.+?)!/,
+              # the ooze's vitality drain: touch, then "Dizziness rushes
+              # through you..." and the damage line
+              /(?<attacker>.+?) whips a pseudopod toward (?<target>you|.+?), brushing/,
+              # halfling cannibal ambush swing (hunt log 2026-09-07 23:34)
+              /With an ululating shriek, (?<attacker>.+?) leaps from the shadows and hammers blindly at (?<target>you|.+?) with grimy little fists!/,
+              # gigas disciple leech fling: the SMR roll prints BEFORE this
+              # line and the evade rides on it (hunt log 2026-09-07 23:52)
+              /(?<attacker>.+?) reaches into a pouch at #{MK_PRE}(?:his|her|its)#{MK_POST} waist and draws back a hand covered in fat leeches.*?flings the parasites at (?<target>you|.+?)!/,
               /(?<attacker>.+?) snaps at (?<target>.+?) with its (?<weapon>[^!]+)!/,
               /(?<attacker>.+?) pounds at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .*?fists?!/,
               /(?<attacker>.+?) tries to bite (?<target>[^!]+)!/,
@@ -354,7 +399,11 @@ module Lich
               /(?<attacker>.+?) leaps from the shadows and (?:throws #{MK_PRE}(?:his|her|its)#{MK_POST} .+? around|hurtles at) (?<target>[^,!]+)/
             ].freeze),
             # PSM maneuvers, third person
-            AttackDef.new(:hamstring, [/(?<attacker>.+?) lunges forward and tries to hamstring (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/].freeze),
+            AttackDef.new(:hamstring, [
+              /(?<attacker>.+?) lunges forward and tries to hamstring (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/,
+              # warg jaws form (hunt log 2026-09-07)
+              /With a quick lunge, (?<attacker>.+?) tries to hamstring (?<target>you|.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} jaws!/
+            ].freeze),
             AttackDef.new(:shield_bash, [
               /(?<attacker>.+?) lunges forward at (?<target>.+?) with #{MK_PRE}(?:his|her|its)#{MK_POST} .+? and attempts a shield bash!/,
               /(?<attacker>.+?) launches a quick bash with (?<weapon>.+?) at (?<target>[^!]+)!/,
@@ -397,7 +446,7 @@ module Lich
           ].freeze
 
           # Environmental / self-inflicted damage. No attacker, no target
-          # capture: the parser classifies every name in SELF_INFLICTED as
+          # capture: the parser classifies every name in ATTACKERLESS as
           # inbound (damage to US), so the "... N points of damage!" line that
           # follows lands on our taken ledger instead of orphaning or, worse,
           # attaching to whatever creature event was open (real-feed
@@ -420,6 +469,23 @@ module Lich
             # put it away")
             AttackDef.new(:thorn_recoil, [
               /As (?:a|an|your) .+? leaves your (?:left|right) hand, the thorns embedded in your skin painfully rip away/
+            ].freeze),
+            # Bleed ticks from open wounds. Nobody's ability: the processor
+            # marks a creature's tick :unowned (UNOWNED_TICK_ATTACKS) so the
+            # damage lands on the creature without joining our rollup; ours
+            # ("Your right leg drips...") is inbound via the "Your" capture.
+            # Lives in this list so the chunk gate passes our own tick, which
+            # carries no creature link.
+            AttackDef.new(:bleed, [
+              /Blood weeps from (?<target>.+?)'s#{MK_POST} open .+? wound\./,
+              /(?<target>.+?)'s#{MK_POST} .+? drips as #{MK_PRE}(?:he|she|it)#{MK_POST} continues to bleed\./,
+              /Trickles of blood course from (?<target>.+?)'s#{MK_POST} .+?\./,
+              /(?<target>Your) .+? drips as you continue to bleed\./
+            ].freeze),
+            # Rot tick (a nearby player's curse on a creature; hunt log
+            # 2026-09-07 23:36). Unowned like bleed.
+            AttackDef.new(:rot, [
+              /Skin peels off (?<target>.+?)'s#{MK_POST} body, exposing rotting flesh\./
             ].freeze)
           ].freeze
 
@@ -439,19 +505,33 @@ module Lich
             nil
           end
 
-          # Def names whose lines describe damage to US with no attacker: the
-          # parser reports them inbound without needing a "you" capture.
-          SELF_INFLICTED = %i[frigid_wind thorn_recoil].freeze
+          # Def names whose lines describe damage to US with no creature
+          # attacker: the parser reports them inbound without needing a "you"
+          # capture, and names the attacker for the ledger.
+          #   ENVIRONMENTAL - the world did it (weather ticks); attacker
+          #                   'environment'
+          #   SELF_INFLICTED - our own gear did it (thorn bow recoil);
+          #                    attacker 'self'
+          # (owner 2026-09-07: "frigid wind is environmental, it's not self
+          # inflicted" - the two must stay distinguishable in reports)
+          ENVIRONMENTAL = %i[frigid_wind].freeze
+          SELF_INFLICTED = %i[thorn_recoil].freeze
+          ATTACKERLESS = (ENVIRONMENTAL + SELF_INFLICTED).freeze
+
+          # Creature maneuvers aimed at the whole room, us included: the line
+          # names the attacker and no target, and the SSR that follows is
+          # OUR save. The parser classifies these inbound.
+          ROOM_TARGETED = %i[howl trumpet shrapnel_spray rift_tentacles].freeze
 
           # The tracker's chunk gate only forwards chunks holding a bolded
           # creature link; an environmental tick names no creature, so its
           # chunk was discarded before the parser ever saw it (real-feed
           # 2026-09-07: zero frigid_wind rows against 10 log ticks). This
           # union lets the gate pass such chunks.
-          SELF_INFLICTED_PATTERN = Regexp.union(ENVIRONMENTAL_ATTACKS.flat_map(&:patterns)).freeze
+          ATTACKERLESS_PATTERN = Regexp.union(ENVIRONMENTAL_ATTACKS.flat_map(&:patterns)).freeze
 
-          def self.self_inflicted_line?(line)
-            SELF_INFLICTED_PATTERN.match?(line)
+          def self.attackerless_line?(line)
+            ATTACKERLESS_PATTERN.match?(line)
           end
 
           # AMBUSH PREFIXES - modifiers, not attacks.
