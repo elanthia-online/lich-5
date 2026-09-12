@@ -166,12 +166,26 @@ module Lich
             # the file's mtime changes, which clears every kind. The document
             # is loaded before the kind's lock is taken: the mutex is not
             # reentrant, and the builders run inside it.
+            # Publication is validated against the document it was built
+            # from: a reset! (an edit, a reload) between capturing the
+            # document and taking the lock empties the cache, so the captured
+            # document is no longer the cached one and the build is discarded
+            # and retried against the current file. Without this an
+            # overlapping reader could publish old definitions into the new
+            # cache, where they would persist until the next edit.
             def memoize(key)
-              refresh_if_changed
-              return @cache[key] if @cache.key?(key)
+              loop do
+                refresh_if_changed
+                return @cache[key] if @cache.key?(key)
 
-              doc = document
-              super(key) { build(key, doc) }
+                doc = document
+                built = @lock.synchronize do
+                  next :stale unless @cache[:document].equal?(doc)
+
+                  @cache.key?(key) ? @cache[key] : (@cache[key] = build(key, doc))
+                end
+                return built unless built == :stale
+              end
             end
 
             def build(key, doc)
@@ -240,12 +254,14 @@ module Lich
             end
 
             def build_flares(doc)
+              accepted = {} # name => [index, flags] of the first accepted entry for that name
               validate_entries(doc['flares'], :flares) do |entry, index|
                 next unless (h = entry_hash(entry, :flares, index))
                 next unless (name = validate_def_name(h['name'], :flares, index))
                 next unless (patterns = validate_patterns(h['patterns'], :flares, index))
-                next unless (flags = validate_flare_flags(h, name, index))
+                next unless (flags = validate_flare_flags(h, name, index, accepted[name]))
 
+                accepted[name] ||= [index, flags]
                 Flares::FlareDef.new(name, patterns, *flags)
               end.freeze
             end
@@ -365,9 +381,21 @@ module Lich
             # name defaults every omitted flag to false.
             #
             # @return [Array(Boolean, Boolean, Boolean), nil]
-            def validate_flare_flags(h, name, index)
+            # The name's flags are owned by whichever def carries it first:
+            # the shipped def when the name is shipped, otherwise the first
+            # accepted supplemental entry (+prior+ = [index, flags]). Later
+            # entries inherit what they omit and are rejected on a
+            # contradiction, so a name never carries two behaviours no
+            # matter where it was introduced.
+            #
+            # @return [Array(Boolean, Boolean, Boolean), nil]
+            def validate_flare_flags(h, name, index, prior)
               shipped = Flares::FLARE_DEFS.find { |d| d.name == name }
-              defaults = shipped ? [shipped.damaging, shipped.aoe, shipped.spawns] : [false, false, false]
+              owner, defaults =
+                if shipped then ["the shipped #{name} flare", [shipped.damaging, shipped.aoe, shipped.spawns]]
+                elsif prior then ["flares[#{prior[0]}] (#{name})", prior[1]]
+                else [nil, [false, false, false]]
+                end
 
               FLARE_FLAGS.each_with_index.map do |flag, i|
                 value = h[flag]
@@ -378,8 +406,8 @@ module Lich
                   return nil
                 end
 
-                if shipped && value != defaults[i]
-                  report("flares[#{index}] skipped -- #{flag}: #{value} contradicts the shipped #{name} flare (#{flag}: #{defaults[i]}); a reused name keeps the shipped behaviour. Omit the flag or use a new name. This entry will not be applied.")
+                if owner && value != defaults[i]
+                  report("flares[#{index}] skipped -- #{flag}: #{value} contradicts #{owner} (#{flag}: #{defaults[i]}); a reused name keeps the behaviour it was first given. Omit the flag or use a new name. This entry will not be applied.")
                   return nil
                 end
 
