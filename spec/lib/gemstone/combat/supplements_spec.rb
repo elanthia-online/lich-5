@@ -175,6 +175,38 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::Supplements do
       expect([flare.damaging, flare.aoe, flare.spawns]).to eq([shipped.damaging, shipped.aoe, shipped.spawns])
     end
 
+    it 'gives a repeated new name the flags of its first entry, inheriting what later entries omit' do
+      write(<<~YAML)
+        flares:
+          - name: custom_frost
+            damaging: true
+            aoe: true
+            patterns: ['Your staff bursts with frost!']
+          - name: custom_frost
+            patterns: ['Your staff spits frost!']
+          - name: custom_frost
+            aoe: true
+            patterns: ['Your staff hums with frost!']
+      YAML
+      tuples = described_class.flares.map { |f| [f.name, f.damaging, f.aoe, f.spawns] }
+      expect(tuples).to eq([[:custom_frost, true, true, false]] * 3)
+      expect(messages).not_to include('skipped')
+    end
+
+    it 'rejects a later entry whose explicit flag contradicts the first entry for that new name' do
+      write(<<~YAML)
+        flares:
+          - name: custom_frost
+            damaging: true
+            patterns: ['Your staff bursts with frost!']
+          - name: custom_frost
+            damaging: false
+            patterns: ['Your staff spits frost!']
+      YAML
+      expect(described_class.flares.size).to eq(1)
+      expect(messages).to include('flares[1] skipped -- damaging: false contradicts flares[0] (custom_frost) (damaging: true)')
+    end
+
     it 'rejects an explicit flag that contradicts the shipped flare' do
       shipped = defs_ns::Flares::FLARE_DEFS.find { |d| d.name == :acid }
       write("flares:\n  - name: acid\n    damaging: #{!shipped.damaging}\n    patterns: ['\\*\\* acid \\*\\*']\n")
@@ -244,6 +276,44 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::Supplements do
 
       File.delete(@file)
       expect(described_class.attacks).to eq([])
+    end
+
+    # Review finding on the first draft: a reader that captured the old
+    # document and was then overtaken by a reset (an edit plus a read of
+    # another kind) published old definitions into the new cache, where
+    # they persisted for every later caller. Barriers, not sleeps: thread A
+    # is held just after it captures the document, B does the edit/reset/
+    # read, then A resumes.
+    it 'does not publish a build from a stale document after a concurrent reset' do
+      write("attacks:\n  - name: before_edit\n    patterns: ['x (?<target>.+?)!']\n")
+      a_captured = Queue.new
+      resume_a = Queue.new
+      reader = nil
+      paused = false
+
+      # Pause the reader once, right after it captures the (old) document.
+      # Its retry after the reset comes back through here and must not
+      # pause again.
+      allow(described_class).to receive(:document).and_wrap_original do |original|
+        doc = original.call
+        if Thread.current == reader && !paused
+          paused = true
+          a_captured << true
+          resume_a.pop
+        end
+        doc
+      end
+
+      reader = Thread.new { described_class.attacks.map(&:name) }
+      a_captured.pop
+
+      write("attacks:\n  - name: after_edit\n    patterns: ['x (?<target>.+?)!']\n")
+      described_class.reset!
+      described_class.flares # caches the new document without touching :attacks
+
+      resume_a << true
+      expect(reader.value).to eq([:after_edit]) # the overlapping reader retried against the current file
+      expect(described_class.attacks.map(&:name)).to eq([:after_edit])
     end
 
     it 'reset! forces a re-read even when the mtime is unchanged' do
