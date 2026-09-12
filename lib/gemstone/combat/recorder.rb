@@ -144,6 +144,7 @@ module Lich
             foreign_caster INTEGER NOT NULL DEFAULT 0, -- a nearby player's attack (observed, not ours)
             unowned     INTEGER NOT NULL DEFAULT 0,    -- effect tick, no owning cast: applied to creature, not our deal
             ours        INTEGER NOT NULL DEFAULT 0,    -- decided at write time: our own OUTBOUND attack - not inbound, not a nearby player's, not on a foreign target, not an unowned tick, not an orphan sink
+            chunk_seq   INTEGER,                       -- the recorder's own count of chunks seen (monotonic for its lifetime): orders chunks that share a whole-second occurred_at, where hits.line_seq restarts
             redirected_from TEXT                       -- guardian redirect: noun of the creature we struck AT; the row's creature is the guardian that took it
           );
           CREATE INDEX IF NOT EXISTS idx_attacks_session ON attacks(session_id, seq);
@@ -270,6 +271,10 @@ module Lich
           # call that caused the close returns.
           @session_finished_callbacks = []
           @merged_stun_rows = Set.new # status ids that already absorbed their stun twin
+          # Chunks seen by this recorder, counted at each chunk boundary
+          # (a fresh per-chunk uid sequence). Persisted as attacks.chunk_seq
+          # so two chunks inside the same prompt second still order.
+          @chunk_seq = 0
           @finished_sessions = []
           @finished_to_notify = []
           @last_event_at = nil
@@ -550,7 +555,7 @@ module Lich
 
         ADDED_COLUMNS = {
           'attacks'   => { 'redirected_from' => 'TEXT', 'attack_kind' => 'TEXT',
-                           'ours' => 'INTEGER NOT NULL DEFAULT 0' },
+                           'ours' => 'INTEGER NOT NULL DEFAULT 0', 'chunk_seq' => 'INTEGER' },
           'flares'    => { 'ours' => 'INTEGER NOT NULL DEFAULT 0' },
           'hits'      => { 'line_seq' => 'INTEGER' },
           'creatures' => { 'kill_credit' => 'TEXT' },
@@ -720,6 +725,7 @@ module Lich
           if new_chunk
             @chunk_rows = {}
             @chunk_flares = {}
+            @chunk_seq += 1
           end
           @chunk_batch = batch
           root_uid = event[:root_uid]
@@ -750,15 +756,15 @@ module Lich
                       # an announced-but-unhonored one (UAC shape) resolved on
                       # the intended creature, which the row already names
                       (event[:redirect] && event[:redirect][:honored] != false) ? event[:redirect][:intended] : nil,
-                      ours]
+                      ours, @chunk_seq]
             @db.execute(<<~SQL, params)
               INSERT INTO attacks (session_id, seq, occurred_at, name, parent, parent_weapon,
                                    root_attack_id, parent_attack_id, parent_confidence,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
                                    outcomes_all, aimed, ambush, attack_kind, inbound, orphan,
-                                   foreign_caster, unowned, redirected_from, ours)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   foreign_caster, unowned, redirected_from, ours, chunk_seq)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
             # stage the uid -> row mapping; published to @chunk_rows only when
@@ -978,10 +984,12 @@ module Lich
                   JOIN attacks a ON a.id = h.attack_id
                   LEFT JOIN flares f ON f.id = h.flare_id
                   WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
-                  ORDER BY a.occurred_at DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
+                  ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
                 SQL
-                # ordering: the chunk's time, then the damage line's position
-                # in the chunk (COMBAT order), then insertion. Row id alone
+                # ordering: the chunk's time, then which chunk (prompt times
+                # are whole seconds, so two chunks can share one), then the
+                # damage line's position in the chunk (COMBAT order), then
+                # insertion. Row id alone
                 # credited a released spell over the swing that landed after
                 # it - the cast is emitted after its swing for lineage
                 # (review of cb68bb90).

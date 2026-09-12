@@ -120,6 +120,28 @@ RSpec.describe 'Recorder kill credit follows combat order' do
     expect(row['kill_credit']).to eq('last_own_hit')
   end
 
+  it 'orders two chunks that share a whole-second timestamp by chunk, not by line position' do
+    rec = Lich::Gemstone::Combat::Recorder.new(@db_path, character: 'Tester', source: 'test', idle_timeout: 60)
+    same_second = Time.at(1_000_000)
+    lizard = { id: 101, name: 'a cave lizard', noun: nil }
+    # earlier chunk: our damage late in the chunk (line 30)
+    rec.record(:attack, { name: 'mine', at: same_second, target: lizard, _uid: 0,
+                          hits: [{ damage: 40, crit: nil, line: 30 }], resolutions: [] })
+    # later chunk, same prompt second: a nearby player's damage early in it (line 2)
+    rec.record(:attack, { name: 'theirs', at: same_second, target: lizard, _uid: 0, foreign_caster: true,
+                          hits: [{ damage: 5, crit: nil, line: 2 }], resolutions: [] })
+    rec.finish_session(at: same_second + 100)
+    rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: 'add')
+    rec.close
+
+    theirs = query("SELECT id, chunk_seq FROM attacks WHERE name = 'theirs'").first
+    mine   = query("SELECT chunk_seq FROM attacks WHERE name = 'mine'").first
+    expect(theirs['chunk_seq']).to be > mine['chunk_seq']
+    row = query('SELECT killed_by_attack_id, kill_credit FROM creatures').first
+    expect(row['killed_by_attack_id']).to eq(theirs['id'])
+    expect(row['kill_credit']).to eq('last_hit')
+  end
+
   it 'records the feed position of every hit' do
     rec = Lich::Gemstone::Combat::Recorder.new(@db_path, character: 'Tester', source: 'test', idle_timeout: 60)
     chunk = [release] + verdict + ["You swing a perfect #{mace} at #{troll}!"] + swing_roll + prompt
