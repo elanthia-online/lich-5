@@ -636,7 +636,9 @@ module Lich
         # @raise [Common::ScriptExecutionGuard::Interrupted] if the calling
         #   script's installed policy rejects the write
         def _puts(str)
-          script = Script.current
+          # Raw callers may hold other shared locks (e.g. Inventory.refresh).
+          # Preserve their pause-free sends while still resolving their guard.
+          script = Script.current_without_pause
           # A guard callback must not reenter the socket. Let Script's guard
           # recursion check reject it before Ruby attempts to relock the mutex.
           if @mutex.owned? && script.respond_to?(:check_execution_guard!) &&
@@ -644,9 +646,7 @@ module Lich
             script.check_execution_guard!(command: str.to_s.dup.freeze)
           end
           @mutex.synchronize do
-            # Script.current may wait for a paused script. Resolve it before
-            # taking the shared socket lock so a pause cannot stall other
-            # scripts' writes. Recheck the captured owner's current policy here
+            # Recheck the captured owner's current policy here
             # after lock contention; do not retain an earlier permission result.
             guarded = script.respond_to?(:check_execution_guard!) &&
                       script.respond_to?(:execution_guard_active?) && script.execution_guard_active?

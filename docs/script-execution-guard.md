@@ -15,6 +15,11 @@ argument and returning **literal `true`** to permit continuation:
   `Game._puts` passes the raw command supplied by its caller without adding or
   stripping a prefix.
 
+`Game.puts` retains its script pause checkpoint. Raw `Game._puts` resolves the
+calling script without waiting for unpause, including when its caller holds a
+shared lock such as `Inventory.refresh`. An installed guard still checks every
+raw write under the socket mutex immediately before transport.
+
 For example, this policy bounds elapsed time and attempted writes for one thread:
 
 ```ruby

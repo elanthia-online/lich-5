@@ -1079,6 +1079,15 @@ module Lich
       end
       private_class_method :__resolve_current
 
+      # Resolves the calling script for core seams that must not add a pause
+      # checkpoint, including raw writes made while holding a caller's lock.
+      #
+      # @return [Script, nil] the script bound to Thread.current, or nil
+      # @api private
+      def Script.current_without_pause
+        __resolve_current
+      end
+
       # Returns the script bound to the calling thread.
       #
       # Blocks the calling thread while that script is paused (unless it has

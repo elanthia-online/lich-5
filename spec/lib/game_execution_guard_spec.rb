@@ -67,8 +67,9 @@ RSpec.describe Lich::GameBase::Game, 'script execution guard on game writes' do
     expect($_CLIENTBUFFER_.last).to include('attack #17')
   end
 
-  it 'resolves the pause-aware script once in puts and once at the write seam' do
-    expect(Script).to receive(:current).twice.and_return(guarded)
+  it 'resolves the pause-aware script in puts and the pause-free owner at the write seam' do
+    expect(Script).to receive(:current).once.and_return(guarded)
+    expect(Script).to receive(:current_without_pause).once.and_return(guarded)
     described_class.puts('attack #17')
   end
 
@@ -170,8 +171,8 @@ RSpec.describe Lich::GameBase::Game, 'script execution guard on game writes' do
     expect(events).to eq([[:check, 'attack #17'], [:write, 'attack #17']])
   end
 
-  it 'resolves pause-aware Script.current outside the shared socket lock' do
-    allow(Script).to receive(:current) do
+  it 'resolves the pause-free owner outside the shared socket lock' do
+    allow(Script).to receive(:current_without_pause) do
       expect(mutex.owned?).to be(false)
       guarded
     end
@@ -190,7 +191,7 @@ RSpec.describe Lich::GameBase::Game, 'script execution guard on game writes' do
     scripts = 2.times.map do
       GameExecutionGuardSpec::GuardedScript.new { |command| events << [:check, command] }
     end
-    allow(Script).to receive(:current) { Thread.current[:game_execution_guard_spec_script] }
+    allow(Script).to receive(:current_without_pause) { Thread.current[:game_execution_guard_spec_script] }
     allow(socket).to receive(:puts) { |command| events << [:write, command] }
     threads = scripts.each_with_index.map do |script, index|
       Thread.new do
