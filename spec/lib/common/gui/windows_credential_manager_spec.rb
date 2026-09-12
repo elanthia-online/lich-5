@@ -1,7 +1,19 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'os'
 require 'ffi'
+
+# spec_helper.rb's own Lich::Util stub doesn't define install_gem_requirements, and
+# this file may load without spec/login_spec_helper.rb (which does) ever having run.
+# `os`/`ffi` are already required unconditionally above, so this only needs to satisfy
+# the call - it isn't standing in for the real gem-install behavior.
+module Lich
+  module Util
+    def self.install_gem_requirements(*); true; end unless respond_to?(:install_gem_requirements)
+  end
+end
+
 require 'common/gui/windows_credential_manager'
 
 RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
@@ -16,7 +28,11 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
         allow(OS).to receive(:windows?).and_return(true)
       end
 
-      it 'returns true if FFI library loads successfully' do
+      # CredentialStruct and the attach_function-defined API calls are only defined
+      # when the real OS.windows? is true at file-load time (see windows_credential_manager.rb)
+      # so this platform can only be exercised on an actual Windows runtime, not by
+      # stubbing OS.windows? after the fact on this (Linux) CI runner.
+      it 'returns true if FFI library loads successfully', if: OS.windows? do
         expect(described_class.available?).to be true
       end
     end
@@ -29,6 +45,67 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
       it 'returns false when not on Windows' do
         expect(described_class.available?).to be false
       end
+    end
+  end
+
+  describe 'module load (regression for #1542)' do
+    # The bug this guards against: this file used to call
+    # Lich::Util.install_gem_requirements and extend FFI::Library unconditionally
+    # at load time on every platform. That made loading it depend on some other
+    # file having already loaded ffi/install_gem_requirements first, so a spec-stub
+    # race elsewhere in the suite could make it raise on non-Windows CI. Now the
+    # whole FFI-dependent block is gated behind OS.windows?, so this file must
+    # never touch Lich::Util.install_gem_requirements off Windows, regardless of
+    # whether a real or stubbed version of that method exists.
+    it 'never calls Lich::Util.install_gem_requirements off Windows' do
+      # Reload into a disposable module rather than the real WindowsCredentialManager
+      # constant, so this doesn't leave load-time state (or, in the Windows test below,
+      # fake singleton bindings) on the module every other example in this file shares.
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', Module.new)
+      allow(OS).to receive(:windows?).and_return(false)
+      # This file's own `require 'ffi'` above already defines FFI, which would mask
+      # a regression where extend FFI::Library/CredentialStruct escaped the guard
+      # without calling install_gem_requirements. Hide it so a reload only succeeds
+      # if the guard keeps every FFI reference out of the non-Windows load path.
+      hide_const('FFI')
+      expect(Lich::Util).not_to receive(:install_gem_requirements)
+
+      load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
+    end
+  end
+
+  describe 'module load on Windows' do
+    # Real ffi_lib/attach_function calls try to dlopen advapi32/kernel32, which only
+    # exist on an actual Windows machine. Double them so this exercises the Windows
+    # branch's call sequence - installer, DLL names, function bindings - without
+    # needing real Windows, instead of skipping this branch on CI entirely.
+    it 'installs ffi, loads the Windows DLLs, and binds the expected Credential Manager functions' do
+      # The fake attach_function below defines singleton methods (CredReadW, etc.) on
+      # whatever module it's called on. Reload into a disposable module instead of the
+      # real WindowsCredentialManager constant so those fakes don't leak into it and
+      # get exercised by later examples in this file instead of the real bindings.
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', Module.new)
+
+      ffi_lib_calls = []
+      attach_function_calls = []
+      original_ffi_lib = FFI::Library.instance_method(:ffi_lib)
+      original_attach_function = FFI::Library.instance_method(:attach_function)
+      FFI::Library.define_method(:ffi_lib) { |*libs| ffi_lib_calls << libs }
+      FFI::Library.define_method(:attach_function) do |name, *_args|
+        attach_function_calls << name
+        define_singleton_method(name) { |*_a| nil }
+      end
+
+      allow(OS).to receive(:windows?).and_return(true)
+      expect(Lich::Util).to receive(:install_gem_requirements).with({ 'ffi' => true }).and_call_original
+
+      load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
+
+      expect(ffi_lib_calls).to eq([%w[advapi32 kernel32]])
+      expect(attach_function_calls).to eq(%i[CredReadW CredWriteW CredDeleteW CredFree GetLastError])
+    ensure
+      FFI::Library.define_method(:ffi_lib, original_ffi_lib)
+      FFI::Library.define_method(:attach_function, original_attach_function)
     end
   end
 
