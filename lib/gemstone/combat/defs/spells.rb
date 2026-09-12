@@ -42,9 +42,12 @@ module Lich
               /Shimmering black flames lash out toward (?<target>[^,]+), encircling the .+? in their deadly grasp\./,
               /Long, spectral talons materialize from midair to tear viciously at the body of (?<target>[^!]+)!/,
               # Marlu, not Gosaena (GSWiki lists this line under Marlu; Gosaena has
-              # a separate, still-unfilled section). Confirmed via a live groupmate
-              # cast where the second mention was a pronoun, not the creature name.
+              # a separate, still-unfilled section). 1p form, per the wiki.
               /A tendril of black mist suddenly senses the proximity of (?<target>[^.]+)\. The mist expands into a large, quickly moving, highly lethal cloud that rapidly surrounds .+?, obliterating it from view\./,
+              # Marlu 3p: a groupmate's cast landing on a nearby creature. Log-
+              # confirmed; the second and third mentions were pronouns ("her"),
+              # not the creature name, hence the .+? tails.
+              /As (?<target>.+?) comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds .+?, obliterating .+? from view\./,
               # Not present on GSWiki as of this writing - log-sourced only.
               /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage\./,
               /The ethereal barbed whip that lies loosely coiled around you uncoils at terrifying speed\. It snaps out toward (?<target>[^!]+)!/,

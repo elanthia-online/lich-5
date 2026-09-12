@@ -117,6 +117,15 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
       expect(result[:target][:id]).to eq(452450877)
     end
 
+    it 'matches 335 Divine Wrath Marlu black mist 3p form (groupmate cast, pronoun tails)' do
+      # Log-confirmed: named once, then "her" twice.
+      line = "As #{bolded(452450877, 'conjurer', 'a gaudy phantasmic conjurer')} comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds her, obliterating her from view."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
     it 'matches 335 Divine Wrath shadowy black rose with a repeated-target tail' do
       line = "A shadowy black rose touches #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')} and wraps immediately about it, struggling to force its long, barbed thorns into the tattooed gigas berserker."
       result = described_class.parse_attack(line)
