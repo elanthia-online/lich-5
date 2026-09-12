@@ -14,9 +14,13 @@ module Lich
       class FileUpdater
         # @param client [GitHubClient] GitHub API client instance
         # @param resolver [ChannelResolver] channel resolver instance
-        def initialize(client, resolver)
+        # @param snapshot_manager [SnapshotManager] snapshot manager instance,
+        #   used to place data-file backups under a shared L5-snapshot-<DATE-TIME>
+        #   directory instead of accumulating them in DATA_DIR
+        def initialize(client, resolver, snapshot_manager)
           @client = client
           @resolver = resolver
+          @snapshot_manager = snapshot_manager
         end
 
         # Updates a file from a specific repository.
@@ -209,11 +213,13 @@ module Lich
 
           if XMLData.game =~ /^GS/
             ["effect-list.xml"].each do |file|
-              transition_filename = "#{file}".sub(".xml", '')
-              newfilename = File.join(DATA_DIR, "#{transition_filename}-#{Time.now.to_i}.xml")
               if File.exist?(File.join(DATA_DIR, file))
+                snapshot_dir = @snapshot_manager.last_snapshot_dir || @snapshot_manager.new_snapshot_dir
+                data_backup_dir = File.join(snapshot_dir, "data")
+                FileUtils.mkdir_p(data_backup_dir)
+                newfilename = File.join(data_backup_dir, file)
                 File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }
-                respond "The prior version of #{file} was renamed to #{newfilename}."
+                respond "The prior version of #{file} was backed up to #{newfilename}."
               end
               update_file('data', file)
             end

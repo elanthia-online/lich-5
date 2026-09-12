@@ -215,7 +215,7 @@ module Lich
               respond
             end
           else
-            file_updater = FileUpdater.new(@client, @resolver)
+            file_updater = FileUpdater.new(@client, @resolver, @snapshot_manager)
             file_updater.update_file(type, requested_file, 'beta')
           end
         end
@@ -301,7 +301,7 @@ module Lich
 
           copy_top_level_files(source_dir)
 
-          file_updater = FileUpdater.new(@client, @resolver)
+          file_updater = FileUpdater.new(@client, @resolver, @snapshot_manager)
           file_updater.update_core_data_and_scripts(version)
 
           lich_to_update = File.join(LICH_DIR, File.basename($PROGRAM_NAME))
