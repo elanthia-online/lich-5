@@ -45,7 +45,7 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::Supplements do
       expect(described_class.flares).to eq([])
       expect(described_class.statuses).to eq([])
       expect(described_class.outcomes).to eq([])
-      expect(described_class.summary).to eq(attacks: 0, flares: 0, statuses: 0, outcomes: 0)
+      expect(described_class.summary).to eq(attacks: 0, flares: 0, statuses: 0, outcomes: 0, messages: 0)
       expect(messages).to eq('')
     end
   end
