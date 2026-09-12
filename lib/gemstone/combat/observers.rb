@@ -13,9 +13,9 @@
 #   2. The ledger, not the balance: persist_event aggregates (damage
 #      totals, wound ranks); the per-event detail is consumed at
 #      application time and only exists here.
-#   3. Persistence: registry entries are session-only and swept
-#      (cleanup_max_age) - recording/logging scripts must capture events
-#      at parse time.
+#   3. Persistence: registry entries are session-only and swept by the
+#      registry's own housekeeping (Creature.cleanup_max_age) - recording/
+#      logging scripts must capture events at parse time.
 #
 # Contract for subscribers:
 #   - Callbacks may run on AsyncProcessor worker threads. They must be

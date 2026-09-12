@@ -639,15 +639,14 @@ RSpec.describe Lich::Gemstone::Creature, 'facade delegation and cleanup_old (F4)
   after { instance_class.configure }
 
   describe '.cleanup_old' do
-    it 'accepts a positional age - the exact form Combat::Tracker#cleanup_creatures passes' do
+    it 'accepts a positional age' do
       old = described_class.register('old thing', 1)
       old.instance_variable_set(:@last_seen_at, Time.now - 10_800) # unseen 3 hours
       described_class.register('fresh thing', 2)
       described_class.clear_room
 
-      # Mirrors tracker.rb: `removed = Creature.cleanup_old(max_age)`. Before the
-      # F4 fix the keyword-only facade raised ArgumentError here, which the
-      # tracker's rescue swallowed - so registry cleanup silently never ran.
+      # A keyword-only facade once raised ArgumentError on a positional age;
+      # keep the facade positional to match the shared base contract.
       removed = nil
       expect { removed = described_class.cleanup_old(600) }.not_to raise_error
 

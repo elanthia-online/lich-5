@@ -773,17 +773,17 @@ module Lich
         CreatureInstance.clear
       end
 
-      # Removes creatures older than the given age (in seconds).
+      # Removes creatures unseen for longer than the given age (in seconds).
       #
       # Positional to match {CreatureInstance#cleanup_old} (supplied by
-      # {Lich::Common::CreatureBase}) and the positional call in
-      # Combat::Tracker#cleanup_creatures. A keyword-only signature here raised
-      # ArgumentError on every scheduled tracker cleanup, which the tracker's
-      # rescue then swallowed - so registry cleanup silently never ran.
+      # {Lich::Common::CreatureBase}). The registry sweeps itself on a
+      # wall-clock throttle from {CreatureInstance#register}; this is for
+      # scripts that want an immediate sweep at a chosen cutoff.
       #
-      # @param max_age_seconds [Integer] age cutoff in seconds.
+      # @param max_age_seconds [Integer] age cutoff in seconds; defaults to
+      #   the configured cleanup_max_age.
       # @return [Integer] number of instances removed.
-      def self.cleanup_old(max_age_seconds = 600)
+      def self.cleanup_old(max_age_seconds = CreatureInstance.cleanup_max_age)
         CreatureInstance.cleanup_old(max_age_seconds)
       end
 
