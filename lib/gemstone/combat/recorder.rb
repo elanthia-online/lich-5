@@ -120,6 +120,7 @@ module Lich
             last_seen   REAL,
             killed_at   REAL,
             killed_by_attack_id INTEGER,
+            kill_credit TEXT,                             -- how killed_by_attack_id was chosen: 'crit' (fatal crit, ground truth) | 'window' (room-feed death inside an attack window) | 'last_own_hit' (no window: the last damaging attack on it was ours) | 'last_hit' (no window: the last damaging attack on it was someone else's) | NULL (unknown / pre-migration)
             UNIQUE (session_id, exist_id)
           );
 
@@ -144,10 +145,13 @@ module Lich
             outcomes_all TEXT,                        -- comma-joined when >1
             aimed       INTEGER NOT NULL DEFAULT 0,
             ambush      INTEGER NOT NULL DEFAULT 0,
+            attack_kind TEXT,                         -- named maneuver: 'waylay'/'ambush' (from hiding, also sets ambush=1) or 'reverse_strike' (parry reaction, ambush=0); NULL when not an ambush, or recorded before this column existed
             inbound     INTEGER NOT NULL DEFAULT 0,
             orphan      INTEGER NOT NULL DEFAULT 0,
             foreign_caster INTEGER NOT NULL DEFAULT 0, -- a nearby player's attack (observed, not ours)
             unowned     INTEGER NOT NULL DEFAULT 0,    -- effect tick, no owning cast: applied to creature, not our deal
+            ours        INTEGER NOT NULL DEFAULT 0,    -- decided at write time: our own OUTBOUND attack - not inbound, not a nearby player's, not on a foreign target, not an unowned tick, not an orphan sink
+            chunk_seq   INTEGER,                       -- the recorder's own count of chunks seen (monotonic for its lifetime): orders chunks that share a whole-second occurred_at, where hits.line_seq restarts
             redirected_from TEXT                       -- guardian redirect: noun of the creature we struck AT; the row's creature is the guardian that took it
           );
           CREATE INDEX IF NOT EXISTS idx_attacks_session ON attacks(session_id, seq);
@@ -184,7 +188,8 @@ module Lich
             damaging    INTEGER NOT NULL DEFAULT 0,
             creature_id INTEGER REFERENCES creatures(id), -- AoE: may differ from swing
             weapon      TEXT,
-            outcome     TEXT
+            outcome     TEXT,
+            ours        INTEGER NOT NULL DEFAULT 0     -- 2p flare (our item fired). On an INBOUND row ours=1 is our REACTIVE flare (shield spike, thorns); ours=0 there is the creature's own weapon proc striking us
           );
           CREATE INDEX IF NOT EXISTS idx_flares_attack ON flares(attack_id);
           CREATE INDEX IF NOT EXISTS idx_flares_name ON flares(name);
@@ -205,12 +210,15 @@ module Lich
             fatal       INTEGER NOT NULL DEFAULT 0,
             amputated   INTEGER NOT NULL DEFAULT 0,
             secondary_location TEXT,
-            secondary_rank     INTEGER                    -- secondary wound severity (:wound_rank)
+            secondary_rank     INTEGER,                   -- secondary wound severity (:wound_rank)
+            line_seq    INTEGER                           -- feed position of the damage line within its chunk: COMBAT order. Row id is insertion order, which a released cast (emitted after its swing) breaks; attacks.occurred_at orders across chunks
           );
           CREATE INDEX IF NOT EXISTS idx_hits_attack ON hits(attack_id);
           CREATE INDEX IF NOT EXISTS idx_hits_creature ON hits(session_id, creature_id);
           CREATE INDEX IF NOT EXISTS idx_hits_location ON hits(location);
           CREATE INDEX IF NOT EXISTS idx_hits_crit ON hits(crit_rank);
+          CREATE INDEX IF NOT EXISTS idx_hits_creature_only ON hits(creature_id);  -- per-creature damage subqueries (the composite needs session_id first)
+          CREATE INDEX IF NOT EXISTS idx_hits_flare ON hits(flare_id);
 
           -- kind: status (action add/remove), stun (value=rounds),
           --       roundtime (value=seconds), spell_loss (spell/spell_name/cause),
@@ -221,6 +229,7 @@ module Lich
             creature_id INTEGER REFERENCES creatures(id), -- NULL = self or unresolved
             subject     TEXT,                             -- name as printed ('self' for us)
             attack_id   INTEGER REFERENCES attacks(id),   -- window attribution
+            flare_id    INTEGER REFERENCES flares(id),    -- the flare it rode on (glowbark blind), else NULL
             occurred_at REAL NOT NULL,
             kind        TEXT NOT NULL,
             status      TEXT,
@@ -260,11 +269,25 @@ module Lich
           @seq = 0
           @open_attack = nil # { id:, creature_ids: Set, inbound: bool }
           @chunk_rows = {}   # per-chunk _uid -> attack row id, for spawn-tree links
+          @chunk_flares = {} # per-chunk _uid -> [flare row ids], for status attack_uid/flare_seq
+          @chunk_batch = nil # the processor's observation_batch id for the chunk above
           @pending_cache = nil      # creature-cache entries staged during a txn (see in_txn)
           @pending_chunk_rows = nil # chunk-row entries staged during a txn (see in_txn)
           @character = character
           @source = source
           @idle_timeout = idle_timeout
+          # Session-finished hook (see on_session_finished / drain_finished_sessions).
+          # Every close path funnels through finish_session_locked, which
+          # queues the id; callbacks run OUTSIDE the mutex after the public
+          # call that caused the close returns.
+          @session_finished_callbacks = []
+          @merged_stun_rows = Set.new # status ids that already absorbed their stun twin
+          # Chunks seen by this recorder, counted at each chunk boundary
+          # (a fresh per-chunk uid sequence). Persisted as attacks.chunk_seq
+          # so two chunks inside the same prompt second still order.
+          @chunk_seq = 0
+          @finished_sessions = []
+          @finished_to_notify = []
           @last_event_at = nil
           # record fires on the AsyncProcessor worker thread; check_idle!/close
           # are documented as driven from the consuming script's own periodic
@@ -286,11 +309,20 @@ module Lich
         # creatures.noun blob=196, text=0), so `WHERE noun = 'berserker'` never
         # matched and text functions saw bytes, not words. Re-tag as UTF-8 at
         # the boundary; game text is ASCII/Latin-1 so scrub only guards junk.
+        # Whitespace is normalised here too. A creature revealed from hiding
+        # sometimes arrives with a space injected into BOTH attributes of its
+        # link - real line 2026-09-11: noun=" rogue" name="human  rogue", the
+        # same creature being plain "rogue"/"human rogue" on its other 34
+        # mentions. The game sends it; it is intermittent, and the reveal line
+        # is never trustworthy. Untouched, " rogue" is a noun distinct from
+        # "rogue" and the creature reports as its own kind forever.
         def txt(value)
           return nil if value.nil?
 
           s = value.to_s
-          s.encoding == Encoding::ASCII_8BIT ? s.dup.force_encoding('UTF-8').scrub('?') : s
+          s = s.dup.force_encoding('UTF-8').scrub('?') if s.encoding == Encoding::ASCII_8BIT
+          s = s.strip.squeeze(' ')
+          s.empty? ? nil : s
         end
 
         def start_session_locked(character: nil, source: nil, at: Time.now)
@@ -300,12 +332,47 @@ module Lich
           @session_id = @db.last_insert_row_id
           @seq = 0
           @creature_cache = {}
+          @closed_session = nil # a new hunt: the previous one takes no more facts
           @session_id
         end
 
         # @return [Integer, nil] the id of the session just closed
         def finish_session(at: Time.now)
-          @mutex.synchronize { finish_session_locked(at: at) }
+          result = @mutex.synchronize { finish_session_locked(at: at) }
+          notify_finished_sessions!
+          result
+        end
+
+        # Session-finished hook. Fires for EVERY close path - the idle poll
+        # (check_idle!), the next event's own idle check inside record, and
+        # close - so a subscriber sees each hunt end without polling. A
+        # session the idle gap closed and a trailing death then re-opened
+        # closes again later and fires again with the same id; dedupe if
+        # that matters. Callbacks run outside the recorder's mutex.
+        # @yieldparam session_id [Integer]
+        def on_session_finished(&blk)
+          @session_finished_callbacks << blk
+          self
+        end
+
+        # Drainable alternative to the callback: every session id finished
+        # since the last drain, oldest first.
+        # @return [Array<Integer>]
+        def drain_finished_sessions
+          @mutex.synchronize do
+            ids = @finished_sessions.dup
+            @finished_sessions.clear
+            ids
+          end
+        end
+
+        def notify_finished_sessions!
+          ids = @mutex.synchronize do
+            pending = @finished_to_notify.dup
+            @finished_to_notify.clear
+            pending
+          end
+          ids.each { |id| @session_finished_callbacks.each { |cb| cb.call(id) } }
         end
 
         def finish_session_locked(at: Time.now)
@@ -313,8 +380,23 @@ module Lich
 
           @db.execute('UPDATE sessions SET ended_at = ? WHERE id = ?', [at.to_f, @session_id])
           finished = @session_id
+          @finished_sessions << finished
+          @finished_to_notify << finished
+          # Remember what the closed session fought. A death confirmed by the
+          # room feed can arrive after the idle gap has already closed the
+          # hunt, and that kill belongs to THIS session's creature rows - see
+          # trailing_fact? / reopen_closed_session_locked!.
+          @closed_session = { id: finished, ended_at: at.to_f, cache: (@creature_cache || {}).dup }
           @session_id = nil
           @open_attack = nil
+          # A closed session's rows are not addressable by the next session's
+          # per-chunk uids. Leaving these populated let an event in the new
+          # session resolve a uid to the OLD session's attack row (real db:
+          # a status linked to the previous hunt's attack across an idle
+          # timeout).
+          @chunk_rows = {}
+          @chunk_flares = {}
+          @chunk_batch = nil
           finished
         end
 
@@ -336,7 +418,9 @@ module Lich
         # Cheap; call it from a periodic loop so a finished hunt closes even
         # when no further event ever arrives.
         def check_idle!(now = Time.now)
-          @mutex.synchronize { check_idle_locked!(now) }
+          result = @mutex.synchronize { check_idle_locked!(now) }
+          notify_finished_sessions!
+          result
         end
 
         def check_idle_locked!(now = Time.now)
@@ -353,6 +437,7 @@ module Lich
             finish_session_locked(at: @last_event_at || Time.now) if @session_id
             @db.close
           end
+          notify_finished_sessions!
         end
 
         # Persist one observer event. Attack events return and publish a frozen
@@ -365,6 +450,7 @@ module Lich
         #   for non-attack events
         def record(type, data)
           result = @mutex.synchronize { record_locked(type, data) }
+          notify_finished_sessions!
           # Receipts name committed rows, never pending writes. Emit outside the
           # recorder lock so consumers may inspect the database without deadlock.
           # This is evidence only, not command ownership or a combat-complete flag.
@@ -374,19 +460,92 @@ module Lich
           result
         end
 
+        # An event that is not ours: a nearby player's attack, a creature
+        # swinging at a third party, an orphan. Recorded for context inside
+        # a hunt, but it neither opens a session nor keeps one alive
+        # (2026-09-07: Tijay's cast in town opened "session 2" of a hunt
+        # that had ended).
+        #
+        # A non-attack event is a bare fact (:status/:stun/:roundtime/
+        # :spell_loss/:ucs) with no ownership flags of its own, so it cannot
+        # be judged on its own contents. It counts as ours when it is keyed
+        # to a creature THIS session already touched - see known_creature?.
+        # Blanket-treating every non-attack as foreign dropped the delayed
+        # room-feed death confirmation that sweep_death_watch exists to emit:
+        # a creature someone else finished minutes later reports `dead` as a
+        # bare :status long after our last swing, and with the session idled
+        # out that row (and the creature's killed_at) was lost outright.
+        def foreign_event?(type, data)
+          return !known_creature?(data) unless type == :attack
+
+          !!(data[:foreign_caster] || data[:foreign_target] || data[:unowned] || data[:_orphan])
+        end
+
+        # True when this event is keyed to a creature we have already recorded
+        # against - in the open session, or in the one the idle gap just
+        # closed (@closed_session, so a lagged death confirmation still finds
+        # its own hunt). A bystander's fact about a creature we never fought
+        # matches neither and stays foreign, opening nothing.
+        def known_creature?(data)
+          exist_id = data[:id]
+          return false unless exist_id
+
+          key = exist_id.to_i
+          return true if @creature_cache&.key?(key) || @pending_cache&.key?(key)
+
+          !!@closed_session&.fetch(:cache, nil)&.key?(key)
+        end
+
+        # A bare fact (not an :attack) about a creature we fought. It belongs
+        # to the hunt that fought it, so it must never open a fresh session:
+        # killed_at has to land on the creature row the attack already wrote.
+        def trailing_fact?(type, ours)
+          ours && type != :attack
+        end
+
+        # Re-open the session the idle gap just closed so a trailing fact
+        # files against its rows. ended_at is left where finish_session_locked
+        # put it - the last real attack - and re-stamped on the next close, so
+        # a lagged death never pads the hunt's duration.
+        def reopen_closed_session_locked!
+          return false unless @closed_session
+
+          @session_id = @closed_session[:id]
+          # Re-stamped by the next finish_session_locked, which closes at
+          # @last_event_at - untouched by a trailing fact, so ended_at comes
+          # back to the last real attack.
+          @db.execute('UPDATE sessions SET ended_at = NULL WHERE id = ?', [@session_id])
+          # Restore the cache so the trailing fact resolves to the creature
+          # row the attack wrote, instead of inserting a duplicate.
+          @creature_cache = @closed_session[:cache].dup
+          true
+        end
+
         def record_locked(type, data)
           if @idle_timeout
             now = Time.now
-            check_idle_locked!(now)
-            start_session_locked(character: @character, source: @source, at: now) unless @session_id
-            @last_event_at = now
+            # Judge ownership BEFORE the idle close: check_idle_locked! ends
+            # the session and start_session_locked wipes @creature_cache, so
+            # asking afterwards would call every delayed fact foreign.
+            ours = !foreign_event?(type, data)
+            trailing = trailing_fact?(type, ours)
+            # A trailing fact holds the open session rather than letting the
+            # idle gap split it; if the gap already closed the hunt, re-open
+            # that same session instead of starting a new one.
+            check_idle_locked!(now) unless trailing && @session_id
+            reopen_closed_session_locked! if trailing && !@session_id
+            start_session_locked(character: @character, source: @source, at: now) if ours && !@session_id
+            # A trailing fact does not extend the hunt: ended_at stays at the
+            # last real attack, so town time never pads a session.
+            @last_event_at = now if ours && !trailing
           end
           return unless @session_id
 
           case type
           when :attack then record_attack(data)
           when :status then record_status(kind: 'status', id: data[:id], name: data[:name],
-                                          status: data[:status].to_s, action: data[:action].to_s)
+                                          status: data[:status].to_s, action: data[:action].to_s,
+                                          flare_seq: data[:flare_seq], attack_uid: data[:attack_uid])
           when :stun then record_status(kind: 'stun', id: data[:id], name: data[:name],
                                         status: 'stunned', action: 'add', value: data[:rounds].to_i)
           when :roundtime then record_status(kind: 'roundtime', id: data[:id], name: data[:name],
@@ -410,19 +569,69 @@ module Lich
         # existed. CREATE TABLE IF NOT EXISTS never alters an existing table,
         # so each column added after first release is listed here and ALTERed
         # in when absent. Keep entries append-only.
+        # Columns added to the schema after the first release. A database
+        # created before one existed gains it on open; every column here must
+        # be nullable, since existing rows cannot supply a value. Anything the
+        # SCHEMA gained but this map did not would fail on the first INSERT
+        # that names it (statuses.flare_id did exactly that).
+        # Seconds within which a crit-table stun and its messaging twin are
+        # the same swing's (both are emitted while one event persists).
+        STUN_PAIR_WINDOW = 2.0
+
         ADDED_COLUMNS = {
-          'attacks' => { 'redirected_from' => 'TEXT' }
+          'attacks'   => { 'redirected_from' => 'TEXT', 'attack_kind' => 'TEXT',
+                           'ours' => 'INTEGER NOT NULL DEFAULT 0', 'chunk_seq' => 'INTEGER' },
+          'flares'    => { 'ours' => 'INTEGER NOT NULL DEFAULT 0' },
+          'hits'      => { 'line_seq' => 'INTEGER' },
+          'creatures' => { 'kill_credit' => 'TEXT' },
+          'statuses'  => { 'flare_id' => 'INTEGER REFERENCES flares(id)' }
         }.freeze
 
+        # Ownership of an attack row, decided ONCE here and persisted as
+        # attacks.ours so no reader re-derives it from five flags. The script
+        # kept five SQL fragments for this and two shapes slipped through:
+        # orphan sink rows (no flags set) passed every predicate, and a
+        # creature's weapon flare on an inbound row counted as our reactive
+        # flare (see flares.ours).
+        def own_attack?(event)
+          !(event[:inbound] || event[:foreign_caster] || event[:foreign_target] ||
+            event[:unowned] || event[:_orphan])
+        end
+
         def migrate!
+          added = Hash.new { |h, k| h[k] = [] }
           ADDED_COLUMNS.each do |table, cols|
             present = @db.execute("PRAGMA table_info(#{table})").map { |r| r[1] }
             cols.each do |col, type|
               next if present.include?(col)
 
               @db.execute("ALTER TABLE #{table} ADD COLUMN #{col} #{type}")
+              added[table] << col
             end
           end
+          # Backfills for databases written before a column existed. Each is
+          # derivable from what the row already stores, so they run only when
+          # the column was just added.
+          if added['attacks'].include?('ours')
+            @db.execute(<<~SQL)
+              UPDATE attacks SET ours = 1
+              WHERE inbound = 0 AND foreign_caster = 0 AND unowned = 0 AND orphan = 0 AND target_kind <> 'foreign'
+            SQL
+          end
+          if added['flares'].include?('ours')
+            # 2p/3p is not stored on old rows: a flare on our own outbound
+            # attack is ours; one on an inbound row is unknowable and stays 0.
+            @db.execute(<<~SQL)
+              UPDATE flares SET ours = 1
+              WHERE attack_id IN (SELECT id FROM attacks WHERE ours = 1)
+            SQL
+          end
+          # A flare-spawned child with no asserted parent row: the script
+          # derived "(echo)" two different ways - now one column read.
+          @db.execute(<<~SQL)
+            UPDATE attacks SET parent_confidence = 'unbound'
+            WHERE parent IS NOT NULL AND parent_attack_id IS NULL AND parent_confidence IS NULL
+          SQL
         end
 
         # -- creatures -----------------------------------------------------------
@@ -521,11 +730,29 @@ module Lich
           # Spawn-tree links: the processor stamps a per-chunk _uid on every
           # event and points :root_uid/:parent_uid at other events in the same
           # chunk (root/parent always emit BEFORE their children). We map uid ->
-          # row id in @chunk_rows, resetting when a new chunk's first event
-          # (_uid == 0) arrives. A root points at itself; an ambiguous spawn has
-          # parent_uid nil.
+          # row id in @chunk_rows. A root points at itself; an ambiguous spawn
+          # has parent_uid nil.
+          #
+          # The chunk is identified by the processor's monotonic
+          # observation_batch id when the payload carries one, NOT by "a uid-0
+          # event arrived": the first event of a chunk can be one we never
+          # record (a foreign cast, an orphan), and the uid-0 reset then never
+          # ran, leaving the previous chunk's - or the previous SESSION's - map
+          # addressable by this chunk's uids. The uid-0 test remains the
+          # fallback for payloads with no batch stamp.
           uid = event[:_uid]
-          @chunk_rows = {} if uid.nil? || uid.zero?
+          batch = event[:observation_batch].is_a?(Hash) ? event[:observation_batch][:id] : nil
+          new_chunk = if batch
+                        batch != @chunk_batch
+                      else
+                        uid.nil? || uid.zero?
+                      end
+          if new_chunk
+            @chunk_rows = {}
+            @chunk_flares = {}
+            @chunk_seq += 1
+          end
+          @chunk_batch = batch
           root_uid = event[:root_uid]
           parent_uid = event[:parent_uid]
           # parent/root were committed by an earlier record in this chunk (they
@@ -534,9 +761,14 @@ module Lich
           root_row = (root_uid && chunk_row(root_uid))
           parent_row = (parent_uid && chunk_row(parent_uid))
           parent_conf = event[:parent_confidence]&.to_s
+          # flare-spawned but the spawner row could not be asserted: say so
+          # in the column instead of leaving readers to infer it
+          parent_conf = 'unbound' if parent && parent_row.nil? && parent_conf.nil?
+          ours = own_attack?(event) ? 1 : 0
 
           attack_id = nil
           touched = Set.new([target[:id]].compact.map(&:to_i))
+          flare_ids = []
           in_txn do
             @seq += 1
             params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, txt(parent_weapon),
@@ -545,20 +777,22 @@ module Lich
                       txt(attacker[:name]), attacker[:id],
                       txt(event[:weapon]), outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
                       event[:aimed] ? 1 : 0, event[:ambush] ? 1 : 0,
+                      event[:attack_kind]&.to_s,
                       event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0,
                       event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0,
                       # only an HONORED redirect changes who the row is about;
                       # an announced-but-unhonored one (UAC shape) resolved on
                       # the intended creature, which the row already names
-                      (event[:redirect] && event[:redirect][:honored] != false) ? event[:redirect][:intended] : nil]
+                      (event[:redirect] && event[:redirect][:honored] != false) ? event[:redirect][:intended] : nil,
+                      ours, @chunk_seq]
             @db.execute(<<~SQL, params)
               INSERT INTO attacks (session_id, seq, occurred_at, name, parent, parent_weapon,
                                    root_attack_id, parent_attack_id, parent_confidence,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
-                                   outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned,
-                                   redirected_from)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   outcomes_all, aimed, ambush, attack_kind, inbound, orphan,
+                                   foreign_caster, unowned, redirected_from, ours, chunk_seq)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
             # stage the uid -> row mapping; published to @chunk_rows only when
@@ -586,13 +820,20 @@ module Lich
               touched << f_target[:id].to_i if f_target && f_target[:id]
               f_outcomes = (flare[:outcomes] || []).map(&:to_s)
               weapon = flare[:weapon].is_a?(Hash) ? flare[:weapon][:name] : flare[:weapon]
+              # A 2p flare (no attacker capture, or a first-person capture such
+              # as the "your" in "spirals from your hands") is our item firing -
+              # on an inbound row that is our REACTIVE flare; a 3p flare names
+              # the creature's or a nearby player's item. Decided here, once.
+              first_person = flare[:attacker].to_s.strip.match?(/\A(?:you|your)\z/i)
+              f_ours = (flare[:attacker].nil? || first_person) && !event[:foreign_caster] ? 1 : 0
               f_params = [attack_id, i + 1, flare[:name].to_s, flare[:damaging] ? 1 : 0,
-                          f_creature, txt(weapon), f_outcomes.first]
+                          f_creature, txt(weapon), f_outcomes.first, f_ours]
               @db.execute(<<~SQL, f_params)
-                INSERT INTO flares (attack_id, seq, name, damaging, creature_id, weapon, outcome)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO flares (attack_id, seq, name, damaging, creature_id, weapon, outcome, ours)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
               SQL
               flare_id = @db.last_insert_row_id
+              flare_ids << flare_id
               (flare[:resolutions] || []).each { |r| insert_resolution(attack_id, flare_id, res_seq += 1, r) }
               (flare[:hits] || []).each do |hit|
                 insert_hit(attack_id, flare_id, f_creature || creature_row, hit_seq += 1, hit, at)
@@ -601,7 +842,8 @@ module Lich
           end
           # Publish the attack window only after commit; a rollback must not
           # leave statuses pointing at an attack row that no longer exists.
-          @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound] }
+          @chunk_flares[uid] = flare_ids if uid
+          @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound], flare_ids: flare_ids }
           attack_receipt(attack_id, event)
         end
 
@@ -652,12 +894,13 @@ module Lich
                     hit[:damage].to_i, crit[:location], map_body_part(crit[:location]),
                     crit[:type]&.to_s, crit[:rank], crit[:wound_rank], fatal,
                     crit[:amputated] ? 1 : 0,
-                    secondary[:location], secondary[:wound_rank] || secondary[:rank]]
+                    secondary[:location], secondary[:wound_rank] || secondary[:rank],
+                    hit[:line]]
           @db.execute(<<~SQL, params)
             INSERT INTO hits (attack_id, flare_id, session_id, creature_id, seq, damage, location,
                               body_part, crit_type, crit_rank, wound_rank, fatal, amputated,
-                              secondary_location, secondary_rank)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              secondary_location, secondary_rank, line_seq)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           SQL
 
           return unless fatal == 1 && creature_row
@@ -666,7 +909,7 @@ module Lich
           # credit even when a room-feed death already stamped killed_at
           # (that stamp can land under an earlier attack when the worker
           # lags the stream), but never moves an earlier killed_at.
-          @db.execute('UPDATE creatures SET killed_at = COALESCE(killed_at, ?), killed_by_attack_id = ? WHERE id = ?',
+          @db.execute("UPDATE creatures SET killed_at = COALESCE(killed_at, ?), killed_by_attack_id = ?, kill_credit = 'crit' WHERE id = ?",
                       [at, attack_id, creature_row])
         end
 
@@ -690,7 +933,7 @@ module Lich
         end
 
         def record_status(kind:, id:, name:, status: nil, action: nil, value: nil,
-                          spell: nil, spell_name: nil, cause: nil)
+                          spell: nil, spell_name: nil, cause: nil, flare_seq: nil, attack_uid: nil)
           at = Time.now.to_f
           # Atomic like record_attack: the creature upsert, the status insert
           # and the kill-stamp are one unit, so a mid-write failure can't leave
@@ -700,22 +943,72 @@ module Lich
           in_txn do
             creature_row = id ? ensure_creature({ id: id, name: name }, at) : nil
             attack_id = nil
+            flare_id = nil
             source = 'direct'
-            if @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
+            flare_at = ->(ids) { ids&.[](flare_seq - 1) if flare_seq.is_a?(Integer) && flare_seq.positive? }
+            if attack_uid && (uid_row = chunk_row(attack_uid))
+              # the processor named the parse event the status rode on -
+              # authoritative over the last-attack window (the last attack
+              # of a chunk may be a creature's cast that interrupted ours)
+              attack_id = uid_row
+              source = 'event'
+              flare_id = flare_at.call(@chunk_flares[attack_uid])
+            elsif @open_attack && id && @open_attack[:creature_ids].include?(id.to_i)
               attack_id = @open_attack[:id]
               source = 'window'
+              # the processor says which of the attack's flares the status
+              # rode on (1-based position in the event's flare list)
+              flare_id = flare_at.call(@open_attack[:flare_ids])
             elsif @open_attack && name == 'self' && @open_attack[:inbound]
               attack_id = @open_attack[:id]
               source = 'window'
             end
 
-            params = [@session_id, creature_row, txt(name), attack_id, at, kind,
-                      txt(status), action, value, spell, txt(spell_name), cause, source]
-            @db.execute(<<~SQL, params)
-              INSERT INTO statuses (session_id, creature_id, subject, attack_id, occurred_at,
-                                    kind, status, action, value, spell, spell_name, cause, source)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            SQL
+            # One swing's stun arrives twice: the crit table's kind='stun' row
+            # (with the round count) and the messaging "X is stunned!" row
+            # (kind='status'). Readers folded them inconsistently, so they
+            # merge here into ONE row - kind 'stun', the round count kept,
+            # the better attack link kept - whichever arrives first.
+            stun_add = (kind == 'stun') || (kind == 'status' && status == 'stunned' && action == 'add')
+            merged = false
+            if stun_add && creature_row
+              # The twin must be the SAME swing's: same attack when both sides
+              # know theirs, no stun removal in between (a fresh application
+              # after a removal is a new stun), and a row that has already
+              # absorbed its twin is not reused for a later application.
+              twin = @db.get_first_row(<<~SQL, [@session_id, creature_row, kind == 'stun' ? 'status' : 'stun', at - STUN_PAIR_WINDOW, attack_id, attack_id, @session_id, creature_row])
+                SELECT id FROM statuses
+                WHERE session_id = ? AND creature_id = ? AND kind = ? AND status = 'stunned' AND action = 'add'
+                  AND occurred_at >= ?
+                  AND (attack_id IS NULL OR ? IS NULL OR attack_id = ?)
+                  AND id > COALESCE((SELECT MAX(id) FROM statuses
+                                     WHERE session_id = ? AND creature_id = ? AND status = 'stunned' AND action = 'remove'), 0)
+                ORDER BY id DESC LIMIT 1
+              SQL
+              twin = nil if twin && @merged_stun_rows.include?(twin[0])
+              if twin
+                @merged_stun_rows << twin[0]
+                @db.execute(<<~SQL, [kind == 'stun' ? value : nil, attack_id, flare_id, source, twin[0]])
+                  UPDATE statuses
+                  SET kind = 'stun',
+                      value = COALESCE(?, value),
+                      attack_id = COALESCE(attack_id, ?),
+                      flare_id = COALESCE(flare_id, ?),
+                      source = CASE WHEN attack_id IS NULL THEN ? ELSE source END
+                  WHERE id = ?
+                SQL
+                merged = true
+              end
+            end
+            unless merged
+              params = [@session_id, creature_row, txt(name), attack_id, flare_id, at, kind,
+                        txt(status), action, value, spell, txt(spell_name), cause, source]
+              @db.execute(<<~SQL, params)
+                INSERT INTO statuses (session_id, creature_id, subject, attack_id, flare_id, occurred_at,
+                                      kind, status, action, value, spell, spell_name, cause, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              SQL
+            end
 
             # A death confirmed by the room feed (processor death watch) rather
             # than a fatal crit: stamp the kill and credit the attack whose
@@ -723,8 +1016,38 @@ module Lich
             # Ownership (kill vs assist) is judged later from that attack's
             # flags, so crediting a foreign caster's attack here is correct.
             if status == 'dead' && action == 'add' && creature_row
-              @db.execute(<<~SQL, [at, attack_id, creature_row])
-                UPDATE creatures SET killed_at = ?, killed_by_attack_id = COALESCE(killed_by_attack_id, ?)
+              credit_id = attack_id
+              credit = attack_id ? 'window' : nil
+              if credit_id.nil?
+                # No window and no event link (the death message lagged past
+                # the swing): credit the LAST damaging attack on it from ANY
+                # source, then say whether that was ours - an own swing, or
+                # our reactive flare on an inbound row ('last_own_hit') - or
+                # someone else's ('last_hit'). Filtering to our hits first
+                # would credit our earlier hit over another player's later one.
+                last = @db.get_first_row(<<~SQL, [creature_row, @session_id])
+                  SELECT a.id, (a.ours = 1 OR COALESCE(f.ours, 0) = 1) FROM hits h
+                  JOIN attacks a ON a.id = h.attack_id
+                  LEFT JOIN flares f ON f.id = h.flare_id
+                  WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
+                  ORDER BY a.occurred_at DESC, COALESCE(a.chunk_seq, -1) DESC, COALESCE(h.line_seq, -1) DESC, h.id DESC LIMIT 1
+                SQL
+                # ordering: the chunk's time, then which chunk (prompt times
+                # are whole seconds, so two chunks can share one), then the
+                # damage line's position in the chunk (COMBAT order), then
+                # insertion. Row id alone
+                # credited a released spell over the swing that landed after
+                # it - the cast is emitted after its swing for lineage
+                # (review of cb68bb90).
+                if last
+                  credit_id = last[0]
+                  credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
+                end
+              end
+              @db.execute(<<~SQL, [at, credit_id, credit, creature_row])
+                UPDATE creatures
+                SET killed_at = ?, killed_by_attack_id = COALESCE(killed_by_attack_id, ?),
+                    kill_credit = COALESCE(kill_credit, ?)
                 WHERE id = ? AND killed_at IS NULL
               SQL
             end

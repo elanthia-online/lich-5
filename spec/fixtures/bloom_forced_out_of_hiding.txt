@@ -1,0 +1,34 @@
+You fire a faewood arrow at <pushBold/>a <a exist="128242975" noun="skald">grim gigas skald</a><popBold/>!
+  AS: +639 vs DS: +416 with AvD: +32 + d100 roll: +85 = +340
+   ... and hit for 138 points of damage!
+   Quick, powerful slash!
+   <pushBold/>The <a exist="128242975" noun="skald">gigas skald</a><popBold/>'s chest is ripped open!
+An earthy, sweet aroma wafts from <pushBold/>a <a exist="128242975" noun="skald">grim gigas skald</a><popBold/> in a murky haze.
+Vital energy infuses you, hastening your arcane reflexes!
+
+** Countless points of pale phosphorescence awaken across your <a exist="127036411" noun="bow">glowbark long bow</a>, rapidly brightening before bursting into brilliant light around <pushBold/>a <a exist="128242975" noun="skald">grim gigas skald</a><popBold/>! **
+<pushBold/>A <a exist="128242975" noun="skald">grim gigas skald</a><popBold/> is unharmed by the plasma!
+You blinded <pushBold/>a <a exist="128242975" noun="skald">grim gigas skald</a><popBold/>!
+
+** Phosphorescent light races through the glowbark as its entire surface blossoms with dazzling radiance, flooding the surroundings in ghostly light! **
+
+** A bloom of spectral light blossoms around <pushBold/>a <a exist="128242963" noun="skald">grim gigas skald</a><popBold/>, engulfing it in searing brilliance! **
+   ... 15 points of damage!
+   <pushBold/>The <a exist="128242963" noun="skald">gigas skald</a><popBold/>'s hand blisters and bleeds from intense heat.
+You blinded <pushBold/>a <a exist="128242963" noun="skald">grim gigas skald</a><popBold/>!
+
+** A bloom of spectral light blossoms around <pushBold/>a <a exist="128244773" noun="mastodon">heavily armored battle mastodon</a><popBold/>, engulfing it in searing brilliance! **
+   ... 7 points of damage!
+   Light burns to <pushBold/>the <a exist="128244773" noun="mastodon">armored battle mastodon</a><popBold/>'s leg.
+You blinded <pushBold/>a <a exist="128244773" noun="mastodon">heavily armored battle mastodon</a><popBold/>!
+<pushBold/>A <a exist="128104042" noun="cannibal">bloody halfling cannibal</a><popBold/> is forced out of hiding!
+
+** A bloom of spectral light blossoms around <pushBold/>a <a exist="128104042" noun="cannibal">bloody halfling cannibal</a><popBold/>, engulfing it in searing brilliance! **
+   ... 25 points of damage!
+   Muscle and blood explode from <pushBold/>the <a exist="128104042" noun="cannibal">halfling cannibal</a><popBold/>'s abdomen in a steaming spray!
+   The <pushBold/><a exist="128104042" noun="cannibal">halfling cannibal</a><popBold/> is stunned!
+You blinded <pushBold/>a <a exist="128104042" noun="cannibal">bloody halfling cannibal</a><popBold/>!
+A tenebrous shroud stitches itself into existence around you as you gracefully retreat into the shadows!
+The arrow sticks in <pushBold/>a <a exist="128242975" noun="skald">grim gigas skald</a><popBold/>'s chest!
+Roundtime: 3 sec.
+Roundtime changed to 1 second.

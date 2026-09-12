@@ -117,6 +117,7 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
 
     it 'identifies the round-2 effect-list pins (513, 911, 1605)' do
       cases = {
+        'A white glow rushes away from a grim gigas skald.'                                                                           => 303,
         'A grim gigas skald no longer bristles with energy.'                                                                          => 513,
         'Laehna becomes solid again.'                                                                                                 => 911,
         "Talliver's movements no longer appear to be influenced by a divine power as the spiritual force fades from around his arms." => 1605

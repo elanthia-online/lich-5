@@ -21,9 +21,58 @@ module Lich
             AttackDef.new(:blood_burst, [/Blood sprays from (?<target>.+?) neck in a crimson arc!/].freeze),
             AttackDef.new(:cold_snap, [/An airy mist rolls into the area, carrying a harsh chill with it./].freeze),
             AttackDef.new(:ethereal_censer, [/(?<target>.+?) becomes enveloped in the incense smoke!/].freeze),
+            # 335 Divine Wrath. The manifestation and strike lines are
+            # deity-specific (~35 catalogued forms from wiki and game logs).
             AttackDef.new(:divine_wrath, [
-              /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage./,
-              /Within the reddish haze, the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./
+              /The sounds of crashing waves increase to an almost deafening level until, suddenly, a powerful wave surges into the area, violently slamming directly into (?<target>[^.]+)\./,
+              /White sparks flicker around you, and you sense electrical energy gathering in the instant before a massive bolt of lightning spears toward (?<target>[^.]+)\./,
+              /A throwing knife formed of shimmering golden light hurtles from the hand of one of the spirit jesters toward (?<target>[^.]+)\./,
+              /Within the reddish haze swirling beside (?<target>[^,]+), the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./,
+              /Within the reddish haze, the man brings his forging-hammer sharply down upon the anvil, producing a loud clang\./,
+              /A brown stag materializes in midair, leaping out of nowhere to try to impale (?<target>[^!]+) upon its magnificent antlers!/,
+              /A beam of vermilion light lances away from the rainbow around you to strike (?<target>[^,]+), bathing the .+? in colored radiance\./,
+              /A beam of cerulean light lances away from the rainbow around you to strike (?<target>[^,]+), bathing the .+? in colored radiance\./,
+              /The ground shakes powerfully directly underneath (?<target>.+?) as a beam of golden light lances away from (?:you|.+?) to transfix .+?\./,
+              /As several faintly glowing snowflakes settle upon (?<target>[^,]+), they ignite with cold white flame\./,
+              /Guided by the knowledge within you, you concentrate upon (?<target>[^,]+), and, by strength of will alone, you expose the natural weaknesses of .+?\./,
+              /A shroud of pale pink light suddenly encircles (?:a |an )?(?<target>[^,]+), and tiny tongues of pure white flame flicker at the heart of the shroud\./,
+              /As your gaze falls across (?:a |an )?(?<target>[^,]+), brilliant radiance suddenly surrounds (?:him|her|it), burning as brightly as the sun\./,
+              /Seen only by your spirit gaze, one of the dream unicorns lowers its head and charges fiercely toward (?<target>[^!]+)! Just before impact, the unicorn's horn glows fiercely amber in hue\./,
+              /Accompanied by a particularly impressive gust of wind, a fleeting golden blur flashes past (?<target>[^.]+)\./,
+              /Shimmering black flames lash out toward (?<target>[^,]+), encircling the .+? in their deadly grasp\./,
+              /Long, spectral talons materialize from midair to tear viciously at the body of (?<target>[^!]+)!/,
+              # Marlu, not Gosaena (GSWiki lists this line under Marlu; Gosaena has
+              # a separate, still-unfilled section). 1p form, per the wiki.
+              /A tendril of black mist suddenly senses the proximity of (?<target>[^.]+)\. The mist expands into a large, quickly moving, highly lethal cloud that rapidly surrounds .+?, obliterating it from view\./,
+              # Marlu 3p: a groupmate's cast landing on a nearby creature. Log-
+              # confirmed; the second and third mentions were pronouns ("her"),
+              # not the creature name, hence the .+? tails.
+              /As (?<target>.+?) comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds .+?, obliterating .+? from view\./,
+              # Not present on GSWiki as of this writing - log-sourced only.
+              /A shadowy figure briefly materializes behind (?<target>[^,]+), and a silent scream courses over .+? visage\./,
+              /The ethereal barbed whip that lies loosely coiled around you uncoils at terrifying speed\. It snaps out toward (?<target>[^!]+)!/,
+              /Suddenly, (?<target>.+?) tries to bolt away, but instead smashes into a wall of spectral force hidden within the shadows!/,
+              /Divine will surges through you, and you command the scimitar to strike at (?<target>[^.]+)\./,
+              /An ethereal pair of feathered white wings materializes from midair and closes around (?<target>[^.]+)\./,
+              /You notice (?<target>.+?) nearby\. How marvelous! You command (?:the moon Liabo|some lilies of the valley|the bartender|seventeen will'o'the'wisps) to /,
+              /Suddenly, a long, leafy vine shoots out and tries to wrap around (?:a |an )?(?<target>[^.]+)\./,
+              /[Aa] tendril of scarlet mist lashes away from you to coil around (?<target>.+?) with a suddenly razor-sharp edge\./,
+              # Ghezresh's GSWiki section is an unfilled stub; log-sourced only,
+              # confirmed via a live self-cast (target repeated verbatim both times).
+              /A strand of barnacle-laced kelp suddenly lashes out at (?<target>[^!]+)!(?:  As the slippery skein connects, strands of silvery mist coil around .+? furiously\.)?/,
+              /A silver-bladed scythe materializes from thin air, spinning end over end as it hurtles toward (?<target>[^!]+)!/,
+              /One of the vines suddenly whips about and lashes out at (?<target>[^!]+)! Despite its slightly ethereal appearance, the vine moves with every evidence of heavy, solid weight\./,
+              # Laethe, not Onar (GSWiki has this under Laethe; Onar's line is the
+              # bone-shafted crossbow bolt below). The wiki's 3p form ends "...into
+              # it." rather than repeating the target, so the tail accepts either.
+              /A shadowy black rose touches (?<target>.+?) and wraps immediately about it, struggling to force its long, barbed thorns into (?:the .+?|it)\./,
+              /A dagger of ivory light suddenly flashes away from the aura surrounding you to strike at (?<target>[^.]+)\./,
+              /^(?:.*, )?[Tt]he intense waves of elegant sound focus upon (?<target>[^.]+)\./,
+              # Onar - confirmed via a live self-cast (cast message and strike
+              # line both observed against real targets).
+              /A bone-shafted crossbow bolt flies out of the shadows toward (?<target>[^!]+)!/,
+              /Listening carefully to the quiet harmony around you, you give voice to wordless song, and the notes of your song ring discordantly against the sounds of the world that relate to (?:a |an )?(?<target>[^.]+)\./,
+              /A glowing golden rose touches (?<target>.+?) and bursts into scarlet flame!/,
             ].freeze),
             AttackDef.new(:earthen_fury, [
               /Fiery debris explodes from the ground beneath (?<target>[^!]+)!/,
@@ -52,7 +101,13 @@ module Lich
               # ground|floor: indoor rooms print "floor" (Ojandhaart great hall,
               # real-feed 2026-09-07) - the ground-only form orphaned every
               # indoor entangle tick as an unknown attack with no target
-              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), wraps itself around .+? body and entangles .+? on the (?:ground|floor)\./,
+              # the miss: same line is the :miss outcome (defs/outcomes.rb).
+              # Without an attack def the SMR before it was orphaned into a
+              # targetless :unknown (hunt log 2026-09-07 19:21:44)
+              /The (?<weed>.+?) lashes out at (?<target>[^,]+), but is unable to grasp/,
+              # the other miss form (no SMR printed; hunt log 2026-09-07 21:30)
+              /The (?<weed>.+?) grabs at (?<target>[^,]+), unable to find a purchase\./
             ].freeze),
             AttackDef.new(:tonis_bolt, [/You unleash a bolt of churning air at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:unbalance, [/Bands of spectral mist ripple and surge beneath (?<target>[^!]+)!/].freeze),
@@ -69,6 +124,26 @@ module Lich
             # is ours. foreign_caster is set downstream from the attacker.
             AttackDef.new(:weapon_infusion, [
               /As (?<attacker>.+?) attempts to strike with .+?, a surge of power flows out of it, through .+?, and leaps out at (?<target>[^!]+)!/
+            ].freeze),
+            # A nearby player's shadow-barb spell (SMR + damage follow; the
+            # caster is the player link, so foreign_caster). Hunt log
+            # 2026-09-07: Burns vs a shield-maiden, recorded as a targetless
+            # unknown with an orphaned SMR.
+            AttackDef.new(:fiery_barbs, [
+              /Fiery red barbs uncoil from the shadows near (?<attacker>.+?) and lash out at (?<target>[^!]+)!/
+            ].freeze),
+            # A nearby player's flaming aura lashing a creature (SMR + damage
+            # follow; hunt log 2026-09-07 23:20, Meb)
+            AttackDef.new(:flaming_aura, [
+              /The flaming aura surrounding (?<attacker>.+?) lashes out at (?<target>[^!]+)!/
+            ].freeze),
+            # DoT tick naming the victim, never the caster (unowned unless
+            # our cast is in the blob - see UNOWNED_TICK_ATTACKS). Its
+            # "causing N" is a summary: the "... N points of damage!" line
+            # that follows carries the hit and its crit, so the inline
+            # number is NOT applied (see SUMMARY_DAMAGE_ATTACKS).
+            AttackDef.new(:spiritual_malady, [
+              /A spiritual malady wracks (?<target>.+?) causing \d+ points? of damage!/
             ].freeze),
           ].freeze
 
@@ -97,7 +172,6 @@ module Lich
             # Excalibur-style weapon spell surge: opens its own CS/TD (the
             # patron-aura flavor rides between); the actual swing opens
             # separately after. The fizzle form is a prefix - no def.
-            AttackDef.new(:weapon_cast, [/As you attempt to strike with your (?<weapon>.+?), it sends a surge of power through you that quickly leaps out at (?:the )?(?<target>[^!]+)!/].freeze),
             AttackDef.new(:elemental_strike, [/A vortex of elemental energy suddenly strikes (?<target>[^!]+)!/].freeze),
             AttackDef.new(:fervent_reproach, [/With a quick flick of your wrists, the orbs dance through the air toward (?<target>[^!]+)!/].freeze),
             AttackDef.new(:force_projection, [/A translucent force moves outward from you and toward (?<target>[^.]+)\./].freeze),
@@ -152,7 +226,13 @@ module Lich
             # matched OUR OWN limb ("Your right leg explodes!") and opened an
             # attack event against us.
             AttackDef.new(:limb_disruption, [/The (?<target>.+?)'s#{MK_POST} (?:right|left) (?:leg|arm|hand|eye) explodes!/].freeze),
-            AttackDef.new(:moonbeam, [/You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [
+              /You level a nebulous beam of shadowy luminescence at (?<target>[^!]+)!/,
+              # 611 evoked: "Tapping the moons above, you draw down a shaft of
+              # swirling moonlight and bathe X in its muted glow." then SMR
+              # (hunt log 2026-09-09 10:45); the moon adjectives vary
+              /you draw down a shaft of \w+ moonlight and bathes? (?<target>.+?) in its \w+ glow\./
+            ].freeze),
             AttackDef.new(:pestilence, [
               /You exhale a virulent green mist toward (?<target>[^,]+), instantly infecting/,
               # 3p: a group member casts it. Without this the per-target
@@ -186,7 +266,15 @@ module Lich
             # shared cast line of targeted bard attack songs (1008, 1016...)
             AttackDef.new(:spellsong, [/You weave another verse into your harmony, directing the sound of your voice at (?<target>[^.]+)\./].freeze),
             AttackDef.new(:sunburst, [/A sudden burst of bright light emanates from your hand toward (?<target>[^!]+)!/].freeze),
-            AttackDef.new(:templars_verdict, [/A column of violet flame envelops (?<target>.+?) in its searing embrace!/].freeze),
+            # 1603. The ERUPT line is the cast (wiki messaging: "You gesture
+            # at X. Violet flames erupt from beneath X." then the CS/TD roll);
+            # the envelops line that follows is its HIT line, deliberately
+            # not a def. On a paladin the spell is usually RELEASED by a Holy
+            # Weapon (1625) infusion mid-swing rather than gestured: the proc
+            # is a flare (:weapon_cast, defs/flares) and the processor treats
+            # the cast that follows it as an interruption of the swing - the
+            # swing resumes when its own AS/DS arrives (SPELL_RELEASING_FLARES).
+            AttackDef.new(:templars_verdict, [/Violet flames erupt from beneath (?<target>.+?)\./].freeze),
             AttackDef.new(:thought_lash, [/A crackling whip of energy lashes out at (?:the )?(?<target>[^!]+)!/].freeze),
             AttackDef.new(:web_bolt, [/You shoot strands of webbing at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:wither, [/A nebulous haze shimmers into view around (?<target>[^,.]+)/].freeze),
@@ -248,6 +336,19 @@ module Lich
               /(?<attacker>.+?) directs the force of #{MK_PRE}(?:his|her|its)#{MK_POST} voice at (?<target>[^!]+)!/
             ].freeze),
             AttackDef.new(:channel, [/(?<attacker>.+?) channels at (?<target>[^.]+)\./].freeze),
+            # Nearby players' spells on creatures we can see (hunt log
+            # 2026-09-09, gigas village). Each names the caster, so the
+            # foreign latch keeps the CS/TD, SMR/SSR and damage lines that
+            # follow off our ledger - a bard's sonic disruption kill was
+            # credited to us before the 3p spellsong form existed.
+            AttackDef.new(:spellsong, [
+              /(?<attacker>.+?) skillfully weaves another verse into #{MK_PRE}(?:his|her)#{MK_POST} harmony, directing the sound of #{MK_PRE}(?:his|her)#{MK_POST} voice at (?<target>[^.]+)\./
+            ].freeze),
+            # bard fear AoE: one cry, then an SSR + "X looks at <bard> in
+            # utter terror!" per creature in the room
+            AttackDef.new(:fear_cry, [/(?<attacker>.+?) lets loose an eerie, modulating cry!/].freeze),
+            AttackDef.new(:golden_waves, [/Golden brown waves billow outward from (?<attacker>.+?) to buffet (?<target>[^!]+)!/].freeze),
+            AttackDef.new(:moonbeam, [/(?<attacker>.+?) draws down a shaft of \w+ moonlight and bathes (?<target>.+?) in its \w+ glow\./].freeze),
             # creature wand flourish - the erupt tail rides the same line
             AttackDef.new(:wand, [/(?<attacker>.+?) flourishes (?<weapon>.+?) at (?<target>[^.]+)\.\s+A .+? erupts toward/].freeze),
             # "hurls a/an <bolt>" - bolt spells from players AND creatures;

@@ -29,7 +29,45 @@ module Lich
         # adjudication - missing def vs genuine drive-by (owner ruling
         # 2026-09-06). A tick IS ours only when our own cast of that spell
         # is visible in the same blob (see cast_owner tracking below).
-        UNOWNED_TICK_ATTACKS = %i[pestilence web].freeze
+        # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
+        # Flares that RELEASE a spell instead of dealing damage themselves
+        # (Holy Weapon 1625: the infused spell fires at the start of a
+        # swing). The cast that follows is the flare's spell, and it lands
+        # in the MIDDLE of the swing - before the swing's own AS/DS. It is
+        # handled like an inbound attack cutting in: the swing is saved as
+        # interrupted_own, the spell runs as its own event, and the first
+        # PHYSICAL roll (AS/DS, UAF/UDF - a warding cast never rolls one)
+        # resumes the swing, which then owns that roll and its damage.
+        # Before this the cast's event held the swing's roll and damage,
+        # and a pummel bracket was dropped as an "unexpected attack" by its
+        # own weapon's spell (Dreadt log 2026-09-11 594-613).
+        SPELL_RELEASING_FLARES = %i[weapon_cast].freeze
+
+        # Assaults whose per-round roll PRECEDES the round line (barrage:
+        # an aim SMR before each arrow, claimed at the arrow's creation -
+        # see the roll-routing notes). While one is open a held maneuver
+        # roll is ours; every other assault rolls after its round line.
+        ROLL_BEFORE_ROUND_ASSAULTS = %i[barrage].freeze
+
+        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady poison_tick].freeze
+
+        # Initiations whose inline "causing N points of damage!" restates the
+        # "... N points of damage!" line that follows (that line carries the
+        # crit) - applying both doubled the tick (hunt log 2026-09-07 23:20).
+        SUMMARY_DAMAGE_ATTACKS = %i[spiritual_malady].freeze
+        # Side effects of another attack that land exactly ONE hit and then
+        # hand the line back to the attack they interrupted: a mount toppled
+        # by our briar pins its rider ("X is pinned beneath Y as it falls!",
+        # one damage line + crit), then the briar's own grapple damage on the
+        # mount prints. Without this the mount's damage landed on the pin row
+        # and the nettles line spawned an empty pin copy on the mount (hunt
+        # log 2026-09-08 00:25).
+        SINGLE_HIT_ATTACKS = %i[mount_collapse].freeze
+
+        # Sequence brackets (Definitions::Sequences) whose rounds are attack
+        # events of the SAME name: a round that prints no initiation line of
+        # its own (a missed volley arrow: roll + dodge only) is still one.
+        SEQUENCE_ROUND_NAMES = %i[volley].freeze
 
         module_function
 
@@ -76,6 +114,16 @@ module Lich
             event.delete(:root_ref)
             event.delete(:parent_ref)
           end
+          # Parse-phase status facts remember the event they rode (:_event,
+          # an object ref). Resolve it to that event's _uid so the recorder
+          # files the status under THAT attack, not under whatever attack it
+          # emitted last: a creature's cast that interrupted our swing emits
+          # after it, and the swing's blinds fell off the swing (hunt log
+          # 2026-09-07 23:50, cloak of shadows).
+          @deferred_emits&.each do |_, payload|
+            ev = payload.delete(:_event)
+            payload[:attack_uid] = uids[ev] if ev && uids.key?(ev)
+          end
           events.each do |event|
             event[:at] = at
             persist_event(event)
@@ -101,6 +149,7 @@ module Lich
           if @deferred_emits
             @deferred_emits << [type, payload]
           else
+            payload.delete(:_event)
             Observers.emit(type, payload)
           end
         end
@@ -108,7 +157,10 @@ module Lich
         def flush_deferred_emits
           pending = @deferred_emits
           @deferred_emits = nil
-          pending&.each { |type, payload| Observers.emit(type, payload) }
+          pending&.each do |type, payload|
+            payload.delete(:_event) # unresolved (no events emitted this chunk)
+            Observers.emit(type, payload)
+          end
         end
 
         PROMPT_TIME_PATTERN = /<prompt time="(\d+)"/.freeze
@@ -146,6 +198,19 @@ module Lich
         NARRATION_PATTERN = Regexp.union(
           / leaps from the back of .+? as .+? topples, narrowly avoiding being pinned/,
           / looks a little bit more wary after that display!/,
+          # a hidden creature revealed by an AoE flare - printed BEFORE the
+          # bloom line that names it, so it switched the target early and the
+          # bloom's damage landed on a phantom `fire` (hunt log 2026-09-07
+          # 22:14:27, the cannibal)
+          / is forced out of hiding!/,
+          # post-kill/rage emotes naming the creature
+          / gurgles out an animalistic shriek of rage, /,
+          # a sanguine ooze splitting on the hit - names the new oozeling
+          # between the damage line and the next arrow (hunt log 2026-09-07
+          # 23:19: phantom fires on the oozeling, volley rounds split)
+          / splatter across the ground, wobbling disconcertingly as they twitch together to form /,
+          / pulses larger, bubbling grotesquely with new mass\./,
+          / pulses monstrously as .+? swells to its full size!/,
           /\AYou are now targeting /
         ).freeze
 
@@ -252,7 +317,57 @@ module Lich
 
         # State machine parser
         def parse_events(lines)
+          # Position recoveries are per chunk: a stand-up here must not
+          # suppress a knockdown crit in the NEXT chunk.
+          @position_recovered = nil
           events = []
+          # Identity-guarded push: an event RESUMED after an inbound
+          # interruption (see interrupted_own) was already saved once.
+          save_event = lambda do |ev|
+            next if events.any? { |e| e.equal?(ev) }
+
+            events << ev
+            # A cast this swing's Holy Weapon proc released that PRINTED
+            # BEFORE the swing (proc -> spell -> swing) was pulled out of the
+            # emit order when the swing adopted it: the recorder resolves
+            # lineage at insert time and a parent must emit first, so the
+            # child follows its parent here.
+            Array(ev.delete(:_released_children)).each { |c| events << c unless events.any? { |e| e.equal?(c) } }
+          end
+          # Our own event that an inbound attack cut into mid-swing. A
+          # creature's reactive cast (cloak of shadows: our arrow lands, its
+          # tendril lashes back, CS/TD, "Warded off!") prints BETWEEN our hit
+          # and our bow's flares; without this the phosphorescence and its
+          # damage/crit attached to the creature's cast as damage to US (hunt
+          # log 2026-09-07 23:18, flayed gigas disciple). Our next own flare
+          # line resumes the interrupted event.
+          interrupted_own = nil
+          # The own swing a flare-released spell cut into (see
+          # SPELL_RELEASING_FLARES): stashed at the cast's open so the fresh
+          # event can be parented to it, then cleared.
+          released_parent = nil
+          # The other ordering: the release line prints FIRST (pre-flare,
+          # no swing open yet), the spell casts, THEN the swing line prints.
+          # The cast is remembered here and parented to the swing that
+          # claims the pending release flare (see the pre-flare claim).
+          pending_release_cast = nil
+          # Every cast deferred behind its swing (see save_event); flushed
+          # at the end in case the swing itself never got saved.
+          deferred_casts = []
+          # Attacker of the last inbound event saved this blob. A creature's
+          # warding spell that lands prints its effect as an attackerless
+          # spell-result line right after the cast's "Warding failed!"
+          # (disciple's wither: "A nebulous haze shimmers into view around
+          # you", hunt log 2026-09-07 23:50) - the effect is that caster's.
+          last_inbound_attacker = nil
+          # the event a SINGLE_HIT_ATTACKS side effect cut in front of (see decl)
+          single_hit_parent = nil
+          # Weapon named by a "You nock <ammo> in your <bow>." line this chunk,
+          # cleared by the swing that follows. A pre-emptive evade ("bounds
+          # to safety as you move to attack it") prints INSTEAD of the fire
+          # line, so the only clue that the swing was a fire is the nock
+          # (hunt log 2026-09-09 16:00: the shroud then rode an "unknown").
+          nocked = nil
           current_event = nil
           parse_state = :seeking_attack
           current_target = nil
@@ -285,6 +400,9 @@ module Lich
           # nil (root still known) rather than guessed. See recorder root/
           # parent_attack_id.
           spawn_root = nil
+          # The sequence bracket (Definitions::Sequences) currently open in
+          # this blob, when its rounds are events of the same name (volley).
+          active_sequence = nil
           # Rolls that could not claim a virgin sink. An array: several can
           # stack up (volley's per-arrow SMRs, trailing rider maneuvers) and
           # the old single slot silently overwrote all but the last.
@@ -304,6 +422,13 @@ module Lich
           # spell_loss cause - a wear-off riding a dispel strip means
           # something different from natural expiry or death cleanup.
           chunk_dispels = []
+          # Creatures THIS chunk killed (fatal crit, coup kill), by exist id.
+          # The registry learns of the death only when the chunk persists,
+          # but the wear-off lines that follow a death line are already in
+          # this chunk - without this a skald's 303 dropping on her death
+          # was a cause-less loss (owner 2026-09-09: "spells falling off
+          # during death versus being removed by a dispel").
+          chunk_deaths = []
           # Ownership of DoT/effect casts we saw in this blob, keyed PER VICTIM
           # as [spell_name, target_key] (target_key = the victim's exist id, or
           # its name when unresolved). :self when our 2p cast line fired ("You
@@ -358,6 +483,17 @@ module Lich
             current_target = held[:target] if held[:target] && held[:target][:id]
             parse_state = :seeking_damage
           end
+          # Pre-flares held over from the previous chunk (see the end of this
+          # method): a bow's dispel fires on the NOCK, resolves (SMR, damage,
+          # crit) and the chunk ends at the prompt before "You fire" prints.
+          # Re-seed them so this chunk's swing claims them like any pre-flare
+          # (hunt log 2026-09-07: eight dispels recorded as their own
+          # "dispel" attacks instead of riding the shot).
+          if (held_flares = @held_pre_flares)
+            @held_pre_flares = nil
+            held_flares.each { |f| f[:_held] = true }
+            pending_flares.concat(held_flares)
+          end
 
           lines.each_with_index do |line, index|
             next if line.strip.empty?
@@ -406,22 +542,84 @@ module Lich
             # through event_savable? (statuses live on the creature, not the
             # event, so the fields alone can't show it).
             line_status_id = nil
+            # An outcome printed ON an initiation line (tangleweed's "lashes
+            # out at X, but is unable to grasp her") belongs to the event that
+            # line opens below, not to whatever event is open now.
+            same_line_outcome = nil
 
             # Always check for status effects on every line (even outside combat)
             if Tracker.settings[:track_statuses]
               if (status_result = Parser.parse_status(line))
+                # Which of this event's flares the status rides on, as a
+                # 1-based position in event[:flares] (the recorder maps it
+                # to the flare row): the active damaging flare when it names
+                # this creature (or names nobody and the creature is the
+                # swing target), else the latest flare that named it - a
+                # glowbark bloom's "You blinded <bloom creature>!" follows
+                # the bloom. Without this every blind sat on the swing row
+                # (owner 2026-09-07: "tagged to the root attack instead of
+                # the bloom flare").
+                status_flare_seq = lambda do |cid|
+                  next nil unless current_event && cid
+                  flares = current_event[:flares] || []
+                  # A line that is itself a flare AND a status (nature's
+                  # decay's "earthy, sweet aroma ... grows more pervasive")
+                  # rides the flare it announces - which the flare branch
+                  # below has not appended yet, so it is the NEXT position.
+                  # Without this the status sat on the flare before it
+                  # (breeze, hunt log 2026-09-07 23:50). Not when the flare
+                  # is about to resume an interrupted swing (see
+                  # interrupted_own): the positions belong to another event.
+                  if (lf = Parser.parse_flare(line)) && !(current_event[:inbound] && interrupted_own)
+                    lf_id = lf[:target].to_s[/exist="(-?\d+)"/, 1]&.to_i
+                    if lf_id == cid || (lf_id.nil? && current_event[:target] && current_event[:target][:id] == cid)
+                      next flares.size + 1
+                    end
+                  end
+                  f = if flare_ctx && flare_ctx[:target_info]
+                        flare_ctx if flare_ctx[:target_info][:id] == cid
+                      elsif flare_ctx && current_event[:target] && current_event[:target][:id] == cid
+                        flare_ctx
+                      end
+                  # Only flares that printed AFTER the swing line: a status
+                  # right after the swing's crit ("Strike pierces forearm!
+                  # The mutant is stunned!") is the swing's, even when a
+                  # pre-flare (dispel, ensorcell) named the creature first
+                  # (hunt log 2026-09-07 23:51).
+                  f ||= flares.reverse.find { |x| !x[:_pre] && x[:target_info] && x[:target_info][:id] == cid }
+                  f && (i = flares.index(f)) ? i + 1 : nil
+                end
+                # The event a status rides on (the recorder's attack_uid) -
+                # ONLY when that event touched the subject: it is the
+                # target, the attacker of an inbound swing, a flare named
+                # it, or the flare-and-status line about to be appended
+                # did (seq). An ambient line sharing the chunk ("A troll
+                # shakes off the stun!" while we shoot an orc) belongs to
+                # no event and stays an independent observation - the
+                # recorder must not be told otherwise (review 2026-09-10).
+                status_event_for = lambda do |cid, seq|
+                  next nil unless current_event && cid
+                  next current_event if seq
+                  ids = [current_event[:target] && current_event[:target][:id],
+                         current_event[:attacker].is_a?(Hash) ? current_event[:attacker][:id] : nil]
+                  ids.concat((current_event[:flares] || []).map { |x| x[:target_info] && x[:target_info][:id] })
+                  ids.compact.include?(cid) ? current_event : nil
+                end
                 if line_target && line_target[:id]
                   # Use ID-based lookup - this is most reliable
                   line_status_id = line_target[:id]
                   if status_result.is_a?(Hash)
-                    apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action])
+                    seq = status_flare_seq.call(line_target[:id])
+                    apply_status_to_target(status_result[:status], line_target[:name], line_target[:id], status_result[:action],
+                                           flare_seq: seq, event: status_event_for.call(line_target[:id], seq), line: index)
                   else
                     # Legacy format - status_result is just the status symbol
-                    apply_status_to_target(status_result, line_target[:name], line_target[:id], :add)
+                    apply_status_to_target(status_result, line_target[:name], line_target[:id], :add, line: index)
                   end
                 elsif status_result.is_a?(Hash) && status_result[:target]
                   # Fallback to name-based lookup only if no ID available
-                  apply_status_to_target(status_result[:status], status_result[:target], nil, status_result[:action])
+                  apply_status_to_target(status_result[:status], status_result[:target], nil, status_result[:action],
+                                         line: index)
                 elsif status_result.is_a?(Hash) && !line.match?(/\A\s*Your?\b/) &&
                       (subject = (current_target && current_target[:id] ? current_target : nil) ||
                                  (flare_ctx && flare_ctx[:target_info]))
@@ -435,8 +633,10 @@ module Lich
                   # 2p lines ("You are stunned!") describe US, never
                   # the creature - the Your?/You guard keeps them out.
                   line_status_id = subject[:id]
+                  seq = status_flare_seq.call(subject[:id])
                   apply_status_to_target(status_result[:status], subject[:name],
-                                         subject[:id], status_result[:action])
+                                         subject[:id], status_result[:action],
+                                         flare_seq: seq, event: status_event_for.call(subject[:id], seq), line: index)
                 elsif status_result.is_a?(Hash) && line.match?(/\A\s*Your?\b/)
                   # 2p: the status is OURS ("You are stunned!"). Never a
                   # creature application - but it IS a fact (inbound
@@ -466,8 +666,9 @@ module Lich
                 cause = nil
                 if chunk_dispels.include?(loss[:id]) || chunk_dispels.include?(:any)
                   cause = :dispel
-                elsif loss[:id] && defined?(Creature) && (c = Creature[loss[:id]]) &&
-                      (c.dead? || (c.respond_to?(:crtr_flag?) && c.crtr_flag?(:dead)))
+                elsif chunk_deaths.include?(loss[:id]) ||
+                      (loss[:id] && defined?(Creature) && (c = Creature[loss[:id]]) &&
+                       (c.dead? || (c.respond_to?(:crtr_flag?) && c.crtr_flag?(:dead))))
                   cause = :death
                 end
                 emit_fact(:spell_loss, id: loss[:id], name: loss[:name],
@@ -502,7 +703,7 @@ module Lich
               # around X flares causing 58 points of damage!") - the same
               # shape as inline attack damage (replay 2026-09-05)
               if (inline = Parser.parse_damage(line))
-                flare[:hits] << { damage: inline, crit: nil }
+                flare[:hits] << { damage: inline, crit: nil, line: index }
                 respond "[Combat] Found inline flare damage: #{inline}" if Tracker.debug?(:verbose)
               end
 
@@ -522,7 +723,47 @@ module Lich
               # The reject clause still matters: when two weapons' flares
               # fire back to back with no attack line between them, the
               # weapon name is the ONLY thing telling them apart.
-              if current_event && !flare_contradicts_weapon?(flare, current_event)
+              # Our own flare arriving while a creature's inbound attack is
+              # the open event: it belongs to the own swing that attack
+              # interrupted - resume it (see interrupted_own). Not only the
+              # "your <weapon>" lines: the disciple's cloak-of-shadows cast
+              # also cut in front of our nature's decay ("Soot brown specks
+              # ... in the wake of <creature>"), breeze and arcane reflex
+              # ("Vital energy infuses you") lines, which name no weapon
+              # (hunt log 2026-09-07 23:50). A creature's cast has no flares
+              # of its own; anything the swing could own resumes it.
+              # A one-hit side effect (mount collapse) has its hit: the flare
+              # that follows is the interrupted swing's (see SINGLE_HIT_ATTACKS;
+              # hunt log 2026-09-09 13:44, chameleon shroud on the pin row)
+              if current_event && single_hit_parent && SINGLE_HIT_ATTACKS.include?(current_event[:name]) &&
+                 current_event[:hits].any?
+                save_event.call(current_event)
+                current_event = single_hit_parent
+                single_hit_parent = nil
+                current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                respond "[Combat] Resumed #{current_event[:name]} after its one-hit side effect (flare)" if Tracker.debug?(:verbose)
+              end
+              if current_event && (current_event[:inbound] || current_event[:_released]) && interrupted_own &&
+                 !flare_contradicts_weapon?(flare, interrupted_own)
+                save_event.call(current_event)
+                current_event = interrupted_own
+                interrupted_own = nil
+                current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                parse_state = :seeking_damage
+                respond "[Combat] Resumed interrupted #{current_event[:name]} for its flare" if Tracker.debug?(:verbose)
+              end
+              # A spell-RELEASING flare fires at the START of an attack. One
+              # arriving on a swing that has already landed (hits) or
+              # resolved (outcome) - or on a creature's inbound event - is
+              # the NEXT swing's, and must be held for it: attached to the
+              # finished swing it dragged the released cast under the wrong
+              # parent (review of 3c3f1bfe). A maneuver's own SMR does not
+              # settle it - pummel rolls its SMR before its release fires.
+              releasing_flare = SPELL_RELEASING_FLARES.include?(flare[:name])
+              settled_for_release = current_event &&
+                                    (current_event[:inbound] || current_event[:hits].any? || current_event[:outcomes].any?)
+              if current_event && !flare_contradicts_weapon?(flare, current_event) &&
+                 !(releasing_flare && settled_for_release)
                 current_event[:flares] << flare
               else
                 pending_flares << flare
@@ -543,13 +784,23 @@ module Lich
             # Spawn-class flares (Blink) fire an imbedded spell whose cast
             # unfolds as a bracketed sequence. Events inside the bracket are
             # children of the flare, not independent casts.
-            if spawn_pending && (seq = Parser.parse_sequence_start(line))
-              active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
-              spawn_pending = nil
-              respond "[Combat] Spawn sequence started: #{seq} from #{active_spawn[:flare]}" if Tracker.debug?(:verbose)
-            elsif active_spawn && Parser.parse_sequence_end(line) == active_spawn[:sequence]
-              respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
-              active_spawn = nil
+            if (seq = Parser.parse_sequence_start(line))
+              # Any sequence bracket names the rounds inside it that print no
+              # initiation of their own (a volley arrow that MISSED prints
+              # only roll + dodge line; hunt log 2026-09-07: two such arrows
+              # recorded as :unknown outside the volley tree).
+              active_sequence = seq
+              if spawn_pending
+                active_spawn = { flare: spawn_pending[:name], sequence: seq, weapon: spawn_pending[:weapon] }
+                spawn_pending = nil
+                respond "[Combat] Spawn sequence started: #{seq} from #{active_spawn[:flare]}" if Tracker.debug?(:verbose)
+              end
+            elsif (seq_end = Parser.parse_sequence_end(line))
+              active_sequence = nil if active_sequence == seq_end
+              if active_spawn && seq_end == active_spawn[:sequence]
+                respond "[Combat] Spawn sequence ended: #{active_spawn[:sequence]}" if Tracker.debug?(:verbose)
+                active_spawn = nil
+              end
             end
 
             # Assault brackets (single-target multi-round attacks: flurry,
@@ -598,7 +849,7 @@ module Lich
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
                 if event_savable?(current_event)
-                  events << current_event
+                  save_event.call(current_event)
                   respond "[Combat] Saved event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits, #{current_event[:statuses].size} statuses" if Tracker.debug?(:verbose)
                 end
 
@@ -684,8 +935,39 @@ module Lich
                 # already dealt its damage is complete - an acid proc must
                 # not steal the next swing's AS/DS (real-feed replay,
                 # logs/examples/weapon_pulverize.txt).
-                flare_ctx = nil if flare_ctx && flare_ctx[:hits].any?
+                # A PHYSICAL roll arriving on a flare-released spell that has
+                # ALREADY resolved is the interrupted swing's: resume the swing
+                # first so the routing below lands the roll and its damage on
+                # it (see SPELL_RELEASING_FLARES). "Already resolved" matters:
+                # Holy Weapon can release a BOLT, whose own AS/DS is the first
+                # roll after its cast line - that one is the bolt's, and only
+                # the roll after it belongs to the swing. Keying on roll type
+                # alone gave the bolt's roll and damage to the swing (review
+                # of 056ff899). A warding cast resolves on its CS/TD first
+                # either way, so this is a no-op for Templar's Verdict.
+                if current_event && current_event[:_released] && interrupted_own &&
+                   %i[as_ds uaf_udf].include?(resolution[:type]) &&
+                   (current_event[:resolutions].any? || current_event[:hits].any? || current_event[:outcomes].any?)
+                  save_event.call(current_event)
+                  current_event = interrupted_own
+                  interrupted_own = nil
+                  current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                  parse_state = :seeking_damage
+                  flare_ctx = nil
+                  respond "[Combat] Resumed interrupted #{current_event[:name]} for its #{resolution[:type]} roll" if Tracker.debug?(:verbose)
+                end
+                settled_flare = flare_ctx if flare_ctx && flare_ctx[:hits].any?
+                flare_ctx = nil if settled_flare
                 sink = flare_ctx
+                # Crit RIDER roll: a knockdown crit rolls its own SMR after
+                # the damage and then narrates the fall on the very next
+                # line. It belongs to the hit that caused it (the flare or
+                # the swing), not to the next attack - held, it became a
+                # synthetic :unknown on the wrong creature.
+                if sink.nil? && %i[smr maneuver_roll].include?(resolution[:type]) &&
+                   (peek = lines[index + 1]) && Definitions::Resolutions.crit_rider_line?(peek)
+                  sink = settled_flare || (current_event && current_event[:hits].any? ? current_event : nil)
+                end
                 # Roll routing differs by roll class (fixture-verified,
                 # logs/examples/):
                 #   SMR/SSR/maneuver rolls PRECEDE their per-target line
@@ -706,8 +988,18 @@ module Lich
                     # switch-born event an outcome settles too - a volley
                     # miss's roll came BEFORE its outcome, so one arriving
                     # after belongs to the next arrow.
+                    #
+                    # A STATUS settles a switch-born event the same way: an
+                    # AoE status effect rolls once PER onlooker, each roll
+                    # printed BEFORE the creature it applies to (eviscerate:
+                    # ssr -> freeze -> unsettled, twice). Without this the
+                    # second roll fell into the first bystander's still-open
+                    # event - which had no hits and no outcome to settle it -
+                    # and the second bystander recorded no roll at all
+                    # (Rysk logs 2026-09-11, fixture eviscerate.txt).
                     settled = current_event[:hits].any? ||
-                              (!born && current_event[:outcomes].any?)
+                              (!born && (current_event[:outcomes].any? ||
+                                         current_event[:_had_status]))
                     sink = current_event unless settled
                   elsif born || (current_event[:hits].empty? && current_event[:outcomes].empty?)
                     sink = current_event
@@ -720,29 +1012,84 @@ module Lich
                 end
                 respond "[Combat] Found resolution: #{resolution[:type]} = #{resolution[:result]}" if Tracker.debug?(:verbose)
               elsif (outcome = Parser.parse_outcome(line))
-                if flare_ctx || current_event
+                # A pre-emptive evade ("bounds to safety as you move to attack
+                # it") is OUR swing resolving, and it names the creature we
+                # swung at. A creature's inbound swing is never closed by the
+                # target-switcher, so one left open across the nock swallowed
+                # the evade and our own swing was never opened - the nocked
+                # bow had nothing to name. Scoped to a live nock: only there
+                # do we know an outbound swing is outstanding, so inbound
+                # maneuvers whose resist line names their own caster
+                # possessively ("the warg's unnerving howl") still attach.
+                preempts_open_inbound = nocked && current_event && current_event[:inbound] &&
+                                        !flare_ctx && line_target && line_target[:id] &&
+                                        !Definitions::Outcomes.inbound_line?(line)
+                if line_attack
+                  same_line_outcome = outcome
+                elsif flare_ctx || (current_event && !preempts_open_inbound)
                   (flare_ctx || current_event)[:outcomes] << outcome
                 elsif line_target && line_target[:id]
+                  # Reached with an open event only via preempts_open_inbound:
+                  # the creature's swing that interleaved between our nock and
+                  # the pre-emptive evade. Save it before opening ours, as the
+                  # single_hit_parent / interrupted_own resumptions do - it
+                  # may carry a fully resolved hit on us.
+                  save_event.call(current_event) if event_savable?(current_event)
                   # An outcome with a named target and no event at all: the
                   # first arrow of a volley round can be a miss - roll +
                   # outcome, no attack line, at the top of the chunk. Open
                   # the event here (chunk-locally the maneuver name is
                   # unknowable) so the miss and its roll survive.
-                  current_event = {
-                    name: pending_ambush ? :ambush : :unknown,
-                    target: line_target, attacker: nil,
-                    weapon: nil, parent: nil, hits: [],
-                    statuses: [], flares: [], outcomes: [outcome],
-                    # A wholly-negated ambush prints its prefix and then an
-                    # intercept, with no attack line between - this is the
-                    # only record that the ambush was attempted.
-                    ambush: !pending_ambush.nil?,
-                    resolutions: pending_resolutions
-                  }
-                  pending_ambush = nil
-                  pending_resolutions = []
-                  current_target = line_target
-                  parse_state = :seeking_damage
+                  # When the line names who attacked US instead ("the thorny
+                  # barrier ... blocks the attack from <X>"), the swing was
+                  # intercepted before it printed: an INBOUND unknown with X
+                  # as the attacker, never an attack on X.
+                  if Definitions::Outcomes.inbound_line?(line)
+                    # (a creature's wholly-negated ambush on us is this shape
+                    # too: prefix, then the intercept, no attack line)
+                    current_event = {
+                      name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : :unknown, target: {}, inbound: true,
+                      attacker: line_target, weapon: nil, parent: nil,
+                      hits: [], statuses: [], flares: [], outcomes: [outcome],
+                      ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                      attack_kind: pending_ambush && pending_ambush[:kind],
+                      resolutions: pending_resolutions
+                    }
+                    pending_ambush = nil
+                    pending_resolutions = []
+                    parse_state = :seeking_damage
+                  else
+                    # Inside a volley bracket the round IS a volley arrow: name
+                    # it and seat it in the volley's spawn tree (the first arrow
+                    # of the round becomes the root the later arrows point at).
+                    round_name = SEQUENCE_ROUND_NAMES.include?(active_sequence) ? active_sequence : nil
+                    # a nocked bow with no fire line printed: the outcome IS
+                    # the fire (pre-emptive evade, see nocked decl)
+                    nock_fire = nocked && !(pending_ambush && pending_ambush[:hidden]) && round_name.nil?
+                    current_event = {
+                      name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : (round_name || (nock_fire ? :fire : :unknown)),
+                      target: line_target, attacker: nil,
+                      weapon: nock_fire ? nocked : nil, parent: nil, hits: [],
+                      statuses: [], flares: [], outcomes: [outcome],
+                      # A wholly-negated ambush prints its prefix and then an
+                      # intercept, with no attack line between - this is the
+                      # only record that the ambush was attempted.
+                      ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                      attack_kind: pending_ambush && pending_ambush[:kind],
+                      resolutions: pending_resolutions
+                    }
+                    if round_name
+                      # lineage as the attack branch would stamp it: first own
+                      # event of the blob roots the tree, later ones point at it
+                      spawn_root ||= current_event
+                      current_event[:root_ref] = spawn_root
+                    end
+                    pending_ambush = nil
+                    pending_resolutions = []
+                    nocked = nil if nock_fire
+                    current_target = line_target
+                    parse_state = :seeking_damage
+                  end
                 else
                   # No event, no named target: an outcome for an
                   # initiation we have no def for. Orphan-sink it.
@@ -759,7 +1106,7 @@ module Lich
             # line follows and carries the target and the roll. Arm the flag
             # and move on; the next attack claims it.
             if (amb = Definitions::Attacks.ambush_prefix(line))
-              pending_ambush = { attacker: amb[:attacker] }
+              pending_ambush = { attacker: amb[:attacker], kind: amb[:kind], hidden: amb[:hidden] }
               respond '[Combat] Ambush prefix armed' if Tracker.debug?(:verbose)
             end
 
@@ -802,6 +1149,9 @@ module Lich
             # above on the same line and double-applied their effects.
             attack = (amb || rdr) ? nil : line_attack
 
+            if (nock = line.gsub(/<[^>]+>/, '').match(/\AYou nock .+? in your (?<weapon>[^.]+)\.\s*\z/))
+              nocked = nock[:weapon]
+            end
             if attack
               # A bare gesture :cast event is the WRAPPER for whatever
               # spell-specific initiation follows in the same chunk (searing
@@ -831,11 +1181,41 @@ module Lich
                 superseded_cast = true
                 current_event = nil
               end
+              # A one-hit side effect remembers the event it cut in front of
+              # (see SINGLE_HIT_ATTACKS); anything else clears it. The side
+              # effect's own line names ITS victim, so the target switcher
+              # has already saved the real parent and left a same-line
+              # artifact copy in current_event - the parent is the saved one.
+              single_hit_parent = nil
+              if SINGLE_HIT_ATTACKS.include?(attack[:name])
+                cand = current_event && current_event[:_line] == index ? events.last : current_event
+                single_hit_parent = cand if cand && !cand[:inbound] && !cand[:foreign_caster] && !cand[:foreign_target]
+              end
               # Save previous event before starting a new one - unless the
               # target-switcher created it on this very line (see _line)
               if event_savable?(current_event) && current_event[:_line] != index
-                events << current_event
+                save_event.call(current_event)
                 respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits" if Tracker.debug?(:verbose)
+                # an inbound attack cutting into our own open swing: remember
+                # the swing so its trailing flares can resume it
+                if attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target])
+                  interrupted_own = current_event
+                end
+                # our own swing carrying an UNCLAIMED spell-releasing flare:
+                # a weaponless CAST opening now is that flare's spell, cutting
+                # into the swing. One flare releases one spell - claiming it
+                # marks the flare consumed, and a weapon-bearing swing line is
+                # never the released spell - otherwise a second swing later in
+                # the chunk read as "released" too and handed its roll and
+                # damage back to the first swing (review of 056ff899).
+                if !attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target]) &&
+                   attack[:weapon].nil? && Parser.parse_swing_weapon(line).nil? &&
+                   (rel = (current_event[:flares] || []).find { |f| SPELL_RELEASING_FLARES.include?(f[:name]) && !f[:_release_claimed] })
+                  rel[:_release_claimed] = true
+                  interrupted_own = current_event
+                  released_parent = { event: current_event, flare: rel }
+                end
+                last_inbound_attacker = current_event[:attacker] if current_event[:inbound] && current_event[:attacker]
               end
               # A same-line artifact event may have claimed held rolls in
               # the switch branch above (volley: the arrow's own SMR) -
@@ -911,7 +1291,11 @@ module Lich
                 # Struck from hiding: this attack carries the ambush
                 # bonuses (DS pushdown + crit weighting). A modifier on the
                 # attack, not an attack of its own.
-                ambush: !pending_ambush.nil?,
+                ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                # Which hiding maneuver armed it (:waylay weights damage,
+                # :ambush weights crits) - see AMBUSH_KINDS. Reaction
+                # prefixes set the kind but leave `ambush` false.
+                attack_kind: pending_ambush && pending_ambush[:kind],
                 # A guardian stepped in front of the creature we struck at
                 # and this attack resolved against the guardian instead:
                 # { interceptor: {id?, name}, intended: <victim noun> }.
@@ -947,6 +1331,19 @@ module Lich
                 # attaching here even after outcomes/damage (see roll routing)
                 _attack_born: true
               }
+              # The swing the nock announced has printed (see decl). Only OUR
+              # own attack can be that swing - "You nock" is first-person - so
+              # a creature's inbound swing or another player's attack
+              # interleaving between the nock and the fire must not clear it,
+              # or the fire (or the pre-emptive evade standing in for it)
+              # loses its weapon and falls back to :unknown, which is the very
+              # failure the nock tracking exists to prevent.
+              nocked = nil unless current_event[:inbound] || eff_foreign
+              # see last_inbound_attacker decl
+              if current_event[:inbound] && current_event[:attacker].nil? && last_inbound_attacker &&
+                 !Definitions::Attacks.attackerless_line?(line)
+                current_event[:attacker] = last_inbound_attacker
+              end
 
               # Spawn-tree lineage (see spawn_root decl). We stamp ONLY lineage
               # we can assert, never a positional guess:
@@ -987,6 +1384,17 @@ module Lich
                 current_event[:root_ref] = spawn_root
                 current_event[:parent_ref] = spawn_root
                 current_event[:parent_confidence] = :bracket
+              elsif released_parent && !not_ours
+                # A spell released by the swing's own flare: child of that
+                # swing. Asserted by adjacency (one releasing flare, one
+                # cast), the same count constraint an echo uses.
+                owner = released_parent[:event]
+                current_event[:root_ref] = owner[:root_ref] || owner
+                current_event[:parent_ref] = owner
+                current_event[:parent_confidence] = :count
+                current_event[:parent] = { flare: released_parent[:flare][:name], weapon: released_parent[:flare][:weapon] }
+                current_event[:_released] = true
+                released_parent = nil
               elsif !not_ours && spawn_root && !pending_echoes.empty? && line.match?(/\AYou\b/) &&
                     current_event[:name] == (pending_echoes.first[:owner] || spawn_root)[:name]
                 echo = pending_echoes.shift
@@ -998,6 +1406,15 @@ module Lich
               else
                 spawn_root = current_event unless not_ours
                 current_event[:root_ref] = current_event
+              end
+              # A weaponless cast opening while a spell-releasing pre-flare
+              # is still unclaimed IS that flare's spell (proc -> spell ->
+              # swing ordering). Mark it so the assault guard leaves the
+              # bracket alone, and hold it for the swing to adopt.
+              if !not_ours && !current_event[:_released] && current_event[:weapon].nil? &&
+                 pending_flares.any? { |f| SPELL_RELEASING_FLARES.include?(f[:name]) }
+                current_event[:_released] = true
+                pending_release_cast = current_event
               end
 
               # Record ownership of a DoT/effect spell from its CAST line so
@@ -1041,7 +1458,8 @@ module Lich
                     @active_assault[:target] = current_target
                   end
                 elsif current_event[:attacker].nil? &&
-                      !%i[unknown companion].include?(current_event[:name])
+                      !%i[unknown companion].include?(current_event[:name]) &&
+                      !current_event[:_released]
                   # Only OUR OWN attacks are impossible mid-assault. A third
                   # party's are normal and must not disturb the bracket:
                   # :companion defs capture (?<companion>) not (?<attacker>)
@@ -1066,10 +1484,11 @@ module Lich
               # No track_damage gate: the main damage branch has none, and
               # gating only here made inline-damage events vanish under
               # configs that omit the key (replay 2026-09-05, pestilence)
-              if (inline = Parser.parse_damage(line))
-                current_event[:hits] << { damage: inline, crit: nil }
+              if !SUMMARY_DAMAGE_ATTACKS.include?(current_event[:name]) && (inline = Parser.parse_damage(line))
+                current_event[:hits] << { damage: inline, crit: nil, line: index }
                 respond "[Combat] Found inline damage: #{inline}" if Tracker.debug?(:verbose)
               end
+              current_event[:outcomes] << same_line_outcome if same_line_outcome
 
               # A new swing claims any held pre-flares whose weapon matches it
               # (they resolved before this swing but belong to it). An inbound
@@ -1077,13 +1496,84 @@ module Lich
               # produced by OUR weapon and still belong to our next swing.
               unless current_event[:inbound]
                 unless pending_flares.empty?
-                  claimed, pending_flares = pending_flares.partition { |f| flare_matches_weapon?(f, current_event[:weapon]) }
-                  current_event[:flares].concat(claimed)
+                  # A bow's pre-flare (dispel on the nock) names the BOW while
+                  # the shot names the ARROW, so a weapon-name match cannot be
+                  # required (hunt log 2026-09-07: 16 of 16 dispels became
+                  # their own attacks, in-chunk, right before "You fire"). A
+                  # pre-flare belongs to this swing unless a flare from a
+                  # DIFFERENT weapon already sits on it - the back-to-back
+                  # dual-wield signature (see flare_contradicts_weapon?).
+                  # Sequential so the first claimed flare guards the second.
+                  still_pending = []
+                  pending_flares.each do |f|
+                    # A spell-RELEASING pre-flare (Holy Weapon) rode a swing,
+                    # never the spell it released: only an attack that names
+                    # a weapon may claim it. Left to the generic rule the
+                    # Templar's Verdict cast took it, which then read as the
+                    # swing that released the spell and pulled the real
+                    # swing's AS/DS onto the cast (Dreadt log 2026-09-11
+                    # 12274, 12715).
+                    releasing = SPELL_RELEASING_FLARES.include?(f[:name])
+                    claim = if releasing
+                              current_event[:weapon] && !flare_contradicts_weapon?(f, current_event)
+                            else
+                              flare_matches_weapon?(f, current_event[:weapon]) || !flare_contradicts_weapon?(f, current_event)
+                            end
+                    if claim
+                      # fired BEFORE the swing line (dispel-on-nock, ensorcell's
+                      # veil): never the cause of a status the swing's own crit
+                      # inflicts afterwards (see status_flare_seq)
+                      f[:_pre] = true
+                      current_event[:flares] << f
+                      # ...and the cast that flare released, which printed
+                      # before this swing, is this swing's child.
+                      if releasing && pending_release_cast
+                        f[:_release_claimed] = true
+                        cast = pending_release_cast
+                        cast[:root_ref] = current_event[:root_ref] || current_event
+                        cast[:parent_ref] = current_event
+                        cast[:parent_confidence] = :count
+                        cast[:parent] = { flare: f[:name], weapon: f[:weapon] }
+                        # re-emit it after the swing (recorder needs parent first)
+                        events.delete_if { |e| e.equal?(cast) }
+                        (current_event[:_released_children] ||= []) << cast
+                        deferred_casts << cast
+                        pending_release_cast = nil
+                      end
+                    else
+                      still_pending << f
+                    end
+                  end
+                  pending_flares = still_pending
                 end
                 unless pending_resolutions.empty?
                   current_event[:resolutions].concat(pending_resolutions)
                   pending_resolutions = []
                 end
+              end
+              # Exception: a creature MANEUVER rolls before its line prints
+              # (3p feint: "[SMR] X feints high, but you aren't fooled"; sap
+              # spit whose miss prints on the NEXT line; a grapple that lands
+              # and prints no outcome at all) - that held maneuver roll is its
+              # own, not our next swing's. This used to key on the line
+              # carrying its own outcome, which only covered the feint shape
+              # and left the other two orphaned (Rysk/Dreadt logs 2026-09-11).
+              # The roll IS ours only when we are mid-sequence: volley (a
+              # sequence) and barrage (an assault) print our SMR before our
+              # arrow line, and both announce themselves, so those states keep
+              # the hold. Every OTHER assault (pummel, flurry, thrash, guardant
+              # thrust) rolls AFTER its round line - fixture-verified - so an
+              # open one must not block the claim: a pummel was open when a
+              # slaver's subdue cut in, and the blanket guard orphaned that
+              # roll (Dreadt log 2026-09-11 7280). Corpus census 2026-09-12:
+              # 5 maneuver-SMR -> inbound-line shapes, 0 with our own attack
+              # following in the chunk. Maneuver-class rolls only - AS/DS
+              # never precedes.
+              if current_event[:inbound] && !pending_resolutions.empty? &&
+                 active_sequence.nil? && !nocked &&
+                 !(@active_assault && ROLL_BEFORE_ROUND_ASSAULTS.include?(@active_assault[:name]))
+                mine, pending_resolutions = pending_resolutions.partition { |r| %i[smr ssr maneuver_roll].include?(r[:type]) }
+                current_event[:resolutions].concat(mine)
               end
               flare_ctx = nil
 
@@ -1101,10 +1591,21 @@ module Lich
               # 2026-09-07); the room-feed death that follows agrees.
               if current_event && current_event[:name] == :coup_de_grace &&
                  (coup_loc = Definitions::Attacks.coup_kill_location(line))
-                current_event[:hits] << { damage: 0, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
+                current_event[:hits] << { damage: 0, line: index, crit: { location: coup_loc, type: 'coup_de_grace', rank: nil,
                                                              wound_rank: nil, fatal: true } }
+                chunk_deaths << current_event[:target][:id] if current_event[:target] && current_event[:target][:id]
                 respond '[Combat] Coup de grace kill' if Tracker.debug?(:verbose)
               elsif (damage = Parser.parse_damage(line))
+                # a one-hit side effect already has its hit: this damage is
+                # the interrupted attack's (see SINGLE_HIT_ATTACKS)
+                if !flare_ctx && current_event && single_hit_parent &&
+                   SINGLE_HIT_ATTACKS.include?(current_event[:name]) && current_event[:hits].any?
+                  save_event.call(current_event)
+                  current_event = single_hit_parent
+                  single_hit_parent = nil
+                  current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                  respond "[Combat] Resumed #{current_event[:name]} after its one-hit side effect" if Tracker.debug?(:verbose)
+                end
                 sink = flare_ctx || current_event
                 # ONE record per landed hit, damage bound to the crit it
                 # produced. Parallel :damages/:crits arrays could not express
@@ -1118,7 +1619,7 @@ module Lich
                 # "... 5 points of damage!"; the 65 is concussion and takes no
                 # crit (the lookahead breaks on the next damage line), the 5
                 # carries the fire crit.
-                hit = { damage: damage, crit: nil }
+                hit = { damage: damage, crit: nil, line: index }
                 sink[:hits] << hit
                 respond "[Combat] Found damage: #{damage}#{flare_ctx ? " (flare: #{flare_ctx[:name]})" : ''}" if Tracker.debug?(:verbose)
 
@@ -1159,6 +1660,15 @@ module Lich
                       # documents which table row matched, and it makes the
                       # payload unserialisable for any recorder downstream.
                       hit[:crit] = c.reject { |k, _| k == :regex }
+                      if c[:fatal]
+                        victim = flare_ctx ? flare_ctx[:target_info] : (sink[:target_info] || sink[:target])
+                        chunk_deaths << victim[:id] if victim && victim[:id]
+                      end
+                      # Where the crit TEXT sits in the chunk. Crit statuses
+                      # are applied after the whole chunk is parsed, so this
+                      # is the only record of where the crit stood relative
+                      # to the messages around it (see position_recovered?).
+                      hit[:_crit_line] = next_line_index
                       respond "[Combat] Found critical hit: #{c[:location]} rank #{c[:wound_rank]}" if Tracker.debug?(:verbose)
                       break # Only take first crit found after this damage
                     end
@@ -1169,7 +1679,7 @@ module Lich
               # Damage while seeking an attack: its initiation had no def
               # (or lived in a prior chunk we cannot see). Orphan-sink it
               # rather than dropping the fact.
-              orphan_hits << { damage: orphan_dmg, crit: nil }
+              orphan_hits << { damage: orphan_dmg, crit: nil, line: index }
               respond "[Combat] Orphan damage: #{orphan_dmg}" if Tracker.debug?(:verbose)
             end
 
@@ -1193,7 +1703,7 @@ module Lich
           if bare_cast?(current_event) && !current_event[:_held] && current_event[:attacker].nil?
             @held_cast = current_event
           elsif event_savable?(current_event)
-            events << current_event
+            save_event.call(current_event)
           end
 
           # Orphaned rolls: no attack ever claimed them (trailing rider
@@ -1229,9 +1739,14 @@ module Lich
           end
 
           # Pre-flares no swing claimed (e.g. the chunk ended first). Ones
-          # that resolved damage against a known target still count - wrap
-          # each as its own event so the damage is applied, not dropped.
-          pending_flares.each do |f|
+          # that resolved damage against a known target still count. First
+          # time round they are HELD for one chunk - the swing they belong
+          # to is usually the next chunk's first line (dispel-on-nock). A
+          # flare already held once is wrapped as its own event so the
+          # damage is applied, not dropped.
+          hold, wrap = pending_flares.partition { |f| f[:target_info] && !f[:hits].empty? && !f[:_held] }
+          @held_pre_flares = hold unless hold.empty?
+          wrap.each do |f|
             next unless f[:target_info] && !f[:hits].empty?
 
             # Data stays on the flare (persist_event applies flare damage
@@ -1244,6 +1759,8 @@ module Lich
             }
           end
 
+          # a deferred cast whose swing never saved still carries its facts
+          deferred_casts.each { |c| events << c unless events.any? { |e| e.equal?(c) } }
           events
         end
 
@@ -1393,16 +1910,77 @@ module Lich
 
         # -- death watch ---------------------------------------------------
 
-        # How many sweeps a touched creature stays watched without dying.
-        # Two chunks covers the room-refresh lag seen in real feeds; anything
-        # longer is a creature that simply survived.
-        DEATH_WATCH_SWEEPS = 3
+        # A touched creature stays watched until it dies or leaves the
+        # registry. It used to expire after three sweeps ("a much later death
+        # is not this event's"), which left creatures we fought and someone
+        # else finished minutes later marked alive (hunt log 2026-09-07: two
+        # mastodons dead in the room feed, both "Alive: true"). Credit is the
+        # recorder's call - a dead status outside any attack window credits
+        # nobody - so watching longer only fixes killed_at. Bounded FIFO.
+        DEATH_WATCH_MAX = 256
+
+        # --- position recovery within one chunk ---------------------------
+        # Message statuses mutate the creature while the chunk is parsed;
+        # crit-derived statuses mutate it afterwards, in persist_event. So a
+        # knockdown crit is applied AFTER a stand-up message that came later
+        # in the same chunk, and would re-prone a creature the game just said
+        # got up. These note which creatures a message stood up, so the crit
+        # pass can leave them alone. Per chunk: cleared at the top of
+        # parse_events, before this chunk's messages are read.
+
+        # The recovery records WHERE in the chunk the stand-up was read, not
+        # merely that one happened. A bare flag cannot answer the question the
+        # crit pass actually asks - "did the creature stand up after THIS
+        # crit?" - so a second, genuine knockdown crit landing later in the
+        # same chunk was suppressed by an earlier stand-up.
+        #
+        # @param id [Integer, String, nil] the creature a message stood up
+        # @param line [Integer, nil] index of the stand-up line in this chunk
+        def note_position_recovery(id, line)
+          return unless id
+
+          @position_recovered ||= {}
+          # A caller that cannot say WHERE the recovery was read still asserts
+          # that one happened. Infinity keeps that meaning "after every crit",
+          # the safe reading: never re-prone a creature the game stood up.
+          at = line.nil? ? Float::INFINITY : line
+          # Keep the LATEST recovery: it is the one a crit must beat.
+          prev = @position_recovered[id.to_i]
+          @position_recovered[id.to_i] = at if prev.nil? || at >= prev
+        end
+
+        # A later knockdown MESSAGE outranks the recovery: the crit pass may
+        # act again.
+        # @param id [Integer, String, nil]
+        def clear_position_recovery(id)
+          return unless id
+
+          @position_recovered&.delete(id.to_i)
+        end
+
+        # @param id [Integer, String, nil]
+        # @param crit_line [Integer, nil] line the crit text sat on, when known
+        # @return [Boolean] a message stood the creature up AFTER this crit
+        def position_recovered?(id, crit_line = nil)
+          return false unless id && @position_recovered
+
+          recovered_at = @position_recovered[id.to_i]
+          return false if recovered_at.nil?
+          # No line on the crit: fall back to the old chunk-wide answer rather
+          # than silently re-proning a creature the game stood up.
+          return true if crit_line.nil?
+
+          # Only a stand-up read AFTER the crit outranks it.
+          recovered_at > crit_line
+        end
 
         def watch_for_death(id)
           return unless id
 
           @death_watch ||= {}
-          @death_watch[id.to_i] = DEATH_WATCH_SWEEPS
+          @death_watch.delete(id.to_i) # re-insert at the tail (most recent)
+          @death_watch[id.to_i] = true
+          @death_watch.shift while @death_watch.size > DEATH_WATCH_MAX
         end
 
         # Emits :status dead (add) for any watched creature whose registry
@@ -1427,8 +2005,6 @@ module Lich
               Observers.emit(:status, id: creature.id, name: creature.name,
                                       status: 'dead', action: :add)
               respond "[Combat] #{creature.name} (#{id}) confirmed dead" if Tracker.debug?(:verbose)
-            elsif (@death_watch[id] -= 1) <= 0
-              @death_watch.delete(id)
             end
           end
         end
@@ -1588,7 +2164,7 @@ module Lich
             event[:hits].each do |hit|
               crit = hit[:crit] or next
 
-              apply_hit_crit_statuses(creature, crit, event, at)
+              apply_hit_crit_statuses(creature, crit, event, at, crit_line: hit[:_crit_line])
             end
           end
 
@@ -1605,7 +2181,8 @@ module Lich
             (flare[:hits] || []).each do |hit|
               crit = hit[:crit] or next
 
-              apply_hit_crit_statuses(f_creature, crit, event, at, flare: flare[:name])
+              apply_hit_crit_statuses(f_creature, crit, event, at, flare: flare[:name],
+                                                                   crit_line: hit[:_crit_line])
             end
           end
         end
@@ -1613,7 +2190,7 @@ module Lich
         # Apply one crit's status effects (stun/roundtime/position/silence/...)
         # to a creature. Shared by direct-hit and flare-hit crits so both paths
         # stay identical; `flare` tags the observer/debug provenance.
-        def apply_hit_crit_statuses(creature, crit, event, at, flare: nil)
+        def apply_hit_crit_statuses(creature, crit, event, at, flare: nil, crit_line: nil)
           if crit[:stunned].to_i > 0
             # The boolean stays owned by <crtrStatus>/messaging; this records
             # the table-derived duration estimate beside it.
@@ -1636,7 +2213,11 @@ module Lich
           # Position changes carry better provenance than the messaging
           # equivalents: /It is knocked to the ground!/ has no target
           # capture, while this crit is already bound to a creature id.
-          if (pos = crit[:position])
+          # A recovery message later in this chunk already said the creature
+          # is up. Messages apply during the parse and crits during persist,
+          # so without this the EARLIER knockdown would overwrite the LATER
+          # stand-up and latch the creature prone.
+          if (pos = crit[:position]) && !position_recovered?(creature.id, crit_line)
             # Tables report "PRONE"/"KNEELING"/"SITTING"; the status
             # canon (messaging, <crtrStatus>, consumers) is lowercase.
             # add_status canonicalizes too, but the observer payload
@@ -1702,7 +2283,11 @@ module Lich
         end
 
         # Apply status effect directly to a creature (outside combat events)
-        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add)
+        # flare_seq / event: which flare (1-based position) of which parse
+        # event the status rode on; process() turns the event ref into an
+        # :attack_uid for the recorder. line: where the status message sat in
+        # the chunk, so a later knockdown crit can outrank an earlier stand-up.
+        def apply_status_to_target(status, target_name_or_id, target_id = nil, action = :add, flare_seq: nil, event: nil, line: nil)
           # Handle both name lookup and direct ID
           if target_id
             creature = Creature[target_id.to_i]
@@ -1725,6 +2310,14 @@ module Lich
               # one the pattern happened to name.
               if POSITION_STATUSES.include?(status.to_s)
                 POSITION_STATUSES.each { |s| creature.remove_status(s) }
+                # Message statuses apply HERE, during the parse; crit-derived
+                # statuses apply later, in persist_event. A creature knocked
+                # down by a crit and standing up afterwards in the same chunk
+                # would be re-proned by that later pass, because the crit is
+                # earlier in the chunk but applied last. Note the recovery so
+                # the crit pass leaves it standing (see apply_hit_crit_statuses).
+                # The line is what lets a LATER knockdown crit still win.
+                note_position_recovery(creature.id, line)
               else
                 creature.remove_status(status)
               end
@@ -1734,12 +2327,19 @@ module Lich
               # sitting is prone, not both.
               if POSITION_STATUSES.include?(status.to_s)
                 (POSITION_STATUSES - [status.to_s]).each { |s| creature.remove_status(s) }
+                # A later knockdown MESSAGE outranks an earlier recovery, so
+                # the crit pass is free to act again (stood up, then knocked
+                # down again inside one chunk).
+                clear_position_recovery(creature.id)
               end
               creature.add_status(status)
               respond "[Combat] Applied status #{status} to #{creature.name} (#{creature.id})" if Tracker.debug?(:verbose)
             end
-            emit_fact(:status, id: creature.id, name: creature.name,
-                               status: status, action: action == :remove ? :remove : :add)
+            payload = { id: creature.id, name: creature.name,
+                        status: status, action: action == :remove ? :remove : :add }
+            payload[:flare_seq] = flare_seq if flare_seq
+            payload[:_event] = event if event
+            emit_fact(:status, payload)
           else
             respond "[Combat] Could not find creature for status: #{status} -> #{target_name_or_id}" if Tracker.debug?(:verbose)
           end

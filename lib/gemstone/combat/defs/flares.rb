@@ -154,8 +154,8 @@ module Lich
             FlareDef.new(:parasite, [/A slender .+? and black tendril lashes out from .+? and slashes (?<target>.+?) .+?!/].freeze, true, true, false),
             FlareDef.new(:physical_prowess, [/The vitality of nature bestows you with a burst of strength!/].freeze, false, true, false),
             FlareDef.new(:plasma, [
-              /\*\* Your .+? pulses with a burst of plasma energy! \*\*/,
-              /\*\* (?<attacker>.+?)'s#{MK_POST} .+? pulses with a burst of plasma energy! \*\*/
+              /\*\* Your .+? pulses with a burst of plasma energy(?: at (?<target>[^!]+))?! \*\*/,
+              /\*\* (?<attacker>.+?)'s#{MK_POST} .+? pulses with a burst of plasma energy(?: at (?<target>[^!]+))?! \*\*/
             ].freeze, true, true, false),
             # Glowbark / plasma weapon flare. Three lines, three roles (owner
             # breakdown 2026-09-06):
@@ -203,6 +203,22 @@ module Lich
               # the sigils, then the tendrils lash out in the same line
               /\*\* A bolt of energy leaps from (?<attacker>.+?)'s#{MK_POST} .+? and sets the sigils along .+? ablaze\.  Tendrils of .+? lash out at (?<target>.+?) and cage .+? within bands of concentric geometry/
             ].freeze, true, false, false),
+            # Holy Weapon (1625) infusion release: a paladin BESEECHes a
+            # bonded weapon to invoke its infused spell at the START of the
+            # next attack, so this line precedes the swing's roll (and, for a
+            # bare swing, the swing line itself - a pre-flare claimed by
+            # weapon). The spell it releases prints its own cast line and is
+            # its own attack; see SPELL_RELEASING_FLARES in the processor.
+            # Was an AttackDef: it then opened an event that swallowed BOTH
+            # the spell's CS/TD and the swing's AS/DS (Dreadt log 2026-09-11:
+            # 13 rows carrying cs_td, 10 of them also as_ds). Not damaging -
+            # the damage belongs to the spell. The wiki prints this in flare
+            # syntax (** ... **); the live feed omits the asterisks.
+            # Second pattern: the FAILED release - nothing follows it.
+            FlareDef.new(:weapon_cast, [
+              /(?:\*\* )?As (?:you attempt to strike with your|your) (?<weapon>.+?)(?: hits)?, it sends a surge of power through you that quickly leaps out at (?:the )?(?<target>[^!]+)!/,
+              /(?:\*\* )?As you attempt to strike with your (?<weapon>.+?), you briefly feel a surge of power, but it dissipates before reaching (?:the )?(?<target>[^!.]+)/
+            ].freeze, false, false, false),
             FlareDef.new(:sigil_cast, [
               /\*\* Numerous sigils along your .+? abruptly flare to brilliance!  .+? surges from each, twining into an echo of your last spell\.\.\. \*\*/,
               /\*\* Numerous sigils along (?<attacker>.+?)'s#{MK_POST} .+? abruptly flare to brilliance!  .+? surges from each, twining into an echo of .+? last spell\.\.\. \*\*/,
@@ -400,6 +416,13 @@ module Lich
 
               result = { name: name, damaging: damaging, aoe: aoe, spawns: spawns }
               result[:target] = match[:target] if match.names.include?('target') && match[:target]
+              # 3p forms name whose item flared; a 2p flare ("Your ...") has
+              # no attacker and is ours - the recorder writes flares.ours off it
+              if match.names.include?('attacker') && (who = match[:attacker])
+                # a lazy capture can land on the FIRST-PERSON form ("from your
+                # hands" - boil_blood): that is ours, not an attacker
+                result[:attacker] = who unless who.gsub(/<[^>]*>/, '').strip =~ /\A(?:your?|yourself)\z/i
+              end
               if (weapon = WEAPON_LINK.match(line))
                 result[:weapon] = { id: weapon[:id].to_i, name: weapon[:name] }
               end

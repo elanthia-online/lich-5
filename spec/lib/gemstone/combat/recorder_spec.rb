@@ -200,6 +200,69 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.close
     end
 
+    it "does not open a session for a nearby player's attack, nor keep one alive with it" do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(name: 'cast', foreign_caster: true))
+      expect(count('sessions')).to eq(0)
+      expect(count('attacks')).to eq(0)
+
+      rec.record(:attack, attack_event)
+      expect(count('sessions')).to eq(1)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 250))
+      rec.record(:attack, attack_event(name: 'cast', foreign_caster: true)) # recorded, but no heartbeat
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 350))
+      rec.check_idle!
+      rec.close
+
+      expect(count('attacks')).to eq(2)
+      expect(query('SELECT ended_at FROM sessions').first['ended_at']).to eq(3_000_000.0)
+    end
+
+    # Regression: foreign_event? used to call EVERY non-:attack type foreign,
+    # so a death confirmed by the room feed after the idle gap (exactly what
+    # the processor's watch-until-death sweep emits, as a bare :status) was
+    # dropped outright - no status row, no killed_at.
+    it 'records a delayed death for a creature this session fought, into that same session' do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(at: Time.at(3_000_000)))
+
+      # the room feed confirms the kill well past the idle gap
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 301))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: :add)
+
+      expect(count('sessions')).to eq(1) # no spurious second session
+      expect(query("SELECT status FROM statuses WHERE kind = 'status'").map { |r| r['status'] }).to eq(['dead'])
+      # the kill lands on the SAME creature row the attack created, not a
+      # duplicate under a new session
+      creatures = query('SELECT id, exist_id, killed_at FROM creatures')
+      expect(creatures.size).to eq(1)
+      expect(creatures.first['killed_at']).to eq(3_000_301.0)
+      rec.close
+    end
+
+    it 'does not let a trailing fact extend the hunt or resurrect it for a stranger' do
+      rec = new_recorder(idle_timeout: 300)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000))
+      rec.record(:attack, attack_event(at: Time.at(3_000_000)))
+
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 301))
+      # a bystander's creature we never touched: still foreign, still dropped
+      rec.record(:status, id: 999, name: 'a passing sprite', status: 'stunned', action: :add)
+      expect(query("SELECT * FROM statuses WHERE kind = 'status'")).to be_empty
+
+      # our own creature's delayed fact is kept, but does not push ended_at out
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'dead', action: :add)
+      allow(Time).to receive(:now).and_return(Time.at(3_000_000 + 900))
+      rec.check_idle!
+      rec.close
+
+      expect(count('sessions')).to eq(1)
+      # ended_at is still the last real attack - town time never pads a hunt
+      expect(query('SELECT ended_at FROM sessions').first['ended_at']).to eq(3_000_000.0)
+    end
+
     it 'closes the session after the idle gap, stamped at the last event time' do
       rec = new_recorder(idle_timeout: 300)
       # first event opens the session; stub Time so last_event_at is controlled
@@ -342,6 +405,37 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(chunk_b['parent_attack_id']).to be_nil
     end
 
+    # A session boundary is a chunk boundary: rows from the closed session
+    # are not addressable by this one's uids. The maps used to survive it,
+    # so a chunk whose FIRST event never reached record_attack (a foreign
+    # event, skipped before the uid-0 reset) left the previous session's
+    # uid -> row map in place for the next event to link into.
+    it 'never links across a session boundary, even when a foreign event held uid 0' do
+      rec = new_recorder(idle_timeout: 300)
+      now = Time.now
+      # hunt one: a real chunk, root at uid 0
+      rec.record(:attack, attack_event(name: 'fire', _uid: 0, root_uid: 0))
+      first_session = query('SELECT id FROM attacks ORDER BY id').size
+      expect(first_session).to eq(1)
+
+      # idle past the timeout, then a new chunk whose first event is foreign
+      # (recorded by nobody: it neither opens a session nor resets the maps)
+      allow(Time).to receive(:now).and_return(now + 301)
+      rec.record(:attack, attack_event(name: 'cast', _uid: 0, root_uid: 0, foreign_caster: true))
+      # ...and our own event, uid 1, which opens hunt two
+      rec.record(:attack, attack_event(name: 'jab', _uid: 1, root_uid: 0, parent_uid: 0))
+      rec.close
+
+      rows = query('SELECT id, session_id, name, root_attack_id, parent_attack_id FROM attacks ORDER BY id')
+      expect(rows.size).to eq(2)
+      old_row, new_row = rows
+      expect(new_row['session_id']).not_to eq(old_row['session_id'])
+      expect(new_row['parent_attack_id']).not_to eq(old_row['id']),
+                                                 'linked to the previous session\'s attack'
+      expect(new_row['root_attack_id']).not_to eq(old_row['id']),
+                                               'rooted in the previous session\'s attack'
+    end
+
     it 'leaves an ambiguous echo (no parent_uid) rooted but parentless' do
       rec = new_recorder
       rec.start_session(at: Time.at(1))
@@ -390,6 +484,49 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec = new_recorder
       rec.close
       expect(query('PRAGMA table_info(attacks)').map { |r| r['name'] }).to include('redirected_from')
+    end
+  end
+
+  # statuses.flare_id ships in the SCHEMA and every status INSERT names it,
+  # so a database created BEFORE the column existed has to gain it on open -
+  # otherwise the first status of the hunt fails with "no column named
+  # flare_id" and the whole status stream is lost on upgrade.
+  describe 'statuses.flare_id migration' do
+    def legacy_database_without_flare_id
+      legacy = SQLite3::Database.new(@db_path)
+      # drop ONLY the statuses column: hits and resolutions have always had a
+      # flare_id (and hits is indexed on it), so a blanket strip built a
+      # legacy table the shipped index could not be created on
+      statuses_ddl = /CREATE TABLE IF NOT EXISTS statuses \(.*?\);/m
+      pre = described_class::SCHEMA.sub(statuses_ddl) do |ddl|
+        ddl.gsub(/\n\s*flare_id    INTEGER REFERENCES flares\(id\),[^\n]*/, '')
+      end
+      expect(pre[statuses_ddl]).not_to include('flare_id')
+      legacy.execute_batch(pre)
+      cols = legacy.execute('PRAGMA table_info(statuses)').map { |r| r[1] }
+      legacy.close
+      expect(cols).not_to include('flare_id')
+    end
+
+    it 'adds the column to a database created before it existed' do
+      legacy_database_without_flare_id
+
+      rec = new_recorder
+      rec.close
+      expect(query('PRAGMA table_info(statuses)').map { |r| r['name'] }).to include('flare_id')
+    end
+
+    it 'records a status into an upgraded database instead of failing the insert' do
+      legacy_database_without_flare_id
+
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      rec.record(:status, id: 101, name: 'a cave lizard', status: 'prone', action: 'add')
+      rec.close
+
+      row = query('SELECT status, action, flare_id FROM statuses').first
+      expect(row['status']).to eq('prone')
+      expect(row['flare_id']).to be_nil
     end
   end
 
@@ -475,6 +612,47 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect(st['status']).to eq('prone')
       expect(st['source']).to eq('window') # inside the open attack's window
       expect(st['attack_id']).not_to be_nil
+    end
+
+    it 'files a status on the flare it rode when the processor names one (flare_seq)' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      ev = attack_event(target_id: 202, target_name: 'an orc')
+      ev[:flares] = [
+        { name: :phosphorescence, damaging: true, target_info: { id: 202, name: 'an orc' }, hits: [{ damage: 5, crit: nil }] },
+        { name: :glowbright, damaging: false, hits: [] },
+        { name: :spectral_bloom, damaging: true, target_info: { id: 303, name: 'a troll' }, hits: [{ damage: 7, crit: nil }] }
+      ]
+      rec.record(:attack, ev)
+      rec.record(:status, { id: 303, name: 'a troll', status: :blind, action: :add, flare_seq: 3 })
+      rec.record(:status, { id: 202, name: 'an orc', status: :blind, action: :add, flare_seq: 1 })
+      rec.record(:status, { id: 202, name: 'an orc', status: :prone, action: :add })
+      rec.close
+
+      rows = query('SELECT s.status, s.subject, f.name AS flare FROM statuses s LEFT JOIN flares f ON f.id = s.flare_id ORDER BY s.id')
+      expect(rows.map { |r| [r['status'], r['subject'], r['flare']] }).to eq([
+                                                                               ['blind', 'a troll', 'spectral_bloom'],
+                                                                               ['blind', 'an orc', 'phosphorescence'],
+                                                                               ['prone', 'an orc', nil]
+                                                                             ])
+      expect(query('SELECT DISTINCT source FROM statuses').map { |r| r['source'] }).to eq(['window'])
+    end
+
+    it 'files a status under the attack the processor names (attack_uid), not the last one emitted' do
+      rec = new_recorder
+      rec.start_session(at: Time.at(1))
+      fire = attack_event(target_id: 202, target_name: 'an orc', _uid: 0, root_uid: 0)
+      fire[:flares] = [{ name: :phosphorescence, damaging: true, target_info: { id: 202, name: 'an orc' }, hits: [{ damage: 5, crit: nil }] }]
+      cast = attack_event(name: 'cast', target_id: nil, target_name: nil, inbound: true, _uid: 1, root_uid: 1,
+                          attacker: { id: 202, name: 'an orc' })
+      cast[:hits] = []
+      rec.record(:attack, fire)
+      rec.record(:attack, cast)
+      rec.record(:status, { id: 202, name: 'an orc', status: :blind, action: :add, flare_seq: 1, attack_uid: 0 })
+      rec.close
+
+      row = query('SELECT s.source, a.name AS attack, f.name AS flare FROM statuses s JOIN attacks a ON a.id = s.attack_id LEFT JOIN flares f ON f.id = s.flare_id').first
+      expect([row['source'], row['attack'], row['flare']]).to eq(['event', 'fire', 'phosphorescence'])
     end
 
     it 'marks a status with no matching open attack as direct' do
