@@ -137,6 +137,7 @@ module Lich
             outcomes_all TEXT,                        -- comma-joined when >1
             aimed       INTEGER NOT NULL DEFAULT 0,
             ambush      INTEGER NOT NULL DEFAULT 0,
+            attack_kind TEXT,                         -- named maneuver: 'waylay'/'ambush' (from hiding, also sets ambush=1) or 'reverse_strike' (parry reaction, ambush=0); NULL when not an ambush, or recorded before this column existed
             inbound     INTEGER NOT NULL DEFAULT 0,
             orphan      INTEGER NOT NULL DEFAULT 0,
             foreign_caster INTEGER NOT NULL DEFAULT 0, -- a nearby player's attack (observed, not ours)
@@ -278,11 +279,20 @@ module Lich
         # creatures.noun blob=196, text=0), so `WHERE noun = 'berserker'` never
         # matched and text functions saw bytes, not words. Re-tag as UTF-8 at
         # the boundary; game text is ASCII/Latin-1 so scrub only guards junk.
+        # Whitespace is normalised here too. A creature revealed from hiding
+        # sometimes arrives with a space injected into BOTH attributes of its
+        # link - real line 2026-09-11: noun=" rogue" name="human  rogue", the
+        # same creature being plain "rogue"/"human rogue" on its other 34
+        # mentions. The game sends it; it is intermittent, and the reveal line
+        # is never trustworthy. Untouched, " rogue" is a noun distinct from
+        # "rogue" and the creature reports as its own kind forever.
         def txt(value)
           return nil if value.nil?
 
           s = value.to_s
-          s.encoding == Encoding::ASCII_8BIT ? s.dup.force_encoding('UTF-8').scrub('?') : s
+          s = s.dup.force_encoding('UTF-8').scrub('?') if s.encoding == Encoding::ASCII_8BIT
+          s = s.strip.squeeze(' ')
+          s.empty? ? nil : s
         end
 
         def start_session_locked(character: nil, source: nil, at: Time.now)
@@ -480,7 +490,7 @@ module Lich
         # SCHEMA gained but this map did not would fail on the first INSERT
         # that names it (statuses.flare_id did exactly that).
         ADDED_COLUMNS = {
-          'attacks'  => { 'redirected_from' => 'TEXT' },
+          'attacks'  => { 'redirected_from' => 'TEXT', 'attack_kind' => 'TEXT' },
           'statuses' => { 'flare_id' => 'INTEGER REFERENCES flares(id)' }
         }.freeze
 
@@ -630,6 +640,7 @@ module Lich
                       txt(attacker[:name]), attacker[:id],
                       txt(event[:weapon]), outcomes.first, (outcomes.size > 1 ? outcomes.join(',') : nil),
                       event[:aimed] ? 1 : 0, event[:ambush] ? 1 : 0,
+                      event[:attack_kind]&.to_s,
                       event[:inbound] ? 1 : 0, event[:_orphan] ? 1 : 0,
                       event[:foreign_caster] ? 1 : 0, event[:unowned] ? 1 : 0,
                       # only an HONORED redirect changes who the row is about;
@@ -641,9 +652,9 @@ module Lich
                                    root_attack_id, parent_attack_id, parent_confidence,
                                    via, creature_id,
                                    target_kind, attacker, attacker_exist_id, weapon, outcome,
-                                   outcomes_all, aimed, ambush, inbound, orphan, foreign_caster, unowned,
-                                   redirected_from)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   outcomes_all, aimed, ambush, attack_kind, inbound, orphan,
+                                   foreign_caster, unowned, redirected_from)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             SQL
             attack_id = @db.last_insert_row_id
             # stage the uid -> row mapping; published to @chunk_rows only when

@@ -30,7 +30,26 @@ module Lich
         # 2026-09-06). A tick IS ours only when our own cast of that spell
         # is visible in the same blob (see cast_owner tracking below).
         # :bleed has no cast at all, so it is always unowned (owner 2026-09-07).
-        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady].freeze
+        # Flares that RELEASE a spell instead of dealing damage themselves
+        # (Holy Weapon 1625: the infused spell fires at the start of a
+        # swing). The cast that follows is the flare's spell, and it lands
+        # in the MIDDLE of the swing - before the swing's own AS/DS. It is
+        # handled like an inbound attack cutting in: the swing is saved as
+        # interrupted_own, the spell runs as its own event, and the first
+        # PHYSICAL roll (AS/DS, UAF/UDF - a warding cast never rolls one)
+        # resumes the swing, which then owns that roll and its damage.
+        # Before this the cast's event held the swing's roll and damage,
+        # and a pummel bracket was dropped as an "unexpected attack" by its
+        # own weapon's spell (Dreadt log 2026-09-11 594-613).
+        SPELL_RELEASING_FLARES = %i[weapon_cast].freeze
+
+        # Assaults whose per-round roll PRECEDES the round line (barrage:
+        # an aim SMR before each arrow, claimed at the arrow's creation -
+        # see the roll-routing notes). While one is open a held maneuver
+        # roll is ours; every other assault rolls after its round line.
+        ROLL_BEFORE_ROUND_ASSAULTS = %i[barrage].freeze
+
+        UNOWNED_TICK_ATTACKS = %i[pestilence web bleed rot spiritual_malady poison_tick].freeze
 
         # Initiations whose inline "causing N points of damage!" restates the
         # "... N points of damage!" line that follows (that line carries the
@@ -301,7 +320,17 @@ module Lich
           events = []
           # Identity-guarded push: an event RESUMED after an inbound
           # interruption (see interrupted_own) was already saved once.
-          save_event = ->(ev) { events << ev unless events.any? { |e| e.equal?(ev) } }
+          save_event = lambda do |ev|
+            next if events.any? { |e| e.equal?(ev) }
+
+            events << ev
+            # A cast this swing's Holy Weapon proc released that PRINTED
+            # BEFORE the swing (proc -> spell -> swing) was pulled out of the
+            # emit order when the swing adopted it: the recorder resolves
+            # lineage at insert time and a parent must emit first, so the
+            # child follows its parent here.
+            Array(ev.delete(:_released_children)).each { |c| events << c unless events.any? { |e| e.equal?(c) } }
+          end
           # Our own event that an inbound attack cut into mid-swing. A
           # creature's reactive cast (cloak of shadows: our arrow lands, its
           # tendril lashes back, CS/TD, "Warded off!") prints BETWEEN our hit
@@ -310,6 +339,18 @@ module Lich
           # log 2026-09-07 23:18, flayed gigas disciple). Our next own flare
           # line resumes the interrupted event.
           interrupted_own = nil
+          # The own swing a flare-released spell cut into (see
+          # SPELL_RELEASING_FLARES): stashed at the cast's open so the fresh
+          # event can be parented to it, then cleared.
+          released_parent = nil
+          # The other ordering: the release line prints FIRST (pre-flare,
+          # no swing open yet), the spell casts, THEN the swing line prints.
+          # The cast is remembered here and parented to the swing that
+          # claims the pending release flare (see the pre-flare claim).
+          pending_release_cast = nil
+          # Every cast deferred behind its swing (see save_event); flushed
+          # at the end in case the swing itself never got saved.
+          deferred_casts = []
           # Attacker of the last inbound event saved this blob. A creature's
           # warding spell that lands prints its effect as an attackerless
           # spell-result line right after the cast's "Warding failed!"
@@ -698,7 +739,7 @@ module Lich
                 current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
                 respond "[Combat] Resumed #{current_event[:name]} after its one-hit side effect (flare)" if Tracker.debug?(:verbose)
               end
-              if current_event && current_event[:inbound] && interrupted_own &&
+              if current_event && (current_event[:inbound] || current_event[:_released]) && interrupted_own &&
                  !flare_contradicts_weapon?(flare, interrupted_own)
                 save_event.call(current_event)
                 current_event = interrupted_own
@@ -879,6 +920,20 @@ module Lich
                 # already dealt its damage is complete - an acid proc must
                 # not steal the next swing's AS/DS (real-feed replay,
                 # logs/examples/weapon_pulverize.txt).
+                # A PHYSICAL roll arriving on a flare-released spell is the
+                # interrupted swing's (a warding cast never rolls AS/DS):
+                # resume the swing first so the routing below lands the roll
+                # and its damage on it (see SPELL_RELEASING_FLARES).
+                if current_event && current_event[:_released] && interrupted_own &&
+                   %i[as_ds uaf_udf].include?(resolution[:type])
+                  save_event.call(current_event)
+                  current_event = interrupted_own
+                  interrupted_own = nil
+                  current_target = current_event[:target] if current_event[:target] && current_event[:target][:id]
+                  parse_state = :seeking_damage
+                  flare_ctx = nil
+                  respond "[Combat] Resumed interrupted #{current_event[:name]} for its #{resolution[:type]} roll" if Tracker.debug?(:verbose)
+                end
                 settled_flare = flare_ctx if flare_ctx && flare_ctx[:hits].any?
                 flare_ctx = nil if settled_flare
                 sink = flare_ctx
@@ -911,8 +966,18 @@ module Lich
                     # switch-born event an outcome settles too - a volley
                     # miss's roll came BEFORE its outcome, so one arriving
                     # after belongs to the next arrow.
+                    #
+                    # A STATUS settles a switch-born event the same way: an
+                    # AoE status effect rolls once PER onlooker, each roll
+                    # printed BEFORE the creature it applies to (eviscerate:
+                    # ssr -> freeze -> unsettled, twice). Without this the
+                    # second roll fell into the first bystander's still-open
+                    # event - which had no hits and no outcome to settle it -
+                    # and the second bystander recorded no roll at all
+                    # (Rysk logs 2026-09-11, fixture eviscerate.txt).
                     settled = current_event[:hits].any? ||
-                              (!born && current_event[:outcomes].any?)
+                              (!born && (current_event[:outcomes].any? ||
+                                         current_event[:_had_status]))
                     sink = current_event unless settled
                   elsif born || (current_event[:hits].empty? && current_event[:outcomes].empty?)
                     sink = current_event
@@ -961,10 +1026,11 @@ module Lich
                     # (a creature's wholly-negated ambush on us is this shape
                     # too: prefix, then the intercept, no attack line)
                     current_event = {
-                      name: pending_ambush ? :ambush : :unknown, target: {}, inbound: true,
+                      name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : :unknown, target: {}, inbound: true,
                       attacker: line_target, weapon: nil, parent: nil,
                       hits: [], statuses: [], flares: [], outcomes: [outcome],
-                      ambush: !pending_ambush.nil?,
+                      ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                      attack_kind: pending_ambush && pending_ambush[:kind],
                       resolutions: pending_resolutions
                     }
                     pending_ambush = nil
@@ -977,16 +1043,17 @@ module Lich
                     round_name = SEQUENCE_ROUND_NAMES.include?(active_sequence) ? active_sequence : nil
                     # a nocked bow with no fire line printed: the outcome IS
                     # the fire (pre-emptive evade, see nocked decl)
-                    nock_fire = nocked && !pending_ambush && round_name.nil?
+                    nock_fire = nocked && !(pending_ambush && pending_ambush[:hidden]) && round_name.nil?
                     current_event = {
-                      name: pending_ambush ? :ambush : (round_name || (nock_fire ? :fire : :unknown)),
+                      name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : (round_name || (nock_fire ? :fire : :unknown)),
                       target: line_target, attacker: nil,
                       weapon: nock_fire ? nocked : nil, parent: nil, hits: [],
                       statuses: [], flares: [], outcomes: [outcome],
                       # A wholly-negated ambush prints its prefix and then an
                       # intercept, with no attack line between - this is the
                       # only record that the ambush was attempted.
-                      ambush: !pending_ambush.nil?,
+                      ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                      attack_kind: pending_ambush && pending_ambush[:kind],
                       resolutions: pending_resolutions
                     }
                     if round_name
@@ -1017,7 +1084,7 @@ module Lich
             # line follows and carries the target and the roll. Arm the flag
             # and move on; the next attack claims it.
             if (amb = Definitions::Attacks.ambush_prefix(line))
-              pending_ambush = { attacker: amb[:attacker] }
+              pending_ambush = { attacker: amb[:attacker], kind: amb[:kind], hidden: amb[:hidden] }
               respond '[Combat] Ambush prefix armed' if Tracker.debug?(:verbose)
             end
 
@@ -1112,6 +1179,13 @@ module Lich
                 if attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target])
                   interrupted_own = current_event
                 end
+                # our own swing carrying a spell-releasing flare: the cast
+                # opening now is that flare's spell, cutting into the swing
+                if !attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target]) &&
+                   (rel = (current_event[:flares] || []).find { |f| SPELL_RELEASING_FLARES.include?(f[:name]) })
+                  interrupted_own = current_event
+                  released_parent = { event: current_event, flare: rel }
+                end
                 last_inbound_attacker = current_event[:attacker] if current_event[:inbound] && current_event[:attacker]
               end
               # A same-line artifact event may have claimed held rolls in
@@ -1188,7 +1262,11 @@ module Lich
                 # Struck from hiding: this attack carries the ambush
                 # bonuses (DS pushdown + crit weighting). A modifier on the
                 # attack, not an attack of its own.
-                ambush: !pending_ambush.nil?,
+                ambush: !!(pending_ambush && pending_ambush[:hidden]),
+                # Which hiding maneuver armed it (:waylay weights damage,
+                # :ambush weights crits) - see AMBUSH_KINDS. Reaction
+                # prefixes set the kind but leave `ambush` false.
+                attack_kind: pending_ambush && pending_ambush[:kind],
                 # A guardian stepped in front of the creature we struck at
                 # and this attack resolved against the guardian instead:
                 # { interceptor: {id?, name}, intended: <victim noun> }.
@@ -1277,6 +1355,17 @@ module Lich
                 current_event[:root_ref] = spawn_root
                 current_event[:parent_ref] = spawn_root
                 current_event[:parent_confidence] = :bracket
+              elsif released_parent && !not_ours
+                # A spell released by the swing's own flare: child of that
+                # swing. Asserted by adjacency (one releasing flare, one
+                # cast), the same count constraint an echo uses.
+                owner = released_parent[:event]
+                current_event[:root_ref] = owner[:root_ref] || owner
+                current_event[:parent_ref] = owner
+                current_event[:parent_confidence] = :count
+                current_event[:parent] = { flare: released_parent[:flare][:name], weapon: released_parent[:flare][:weapon] }
+                current_event[:_released] = true
+                released_parent = nil
               elsif !not_ours && spawn_root && !pending_echoes.empty? && line.match?(/\AYou\b/) &&
                     current_event[:name] == (pending_echoes.first[:owner] || spawn_root)[:name]
                 echo = pending_echoes.shift
@@ -1288,6 +1377,15 @@ module Lich
               else
                 spawn_root = current_event unless not_ours
                 current_event[:root_ref] = current_event
+              end
+              # A weaponless cast opening while a spell-releasing pre-flare
+              # is still unclaimed IS that flare's spell (proc -> spell ->
+              # swing ordering). Mark it so the assault guard leaves the
+              # bracket alone, and hold it for the swing to adopt.
+              if !not_ours && !current_event[:_released] && current_event[:weapon].nil? &&
+                 pending_flares.any? { |f| SPELL_RELEASING_FLARES.include?(f[:name]) }
+                current_event[:_released] = true
+                pending_release_cast = current_event
               end
 
               # Record ownership of a DoT/effect spell from its CAST line so
@@ -1331,7 +1429,8 @@ module Lich
                     @active_assault[:target] = current_target
                   end
                 elsif current_event[:attacker].nil? &&
-                      !%i[unknown companion].include?(current_event[:name])
+                      !%i[unknown companion].include?(current_event[:name]) &&
+                      !current_event[:_released]
                   # Only OUR OWN attacks are impossible mid-assault. A third
                   # party's are normal and must not disturb the bracket:
                   # :companion defs capture (?<companion>) not (?<attacker>)
@@ -1378,12 +1477,39 @@ module Lich
                   # Sequential so the first claimed flare guards the second.
                   still_pending = []
                   pending_flares.each do |f|
-                    if flare_matches_weapon?(f, current_event[:weapon]) || !flare_contradicts_weapon?(f, current_event)
+                    # A spell-RELEASING pre-flare (Holy Weapon) rode a swing,
+                    # never the spell it released: only an attack that names
+                    # a weapon may claim it. Left to the generic rule the
+                    # Templar's Verdict cast took it, which then read as the
+                    # swing that released the spell and pulled the real
+                    # swing's AS/DS onto the cast (Dreadt log 2026-09-11
+                    # 12274, 12715).
+                    releasing = SPELL_RELEASING_FLARES.include?(f[:name])
+                    claim = if releasing
+                              current_event[:weapon] && !flare_contradicts_weapon?(f, current_event)
+                            else
+                              flare_matches_weapon?(f, current_event[:weapon]) || !flare_contradicts_weapon?(f, current_event)
+                            end
+                    if claim
                       # fired BEFORE the swing line (dispel-on-nock, ensorcell's
                       # veil): never the cause of a status the swing's own crit
                       # inflicts afterwards (see status_flare_seq)
                       f[:_pre] = true
                       current_event[:flares] << f
+                      # ...and the cast that flare released, which printed
+                      # before this swing, is this swing's child.
+                      if releasing && pending_release_cast
+                        cast = pending_release_cast
+                        cast[:root_ref] = current_event[:root_ref] || current_event
+                        cast[:parent_ref] = current_event
+                        cast[:parent_confidence] = :count
+                        cast[:parent] = { flare: f[:name], weapon: f[:weapon] }
+                        # re-emit it after the swing (recorder needs parent first)
+                        events.delete_if { |e| e.equal?(cast) }
+                        (current_event[:_released_children] ||= []) << cast
+                        deferred_casts << cast
+                        pending_release_cast = nil
+                      end
                     else
                       still_pending << f
                     end
@@ -1395,11 +1521,27 @@ module Lich
                   pending_resolutions = []
                 end
               end
-              # Exception: an inbound maneuver whose initiation IS its result
-              # line (3p feint: "[SMR] X feints high, but you aren't fooled")
-              # rolled BEFORE it printed - that held maneuver roll is its own,
-              # not our next swing's.
-              if current_event[:inbound] && same_line_outcome && !pending_resolutions.empty?
+              # Exception: a creature MANEUVER rolls before its line prints
+              # (3p feint: "[SMR] X feints high, but you aren't fooled"; sap
+              # spit whose miss prints on the NEXT line; a grapple that lands
+              # and prints no outcome at all) - that held maneuver roll is its
+              # own, not our next swing's. This used to key on the line
+              # carrying its own outcome, which only covered the feint shape
+              # and left the other two orphaned (Rysk/Dreadt logs 2026-09-11).
+              # The roll IS ours only when we are mid-sequence: volley (a
+              # sequence) and barrage (an assault) print our SMR before our
+              # arrow line, and both announce themselves, so those states keep
+              # the hold. Every OTHER assault (pummel, flurry, thrash, guardant
+              # thrust) rolls AFTER its round line - fixture-verified - so an
+              # open one must not block the claim: a pummel was open when a
+              # slaver's subdue cut in, and the blanket guard orphaned that
+              # roll (Dreadt log 2026-09-11 7280). Corpus census 2026-09-12:
+              # 5 maneuver-SMR -> inbound-line shapes, 0 with our own attack
+              # following in the chunk. Maneuver-class rolls only - AS/DS
+              # never precedes.
+              if current_event[:inbound] && !pending_resolutions.empty? &&
+                 active_sequence.nil? && !nocked &&
+                 !(@active_assault && ROLL_BEFORE_ROUND_ASSAULTS.include?(@active_assault[:name]))
                 mine, pending_resolutions = pending_resolutions.partition { |r| %i[smr ssr maneuver_roll].include?(r[:type]) }
                 current_event[:resolutions].concat(mine)
               end
@@ -1582,6 +1724,8 @@ module Lich
             }
           end
 
+          # a deferred cast whose swing never saved still carries its facts
+          deferred_casts.each { |c| events << c unless events.any? { |e| e.equal?(c) } }
           events
         end
 

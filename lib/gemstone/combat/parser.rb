@@ -341,8 +341,15 @@ module Lich
             target_text = match[:target]
             return nil if target_text.nil? || target_text.strip.empty?
 
-            # Look for creature in target text
-            if (target_match = TARGET_LINK_PATTERN.match(target_text))
+            # Look for creature in target text. A possessive capture ends at
+            # the apostrophe INSIDE the link text ("<a ...>human robber" + "'s"
+            # outside), so the closing tag falls beyond the capture and
+            # TARGET_LINK_PATTERN cannot match - bleed/trickle ticks were
+            # resolving to no target and recording as foreign (Rysk logs
+            # 2026-09-11: 10 bleed ticks on named creatures, all unattributed).
+            # Fall back to the open-tail form, as the attacker path does.
+            if (target_match = TARGET_LINK_PATTERN.match(target_text) ||
+                               OPEN_LINK_TAIL_PATTERN.match(target_text))
               id = target_match[:id].to_i
               return nil if id < 0
 
