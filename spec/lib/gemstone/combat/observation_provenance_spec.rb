@@ -22,7 +22,7 @@ RSpec.describe 'Combat observation provenance' do
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
     stub_const('Lich::Gemstone::Combat::Creature', Class.new { def self.[](_id); end })
-    %i[@death_watch @death_announced @held_cast @deferred_emits @observation_batch_id].each do |iv|
+    %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits @observation_batch_id].each do |iv|
       processor.instance_variable_set(iv, nil)
     end
     observers.clear!
@@ -70,6 +70,62 @@ RSpec.describe 'Combat observation provenance' do
     observers.on(:attack) { |_type, _event| }
     [source.merge(sequence: 0), source.merge(received_at: Float::NAN), source.merge(character: ''), {}].each do |invalid|
       expect(processor.parse_events(chunk, source: invalid).first[:source]).to be_nil
+    end
+  end
+
+  describe 'pre-flares held across chunks' do
+    let(:pre_flare) do
+      [
+        ' ** Your <a exist="456" noun="bow">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around the <pushBold/><a exist="123" noun="rat">giant rat</a><popBold/>! **',
+        '   ... 20 points of damage!'
+      ]
+    end
+    let(:later_source) { source.merge(sequence: 9, received_at: 20.0) }
+
+    before { observers.on(:attack) { |_type, _event| } }
+
+    it 'keeps the oldest receipt when the next attack claims the flare' do
+      expect(processor.parse_events(pre_flare, source: source)).to be_empty
+      event = processor.parse_events(chunk, source: later_source).first
+      expect(event[:source]).to eq(source)
+      expect(event[:source]).to be_frozen
+      expect(event[:flares].first[:hits].map { |hit| hit[:damage] }).to eq([20])
+    end
+
+    it 'retains the original receipt when an unclaimed flare emits in the next batch' do
+      seen = []
+      observers.on(:attack) { |_type, event| seen << event }
+      processor.process(pre_flare, source: source)
+      expect(seen).to be_empty
+      processor.process(['You are now in a defensive stance.'], source: later_source)
+      expect(seen.first).to include(name: :dispel, source: source)
+      expect(seen.first[:observation_batch]).to include(index: 0, size: 1)
+    end
+
+    it 'invalidates claimed and unclaimed held flares across changed or unknown bindings' do
+      [source.merge(room_epoch: 5), source.merge(connection_id: 456), source.merge(character: 'Other'), nil].each do |later|
+        [chunk, ['You are now in a defensive stance.']].each do |following|
+          expect(processor.parse_events(pre_flare, source: source)).to be_empty
+          event = processor.parse_events(following, source: later).first
+          expect(event[:source]).to be_nil
+          expect(event[:flares].first[:hits].map { |hit| hit[:damage] }).to eq([20])
+        end
+      end
+    end
+
+    it 'does not attach a verified source to a flare retained from a legacy call' do
+      expect(processor.parse_events(pre_flare)).to be_empty
+      expect(processor.parse_events(chunk, source: later_source).first[:source]).to be_nil
+    end
+  end
+
+  it 'includes source on upstream outcome-only inbound and outbound events' do
+    observers.on(:attack) { |_type, _event| }
+    inbound = 'The thorny barrier surrounding you blocks the attack from the <pushBold/><a exist="123" noun="skald">gigas skald</a><popBold/>!'
+    outbound = 'With preternatural speed, the <pushBold/><a exist="123" noun="rat">giant rat</a><popBold/> bounds to safety as you move to attack <pushBold/><a exist="123" noun="rat">it</a><popBold/>, leaving you off-balance!'
+    [inbound, outbound].each do |line|
+      event = processor.parse_events([line], source: source).first
+      expect(event).to include(source: source)
     end
   end
 end

@@ -65,8 +65,8 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
 
     it 'flags environmental tick lines for the tracker chunk gate (they carry no creature link)' do
       defs = Lich::Gemstone::Combat::Definitions::Attacks
-      expect(defs.self_inflicted_line?('Bitter cold leaches warmth from your skin.')).to be true
-      expect(defs.self_inflicted_line?('You feel more refreshed.')).to be false
+      expect(defs.attackerless_line?('Bitter cold leaches warmth from your skin.')).to be true
+      expect(defs.attackerless_line?('You feel more refreshed.')).to be false
     end
 
     it 'reports the thorn bow recoil as inbound damage to us' do
@@ -102,6 +102,32 @@ RSpec.describe Lich::Gemstone::Combat::Parser do
 
     it 'matches 335 Divine Wrath per-target materialize line' do
       line = "A shadowy figure briefly materializes behind #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')}, and a silent scream courses over a tattooed gigas berserker's visage."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
+    it 'matches 335 Divine Wrath shadowy black rose with a pronoun tail (Laethe 3p form)' do
+      # GSWiki's 3p form ends "...into it." rather than repeating the target.
+      line = "A shadowy black rose touches #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')} and wraps immediately about it, struggling to force its long, barbed thorns into it."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
+    it 'matches 335 Divine Wrath Marlu black mist 3p form (groupmate cast, pronoun tails)' do
+      # Log-confirmed: named once, then "her" twice.
+      line = "As #{bolded(452450877, 'conjurer', 'a gaudy phantasmic conjurer')} comes too close to a tendril of black mist, the mist suddenly expands into a large black cloud, which rapidly surrounds her, obliterating her from view."
+      result = described_class.parse_attack(line)
+      expect(result).not_to be_nil
+      expect(result[:name]).to eq(:divine_wrath)
+      expect(result[:target][:id]).to eq(452450877)
+    end
+
+    it 'matches 335 Divine Wrath shadowy black rose with a repeated-target tail' do
+      line = "A shadowy black rose touches #{bolded(452450877, 'berserker', 'a tattooed gigas berserker')} and wraps immediately about it, struggling to force its long, barbed thorns into the tattooed gigas berserker."
       result = described_class.parse_attack(line)
       expect(result).not_to be_nil
       expect(result[:name]).to eq(:divine_wrath)

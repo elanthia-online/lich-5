@@ -104,6 +104,20 @@ RSpec.describe 'Tracker ingestion observations' do
     expect(@seen.first.first).to eq([attack, prompt])
   end
 
+  it 'keeps roster refreshes out of the creature gate and buffer limit' do
+    refresh = '<component id="room objs">You also see <pushBold/><a exist="123" noun="rat">a giant rat</a><popBold/>.</component>'
+    @hook.call(refresh)
+    @hook.call('You feel drained.' + prompt)
+    expect(@seen).to be_empty
+
+    tracker.instance_variable_get(:@settings)[:buffer_size] = 1
+    @hook.call(attack)
+    3.times { @hook.call(refresh) }
+    @hook.call(prompt)
+    expect(@seen.first.first).to eq([attack, prompt])
+    expect(@seen.first.last).to include(room_epoch: 4)
+  end
+
   it 'does not exempt partial, nested or transition-bearing room refresh fragments' do
     [
       '<component id="room objs">',
@@ -173,6 +187,18 @@ RSpec.describe 'Tracker ingestion observations' do
     @hook.call(attack)
     @hook.call(prompt)
     expect(@seen.last.last).to be_nil
+  end
+
+  it 'invalidates buffered text across a reconnect instead of rebinding it' do
+    @hook.call(attack)
+    reconnected = Thread.new do
+      Lich::Gemstone::Combat::Game.thread = Thread.current
+      @hook.call(prompt)
+      @hook.call(attack + prompt)
+    end
+    reconnected.join
+    expect(@seen.first.last).to be_nil
+    expect(@seen.last.last).to include(connection_id: reconnected.object_id)
   end
 
   it 'forwards source through normal synchronous processing but leaves disabled tracking disabled' do

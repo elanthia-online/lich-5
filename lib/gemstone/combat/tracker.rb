@@ -39,7 +39,6 @@ module Lich
         @settings = {}
         @async_processor = nil
         @buffer = []
-        @chunks_processed = 0
         @initialized = false
         @source_sequence = 0
         @buffer_source = nil
@@ -62,10 +61,14 @@ module Lich
           max_threads: 2,           # Keep threading for performance
           debug: false,
           buffer_size: 200,         # Increase for large combat chunks
-          fallback_max_hp: 350,     # Default max HP when template unavailable
-          cleanup_interval: 100,    # Cleanup creature registry every N chunks
-          cleanup_max_age: 600      # Remove creatures older than N seconds (10 minutes)
+          fallback_max_hp: 350      # Default max HP when template unavailable
         }.freeze
+
+        # Settings this tracker no longer reads. Dropped from persisted
+        # settings on load so they neither linger in stats nor get re-saved.
+        # Creature registry retention now lives on the registry itself:
+        # Creature.configure(cleanup_max_age:).
+        RETIRED_SETTINGS = %i[cleanup_interval cleanup_max_age].freeze
 
         class << self
           attr_reader :settings, :buffer
@@ -227,8 +230,10 @@ module Lich
 
           # Process a chunk of game lines
           #
-          # Filters for combat-relevant lines and processes them.
-          # Triggers periodic cleanup of old creature instances.
+          # Filters for combat-relevant lines and processes them. Creature
+          # registry housekeeping is not done here: the registry sweeps
+          # itself on a wall-clock throttle (CreatureBase::ClassMethods#housekeep),
+          # so it stays bounded whether or not tracking is enabled.
           #
           # @param chunk [Array<String>] Game lines to process
           # @param source [Hash, nil] optional ingestion context forwarded to the
@@ -242,16 +247,9 @@ module Lich
             return unless chunk.any? { |line| combat_relevant?(line) }
 
             if @async_processor
-              source ? @async_processor.process_async(chunk, source: source) : @async_processor.process_async(chunk)
+              @async_processor.process_async(chunk, source: source)
             else
-              source ? Processor.process(chunk, source: source) : Processor.process(chunk)
-            end
-
-            # Periodic cleanup of old creature instances
-            @chunks_processed += 1
-            if @chunks_processed >= @settings[:cleanup_interval]
-              cleanup_creatures
-              @chunks_processed = 0
+              Processor.process(chunk, source: source)
             end
           end
 
@@ -381,24 +379,11 @@ module Lich
             nil
           end
 
-          def cleanup_creatures
-            return unless defined?(Creature)
-
-            max_age = @settings[:cleanup_max_age]
-            removed = Creature.cleanup_old(max_age)
-
-            if removed && removed > 0
-              respond "[Combat] Cleaned up #{removed} old creature instances (age > #{max_age}s)" if debug?
-            end
-          rescue => e
-            respond "[Combat] Error during creature cleanup: #{e.message}" if debug?
-          end
-
           def load_settings
             # Load from DB_Store with per-character scope
             scope = "#{XMLData.game}:#{XMLData.name}"
             stored_settings = Lich::Common::DB_Store.read(scope, 'lich_combat_tracker')
-            @settings = DEFAULT_SETTINGS.merge(stored_settings)
+            @settings = DEFAULT_SETTINGS.merge(stored_settings.reject { |key, _| RETIRED_SETTINGS.include?(key.to_sym) })
           end
 
           def save_settings
@@ -449,9 +434,9 @@ module Lich
                 # creature at all (frigid wind, thorn-bow recoil).
                 if chunk.any? { |line|
                   (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
-                  Definitions::Attacks.self_inflicted_line?(line)
+                  Definitions::Attacks.attackerless_line?(line)
                 }
-                  source ? process(chunk, source: source) : process(chunk) unless chunk.empty?
+                  process(chunk, source: source) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else
                   respond "[Combat] Discarded non-combat chunk (#{chunk.size} lines)" if debug?

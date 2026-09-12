@@ -102,6 +102,11 @@ module Lich
           # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
           SpellUpMsgs = /^#{Lich::Common::Spell.upmsgs.join('$|^')}$/o.freeze
           SpellDnMsgs = /^#{Lich::Common::Spell.dnmsgs.join('$|^')}$/o.freeze
+          # Spells that name the character they land on. The alternation is
+          # empty when no spell carries a target-start message, and an empty
+          # union would match every line, so fall back to a pattern that
+          # matches nothing.
+          SpellTargetUpMsgs = (Lich::Common::Spell.target_upmsgs.empty? ? /(?!)/ : /^#{Lich::Common::Spell.target_upmsgs.join('$|^')}$/o).freeze
           SpellsongRenewed = /^Your songs? renews?/.freeze
 
           # Enhancive parsing patterns - from INVENTORY ENHANCIVE TOTALS command
@@ -130,7 +135,7 @@ module Lich
                       ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
                       Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
                       BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActiveStart,
-                      CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
+                      CutthroatNoActive, SpellUpMsgs, SpellTargetUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
                       SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
                       Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
                       TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, TicketAevit,
@@ -633,9 +638,29 @@ module Lich
               spell = Spell.list.find do |s|
                 line =~ /^#{s.msgup}$/
               end
-              spell.putup unless spell.active?
+              # A start message while the spell is already up is the game
+              # refreshing it: a refreshable timer resets to its full
+              # duration, anything else keeps the timer it has.
+              spell.putup if !spell.active? || spell.refreshable?
               # add various cooldowns back without affecting parse speed
               Spells.require_cooldown(spell)
+              # The group (EVOKE) version of a spell says so in the caster's
+              # own start message; every other view of the same spell (a
+              # self-cast, or being on the receiving end) leaves the clause
+              # out. That is the only notice the caster gets that a group
+              # casting landed, so it is where the per-target cooldowns start.
+              Group.record_spell_cooldown(spell) if line.include?('your group')
+              :ok
+            when Pattern::SpellTargetUpMsgs
+              # A spell landing on someone else, named in the third person.
+              # The cooldown it starts belongs to that character whoever cast
+              # it, so this counts the same seen from across the room as it
+              # does from the caster.
+              target = Regexp.last_match(:noun)
+              spell = Spell.list.find do |s|
+                s.target_msgup && line =~ /^#{s.target_msgup}$/
+              end
+              Group.record_target_cooldown(spell, target) if spell
               :ok
             when Pattern::SpellDnMsgs
               spell = Spell.list.find do |s|

@@ -15,7 +15,7 @@ module Lich
       @@cost_list ||= Array.new
       @@load_mutex = Mutex.new
       @@after_stance = nil
-      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast
+      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast, :group_cooldown, :target_cooldown, :target_msgup
       attr_accessor :stance, :channel
 
       @@prepare_regex = Regexp.union(
@@ -134,6 +134,24 @@ module Lich
           end
         }
         @cast_proc = xml_spell.locate('cast-proc').first&.text
+        # Seconds a character is locked out of this spell, by kind. A 'group'
+        # cooldown covers another group (EVOKE) casting of it; a 'target'
+        # cooldown covers the spell landing on them from any caster, paired
+        # with the third-person message that names them. Both are nil when the
+        # spell declares no cooldown of that kind. See Group.spell_cooldown and
+        # Group.spell_cooldown_ready?.
+        xml_spell.locate('cooldown').each { |xml_cooldown|
+          case xml_cooldown['type'].to_s.downcase
+          when 'group'
+            @group_cooldown = xml_cooldown.text.to_i
+          when 'target'
+            @target_cooldown = xml_cooldown.text.to_i
+          end
+        }
+        @target_msgup = xml_spell.locate('message')
+                                 .select { |e| e['type'].to_s.downcase == 'target-start' }
+                                 .collect { |e| e.text }.join('$|^')
+        @target_msgup = nil if @target_msgup.empty?
         @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0
@@ -242,6 +260,13 @@ module Lich
         @@list.collect { |spell| spell.msgup }.compact
       end
 
+      # Third-person start messages, for spells that name the character they
+      # land on. Empty until the effect list carries target-start messages.
+      def Spell.target_upmsgs
+        Spell.load unless @@loaded
+        @@list.collect { |spell| spell.target_msgup }.compact
+      end
+
       def Spell.dnmsgs
         Spell.load unless @@loaded
         @@list.collect { |spell| spell.msgdn }.compact
@@ -345,6 +370,14 @@ module Lich
         (self.timeleft > 0) and @active
       end
 
+      # The cast-type predicates below (stackable?, refreshable?, multicastable?)
+      # and the duration formulas resolve against the 'self' cast-type unless a
+      # :caster or :target naming someone else is supplied. A bare call therefore
+      # answers for a self-cast only, which is not the same answer for spells
+      # whose target cast-type differs: in the current effect list 14 group buffs
+      # (Bravery 211 and Heroism 215 among them) are stackable when self-cast but
+      # refreshable when cast on someone else. Pass :caster/:target whenever the
+      # spell may have come from another character.
       def stackable?(options = {})
         if options[:caster] and (options[:caster] !~ /^(?:self|#{XMLData.name})$/i)
           if options[:target] and (options[:target].downcase == options[:caster].downcase)

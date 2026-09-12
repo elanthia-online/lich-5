@@ -94,7 +94,7 @@ module Lich
             @processing = true
             started = Time.now
             begin
-              source ? Processor.process(chunk, source: source) : Processor.process(chunk)
+              Processor.process(chunk, source: source)
 
               elapsed = Time.now - started
               if elapsed > 0.5 && Tracker.debug?

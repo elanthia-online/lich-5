@@ -226,6 +226,48 @@ describe Lich::Gemstone::QStrike do
     end
   end
 
+  describe ".mstrike_cost" do
+    def cooldown(active)
+      XMLData.save_dialogs("Cooldowns", active ? { "Multi-Strike" => Time.now.to_f + 60 } : {})
+    end
+
+    after { cooldown(false) }
+
+    it "is free outside the recovery period" do
+      GameObj.set_right_hand(MockGameObj.new(id: 1, noun: "broadsword", name: "a steel broadsword"))
+      expect(Lich::Gemstone::QStrike.mstrike_cost).to eq(0)
+      expect(Lich::Gemstone::QStrike.mstrike_cost(focused: true)).to eq(0)
+    end
+
+    it "prices open and focused strikes on the weapon speed during recovery" do
+      cooldown(true)
+      GameObj.set_right_hand(MockGameObj.new(id: 1, noun: "broadsword", name: "a steel broadsword")) # speed 5
+      expect(Lich::Gemstone::QStrike.mstrike_cost).to eq(35)                 # 20 + 3 * 5
+      expect(Lich::Gemstone::QStrike.mstrike_cost(focused: true)).to eq(50)  # 30 + 4 * 5
+    end
+
+    it "adds an offhand weapon's speed less two, never a shield or a dagger" do
+      cooldown(true)
+      GameObj.set_right_hand(MockGameObj.new(id: 1, noun: "broadsword", name: "a steel broadsword")) # 5
+      GameObj.set_left_hand(MockGameObj.new(id: 2, noun: "broadsword", name: "a steel broadsword"))  # 5 - 2 = 3
+      expect(Lich::Gemstone::QStrike.mstrike_weapon_speed).to eq(8)
+      expect(Lich::Gemstone::QStrike.mstrike_cost).to eq(44)
+      GameObj.set_left_hand(MockGameObj.new(id: 2, noun: "dagger", name: "a steel dagger")) # 1 - 2 < 0
+      expect(Lich::Gemstone::QStrike.mstrike_weapon_speed).to eq(5)
+      GameObj.set_left_hand(MockGameObj.new(id: 2, noun: "buckler", name: "a small buckler"))
+      expect(Lich::Gemstone::QStrike.mstrike_weapon_speed).to eq(5)
+    end
+
+    it "is what lookup_attack_cost and calculate price mstrike at" do
+      cooldown(true)
+      GameObj.set_right_hand(MockGameObj.new(id: 1, noun: "broadsword", name: "a steel broadsword"))
+      expect(Lich::Gemstone::QStrike.lookup_attack_cost("mstrike")).to eq(35)
+      expect(Lich::Gemstone::QStrike.lookup_attack_cost(:mstrike_focused)).to eq(50)
+      expect(Lich::Gemstone::QStrike.lookup_attack_cost("focused mstrike")).to eq(50)
+      expect(Lich::Gemstone::QStrike.calculate(attack_name: :mstrike_focused)[:attack_cost]).to eq(50)
+    end
+  end
+
   describe ".cost_per_second_reduction" do
     it "calculates correctly for sword + shield (10 + primary + 0)" do
       sword = MockGameObj.new(id: 1, noun: "broadsword", name: "a steel broadsword")

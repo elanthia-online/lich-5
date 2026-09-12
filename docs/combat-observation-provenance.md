@@ -45,10 +45,26 @@ different bindings, unknown source, or buffer truncation invalidate the whole
 chunk. This is deliberately conservative: unrelated preceding text can make
 the chunk too old for a consumer's action window.
 
+A standalone, complete `room objs` or `room players` component is omitted
+from the combat buffer intentionally. The processor already skips component
+lines because roster links can look like combat targets. XML parsing and
+other downstream hooks still receive the original fragment; this exclusion
+does not suppress roster updates. Keeping it out of the buffer also prevents
+roster-only links from satisfying the creature gate or displacing combat text
+at the buffer limit. It contributes neither an event nor a source timestamp.
+Only the strictly recognized standalone refresh is exempt: mixed combat and
+component fragments, nested components, split tags, and transition markup
+still invalidate provenance. The next retained fragment must match the
+buffer's original connection, character and room binding.
+
 The async worker copies and forwards source; it never rereads current room.
 A held cast preserves its initiating source when a same-binding later chunk
 supersedes it with a spell result. Missing or changed later binding invalidates
 that source instead of assigning a new room/time.
+Pre-flares held for the next chunk likewise retain their original source;
+an attack that claims them takes the oldest contributing receipt, or nil
+when any contributing binding is absent or different. An unclaimed held
+flare emitted on its own never acquires the newer chunk's timestamp.
 
 `Processor.process` adds a frozen `event[:observation_batch]` before callbacks:
 

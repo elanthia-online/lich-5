@@ -1,5 +1,50 @@
 # Changelog
 
+## [5.21.0](https://github.com/elanthia-online/lich-5/compare/v5.20.1...v5.21.0) (2026-09-09)
+
+
+### Features
+
+* **all:** add --active-session-dir to decouple Active Sessions coordination from --temp ([#1520](https://github.com/elanthia-online/lich-5/issues/1520)) ([dec50f2](https://github.com/elanthia-online/lich-5/commit/dec50f2c274905eca2641eb06b1acf43110d96fd))
+* **all:** Add --refresh-characters and --add-character CLI flags ([#1504](https://github.com/elanthia-online/lich-5/issues/1504)) ([626c616](https://github.com/elanthia-online/lich-5/commit/626c61606d6c02004c01cbd9d25d299a0e75f645))
+* **all:** add HTTPS web-login fallback for when EAccess (7910) is unreachable ([#1570](https://github.com/elanthia-online/lich-5/issues/1570)) ([3c65590](https://github.com/elanthia-online/lich-5/commit/3c6559032a277a5a5b9924f6cae4f447b14bb084))
+* **all:** add read model for the inventoryManager extended feed ([#1524](https://github.com/elanthia-online/lich-5/issues/1524)) ([b6d24f5](https://github.com/elanthia-online/lich-5/commit/b6d24f511e7ca763bab56f9c62ca25a829e485d7))
+* **all:** GUI add configurable frontend registry ([#1558](https://github.com/elanthia-online/lich-5/issues/1558)) ([4d88b18](https://github.com/elanthia-online/lich-5/commit/4d88b18c022f1506c2dc749f17cc4a44e98ac099))
+* **dr:** [DRCC] add shared private-forge helpers ([#1560](https://github.com/elanthia-online/lich-5/issues/1560)) ([94c76c4](https://github.com/elanthia-online/lich-5/commit/94c76c44b706ed880eea1880349961b6c06be064))
+* **dr:** non-destructive upsert for INV SEARCH / category scrapes (03 of 05) ([#1556](https://github.com/elanthia-online/lich-5/issues/1556)) ([14aa649](https://github.com/elanthia-online/lich-5/commit/14aa649a38147f89d5e9383965ec2ed015f613f2))
+* **dr:** opt-in cambrinth charge distribution across configured items ([#1549](https://github.com/elanthia-online/lich-5/issues/1549)) ([6df598c](https://github.com/elanthia-online/lich-5/commit/6df598cc5bf8d6cf70c3f402676537c2310759b9))
+* **dr:** player-supplied custom prep/cast/invoke messages ([#1528](https://github.com/elanthia-online/lich-5/issues/1528)) ([9c30bc0](https://github.com/elanthia-online/lich-5/commit/9c30bc0c93dd3435533d48dcac7d19c0264057fe))
+* **dr:** populate GameObj from INV LIST full refresh (02 of 05) ([#1554](https://github.com/elanthia-online/lich-5/issues/1554)) ([0fcb506](https://github.com/elanthia-online/lich-5/commit/0fcb506ffda0ebd6652c606f6fd933ffae4152e6))
+* **dr:** reconcile GameObj containers on hand pickup (04 of 05) ([#1557](https://github.com/elanthia-online/lich-5/issues/1557)) ([559bcfb](https://github.com/elanthia-online/lich-5/commit/559bcfb21f990bbc60dcac60883ca01cdcf9ce34))
+* **gs:** creature template library - measured combat data, HP/speed censuses, messaging ([#1539](https://github.com/elanthia-online/lich-5/issues/1539)) ([f86104f](https://github.com/elanthia-online/lich-5/commit/f86104f473850a884b13b673944f7e66842ab0c3))
+
+
+### Bug Fixes
+
+* **all:** always report missing gems on stderr; only wait on a dialog without a tty ([#1544](https://github.com/elanthia-online/lich-5/issues/1544)) ([6facdbf](https://github.com/elanthia-online/lich-5/commit/6facdbf94aff2972b06b36de87e8d17d96d6265d))
+* **all:** dispatch --help and --version before the GTK require ([#1546](https://github.com/elanthia-online/lich-5/issues/1546)) ([746b968](https://github.com/elanthia-online/lich-5/commit/746b968dd3ab8570a6b5948bb8d566d1bdf65595))
+* **all:** enforce Script#pause at every blocking/mutating checkpoint ([#1537](https://github.com/elanthia-online/lich-5/issues/1537)) ([801eede](https://github.com/elanthia-online/lich-5/commit/801eededc69abd62aa1c9dfe6b8a66030f1d9069))
+* **all:** global_def update deprecated method calls to include caller info ([#1550](https://github.com/elanthia-online/lich-5/issues/1550)) ([a5e1dce](https://github.com/elanthia-online/lich-5/commit/a5e1dce4268b4f8a020cdd49f1fbe0ee9b8dedac))
+* **all:** normalize colons in Lich::Util.normalize_lookup ([#1561](https://github.com/elanthia-online/lich-5/issues/1561)) ([e303c95](https://github.com/elanthia-online/lich-5/commit/e303c952a4a8ed26d99cf322c24da2e6529c1017))
+* **all:** Script.log respects --log-dir/LOG_DIR override; use File.join for paths in script.rb ([#1572](https://github.com/elanthia-online/lich-5/issues/1572)) ([173b973](https://github.com/elanthia-online/lich-5/commit/173b973a2a32fcd5e361d3512ebc13033506da29))
+* **dr:** do not re-add a held item as worn inventory on inv scrape ([#1565](https://github.com/elanthia-online/lich-5/issues/1565)) ([3a59161](https://github.com/elanthia-online/lich-5/commit/3a591619633d9249def98a438f68486458261ac6))
+* **dr:** drvariables add more data to VOL_MAP ([#1536](https://github.com/elanthia-online/lich-5/issues/1536)) ([874e2ab](https://github.com/elanthia-online/lich-5/commit/874e2ab45008da1cebbf6de7607bfc51bff8309c))
+* **dr:** evict orphaned identity-index entries on a name-changing upsert ([#1566](https://github.com/elanthia-online/lich-5/issues/1566)) ([6f12688](https://github.com/elanthia-online/lich-5/commit/6f126888e32d66e8dac9e6d64a5bdec5ddb2fff8))
+* **dr:** make INV LIST refresh atomic and warn on interruption (05 of 05) ([#1563](https://github.com/elanthia-online/lich-5/issues/1563)) ([3fdad33](https://github.com/elanthia-online/lich-5/commit/3fdad33028cdb56e1bd0b7bdb05ce9c522200b19))
+* **dr:** match lowercase "it's already open" when opening a container ([#1553](https://github.com/elanthia-online/lich-5/issues/1553)) ([d14a4a9](https://github.com/elanthia-online/lich-5/commit/d14a4a95ea6587e54dbef8801e52d6187f74a7de))
+* **dr:** normalize capitalized leading articles in inventory scrape names (01 of 05) ([#1555](https://github.com/elanthia-online/lich-5/issues/1555)) ([d959121](https://github.com/elanthia-online/lich-5/commit/d95912191ffad9ed6ddc650cd265cabc42458822))
+* **dr:** pin capped skills to 34 in DRSkill.clear_mind ([#1548](https://github.com/elanthia-online/lich-5/issues/1548)) ([f74068e](https://github.com/elanthia-online/lich-5/commit/f74068ecc9427a2298708111604591ad037b534a))
+* **dr:** refresh before_name/after_name on a name-preserving container move ([#1564](https://github.com/elanthia-online/lich-5/issues/1564)) ([5c4f597](https://github.com/elanthia-online/lich-5/commit/5c4f59797effa565516caa9824970dde47aea14b))
+* **dr:** unpause the exact scripts safe_pause_list paused, by object ([#1574](https://github.com/elanthia-online/lich-5/issues/1574)) ([073d23a](https://github.com/elanthia-online/lich-5/commit/073d23a9d75b94029e9d08a7dfbd443335adc65c))
+* **gs:** combat module - event defs, observer emissions, replay-verified parsing, SQLite recorder ([#1559](https://github.com/elanthia-online/lich-5/issues/1559)) ([e403631](https://github.com/elanthia-online/lich-5/commit/e4036317dbd2aa7b0dbc4a2797268bb8b5219b9d))
+* **gs:** correct messaging drift in 13 crit table patterns ([#1547](https://github.com/elanthia-online/lich-5/issues/1547)) ([6ed847a](https://github.com/elanthia-online/lich-5/commit/6ed847afaf13b0414e93aa75936874ace93fd5ad))
+* **gs:** Infomon xmlparser additional npc death messaging ([#1540](https://github.com/elanthia-online/lich-5/issues/1540)) ([867ed34](https://github.com/elanthia-online/lich-5/commit/867ed347be47c8047252617c1ad7826226e6f2c6))
+
+
+### Documentation
+
+* **all:** Add documentation badge links to README ([#1552](https://github.com/elanthia-online/lich-5/issues/1552)) ([772702f](https://github.com/elanthia-online/lich-5/commit/772702f868f18053006f2c324f70b9ffa3626e54))
+
 ## [5.20.1](https://github.com/elanthia-online/lich-5/compare/v5.20.0...v5.20.1) (2026-08-20)
 
 
