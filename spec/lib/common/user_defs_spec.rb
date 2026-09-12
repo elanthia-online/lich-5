@@ -49,6 +49,15 @@ RSpec.describe Lich::Common::UserDefs do
       defs.cached(:k) { calls += 1 }
       expect(calls).to eq(2)
     end
+
+    it 'caches false and nil rather than recomputing them (presence, not truthiness)' do
+      calls = 0
+      2.times { defs.cached(:falsy) { calls += 1; false } }
+      2.times { defs.cached(:nil) { calls += 1; nil } }
+      expect(calls).to eq(2)
+      expect(defs.cached(:falsy) { :recomputed }).to be(false)
+      expect(defs.cached(:nil) { :recomputed }).to be_nil
+    end
   end
 
   describe 'validate_entries' do

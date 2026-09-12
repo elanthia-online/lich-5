@@ -91,12 +91,20 @@ module Lich
 
       # Returns the memoized value for +key+, computing it with the block on
       # first use. Double-checked: no lock on the warm path (the common case on
-      # hot parse paths), lock only to populate a missing key.
+      # hot parse paths), lock only to populate a missing key. Presence, not
+      # truthiness, decides whether the key is cached, so a value of +false+ or
+      # +nil+ is memoized like any other.
       #
       # @param key [Object] memo key
       # @return [Object] the cached or freshly computed value
       def memoize(key)
-        @cache[key] || @lock.synchronize { @cache[key] ||= yield }
+        return @cache[key] if @cache.key?(key)
+
+        @lock.synchronize do
+          return @cache[key] if @cache.key?(key)
+
+          @cache[key] = yield
+        end
       end
 
       # Validates each entry of +raw+ with the block, keeping the non-nil
