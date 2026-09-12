@@ -898,13 +898,23 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       events = described_class.parse_events([
                                               'You nock a faewood arrow fletched with plain white feathers in your <a exist="129604585" noun="bow">glowbark long bow</a>.',
                                               "#{other} claws at you!",
-                                              '   ... but the attack is foiled by your armor.',
+                                              '  AS: +176 vs DS: +76 with AvD: +20 + d100 roll: +64 = +184',
+                                              '   ... and hits for 28 points of damage!',
+                                              '   Smack to the eye bursts blood vessels.',
                                               "With preternatural speed, #{warg} bounds to safety as you move to attack #{bolded(123985834, 'warg', 'it')}, leaving you off-balance!",
                                               'The arrow streaks off into the distance!'
                                             ])
+      expect(events.size).to eq(2)
       fire = events.find { |e| !e[:inbound] }
       expect(fire).not_to be_nil
       expect([fire[:name], fire[:weapon], fire[:target][:id]]).to eq([:fire, 'glowbark long bow', 123985834])
+
+      # The interleaved swing is a fully resolved hit on us - it must survive
+      # the pre-emption, not be discarded when our fire opens.
+      swing = events.find { |e| e[:inbound] }
+      expect(swing).not_to be_nil
+      expect(swing[:attacker][:id]).to eq(123985999)
+      expect(swing[:hits].map { |h| h[:damage] }).to eq([28])
     end
 
     it "gives the swing, not the pinned rider's one-hit row, the flare that follows the pin" do

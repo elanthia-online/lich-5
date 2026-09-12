@@ -942,6 +942,12 @@ module Lich
                 elsif flare_ctx || (current_event && !preempts_open_inbound)
                   (flare_ctx || current_event)[:outcomes] << outcome
                 elsif line_target && line_target[:id]
+                  # Reached with an open event only via preempts_open_inbound:
+                  # the creature's swing that interleaved between our nock and
+                  # the pre-emptive evade. Save it before opening ours, as the
+                  # single_hit_parent / interrupted_own resumptions do - it
+                  # may carry a fully resolved hit on us.
+                  save_event.call(current_event) if event_savable?(current_event)
                   # An outcome with a named target and no event at all: the
                   # first arrow of a volley round can be a miss - roll +
                   # outcome, no attack line, at the top of the chunk. Open
