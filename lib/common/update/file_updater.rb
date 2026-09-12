@@ -204,8 +204,14 @@ module Lich
         # Updates core data files (effect-list.xml) after version upgrade.
         #
         # @param version [String] version string (default: LICH_VERSION)
+        # @param snapshot_dir [String, nil] snapshot directory to back data files
+        #   up into, e.g. one just created by the active update flow's
+        #   SnapshotManager#snapshot call. When nil (a standalone call not part
+        #   of a full update, such as the login autostart path), a fresh
+        #   directory is created so this never reuses a snapshot from an
+        #   earlier, unrelated update run.
         # @return [void]
-        def update_core_data_and_scripts(version = LICH_VERSION)
+        def update_core_data_and_scripts(version = LICH_VERSION, snapshot_dir = nil)
           if XMLData.game !~ /^GS|^DR/
             respond "invalid game type, unsure what scripts to update via Update.update_core_scripts"
             return
@@ -214,8 +220,7 @@ module Lich
           if XMLData.game =~ /^GS/
             ["effect-list.xml"].each do |file|
               if File.exist?(File.join(DATA_DIR, file))
-                snapshot_dir = @snapshot_manager.last_snapshot_dir || @snapshot_manager.new_snapshot_dir
-                data_backup_dir = File.join(snapshot_dir, "data")
+                data_backup_dir = File.join(snapshot_dir || @snapshot_manager.new_snapshot_dir, "data")
                 FileUtils.mkdir_p(data_backup_dir)
                 newfilename = File.join(data_backup_dir, file)
                 File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }

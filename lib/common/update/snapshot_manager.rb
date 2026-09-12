@@ -17,13 +17,6 @@ module Lich
           map.lic repository.lic vars.lic version.lic
         ].freeze
 
-        # Path to the most recently created snapshot directory, if any, so
-        # that other steps in the same update run (e.g. data-file backups)
-        # can drop files alongside it instead of creating their own.
-        #
-        # @return [String, nil]
-        attr_reader :last_snapshot_dir
-
         # Creates a fresh timestamped directory under BACKUP_DIR using the
         # same L5-snapshot-<DATE-TIME> naming convention as #snapshot.
         #
@@ -36,7 +29,7 @@ module Lich
 
         # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
         #
-        # @return [void]
+        # @return [String] path to the created snapshot directory
         def snapshot
           respond
           respond 'Creating a snapshot of current Lich core files ONLY.'
@@ -46,7 +39,6 @@ module Lich
           respond 'additional requested updates are completed.'
 
           snapshot_subdir = new_snapshot_dir
-          @last_snapshot_dir = snapshot_subdir
 
           FileUtils.cp(File.join(LICH_DIR, File.basename($PROGRAM_NAME)),
                        File.join(snapshot_subdir, File.basename($PROGRAM_NAME)))
@@ -63,6 +55,8 @@ module Lich
           respond
           respond 'Current Lich ecosystem files (only) backed up to:'
           respond "    #{snapshot_subdir}"
+
+          snapshot_subdir
         end
 
         # Restores most recent snapshot from BACKUP_DIR.
