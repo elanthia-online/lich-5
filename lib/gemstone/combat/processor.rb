@@ -748,7 +748,18 @@ module Lich
                 parse_state = :seeking_damage
                 respond "[Combat] Resumed interrupted #{current_event[:name]} for its flare" if Tracker.debug?(:verbose)
               end
-              if current_event && !flare_contradicts_weapon?(flare, current_event)
+              # A spell-RELEASING flare fires at the START of an attack. One
+              # arriving on a swing that has already landed (hits) or
+              # resolved (outcome) - or on a creature's inbound event - is
+              # the NEXT swing's, and must be held for it: attached to the
+              # finished swing it dragged the released cast under the wrong
+              # parent (review of 3c3f1bfe). A maneuver's own SMR does not
+              # settle it - pummel rolls its SMR before its release fires.
+              releasing_flare = SPELL_RELEASING_FLARES.include?(flare[:name])
+              settled_for_release = current_event &&
+                                    (current_event[:inbound] || current_event[:hits].any? || current_event[:outcomes].any?)
+              if current_event && !flare_contradicts_weapon?(flare, current_event) &&
+                 !(releasing_flare && settled_for_release)
                 current_event[:flares] << flare
               else
                 pending_flares << flare
@@ -1513,6 +1524,7 @@ module Lich
                       # ...and the cast that flare released, which printed
                       # before this swing, is this swing's child.
                       if releasing && pending_release_cast
+                        f[:_release_claimed] = true
                         cast = pending_release_cast
                         cast[:root_ref] = current_event[:root_ref] || current_event
                         cast[:parent_ref] = current_event

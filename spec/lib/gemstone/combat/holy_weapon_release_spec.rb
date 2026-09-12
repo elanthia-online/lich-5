@@ -76,6 +76,75 @@ RSpec.describe 'Holy Weapon release' do
     expect(events.last[:_released]).to be_falsey
   end
 
+  # Second review round (3c3f1bfe): the release -> spell -> swing ordering.
+  let(:release_then_verdict) do
+    [
+      "As you attempt to strike with your #{mace}, it sends a surge of power through you that quickly leaps out at #{troll}!",
+      "Violet flames erupt from beneath #{troll}.",
+      '  CS: +149 - TD: +120 + CvA: +17 + d100: +85 == +131',
+      '  Warding failed!',
+      "A column of seething violet flame envelops #{troll} in its searing embrace!",
+      '   ... 20 points of damage!'
+    ]
+  end
+
+  it 'lets a swing with a LINKED weapon claim the pending release and adopt the cast' do
+    chunk = release_then_verdict + [
+      "You swing a perfect #{mace} at #{troll}!",
+      '  AS: +273 vs DS: +80 with AvD: +35 + d100 roll: +2 = +230',
+      '   ... and hit for 79 points of damage!',
+      '<prompt time="1">&gt;</prompt>'
+    ]
+    events = processor.parse_events(chunk)
+    expect(summary(events)).to eq([
+      [:attack, %i[as_ds], [79], nil],
+      [:templars_verdict, %i[cs_td], [20], :attack]
+    ])
+    expect(events.first[:flares].map { |f| f[:name] }).to eq([:weapon_cast])
+    expect(events.first[:weapon]).to eq('perfect mithril mace')
+  end
+
+  it 'consumes the release on the release-before-swing path so a later bolt is not adopted' do
+    chunk = release_then_verdict + [
+      "You swing a perfect mithril mace at #{troll}!",
+      '  AS: +273 vs DS: +80 with AvD: +35 + d100 roll: +2 = +230',
+      '   ... and hit for 79 points of damage!',
+      "You hurl a fiery bolt at #{troll}!",
+      '  AS: +120 vs DS: +80 with AvD: +25 + d100 roll: +60 = +125',
+      '   ... and hit for 15 points of damage!',
+      '<prompt time="1">&gt;</prompt>'
+    ]
+    events = processor.parse_events(chunk)
+    expect(summary(events)).to eq([
+      [:attack, %i[as_ds], [79], nil],
+      [:templars_verdict, %i[cs_td], [20], :attack],
+      [:bolt, %i[as_ds], [15], nil]
+    ])
+    expect(events.last[:_released]).to be_falsey
+  end
+
+  it 'holds a release that follows a settled swing for the NEXT swing' do
+    chunk = [
+      "You swing a perfect mithril mace at #{troll}!",
+      '  AS: +260 vs DS: +80 with AvD: +35 + d100 roll: +10 = +225',
+      '   ... and hit for 10 points of damage!'
+    ] + release_then_verdict + [
+      "You swing a perfect mithril mace at #{troll}!",
+      '  AS: +273 vs DS: +80 with AvD: +35 + d100 roll: +2 = +230',
+      '   ... and hit for 79 points of damage!',
+      '<prompt time="1">&gt;</prompt>'
+    ]
+    events = processor.parse_events(chunk)
+    expect(summary(events)).to eq([
+      [:attack, %i[as_ds], [10], nil],
+      [:attack, %i[as_ds], [79], nil],
+      [:templars_verdict, %i[cs_td], [20], :attack]
+    ])
+    expect(events[0][:flares]).to be_empty
+    expect(events[1][:flares].map { |f| f[:name] }).to eq([:weapon_cast])
+    expect(events[2][:parent_ref]).to equal(events[1])
+  end
+
   it 'lets a released BOLT keep its own AS/DS and damage' do
     chunk = [
       "You take a menacing step toward #{troll}, sweeping your #{mace} out low to your side in your advance.",
