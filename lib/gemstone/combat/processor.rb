@@ -920,12 +920,19 @@ module Lich
                 # already dealt its damage is complete - an acid proc must
                 # not steal the next swing's AS/DS (real-feed replay,
                 # logs/examples/weapon_pulverize.txt).
-                # A PHYSICAL roll arriving on a flare-released spell is the
-                # interrupted swing's (a warding cast never rolls AS/DS):
-                # resume the swing first so the routing below lands the roll
-                # and its damage on it (see SPELL_RELEASING_FLARES).
+                # A PHYSICAL roll arriving on a flare-released spell that has
+                # ALREADY resolved is the interrupted swing's: resume the swing
+                # first so the routing below lands the roll and its damage on
+                # it (see SPELL_RELEASING_FLARES). "Already resolved" matters:
+                # Holy Weapon can release a BOLT, whose own AS/DS is the first
+                # roll after its cast line - that one is the bolt's, and only
+                # the roll after it belongs to the swing. Keying on roll type
+                # alone gave the bolt's roll and damage to the swing (review
+                # of 056ff899). A warding cast resolves on its CS/TD first
+                # either way, so this is a no-op for Templar's Verdict.
                 if current_event && current_event[:_released] && interrupted_own &&
-                   %i[as_ds uaf_udf].include?(resolution[:type])
+                   %i[as_ds uaf_udf].include?(resolution[:type]) &&
+                   (current_event[:resolutions].any? || current_event[:hits].any? || current_event[:outcomes].any?)
                   save_event.call(current_event)
                   current_event = interrupted_own
                   interrupted_own = nil
@@ -1179,10 +1186,17 @@ module Lich
                 if attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target])
                   interrupted_own = current_event
                 end
-                # our own swing carrying a spell-releasing flare: the cast
-                # opening now is that flare's spell, cutting into the swing
+                # our own swing carrying an UNCLAIMED spell-releasing flare:
+                # a weaponless CAST opening now is that flare's spell, cutting
+                # into the swing. One flare releases one spell - claiming it
+                # marks the flare consumed, and a weapon-bearing swing line is
+                # never the released spell - otherwise a second swing later in
+                # the chunk read as "released" too and handed its roll and
+                # damage back to the first swing (review of 056ff899).
                 if !attack[:inbound] && !(current_event[:inbound] || current_event[:foreign_caster] || current_event[:foreign_target]) &&
-                   (rel = (current_event[:flares] || []).find { |f| SPELL_RELEASING_FLARES.include?(f[:name]) })
+                   attack[:weapon].nil? && Parser.parse_swing_weapon(line).nil? &&
+                   (rel = (current_event[:flares] || []).find { |f| SPELL_RELEASING_FLARES.include?(f[:name]) && !f[:_release_claimed] })
+                  rel[:_release_claimed] = true
                   interrupted_own = current_event
                   released_parent = { event: current_event, flare: rel }
                 end
