@@ -9,6 +9,7 @@
 
 require 'weakref'
 require_relative 'script_death'
+require_relative 'script_execution_guard'
 
 module Lich
   module Common
@@ -38,6 +39,14 @@ module Lich
       RAW_THREAD_GROUP_ENCLOSED = ThreadGroup.instance_method(:enclosed?)
       JOIN_WAIT_INTERVAL = 0.05
       CLEANUP_SCRIPT_THREAD_KEY = :lich_cleanup_script
+      EXECUTION_GUARD_MUTEX_INITIALIZER = Mutex.new
+      EXECUTION_GUARD_POLL_INTERVAL = 0.05
+      # Script instances expose cooperative execution guard scopes/checkpoints.
+      EXECUTION_GUARD_PROTOCOL = 1
+      # Named-script starts accept a policy installed before the worker runs.
+      START_EXECUTION_GUARD_PROTOCOL = 1
+      # Guards can explicitly prohibit native script starts by their workers.
+      SCRIPT_START_RESTRICTION_PROTOCOL = 1
 
       # Nested lock order:
       #   startup -> registry -> per-script lifecycle -> child relationship
@@ -118,6 +127,18 @@ module Lich
           script_args = (options[:args] || String.new)
         end
 
+        options ||= {}
+        allow_script_starts = options.fetch(:allow_script_starts, true)
+        unless allow_script_starts.equal?(true) || allow_script_starts.equal?(false)
+          raise ArgumentError, 'allow_script_starts must be true or false'
+        end
+        if !allow_script_starts && options[:execution_guard].nil?
+          raise ArgumentError, 'restricting script starts requires an execution guard'
+        end
+        unless options[:execution_guard].nil?
+          startup_guard = ScriptExecutionGuard.new(options[:execution_guard], :allow_script_starts => allow_script_starts)
+        end
+
         # fixme: look in wizard script directory
         # Resolve via the shared resolver so script discovery stays identical
         # everywhere (custom/ root, custom/<subdir>/, then SCRIPT_DIR root).
@@ -167,6 +188,7 @@ module Lich
           launcher_thread = Thread.current
           gate_release_failed = false
           begin
+            script_obj.__send__(:__install_startup_execution_guard, startup_guard) if startup_guard
             new_thread = Thread.new {
               begin
                 next unless Script.__send__(:__await_thread_gate, start_gate, launcher_thread, false)
@@ -207,6 +229,12 @@ module Lich
                 else
                   respond '--- error: out of cheese'
                 end
+              rescue ScriptExecutionGuard::Interrupted => error
+                # The initial Script.current pause checkpoint runs before the
+                # ordinary script-body error handler. Preserve its denial as a
+                # failed child result, not an unreported thread exception.
+                script_obj.__send__(:__record_exit_error, error)
+                Script.__send__(:__report_script_error, script_obj, error, :untrusted => !trusted)
               ensure
                 script_obj.kill if script_obj.running? && !script_obj.stopping?
               end
@@ -737,6 +765,7 @@ module Lich
       end
 
       def Script.__begin_start(reservation, name = nil, force: true)
+        __resolve_current&.__send__(:__check_script_start_allowed!)
         normalized_name = name&.downcase
         @@startup_mutex.synchronize do
           __reap_abandoned_startups_locked
@@ -760,6 +789,7 @@ module Lich
       private_class_method :__begin_start
 
       def Script.__begin_library_start(reservation, name, deadline: nil)
+        __resolve_current&.__send__(:__check_script_start_allowed!)
         normalized_name = name.downcase
         @@startup_mutex.synchronize do
           __reap_abandoned_startups_locked
@@ -971,6 +1001,8 @@ module Lich
       # Starts a named script and registers it as a child of the current script.
       # Outside a script worker, this behaves like {Script.start}.
       #
+      # @param args [Array] {.start} arguments, including optional
+      #   +execution_guard: Proc+ in the existing options hash
       # @return [Script, nil] the started script, or nil when startup fails
       def Script.start_child(*args)
         parent = Script.current
@@ -987,14 +1019,29 @@ module Lich
       # return value, and a timed-out child is torn down before the raise, so
       # no unsupervised child ever survives this call.
       #
+      # @param args [Array] arguments forwarded to {.start_child}
       # @param timeout [Numeric, nil] maximum seconds to wait, or nil to wait indefinitely
+      # @param execution_guard [Proc, nil] optional lifetime policy, as in {.start}
+      # @param allow_script_starts [Boolean, nil] override the policy's script-start
+      #   permission; nil retains the options hash value (default true)
       # @return [Script] the terminated child
       # @raise [ArgumentError] when the timeout is negative, before the child starts
       # @raise [StartError] when the child cannot be started
       # @raise [TimeoutError] when the child outlives the timeout, after its teardown
-      def Script.run_child(*args, timeout: nil)
+      def Script.run_child(*args, timeout: nil, execution_guard: nil, allow_script_starts: nil)
         raise ArgumentError, 'timeout must be non-negative' if timeout && timeout.negative?
 
+        overrides = {}
+        overrides[:execution_guard] = execution_guard unless execution_guard.nil?
+        overrides[:allow_script_starts] = allow_script_starts unless allow_script_starts.nil?
+        unless overrides.empty?
+          args = args.dup
+          if args.last.is_a?(Hash)
+            args[-1] = args.last.merge(overrides)
+          else
+            args << overrides
+          end
+        end
         child = Script.start_child(*args)
         unless child
           name = args.first.is_a?(Hash) ? args.first[:name] : args.first
@@ -1032,6 +1079,15 @@ module Lich
       end
       private_class_method :__resolve_current
 
+      # Resolves the calling script for core seams that must not add a pause
+      # checkpoint, including raw writes made while holding a caller's lock.
+      #
+      # @return [Script, nil] the script bound to Thread.current, or nil
+      # @api private
+      def Script.current_without_pause
+        __resolve_current
+      end
+
       # Returns the script bound to the calling thread.
       #
       # Blocks the calling thread while that script is paused (unless it has
@@ -1048,11 +1104,29 @@ module Lich
         script
       end
 
+      # Native helpers use this sleep checkpoint so opted-in scripts can unwind
+      # a long roundtime/retry wait. Ordinary scripts keep the original sleep
+      # behavior; resolving the caller here does not add a pause checkpoint.
+      #
+      # @param seconds [Numeric] requested duration
+      # @return [Numeric] sleep result
+      # @raise [ArgumentError] if the duration is invalid for the active sleep mode
+      # @raise [ScriptExecutionGuard::Interrupted] if the caller's policy cancels
+      def Script.execution_sleep(seconds)
+        script = __resolve_current
+        script ? script.execution_sleep(seconds) : Kernel.sleep(seconds)
+      end
+
       # Starts a script, blocking first if the calling script is paused.
       #
       # @param args [Array] arguments forwarded to the underlying script
       #   start machinery (script name, params, flags -- see callers for the
       #   accepted shapes)
+      # @option args [Proc, nil] :execution_guard optional observation-only
+      #   policy installed before execution, retained through teardown callbacks,
+      #   and removed after all owned workers stop. No child inheritance.
+      # @option args [Boolean] :allow_script_starts (true) false forbids new
+      #   native script launches from this guarded script, including during cleanup
       # @return [Script, nil] the started script, or nil on failure
       # @note Blocks the calling thread while it is itself paused (unless
       #   exempt via +ignore_pause+) before starting anything; a no-op wait
@@ -2403,7 +2477,11 @@ module Lich
       private :__record_exit_error
 
       def __record_successful_exit
+        guard = execution_guard_mutex.synchronize { @startup_execution_guard }
+        guard&.checkpoint!
         lifecycle_mutex.synchronize { @completed_successfully = true unless @exit_error }
+      rescue ScriptExecutionGuard::Interrupted => error
+        __record_exit_error(error)
       end
       private :__record_successful_exit
 
@@ -2597,6 +2675,7 @@ module Lich
       private :__while_running
 
       def __discard_startup
+        __close_startup_execution_guard
         parent = nil
         Script.__send__(:__registry_synchronize) do
           lifecycle_mutex.synchronize do
@@ -2721,6 +2800,7 @@ module Lich
           CHILD_RELATIONSHIP_MUTEX.synchronize { parent = @parent_script }
           parent&.unregister_child(self)
           CHILD_RELATIONSHIP_MUTEX.synchronize { @parent_script = nil }
+          __close_startup_execution_guard
           lifecycle_mutex.synchronize do
             @die_with = @at_exit_procs = nil
             @cleanup_complete = true
@@ -2811,9 +2891,150 @@ module Lich
       # one implementation instead of inlining the sleep loop.
       #
       # @return [void]
+      # @raise [ScriptExecutionGuard::Interrupted] if an installed policy cancels
       def wait_while_paused!
-        sleep 0.2 while paused? and not ignore_pause
+        unless execution_guard_active?
+          sleep 0.2 while paused? and not ignore_pause
+          return
+        end
+        # Guard callbacks may read Script.current. Do not recursively enter the
+        # pause loop while collecting those observations; sends still pass the
+        # guard at the socket and recursive sends are rejected there.
+        guard = execution_guard_mutex.synchronize { @execution_guard }
+        return if guard&.checking?
+
+        loop do
+          check_execution_guard!
+          break unless paused? && !ignore_pause
+
+          Kernel.sleep(EXECUTION_GUARD_POLL_INTERVAL)
+        end
       end
+
+      # Attach a named script's launch policy before releasing its worker gate.
+      # @param guard [ScriptExecutionGuard] already validated policy
+      # @return [void]
+      # @api private
+      def __install_startup_execution_guard(guard)
+        execution_guard_mutex.synchronize do
+          raise ArgumentError, 'script already has an execution guard' if @execution_guard
+
+          @execution_guard = @startup_execution_guard = guard
+        end
+      end
+      private :__install_startup_execution_guard
+
+      # Dispose the launch policy only after cleanup and worker termination (or
+      # rejected startup), never when the body merely returns or is interrupted.
+      # @return [void]
+      # @api private
+      def __close_startup_execution_guard
+        execution_guard_mutex.synchronize do
+          guard = @startup_execution_guard
+          return unless guard
+
+          guard.close!
+          @execution_guard = nil if @execution_guard.equal?(guard)
+          @startup_execution_guard = nil
+        end
+      end
+      private :__close_startup_execution_guard
+
+      # Called at native startup admission before reserving a name or creating
+      # workers. Read the actual caller, not a requested child's parent option.
+      # @return [true] when no active policy prohibits script launches
+      # @raise [ScriptExecutionGuard::Interrupted] when explicitly prohibited
+      # @api private
+      def __check_script_start_allowed!
+        guard = execution_guard_mutex.synchronize { @execution_guard }
+        guard ? guard.check_script_start! : true
+      end
+      private :__check_script_start_allowed!
+
+      # Install an opt-in execution policy for this script for the duration of
+      # the block. The policy receives nil at cooperative checkpoints, or the
+      # immutable raw command (including the client prefix) before a socket write.
+      # Only literal true permits continuation. A denial stays cancelled even if
+      # a helper rescues the interruption; leaving the scope checks it again.
+      #
+      # The scope applies to this script's worker threads, not child scripts.
+      # Owners must join their workers before leaving it. This is cooperative
+      # control, not a sandbox for arbitrary Ruby or a way to undo sent commands.
+      #
+      # @param callback [Proc] observation-only policy, never a command sender
+      # @param allow_script_starts [Boolean] false prohibits native script launches
+      #   by this script while the scope is installed; default true is unchanged
+      # @yieldparam guard [ScriptExecutionGuard] cancellation handle
+      # @return [Object] the block's result when the guard permits completion
+      # @raise [ArgumentError] if callback is not a Proc, the block is missing,
+      #   or another guard is already installed
+      # @raise [ScriptExecutionGuard::Interrupted] if the policy cancels execution
+      def with_execution_guard(callback, allow_script_starts: true)
+        raise ArgumentError, 'execution guard requires a block' unless block_given?
+
+        guard = ScriptExecutionGuard.new(callback, :allow_script_starts => allow_script_starts)
+        execution_guard_mutex.synchronize do
+          raise ArgumentError, 'script already has an execution guard' if @execution_guard
+
+          @execution_guard = guard
+        end
+        begin
+          guard.checkpoint!
+          result = yield guard
+          guard.checkpoint!
+          result
+        ensure
+          guard.close!
+          execution_guard_mutex.synchronize { @execution_guard = nil if @execution_guard.equal?(guard) }
+        end
+      end
+
+      # Check for an installed policy without evaluating or renewing it.
+      # @return [Boolean] whether this script currently has a scoped policy
+      def execution_guard_active?
+        execution_guard_mutex.synchronize { !@execution_guard.nil? }
+      end
+
+      # Evaluate the installed policy, preserving any previous cancellation.
+      # @param command [String, nil] exact wire command, or nil for a checkpoint
+      # @return [true] if no guard is installed or its policy permits continuation
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy denies
+      def check_execution_guard!(command: nil)
+        guard = execution_guard_mutex.synchronize { @execution_guard }
+        guard ? guard.checkpoint!(command: command) : true
+      end
+
+      # Sleep cooperatively while a policy is installed. Native helpers use this
+      # instead of one long sleep so cancellation can unwind their ensure blocks.
+      #
+      # @param seconds [Numeric] finite nonnegative duration in seconds
+      # @return [Numeric] requested duration; ordinary scripts retain Kernel.sleep
+      # @raise [ArgumentError] if the duration is invalid for the active sleep mode
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
+      def execution_sleep(seconds)
+        return Kernel.sleep(seconds) unless execution_guard_active?
+
+        unless seconds.is_a?(Numeric) && seconds.finite? && seconds >= 0
+          raise ArgumentError, 'guarded sleep requires a finite nonnegative duration'
+        end
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+        loop do
+          check_execution_guard!
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          break if remaining <= 0
+
+          Kernel.sleep([remaining, EXECUTION_GUARD_POLL_INTERVAL].min)
+        end
+        seconds
+      end
+
+      # Obtain this script's lazily initialized policy lock.
+      # @return [Mutex] the per-script execution guard lock
+      # @api private
+      def execution_guard_mutex
+        @execution_guard_mutex || EXECUTION_GUARD_MUTEX_INITIALIZER.synchronize { @execution_guard_mutex ||= Mutex.new }
+      end
+      private :execution_guard_mutex
 
       def get_next_label
         if !@jump_label
@@ -2842,33 +3063,85 @@ module Lich
         @name
       end
 
+      # Read downstream data, observing an installed guard while waiting.
+      # @param timeout [Numeric, nil] maximum wait in seconds; nil waits indefinitely
+      # @return [String, nil, false] a line, nil on timeout, or false when no
+      #   downstream stream is enabled
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def gets(timeout = nil)
         # fixme: no xml gets
         if @want_downstream or @want_downstream_xml or @want_script_output
-          @downstream_buffer.wait_shift(timeout)
+          if execution_guard_active?
+            deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout.to_f if timeout
+            loop do
+              check_execution_guard!
+              remaining = deadline && deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+              # Like LimitedArray#wait_shift, an expired timeout still permits
+              # reading an already-buffered line. Zero only prevents waiting.
+              interval = remaining ? [[remaining, 0].max, EXECUTION_GUARD_POLL_INTERVAL].min : EXECUTION_GUARD_POLL_INTERVAL
+              line = @downstream_buffer.wait_shift(interval)
+              unless line.nil?
+                check_execution_guard!
+                return line
+              end
+              return nil if deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+            end
+          else
+            @downstream_buffer.wait_shift(timeout)
+          end
         else
           echo 'this script is set as unique but is waiting for game data...'
-          sleep 2
+          execution_sleep 2
           false
         end
       end
 
+      # Read buffered downstream data without waiting for another line.
+      # @return [String, nil, false] a line, nil when empty, or false when no
+      #   downstream stream is enabled
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def gets?
+        check_execution_guard!
         if @want_downstream or @want_downstream_xml or @want_script_output
-          @downstream_buffer.try_shift
+          line = @downstream_buffer.try_shift
+          check_execution_guard!
+          line
         else
           echo 'this script is set as unique but is waiting for game data...'
-          sleep 2
+          execution_sleep 2
           false
         end
       end
 
+      # Wait for upstream data with cooperative cancellation when guarded.
+      # @return [String, nil] the shifted line, or nil if another reader consumed it
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def upstream_gets
+        if execution_guard_active?
+          check_execution_guard!
+          execution_sleep(EXECUTION_GUARD_POLL_INTERVAL) while @upstream_buffer.empty?
+          check_execution_guard!
+          line = @upstream_buffer.shift
+          check_execution_guard!
+          return line
+        end
+
         sleep 0.05 while @upstream_buffer.empty?
         @upstream_buffer.shift
       end
 
+      # Read upstream data without waiting for another line.
+      # @return [String, nil] the shifted line, or nil when none is available
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def upstream_gets?
+        if execution_guard_active?
+          check_execution_guard!
+          line = @upstream_buffer.empty? ? nil : @upstream_buffer.shift
+          check_execution_guard!
+          return line
+        end
+
         if @upstream_buffer.empty?
           nil
         else
@@ -2876,12 +3149,34 @@ module Lich
         end
       end
 
+      # Wait for private script data with cooperative cancellation when guarded.
+      # @return [String, nil] the shifted line, or nil if another reader consumed it
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def unique_gets
+        if execution_guard_active?
+          check_execution_guard!
+          execution_sleep(EXECUTION_GUARD_POLL_INTERVAL) while @unique_buffer.empty?
+          check_execution_guard!
+          line = @unique_buffer.shift
+          check_execution_guard!
+          return line
+        end
+
         sleep 0.05 while @unique_buffer.empty?
         @unique_buffer.shift
       end
 
+      # Read private script data without waiting for another line.
+      # @return [String, nil] the shifted line, or nil when none is available
+      # @raise [ScriptExecutionGuard::Interrupted] if the installed policy cancels
       def unique_gets?
+        if execution_guard_active?
+          check_execution_guard!
+          line = @unique_buffer.empty? ? nil : @unique_buffer.shift
+          check_execution_guard!
+          return line
+        end
+
         if @unique_buffer.empty?
           nil
         else

@@ -279,12 +279,12 @@ end
 
 def waitrt
   wait_until { (XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkrt
+  Script.execution_sleep checkrt
 end
 
 def waitcastrt
   wait_until { (XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkcastrt
+  Script.execution_sleep checkcastrt
 end
 
 def checkrt
@@ -296,16 +296,16 @@ def checkcastrt
 end
 
 def waitrt?
-  sleep checkrt
+  Script.execution_sleep checkrt
   return true if checkrt > 0.0
   return false if checkrt == 0
 end
 
 def waitcastrt?
-  #  sleep checkcastrt
+  #  Script.execution_sleep checkcastrt
   current_castrt = checkcastrt
   if current_castrt.to_f > 0.0
-    sleep(current_castrt)
+    Script.execution_sleep(current_castrt)
     return true
   else
     return false
@@ -606,7 +606,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       line_count += 1
     end
     if line.nil?
-      sleep 0.1
+      Script.execution_sleep 0.1
     elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
       # DragonRealms
       fput 'retreat'
@@ -637,11 +637,11 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
-      sleep 1
+      Script.execution_sleep 1
       waitrt?
       put_dir.call
     elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
-      sleep 1
+      Script.execution_sleep 1
       waitrt?
       fput 'stand' unless standing?
       waitrt?
@@ -650,7 +650,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       # swims in Sailor's Grief
       return true
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
-      sleep 0.5
+      Script.execution_sleep 0.5
       waitrt?
       fput 'stand' unless standing?
       waitrt?
@@ -706,9 +706,9 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       end
     elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
       if $2.to_i > 1
-        sleep($2.to_i - "0.2".to_f)
+        Script.execution_sleep($2.to_i - "0.2".to_f)
       else
-        sleep 0.3
+        Script.execution_sleep 0.3
       end
       put_dir.call
     elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
@@ -716,18 +716,18 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       waitrt?
       put_dir.call
     elsif line =~ /^You're still recovering from your recent/
-      sleep 2
+      Script.execution_sleep 2
       put_dir.call
     elsif line =~ /^The ground approaches you at an alarming rate/
-      sleep 1
+      Script.execution_sleep 1
       fput 'stand' unless standing?
       put_dir.call
     elsif line =~ /You go flying down several feet, landing with a/
-      sleep 1
+      Script.execution_sleep 1
       fput 'stand' unless standing?
       put_dir.call
     elsif line =~ /^Sorry, you may only type ahead/
-      sleep 1
+      Script.execution_sleep 1
       put_dir.call
     elsif line == 'You are still stunned.'
       wait_while { stunned? }
@@ -744,10 +744,10 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       put_dir.call
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
       fput "stow feet"
-      sleep 1
+      Script.execution_sleep 1
       put_dir.call
     elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
-      sleep(0.5)
+      Script.execution_sleep(0.5)
       wait_while { stunned? }
       waitrt?
       fput 'stand' unless standing?
@@ -757,7 +757,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       30.times {
         break if clear.include?('You regain control of your senses!')
 
-        sleep 0.1
+        Script.execution_sleep 0.1
       }
       put_dir.call
     elsif line =~ /^It's pitch dark and you can't see a thing!/
@@ -829,6 +829,7 @@ def wait_until(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -859,6 +860,7 @@ def wait_while(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -1436,13 +1438,13 @@ end
 
 def pause(num = 1)
   if num.to_s =~ /m/
-    sleep((num.sub(/m/, '').to_f * 60))
+    Script.execution_sleep((num.sub(/m/, '').to_f * 60))
   elsif num.to_s =~ /h/
-    sleep((num.sub(/h/, '').to_f * 3600))
+    Script.execution_sleep((num.sub(/h/, '').to_f * 3600))
   elsif num.to_s =~ /d/
-    sleep((num.sub(/d/, '').to_f * 86400))
+    Script.execution_sleep((num.sub(/d/, '').to_f * 86400))
   else
-    sleep(num.to_f)
+    Script.execution_sleep(num.to_f)
   end
 end
 
@@ -1670,7 +1672,7 @@ def fput(message, *waitingfor)
 
     if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
       hold_up = Regexp.last_match[:wait_time].to_i
-      sleep(hold_up) unless hold_up.nil?
+      Script.execution_sleep(hold_up) unless hold_up.nil?
       clear
       put(message)
       next
@@ -1681,21 +1683,21 @@ def fput(message, *waitingfor)
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
         echo "You're dead...! You can't do that!"
-        sleep 1
+        Script.execution_sleep 1
         script.downstream_buffer.unshift(string)
         return false
       elsif checkstunned
         while checkstunned
-          sleep("0.25".to_f)
+          Script.execution_sleep("0.25".to_f)
         end
       elsif checkwebbed
         while checkwebbed
-          sleep("0.25".to_f)
+          Script.execution_sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
-        sleep 1
+        Script.execution_sleep 1
       else
-        sleep 0.1
+        Script.execution_sleep 0.1
         script.downstream_buffer.unshift(string)
         return false
       end
@@ -1711,7 +1713,7 @@ def fput(message, *waitingfor)
           script.downstream_buffer.unshift(string)
           return foundit
         end
-        sleep 1
+        Script.execution_sleep 1
         clear
         put(message)
         next
@@ -2035,19 +2037,19 @@ def dothistimeout(action, timeout, success_line)
     loop {
       line = get?
       if line.nil?
-        sleep 0.1
+        Script.execution_sleep 0.1
       elsif line =~ success_line
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'You are still stunned.'
@@ -2057,7 +2059,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -2066,7 +2068,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -2078,7 +2080,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
