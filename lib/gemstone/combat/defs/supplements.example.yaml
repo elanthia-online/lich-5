@@ -87,3 +87,54 @@ outcomes:
   - type: miss
     patterns:
       - 'The ice lance shatters harmlessly near (?<target>[^.]+)\.'
+
+messages:
+  # Messages are the non-combat lines a script subscribes to as events
+  # (Combat::Tracker.on(:event_name) { |type, payload| ... }): a charge
+  # counter, an item operation succeeding, an effect switching on or off.
+  # Each def names its family and event, one or more patterns, and how to
+  # build the payload from the match:
+  #
+  #   captures:  payload key -> named capture, with a type:
+  #                string (default), integer, or symbol
+  #   values:    payload key -> a literal (string, number, true/false/null)
+  #
+  # If a capture did not participate in the match or an integer does not
+  # parse, NOTHING is emitted (reported once), never a zero or empty fact.
+  # The key  raw  is always added by Lich and cannot be set here.
+  #
+  # Reusing a shipped event adds patterns to it. The payload must satisfy
+  # that event's contract (the keys and types its consumers rely on), and
+  # the event stays in its shipped family.
+  #
+  # A new event must be named user_... and so must a new family, so a
+  # future Lich release can never collide with your file.
+
+  # Shipped event, shipped family: one more Swift Justice line. The
+  # contract wants charges as an integer.
+  - family: marks
+    event: swift_justice
+    patterns:
+      - 'Your Swift Justice charges are restored to (?<n>\d+)\.'
+    captures:
+      charges: { from: n, type: integer }
+
+  # A new family with a new event. Two defs, same event, different
+  # literal facts.
+  - family: user_item_prep
+    event: user_feed_result
+    patterns:
+      - 'You feed the (?<what>.+?) and it hums softly\.'
+    captures:
+      what: what                 # shorthand for { from: what, type: string }
+    values:
+      ok: true
+
+  - family: user_item_prep
+    event: user_feed_result
+    patterns:
+      - 'You feed the (?<what>.+?) and it does nothing\.'
+    captures:
+      what: what
+    values:
+      ok: false

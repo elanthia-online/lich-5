@@ -22,6 +22,7 @@
 #
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -36,16 +37,52 @@ module Lich
             def rejects?(line) = PatternGate.rejects?(gate, always_scan, line)
           end
 
-          # Build a family from [event, pattern, data] rows.
+          # The payload contract of every shipped event: the family it
+          # belongs to and the keys (with types) its consumers rely on. This
+          # is what a player supplement (defs/supplements.rb) that reuses a
+          # shipped event name is validated against - the same name is only
+          # useful if subscribers still get the payload they expect - and it
+          # is also how a supplement is kept from moving an event to another
+          # family. A key absent here is optional (rooted's id, for one);
+          # nil is accepted for any key. Types: :string, :integer, :boolean,
+          # :symbol. Keep in step with the defs below - the spec checks that
+          # every shipped event has an entry naming its family.
+          CONTRACTS = {
+            disarm_seen: { family: :disarm, keys: { kind: :symbol, noun: :string } },
+            sanctum_transform: { family: :disarm, keys: { noun: :string } },
+            itchy_curse: { family: :hazard, keys: {} },
+            infected_wound: { family: :hazard, keys: {} },
+            hive_trap: { family: :hazard, keys: { kind: :symbol } },
+            entangled: { family: :hazard, keys: {} },
+            ambusher: { family: :ambush, keys: { noun: :string } },
+            bolted: { family: :ambush, keys: {} },
+            rooted: { family: :hold, keys: {} },
+            unrooted: { family: :hold, keys: { id: :string } },
+            item_limit: { family: :hold, keys: {} },
+            bless_shrugged: { family: :bless, keys: { id: :string, noun: :string } },
+            bless_expired: { family: :bless, keys: { id: :string, noun: :string } },
+            arrow_stuck: { family: :archery, keys: { id: :string, where: :string } },
+            aiming: { family: :archery, keys: { where: :string } },
+            bond_return: { family: :archery, keys: { what: :string } },
+            haze_703: { family: :marks, keys: { id: :string, on: :boolean } },
+            rebuke_1614: { family: :marks, keys: { id: :string, on: :boolean } },
+            swift_justice: { family: :marks, keys: { charges: :integer } },
+            arcane_reflex: { family: :marks, keys: { active: :boolean } },
+            weapon_reaction: { family: :reaction, keys: { reaction: :string } }
+          }.freeze
+
+          # Build a family from [event, pattern, data] rows, with the
+          # player's supplement rows for that family name appended (empty
+          # when there is no file), before the gate is derived.
           def self.family(name, rows)
-            defs = rows.map { |event, pattern, data| MessageDef.new(event, pattern, data) }
+            defs = (rows + Supplements.messages(name)).map { |event, pattern, data| MessageDef.new(event, pattern, data) }
             gate, always = PatternGate.build(defs.map(&:pattern))
             Family.new(name, defs.freeze, gate, always)
           end
 
           NONE = ->(_m) { {} }
 
-          FAMILIES = [
+          SHIPPED_FAMILIES = [
             # ecleanse set_hooks 1618: the line-driven recoveries. The disarm
             # lines carry the weapon's noun; what hand it was in and where
             # we stood is the subscriber's to read at the moment.
@@ -125,16 +162,40 @@ module Lich
                    ])
           ].freeze
 
+          # Families the player's file declares that are not shipped ones
+          # (their names carry the user_ prefix; see Supplements). Rows come
+          # in through family()'s splice, so pass none here.
+          USER_FAMILIES = Supplements.message_families
+                                     .reject { |n| SHIPPED_FAMILIES.any? { |f| f.name == n } }
+                                     .map { |n| family(n, []) }.freeze
+
+          FAMILIES = (SHIPPED_FAMILIES + USER_FAMILIES).freeze
+
           BY_NAME = FAMILIES.to_h { |f| [f.name, f] }.freeze
           # event -> family, for subscription gating
           FAMILY_OF = FAMILIES.each_with_object({}) { |f, h| f.events.each { |e| h[e] = f } }.freeze
           EVENTS = FAMILY_OF.keys.freeze
 
+          # The four derived tables as one frozen object, bound last and in
+          # a single assignment so a hot reload never pairs families from
+          # one build with an event map from another (see Definitions::Table
+          # for the same rule on the combat kinds). Combat::Messages reads
+          # it once per call.
+          MessageTable = Struct.new(:families, :by_name, :family_of, :events)
+          TABLE = MessageTable.new(FAMILIES, BY_NAME, FAMILY_OF, EVENTS).freeze
+
+          # @return [MessageTable] the current message table
+          def self.table = TABLE
+
           # Every event a line yields across +families+, as [event, data].
+          # A def whose data block returns nil emits nothing: that is how a
+          # supplement def reports a capture it could not convert instead
+          # of publishing a misleading fact (shipped data blocks never
+          # return nil).
           #
           # @param families [Array<Family>] the ones to scan (all by default)
           # @return [Array<Array(Symbol, Hash)>]
-          def self.scan(line, families = FAMILIES)
+          def self.scan(line, families = TABLE.families)
             found = []
             families.each do |family|
               next if family.rejects?(line)
@@ -143,7 +204,10 @@ module Lich
                 m = d.pattern.match(line)
                 next unless m
 
-                found << [d.event, (d.data.call(m) || {}).merge(raw: line)]
+                payload = d.data.call(m)
+                next if payload.nil?
+
+                found << [d.event, payload.merge(raw: line)]
               end
             end
             found

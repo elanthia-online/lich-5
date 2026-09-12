@@ -44,18 +44,26 @@ module Lich
         @matched = 0
 
         class << self
-          def families = Definitions::Messages::FAMILIES
-          def events = Definitions::Messages::EVENTS
+          # The current definition table, read once per call: after a hot
+          # reload (Tracker.reload_defs!, `;hmr combat/defs/`) the def
+          # module binds a new one, and nothing here may hold the old.
+          def table = Definitions::Messages.table
+          def families = table.families
+          def events = table.events
 
           # A message event, as opposed to a combat fact.
-          def event?(type) = Definitions::Messages::FAMILY_OF.key?(type.to_sym)
+          def event?(type) = table.family_of.key?(type.to_sym)
 
           # The families with a subscriber for at least one of their events.
-          def active_families = @active
+          # Held as NAMES and resolved against the current table, so a
+          # reload never leaves the scanner on a stale Family object.
+          def active_families = table.by_name.values_at(*@active).compact
 
           # Recompute the active families from the subscriptions and put the
           # hook up or take it down to match. Observers calls this on every
-          # change; harmless to call again.
+          # change, and Supplements.reload_defs! after a reload (a script may
+          # subscribe to an event before the player's file defines it);
+          # harmless to call again.
           #
           # The whole read-decide-act sequence is held under @mutex: two
           # scripts subscribing at once would otherwise interleave so that
@@ -63,9 +71,9 @@ module Lich
           # uninstall!, silently leaving a live subscriber with no hook.
           def refresh!
             @mutex.synchronize do
-              @active = families.select { |f| f.events.any? { |e| Observers.any_for?(e) } }.freeze
+              @active = families.select { |f| f.events.any? { |e| Observers.any_for?(e) } }.map(&:name).freeze
               @active.empty? ? uninstall! : install!
-              @active
+              active_families
             end
           end
 
@@ -73,7 +81,7 @@ module Lich
           # (the active ones by default; pass +families+ to scan them all).
           #
           # @return [Array<Array(Symbol, Hash)>]
-          def scan(line, families: @active)
+          def scan(line, families: active_families)
             Definitions::Messages.scan(line, families)
           end
 
@@ -99,7 +107,7 @@ module Lich
           def installed? = @hook
 
           def stats
-            { installed: @hook, families: @active.map(&:name), scanned: @scanned, matched: @matched,
+            { installed: @hook, families: @active, scanned: @scanned, matched: @matched,
               queued: @queue ? @queue.size : 0, worker_alive: !@worker.nil? && @worker.alive? }
           end
 
