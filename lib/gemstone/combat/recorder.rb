@@ -369,12 +369,7 @@ module Lich
           # recorder lock so consumers may inspect the database without deadlock.
           # This is evidence only, not command ownership or a combat-complete flag.
           if type == :attack && result.is_a?(Hash) && result[:protocol] == RECEIPT_PROTOCOL
-            begin
-              Lich::Gemstone::Combat::Observers.emit(:recorded_attack, result)
-            rescue StandardError
-              # Optional receipt delivery cannot undo or break a committed record.
-              nil
-            end
+            Lich::Gemstone::Combat::Observers.emit(:recorded_attack, result)
           end
           result
         end
@@ -540,7 +535,8 @@ module Lich
           parent_row = (parent_uid && chunk_row(parent_uid))
           parent_conf = event[:parent_confidence]&.to_s
 
-          receipt = nil
+          attack_id = nil
+          touched = Set.new([target[:id]].compact.map(&:to_i))
           in_txn do
             @seq += 1
             params = [@session_id, @seq, at, event[:name].to_s, parent&.to_s, txt(parent_weapon),
@@ -584,7 +580,6 @@ module Lich
               insert_hit(attack_id, nil, creature_row, hit_seq += 1, hit, at)
             end
 
-            touched = Set.new([target[:id]].compact.map(&:to_i))
             (event[:flares] || []).each_with_index do |flare, i|
               f_target = flare[:target_info]
               f_creature = f_target ? ensure_creature(f_target, at) : nil
@@ -603,19 +598,29 @@ module Lich
                 insert_hit(attack_id, flare_id, f_creature || creature_row, hit_seq += 1, hit, at)
               end
             end
-
-            @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound] }
-            provenance = if defined?(Processor) && Processor.respond_to?(:observation_source)
-                           Processor.observation_source(event[:source])
-                         end
-            receipt = {
-              protocol: RECEIPT_PROTOCOL, recorder_id: @recorder_id,
-              database: @receipt_path&.dup&.freeze, file_identity: @receipt_file,
-              session_id: @session_id, attack_id: attack_id,
-              source: provenance
-            }.freeze
           end
-          receipt
+          # Publish the attack window only after commit; a rollback must not
+          # leave statuses pointing at an attack row that no longer exists.
+          @open_attack = { id: attack_id, creature_ids: touched, inbound: !!event[:inbound] }
+          attack_receipt(attack_id, event)
+        end
+
+        def attack_receipt(attack_id, event)
+          provenance = if defined?(Processor) && Processor.respond_to?(:observation_source)
+                         Processor.observation_source(event[:source])
+                       end
+          {
+            protocol: RECEIPT_PROTOCOL, recorder_id: @recorder_id,
+            database: @receipt_path&.dup&.freeze, file_identity: @receipt_file,
+            session_id: @session_id, attack_id: attack_id,
+            source: provenance
+          }.freeze
+        rescue StandardError => e
+          # Receipt metadata is optional. The attack is already committed, so
+          # report this separately from a persistence failure and emit nothing.
+          msg = "CombatRecorder receipt for committed attack #{attack_id}: #{e.message}"
+          defined?(Lich) && Lich.respond_to?(:log) ? Lich.log("error: #{msg}") : warn(msg)
+          nil
         end
 
         def insert_resolution(attack_id, flare_id, seq, res)
