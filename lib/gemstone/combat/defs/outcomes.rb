@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -320,11 +321,17 @@ module Lich
           # first-match-wins scanning.
           #
           # @return [Array<Array(Regexp, Symbol)>]
-          OUTCOME_LOOKUP = OUTCOME_DEFS.flat_map { |d| d.patterns.map { |rx| [rx, d.type] } }.freeze
+          # Shipped defs first, then player supplements (defs/supplements.rb),
+          # whose types are restricted to the ones defined above.
+          OUTCOME_LOOKUP = (OUTCOME_DEFS + Supplements.outcomes).flat_map { |d| d.patterns.map { |rx| [rx, d.type] } }.freeze
 
           # Cheap literal pre-filter over all outcome patterns; ALWAYS_SCAN
           # holds the few patterns the gate cannot cover.
           GATE, ALWAYS_SCAN = PatternGate.build(OUTCOME_LOOKUP.map(&:first))
+
+          # Lookup and gate as one frozen table, bound last in a single
+          # assignment; parse reads it once per call (see Definitions::Table).
+          TABLE = Table.new(OUTCOME_LOOKUP, GATE, ALWAYS_SCAN).freeze
 
           # Classifies a single game line as an attack outcome.
           #
@@ -332,9 +339,10 @@ module Lich
           # @return [Symbol, nil] outcome type (:miss, :hit, :evade, ...),
           #   or nil when the line is not an outcome line
           def self.parse(line)
-            return nil unless GATE.match?(line) || ALWAYS_SCAN.any? { |rx| rx.match?(line) }
+            table = TABLE
+            return nil if table.rejects?(line)
 
-            OUTCOME_LOOKUP.each { |rx, type| return type if rx.match?(line) }
+            table.lookup.each { |rx, type| return type if rx.match?(line) }
             nil
           end
 
@@ -345,9 +353,10 @@ module Lich
           # it - the processor opens it inbound, not as an attack ON X
           # (hunt log 2026-09-07: barrier blocks filed as unknown vs warg).
           def self.inbound_line?(line)
-            return false unless GATE.match?(line) || ALWAYS_SCAN.any? { |rx| rx.match?(line) }
+            table = TABLE
+            return false if table.rejects?(line)
 
-            OUTCOME_LOOKUP.each do |rx, _type|
+            table.lookup.each do |rx, _type|
               next unless rx.match?(line)
 
               return rx.names.include?('attacker')

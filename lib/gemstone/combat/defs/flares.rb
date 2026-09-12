@@ -22,6 +22,7 @@
 #
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -392,11 +393,17 @@ module Lich
           ].freeze
 
           # [pattern, name, damaging, aoe, spawns] rows, one per pattern
-          FLARE_LOOKUP = FLARE_DEFS.flat_map { |d|
+          # Shipped defs first, then player supplements (defs/supplements.rb);
+          # a supplement reusing a shipped name carries the shipped flags.
+          FLARE_LOOKUP = (FLARE_DEFS + Supplements.flares).flat_map { |d|
             d.patterns.map { |rx| [rx, d.name, d.damaging, d.aoe, d.spawns] }
           }.freeze
 
           GATE, ALWAYS_SCAN = PatternGate.build(FLARE_LOOKUP.map(&:first))
+
+          # Lookup and gate as one frozen table, bound last in a single
+          # assignment; parse reads it once per call (see Definitions::Table).
+          TABLE = Table.new(FLARE_LOOKUP, GATE, ALWAYS_SCAN).freeze
 
           # Flare announce lines name the flaring weapon as a link:
           #   Your <a exist="393573117" noun="sword">slim short sword</a> ...
@@ -409,9 +416,10 @@ module Lich
           #   target is the named capture when the pattern has one (may be nil);
           #   weapon is { id:, name: } when the line links the flaring weapon.
           def self.parse(line)
-            return nil unless GATE.match?(line) || ALWAYS_SCAN.any? { |rx| rx.match?(line) }
+            table = TABLE
+            return nil if table.rejects?(line)
 
-            FLARE_LOOKUP.each do |pattern, name, damaging, aoe, spawns|
+            table.lookup.each do |pattern, name, damaging, aoe, spawns|
               next unless (match = pattern.match(line))
 
               result = { name: name, damaging: damaging, aoe: aoe, spawns: spawns }

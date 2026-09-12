@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -761,9 +762,17 @@ module Lich
           # swing patterns; second-person defs come before third-person so
           # "You swing" never falls through; the generic 2p bolt sits last
           # inside WIKI_SPELL_ATTACKS so named bolts keep their names.
-          ALL_ATTACKS = (PRIORITY_ATTACKS + BASIC_ATTACKS + SPELL_ATTACKS + WIKI_SPELL_ATTACKS +
+          # Player supplements (defs/supplements.rb, DATA_DIR/combat/defs.yaml)
+          # are spliced by slot: :priority ahead of the generic swings, :generic
+          # with the second-person defs, :third_person ahead of the shipped
+          # third-person defs. Each reader returns an empty frozen array when
+          # there is no file, so the shipped assembly is unchanged.
+          ALL_ATTACKS = (PRIORITY_ATTACKS + Supplements.attacks(:priority) +
+                        BASIC_ATTACKS + Supplements.attacks(:generic) +
+                        SPELL_ATTACKS + WIKI_SPELL_ATTACKS +
                         MANEUVER_ATTACKS + WEAPON_ATTACKS +
                         SHIELD_ATTACKS + COMPANION_ATTACKS + ENVIRONMENTAL_ATTACKS +
+                        Supplements.attacks(:third_person) +
                         THIRD_PERSON_SPELL_ATTACKS + THIRD_PERSON_ATTACKS).freeze
 
           # Create lookup table for fast pattern matching
@@ -780,9 +789,16 @@ module Lich
           # attack pattern if it contains that pattern's longest literal.
           ATTACK_GATE, ATTACK_ALWAYS_SCAN = PatternGate.build(ATTACK_LOOKUP.map(&:first))
 
+          # The lookup and its gate as one frozen table, bound last and in a
+          # single assignment: what the parser reads (see Definitions::Table).
+          TABLE = Table.new(ATTACK_LOOKUP, ATTACK_GATE, ATTACK_ALWAYS_SCAN).freeze
+
+          # @return [Table] the current attack table; read once per call
+          def self.table = TABLE
+
           # True when the line cannot match any attack pattern
           def self.rejects?(line)
-            PatternGate.rejects?(ATTACK_GATE, ATTACK_ALWAYS_SCAN, line)
+            TABLE.rejects?(line)
           end
         end
       end
