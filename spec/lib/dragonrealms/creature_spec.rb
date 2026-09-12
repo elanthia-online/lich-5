@@ -404,8 +404,9 @@ RSpec.describe Lich::DragonRealms::Creature do
 
     it 'accepts a positional age and removes aged creatures' do
       old = described_class.register('an orc', 1)
-      old.instance_variable_set(:@created_at, Time.now - 10_800) # 3 hours old
+      old.instance_variable_set(:@last_seen_at, Time.now - 10_800) # unseen 3 hours
       described_class.register('a kobold', 2)
+      described_class.clear_room
 
       # A keyword-only facade would raise ArgumentError against the positional
       # base method; the fix keeps the facade positional.
@@ -419,8 +420,9 @@ RSpec.describe Lich::DragonRealms::Creature do
 
     it 'defaults to a 600s cutoff when called with no argument' do
       old = described_class.register('an orc', 1)
-      old.instance_variable_set(:@created_at, Time.now - 601)
+      old.instance_variable_set(:@last_seen_at, Time.now - 601)
       described_class.register('a kobold', 2)
+      described_class.clear_room
 
       expect(described_class.cleanup_old).to eq(1)
     end

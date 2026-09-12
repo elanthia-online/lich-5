@@ -263,16 +263,47 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature.current_room_ids).to be_empty
     end
 
-    it 'removes only instances older than the cleanup cutoff' do
+    it 'removes only instances unseen longer than the cleanup cutoff' do
       old = SampleCreature.register('old kobold', 1)
-      old.instance_variable_set(:@created_at, Time.now - 3600)
+      old.instance_variable_set(:@last_seen_at, Time.now - 3600)
       SampleCreature.register('fresh kobold', 2)
+      SampleCreature.clear_room # neither is in the current room any more
 
       removed = SampleCreature.cleanup_old(600)
 
       expect(removed).to eq(1)
       expect(SampleCreature[1]).to be_nil
       expect(SampleCreature[2]).not_to be_nil
+    end
+
+    it 'never removes a creature that is in the current room, however stale' do
+      stale = SampleCreature.register('lingering kobold', 1)
+      stale.instance_variable_set(:@last_seen_at, Time.now - 3600)
+
+      expect(SampleCreature.cleanup_old(600)).to eq(0)
+      expect(SampleCreature[1]).to equal(stale)
+    end
+
+    it 'ages against last-seen, not creation, so a long fight is not discarded' do
+      veteran = SampleCreature.register('kobold', 1)
+      veteran.instance_variable_set(:@created_at, Time.now - 3600)
+      SampleCreature.register('kobold', 1) # room refresh re-touches it
+      SampleCreature.clear_room
+
+      expect(SampleCreature.cleanup_old(600)).to eq(0)
+      expect(SampleCreature[1]).to equal(veteran)
+    end
+
+    it 'touches last-seen on re-registration and on a crtrStatus sync' do
+      creature = SampleCreature.register('kobold', 1)
+      creature.instance_variable_set(:@last_seen_at, Time.now - 3600)
+
+      SampleCreature.register('kobold', 1)
+      expect(creature.last_seen_at).to be_within(1).of(Time.now)
+
+      creature.instance_variable_set(:@last_seen_at, Time.now - 3600)
+      creature.sync_crtr_status({})
+      expect(creature.last_seen_at).to be_within(1).of(Time.now)
     end
   end
 
@@ -472,7 +503,7 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature.full?).to be true
     end
 
-    it 'refuses a newcomer when full and nothing is old enough to evict' do
+    it 'refuses a newcomer only when the registry is full of in-room creatures' do
       SampleCreature.configure(max_size: 2)
       SampleCreature.register('a', 1)
       SampleCreature.register('b', 2)
@@ -484,29 +515,62 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature[3]).to be_nil
     end
 
-    it 'evicts an aged creature to make room, then registers the newcomer' do
+    it 'evicts the least-recently-seen creature not in the room when full, even if fresh' do
       SampleCreature.configure(max_size: 2)
-      old = SampleCreature.register('old', 1)
-      old.instance_variable_set(:@created_at, Time.now - 10_800) # 3 hours old
-      SampleCreature.register('fresh', 2)
+      older = SampleCreature.register('older', 1)
+      older.instance_variable_set(:@last_seen_at, Time.now - 30)
+      SampleCreature.register('newer', 2)
+      SampleCreature.clear_room
+      SampleCreature.register('newer', 2) # only 2 is in the room now
       expect(SampleCreature.full?).to be true
 
       newcomer = SampleCreature.register('new', 3)
 
       expect(newcomer).not_to be_nil
-      expect(SampleCreature[1]).to be_nil # aged one evicted
+      expect(SampleCreature[1]).to be_nil # stalest out-of-room one evicted
+      expect(SampleCreature[2]).not_to be_nil
       expect(SampleCreature[3]).to equal(newcomer)
       expect(SampleCreature.size).to eq(2)
     end
 
-    it 'defaults cleanup_old to a 600s cutoff when called with no argument' do
-      old = SampleCreature.register('old', 1)
-      old.instance_variable_set(:@created_at, Time.now - 601)
-      SampleCreature.register('fresh', 2)
+    it 'runs housekeeping from register on a wall-clock throttle, independent of any tracker' do
+      stale = SampleCreature.register('stale', 1)
+      stale.instance_variable_set(:@last_seen_at, Time.now - 3600)
+      SampleCreature.clear_room
 
+      # First housekeeping pass already ran during the registration above, so
+      # the next call within the interval is throttled and the stale one stays.
+      SampleCreature.register('next', 2)
+      expect(SampleCreature[1]).not_to be_nil
+
+      SampleCreature.instance_variable_set(:@last_housekeeping, Time.now - 61)
+      SampleCreature.register('later', 3)
+      expect(SampleCreature[1]).to be_nil
+      expect(SampleCreature.size).to eq(2)
+    end
+
+    it 'defaults cleanup_old to the configured 600s cutoff when called with no argument' do
+      old = SampleCreature.register('old', 1)
+      old.instance_variable_set(:@last_seen_at, Time.now - 601)
+      SampleCreature.register('fresh', 2)
+      SampleCreature.clear_room
+
+      expect(SampleCreature.cleanup_max_age).to eq(600)
       expect(SampleCreature.cleanup_old).to eq(1)
       expect(SampleCreature[1]).to be_nil
       expect(SampleCreature[2]).not_to be_nil
+    end
+
+    it 'honours a configured cleanup_max_age and resets it with the other defaults' do
+      SampleCreature.configure(cleanup_max_age: 5)
+      old = SampleCreature.register('old', 1)
+      old.instance_variable_set(:@last_seen_at, Time.now - 6)
+      SampleCreature.clear_room
+
+      expect(SampleCreature.cleanup_old).to eq(1)
+
+      SampleCreature.configure
+      expect(SampleCreature.cleanup_max_age).to eq(600)
     end
   end
 

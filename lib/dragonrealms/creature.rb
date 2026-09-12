@@ -382,7 +382,8 @@ module Lich
         {
           instances: CreatureInstance.size,
           max_size: CreatureInstance.max_size,
-          auto_register: CreatureInstance.auto_register?
+          auto_register: CreatureInstance.auto_register?,
+          cleanup_max_age: CreatureInstance.cleanup_max_age
         }
       end
 
