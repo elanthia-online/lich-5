@@ -113,7 +113,7 @@ module Lich
             last_seen   REAL,
             killed_at   REAL,
             killed_by_attack_id INTEGER,
-            kill_credit TEXT,                             -- how killed_by_attack_id was chosen: 'crit' (fatal crit, ground truth) | 'window' (room-feed death inside an attack window) | 'last_own_hit' (no window: our last damaging attack on it) | NULL (unknown / pre-migration)
+            kill_credit TEXT,                             -- how killed_by_attack_id was chosen: 'crit' (fatal crit, ground truth) | 'window' (room-feed death inside an attack window) | 'last_own_hit' (no window: the last damaging attack on it was ours) | 'last_hit' (no window: the last damaging attack on it was someone else's) | NULL (unknown / pre-migration)
             UNIQUE (session_id, exist_id)
           );
 
@@ -268,6 +268,7 @@ module Lich
           # queues the id; callbacks run OUTSIDE the mutex after the public
           # call that caused the close returns.
           @session_finished_callbacks = []
+          @merged_stun_rows = Set.new # status ids that already absorbed their stun twin
           @finished_sessions = []
           @finished_to_notify = []
           @last_event_at = nil
@@ -785,10 +786,12 @@ module Lich
               touched << f_target[:id].to_i if f_target && f_target[:id]
               f_outcomes = (flare[:outcomes] || []).map(&:to_s)
               weapon = flare[:weapon].is_a?(Hash) ? flare[:weapon][:name] : flare[:weapon]
-              # A 2p flare (no attacker capture) is our item firing - on an
-              # inbound row that is our REACTIVE flare; a 3p flare names the
-              # creature's or a nearby player's item. Decided here, once.
-              f_ours = flare[:attacker].nil? && !event[:foreign_caster] ? 1 : 0
+              # A 2p flare (no attacker capture, or a first-person capture such
+              # as the "your" in "spirals from your hands") is our item firing -
+              # on an inbound row that is our REACTIVE flare; a 3p flare names
+              # the creature's or a nearby player's item. Decided here, once.
+              first_person = flare[:attacker].to_s.strip.match?(/\A(?:you|your)\z/i)
+              f_ours = (flare[:attacker].nil? || first_person) && !event[:foreign_caster] ? 1 : 0
               f_params = [attack_id, i + 1, flare[:name].to_s, flare[:damaging] ? 1 : 0,
                           f_creature, txt(weapon), f_outcomes.first, f_ours]
               @db.execute(<<~SQL, f_params)
@@ -914,13 +917,22 @@ module Lich
             stun_add = (kind == 'stun') || (kind == 'status' && status == 'stunned' && action == 'add')
             merged = false
             if stun_add && creature_row
-              twin = @db.get_first_row(<<~SQL, [@session_id, creature_row, kind == 'stun' ? 'status' : 'stun', at - STUN_PAIR_WINDOW])
+              # The twin must be the SAME swing's: same attack when both sides
+              # know theirs, no stun removal in between (a fresh application
+              # after a removal is a new stun), and a row that has already
+              # absorbed its twin is not reused for a later application.
+              twin = @db.get_first_row(<<~SQL, [@session_id, creature_row, kind == 'stun' ? 'status' : 'stun', at - STUN_PAIR_WINDOW, attack_id, attack_id, @session_id, creature_row])
                 SELECT id FROM statuses
                 WHERE session_id = ? AND creature_id = ? AND kind = ? AND status = 'stunned' AND action = 'add'
                   AND occurred_at >= ?
+                  AND (attack_id IS NULL OR ? IS NULL OR attack_id = ?)
+                  AND id > COALESCE((SELECT MAX(id) FROM statuses
+                                     WHERE session_id = ? AND creature_id = ? AND status = 'stunned' AND action = 'remove'), 0)
                 ORDER BY id DESC LIMIT 1
               SQL
+              twin = nil if twin && @merged_stun_rows.include?(twin[0])
               if twin
+                @merged_stun_rows << twin[0]
                 @db.execute(<<~SQL, [kind == 'stun' ? value : nil, attack_id, flare_id, source, twin[0]])
                   UPDATE statuses
                   SET kind = 'stun',
@@ -953,18 +965,22 @@ module Lich
               credit = attack_id ? 'window' : nil
               if credit_id.nil?
                 # No window and no event link (the death message lagged past
-                # the swing): credit our last damaging attack on it - an own
-                # swing, or our reactive flare on an inbound row - so a kill
-                # we clearly made is not reported as an assist.
-                credit_id = @db.get_first_value(<<~SQL, [creature_row, @session_id])
-                  SELECT a.id FROM hits h
+                # the swing): credit the LAST damaging attack on it from ANY
+                # source, then say whether that was ours - an own swing, or
+                # our reactive flare on an inbound row ('last_own_hit') - or
+                # someone else's ('last_hit'). Filtering to our hits first
+                # would credit our earlier hit over another player's later one.
+                last = @db.get_first_row(<<~SQL, [creature_row, @session_id])
+                  SELECT a.id, (a.ours = 1 OR COALESCE(f.ours, 0) = 1) FROM hits h
                   JOIN attacks a ON a.id = h.attack_id
                   LEFT JOIN flares f ON f.id = h.flare_id
                   WHERE h.creature_id = ? AND a.session_id = ? AND h.damage > 0
-                    AND (a.ours = 1 OR f.ours = 1)
                   ORDER BY h.id DESC LIMIT 1
                 SQL
-                credit = 'last_own_hit' if credit_id
+                if last
+                  credit_id = last[0]
+                  credit = last[1] == 1 ? 'last_own_hit' : 'last_hit'
+                end
               end
               @db.execute(<<~SQL, [at, credit_id, credit, creature_row])
                 UPDATE creatures

@@ -418,7 +418,11 @@ module Lich
               result[:target] = match[:target] if match.names.include?('target') && match[:target]
               # 3p forms name whose item flared; a 2p flare ("Your ...") has
               # no attacker and is ours - the recorder writes flares.ours off it
-              result[:attacker] = match[:attacker] if match.names.include?('attacker') && match[:attacker]
+              if match.names.include?('attacker') && (who = match[:attacker])
+                # a lazy capture can land on the FIRST-PERSON form ("from your
+                # hands" - boil_blood): that is ours, not an attacker
+                result[:attacker] = who unless who.gsub(/<[^>]*>/, '').strip =~ /\A(?:your?|yourself)\z/i
+              end
               if (weapon = WEAPON_LINK.match(line))
                 result[:weapon] = { id: weapon[:id].to_i, name: weapon[:name] }
               end
