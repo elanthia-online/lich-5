@@ -1,0 +1,68 @@
+# Combat definition supplements - example file.
+#
+# Copy this to  <Lich data directory>/combat/defs.yaml  and edit. Lich reads
+# it at login and again on  ;hmr combat/defs/  so a new pattern is live
+# without a relog or a Lich release.
+#
+# Every entry is validated on its own. A bad entry is skipped with a message
+# that names the kind, index and reason; the rest of the file still loads.
+#
+# Pattern rules
+#   - Write patterns as SINGLE-QUOTED strings so backslashes survive YAML.
+#   - Named captures are the contract with the parser:
+#       (?<target>...)   the creature or player hit
+#       (?<attacker>...) who swung, for third-person lines
+#       (?<weapon>...)   the weapon, when the line names it
+#   - Live game text arrives with XML links around names. Put {{MK_PRE}}
+#     before a bare pronoun and {{MK_POST}} after a pronoun or possessive 's
+#     and the pattern will match with or without the markup.
+#   - Reusing a shipped name ADDS patterns to it. Everything the tracker
+#     already knows about that name (damage attribution, flare flags,
+#     manoeuvre handling) applies to your lines too. That is the common
+#     case: a weapon with custom flare text, or a CMAN with unusual verbiage.
+#   - Only patterns that contain a guaranteed literal run are cheap. A
+#     pattern made only of wildcards is scanned on every line.
+#
+# Once a pattern proves out in play, please open a pull request so everyone
+# gets it.
+
+attacks:
+  # A shipped manoeuvre with custom verbiage: same name, one more pattern.
+  - name: tackle
+    slot: priority                # priority | generic | third_person
+    patterns:
+      - 'You launch yourself bodily at (?<target>.+?) and connect!'
+
+  # A genuinely new attack. Lands in the generic slot when slot: is omitted.
+  - name: ice_lance
+    patterns:
+      - 'You hurl a lance of ice at (?<target>[^!]+)!'
+
+flares:
+  # A shipped flare with bespoke text. damaging/aoe/spawns are inherited
+  # from the shipped acid flare; setting one to a different value is an
+  # error, because one name must never carry two behaviours.
+  - name: acid
+    patterns:
+      - '\*\* Your .+? spits a gob of acid at (?<target>.+?)! \*\*'
+      - '\*\* (?<attacker>.+?)''s{{MK_POST}} .+? spits a gob of acid! \*\*'
+
+  # A new flare. Omitted flags default to false.
+  - name: frost_flare
+    damaging: true
+    patterns:
+      - '\*\* Your .+? flares with frost, striking (?<target>.+?)! \*\*'
+
+statuses:
+  - name: chilled
+    add:
+      - '(?<target>.+?) shivers uncontrollably\.'
+    remove:
+      - '(?<target>.+?) stops shivering\.'
+
+outcomes:
+  # type must be one of the shipped outcome types, e.g. miss, hit, parry,
+  # block, evade, fumble, resisted, warded, unaffected.
+  - type: miss
+    patterns:
+      - 'The ice lance shatters harmlessly near (?<target>[^.]+)\.'
