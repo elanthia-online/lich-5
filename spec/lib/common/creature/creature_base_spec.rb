@@ -517,6 +517,52 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature[3]).to be_nil
     end
 
+    it 'warns once, naming the current-room condition, when refusing a newcomer' do
+      SampleCreature.configure(max_size: 1)
+      SampleCreature.instance_variable_set(:@warned_full, nil)
+      SampleCreature.register('a', 1)
+      logged = []
+      allow(Lich).to receive(:log) { |msg| logged << msg }
+
+      SampleCreature.register('b', 2)
+      SampleCreature.register('c', 3)
+
+      expect(logged.size).to eq(1)
+      expect(logged.first).to match(/registry full \(1\) with every entry in the current room/)
+    end
+
+    it 'falls back to evicting a previous-room creature when the registry fills at a room change' do
+      SampleCreature.configure(max_size: 3)
+      SampleCreature.register('a', 1)
+      SampleCreature.register('b', 2)
+      SampleCreature.register('c', 3)
+      expect(SampleCreature.full?).to be true
+
+      SampleCreature.clear_room # into a new room: 1-3 are now the previous roster
+      newcomer = SampleCreature.register('d', 4)
+
+      expect(newcomer).not_to be_nil
+      expect(SampleCreature.size).to eq(3)
+      expect(SampleCreature[4]).to equal(newcomer)
+      expect(SampleCreature.all.count { |c| [1, 2, 3].include?(c.id) }).to eq(2)
+    end
+
+    it 'still prefers evicting an unsheltered creature over a previous-room one' do
+      SampleCreature.configure(max_size: 3)
+      SampleCreature.register('a', 1)
+      SampleCreature.register('b', 2)
+      SampleCreature.clear_room
+      SampleCreature.clear_room # 1 and 2 are neither in the room nor the previous roster
+      SampleCreature.register('c', 3)
+      SampleCreature.clear_room # 3 is the previous roster
+
+      SampleCreature.register('d', 4)
+
+      expect(SampleCreature[3]).not_to be_nil
+      expect(SampleCreature[4]).not_to be_nil
+      expect([SampleCreature[1], SampleCreature[2]].compact.size).to eq(1)
+    end
+
     it 'evicts the least-recently-seen creature not in the room when full, even if fresh' do
       SampleCreature.configure(max_size: 2)
       older = SampleCreature.register('older', 1)

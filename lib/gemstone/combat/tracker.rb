@@ -61,6 +61,12 @@ module Lich
           fallback_max_hp: 350      # Default max HP when template unavailable
         }.freeze
 
+        # Settings this tracker no longer reads. Dropped from persisted
+        # settings on load so they neither linger in stats nor get re-saved.
+        # Creature registry retention now lives on the registry itself:
+        # Creature.configure(cleanup_max_age:).
+        RETIRED_SETTINGS = %i[cleanup_interval cleanup_max_age].freeze
+
         class << self
           attr_reader :settings, :buffer
 
@@ -312,7 +318,7 @@ module Lich
             # Load from DB_Store with per-character scope
             scope = "#{XMLData.game}:#{XMLData.name}"
             stored_settings = Lich::Common::DB_Store.read(scope, 'lich_combat_tracker')
-            @settings = DEFAULT_SETTINGS.merge(stored_settings)
+            @settings = DEFAULT_SETTINGS.merge(stored_settings.reject { |key, _| RETIRED_SETTINGS.include?(key.to_sym) })
           end
 
           def save_settings

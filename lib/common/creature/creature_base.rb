@@ -191,8 +191,8 @@ module Lich
         # Combat::Tracker (off by default) ever calls {#cleanup_old}.
         #
         # @return [Object, nil] the registered instance, or nil when
-        #   auto-registration is disabled or the registry is full of in-room
-        #   creatures.
+        #   auto-registration is disabled or the registry is full of creatures
+        #   in the current room.
         def register(name, id, noun = nil)
           # Record room presence first: the feed event that triggers this call
           # (a bolded room-object name or a <crtrStatus> tag) is itself proof the
@@ -345,12 +345,21 @@ module Lich
 
         # Evicts the least-recently-seen instance that is not in the room.
         #
+        # The previous room's roster is a soft shelter here: it exists only
+        # to cover the mid-refresh window (see {#sheltered_ids}), so when the
+        # registry is full and nothing else is evictable, a previous-room
+        # creature goes before the newcomer is refused. Without that fallback
+        # a registry filled at the moment of a room change would refuse
+        # every creature in the new room until the next refresh. Only the
+        # live roster is untouchable.
+        #
         # @return [Object, nil] the evicted instance, or nil when every
         #   instance is in the current room.
         def evict_stalest
-          shelter = sheltered_ids
-          id, instance = instances
-                         .reject { |candidate_id, _| shelter.include?(candidate_id) }
+          previous = @previous_room_ids || []
+          candidates = instances.reject { |id, _| room_roster.include?(id) }
+          preferred = candidates.reject { |id, _| previous.include?(id) }
+          id, instance = (preferred.empty? ? candidates : preferred)
                          .min_by { |_, candidate| candidate.last_seen_at }
           return nil unless id
 
@@ -359,14 +368,20 @@ module Lich
           instance
         end
 
-        # Logs once per process that the registry is full of in-room creatures.
+        # Logs once per process that the registry is full of creatures in the
+        # current room.
         #
         # @return [void]
         def warn_full_once
           return if @warned_full
 
           @warned_full = true
-          Lich.log "#{name}: creature registry full (#{max_size}) with every entry in the current room; new creatures are not being tracked" if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log full_warning if defined?(Lich) && Lich.respond_to?(:log)
+        end
+
+        # @return [String] the {#warn_full_once} message.
+        def full_warning
+          "#{name}: creature registry full (#{max_size}) with every entry in the current room; new creatures are not being tracked"
         end
 
         # Configures registry limits.
