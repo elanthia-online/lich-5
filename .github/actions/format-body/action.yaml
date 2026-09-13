@@ -57,10 +57,11 @@ runs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         MODE: ${{ inputs.mode }}
-        # Bumped for the pull-link-vs-issue-link harvest fix below; this invalidates the
-        # sentinel on any already-formatted, still-open RP PR so it gets reformatted with
-        # the fix instead of being skipped by the old, matching sentinel.
-        CONTRACT_SHA: "2aa1c6bdb379fa50f77ca249ac4a19f7eef93e606f77d61dcbf1fc14107891a5"
+        # Bumped again: the prior fix assumed the real PR used a "/pull/" link, but RP renders
+        # every reference (issue or PR) as "/issues/"; taking the LAST "#NNN" match is the
+        # correct signal. Bump invalidates the sentinel on any already-formatted, still-open
+        # RP PR so it gets reformatted with the fix instead of being skipped.
+        CONTRACT_SHA: "699e8e7e66d93612c64757d672ffcca2db94e9c051060144e7c1a1d3fc29d2f6"
         BREAK_AUTO: ${{ inputs.break_autolinks_in_bullets }}
         PR_NUMBER: ${{ inputs.pr_number }}
       with:
@@ -125,16 +126,21 @@ runs:
           // ---------------------------------------------------------
 
           // Harvest PR numbers from existing RP bullets (lines starting with '* ' and containing '#NNN').
-          // RP bullets that close an issue link BOTH the issue and the merging PR, e.g.:
-          //   * **all:** desc ([#1596](.../issues/1596)) ([#1599](.../pull/1599)) ([sha](...))
-          // Prefer a "/pull/<N>" link (the actual PR, which pulls.get() below can resolve) over
-          // a bare "#<N>" match, which would grab the issue number first and 404 on pulls.get().
+          // RP renders every "#NNN" it finds in the merge commit subject as an "/issues/NNN"
+          // link -- it never distinguishes issues from PRs by URL shape, so both look identical.
+          // When a PR's own title references the issue it closes (e.g. "fix(all): ... (#1596)"),
+          // GitHub's squash-merge appends the *real* merging PR number as the final "(#NNN)"
+          // token in the commit subject: "fix(all): ... (#1596) (#1599)". RP then emits both as
+          // links in that same left-to-right order:
+          //   * **all:** desc ([#1596](.../issues/1596)) ([#1599](.../issues/1599)) ([sha](...))
+          // The commit-sha link has no leading "#" so it never matches here. Taking the LAST
+          // "#NNN" match (not the first) reliably gets the real PR number, since GitHub always
+          // appends it last; pulls.get() below then resolves it instead of 404ing on the issue.
           const prNums = [];
           for (const l of body.split(/\r?\n/)) {
             if (/^\s*\*\s+/.test(l)) {
-              const pullLink = l.match(/\(https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)\)/);
-              const m = pullLink || l.match(/#(\d+)/);
-              if (m) prNums.push(parseInt(m[1], 10));
+              const matches = [...l.matchAll(/#(\d+)/g)];
+              if (matches.length) prNums.push(parseInt(matches[matches.length - 1][1], 10));
             }
           }
           // De-dupe in encounter order
