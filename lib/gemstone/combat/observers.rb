@@ -42,6 +42,21 @@
 #                 cleanup, not meaningful expiry), or nil (natural
 #                 expiry, or cause not visible in this chunk)
 #
+# Message events (defs/messages.rb, delivered by Combat::Messages; every
+# payload also carries :raw, the line). Scanned only while subscribed:
+#   :disarm_seen  { kind: :recover|:telekinetic_recover|:recover_weapon_webbing, noun: }
+#   :sanctum_transform { noun: }
+#   :itchy_curse, :infected_wound, :entangled   {}
+#   :hive_trap    { kind: :apparatus|:ground }
+#   :ambusher     { noun: }  (nil for the shadowy figure)
+#   :bolted       {}
+#   :rooted / :unrooted  { id: } (the snake's), :item_limit {}
+#   :bless_shrugged / :bless_expired  { id:, noun: }
+#   :arrow_stuck  { id:, where: }, :aiming { where: } (nil when cleared),
+#   :bond_return  { what: }
+#   :haze_703 / :rebuke_1614  { id:, on: }, :swift_justice { charges: },
+#   :arcane_reflex { active: }, :weapon_reaction { reaction: }
+#
 # @example
 #   Combat::Tracker.on(:damage) { |type, data| my_queue << data }
 #   handler = Combat::Tracker.on(:status, :wound) { |type, data| ... }
@@ -54,8 +69,17 @@ module Lich
         @mutex = Mutex.new
         @subscribers = Hash.new { |h, k| h[k] = [] }
         @named = {}
+        @on_change = []
 
         class << self
+          # A block run after every subscription change (on, off, clear!):
+          # how Combat::Messages learns which families to scan. Errors are
+          # isolated the way subscriber errors are.
+          def on_change(&block)
+            @mutex.synchronize { @on_change << block }
+            block
+          end
+
           # Subscribe to one or more event types (or :any for everything).
           # Returns the block; keep it to unsubscribe via .off.
           #
@@ -75,6 +99,7 @@ module Lich
               end
               types.each { |t| @subscribers[t.to_sym] << block }
             end
+            changed
             block
           end
 
@@ -90,6 +115,7 @@ module Lich
               @named.delete_if { |_, h| h == handler }
               @subscribers.each_value { |list| list.delete(handler) } if handler
             end
+            changed
             nil
           end
 
@@ -115,6 +141,20 @@ module Lich
             @mutex.synchronize do
               @subscribers.clear
               @named.clear
+            end
+            changed
+          end
+
+          private
+
+          def changed
+            callbacks = @mutex.synchronize { @on_change.dup }
+            callbacks.each do |cb|
+              begin
+                cb.call
+              rescue StandardError => e
+                Lich.log "error: Combat::Observers on_change: #{e.message}\n\t#{e.backtrace&.first}"
+              end
             end
           end
         end
