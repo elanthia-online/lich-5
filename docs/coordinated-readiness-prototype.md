@@ -33,6 +33,40 @@ callbacks and World readers; this does not copy DR's script-specific loader or
 invent a second plugin registry. One completed-tick notification is added because
 the existing `on_tick` fires before the action, not after it.
 
+## Cross-consumer architecture boundary
+
+An independent, production-tested DragonRealms consumer pressure-tested this
+prototype against a third coordination shape: leaderless allocation of contended
+resources through acquire, renew, release, expiry and reclaim. That experience
+supports complete operation identity, conservative unknown state, generation
+fences and explicit reconciliation. It also exposes two boundaries that this
+prototype must not accidentally freeze incorrectly.
+
+First, the fixed `room` and `readiness` projection in this branch is an
+EOHunter-specific experimental Adapter, not the eventual game-neutral core
+observation schema. A promotable observation envelope needs producer/session
+incarnation, source name, source generation and sequence, capture boundary,
+freshness in the producer's clock domain, and explicit per-field coherence.
+GemStone room epochs and combat provenance are possible source Adapters; a DR
+consumer may supply a different coherent source. Polling either one must not
+freshen it.
+
+Second, the loopback ActiveSessions endpoint is the transport Adapter exercised
+here, not the semantic definition of coordination. A consumer with an existing
+same-host or cross-host backend should be able to adopt the identity, freshness
+and reconciliation contract without adopting this socket implementation. This
+branch deliberately does not add Redis, remote transport or a generic plugin
+loader; it records the seam that a later implementation must preserve.
+
+Long-lived resource leases are likewise outside this read-only slice. They are
+not authorization grants and are not one-shot operation receipts. If promoted,
+they belong in a sibling `Leases` Interface whose core contract owns lease
+identity, renewal, expiry, release, reclaim eligibility and a monotonically
+increasing fencing generation. Consumer code continues to own eligibility,
+preference and recovery policy, while the selected storage Adapter must provide
+atomic compare-and-claim. Leaderless policy does not remove the need for one
+serialization authority at the storage seam.
+
 ## Contract
 
 `Lich::InternalAPI::Coordination` is explicitly required by the pilot, never by
@@ -138,11 +172,14 @@ overhead and long-run CPU/memory stability still need measurement before any
 live pilot. Four admitted clients are the enforced concurrency bound, not a
 measured claim about the kernel's listen backlog.
 
-Before slice C: maintainer agreement on coherent native projections, longer
-stalled-publisher/availability measurements, separately reviewed operation
-contracts and authorization. Before generic core promotion: a real LAB contract
-test plus code deletion demonstrating the second-consumer benefit. No writes or
-live trial are silently enabled by completing this prototype.
+Before slice C: maintainer agreement on a game-neutral coherent observation
+envelope and its first native writer, longer stalled-publisher/availability
+measurements, separately reviewed operation contracts and authorization. Before
+generic core promotion: a real LAB contract test plus code deletion demonstrating
+the second-consumer benefit, and paper validation that the contract does not
+preclude the DR claim/lease consumer. A public lease implementation is a later,
+separately approved slice. No writes or live trial are silently enabled by
+completing this prototype.
 
 Rollback: do not require/attach the optional module. The live installation has
 not been changed; both worktrees remain separate from running game sessions.
