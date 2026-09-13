@@ -2,6 +2,9 @@
 
 require 'json'
 require 'socket'
+require 'ipaddr'
+
+require_relative 'bounded_frame'
 
 module Lich
   module InternalAPI
@@ -22,13 +25,21 @@ module Lich
         # @param host [String]
         # @param port [Integer]
         # @param auth_token [String]
-        # @param socket_factory [#call] builds a connected client socket
+        # @param socket_factory [#call] builds a connected client socket; in
+        #   bounded mode must honor the supplied absolute monotonic deadline:
+        #   keyword and close any socket it cannot return
+        # @param max_frame_bytes [Integer, nil] optional request/response byte cap
+        # @param timeout [Numeric, nil] total connect/write/read deadline seconds
         # @return [void]
-        def initialize(host:, port:, auth_token:, socket_factory: nil)
+        def initialize(host:, port:, auth_token:, socket_factory: nil, max_frame_bytes: nil, timeout: nil)
           @host = host
           @port = port
           @auth_token = auth_token
-          @socket_factory = socket_factory || ->(connect_host, connect_port) { TCPSocket.new(connect_host, connect_port) }
+          @bounded = !max_frame_bytes.nil? || !timeout.nil?
+          @max_frame_bytes = max_frame_bytes.nil? ? BoundedFrame::DEFAULT_MAX_BYTES : max_frame_bytes
+          @timeout = timeout.nil? ? READ_TIMEOUT : timeout
+          BoundedFrame.validate!(@timeout, @max_frame_bytes) if @bounded
+          @socket_factory = socket_factory || (@bounded ? method(:connect_bounded) : ->(connect_host, connect_port) { TCPSocket.new(connect_host, connect_port) })
         end
 
         # Sends a raw command payload to the active sessions service.
@@ -37,6 +48,8 @@ module Lich
         # @param payload [Hash] request-specific payload
         # @return [Hash] parsed response payload or a normalized error hash
         def request(command, payload = {})
+          return bounded_request(command, payload) if @bounded
+
           socket = @socket_factory.call(@host, @port)
           socket.write(JSON.dump(command: command, auth: @auth_token, payload: payload) + "\n")
           raw = read_response(socket)
@@ -83,6 +96,52 @@ module Lich
         end
 
         private
+
+        # Connects only to a numeric address, avoiding unbounded DNS resolution.
+        # Coordination supplies a loopback address; legacy hostname support is
+        # unchanged when bounds are absent.
+        # @param host [String] numeric IP address
+        # @param port [Integer] TCP port
+        # @param deadline [Numeric] absolute local monotonic deadline
+        # @return [Socket] connected socket
+        def connect_bounded(host, port, deadline:)
+          address = Addrinfo.tcp(IPAddr.new(host).to_s, port)
+          socket = Socket.new(address.afamily, Socket::SOCK_STREAM, 0)
+          result = socket.connect_nonblock(address, exception: false)
+          if result == :wait_writable
+            raise IOError, 'transport timeout' unless IO.select(nil, [socket], nil, BoundedFrame.remaining(deadline))
+
+            error = socket.getsockopt(Socket::SOL_SOCKET, Socket::SO_ERROR).int
+            raise SystemCallError.new('connect', error) unless error.zero?
+          end
+          BoundedFrame.remaining(deadline)
+          socket
+        rescue StandardError
+          socket&.close rescue nil
+          raise
+        end
+
+        # Sends one request with a deadline shared by connection, write and read.
+        # @param command [String] protocol command
+        # @param payload [Hash] request data
+        # @return [Hash] protocol response or normalized error
+        def bounded_request(command, payload)
+          deadline = BoundedFrame.now + @timeout
+          frame = JSON.dump(command: command, auth: @auth_token, payload: payload) + "\n"
+          raise IOError, 'frame too large' if frame.bytesize > @max_frame_bytes
+
+          socket = @socket_factory.call(@host, @port, deadline: deadline)
+          BoundedFrame.write(socket, frame, deadline: deadline, max_bytes: @max_frame_bytes)
+          raw = BoundedFrame.read(socket, deadline: deadline, max_bytes: @max_frame_bytes)
+          response = JSON.parse(raw, symbolize_names: true, max_nesting: 16)
+          return { ok: false, error: 'invalid response type' } unless response.is_a?(Hash)
+
+          response
+        rescue StandardError => e
+          { ok: false, error: e.message }
+        ensure
+          socket&.close rescue nil
+        end
 
         # Reads a single newline-terminated JSON response without allowing
         # partial frames to block indefinitely.
