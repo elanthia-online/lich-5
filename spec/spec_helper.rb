@@ -95,6 +95,14 @@ RSpec.configure do |config|
     # cross-file leakage). Specs that need a clean slate still call reset! themselves.
     Lich::Gemstone::Infomon.flush if defined?(Lich::Gemstone::Infomon) && Lich::Gemstone::Infomon.respond_to?(:flush)
 
+    # Lich::Common::Account state (class-level accessors leak across specs)
+    if defined?(Lich::Common::Account)
+      Lich::Common::Account.name = nil if Lich::Common::Account.respond_to?(:name=)
+      Lich::Common::Account.game_code = nil if Lich::Common::Account.respond_to?(:game_code=)
+      Lich::Common::Account.character = nil if Lich::Common::Account.respond_to?(:character=)
+      Lich::Common::Account.subscription = nil if Lich::Common::Account.respond_to?(:subscription=)
+    end
+
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
 
