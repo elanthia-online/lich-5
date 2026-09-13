@@ -431,3 +431,5 @@ module Lich
     end
   end
 end
+
+require_relative 'coordination/operations'
