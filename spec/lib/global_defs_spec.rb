@@ -26,8 +26,8 @@ RSpec.describe '#fput' do
     #   max_resends:      how many times a refusal ("...wait 3", "struggle to
     #                     stand", stunned) may trigger a resend before giving
     #                     up (nil, the original: unbounded)
-    #   interrupt:        a callable checked on every wait; true ends the
-    #                     send at once (nil: never)
+    #   interrupt:        a callable checked on every wait and before every
+    #                     resend; true ends the send at once (nil: never)
     #   resend_transient: on a transient refusal that is not a stun or a
     #                     web (a "can't seem", "don't seem"), resend after a
     #                     quarter second instead of giving up (false, the
@@ -41,6 +41,9 @@ RSpec.describe '#fput' do
     timeout = option.call(:timeout) || 60
     max_resends = option.call(:max_resends)
     interrupt = option.call(:interrupt)
+    unless interrupt.nil? || interrupt.respond_to?(:call)
+      raise ArgumentError, "fput: interrupt: must respond to call"
+    end
     resend_transient = option.call(:resend_transient) ? true : false
     symbols = option.call(:failures) == :symbol
     fail_with = ->(reason) { symbols ? reason : false }
@@ -61,6 +64,9 @@ RSpec.describe '#fput' do
       false
     end
     resends = 0
+    # true after 'stand' went out and before its reply came back; the reply
+    # is not the answer to message, so message goes out again on top of it
+    standing = false
     # a refusal that asks for a resend: false when the cap allows it
     over_cap = lambda do
       resends += 1
@@ -93,16 +99,21 @@ RSpec.describe '#fput' do
         hold_up = Regexp.last_match[:wait_time].to_i
         return fail_with.call(:interrupted) if wait.call(hold_up)
 
+        standing = false
         clear
         put(message)
         next
       elsif string =~ /^You.+struggle.+stand/
+        # stand in this frame, under the same cap and interrupt, instead of
+        # a nested fput('stand') that started its own count and could not
+        # be interrupted; a persistent struggle recursed until the stack
+        # gave out
         return fail_with.call(:too_many_resends) if over_cap.call
+        return fail_with.call(:interrupted) if interrupted.call
 
+        standing = true
         clear
-        stood = fput('stand', options)
-        return stood if symbols && stood.is_a?(Symbol)
-
+        put('stand')
         next
       elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
         if dead?
@@ -123,16 +134,27 @@ RSpec.describe '#fput' do
             sleep("0.25".to_f)
           end
         elsif string =~ /Sorry, you may only type ahead/
-          sleep 1
+          return fail_with.call(:interrupted) if wait.call(1)
         elsif resend_transient
-          sleep 0.25
+          return fail_with.call(:interrupted) if wait.call(0.25)
         else
           sleep 0.1
           script.downstream_buffer.unshift(string)
           return fail_with.call(:refused)
         end
-        return fail_with.call(:too_many_resends) if over_cap.call
+        if over_cap.call
+          script.downstream_buffer.unshift(string)
+          return fail_with.call(:too_many_resends)
+        end
 
+        standing = false
+        clear
+        put(message)
+        next
+      elsif standing
+        # the reply to 'stand' ("You stand back up.", "You are already
+        # standing"): message went unanswered, send it again
+        standing = false
         clear
         put(message)
         next
@@ -339,6 +361,48 @@ RSpec.describe '#fput' do
     it 'counts a waitingfor miss as a resend' do
       stub_game_responses('no', 'no', 'no', 'You pick up a sword.')
       expect(fput('get sword', 'You pick up', max_resends: 1, failures: :symbol)).to eq(:too_many_resends)
+    end
+
+    it 'stands in the same frame and resends the message once up' do
+      stub_game_responses('You struggle to stand.', 'You stand back up.', 'You pick up a sword.')
+      expect(self).to receive(:put).with('get sword').ordered
+      expect(self).to receive(:put).with('stand').ordered
+      expect(self).to receive(:put).with('get sword').ordered
+
+      expect(fput('get sword')).to eq('You pick up a sword.')
+    end
+
+    it 'caps a persistent struggle to stand' do
+      allow(self).to receive(:get?).and_return('You struggle to stand.')
+      expect(self).to receive(:put).with('stand').exactly(3).times
+
+      expect(fput('get sword', max_resends: 3, failures: :symbol)).to eq(:too_many_resends)
+    end
+
+    it 'honors the interrupt on a persistent struggle to stand' do
+      allow(self).to receive(:get?).and_return('You struggle to stand.')
+
+      expect(fput('get sword', interrupt: -> { true }, failures: :symbol)).to eq(:interrupted)
+      expect(fput('get sword', interrupt: -> { true })).to eq(false)
+    end
+
+    it 'honors the interrupt during the type-ahead and transient waits' do
+      stub_game_responses('Sorry, you may only type ahead 1 command.', 'OK.')
+      expect(fput('get sword', interrupt: -> { true }, failures: :symbol)).to eq(:interrupted)
+
+      stub_game_responses("You can't seem to do that.", 'OK.')
+      expect(fput('get sword', resend_transient: true, interrupt: -> { true }, failures: :symbol)).to eq(:interrupted)
+    end
+
+    it 'surfaces the last refusal when resend_transient gives up' do
+      stub_game_responses("You can't seem to do that.", "You can't seem to do that.", 'OK.')
+
+      expect(fput('get sword', resend_transient: true, max_resends: 1, failures: :symbol)).to eq(:too_many_resends)
+      expect(downstream_buffer).to eq(["You can't seem to do that."])
+    end
+
+    it 'rejects an interrupt that cannot be called' do
+      expect { fput('get sword', interrupt: true) }.to raise_error(ArgumentError, /interrupt/)
     end
   end
 

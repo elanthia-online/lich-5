@@ -1690,8 +1690,8 @@ def fput(message, *waitingfor)
   #   max_resends:      how many times a refusal ("...wait 3", "struggle to
   #                     stand", stunned) may trigger a resend before giving
   #                     up (nil, the original: unbounded)
-  #   interrupt:        a callable checked on every wait; true ends the
-  #                     send at once (nil: never)
+  #   interrupt:        a callable checked on every wait and before every
+  #                     resend; true ends the send at once (nil: never)
   #   resend_transient: on a transient refusal that is not a stun or a
   #                     web (a "can't seem", "don't seem"), resend after a
   #                     quarter second instead of giving up (false, the
@@ -1705,6 +1705,9 @@ def fput(message, *waitingfor)
   timeout = option.call(:timeout) || 60
   max_resends = option.call(:max_resends)
   interrupt = option.call(:interrupt)
+  unless interrupt.nil? || interrupt.respond_to?(:call)
+    raise ArgumentError, "fput: interrupt: must respond to call"
+  end
   resend_transient = option.call(:resend_transient) ? true : false
   symbols = option.call(:failures) == :symbol
   fail_with = ->(reason) { symbols ? reason : false }
@@ -1725,6 +1728,9 @@ def fput(message, *waitingfor)
     false
   end
   resends = 0
+  # true after 'stand' went out and before its reply came back; the reply
+  # is not the answer to message, so message goes out again on top of it
+  standing = false
   # a refusal that asks for a resend: false when the cap allows it
   over_cap = lambda do
     resends += 1
@@ -1757,16 +1763,21 @@ def fput(message, *waitingfor)
       hold_up = Regexp.last_match[:wait_time].to_i
       return fail_with.call(:interrupted) if wait.call(hold_up)
 
+      standing = false
       clear
       put(message)
       next
     elsif string =~ /^You.+struggle.+stand/
+      # stand in this frame, under the same cap and interrupt, instead of
+      # a nested fput('stand') that started its own count and could not
+      # be interrupted; a persistent struggle recursed until the stack
+      # gave out
       return fail_with.call(:too_many_resends) if over_cap.call
+      return fail_with.call(:interrupted) if interrupted.call
 
+      standing = true
       clear
-      stood = fput('stand', options)
-      return stood if symbols && stood.is_a?(Symbol)
-
+      put('stand')
       next
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
@@ -1787,16 +1798,27 @@ def fput(message, *waitingfor)
           sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
-        sleep 1
+        return fail_with.call(:interrupted) if wait.call(1)
       elsif resend_transient
-        sleep 0.25
+        return fail_with.call(:interrupted) if wait.call(0.25)
       else
         sleep 0.1
         script.downstream_buffer.unshift(string)
         return fail_with.call(:refused)
       end
-      return fail_with.call(:too_many_resends) if over_cap.call
+      if over_cap.call
+        script.downstream_buffer.unshift(string)
+        return fail_with.call(:too_many_resends)
+      end
 
+      standing = false
+      clear
+      put(message)
+      next
+    elsif standing
+      # the reply to 'stand' ("You stand back up.", "You are already
+      # standing"): message went unanswered, send it again
+      standing = false
       clear
       put(message)
       next
