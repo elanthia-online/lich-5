@@ -9,15 +9,51 @@ This is the request-lifecycle slice that follows the read-only coordinated
 sessions prototype in PR #1613. It is intentionally stacked on that branch so
 review of PRs #1612 and #1613 does not block further design validation.
 
-The module reuses the bounded loopback `ActiveSessions::Server` and
-`ActiveSessions::Client`. It adds one explicit control grant between two exact
-session identities, a bounded request/receipt store, and an owner-thread
-mailbox. It does not add a broker, shared Ruby interpreter, Redis dependency,
-remote eval, raw game-command route, script-start route, or hunting policy.
+The current transport Adapter reuses the bounded loopback
+`ActiveSessions::Server` and `ActiveSessions::Client`. It adds one explicit
+control grant between two exact session identities, a bounded request/receipt
+store, and an owner-thread mailbox. The operation identity, argument digest,
+receipt and reconciliation semantics are not defined in terms of loopback; a
+future transport Adapter may preserve that contract without using this socket
+implementation. This slice does not add a broker, shared Ruby interpreter,
+Redis dependency, remote eval, raw game-command route, script-start route, or
+hunting policy.
 
 The first exercised operation is synthetic. A test owner takes a `probe` or
 `hold` request and explicitly records the result; no game state or script is
 touched. EOHunter and LAB adapters are separate follow-up changes.
+
+## Operations are not resource leases
+
+Independent DragonRealms production experience adds a third consumer shape to
+the design review: leaderless processes contend for exclusive resources, hold
+them over time, renew them and reclaim them after an owner disappears. It
+confirms the value of generation-bound IDs, immutable argument digests,
+tombstones and conservative unknown outcomes, but it is not the lifecycle this
+module implements.
+
+The architecture therefore distinguishes three sibling Interfaces:
+
+- `Observations` publish bounded facts with source generation, sequence,
+  freshness and explicit coherence.
+- `Operations` deliver discrete requests and retain admission, outcome and
+  cleanup receipts. This branch implements only this Interface.
+- `Leases` would represent long-lived exclusive ownership through acquire,
+  renew, release, expiry, reclaim and a monotonically increasing fencing
+  generation. It requires separate design and approval.
+
+An operation authorization grant says which peer may request named work. It
+does not claim or renew a shared resource. Grant expiry rejects or cooperatively
+cancels work according to the operation contract; it must not be reused as
+proof that a resource was released. Conversely, lease expiry makes a new claim
+eligible but does not prove that the former holder completed physical cleanup.
+
+If a `Leases` Interface is added, core should own the mechanical lifecycle and
+fencing semantics, consumers should own eligibility, preference and recovery
+policy, and the configured storage Adapter should own atomic compare-and-claim.
+A same-host Adapter may use native file/service primitives; a cross-host DR
+plugin may use its existing backend. Neither transport nor allocation policy is
+introduced by this PR.
 
 ## Module interface
 
@@ -127,6 +163,7 @@ untrusted-plugin operation require a different threat model.
 - No subscription/event stream is added.
 - No automatic retry is performed by the client.
 - No persistent receipt store survives process replacement.
+- No resource lease lifecycle, arbitration store or leader election is added.
 - No consumer-specific readiness, movement, combat, safe-room or recovery
   meaning is defined in Lich.
 - No Script lifecycle registry is duplicated. Later adapters retain exact
