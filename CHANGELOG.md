@@ -1,5 +1,43 @@
 # Changelog
 
+## [5.22.0](https://github.com/elanthia-online/lich-5/compare/v5.21.0...v5.22.0) (2026-09-13)
+
+
+### Features
+
+* **all:** add static-only map route selection ([#1577](https://github.com/elanthia-online/lich-5/issues/1577)) ([6ef113d](https://github.com/elanthia-online/lich-5/commit/6ef113d5a9bd783f005a74f4ee4aa31bbae2f32c))
+* **all:** Spell.results_regex, the lines cast waits on, exposed ([#1590](https://github.com/elanthia-online/lich-5/issues/1590)) ([4428629](https://github.com/elanthia-online/lich-5/commit/442862907a7d3c16c2fee4e7b0ab022ad379c9d4))
+* **gs:** add trustworthy combat observation provenance ([#1576](https://github.com/elanthia-online/lich-5/issues/1576)) ([5e335b9](https://github.com/elanthia-online/lich-5/commit/5e335b91d76600c145121608757aac9d537d0863))
+* **gs:** Combat::Messages - non-combat message families as observer events ([#1586](https://github.com/elanthia-online/lich-5/issues/1586)) ([876987d](https://github.com/elanthia-online/lich-5/commit/876987d2e68d895054cfbd521e6a3bec4f899860))
+* **gs:** emit post-commit combat recorder receipts ([#1592](https://github.com/elanthia-online/lich-5/issues/1592)) ([3342837](https://github.com/elanthia-online/lich-5/commit/3342837fe78cd8965d20525464913c66218ea853))
+* **gs:** Group.join, the follower's side of Group.add ([#1591](https://github.com/elanthia-online/lich-5/issues/1591)) ([0d20f04](https://github.com/elanthia-online/lich-5/commit/0d20f04096e1464bd647f784be0b88693bd9df64))
+* **gs:** Lich::Gemstone::Bank, Currency refresh, and WEALTH parser lines ([#1581](https://github.com/elanthia-online/lich-5/issues/1581)) ([0229fdf](https://github.com/elanthia-online/lich-5/commit/0229fdf68e4475124e49cb6d552f97e03bd75c69))
+* **gs:** Lich::Gemstone::Fog, the ways home on the spell and society readers ([#1584](https://github.com/elanthia-online/lich-5/issues/1584)) ([1623af2](https://github.com/elanthia-online/lich-5/commit/1623af2e5a5950af1c9dd13d6fdba4d0f0a77e86))
+* **gs:** Lich::Gemstone::Stance, a shared stance setter ([#1578](https://github.com/elanthia-online/lich-5/issues/1578)) ([0e7a13b](https://github.com/elanthia-online/lich-5/commit/0e7a13b4c23340720530e64a2d48bbc3086927d8))
+* **gs:** Lich::Stash.wield and Stash.hands put named items into hands ([#1579](https://github.com/elanthia-online/lich-5/issues/1579)) ([3e50dc9](https://github.com/elanthia-online/lich-5/commit/3e50dc9d9f4e26183aa71943b408b3072aa596eb))
+* **gs:** PSM command and results_regex readers, factored out of use ([#1583](https://github.com/elanthia-online/lich-5/issues/1583)) ([4bdb3af](https://github.com/elanthia-online/lich-5/commit/4bdb3af4ed4de9114535e33fe84a52ff62b5f79f))
+* **gs:** society command readers, factored out of use ([#1589](https://github.com/elanthia-online/lich-5/issues/1589)) ([a2d8436](https://github.com/elanthia-online/lich-5/commit/a2d8436007311921f9d7925d05e6f9ee89953aa9))
+
+
+### Bug Fixes
+
+* **all:** creatures registry housekeeping independent of Combat::Tracker ([#1603](https://github.com/elanthia-online/lich-5/issues/1603)) ([13d4b1f](https://github.com/elanthia-online/lich-5/commit/13d4b1f6681f11b737df113c7a961fb4f39e3b93))
+* **all:** setup_files uses content hash for cache freshness ([#1596](https://github.com/elanthia-online/lich-5/issues/1596)) ([#1599](https://github.com/elanthia-online/lich-5/issues/1599)) ([4968e45](https://github.com/elanthia-online/lich-5/commit/4968e45e92a239a375677e0f4767a67085925089))
+* **gs:** catalog missing deity-specific strike lines for Divine Wrath (335) ([#1598](https://github.com/elanthia-online/lich-5/issues/1598)) ([b79ceaf](https://github.com/elanthia-online/lich-5/commit/b79ceafe96a60c6b2ca8f711d86a4133afbad87f))
+* **gs:** combat module - a stand-up message later in the chunk outranks an earlier knockdown crit ([#1595](https://github.com/elanthia-online/lich-5/issues/1595)) ([1bfa069](https://github.com/elanthia-online/lich-5/commit/1bfa069cfc37af67f77f8750113c0d52105d5943))
+* **gs:** combat module - hunt-log audit: interrupted-swing resume, status attribution by event, spell-loss cause, live defs ([#1593](https://github.com/elanthia-online/lich-5/issues/1593)) ([6e49803](https://github.com/elanthia-online/lich-5/commit/6e49803506e012aab31684eb1c080fedb2316897))
+* **gs:** combat module - Rysk/Dreadt log audit: Holy Weapon release model, held maneuver rolls, AoE roll attribution, live defs ([#1600](https://github.com/elanthia-online/lich-5/issues/1600)) ([ad35837](https://github.com/elanthia-online/lich-5/commit/ad3583780853dd2e8080977f9f48e6a7557b2dd3))
+* **gs:** Group.broken? waits on Lich::Claim::Lock, the constant that exists ([#1588](https://github.com/elanthia-online/lich-5/issues/1588)) ([82b19fd](https://github.com/elanthia-online/lich-5/commit/82b19fd1e56268e0571d2c1cde2ec40e16bea89b))
+* **gs:** infomon - a spell's start message refreshes a refreshable timer ([#1585](https://github.com/elanthia-online/lich-5/issues/1585)) ([8a08f26](https://github.com/elanthia-online/lich-5/commit/8a08f260036997400fc7aacb0e29b90894b33714))
+* **gs:** Injured cache lives on the class and keys on an injury fingerprint ([#1582](https://github.com/elanthia-online/lich-5/issues/1582)) ([120d0f3](https://github.com/elanthia-online/lich-5/commit/120d0f3f5f55db8ffb29ba63d847d5b92f3fef88))
+* **gs:** QStrike prices MSTRIKE's own stamina cost ([#1594](https://github.com/elanthia-online/lich-5/issues/1594)) ([b9df96c](https://github.com/elanthia-online/lich-5/commit/b9df96c4590dc90dc6b7d773f20bbb293d363820))
+* **gs:** track spell cooldowns on the characters a spell locks out ([#1597](https://github.com/elanthia-online/lich-5/issues/1597)) ([f13df81](https://github.com/elanthia-online/lich-5/commit/f13df81bd0f7a55d121f57c03e11db7f2c6180a7))
+
+
+### Refactoring
+
+* **all:** extract UserDefs from DragonRealms CustomSubstitutions to Lich::Common ([#1605](https://github.com/elanthia-online/lich-5/issues/1605)) ([486ca66](https://github.com/elanthia-online/lich-5/commit/486ca661f457f8ea089e13f56a06f483c9dc1071))
+
 ## [5.21.0](https://github.com/elanthia-online/lich-5/compare/v5.20.1...v5.21.0) (2026-09-09)
 
 

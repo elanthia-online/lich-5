@@ -1,6 +1,6 @@
 # Lich5 carveout to better manage semver
 
-LICH_VERSION = '5.21.0' # x-release-please-version
+LICH_VERSION = '5.22.0' # x-release-please-version
 
 REQUIRED_RUBY = '4.0'
 RECOMMENDED_RUBY = '4.0'
