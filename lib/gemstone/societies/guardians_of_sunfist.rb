@@ -286,13 +286,26 @@ module Lich
           end
 
           if available?(sigil_name)
-            command = sigil[:usage] || "sigil of #{sigil[:short_name]}"
             waitrt?
             waitcastrt?
-            fput "#{command} #{target}".strip
+            fput Society.command(sigil, "sigil of", target)
           else
             Lich::Messaging.msg("warn", "You cannot use the #{sigil_name} sigil right now.")
           end
+        end
+
+        ##
+        # The command {use} sends for a sigil, without sending it.
+        #
+        # @param sigil_name [String] The short or long name of the sigil
+        # @param target [String, Integer, GameObj, nil] Optional target (a GameObj or id as `#id`)
+        # @return [String, nil] e.g. "sigil of contact", nil when the sigil is unknown
+        #
+        def self.command(sigil_name, target = nil)
+          sigil = self[sigil_name]
+          return nil unless sigil
+
+          Society.command(sigil, "sigil of", target)
         end
 
         ##
