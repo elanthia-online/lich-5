@@ -334,6 +334,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
   describe '.stop_service! and discovery cleanup' do
     it 'removes the discovery file when the owner is also the last remaining session' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
       write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
       allow(described_class).to receive(:query_snapshot).and_return(
         source: 'ActiveSessionsAPI', total: 0, connected: 0, detachable: 0, sessions: []
@@ -342,6 +343,14 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       described_class.cleanup_discovery_if_last_session!
 
       expect(File.exist?(discovery_file)).to be(false)
+    end
+
+    it 'does not treat matching pid metadata as ownership without the native lock' do
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+
+      described_class.stop_service!
+
+      expect(File.exist?(discovery_file)).to be(true)
     end
 
     it 'keeps the discovery file when the snapshot is a fallback error' do
