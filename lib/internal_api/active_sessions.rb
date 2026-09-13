@@ -62,6 +62,14 @@ module Lich
       # @return [String]
       LOCK_FILENAME = 'lich-active-sessions.lock'
 
+      # Backoff used when Windows temporarily denies rename or delete because
+      # another process still has the discovery file open. The ownership flock
+      # remains held throughout these bounded retries, so no successor can
+      # validly publish a competing generation in the meantime.
+      #
+      # @return [Array<Float>]
+      DISCOVERY_FILESYSTEM_RETRY_DELAYS = [0.01, 0.02, 0.04, 0.08, 0.16].freeze
+
       @registry = nil
       @server = nil
       @lock_file = nil
@@ -519,11 +527,37 @@ module Lich
         File.open(temp_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
           file.write(JSON.dump(payload))
         end
-        File.rename(temp_path, discovery_path)
+        retry_discovery_filesystem_operation { File.rename(temp_path, discovery_path) }
       ensure
         File.delete(temp_path) if defined?(temp_path) && File.exist?(temp_path)
       end
       private_class_method :write_discovery
+
+      # Runs a discovery-file mutation with bounded retries for Windows sharing
+      # violations. Ownership is revalidated before every attempt; losing the
+      # flock aborts instead of allowing an obsolete owner to publish or remove
+      # a successor's discovery generation.
+      #
+      # @yield the filesystem mutation to attempt
+      # @return [Object] the mutation result
+      # @raise [IOError] when native discovery ownership is no longer held
+      # @raise [Errno::EACCES] when every bounded retry is exhausted
+      def self.retry_discovery_filesystem_operation
+        retry_index = 0
+
+        begin
+          raise IOError, 'ActiveSessions discovery ownership lost during filesystem operation' unless own_lock?
+
+          yield
+        rescue Errno::EACCES
+          raise if retry_index >= DISCOVERY_FILESYSTEM_RETRY_DELAYS.length
+
+          sleep(DISCOVERY_FILESYSTEM_RETRY_DELAYS.fetch(retry_index))
+          retry_index += 1
+          retry
+        end
+      end
+      private_class_method :retry_discovery_filesystem_operation
 
       # Deletes the discovery file only when the current process still owns it.
       #
@@ -541,10 +575,12 @@ module Lich
       # @param expected_owner_pid [Integer]
       # @return [void]
       def self.delete_discovery_if_owner(expected_owner_pid)
-        current = load_discovery
-        return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+        retry_discovery_filesystem_operation do
+          current = load_discovery
+          return unless current[:owner_pid].to_i == expected_owner_pid.to_i
 
-        File.delete(discovery_path) if File.exist?(discovery_path)
+          File.delete(discovery_path) if File.exist?(discovery_path)
+        end
       rescue StandardError
         nil
       end

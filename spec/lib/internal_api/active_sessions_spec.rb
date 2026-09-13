@@ -189,6 +189,49 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(discovery[:port]).to eq(55_555)
     end
 
+    it 'retries a transient Windows sharing violation while publishing discovery' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new)
+        .and_return(server_double(auth_token: 'takeover-token', port: 55_555))
+      allow(described_class).to receive(:sleep)
+
+      rename_attempts = 0
+      allow(File).to receive(:rename).and_wrap_original do |original, source, destination|
+        rename_attempts += 1
+        raise Errno::EACCES, 'destination temporarily open' if rename_attempts == 1
+
+        original.call(source, destination)
+      end
+
+      expect(described_class.ensure_service!).to be(true)
+      expect(rename_attempts).to eq(2)
+      expect(read_discovery[:port]).to eq(55_555)
+      expect(described_class.instance_variable_get(:@lock_file)).not_to be_nil
+    end
+
+    it 'does not retry discovery publication after native ownership is lost' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      doomed = server_double(auth_token: 'obsolete-token', port: 55_555)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
+      write_discovery_file(owner_pid: 4242, auth_token: 'successor-token', port: 56_000)
+
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'destination temporarily open'
+      end
+      allow(described_class).to receive(:sleep) do
+        described_class.send(:release_ownership_lock)
+      end
+
+      expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(1)
+      expect(read_discovery).to include(owner_pid: 4242, auth_token: 'successor-token', port: 56_000)
+      expect(doomed).to have_received(:stop)
+    end
+
     it 'degrades to unavailable (no bind, no split-brain) when the lock cannot be opened' do
       dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
@@ -234,11 +277,15 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
       doomed = server_double(auth_token: 'started-token', port: 45_000, start: true)
       allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
-      # Simulate a discovery write failure (e.g. File.rename over an existing
-      # file failing on Windows) after the server has already started.
-      allow(described_class).to receive(:write_discovery).and_raise(Errno::EACCES, 'rename failed')
+      allow(described_class).to receive(:sleep)
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'rename failed'
+      end
 
       expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
       expect(doomed).to have_received(:stop)
       expect(described_class.instance_variable_get(:@server)).to be_nil
       expect(described_class.instance_variable_get(:@lock_file)).to be_nil
@@ -343,6 +390,28 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       described_class.cleanup_discovery_if_last_session!
 
       expect(File.exist?(discovery_file)).to be(false)
+    end
+
+    it 'retries a transient Windows sharing violation while removing owned discovery' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+      allow(described_class).to receive(:sleep)
+
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == discovery_file
+          delete_attempts += 1
+          raise Errno::EACCES, 'destination temporarily open' if delete_attempts == 1
+        end
+
+        original.call(path)
+      end
+
+      described_class.stop_service!
+
+      expect(delete_attempts).to eq(2)
+      expect(File.exist?(discovery_file)).to be(false)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
     end
 
     it 'does not treat matching pid metadata as ownership without the native lock' do
