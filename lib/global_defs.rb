@@ -2342,7 +2342,6 @@ end
 
 # Send one newly attached frontend the game state it missed before attaching.
 def detachable_client_send_init(client)
-  100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
   init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
   init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
   init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
