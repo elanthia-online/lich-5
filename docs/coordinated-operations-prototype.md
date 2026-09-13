@@ -51,9 +51,25 @@ eligible but does not prove that the former holder completed physical cleanup.
 If a `Leases` Interface is added, core should own the mechanical lifecycle and
 fencing semantics, consumers should own eligibility, preference and recovery
 policy, and the configured storage Adapter should own atomic compare-and-claim.
-A same-host Adapter may use native file/service primitives; a cross-host DR
-plugin may use its existing backend. Neither transport nor allocation policy is
-introduced by this PR.
+A same-host Adapter may use native file/service primitives; another consumer
+may use a cross-host store Adapter. Every contender for one logical
+resource pool must resolve through the same store authority or exclusivity is
+not guaranteed. Neither transport nor allocation policy is introduced by this
+PR.
+
+Lease identity must separate durable participant identity from the ephemeral
+holder incarnation. A restarted participant may atomically resume a still-owned
+lease without losing its acquisition standing only when the store still names
+that durable participant and no newer fence exists. Successful resume advances
+the fence and installs the new holder incarnation, invalidating the old process.
+Discrete operation grants remain session/run-bound and never acquire this
+restart behavior.
+
+This prototype is reviewable while that sibling Interface remains unimplemented,
+but `Operations` must not be declared stable/public first. A game-free lease
+conformance harness must prove that one fenced winner, idempotent renew/release/
+reclaim, restart fencing and unknown-cleanup semantics compose over these
+primitives—or explicitly conclude that Leases require a separate surface.
 
 ## Module interface
 
