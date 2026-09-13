@@ -71,6 +71,36 @@ module Lich
 
         module_function
 
+        # Include attack details for persistent recording or transient observers.
+        # @return [Boolean] whether attack events are currently requested
+        def attack_events_requested?
+          Tracker.settings[:emit_attacks] || Observers.any_for?(:attack)
+        end
+
+        # Scalar allowlist copied before any event retains it. Metadata is not
+        # invented for legacy/replay callers which supply no ingestion source.
+        # @param value [Object] proposed ingestion metadata
+        # @return [Hash, nil] frozen validated context, or nil when incomplete
+        def observation_source(value)
+          return nil unless value.is_a?(Hash)
+          integers = %i[connection_id room_epoch sequence]
+          return nil unless integers.all? { |key| value[key].is_a?(Integer) && value[key] >= 0 } && value[:connection_id].positive? && value[:sequence].positive?
+          return nil unless %i[game character].all? { |key| value[key].is_a?(String) && !value[key].empty? }
+          at = value[:received_at]
+          return nil unless at.is_a?(Numeric) && at.real? && at.finite? && at >= 0
+
+          value.slice(*integers, :game, :character, :received_at)
+               .transform_values { |item| item.is_a?(String) ? item.dup.freeze : item }.freeze
+        end
+
+        # Combining cross-chunk facts must retain their oldest receipt and
+        # reject missing or changed bindings, never stamp older facts anew.
+        def combined_observation_source(first, later)
+          return nil unless first && later && %i[connection_id game character room_epoch].all? { |key| first[key] == later[key] }
+
+          first[:received_at] <= later[:received_at] ? first : later
+        end
+
         # Process a chunk of game lines for combat events. Parses the chunk
         # into events, resolves their in-blob spawn-tree links (event-object
         # refs -> stable per-chunk uids the recorder maps to row ids), stamps
@@ -80,11 +110,16 @@ module Lich
         # @param at [Time, nil] server time for this chunk (from the chunk's
         #   <prompt time=>). Duration estimates are anchored to this rather
         #   than to parse time, which the async worker can lag under load.
-        def process(chunk, at: nil)
+        # @param source [Hash, nil] optional socket-ingestion context; invalid or
+        #   absent metadata leaves events without verified source provenance
+        # @return [void]
+        # @note Calls must be serialized; production uses the ordered async worker
+        def process(chunk, at: nil, source: nil)
           # Parse-phase fact emits (:status/:ucs/:spell_loss) queue up here
           # and go out AFTER this chunk's :attack emits - see emit_fact.
           @deferred_emits = []
-          events = parse_events(chunk)
+          include_attack_events = attack_events_requested?
+          events = parse_events(chunk, source: source, include_attack_events: include_attack_events)
           # Death sweep runs AFTER this chunk's attacks emit, never before:
           # the async worker lags the game stream, so the creature registry
           # already shows a death that THIS chunk's attack caused. Sweeping
@@ -104,8 +139,10 @@ module Lich
           # THIS chunk (or self for a root). A ref to an event not in the emit
           # set (should not happen) degrades to self-root / no-parent.
           uids = {}.compare_by_identity
+          @observation_batch_id = (@observation_batch_id || 0) + 1
           events.each_with_index { |ev, i| uids[ev] = i }
           events.each_with_index do |event, i|
+            event[:observation_batch] = { id: @observation_batch_id, index: i, size: events.length }.freeze
             event[:_uid] = i
             root = event[:root_ref]
             event[:root_uid] = root ? (uids[root] || i) : i
@@ -126,7 +163,7 @@ module Lich
           end
           events.each do |event|
             event[:at] = at
-            persist_event(event)
+            persist_event(event, include_attack_events: include_attack_events)
           end
           sweep_death_watch
 
@@ -245,7 +282,7 @@ module Lich
         # emit is a fact-less SWITCH ARTIFACT: guard-intercept and
         # UCS-positioning lines spawn empty inherited events that used to
         # emit as phantom attacks (real-feed replay, logs/examples/fury.txt).
-        def event_savable?(event)
+        def event_savable?(event, include_attack_events: attack_events_requested?)
           return false unless event
 
           unless event[:target][:id]
@@ -269,13 +306,13 @@ module Lich
             return false unless event[:inbound] || event[:foreign_target] ||
                                 event[:_attack_born]
 
-            return Tracker.settings[:emit_attacks] &&
+            return include_attack_events &&
                    (event[:_attack_born] || !event[:outcomes].empty? ||
                     !event[:resolutions].empty? || !event[:hits].empty?)
           end
 
           event_worth_saving?(event) ||
-            (Tracker.settings[:emit_attacks] &&
+            (include_attack_events &&
              (event[:_attack_born] ||
               !event[:outcomes].empty? || !event[:resolutions].empty? ||
               !event[:flares].empty? || event[:_had_status]))
@@ -315,8 +352,15 @@ module Lich
           end
         end
 
-        # State machine parser
-        def parse_events(lines)
+        # Parse combat lines into events without inventing ingestion provenance.
+        # @param lines [Array<String>] game lines for one parser chunk
+        # @param source [Hash, nil] optional ingestion context to validate and copy
+        # @param include_attack_events [Boolean, nil] fixed transient attack
+        #   demand for this parse, or nil to snapshot current demand
+        # @return [Array<Hash>] parsed attack and related outcome events
+        def parse_events(lines, source: nil, include_attack_events: nil)
+          source = observation_source(source)
+          include_attack_events = attack_events_requested? if include_attack_events.nil?
           # Position recoveries are per chunk: a stand-up here must not
           # suppress a knockdown crit in the NEXT chunk.
           @position_recovered = nil
@@ -477,6 +521,7 @@ module Lich
           # first line.
           if (held = @held_cast)
             @held_cast = nil
+            held[:source] = combined_observation_source(held[:source], source)
             held[:_held] = true
             held[:_line] = nil
             current_event = held
@@ -491,7 +536,10 @@ module Lich
           # "dispel" attacks instead of riding the shot).
           if (held_flares = @held_pre_flares)
             @held_pre_flares = nil
-            held_flares.each { |f| f[:_held] = true }
+            held_flares.each do |f|
+              f[:_held] = true
+              f[:source] = combined_observation_source(f[:source], source)
+            end
             pending_flares.concat(held_flares)
           end
 
@@ -691,6 +739,7 @@ module Lich
             # for the next matching swing (pre-flare, e.g. dispel gloves that
             # resolve before the attack). Position is ground truth for timing.
             if (flare = Parser.parse_flare(line))
+              flare[:source] = source
               flare[:hits] = []
               flare[:outcomes] = []
               flare[:resolutions] = []
@@ -848,7 +897,7 @@ module Lich
               # Check if this is a real target switch (different creature)
               if current_target && current_target[:id] != line_target[:id]
                 # Save previous event if it has data
-                if event_savable?(current_event)
+                if event_savable?(current_event, include_attack_events: include_attack_events)
                   save_event.call(current_event)
                   respond "[Combat] Saved event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits, #{current_event[:statuses].size} statuses" if Tracker.debug?(:verbose)
                 end
@@ -857,6 +906,7 @@ module Lich
                 # lineage from previous - a target switch mid-AoE stays inside
                 # the same spawned sequence)
                 current_event = {
+                  source: current_event ? current_event[:source] : source,
                   name: current_event ? current_event[:name] : :unknown,
                   target: line_target,
                   weapon: current_event && current_event[:weapon],
@@ -919,7 +969,7 @@ module Lich
             # ("the warg evades!"), so the switch must happen first or the
             # outcome lands on the previous target's event.
             # Only parsed when a recorder-class subscriber wants the blob.
-            if Tracker.settings[:emit_attacks]
+            if include_attack_events
               if (resolution = Parser.parse_resolution(line))
                 # Most rolls FOLLOW their attack line (swing -> AS/DS), but
                 # volley's SMR PRECEDES each arrow line. A roll claims the
@@ -1034,7 +1084,7 @@ module Lich
                   # the pre-emptive evade. Save it before opening ours, as the
                   # single_hit_parent / interrupted_own resumptions do - it
                   # may carry a fully resolved hit on us.
-                  save_event.call(current_event) if event_savable?(current_event)
+                  save_event.call(current_event) if event_savable?(current_event, include_attack_events: include_attack_events)
                   # An outcome with a named target and no event at all: the
                   # first arrow of a volley round can be a miss - roll +
                   # outcome, no attack line, at the top of the chunk. Open
@@ -1048,6 +1098,7 @@ module Lich
                     # (a creature's wholly-negated ambush on us is this shape
                     # too: prefix, then the intercept, no attack line)
                     current_event = {
+                      source: source,
                       name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : :unknown, target: {}, inbound: true,
                       attacker: line_target, weapon: nil, parent: nil,
                       hits: [], statuses: [], flares: [], outcomes: [outcome],
@@ -1067,6 +1118,7 @@ module Lich
                     # the fire (pre-emptive evade, see nocked decl)
                     nock_fire = nocked && !(pending_ambush && pending_ambush[:hidden]) && round_name.nil?
                     current_event = {
+                      source: source,
                       name: (pending_ambush && pending_ambush[:hidden]) ? :ambush : (round_name || (nock_fire ? :fire : :unknown)),
                       target: line_target, attacker: nil,
                       weapon: nock_fire ? nocked : nil, parent: nil, hits: [],
@@ -1170,6 +1222,7 @@ module Lich
               #     fresh 2p initiation of our own ("You fire ...") - that is
               #     the next action, not this cast's effect.
               superseded_cast = nil
+              superseded_source = nil
               if bare_cast?(current_event) &&
                  (attack[:attacker].nil? ||
                   (current_event[:attacker] && attack[:attacker][:name] == current_event[:attacker][:name])) &&
@@ -1179,6 +1232,7 @@ module Lich
                 # gesture) belong to the spell event that replaces it
                 pending_flares.concat(current_event[:flares])
                 superseded_cast = true
+                superseded_source = current_event[:source]
                 current_event = nil
               end
               # A one-hit side effect remembers the event it cut in front of
@@ -1193,7 +1247,7 @@ module Lich
               end
               # Save previous event before starting a new one - unless the
               # target-switcher created it on this very line (see _line)
-              if event_savable?(current_event) && current_event[:_line] != index
+              if event_savable?(current_event, include_attack_events: include_attack_events) && current_event[:_line] != index
                 save_event.call(current_event)
                 respond "[Combat] Completed event for #{current_event[:target][:name]}: #{current_event[:hits].size} hits" if Tracker.debug?(:verbose)
                 # an inbound attack cutting into our own open swing: remember
@@ -1253,6 +1307,7 @@ module Lich
                             (foreign_latch && attack[:attacker].nil? && !our_2p) || nil
 
               current_event = {
+                source: superseded_cast ? superseded_source : source,
                 name: attack[:name],
                 target: attack[:target] || {},
                 attacker: attack[:attacker], # nil for our own (2nd-person) attacks
@@ -1524,6 +1579,7 @@ module Lich
                       # veil): never the cause of a status the swing's own crit
                       # inflicts afterwards (see status_flare_seq)
                       f[:_pre] = true
+                      current_event[:source] = combined_observation_source(current_event[:source], f[:source])
                       current_event[:flares] << f
                       # ...and the cast that flare released, which printed
                       # before this swing, is this swing's child.
@@ -1634,7 +1690,7 @@ module Lich
                 # enables only emit_attacks) of every crit - the emit carried a
                 # crit-shaped hole.
                 if Tracker.settings[:track_wounds] || Tracker.settings[:track_statuses] ||
-                   Tracker.settings[:emit_attacks]
+                   include_attack_events
                   (1..3).each do |offset|
                     next_line_index = index + offset
                     break if next_line_index >= lines.size
@@ -1702,7 +1758,7 @@ module Lich
           # supersedes it or emits it as it stands.
           if bare_cast?(current_event) && !current_event[:_held] && current_event[:attacker].nil?
             @held_cast = current_event
-          elsif event_savable?(current_event)
+          elsif event_savable?(current_event, include_attack_events: include_attack_events)
             save_event.call(current_event)
           end
 
@@ -1717,6 +1773,7 @@ module Lich
             anchor = current_target || (events.last && events.last[:target])
             if anchor && anchor[:id]
               events << {
+                source: source,
                 name: :unknown, target: anchor, attacker: nil, weapon: nil,
                 parent: nil, hits: [], statuses: [],
                 flares: [], outcomes: [], resolutions: pending_resolutions
@@ -1731,6 +1788,7 @@ module Lich
           # exists for recorders, same rationale as inbound events.
           if !orphan_hits.empty? || !orphan_outcomes.empty? || !pending_resolutions.empty?
             events << {
+              source: source,
               name: :unknown, target: {}, attacker: nil, weapon: nil,
               parent: nil, hits: orphan_hits, statuses: [],
               flares: [], outcomes: orphan_outcomes,
@@ -1753,6 +1811,7 @@ module Lich
             # separately); duplicating it into the event arrays would
             # double-apply it.
             events << {
+              source: f[:source],
               name: f[:name], target: f[:target_info], weapon: f[:weapon] && f[:weapon][:name],
               parent: nil, hits: [], statuses: [], flares: [f],
               outcomes: [], resolutions: []
@@ -1765,7 +1824,7 @@ module Lich
         end
 
         # Apply combat event to creature instance (same as before)
-        def persist_event(event)
+        def persist_event(event, include_attack_events: attack_events_requested?)
           target = event[:target]
 
           # The whole parsed event as one emit: swing + flares + spawned-cast
@@ -1779,7 +1838,7 @@ module Lich
           #     complete regardless of settings - and therefore BEFORE the
           #     creature is mutated (an :attack subscriber reading
           #     Creature[id] sees pre-swing state; per-fact emits see post).
-          Observers.emit(:attack, event) if Tracker.settings[:emit_attacks]
+          Observers.emit(:attack, event) if include_attack_events
 
           # A nearby player's attack (foreign_caster) DOES resolve onto a
           # creature we can see, so unlike inbound/foreign_target it passes

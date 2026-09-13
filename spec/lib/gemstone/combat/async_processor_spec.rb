@@ -25,6 +25,33 @@ RSpec.describe Lich::Gemstone::Combat::AsyncProcessor do
   end
 
   describe '#process_async' do
+    it 'copies ingress provenance before delayed processing instead of reading current context' do
+      entered, release, seen = Queue.new, Queue.new, []
+      allow(Lich::Gemstone::Combat::Processor).to receive(:process) do |chunk, **metadata|
+        if chunk == ['block']
+          entered << true
+          release.pop
+        else
+          seen << metadata[:source]
+        end
+      end
+      quiet_gc
+      processor = described_class.new
+      processor.process_async(['block'])
+      entered.pop
+      source = { connection_id: 123, game: +'GSIV', character: +'Testmage', room_epoch: 4, sequence: 8, received_at: 10.0 }
+      processor.process_async(['attack'], source: source)
+      source[:character].replace('Changed')
+      source[:room_epoch] = 5
+      release << true
+      processor.shutdown
+      expect(seen.first).to include(character: 'Testmage', room_epoch: 4, sequence: 8, received_at: 10.0)
+      expect(seen.first).to be_frozen
+      expect(seen.first[:character]).to be_frozen
+    ensure
+      release << true if release && release.empty?
+    end
+
     it 'processes chunks in arrival order on the worker thread' do
       seen = []
       allow(Lich::Gemstone::Combat::Processor).to receive(:process) { |chunk| seen << chunk.first }
