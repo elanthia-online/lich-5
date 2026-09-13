@@ -3,6 +3,8 @@
 require_relative '../../../spec_helper'
 require 'tmpdir'
 require 'gemstone/combat/recorder'
+require 'gemstone/combat/processor'
+require 'gemstone/combat/observers'
 
 # End-to-end coverage for the SQLite Combat::Recorder: the wiring the PR
 # shipped with zero first-party callers. These drive a real on-disk database
@@ -17,20 +19,14 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
   # Make a unique dir, run, then best-effort remove (ignoring locks that the
   # GC hasn't released yet; the OS reclaims the temp dir regardless).
   before do
-    # close calls unsubscribe! -> Observers.off; stub a no-op Observers so the
-    # recorder's lifecycle runs without the full pub/sub module loaded.
-    observers = Module.new do
-      def self.on(*, **, &_blk); end
-      def self.off(*); end
-      def self.emit(*); end
-    end
-    stub_const('Lich::Gemstone::Combat::Observers', observers)
+    Lich::Gemstone::Combat::Observers.clear!
 
     @tmpdir = Dir.mktmpdir('combat-recorder')
     @db_path = File.join(@tmpdir, 'test.db')
   end
 
   after do
+    Lich::Gemstone::Combat::Observers.clear!
     GC.start
     FileUtils.remove_entry(@tmpdir)
   rescue StandardError
@@ -67,6 +63,101 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
   end
 
   describe 'session lifecycle' do
+    it 'isolates a raising receipt subscriber and still delivers to other subscribers' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester')
+      received = []
+      allow(Lich).to receive(:log)
+      Lich::Gemstone::Combat::Observers.on(:recorded_attack) { raise 'observer failed' }
+      Lich::Gemstone::Combat::Observers.on(:recorded_attack) { |_, receipt| received << receipt }
+      expect { rec.record(:attack, attack_event) }.not_to raise_error
+      expect(count('attacks')).to eq(1)
+      expect(received.size).to eq(1)
+      expect(Lich).to have_received(:log).with(/Combat::Observers subscriber \(recorded_attack\): observer failed/)
+      rec.close
+    end
+
+    it 'keeps committed attacks and status attribution when receipt provenance fails' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester')
+      allow(Lich).to receive(:log)
+      allow(Lich::Gemstone::Combat::Processor).to receive(:observation_source).and_raise('provenance failed')
+      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+
+      expect(rec.record(:attack, attack_event)).to be_nil
+      rec.record(:status, { id: 101, name: 'a cave lizard', status: :prone, action: :add })
+
+      expect(count('attacks')).to eq(1)
+      expect(count('hits')).to eq(1)
+      attack = query('SELECT id FROM attacks').first
+      status = query('SELECT attack_id, source FROM statuses').first
+      expect(status.values_at('attack_id', 'source')).to eq([attack['id'], 'window'])
+      expect(Lich).to have_received(:log).with('error: CombatRecorder receipt for committed attack 1: provenance failed')
+      rec.close
+    end
+
+    it 'preserves in-memory recorders without claiming a readable database file' do
+      rec = described_class.new(':memory:')
+      rec.start_session(character: 'Tester')
+      receipt = rec.record(:attack, attack_event)
+      expect(receipt[:database]).to be_nil
+      expect(receipt[:file_identity]).to be_nil
+      rec.close
+    end
+
+    it 'publishes a receipt only after the complete attack transaction is readable' do
+      rec = new_recorder
+      sid = rec.start_session(character: 'Tester')
+      received = []
+      Lich::Gemstone::Combat::Observers.on(:recorded_attack) do |_, receipt|
+        expect(receipt[:session_id]).to eq(sid)
+        expect(receipt[:database]).to eq(File.realpath(@db_path))
+        expect(receipt[:file_identity]).to eq([File.stat(@db_path).dev, File.stat(@db_path).ino])
+        expect(query('SELECT COUNT(*) AS n FROM hits WHERE attack_id = ?', receipt[:attack_id]).first['n']).to eq(1)
+        expect(receipt).to be_frozen
+        expect(receipt[:source]).to be_nil # replay/legacy input is not live provenance
+        # Re-enter a public method that takes the recorder mutex. Calling this
+        # callback under that mutex would raise a recursive-lock error.
+        rec.check_idle!
+        received << receipt
+      end
+      rec.record(:attack, attack_event)
+      expect(received.size).to eq(1)
+      rec.close
+    end
+
+    it 'does not publish a receipt when an attack transaction rolls back' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester')
+      allow(rec).to receive(:insert_hit).and_raise(SQLite3::Exception, 'fixture failure')
+      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+      rec.record(:attack, attack_event)
+      expect(count('attacks')).to eq(0)
+      rec.close
+    end
+
+    it 'does not attribute statuses or emit receipts for a rollback after all attack writes' do
+      rec = new_recorder
+      rec.start_session(character: 'Tester')
+      db = rec.instance_variable_get(:@db)
+      allow(db).to receive(:transaction).and_wrap_original do |original, &block|
+        original.call do
+          block.call
+          raise SQLite3::Exception, 'failure before commit'
+        end
+      end
+      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+
+      rec.record(:attack, attack_event)
+      expect(count('attacks')).to eq(0)
+      expect(count('hits')).to eq(0)
+      allow(db).to receive(:transaction).and_call_original
+      rec.record(:status, { id: 101, name: 'a cave lizard', status: :prone, action: :add })
+      status = query('SELECT attack_id, source FROM statuses').first
+      expect(status.values_at('attack_id', 'source')).to eq([nil, 'direct'])
+      rec.close
+    end
+
     it 'opens, records into, and closes a session' do
       rec = new_recorder
       sid = rec.start_session(character: 'Tester', source: 'test', at: Time.at(1_000_000))
