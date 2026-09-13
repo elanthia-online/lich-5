@@ -65,7 +65,14 @@ identity, renewal, expiry, release, reclaim eligibility and a monotonically
 increasing fencing generation. Consumer code continues to own eligibility,
 preference and recovery policy, while the selected storage Adapter must provide
 atomic compare-and-claim. Leaderless policy does not remove the need for one
-serialization authority at the storage seam.
+serialization authority at the storage seam, and every contender for one
+resource pool must use that same authority.
+
+A lease also needs two identity lifetimes: durable participant identity may
+preserve legitimate standing across restart, while an ephemeral holder
+incarnation identifies the process currently allowed to act. Atomic resume must
+advance the fence and invalidate the old incarnation. This differs from grants
+and operations, whose old session/run authority always dies on restart.
 
 ## Contract
 
@@ -177,9 +184,13 @@ envelope and its first native writer, longer stalled-publisher/availability
 measurements, separately reviewed operation contracts and authorization. Before
 generic core promotion: a real LAB contract test plus code deletion demonstrating
 the second-consumer benefit, and paper validation that the contract does not
-preclude the DR claim/lease consumer. A public lease implementation is a later,
-separately approved slice. No writes or live trial are silently enabled by
-completing this prototype.
+preclude the DR claim/lease consumer. Before discrete Operations are declared
+stable/public, a game-free lease conformance harness must either demonstrate
+composition over them or record the need for a separate surface. It must cover
+one fenced winner, idempotent renew/release/reclaim, restart/resume fencing and
+unknown cleanup distinct from released. A public lease implementation remains a
+later, separately approved slice. No writes or live trial are silently enabled
+by completing this prototype.
 
 Rollback: do not require/attach the optional module. The live installation has
 not been changed; both worktrees remain separate from running game sessions.
