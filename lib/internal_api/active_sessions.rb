@@ -259,6 +259,10 @@ module Lich
           @server&.stop
           @server = nil
           @registry = nil
+          # Keep the native flock through the ownership check and unlink. A
+          # successor can publish as soon as we release it; checking the pid
+          # before an unlocked unlink does not protect that new publication.
+          delete_discovery_if_owned if own_lock?
           release_ownership_lock
         end
         @service_client_mutex.synchronize do
@@ -266,7 +270,6 @@ module Lich
           @service_client_token = nil
           @service_client_port = nil
         end
-        delete_discovery_if_owned
       end
 
       # Returns a client configured from the current discovery record.
@@ -532,9 +535,8 @@ module Lich
 
       # Deletes the discovery file only when it still belongs to the given owner.
       #
-      # Re-reads the file before deletion to avoid a race where another process
-      # has written a fresh discovery between the caller's initial read and this
-      # deletion attempt.
+      # The caller must retain the native ownership flock throughout this
+      # operation. The pid check alone cannot serialize publication and unlink.
       #
       # @param expected_owner_pid [Integer]
       # @return [void]
