@@ -364,35 +364,13 @@ module Lich
       def Feat.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Feat.available?(name, forcert_count: forcert_count)
 
-        name_normalized = PSMS.name_normal(name)
-        technique = @@feats.fetch(PSMS.find_name(name_normalized, "Feat")[:long_name])
-        usage = technique[:usage]
-        return if usage.nil?
+        usage_cmd = Feat.command(name, target, forcert_count: forcert_count)
+        return if usage_cmd.nil?
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./i
+        results_regex = Feat.results_regex(name, results_of_interest: results_of_interest)
 
-        results_regex = Regexp.union(
-          PSMS::FAILURES_REGEXES,
-          /^#{name} what\?$/i,
-          in_cooldown_regex,
-          technique[:regex],
-          /^Roundtime: [0-9]+ sec\.$/,
-        )
-
-        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
-
-        usage_cmd = (['guard', 'protect'].include?(usage) ? "#{usage}" : "feat #{usage}")
-        if target.is_a?(GameObj)
-          usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
-          usage_cmd += " ##{target}"
-        elsif target != ""
-          usage_cmd += " #{target}"
-        end
-
-        if forcert_count > 0
-          usage_cmd += " forcert"
-        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+        # with forcert we don't want to wait for rt, but we need to otherwise
+        unless forcert_count > 0
           waitrt?
           waitcastrt?
         end
@@ -403,6 +381,33 @@ module Lich
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
         usage_result
+      end
+
+      # Feats sent as their own verb rather than FEAT <usage>.
+      BARE_COMMANDS = ['guard', 'protect'].freeze
+
+      # The command {Feat.use} sends for a feat, without sending it.
+      #
+      # @param name [String] The name of the Feat
+      # @param target [String, Integer, GameObj] The target (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] e.g. "feat dispel #12345" or "guard Dissonance", nil when the feat has no usage
+      def Feat.command(name, target = "", forcert_count: 0)
+        technique = @@feats.fetch(PSMS.find_name(PSMS.name_normal(name), "Feat")[:long_name])
+        usage = technique[:usage]
+        return nil if usage.nil?
+
+        PSMS.command(BARE_COMMANDS.include?(usage) ? nil : "feat", usage, target, forcert_count: forcert_count)
+      end
+
+      # Every line that answers the feat's command: the regex {Feat.use} waits on.
+      #
+      # @param name [String] The name of the Feat
+      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
+      # @return [Regexp]
+      def Feat.results_regex(name, results_of_interest: nil)
+        technique = @@feats.fetch(PSMS.find_name(PSMS.name_normal(name), "Feat")[:long_name])
+        PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
       end
 
       # Returns the "success" regex associated with a given Feat technique name.
