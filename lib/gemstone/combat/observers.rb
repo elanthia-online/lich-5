@@ -63,27 +63,36 @@
 #   :haze_703 / :rebuke_1614  { id:, on: }, :swift_justice { charges: },
 #   :arcane_reflex { active: }, :weapon_reaction { reaction: }
 #
+# Since 5.22 this is a thin facade over Lich::Common::Events: every combat
+# event type is the topic "combat.<type>" on the shared board, so a script
+# may equally subscribe with Events.on('combat.damage') or 'combat.*'. The
+# facade keeps the (type, data) callback shape and the Symbol types. It
+# also inherits Events' owner tracking: a subscription made from a script is
+# removed when that script dies (previously it leaked), unless registered
+# with persist: true.
+#
 # @example
 #   Combat::Tracker.on(:damage) { |type, data| my_queue << data }
 #   handler = Combat::Tracker.on(:status, :wound) { |type, data| ... }
 #   Combat::Tracker.off(handler)
 #
+require_relative '../../common/events'
+
 module Lich
   module Gemstone
     module Combat
       module Observers
-        @mutex = Mutex.new
-        @subscribers = Hash.new { |h, k| h[k] = [] }
-        @named = {}
-        @on_change = []
+        PREFIX = 'combat.'
+
+        @mutex   = Mutex.new
+        @handles = {} # user block => Events subscription name
 
         class << self
-          # A block run after every subscription change (on, off, clear!):
-          # how Combat::Messages learns which families to scan. Errors are
-          # isolated the way subscriber errors are.
+          # A block run after every subscription change to a combat topic
+          # (on, off, clear!, owner death): how Combat::Messages learns which
+          # families to scan. Errors are isolated the way subscriber errors are.
           def on_change(&block)
-            @mutex.synchronize { @on_change << block }
-            block
+            Lich::Common::Events.on_change(prefix: PREFIX, &block)
           end
 
           # Subscribe to one or more event types (or :any for everything).
@@ -93,77 +102,75 @@ module Lich
           # semantics): re-registering the same name replaces the previous
           # handler instead of stacking - safe for script restarts and
           # interactive ;e testing.
-          def on(*types, name: nil, &block)
+          #
+          # persist: true keeps the subscription after the registering script
+          # dies; the default removes it with the script.
+          def on(*types, name: nil, persist: false, &block)
             raise ArgumentError, 'block required' unless block
 
-            types = [:any] if types.empty?
+            types  = [:any] if types.empty?
+            topics = types.map { |t| topic_for(t) }
+            wrapper = proc { |topic, data| block.call(type_for(topic), data) }
+            handle = Lich::Common::Events.on(*topics, name: (name ? "#{PREFIX}#{name}" : nil), persist: persist, &wrapper)
             @mutex.synchronize do
-              if name
-                old = @named.delete(name.to_s)
-                @subscribers.each_value { |list| list.delete(old) } if old
-                @named[name.to_s] = block
-              end
-              types.each { |t| @subscribers[t.to_sym] << block }
+              # a named re-registration replaced an older block; forget it
+              @handles.delete_if { |_, h| h == handle }
+              @handles[block] = handle
             end
-            changed
             block
           end
 
           # Remove a handler - pass the Proc returned by {on}, or the name
           # it was registered under.
           def off(handler_or_name)
-            @mutex.synchronize do
-              handler = if handler_or_name.is_a?(Proc)
-                          handler_or_name
-                        else
-                          @named.delete(handler_or_name.to_s)
-                        end
-              @named.delete_if { |_, h| h == handler }
-              @subscribers.each_value { |list| list.delete(handler) } if handler
-            end
-            changed
+            handle = if handler_or_name.is_a?(Proc)
+                       @mutex.synchronize { @handles.delete(handler_or_name) }
+                     else
+                       "#{PREFIX}#{handler_or_name}"
+                     end
+            return nil unless handle
+
+            @mutex.synchronize { @handles.delete_if { |_, h| h == handle } }
+            Lich::Common::Events.off(handle)
             nil
           end
 
           # Emit an event to type + :any subscribers. Subscriber errors are
           # isolated and logged, never raised to the caller (the processor).
           def emit(type, data)
-            handlers = @mutex.synchronize { @subscribers[type].dup + @subscribers[:any].dup }
-            handlers.each do |handler|
-              begin
-                handler.call(type, data)
-              rescue StandardError => e
-                Lich.log "error: Combat::Observers subscriber (#{type}): #{e.message}\n\t#{e.backtrace&.first}"
-              end
-            end
+            Lich::Common::Events.emit(topic_for(type), data)
             nil
           end
 
           def any_for?(type)
-            @mutex.synchronize { !@subscribers[type].empty? || !@subscribers[:any].empty? }
+            Lich::Common::Events.any_for?(topic_for(type))
           end
 
+          # Drop every combat subscription (other topic families untouched).
           def clear!
-            @mutex.synchronize do
-              @subscribers.clear
-              @named.clear
-            end
-            changed
+            @mutex.synchronize { @handles.clear }
+            Lich::Common::Events.clear!(PREFIX)
           end
 
           private
 
-          def changed
-            callbacks = @mutex.synchronize { @on_change.dup }
-            callbacks.each do |cb|
-              begin
-                cb.call
-              rescue StandardError => e
-                Lich.log "error: Combat::Observers on_change: #{e.message}\n\t#{e.backtrace&.first}"
-              end
-            end
+          # Forget block handles whose subscription Events already dropped
+          # (owner death, or an off by name), so the map cannot grow.
+          def prune!
+            live = Lich::Common::Events.names
+            @mutex.synchronize { @handles.delete_if { |_, h| !live.include?(h) } }
+          end
+
+          def topic_for(type)
+            type.to_sym == :any ? "#{PREFIX}*" : "#{PREFIX}#{type}"
+          end
+
+          def type_for(topic)
+            topic.delete_prefix(PREFIX).to_sym
           end
         end
+
+        Lich::Common::Events.on_change(prefix: PREFIX) { prune! }
       end
     end
   end

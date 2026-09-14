@@ -2,14 +2,22 @@
 
 require 'rspec'
 
-# Load Observers standalone - it has no Lich dependencies beyond Lich.log,
-# which we provide as a test double module.
+# Load Observers standalone - it has no Lich dependencies beyond Lich.log
+# (provided as a test double) and Lich::Common::Events, which it is a facade
+# over since 5.22.
 module Lich
   def self.log(msg); (@logged ||= []) << msg; end
 
   def self.logged = @logged ||= []
   module Gemstone; module Combat; end; end
 end
+
+# Stand-in for the script registry Events reads the owner from.
+class Script
+  class << self
+    attr_accessor :current
+  end
+end unless defined?(Script)
 
 require_relative '../../../../lib/gemstone/combat/observers'
 
@@ -49,7 +57,7 @@ RSpec.describe Lich::Gemstone::Combat::Observers do
     described_class.on(:damage) { |_, d| survivor << d }
     expect { described_class.emit(:damage, id: 1) }.not_to raise_error
     expect(survivor).to eq([{ id: 1 }])
-    expect(Lich.logged.last).to include('Combat::Observers subscriber (damage): boom')
+    expect(Lich.logged.last).to include('Events subscriber').and include('(combat.damage): boom')
   end
 
   it 'named registration is idempotent - re-registering replaces' do
@@ -66,6 +74,36 @@ RSpec.describe Lich::Gemstone::Combat::Observers do
     described_class.off('bar')
     described_class.emit(:damage, {})
     expect(seen).to be_empty
+  end
+
+  it 'is the combat.* family on the shared Events board' do
+    seen = []
+    Lich::Common::Events.on('combat.damage') { |topic, data| seen << [topic, data] }
+    described_class.emit(:damage, id: 7)
+    expect(seen).to eq([['combat.damage', { id: 7 }]])
+    expect(Lich::Common::Events.any_for?('combat.damage')).to be(true)
+  end
+
+  it 'clear! leaves other topic families alone' do
+    other = []
+    Lich::Common::Events.on('go2.status', name: 'sup') { |_, d| other << d }
+    described_class.on(:damage) { nil }
+    described_class.clear!
+    Lich::Common::Events.emit('go2.status', :ok)
+    expect(other).to eq([:ok])
+    Lich::Common::Events.off('sup')
+  end
+
+  it 'drops a script-owned subscription when that script dies' do
+    script = Struct.new(:name).new('combat_stats')
+    Script.current = script
+    seen = []
+    described_class.on(:damage) { |*a| seen << a }
+    Script.current = nil
+    Lich::Common::Events.cleanup_on_death(script.object_id)
+    described_class.emit(:damage, {})
+    expect(seen).to be_empty
+    expect(described_class.any_for?(:damage)).to be(false)
   end
 
   it 'reports whether a type has subscribers' do

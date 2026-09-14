@@ -73,7 +73,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       expect { rec.record(:attack, attack_event) }.not_to raise_error
       expect(count('attacks')).to eq(1)
       expect(received.size).to eq(1)
-      expect(Lich).to have_received(:log).with(/Combat::Observers subscriber \(recorded_attack\): observer failed/)
+      expect(Lich).to have_received(:log).with(/Events subscriber .*\(combat\.recorded_attack\): observer failed/)
       rec.close
     end
 
