@@ -1056,6 +1056,18 @@ module DownstreamHook
     data
   end
 
+  # Matches the production HookRegistry surface: add/remove are hash writes
+  # that never raise, so code driven by them (Combat::Messages) behaves as
+  # it does in production instead of tripping over a missing method.
+  def self.add(name, action, persist: nil)
+    (@hooks ||= {})[name] = [action, persist]
+    action
+  end
+
+  def self.remove(name)
+    (@hooks ||= {}).delete(name)&.first
+  end
+
   # Matches the production surface used by the ScriptDeath cleanup.
   def self.cleanup_on_death(_owner_id)
     0

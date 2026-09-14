@@ -41,6 +41,20 @@ RSpec.describe Lich::Gemstone::Combat::Messages do
     events.off('supervisor')
   end
 
+  it 'leaves active_families and installed? consistent when the hook call raises' do
+    stub_const('DownstreamHook', Class.new do
+      define_singleton_method(:add) { |_name, _action, **| raise 'hook registry down' }
+      define_singleton_method(:remove) { |_name| nil }
+    end)
+    allow(Lich).to receive(:log)
+    events.on('combat.bolted', name: 'probe') { nil }
+    # Events swallowed the raise; @active must not have been committed ahead of it.
+    expect(described_class.installed?).to be(false)
+    expect(described_class.active_families).to eq([])
+    expect(Lich).to have_received(:log).with(/Events on_change: hook registry down/)
+    events.off('probe')
+  end
+
   it 'has no active family and no hook with nobody subscribed' do
     expect(described_class.active_families).to eq([])
     expect(described_class.installed?).to be(false)

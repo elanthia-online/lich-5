@@ -15,7 +15,7 @@
 # hook is not even installed.
 #
 # Matching runs on a single worker thread fed by a queue, never on the
-# game stream. Subscribers therefore run on that worker: the
+# game stream. Subscribers therefore run on that worker.
 # The Events subscriber contract applies - cheap, non-blocking, no game
 # commands from the callback.
 #
@@ -69,10 +69,16 @@ module Lich
           # scripts subscribing at once would otherwise interleave so that
           # the last @active write is non-empty while the last hook call is
           # uninstall!, silently leaving a live subscriber with no hook.
+          #
+          # @active is committed only after the hook call succeeds: if
+          # DownstreamHook.add/remove raises (Events swallows and logs it),
+          # the previous consistent @active/@hook pair stays in place rather
+          # than reporting a family active with no hook up, or the reverse.
           def refresh!
             @mutex.synchronize do
-              @active = families.select { |f| f.events.any? { |e| Lich::Common::Events.any_for?("combat.#{e}") } }.map(&:name).freeze
-              @active.empty? ? uninstall! : install!
+              active = families.select { |f| f.events.any? { |e| Lich::Common::Events.any_for?("combat.#{e}") } }.map(&:name).freeze
+              active.empty? ? uninstall! : install!
+              @active = active
               active_families
             end
           end
