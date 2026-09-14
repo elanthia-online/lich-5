@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Savage_fork-tongued_wendigo",
   picture: "",
   level: 105,
-  family: "humanoid",
+  family: "Humanoid",
   type: "biped",
   undead: false,
   blood: true,

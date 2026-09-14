@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Niveous_giant_warg",
   picture: "",
   level: 104,
-  family: "canine",
+  family: "Canine",
   type: "quadruped",
   undead: false,
   blood: true,

@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/hill_troll",
   picture: "",
   level: 16,
-  family: "troll",
+  family: "Troll",
   type: "biped",
   undead: false,
   blood: true,

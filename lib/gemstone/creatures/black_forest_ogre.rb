@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/black_forest_ogre",
   picture: "",
   level: 60,
-  family: "ogre",
+  family: "Ogre",
   type: "Biped",
   undead: false,
   blood: true,

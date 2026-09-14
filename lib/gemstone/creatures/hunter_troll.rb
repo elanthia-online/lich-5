@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/hunter_troll",
   picture: "",
   level: 30,
-  family: "troll",
+  family: "Troll",
   type: "Biped",
   undead: false,
   blood: true,

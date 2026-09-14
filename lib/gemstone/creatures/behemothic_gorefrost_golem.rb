@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Behemothic_gorefrost_golem",
   picture: "",
   level: 104,
-  family: "golem",
+  family: "Golem",
   type: "biped",
   undead: false,
   blood: nil,

@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/flesh_golem",
   picture: "",
   level: 50,
-  family: "golem",
+  family: "Golem",
   type: "Biped",
   undead: true,
   blood: false,

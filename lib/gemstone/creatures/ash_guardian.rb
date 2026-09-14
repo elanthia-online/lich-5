@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/ash_guardian",
   picture: "",
   level: 87,
-  family: "elemental",
+  family: "Elemental",
   type: "Biped",
   undead: false,
   blood: false,

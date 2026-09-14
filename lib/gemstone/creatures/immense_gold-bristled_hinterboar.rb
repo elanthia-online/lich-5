@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Immense_gold-bristled_hinterboar",
   picture: "",
   level: 102,
-  family: "suine",
+  family: "Suine",
   type: "quadruped",
   undead: false,
   blood: true,

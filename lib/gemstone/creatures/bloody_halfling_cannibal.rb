@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Bloody_halfling_cannibal",
   picture: "",
   level: 101,
-  family: "humanoid",
+  family: "Humanoid",
   type: "biped",
   undead: false,
   blood: true,

@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Brawny_gigas_shield-maiden",
   picture: "",
   level: 106,
-  family: "gigas",
+  family: "Gigas",
   type: "biped",
   undead: false,
   blood: true,

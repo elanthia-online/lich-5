@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Stunted_halfling_bloodspeaker",
   picture: "",
   level: 103,
-  family: "humanoid",
+  family: "Humanoid",
   type: "biped",
   undead: false,
   blood: true,

@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Tattooed_gigas_berserker",
   picture: "",
   level: 103,
-  family: "gigas",
+  family: "Gigas",
   type: "biped",
   undead: false,
   blood: true,

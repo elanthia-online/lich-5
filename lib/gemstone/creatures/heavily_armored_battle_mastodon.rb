@@ -4,7 +4,7 @@
   url: "https://gswiki.play.net/Heavily_armored_battle_mastodon",
   picture: "",
   level: 102,
-  family: "elephantid",
+  family: "Elephantid",
   type: "quadruped",
   undead: false,
   blood: true,
