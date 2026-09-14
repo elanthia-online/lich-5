@@ -322,6 +322,65 @@ RSpec.describe 'combat message supplements' do
     end
   end
 
+  # A user pattern that exceeds its evaluation budget must cost that one
+  # pattern and nothing else: not the facts the line already yielded, not
+  # the defs that follow it, and not the rest of the family behind a gate
+  # that raised while deciding whether to scan at all.
+  describe 'a supplemental pattern that times out while matching' do
+    let(:shipped_line) { 'You shiver slightly as an invisible rash covers your body.' }
+
+    # Stands in for a catastrophically backtracking regex without needing
+    # one: matching raises the same error Regexp.timeout raises.
+    def timing_out_pattern(source = 'rash')
+      Regexp.new(source).tap do |rx|
+        allow(rx).to receive(:match).and_raise(Regexp::TimeoutError)
+        allow(rx).to receive(:match?).and_raise(Regexp::TimeoutError)
+      end
+    end
+
+    # Splices a def carrying +pattern+ into the hazard family, before or
+    # after the shipped ones, and returns the family list scan takes.
+    def hazard_with(pattern, event: :user_boom, position: :after)
+      hazard = defs::Messages.table.by_name[:hazard]
+      row = defs::Messages::MessageDef.new(event, pattern, ->(_m) { {} })
+      order = position == :before ? [row, *hazard.defs] : [*hazard.defs, row]
+      gate, always = defs::PatternGate.build(order.map(&:pattern))
+      [defs::Messages::Family.new(:hazard, order.freeze, gate, always)]
+    end
+
+    it 'keeps a shipped fact found before the timing-out pattern' do
+      families = hazard_with(timing_out_pattern, position: :after)
+      found = defs::Messages.scan(shipped_line, families)
+      expect(found.map(&:first)).to eq([:itchy_curse])
+    end
+
+    it 'still delivers a shipped fact that comes after it' do
+      families = hazard_with(timing_out_pattern, position: :before)
+      found = defs::Messages.scan(shipped_line, families)
+      expect(found.map(&:first)).to eq([:itchy_curse])
+    end
+
+    it 'scans the family when the gate itself times out deciding' do
+      # An ungated pattern raises inside PatternGate.rejects?; treating the
+      # family as rejected there would hide every def it holds.
+      families = hazard_with(timing_out_pattern('.'), position: :after)
+      expect(families.first.always_scan).not_to be_empty
+      found = defs::Messages.scan(shipped_line, families)
+      expect(found.map(&:first)).to eq([:itchy_curse])
+    end
+
+    it 'reports once per pattern however many lines hit it, and again after a reload' do
+      families = hazard_with(timing_out_pattern)
+      3.times { defs::Messages.scan(shipped_line, families) }
+      expect(reports.scan('took too long').size).to eq(1)
+
+      Lich::Messaging.clear_messages!
+      supplements.reset!
+      defs::Messages.scan(shipped_line, families)
+      expect(reports).to include('took too long')
+    end
+  end
+
   describe 'the shipped example file' do
     it 'loads its messages section with no rejections' do
       supplements.path = File.join(LIB_DIR, 'gemstone', 'combat', 'defs', 'supplements.example.yaml')
