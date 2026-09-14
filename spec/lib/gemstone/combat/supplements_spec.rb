@@ -329,6 +329,57 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::Supplements do
     end
   end
 
+  describe '.loaded' do
+    it 'names what each kind defined, attacks grouped by the slot they splice into' do
+      write(<<~YAML)
+        attacks:
+          - name: tackle
+            slot: priority
+            patterns: ['You launch yourself at (?<target>.+?) and connect!']
+          - name: ice_lance
+            patterns: ['You hurl a lance of ice at (?<target>[^!]+)!']
+        flares:
+          - name: frost_flare
+            patterns: ['\\*\\* Your .+? flares with frost, striking (?<target>.+?)! \\*\\*']
+        statuses:
+          - name: chilled
+            add: ['(?<target>.+?) shivers uncontrollably\\.']
+        outcomes:
+          - type: miss
+            patterns: ['The ice lance shatters near (?<target>[^.]+)\\.']
+      YAML
+
+      expect(described_class.loaded).to eq(
+        attacks: { priority: [:tackle], generic: [:ice_lance] },
+        flares: [:frost_flare],
+        statuses: [:chilled],
+        outcomes: [:miss]
+      )
+    end
+
+    it 'leaves out kinds and slots the file does not mention' do
+      write("flares:\n  - name: acid\n    patterns: ['Your blade drips acid at (?<target>.+?)!']\n")
+      expect(described_class.loaded).to eq(flares: [:acid])
+    end
+
+    it 'is empty with no file' do
+      expect(described_class.loaded).to eq({})
+    end
+
+    it 'omits an entry the compiler rejected' do
+      write(<<~YAML)
+        attacks:
+          - name: good
+            patterns: ['You jab (?<target>.+?)!']
+          - name: bad
+            patterns: ['You jab (?<target>.+?)(']
+      YAML
+
+      expect(described_class.loaded).to eq(attacks: { generic: [:good] })
+      expect(messages).to include('attacks[1]')
+    end
+  end
+
   describe 'the shipped example file' do
     it 'loads with no rejections and exercises every kind' do
       described_class.path = File.join(LIB_DIR, 'gemstone', 'combat', 'defs', 'supplements.example.yaml')

@@ -128,6 +128,24 @@ module Lich
               }
             end
 
+            # What the file defined, by kind and name: {summary} answers
+            # "did my file load", this answers "did it load what I meant".
+            # A name here that the shipped tables also carry has extended
+            # that def; one they do not is a new def of the player's own.
+            # Attacks are grouped by slot, since the slot decides where
+            # they splice and a wrong one is invisible in the counts.
+            # Kinds the file does not mention are left out.
+            #
+            # @return [Hash{Symbol=>Object}]
+            def loaded
+              {
+                attacks: ATTACK_SLOTS.to_h { |s| [s, attacks(s).map(&:name)] }.reject { |_slot, names| names.empty? },
+                flares: flares.map(&:name),
+                statuses: statuses.map(&:name),
+                outcomes: outcomes.map(&:type)
+              }.reject { |_kind, entries| entries.empty? }
+            end
+
             # Every loaded def file, in load order: what `;hmr combat/defs/`
             # matches, minus this module's own file (re-reading it would
             # reset the memo a second time and re-extend UserDefs for no gain).
