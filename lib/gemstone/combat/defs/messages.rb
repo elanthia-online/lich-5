@@ -184,6 +184,10 @@ module Lich
           MessageTable = Struct.new(:families, :by_name, :family_of, :events)
           TABLE = MessageTable.new(FAMILIES, BY_NAME, FAMILY_OF, EVENTS).freeze
 
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!(:messages)
+
           # @return [MessageTable] the current message table
           def self.table = TABLE
 
@@ -198,18 +202,13 @@ module Lich
           def self.scan(line, families = TABLE.families)
             found = []
             families.each do |family|
-              next if family_rejects?(family, line)
+              # Both the gate and the match below are timeout-guarded in
+              # PatternGate: one pathological pattern must not cost the
+              # facts this line already yielded, nor the defs after it.
+              next if family.rejects?(line)
 
               family.defs.each do |d|
-                m = begin
-                  d.pattern.match(line)
-                rescue Regexp::TimeoutError
-                  # One pathological pattern must not cost the facts this
-                  # line already yielded, nor the defs after it: skip it
-                  # for this line and keep scanning.
-                  Supplements.report_match_timeout(d.pattern)
-                  next
-                end
+                m = PatternGate.safe_match(d.pattern, line)
                 next unless m
 
                 payload = d.data.call(m)
@@ -220,20 +219,6 @@ module Lich
             end
             found
           end
-
-          # The family gate, with a timed-out ungated pattern treated as
-          # undecided rather than as a rejection: the gate only decides
-          # whether the full scan is worth running, so on a timeout the
-          # family is scanned (where each pattern is guarded individually)
-          # instead of dropping every def it holds.
-          #
-          # @return [Boolean]
-          def self.family_rejects?(family, line)
-            family.rejects?(line)
-          rescue Regexp::TimeoutError
-            false
-          end
-          private_class_method :family_rejects?
         end
       end
     end
