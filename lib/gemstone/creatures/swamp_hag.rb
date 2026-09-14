@@ -30,10 +30,6 @@
     {
       name: "Miasmal Forest",
       uids: [5004035..5004044, 5004049..5004053]
-    },
-    {
-      name: "unmapped",
-      uids: [5004045..5004048, 5004054..5004054]
     }
   ],
   attack_attributes: {

@@ -31,10 +31,6 @@
       uids: [14005054..14005066]
     },
     {
-      name: "unmapped",
-      uids: [21025..21028]
-    },
-    {
       name: "Smuggling Tunnels",
       uids: [37002..37021]
     },

@@ -30,10 +30,6 @@
     {
       name: "The Ruined Tower",
       uids: [305023..305030, 305032..305038]
-    },
-    {
-      name: "unmapped",
-      uids: [305031..305031]
     }
   ],
   attack_attributes: {

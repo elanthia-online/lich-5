@@ -35,10 +35,6 @@
       uids: [13020..13036]
     },
     {
-      name: "unmapped",
-      uids: [4217102..4217132]
-    },
-    {
       name: "Vornavian Coast",
       uids: [4218301..4218325]
     }

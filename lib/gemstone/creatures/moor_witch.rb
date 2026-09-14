@@ -30,10 +30,6 @@
     {
       name: "Shattered Moors",
       uids: [420001..420037, 420040..420046]
-    },
-    {
-      name: "unmapped",
-      uids: [420038..420039]
     }
   ],
   attack_attributes: {

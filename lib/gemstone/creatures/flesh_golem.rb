@@ -31,10 +31,6 @@
     {
       name: "Marsh Keep",
       uids: [376051..376054, 376057..376088]
-    },
-    {
-      name: "unmapped",
-      uids: [376055..376056]
     }
   ],
   attack_attributes: {

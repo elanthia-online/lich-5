@@ -30,10 +30,6 @@
     {
       name: "Temple Wyneb",
       uids: [13300001..13300076, 13300080..13300080]
-    },
-    {
-      name: "unmapped",
-      uids: [13300077..13300079]
     }
   ],
   attack_attributes: {

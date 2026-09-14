@@ -30,10 +30,6 @@
     {
       name: "Mraent Caverns",
       uids: [13008001..13008040]
-    },
-    {
-      name: "unmapped",
-      uids: [13008041..13008041]
     }
   ],
   attack_attributes: {

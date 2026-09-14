@@ -27,10 +27,6 @@
     {
       name: "Sailor's Grief",
       uids: [7150201..7150229, 7150301..7150325, 7150328..7150329]
-    },
-    {
-      name: "unmapped",
-      uids: [7150326..7150327]
     }
   ],
   attack_attributes: {

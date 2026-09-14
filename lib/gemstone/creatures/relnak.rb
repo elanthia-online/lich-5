@@ -29,10 +29,6 @@
     {
       name: "Catacombs",
       uids: [490002..490004, 490010..490011, 490018..490018]
-    },
-    {
-      name: "unmapped",
-      uids: [490017..490017]
     }
   ],
   attack_attributes: {

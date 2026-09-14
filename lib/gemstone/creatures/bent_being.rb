@@ -29,10 +29,6 @@
     {
       name: "Old Ta'Faendryl",
       uids: [17003011..17003038, 17003101..17003150, 17003201..17003217]
-    },
-    {
-      name: "unmapped",
-      uids: [17003001..17003010]
     }
   ],
   attack_attributes: {
