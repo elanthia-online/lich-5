@@ -453,7 +453,7 @@ RSpec.describe 'combat message supplements' do
   describe 'the shipped example file' do
     it 'loads its messages section with no rejections' do
       supplements.path = File.join(LIB_DIR, 'gemstone', 'combat', 'defs', 'supplements.example.yaml')
-      expect(supplements.summary[:messages]).to eq(3)
+      expect(supplements.summary[:messages]).to eq(5)
       expect(reports).not_to include('skipped')
     end
   end

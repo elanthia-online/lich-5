@@ -99,6 +99,11 @@ messages:
   #                string (default), integer, or symbol
   #   values:    payload key -> a literal (string, number, true/false/null)
   #
+  # There is no boolean capture type, because game text never carries a
+  # literal true/false: it has one line for the on state and another for
+  # the off state. A boolean fact is two entries for the same event, each
+  # with the literal under values: -- see the haze_703 pair below.
+  #
   # If a capture did not participate in the match or an integer does not
   # parse, NOTHING is emitted (reported once), never a zero or empty fact.
   # The key  raw  is always added by Lich and cannot be set here.
@@ -118,6 +123,28 @@ messages:
       - 'Your Swift Justice charges are restored to (?<n>\d+)\.'
     captures:
       charges: { from: n, type: integer }
+
+  # Shipped event whose contract wants a BOOLEAN (haze_703: id as string,
+  # on as boolean). A boolean cannot be captured, so the on and off lines
+  # are two entries and each supplies  on:  as a literal. The id comes
+  # from the creature link, which is how the shipped patterns capture it.
+  - family: marks
+    event: haze_703
+    patterns:
+      - '<a exist="(?<id>[^"]+)" noun="[^"]+">[^<]+</a>.*? is wreathed in a blood red haze\.'
+    captures:
+      id: id
+    values:
+      'on': true               # quoted: on/off/yes/no are YAML booleans, so a bare  on:  is the key true, not the word
+
+  - family: marks
+    event: haze_703
+    patterns:
+      - 'The blood red haze around <a exist="(?<id>[^"]+)" noun="[^"]+">[^<]+</a> fades\.'
+    captures:
+      id: id
+    values:
+      'on': false
 
   # A new family with a new event. Two defs, same event, different
   # literal facts.

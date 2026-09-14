@@ -79,6 +79,14 @@ module Lich
           # Message payload building blocks. A capture maps a payload key to
           # a named capture with a type; a value is a literal scalar. Keys
           # the engine adds itself cannot be set from the file.
+          # Deliberately no boolean: game text never carries a literal
+          # true/false to capture, it carries one line for the on state and
+          # another for the off state. A boolean fact -- including the
+          # shipped contracts that want one (haze_703, rebuke_1614,
+          # arcane_reflex) -- is therefore written as two entries for the
+          # same event, each with the literal under values:. The example
+          # file shows the pair, and the rejection for type: boolean points
+          # at it.
           CAPTURE_TYPES = %w[string integer symbol].freeze
           RESERVED_PAYLOAD_KEYS = %w[raw].freeze
           # New families and events must carry this prefix so a future
@@ -540,7 +548,12 @@ module Lich
                   return nil
                 end
                 unless CAPTURE_TYPES.include?(type.to_s)
-                  report("messages[#{index}] skipped -- captures.#{key}: type must be one of #{CAPTURE_TYPES.join(', ')}, got #{type.inspect}. This entry will not be applied.")
+                  hint = if type.to_s == 'boolean'
+                           " A boolean is not captured from the text: write two entries for the event, one per line, each with #{key}: true or #{key}: false under values: (see supplements.example.yaml, haze_703)."
+                         else
+                           ''
+                         end
+                  report("messages[#{index}] skipped -- captures.#{key}: type must be one of #{CAPTURE_TYPES.join(', ')}, got #{type.inspect}.#{hint} This entry will not be applied.")
                   return nil
                 end
                 unless patterns.all? { |rx| rx.names.include?(from) }
