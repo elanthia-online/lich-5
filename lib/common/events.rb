@@ -96,6 +96,12 @@ module Lich
         # Remove a subscription by the name {on} returned, or by the block
         # that was registered.
         #
+        # Not synchronous with in-flight delivery: {emit} snapshots its
+        # handler list before calling any, so a handler removed while an emit
+        # is iterating can still run once more. Handlers that must not act
+        # after their owner starts shutting down should check their own state
+        # rather than rely on off having taken effect.
+        #
         # @param name_or_block [String, Symbol, Proc]
         # @return [Boolean] whether anything was removed
         def off(name_or_block)

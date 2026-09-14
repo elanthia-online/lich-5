@@ -41,6 +41,10 @@ module so a `;e Events.list` reads sensibly.
   `before_dying` block.
 - **Error isolation.** A handler that raises is logged and skipped. One bad
   listener cannot break the emitter or the other listeners.
+- **`off` is not a barrier.** An emit already in progress snapshots its
+  handlers first, so a handler removed mid-emit can run one more time. If a
+  handler must not act once your script is shutting down, check a flag of
+  your own inside it.
 
 ## API
 
