@@ -125,6 +125,61 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
     end
   end
 
+  # A pattern that exceeds its evaluation budget must cost that one pattern
+  # and nothing else: not the facts a line already yielded, not the defs
+  # after it, and not the worker's remaining work.
+  describe 'timeout isolation' do
+    def timing_out(source = 'slow')
+      Regexp.new(source).tap do |rx|
+        allow(rx).to receive(:match).and_raise(Regexp::TimeoutError)
+        allow(rx).to receive(:match?).and_raise(Regexp::TimeoutError)
+      end
+    end
+
+    it 'safe_match skips the offending pattern instead of raising' do
+      expect(described_class.safe_match(timing_out, 'anything')).to be_nil
+    end
+
+    it 'safe_match? answers false rather than raising' do
+      expect(described_class.safe_match?(timing_out, 'anything')).to be(false)
+    end
+
+    it 'a timed-out gate is undecided, so the family is still scanned' do
+      # Rejecting here would hide every def behind this gate; the full scan
+      # re-evaluates the same pattern under safe_match, which reports it.
+      expect(described_class.rejects?(timing_out, [].freeze, 'a line')).to be(false)
+    end
+
+    it 'a timed-out always_scan pattern does not reject the line' do
+      expect(described_class.rejects?(nil, [timing_out].freeze, 'a line')).to be(false)
+    end
+
+    it 'a later definition still matches after an earlier one times out' do
+      bad = timing_out
+      good = /(?<target>.+?) shivers uncontrollably\./
+      line = 'a kobold shivers uncontrollably.'
+
+      resolved = [[bad, :bad], [good, :good]].find { |rx, _n| described_class.safe_match(rx, line) }
+      expect(resolved&.last).to eq(:good)
+    end
+  end
+
+  # A pattern that is valid on its own can still be illegal inside a union:
+  # a numbered backreference beside a named capture raises RegexpError. The
+  # detectors are the only place a union of user and shipped patterns is
+  # built, so they must not take the def file down with them.
+  describe '.union_or_nil' do
+    it 'returns the union when the patterns combine' do
+      expect(described_class.union_or_nil([/abc/, /def/], 'test')).to be_a(Regexp)
+    end
+
+    it 'returns nil instead of raising when they cannot' do
+      patterns = [/(?<target>.+?) shivers\./, /^(\w+) echoes \1$/]
+      expect { Regexp.union(patterns) }.to raise_error(RegexpError)
+      expect(described_class.union_or_nil(patterns, 'test')).to be_nil
+    end
+  end
+
   describe 'safety property over the real def files' do
     {
       'attacks'        => -> {

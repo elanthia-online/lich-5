@@ -135,10 +135,71 @@ module Lich
           # keeps the line in play; a non-empty always_scan does NOT blanket-
           # disable rejection (that was the old bug - it reverted the whole
           # table to full-scan the moment one short-literal pattern existed).
-          def rejects?(gate, always_scan, line)
-            return false if gate&.match?(line)
+          # A pattern that exceeds its evaluation budget must cost that one
+          # pattern and nothing else: not the facts a line already yielded,
+          # not the defs after it, and not the worker's remaining work. Both
+          # helpers skip the offending pattern for this line and report it
+          # once per source, through Supplements so the dedup set and its
+          # reset-on-reload are shared with the compile-time reports.
+          #
+          # @return [MatchData, nil]
+          def safe_match(pattern, line)
+            pattern.match(line)
+          rescue Regexp::TimeoutError
+            report_timeout(pattern)
+            nil
+          end
 
-            always_scan.none? { |rx| rx.match?(line) }
+          # @return [Boolean] false when the pattern timed out
+          def safe_match?(pattern, line)
+            pattern.match?(line)
+          rescue Regexp::TimeoutError
+            report_timeout(pattern)
+            false
+          end
+
+          def report_timeout(pattern)
+            Supplements.report_match_timeout(pattern) if defined?(Supplements)
+          end
+
+          def rejects?(gate, always_scan, line)
+            # A timeout anywhere in the gate leaves the answer UNDECIDED, so
+            # the line goes to the full scan rather than being rejected:
+            # deciding not to scan would hide every def behind this gate.
+            # That scan re-evaluates the same pattern under safe_match,
+            # which is where it gets reported. Distinguishing a timeout from
+            # an honest non-match is the whole point -- safe_match?'s false
+            # cannot tell them apart, so the raise is caught here.
+            return false if gate && timeout_tolerant_match?(gate, line) != false
+
+            always_scan.all? { |rx| timeout_tolerant_match?(rx, line) == false }
+          end
+
+          # @return [Boolean, nil] true/false as matched, nil on a timeout
+          def timeout_tolerant_match?(pattern, line)
+            pattern.match?(line)
+          rescue Regexp::TimeoutError
+            report_timeout(pattern)
+            nil
+          end
+
+          # Regexp.union of +patterns+, or nil when they cannot be combined.
+          #
+          # A pattern that is perfectly valid on its own can still be
+          # illegal inside a union: a numbered backreference beside a
+          # named capture raises RegexpError ("numbered backref/call is not
+          # allowed"). Since a supplement may contribute either, a union of
+          # user and shipped patterns is not guaranteed to compile, and the
+          # caller gets nil rather than an exception.
+          #
+          # @param patterns [Array<Regexp>]
+          # @param label [String] named in the report when the union fails
+          # @return [Regexp, nil] frozen
+          def union_or_nil(patterns, label)
+            Regexp.union(patterns).freeze
+          rescue RegexpError => e
+            Supplements.report_union_failure(label, e) if defined?(Supplements)
+            nil
           end
         end
       end

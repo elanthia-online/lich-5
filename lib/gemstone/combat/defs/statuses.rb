@@ -450,7 +450,28 @@ module Lich
           # Compiled regex for fast detection. NOTE: costs ~1ms per
           # non-matching line (unanchored `.+?` alternatives); kept for
           # compatibility but the literal gate below is what parse uses.
-          STATUS_DETECTOR = Regexp.union(ALL_LOOKUP.map(&:first)).freeze
+          #
+          # Built on first use rather than at load: a supplemental pattern
+          # that is perfectly valid alone can still be illegal inside a
+          # union (a numbered backreference beside a shipped named capture
+          # raises RegexpError), and a union built here would take the whole
+          # def file down with it before TABLE ever existed. Nothing in Lich
+          # reads this; PatternGate.build handles each pattern separately.
+          #
+          # @return [Regexp, nil] nil when the patterns cannot be combined
+          # Back-compat: the old constant name resolves to {detector},
+          # so a script still reading STATUS_DETECTOR keeps working.
+          def self.const_missing(name)
+            return detector if name == :STATUS_DETECTOR
+
+            super
+          end
+
+          def self.detector
+            return @detector if defined?(@detector)
+
+            @detector = PatternGate.union_or_nil(ALL_LOOKUP.map(&:first), 'statuses')
+          end
 
           # Literal-substring gate (~7us/line, measured on session logs)
           STATUS_GATE, STATUS_ALWAYS_SCAN = PatternGate.build(ALL_LOOKUP.map(&:first))
@@ -471,7 +492,7 @@ module Lich
             return nil if table.rejects?(line)
 
             table.lookup.each do |pattern, name, action|
-              if (match = pattern.match(line))
+              if (match = PatternGate.safe_match(pattern, line))
                 result = {
                   status: name,
                   action: action # :add or :remove

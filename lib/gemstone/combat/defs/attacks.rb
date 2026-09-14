@@ -783,7 +783,28 @@ module Lich
           # Compiled regex for fast detection. NOTE: costs ~0.5ms per
           # non-matching line (unanchored `.+?` alternatives); kept for
           # compatibility but the literal gate below is what the parser uses.
-          ATTACK_DETECTOR = Regexp.union(ATTACK_LOOKUP.map(&:first)).freeze
+          #
+          # Built on first use rather than at load: a supplemental pattern
+          # that is perfectly valid alone can still be illegal inside a
+          # union (a numbered backreference beside a shipped named capture
+          # raises RegexpError), and a union built here would take the whole
+          # def file down with it before TABLE ever existed. Nothing in Lich
+          # reads this; PatternGate.build handles each pattern separately.
+          #
+          # @return [Regexp, nil] nil when the patterns cannot be combined
+          # Back-compat: the old constant name resolves to {detector},
+          # so a script still reading ATTACK_DETECTOR keeps working.
+          def self.const_missing(name)
+            return detector if name == :ATTACK_DETECTOR
+
+            super
+          end
+
+          def self.detector
+            return @detector if defined?(@detector)
+
+            @detector = PatternGate.union_or_nil(ATTACK_LOOKUP.map(&:first), 'attacks')
+          end
 
           # Literal-substring gate (~7us/line): a line can only match an
           # attack pattern if it contains that pattern's longest literal.

@@ -424,7 +424,7 @@ module Lich
             return nil if table.rejects?(line)
 
             table.lookup.each do |pattern, name, damaging, aoe, spawns|
-              next unless (match = pattern.match(line))
+              next unless (match = PatternGate.safe_match(pattern, line))
 
               result = { name: name, damaging: damaging, aoe: aoe, spawns: spawns }
               result[:target] = match[:target] if match.names.include?('target') && match[:target]

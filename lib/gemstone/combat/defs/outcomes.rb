@@ -346,7 +346,7 @@ module Lich
             table = TABLE
             return nil if table.rejects?(line)
 
-            table.lookup.each { |rx, type| return type if rx.match?(line) }
+            table.lookup.each { |rx, type| return type if PatternGate.safe_match?(rx, line) }
             nil
           end
 
@@ -361,7 +361,7 @@ module Lich
             return false if table.rejects?(line)
 
             table.lookup.each do |rx, _type|
-              next unless rx.match?(line)
+              next unless PatternGate.safe_match?(rx, line)
 
               return rx.names.include?('attacker')
             end

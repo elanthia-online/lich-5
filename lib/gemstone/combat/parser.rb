@@ -48,7 +48,7 @@ module Lich
             return nil if table.rejects?(line)
 
             table.lookup.each do |pattern, name|
-              if (match = pattern.match(line))
+              if (match = Definitions::PatternGate.safe_match(pattern, line))
                 # An inbound attack (creature -> us) names US as its target.
                 # Its only creature link is the ATTACKER, so the line-scan
                 # fallback below would install the attacker as its own
@@ -178,7 +178,7 @@ module Lich
             return false if table.rejects?(line)
 
             table.lookup.each do |pattern, name|
-              if (match = pattern.match(line))
+              if (match = Definitions::PatternGate.safe_match(pattern, line))
                 return self_target?(match) || Definitions::Attacks::ROOM_TARGETED.include?(name)
               end
             end

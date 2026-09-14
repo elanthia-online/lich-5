@@ -39,6 +39,9 @@ module Lich
         @enabled = false
         @settings = {}
         @async_processor = nil
+        # Serialises reading-and-enqueueing a chunk against replacing the
+        # async worker, so a reload never strands a chunk on the old queue.
+        @reload_lock = Mutex.new
         @buffer = []
         @initialized = false
         @source_sequence = 0
@@ -251,11 +254,20 @@ module Lich
             # Quick filter - only process if combat-related content present
             return unless chunk.any? { |line| combat_relevant?(line) }
 
-            if @async_processor
-              @async_processor.process_async(chunk, source: source)
-            else
-              Processor.process(chunk, source: source)
+            # Read the worker and enqueue as one step, under the lock
+            # reload_defs! takes around the swap: without it a chunk read
+            # @async_processor, then the reload drained and replaced that
+            # worker, and the push landed behind the shutdown sentinel of a
+            # queue nothing would drain again. The lock spans the push, not
+            # the parse -- that stays on the worker thread.
+            worker = @reload_lock.synchronize do
+              @async_processor&.tap { |w| w.process_async(chunk, source: source) }
             end
+            return if worker
+
+            # No async worker configured (max_threads <= 0): parse inline,
+            # outside the lock, so a reload never waits on a parse.
+            Processor.process(chunk, source: source)
           end
 
           # Single compiled filter for combat-relevant content. One regex scan
@@ -336,6 +348,29 @@ module Lich
             end
           end
 
+          # Hot-reloads the combat definitions with the player's supplement
+          # file (DATA_DIR/combat/defs.yaml) re-read: the in-session path
+          # after editing that file, equivalent to `;hmr combat/defs/` but
+          # quiet. The async worker is drained first so no chunk is mid-parse
+          # while the tables rebind, then restarted if tracking is on.
+          #
+          # @return [Array<String>] the def files that reloaded cleanly
+          def reload_defs!
+            reloaded = nil
+            # Ingestion parks on this lock for the drain and the swap, so a
+            # chunk arriving mid-reload is enqueued on the NEW worker rather
+            # than stranded behind the old one's shutdown sentinel. The
+            # drain is bounded by the queue it is already draining.
+            @reload_lock.synchronize do
+              was_running = !@async_processor.nil?
+              shutdown_processor
+              reloaded = Definitions::Supplements.reload_defs!
+              initialize_processor if was_running && enabled?
+            end
+            respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
+            reloaded
+          end
+
           private
 
           # A room/stream change can occur inside one input string BEFORE our
@@ -409,22 +444,6 @@ module Lich
             return unless @async_processor
             @async_processor.shutdown
             @async_processor = nil
-          end
-
-          # Hot-reloads the combat definitions with the player's supplement
-          # file (DATA_DIR/combat/defs.yaml) re-read: the in-session path
-          # after editing that file, equivalent to `;hmr combat/defs/` but
-          # quiet. The async worker is drained first so no chunk is mid-parse
-          # while the tables rebind, then restarted if tracking is on.
-          #
-          # @return [Array<String>] the def files that reloaded cleanly
-          def reload_defs!
-            was_running = !@async_processor.nil?
-            shutdown_processor
-            reloaded = Definitions::Supplements.reload_defs!
-            initialize_processor if was_running && enabled?
-            respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
-            reloaded
           end
 
           def add_downstream_hook

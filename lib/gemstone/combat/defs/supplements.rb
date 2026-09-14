@@ -162,6 +162,32 @@ module Lich
               @assembled_mtimes[kind.to_sym] = present? ? File.mtime(path) : nil
             end
 
+            # Reports a pattern that exceeded its evaluation budget while
+            # matching, once per pattern source, through UserDefs' own dedup
+            # set (cleared by reset!, so a reload reports again).
+            # Compile-time timeouts are already reported by the validator;
+            # this is the match-time path, where the scanner skips the
+            # pattern for that line and carries on with the rest.
+            #
+            # @param pattern [Regexp] the pattern that timed out
+            # @return [void]
+            def report_match_timeout(pattern) = report_timeout(pattern)
+
+            # Reports that a set of patterns could not be combined into one
+            # detector regex. Only the (unused) compatibility detectors
+            # build such a union; matching itself is per pattern, so this
+            # costs nothing but the detector.
+            #
+            # @param label [String] which table, e.g. 'statuses'
+            # @param error [RegexpError]
+            # @return [void]
+            def report_union_failure(label, error)
+              report("the #{label} detector could not be built (#{error.message.split(':').first}). " \
+                     'Matching is unaffected; only the unused compatibility detector is nil. ' \
+                     'A pattern with a numbered backreference (\\1) cannot be combined -- use a named ' \
+                     'capture and \\k<name> instead.')
+            end
+
             # Counts per kind, for debug output and support: the first thing
             # to check when a report may stem from a player's own file.
             #
