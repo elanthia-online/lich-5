@@ -43,7 +43,7 @@ module Lich
         /^The heightened sense of spiritual awareness leaves you/, # Revelation (REV)
         /^The swirling fog dissipates from around you/, # Ghost Shroud (GHS)
         # Paladin spells
-        /^The holy golden radiance of your soul subsides, retreating into your body/, # Holy Warrior (HOW)
+        /^The .* radiance of your soul subsides, retreating into your body/, # Holy Warrior (HOW)
         /^Truffenyi's Rally ends, leaving behind a momentary sensation of something stuck in your throat/, # Truffenyi's Rally (TR)
         # Moon Mage spells
         /^The web of shadows twitches one last time and then goes inert/, # Shadow Web (SHW)
