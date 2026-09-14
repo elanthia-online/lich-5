@@ -149,6 +149,8 @@ module Lich
         # Relies on the script-context primitives (get?, put, fput, waitrt?,
         # wait_while, standing?, ...) that lib/global_defs.rb defines at top
         # level, so it must run on a script thread like its callers always have.
+        # Needs the bounded fput (max_resends:, failures: :symbol); on an fput
+        # without those options the stand remedy would recurse without limit.
         #
         # @param dir [String] the exit as the map spells it ('north', 'go door')
         # @param giveup_seconds [Integer] quiet time before giving up
@@ -179,7 +181,8 @@ module Lich
           sends = 0
           remedies = Hash.new(0)
           last_line = nil
-          remedy_reply = nil # what the game said to the last remedy command
+          remedy_replies = {} # what the game said to each kind of remedy
+          current_kind = nil
 
           # Every exit goes through here: restore hands and the buffer, record the
           # failure (with its cause) unless we moved, return the tri-state value.
@@ -207,33 +210,20 @@ module Lich
             put dir
           }
 
-          # Send one remedy command (stand, unhide, retreat, ...) and read its
-          # reply, bounded by time. Deliberately not fput: fput answers "You
-          # struggle, but fail to stand." by calling fput('stand') again with
-          # no limit, so a remedy routed through it never returns and the
-          # budgets below could never apply. One "...wait N" is honored.
-          command = proc { |cmd, timeout = 3|
-            2.times {
-              save_stream.push(clear)
-              put cmd
-              deadline = Time.now + timeout
-              reply = nil
-              while Time.now < deadline
-                reply = get?
-                if reply.nil?
-                  sleep 0.05
-                  next
-                end
-                save_stream.push(reply)
-                break
-              end
-              if reply =~ /^(?:\.\.\.w|W)ait ([0-9]+) sec/
-                sleep($1.to_i)
-                next
-              end
-              remedy_reply = last_line = reply if reply
-              break reply
-            }
+          # Send one remedy command (stand, unhide, retreat, ...) through the
+          # bounded fput: one refusal-driven resend (a "...wait N", or the
+          # in-frame stand fput does on "You struggle, but fail to stand."),
+          # then a failure symbol instead of the unbounded ladder the old fput
+          # ran, which is what kept the stand loop alive. The reply string is
+          # kept per remedy kind so an exhausted remedy can report what the
+          # game actually said to it.
+          command = proc { |cmd|
+            reply = fput(cmd, timeout: 3, max_resends: 1, failures: :symbol)
+            if reply.is_a?(String)
+              remedy_replies[current_kind] = reply
+              last_line = reply
+            end
+            reply
           }
 
           # Apply a remedy and re-send, unless this remedy has already been tried
@@ -243,11 +233,14 @@ module Lich
             remedies[kind] += 1
             if remedies[kind] > budget
               echo "move: #{kind} did not help after #{budget} tries.  giving up."
-              # the reply to the remedy ("You struggle, but fail to stand.")
-              # explains the failure better than the move's own refusal
-              last_line = remedy_reply if remedy_reply
+              # what the game said to THIS remedy ("You are overburdened and
+              # cannot manage to stand.") explains more than the move's own
+              # refusal; a reply to some other remedy that later succeeded
+              # must not be mistaken for it
+              last_line = remedy_replies[kind] if remedy_replies[kind]
               finish.call(nil, cause)
             end
+            current_kind = kind
             fix.call
             put_dir.call
           }

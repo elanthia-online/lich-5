@@ -38,9 +38,30 @@ module MoveFakePrimitives
   def game = Thread.current[:move_game]
   def get? = game.get?
   def put(cmd) = game.put(cmd)
-  # The real fput answers "You struggle, but fail to stand." by calling
-  # fput('stand') again, forever. Move must never route a remedy through it.
-  def fput(cmd) = raise("move routed #{cmd.inspect} through fput")
+
+  # The bounded fput of #1587, reduced to what move relies on: a refusal
+  # ("...wait N", "You struggle, but fail to stand.") triggers a resend -
+  # 'stand' in frame for the struggle - up to max_resends, then the failure
+  # symbol; any other line is returned as the reply. An unbounded call is
+  # the bug #1622 exists to fix, so it raises.
+  def fput(cmd, *_waitingfor, **opts)
+    raise "move called fput(#{cmd.inspect}) without max_resends" unless opts[:max_resends]
+
+    resends = 0
+    message = cmd.dup
+    loop do
+      game.sent << message.dup
+      reply = game.get?
+      return :no_response if reply.nil?
+      return reply unless reply =~ /^\.{3}wait \d|^You.+struggle.+stand/
+
+      resends += 1
+      return :too_many_resends if resends > opts[:max_resends]
+
+      message = 'stand' if reply =~ /struggle/
+    end
+  end
+
   def echo(msg) = game.echoed << msg
   def waitrt?; end
   def wait_while; end
@@ -108,19 +129,29 @@ RSpec.describe Lich::Common::Move do
     let(:struggle) { 'You struggle, but fail to stand.' }
 
     it 'used to retry forever; now gives up after MAX_REMEDIES stands' do
-      # each cycle: "must be standing" -> stand -> "struggle" -> re-send
-      g = game([cannot, struggle] * 10)
+      # each cycle: "must be standing" -> stand -> struggle -> fput's one
+      # in-frame re-stand -> struggle -> :too_many_resends -> re-send north
+      g = game([cannot, struggle, struggle] * 10)
       expect(move.move('north')).to be_nil
-      expect(g.sent.count('stand')).to eq(described_class::MAX_REMEDIES)
+      expect(g.sent.count('stand')).to eq(2 * described_class::MAX_REMEDIES)
       expect(g.sent.count('north')).to eq(described_class::MAX_REMEDIES + 1)
       expect(g.echoed.last).to match(/stand did not help after 3 tries/)
-      expect(move.last_failure.line).to eq(struggle)
+      # fput swallowed the struggle lines into a symbol, so the move's own
+      # refusal is the best line there is
+      expect(move.last_failure.line).to eq(cannot)
     end
 
-    it 'sends stand once per remedy and reads the reply itself (never via fput)' do
-      g = game([cannot, struggle, cannot, 'You stand back up.'], arrive_after: 5)
+    it 'reports what the game said to the stand when it said something' do
+      overburdened = 'You are overburdened and cannot manage to stand.'
+      game([cannot, overburdened] * 10)
+      expect(move.move('north')).to be_nil
+      expect(move.last_failure.line).to eq(overburdened)
+    end
+
+    it 'sends each remedy through the bounded fput' do
+      g = game([cannot, 'You stand back up.'], arrive_after: 3)
       expect(move.move('north')).to be(true)
-      expect(g.sent).to eq(['north', 'stand', 'north', 'stand', 'north'])
+      expect(g.sent).to eq(['north', 'stand', 'north'])
     end
 
     it 'honors one roundtime reply to the stand itself' do
@@ -130,19 +161,27 @@ RSpec.describe Lich::Common::Move do
     end
 
     it 'succeeds if a stand eventually works' do
-      game([cannot, struggle, cannot, 'You stand back up.'], arrive_after: 5)
+      game([cannot, struggle, 'You stand back up.'], arrive_after: 4)
       expect(move.move('north')).to be(true)
     end
 
+    it 'does not blame a later remedy on an earlier one that succeeded' do
+      flounder = 'You flounder around in the water.'
+      game([cannot, 'You stand back up.'] + [flounder] * 30)
+      expect(move.move('swim east')).to be_nil
+      expect(move.last_failure.cause).to eq(:swim)
+      expect(move.last_failure.line).to eq(flounder)
+    end
+
     it 'blames the pack when overburdened' do
-      g = game([cannot, struggle] * 10)
+      g = game([cannot, struggle, struggle] * 10)
       g.encumbrance_text = 'Overburdened'
       move.move('north')
       expect(move.last_failure.cause).to eq(:encumbered)
     end
 
     it 'blames wounds when a limb is wounded' do
-      game([cannot, struggle] * 10)
+      game([cannot, struggle, struggle] * 10)
       XMLData.define_singleton_method(:injuries) { { 'leftLeg' => { 'wound' => 2 } } }
       stub_const('Lich::Gemstone::Wounds', Class.new { def self.limbs = 2 })
       move.move('north')
@@ -150,7 +189,7 @@ RSpec.describe Lich::Common::Move do
     end
 
     it 'is :position when neither applies' do
-      game([cannot, struggle] * 10)
+      game([cannot, struggle, struggle] * 10)
       move.move('north')
       expect(move.last_failure.cause).to eq(:position)
     end
