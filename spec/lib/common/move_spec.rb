@@ -20,7 +20,7 @@ class MoveGame
     @lines = lines.dup
     @sent = []
     @echoed = []
-    @arrive_after = arrive_after # send count at which the room changes
+    @arrive_after = arrive_after # put count (remedies included) at which the room changes
     @room_count = 0
     @encumbrance_text = ''
     @buffer = []
@@ -38,7 +38,9 @@ module MoveFakePrimitives
   def game = Thread.current[:move_game]
   def get? = game.get?
   def put(cmd) = game.put(cmd)
-  def fput(cmd) = game.sent << cmd.dup
+  # The real fput answers "You struggle, but fail to stand." by calling
+  # fput('stand') again, forever. Move must never route a remedy through it.
+  def fput(cmd) = raise("move routed #{cmd.inspect} through fput")
   def echo(msg) = game.echoed << msg
   def waitrt?; end
   def wait_while; end
@@ -103,28 +105,44 @@ RSpec.describe Lich::Common::Move do
   describe 'the stand loop' do
     let(:cannot) { 'You must be standing to do that.' }
 
+    let(:struggle) { 'You struggle, but fail to stand.' }
+
     it 'used to retry forever; now gives up after MAX_REMEDIES stands' do
-      g = game([cannot] * 10)
+      # each cycle: "must be standing" -> stand -> "struggle" -> re-send
+      g = game([cannot, struggle] * 10)
       expect(move.move('north')).to be_nil
       expect(g.sent.count('stand')).to eq(described_class::MAX_REMEDIES)
       expect(g.sent.count('north')).to eq(described_class::MAX_REMEDIES + 1)
       expect(g.echoed.last).to match(/stand did not help after 3 tries/)
+      expect(move.last_failure.line).to eq(struggle)
+    end
+
+    it 'sends stand once per remedy and reads the reply itself (never via fput)' do
+      g = game([cannot, struggle, cannot, 'You stand back up.'], arrive_after: 5)
+      expect(move.move('north')).to be(true)
+      expect(g.sent).to eq(['north', 'stand', 'north', 'stand', 'north'])
+    end
+
+    it 'honors one roundtime reply to the stand itself' do
+      g = game([cannot, '...wait 2 seconds.', 'You stand back up.'], arrive_after: 4)
+      expect(move.move('north')).to be(true)
+      expect(g.sent).to eq(['north', 'stand', 'stand', 'north'])
     end
 
     it 'succeeds if a stand eventually works' do
-      game([cannot, cannot], arrive_after: 3)
+      game([cannot, struggle, cannot, 'You stand back up.'], arrive_after: 5)
       expect(move.move('north')).to be(true)
     end
 
     it 'blames the pack when overburdened' do
-      g = game([cannot] * 10)
+      g = game([cannot, struggle] * 10)
       g.encumbrance_text = 'Overburdened'
       move.move('north')
       expect(move.last_failure.cause).to eq(:encumbered)
     end
 
     it 'blames wounds when a limb is wounded' do
-      game([cannot] * 10)
+      game([cannot, struggle] * 10)
       XMLData.define_singleton_method(:injuries) { { 'leftLeg' => { 'wound' => 2 } } }
       stub_const('Lich::Gemstone::Wounds', Class.new { def self.limbs = 2 })
       move.move('north')
@@ -132,7 +150,7 @@ RSpec.describe Lich::Common::Move do
     end
 
     it 'is :position when neither applies' do
-      game([cannot] * 10)
+      game([cannot, struggle] * 10)
       move.move('north')
       expect(move.last_failure.cause).to eq(:position)
     end
@@ -143,6 +161,21 @@ RSpec.describe Lich::Common::Move do
     expect(move.move('north')).to be_nil
     expect(g.sent.count('retreat')).to eq(2 * described_class::MAX_REMEDIES)
     expect(move.last_failure.cause).to eq(:engaged)
+  end
+
+  it 'names a swim, drag or guard failure from the shared roll branch' do
+    nook = 'Tentatively, you attempt to swim through the nook.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!'
+    game([nook] * 30)
+    expect(move.move('swim nook')).to be_nil
+    expect(move.last_failure.cause).to eq(:swim)
+
+    game(['You grab Bob and try to drag him, but he is too heavy.'] * 30)
+    expect(move.move('go gate')).to be_nil
+    expect(move.last_failure.cause).to eq(:drag)
+
+    game(['Guardsman Ralof stops you and says, "Halt!  You need to make sure you check in first."'] * 30)
+    expect(move.move('go gate')).to be_nil
+    expect(move.last_failure.cause).to eq(:denied)
   end
 
   it 'gives climb rolls a longer leash' do
@@ -218,6 +251,8 @@ RSpec.describe Lich::Common::Move do
       'The gate appears to be closed.'                           => :closed,
       'You may not pass.'                                        => :denied,
       'I could not find what you were referring to.'             => :map,
+      "You can't swim in that direction."                        => :map,
+      'You flounder around in the water.'                        => :swim,
       '...wait 3 seconds.'                                       => :roundtime,
       'Something new the game said.'                             => :unknown,
       nil                                                        => :unknown

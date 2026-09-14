@@ -28,6 +28,7 @@ module Lich
     #   :denied      an NPC or rule refused entry (guards, tickets, guild)
     #   :climb       the climb kept failing (skill roll; not a wound)
     #   :swim        the swim kept failing
+    #   :drag        the body being dragged would not come
     #   :roundtime   still waiting on roundtime when we gave up
     #   :unknown     none of the above - read +line+
     #
@@ -59,6 +60,8 @@ module Lich
         [:hands,      /hands were empty|hands full|both hands (?:free|might help)|empty hands/i],
         [:position,   /stand(?:ing)? ?(?:up )?first|must be standing|while (?:sitting|lying down)|from that position|already sitting|should stand up|standing up might help|get up first/i],
         [:closed,     /(?:appears|seems) to be closed|squeeze between the stone doors/i],
+        [:swim,       /attempt to swim|begin to sink|paddle back to safety|around in the water|swift current|failure to swim|current catches you/i],
+        [:drag,       /try to drag/i],
         [:denied,     /may not pass|unseen force prevents|aren't allowed to enter|only performers|see your ticket|registered groups|reputation precedes|"Abandoned\."|leave promptly|open to invitees|unable to follow you|check in/i],
         [:map,        /can't go there|can't (?:go|swim) in that direction|could not find what you were referring|what were you referring|where are you trying to go|plan to do that here|can't go to|become impassable|too far away|too far above/i],
         [:roundtime,  /^\.{3}wait \d|^wait \d/i]
@@ -81,6 +84,16 @@ module Lich
 
           CAUSES.each { |cause, pattern| return cause if line =~ pattern }
           :unknown
+        end
+
+        # The cause for a line from the shared skill-roll branch: swim, drag
+        # and guard lines are named for what they are; anything else there is
+        # a climb.
+        # @param line [String]
+        # @return [Symbol]
+        def roll_cause(line)
+          c = classify(line)
+          %i[swim drag denied].include?(c) ? c : :climb
         end
 
         # Why did a stand keep failing? "You struggle, but fail to stand" is
@@ -166,6 +179,7 @@ module Lich
           sends = 0
           remedies = Hash.new(0)
           last_line = nil
+          remedy_reply = nil # what the game said to the last remedy command
 
           # Every exit goes through here: restore hands and the buffer, record the
           # failure (with its cause) unless we moved, return the tri-state value.
@@ -193,6 +207,35 @@ module Lich
             put dir
           }
 
+          # Send one remedy command (stand, unhide, retreat, ...) and read its
+          # reply, bounded by time. Deliberately not fput: fput answers "You
+          # struggle, but fail to stand." by calling fput('stand') again with
+          # no limit, so a remedy routed through it never returns and the
+          # budgets below could never apply. One "...wait N" is honored.
+          command = proc { |cmd, timeout = 3|
+            2.times {
+              save_stream.push(clear)
+              put cmd
+              deadline = Time.now + timeout
+              reply = nil
+              while Time.now < deadline
+                reply = get?
+                if reply.nil?
+                  sleep 0.05
+                  next
+                end
+                save_stream.push(reply)
+                break
+              end
+              if reply =~ /^(?:\.\.\.w|W)ait ([0-9]+) sec/
+                sleep($1.to_i)
+                next
+              end
+              remedy_reply = last_line = reply if reply
+              break reply
+            }
+          }
+
           # Apply a remedy and re-send, unless this remedy has already been tried
           # +budget+ times without the move succeeding - then give up with +cause+.
           # nil (keep the exit): the obstacle is about the character, not the map.
@@ -200,6 +243,9 @@ module Lich
             remedies[kind] += 1
             if remedies[kind] > budget
               echo "move: #{kind} did not help after #{budget} tries.  giving up."
+              # the reply to the remedy ("You struggle, but fail to stand.")
+              # explains the failure better than the move's own refusal
+              last_line = remedy_reply if remedy_reply
               finish.call(nil, cause)
             end
             fix.call
@@ -220,11 +266,11 @@ module Lich
             elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
               # DragonRealms
               remedy.call(:retreat, MAX_REMEDIES, :engaged) {
-                fput 'retreat'
-                fput 'retreat'
+                command.call('retreat')
+                command.call('retreat')
               }
             elsif line =~ /^You can't enter .+ and remain hidden or invisible\.|if he can't see you!$|^You can't enter .+ when you can't be seen\.$|^You can't do that without being seen\.$|^How do you intend to get .*? attention\?  After all, no one can see you right now\.$/
-              remedy.call(:unhide, MAX_REMEDIES, :hidden) { fput 'unhide' }
+              remedy.call(:unhide, MAX_REMEDIES, :hidden) { command.call('unhide') }
             elsif (line =~ /^You (?:take a few steps toward|trudge up to|limp towards|march up to|sashay gracefully up to|skip happily towards|sneak up to|stumble toward) a rusty doorknob/) and (dir =~ /door/)
               which = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth', 'eleventh', 'twelfth']
               remedy.call(:door, which.length, :map) {
@@ -242,7 +288,9 @@ module Lich
               # return nil instead of false to show the direction shouldn't be removed from the map database
               finish.call(nil)
             elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
-              remedy.call(:roll, MAX_ROLLS, :climb) {
+              # swim, drag and guard lines share this branch with climb lines;
+              # name the cause from the line rather than assuming a climb
+              remedy.call(:roll, MAX_ROLLS, roll_cause(line)) {
                 sleep 1
                 waitrt?
               }
@@ -250,7 +298,7 @@ module Lich
               remedy.call(:roll, MAX_ROLLS, :climb) {
                 sleep 1
                 waitrt?
-                fput 'stand' unless standing?
+                command.call('stand') unless standing?
                 waitrt?
               }
             elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
@@ -260,7 +308,7 @@ module Lich
               remedy.call(:roll, MAX_ROLLS, :climb) {
                 sleep 0.5
                 waitrt?
-                fput 'stand' unless standing?
+                command.call('stand') unless standing?
                 waitrt?
                 if checkleft or checkright
                   need_full_hands = true
@@ -287,7 +335,7 @@ module Lich
                 tried_fix_drag = true
                 name = (/^You grab (.*?)('s body)? and drag/.match(drag_line).captures.first || /^You are now automatically attempting to drag (.*?) when/.match(drag_line).captures.first)
                 target = /^(?:go|climb) (.+)$/.match(dir).captures.first
-                fput "drag #{name}"
+                command.call("drag #{name}")
                 dir = "drag #{name} #{target}"
                 put_dir.call
               else
@@ -305,7 +353,7 @@ module Lich
                 finish.call(false, :closed)
               else
                 tried_open = true
-                fput dir.sub(/go|climb/, 'open')
+                command.call(dir.sub(/go|climb/, 'open'))
                 put_dir.call
               end
             elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
@@ -322,7 +370,7 @@ module Lich
               # from the character's state since the failure text is the same
               # for a heavy pack and for leg wounds.
               remedy.call(:stand, MAX_REMEDIES, stand_failure_cause) {
-                fput 'stand'
+                command.call('stand')
                 waitrt?
               }
             elsif line =~ /^You're still recovering from your recent/
@@ -330,12 +378,12 @@ module Lich
             elsif line =~ /^The ground approaches you at an alarming rate/
               remedy.call(:fell, MAX_ROLLS, :climb) {
                 sleep 1
-                fput 'stand' unless standing?
+                command.call('stand') unless standing?
               }
             elsif line =~ /You go flying down several feet, landing with a/
               remedy.call(:fell, MAX_ROLLS, :climb) {
                 sleep 1
-                fput 'stand' unless standing?
+                command.call('stand') unless standing?
               }
             elsif line =~ /^Sorry, you may only type ahead/
               sleep 1
@@ -346,7 +394,7 @@ module Lich
             elsif line =~ /you slip (?:on a patch of ice )?and flail uselessly as you land on your rear(?:\.|!)$|You wobble and stumble only for a moment before landing flat on your face!$|^You slip in the mud and fall flat on your back\!$/
               remedy.call(:fell, MAX_ROLLS, :climb) {
                 waitrt?
-                fput 'stand' unless standing?
+                command.call('stand') unless standing?
                 waitrt?
               }
             elsif line =~ /^You flick your hand (?:up|down)wards and focus your aura on your disk, but your disk only wobbles briefly\.$/
@@ -355,14 +403,14 @@ module Lich
               remedy.call(:roll, MAX_ROLLS, :swim) { waitrt? }
             elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
               remedy.call(:feet, MAX_REMEDIES, :unknown) {
-                fput "stow feet"
+                command.call('stow feet')
                 sleep 1
               }
             elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
               sleep(0.5)
               wait_while { stunned? }
               waitrt?
-              fput 'stand' unless standing?
+              command.call('stand') unless standing?
               waitrt?
               put_dir.call
             elsif line == "You don't seem to be able to move to do that."
