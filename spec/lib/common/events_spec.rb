@@ -196,6 +196,16 @@ RSpec.describe Lich::Common::Events do
       expect(fired.length).to eq(2)
     end
 
+    it 'notifies the family a named subscription left when it is re-registered elsewhere' do
+      fired = []
+      @cb = described_class.on_change(prefix: 'combat.') { fired << described_class.any_for?('combat.bolted') }
+      described_class.on('combat.bolted', name: 'supervisor') { nil }
+      described_class.on('go2.status', name: 'supervisor') { nil }
+      expect(fired).to eq([true, false])
+      described_class.off('supervisor')
+      expect(described_class.names).to be_empty
+    end
+
     it 'isolates a raising on_change callback' do
       allow(Lich).to receive(:log)
       @cb = described_class.on_change { raise 'boom' }

@@ -26,6 +26,21 @@ RSpec.describe Lich::Gemstone::Combat::Messages do
     described_class.shutdown
   end
 
+  it 'takes the hook down when a named subscription is re-registered on another family' do
+    hooks = {}
+    stub_const('DownstreamHook', Class.new do
+      define_singleton_method(:add) { |name, action, persist: nil| hooks[name] = [action, persist] }
+      define_singleton_method(:remove) { |name| hooks.delete(name) }
+    end)
+    events.on('combat.bolted', name: 'supervisor') { nil }
+    expect(described_class.installed?).to be(true)
+    events.on('go2.status', name: 'supervisor') { nil }
+    expect(described_class.active_families).to eq([])
+    expect(described_class.installed?).to be(false)
+    expect(hooks).to be_empty
+    events.off('supervisor')
+  end
+
   it 'has no active family and no hook with nobody subscribed' do
     expect(described_class.active_families).to eq([])
     expect(described_class.installed?).to be(false)

@@ -81,8 +81,15 @@ module Lich
             owner_name: (owner&.name || 'Unknown'),
             persist: (persist ? true : false)
           )
-          @mutex.synchronize { @subs[sub.name] = sub }
-          changed([sub])
+          replaced = @mutex.synchronize do
+            old = @subs[sub.name]
+            @subs[sub.name] = sub
+            old
+          end
+          # A named re-registration may move to a different topic family; the
+          # family it left needs its on_change too (Combat::Messages would
+          # otherwise keep its hook installed with nobody listening).
+          changed(replaced ? [replaced, sub] : [sub])
           sub.name
         end
 
