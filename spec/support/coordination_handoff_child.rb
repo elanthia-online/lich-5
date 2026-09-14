@@ -11,7 +11,7 @@ module CoordinationHandoffChild
   DISCOVERY = File.join(ACTIVE_SESSION_DIR, SERVICE::DISCOVERY_FILENAME)
 
   class << self
-    attr_accessor :publication_barrier, :cleanup_barrier
+    attr_accessor :publication_barrier, :cleanup_barrier, :sharing_violation_barrier
 
     def emit(event, fields = {})
       STDOUT.puts(JSON.dump(fields.merge(event: event)))
@@ -54,6 +54,12 @@ module CoordinationHandoffChild
         CoordinationHandoffChild.barrier('publication_pending')
       end
       super
+    rescue Errno::EACCES
+      if destination == CoordinationHandoffChild::DISCOVERY && CoordinationHandoffChild.sharing_violation_barrier
+        CoordinationHandoffChild.sharing_violation_barrier = false
+        CoordinationHandoffChild.barrier('sharing_violation')
+      end
+      raise
     end
 
     def delete(*paths)
@@ -62,6 +68,12 @@ module CoordinationHandoffChild
         CoordinationHandoffChild.barrier('cleanup_pending')
       end
       super
+    rescue Errno::EACCES
+      if paths.include?(CoordinationHandoffChild::DISCOVERY) && CoordinationHandoffChild.sharing_violation_barrier
+        CoordinationHandoffChild.sharing_violation_barrier = false
+        CoordinationHandoffChild.barrier('sharing_violation')
+      end
+      raise
     end
   end
 end
@@ -83,6 +95,19 @@ begin
     when 'arm_cleanup'
       worker.cleanup_barrier = true
       worker.emit('armed')
+    when 'arm_sharing_violation'
+      worker.sharing_violation_barrier = true
+      worker.emit('armed')
+    when 'hold_discovery'
+      File.open(worker::DISCOVERY, 'rb') do
+        worker.barrier('discovery_held')
+      end
+      worker.emit('discovery_released')
+    when 'probe_lock'
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      acquired = worker::SERVICE.send(:acquire_ownership_lock)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      worker.emit('lock_probed', acquired: acquired, elapsed: elapsed)
     when 'ensure'
       available = worker::SERVICE.ensure_service!
       worker.emit('ensured', worker.state.merge(available: available))

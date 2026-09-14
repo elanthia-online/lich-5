@@ -79,7 +79,11 @@ RSpec.describe 'Native ActiveSessions process handoff' do
 
   def kill_child(child)
     Process.kill('KILL', child[:pid])
-    expect(reap_child(child).termsig).to eq(Signal.list.fetch('KILL'))
+    status = reap_child(child)
+    # Ruby on Windows reports Process.kill('KILL') as exit 0 rather than a
+    # POSIX termination signal. A completed waitpid is the portable proof that
+    # the process died; retain the stronger signal assertion where supported.
+    expect(status.termsig).to eq(Signal.list.fetch('KILL')) unless Gem.win_platform?
   end
 
   def discovery
@@ -194,5 +198,59 @@ RSpec.describe 'Native ActiveSessions process handoff' do
       expect(command(successor, 'ensure', 'ensured')['available']).to be(true)
     end
     expect_available(reader, successor)
+  end
+
+  if Gem.win_platform?
+    it 'declines a held native ownership flock without blocking' do
+      owner, contender = Array.new(2) { start_child }
+      expect(command(owner, 'ensure', 'ensured')['available']).to be(true)
+
+      probe = command(contender, 'probe_lock', 'lock_probed')
+      expect(probe['acquired']).to be(false)
+      expect(probe['elapsed']).to be < 1
+    end
+
+    it 'retries publication after a real Windows sharing violation' do
+      owner, successor, holder = Array.new(3) { start_child }
+      expect(command(owner, 'ensure', 'ensured')['available']).to be(true)
+      kill_child(owner)
+
+      command(successor, 'arm_publication', 'armed')
+      command(successor, 'arm_sharing_violation', 'armed')
+      send_command(successor, 'ensure')
+      receive(successor, 'publication_pending')
+
+      send_command(holder, 'hold_discovery')
+      receive(holder, 'discovery_held')
+      send_command(successor, 'release')
+      receive(successor, 'sharing_violation')
+
+      send_command(holder, 'release')
+      receive(holder, 'discovery_released')
+      send_command(successor, 'release')
+      expect(receive(successor, 'ensured')['available']).to be(true)
+      expect(discovery['owner_pid']).to eq(successor[:pid])
+    end
+
+    it 'retries owned cleanup after a real Windows sharing violation' do
+      owner, holder = Array.new(2) { start_child }
+      expect(command(owner, 'ensure', 'ensured')['available']).to be(true)
+      command(owner, 'arm_cleanup', 'armed')
+      command(owner, 'arm_sharing_violation', 'armed')
+      send_command(owner, 'stop')
+      receive(owner, 'cleanup_pending')
+
+      send_command(holder, 'hold_discovery')
+      receive(holder, 'discovery_held')
+      send_command(owner, 'release')
+      receive(owner, 'sharing_violation')
+
+      send_command(holder, 'release')
+      receive(holder, 'discovery_released')
+      send_command(owner, 'release')
+      stopped = receive(owner, 'stopped')
+      expect(stopped.values_at('owns_lock', 'owns_server')).to eq([false, false])
+      expect(File.exist?(File.join(@handoff_dir, 'lich-active-sessions.json'))).to be(false)
+    end
   end
 end

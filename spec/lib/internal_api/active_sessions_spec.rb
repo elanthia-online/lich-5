@@ -148,7 +148,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(discovery[:owner_pid]).to eq(Process.pid)
       expect(discovery[:auth_token]).to eq('generated-token')
       expect(discovery[:port]).to eq(54_321)
-      expect(File.stat(discovery_file).mode & 0o777).to eq(0o600)
+      # Windows does not preserve POSIX permission bits supplied to File.open.
+      expect(File.stat(discovery_file).mode & 0o777).to eq(0o600) unless Gem.win_platform?
       expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.lock'))).to be(true)
     end
 
