@@ -140,7 +140,7 @@ module Lich
             @enabled = true
             @settings[:enabled] = true # Force enabled in settings
             save_settings # Persist enabled state
-            initialize_processor
+            @reload_lock.synchronize { initialize_processor }
             add_downstream_hook
 
             respond "[Combat] Combat tracking enabled" if debug?
@@ -159,7 +159,9 @@ module Lich
             @settings[:enabled] = false
             save_settings # Persist disabled state
             remove_downstream_hook
-            shutdown_processor
+            # Same race as reload_defs!: a chunk that read the worker before
+            # this drains it must not land behind the shutdown sentinel.
+            @reload_lock.synchronize { shutdown_processor }
 
             respond "[Combat] Combat tracking disabled" if debug?
           end
@@ -260,10 +262,15 @@ module Lich
             # worker, and the push landed behind the shutdown sentinel of a
             # queue nothing would drain again. The lock spans the push, not
             # the parse -- that stays on the worker thread.
-            worker = @reload_lock.synchronize do
+            handled = @reload_lock.synchronize do
+              # Re-checked under the lock: a chunk that passed the check
+              # above and then parked here through a disable! must not
+              # come out the other side and parse.
+              next :disabled unless enabled?
+
               @async_processor&.tap { |w| w.process_async(chunk, source: source) }
             end
-            return if worker
+            return if handled
 
             # No async worker configured (max_threads <= 0): parse inline,
             # outside the lock, so a reload never waits on a parse.
@@ -322,8 +329,12 @@ module Lich
 
             # Reinitialize processor if thread count changed
             if new_settings.key?(:max_threads)
-              shutdown_processor
-              initialize_processor
+              # Under the ingestion lock so a chunk arriving mid-swap goes to
+              # the new worker rather than behind the old one's sentinel.
+              @reload_lock.synchronize do
+                shutdown_processor
+                initialize_processor
+              end
             end
 
             respond "[Combat] Settings updated: #{@settings}" if debug?

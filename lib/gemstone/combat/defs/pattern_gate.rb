@@ -40,13 +40,6 @@ module Lich
         # gate from another, and a load that fails part-way leaves the
         # previous complete table live.
         Table = Struct.new(:lookup, :gate, :always_scan) do
-          # @param lookup [Array<Array>] rows whose first element is the Regexp
-          # @return [Table] frozen
-          def self.build(lookup)
-            gate, always = PatternGate.build(lookup.map(&:first))
-            new(lookup.freeze, gate, always).freeze
-          end
-
           # True when the line cannot match any pattern in this table.
           def rejects?(line) = PatternGate.rejects?(gate, always_scan, line)
         end

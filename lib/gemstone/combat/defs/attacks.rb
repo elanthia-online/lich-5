@@ -823,7 +823,6 @@ module Lich
           # serving the old union (or a cached nil).
           remove_instance_variable(:@detector) if instance_variable_defined?(:@detector)
 
-
           # @return [Table] the current attack table; read once per call
           def self.table = TABLE
 

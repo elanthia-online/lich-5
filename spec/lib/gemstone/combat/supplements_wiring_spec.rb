@@ -282,6 +282,14 @@ RSpec.describe 'combat definition supplements wiring' do
       expect(reloaded.map { |f| File.basename(f) }).to include('attacks.rb', 'statuses.rb', 'outcomes.rb')
       expect(defs::Flares::TABLE).to equal(before)
       expect(messages).to include('flares.rb failed to reload: SyntaxError: boom. Its previous definitions remain in effect.')
+
+      # "Its previous definitions remain in effect" has to hold at the class
+      # level too. pattern_gate.rb defines Table with Struct.new, which
+      # yields a fresh class each run; re-executing it on reload left the
+      # kept table an instance of a class the constant no longer named.
+      expect(reloaded.map { |f| File.basename(f) }).not_to include('pattern_gate.rb')
+      expect(defs::Flares::TABLE).to be_a(defs::Table)
+      expect(defs::Attacks::TABLE).to be_a(defs::Table)
     end
 
     # The files that did reload must not answer for the one that did not.

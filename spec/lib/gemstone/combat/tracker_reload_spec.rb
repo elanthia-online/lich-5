@@ -72,8 +72,10 @@ RSpec.describe 'Tracker.reload_defs!' do
     ingest = Thread.new { tracker.process(['You swing a broadsword at a rat!']) }
     # With the lock, this thread parks until the swap completes and its
     # chunk goes to the NEW worker. Without it, the push lands behind the
-    # dying worker's sentinel, on a queue nothing drains again.
-    sleep 0.1
+    # dying worker's sentinel, on a queue nothing drains again. Wait for
+    # the thread to actually block (or finish, in the unlocked case)
+    # rather than sleeping and hoping it got scheduled.
+    wait_until_parked(ingest)
     release << true
     reloader.join
     ingest.join
@@ -85,6 +87,105 @@ RSpec.describe 'Tracker.reload_defs!' do
     # parsed at all" would pass either way: the old worker drains whatever
     # it reaches before its sentinel. Each processor counts its own chunks,
     # so this says which queue the push actually reached.
+    second.shutdown
+    expect(second.stats[:total]).to eq(1)
+    expect(first.stats[:total]).to eq(0)
+    expect(processed.size).to eq(1)
+  end
+
+  # Blocks until +thread+ is parked on a lock (status 'sleep') or has
+  # finished, bounded so a wedged test fails instead of hanging.
+  def wait_until_parked(thread, deadline: 5)
+    finish = Process.clock_gettime(Process::CLOCK_MONOTONIC) + deadline
+    until thread.stop?
+      raise "thread never parked: #{thread.status.inspect}" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > finish
+
+      Thread.pass
+    end
+  end
+
+  # Holds the worker's shutdown open at the sentinel, ingests one chunk in
+  # that window, then lets shutdown finish. Yields [old worker, ingest
+  # thread] once both the lifecycle call and the ingest have returned.
+  def with_chunk_arriving_during(lifecycle)
+    tracker.send(:initialize_processor)
+    first = tracker.instance_variable_get(:@async_processor)
+    in_shutdown = Queue.new
+    release = Queue.new
+    real_shutdown = first.method(:shutdown)
+    allow(first).to receive(:shutdown) do
+      in_shutdown << true
+      release.pop
+      real_shutdown.call
+    end
+
+    caller = Thread.new(&lifecycle)
+    in_shutdown.pop
+    ingest = Thread.new { tracker.process(['You swing a broadsword at a rat!']) }
+    wait_until_parked(ingest)
+    release << true
+    caller.join
+    ingest.join
+    first
+  end
+
+  # The same race as reload_defs!, at the other two places the worker is
+  # replaced or torn down.
+  it 'disable! neither strands a chunk behind the dying worker nor parses it afterwards' do
+    parsed = 0
+    allow(Lich::Gemstone::Combat::Processor).to receive(:process) { parsed += 1 }
+    allow(tracker).to receive(:save_settings)
+    allow(tracker).to receive(:remove_downstream_hook)
+
+    tracker.send(:initialize_processor)
+    first = tracker.instance_variable_get(:@async_processor)
+
+    # The chunk has to be PAST process's leading enabled? check when
+    # disable! starts, or it is simply dropped there and the race is never
+    # run. Hold it inside the relevance filter, which runs after that check.
+    in_filter = Queue.new
+    resume_filter = Queue.new
+    allow(tracker).to receive(:combat_relevant?) do
+      in_filter << true
+      resume_filter.pop
+      true
+    end
+    in_shutdown = Queue.new
+    release = Queue.new
+    real_shutdown = first.method(:shutdown)
+    allow(first).to receive(:shutdown) do
+      in_shutdown << true
+      release.pop
+      real_shutdown.call
+    end
+
+    ingest = Thread.new { tracker.process(['You swing a broadsword at a rat!']) }
+    in_filter.pop
+    disabler = Thread.new { tracker.disable! }
+    in_shutdown.pop
+    # disable! is now inside the drain. Let the chunk go: with the lock it
+    # parks, then finds tracking off and drops; without it, it is pushed to
+    # the worker being torn down and parsed after disable! has returned.
+    resume_filter << true
+    wait_until_parked(ingest)
+    release << true
+    disabler.join
+    ingest.join
+
+    expect(tracker.enabled?).to be(false)
+    expect(first.stats[:queued]).to eq(0)
+    expect(parsed).to eq(0)
+  end
+
+  it 'configure(max_threads:) hands a chunk arriving mid-swap to the new worker' do
+    processed = Queue.new
+    allow(Lich::Gemstone::Combat::Processor).to receive(:process) { |chunk, **_| processed << chunk }
+    allow(tracker).to receive(:save_settings)
+
+    first = with_chunk_arriving_during(-> { tracker.configure(max_threads: 1) })
+
+    second = tracker.instance_variable_get(:@async_processor)
+    expect(second).not_to equal(first)
     second.shutdown
     expect(second.stats[:total]).to eq(1)
     expect(first.stats[:total]).to eq(0)

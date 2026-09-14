@@ -226,8 +226,13 @@ module Lich
 
             # Every loaded def file, in load order: what `;hmr combat/defs/`
             # matches, minus this module's own file (re-reading it would
-            # reset the memo a second time and re-extend UserDefs for no gain).
-            DEF_FILE_PATTERN = %r{[/\\]gemstone[/\\]combat[/\\]defs[/\\](?!supplements\.rb\z)[^/\\]+\.rb\z}.freeze
+            # reset the memo a second time and re-extend UserDefs for no gain)
+            # and minus pattern_gate.rb: it defines the Table struct, and
+            # Struct.new yields a fresh class each run, so re-executing it
+            # would leave the table of a def file that failed to reload --
+            # the one this method promises stays live -- an instance of a
+            # class the Table constant no longer names.
+            DEF_FILE_PATTERN = %r{[/\\]gemstone[/\\]combat[/\\]defs[/\\](?!supplements\.rb\z|pattern_gate\.rb\z)[^/\\]+\.rb\z}.freeze
 
             # Re-reads the supplement file and re-executes every loaded def
             # file so each rebinds its TABLE from shipped defs plus the

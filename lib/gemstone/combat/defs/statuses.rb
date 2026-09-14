@@ -489,7 +489,6 @@ module Lich
           # serving the old union (or a cached nil).
           remove_instance_variable(:@detector) if instance_variable_defined?(:@detector)
 
-
           # Parse status effect from line
           def self.parse(line)
             table = TABLE
