@@ -405,6 +405,10 @@ module Lich
           # assignment; parse reads it once per call (see Definitions::Table).
           TABLE = Table.new(FLARE_LOOKUP, GATE, ALWAYS_SCAN).freeze
 
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!
+
           # Flare announce lines name the flaring weapon as a link:
           #   Your <a exist="393573117" noun="sword">slim short sword</a> ...
           # The exist id is the join key for claiming pre-flares by weapon.

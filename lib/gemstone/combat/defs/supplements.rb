@@ -82,6 +82,7 @@ module Lich
             def path=(new_path)
               @path = new_path
               @loaded_mtime = nil
+              @assembled_mtime = nil
               reset!
             end
 
@@ -91,9 +92,17 @@ module Lich
             # True when the file on disk (present or not) differs from what
             # the current def tables were assembled from, so a reload_defs!
             # would change something. Cheap: one stat.
+            #
+            # Deliberately NOT the document cache's stamp (@loaded_mtime):
+            # reading a supplement re-parses the file, which every reader
+            # does, but only reload_defs! rebuilds the tables the parser
+            # matches against. Sharing one stamp let an inspection call --
+            # `loaded` or `summary`, the very things a player runs after an
+            # edit -- answer "not stale" while the new definition was still
+            # unrecognised, and the login-time reload then skipped it.
             def stale?
               current = present? ? File.mtime(path) : nil
-              @loaded_mtime != current
+              @assembled_mtime != current
             end
 
             # Supplemental attack defs for one slot.
@@ -114,6 +123,19 @@ module Lich
 
             # @return [Array<Outcomes::OutcomeDef>] frozen
             def outcomes = memoize(:outcomes)
+
+            # Records that a def module has just assembled its table from
+            # the current file, so {stale?} answers for the tables the
+            # parser matches against rather than for the document cache.
+            # Called by each def module at the point it splices the
+            # supplements in -- at require time and again on every reload,
+            # which are the only two ways a table is built. Inspecting a
+            # reader (`loaded`, `summary`) deliberately does not call it.
+            #
+            # @return [void]
+            def assembled!
+              @assembled_mtime = present? ? File.mtime(path) : nil
+            end
 
             # Counts per kind, for debug output and support: the first thing
             # to check when a report may stem from a player's own file.

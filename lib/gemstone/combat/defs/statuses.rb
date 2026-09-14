@@ -459,6 +459,10 @@ module Lich
           # assignment; parse reads it once per call (see Definitions::Table).
           TABLE = Table.new(ALL_LOOKUP, STATUS_GATE, STATUS_ALWAYS_SCAN).freeze
 
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!
+
           # Parse status effect from line
           def self.parse(line)
             table = TABLE

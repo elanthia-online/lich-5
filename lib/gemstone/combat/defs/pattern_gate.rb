@@ -84,18 +84,48 @@ module Lich
           # useful gate (they must be tried on every line).
           MIN_LITERAL = 4
 
+          # True when +regex+ matches without regard to case, whether that
+          # was set as an option (//i, Regexp::IGNORECASE) or written inline
+          # as a global (?i) -- the inline form rides in the source and
+          # leaves options untouched. A scoped (?i:...) is not global, and
+          # its group is stripped out of the literal anyway.
+          def case_folded?(regex)
+            return true if (regex.options & Regexp::IGNORECASE) != 0
+
+            regex.source.match?(/\(\?[a-z]*i[a-z]*\)/)
+          end
+
           def build(patterns)
             literals = []
+            folded = []
             always_scan = []
             patterns.each do |pattern|
               literal = longest_literal(pattern)
               if literal && literal.length >= MIN_LITERAL
-                literals << literal
+                # A case-folded pattern's literal has to be matched the same
+                # way, or the gate rejects lines the pattern itself matches
+                # (/ZEPHYR chills/i against "zephyr chills ..."). Folded
+                # literals go into their own case-insensitive union rather
+                # than sending the whole pattern to always_scan, which would
+                # put every def of a case-folded family back on full scan.
+                (case_folded?(pattern) ? folded : literals) << literal
               else
                 always_scan << pattern
               end
             end
-            [literals.empty? ? nil : Regexp.union(literals.uniq).freeze, always_scan.freeze]
+            [union_of(literals, folded), always_scan.freeze]
+          end
+
+          # One gate regex covering both unions, or nil when there are no
+          # literals at all.
+          def union_of(literals, folded)
+            exact = literals.empty? ? nil : Regexp.union(literals.uniq)
+            loose = folded.empty? ? nil : Regexp.new(Regexp.union(folded.uniq).source, Regexp::IGNORECASE)
+            return nil unless exact || loose
+            return exact.freeze unless loose
+            return loose.freeze unless exact
+
+            Regexp.union(exact, loose).freeze
           end
 
           # Convenience: true when the line can't possibly match any pattern in

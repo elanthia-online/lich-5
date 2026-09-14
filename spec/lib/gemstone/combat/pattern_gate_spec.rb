@@ -4,6 +4,7 @@ require_relative '../../../spec_helper'
 require 'gemstone/combat/defs/pattern_gate'
 require 'gemstone/combat/defs/attacks'
 require 'gemstone/combat/defs/statuses'
+require 'gemstone/combat/defs/messages'
 
 # PatternGate derives literal-substring pre-filters from def patterns. The
 # safety property is: the gate must NEVER reject a line that some pattern
@@ -37,9 +38,54 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
     it 'trims a trailing character that is optional in the source' do
       expect(described_class.longest_literal(/points? of damage/)).to eq(' of damage')
     end
+
+    it 'extracts the literal from a case-folded pattern too (build matches it case-insensitively)' do
+      expect(described_class.longest_literal(/ZEPHYR chills (?<target>.+)/i)).to eq('ZEPHYR chills ')
+      expect(described_class.longest_literal(/(?i)ZEPHYR chills (?<target>.+)/)).to eq('ZEPHYR chills ')
+    end
+  end
+
+  # A literal lifted out of a case-folded pattern has to be matched the same
+  # way. Gating /ZEPHYR chills/i on a case-sensitive "ZEPHYR chills" rejects
+  # "zephyr chills a kobold" -- a line the pattern itself matches -- and
+  # sending the whole pattern to always_scan instead would put every def of
+  # a case-folded family back on a full scan of every line.
+  describe '.case_folded?' do
+    it 'recognises the option-setting and inline-global spellings' do
+      expect(described_class.case_folded?(/x/i)).to be(true)
+      expect(described_class.case_folded?(Regexp.new('x', Regexp::IGNORECASE))).to be(true)
+      expect(described_class.case_folded?(/(?i)x/)).to be(true)
+      expect(described_class.case_folded?(/(?mi)x/)).to be(true)
+    end
+
+    it 'does not treat a plain pattern or a scoped group as globally folded' do
+      expect(described_class.case_folded?(/x/)).to be(false)
+      expect(described_class.case_folded?(/(?i:x)y/)).to be(false)
+      expect(described_class.case_folded?(/(?<name>x)y/)).to be(false)
+    end
   end
 
   describe '.build / .rejects?' do
+    it 'gates a case-folded pattern without rejecting the lines it matches' do
+      pattern = /(?i)ZEPHYR chills (?<target>.+)/
+      gate, always = described_class.build([pattern])
+
+      expect(pattern.match('zephyr chills a kobold')).not_to be_nil
+      expect(described_class.rejects?(gate, always, 'zephyr chills a kobold')).to be(false)
+      # Still gated, not dumped onto every line as a full scan.
+      expect(always).to be_empty
+      expect(described_class.rejects?(gate, always, 'nothing relevant here')).to be(true)
+    end
+
+    it 'keeps folded and exact literals in one gate without loosening the exact ones' do
+      gate, always = described_class.build([/ZEPHYR chills/i, /PLAIN literal here/])
+      expect(always).to be_empty
+      expect(described_class.rejects?(gate, always, 'zephyr chills')).to be(false)
+      expect(described_class.rejects?(gate, always, 'PLAIN literal here')).to be(false)
+      # The case-sensitive pattern keeps its case sensitivity.
+      expect(described_class.rejects?(gate, always, 'plain literal here')).to be(true)
+    end
+
     it 'sends patterns without a usable literal to always_scan' do
       gate, always = described_class.build([/ab|cd/, /a long literal here/])
       expect(always).to eq([/ab|cd/])
@@ -81,13 +127,20 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
 
   describe 'safety property over the real def files' do
     {
-      'attacks'  => -> {
+      'attacks'        => -> {
         a = Lich::Gemstone::Combat::Definitions::Attacks
         [a::ATTACK_LOOKUP.map(&:first), a::ATTACK_GATE, a::ATTACK_ALWAYS_SCAN]
       },
-      'statuses' => -> {
+      'statuses'       => -> {
         s = Lich::Gemstone::Combat::Definitions::Statuses
         [s::ALL_LOOKUP.map(&:first), s::STATUS_GATE, s::STATUS_ALWAYS_SCAN]
+      },
+      # The message families carry the shipped case-folded patterns, so they
+      # are where a gate that ignores casing shows up first.
+      'message family' => -> {
+        m = Lich::Gemstone::Combat::Definitions::Messages
+        fam = m::FAMILIES.find { |f| f.defs.any? { |d| described_class.case_folded?(d.pattern) } } || m::FAMILIES.first
+        [fam.defs.map(&:pattern), fam.gate, fam.always_scan]
       }
     }.each do |name, fetch|
       it "every #{name} pattern is either gated by a guaranteed literal or in always_scan" do
@@ -98,6 +151,9 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
             # the literal must be guaranteed: any line containing it passes
             # the gate, so lines matching the pattern are never rejected
             expect(gate).to match(literal)
+            # and in whatever casing the pattern itself accepts, or the gate
+            # would reject a line the pattern matches
+            expect(gate).to match(literal.swapcase) if described_class.case_folded?(pattern)
           else
             expect(always).to include(pattern)
           end

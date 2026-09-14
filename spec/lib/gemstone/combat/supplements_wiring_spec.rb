@@ -161,6 +161,32 @@ RSpec.describe 'combat definition supplements wiring' do
       expect(supplements.summary.values).to all(eq(0))
     end
 
+    # The literal gate is a union of plain strings matched case-sensitively,
+    # so a case-folded supplemental pattern was filtered out before the scan
+    # ever saw it: the pattern matched the line directly while
+    # Statuses.parse returned nil. Its literal now joins a case-insensitive
+    # union instead, so the pattern stays gated rather than falling back to
+    # a full scan of every line.
+    it 'recognises a case-insensitive supplemental pattern' do
+      write(<<~YAML)
+        statuses:
+          - name: zephyr_chilled
+            add: ['(?i)ZEPHYR chills (?<target>.+)']
+      YAML
+      supplements.reload_defs!
+
+      pattern = supplements.statuses.find { |s| s.name == :zephyr_chilled }.add_patterns.first
+      expect(pattern.match('zephyr chills a kobold')).not_to be_nil
+      expect(defs::Statuses::TABLE.always_scan).not_to include(pattern)
+      expect(defs::Statuses::TABLE.rejects?('zephyr chills a kobold')).to be(false)
+
+      parsed = defs::Statuses.parse('zephyr chills a kobold')
+      expect(parsed).not_to be_nil
+      expect(parsed[:status]).to eq(:zephyr_chilled)
+      expect(parsed[:action]).to eq(:add)
+      expect(parsed[:target]).to eq('a kobold')
+    end
+
     it 'reports stale? only when the file changed since the tables were assembled' do
       supplements.reload_defs!
       expect(supplements.stale?).to be(false)
@@ -168,6 +194,30 @@ RSpec.describe 'combat definition supplements wiring' do
       expect(supplements.stale?).to be(true)
       supplements.reload_defs!
       expect(supplements.stale?).to be(false)
+    end
+
+    # stale? must answer for the assembled tables, not for the document
+    # cache. Sharing one stamp meant that inspecting the file after an edit
+    # -- exactly what loaded and summary are for -- cleared the flag while
+    # the new definition was still unrecognised, so the login-time
+    # `reload_defs! if stale?` skipped it.
+    it 'stays stale while inspecting, until the tables are actually rebuilt' do
+      supplements.reload_defs!
+      write(yaml)
+      expect(supplements.stale?).to be(true)
+
+      expect(supplements.loaded).to include(:attacks)
+      expect(supplements.summary[:attacks]).to be > 0
+      supplements.flares
+      supplements.statuses
+      supplements.outcomes
+
+      expect(supplements.stale?).to be(true)
+      expect(parser.parse_attack("You hurl a lance of ice at #{bolded(1, 'x', 'x')}!")[:name]).not_to eq(:ice_lance)
+
+      supplements.reload_defs!
+      expect(supplements.stale?).to be(false)
+      expect(parser.parse_attack("You hurl a lance of ice at #{bolded(1, 'x', 'x')}!")[:name]).to eq(:ice_lance)
     end
   end
 

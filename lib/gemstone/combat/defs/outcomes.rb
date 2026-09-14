@@ -333,6 +333,10 @@ module Lich
           # assignment; parse reads it once per call (see Definitions::Table).
           TABLE = Table.new(OUTCOME_LOOKUP, GATE, ALWAYS_SCAN).freeze
 
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!
+
           # Classifies a single game line as an attack outcome.
           #
           # @param line [String] one line of game text (tags included)

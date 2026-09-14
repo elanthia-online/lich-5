@@ -793,6 +793,10 @@ module Lich
           # single assignment: what the parser reads (see Definitions::Table).
           TABLE = Table.new(ATTACK_LOOKUP, ATTACK_GATE, ATTACK_ALWAYS_SCAN).freeze
 
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!
+
           # @return [Table] the current attack table; read once per call
           def self.table = TABLE
 
