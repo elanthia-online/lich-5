@@ -3,6 +3,8 @@
 # rubocop changes and DR toplevel command handling (2023-06-28)
 # sadly adding global level script methods (2024-06-12)
 
+require_relative 'common/move'
+
 # Sentinel constants for dependency.lic gating.
 # When these are defined, dependency.lic skips its inline versions.
 module Lich
@@ -610,11 +612,22 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
   # [LNet]-[Private]-Casis: "You begin to make your way up the steep headland pathway.  Before traveling very far, however, you lose your footing on the loose stones.  You struggle in vain to maintain your balance, then find yourself falling to the bay below!"  (20:35:36)
   # [LNet]-[Private]-Casis: "You smack into the water with a splash and sink far below the surface."  (20:35:50)
   # You approach the entrance and identify yourself to the guard.  The guard checks over a long scroll of names and says, "I'm sorry, the Guild is open to invitees only.  Please do return at a later date when we will be open to the public."
+  #
+  # Returns true (moved), false (this exit is wrong; the caller may drop it
+  # from the map) or nil (blocked for now; keep the exit). After a false or
+  # nil, Lich::Common::Move.last_failure says what was sent, the line that
+  # ended it, and a :cause a caller can act on. Every "fix the obstacle and
+  # re-send" branch below has a budget (Move::MAX_REMEDIES for remedies that
+  # should work first time, Move::MAX_ROLLS for climb/swim rolls) so a
+  # remedy that is not working cannot keep this loop alive forever.
   if dir == 'none'
     echo 'move: no direction given'
     return false
   end
 
+  # Own the string: several branches rewrite it (climb<->go, door numbering),
+  # and the argument is often a wayto string straight from the map database.
+  dir = dir.to_s.dup
   need_full_hands = false
   tried_open = false
   tried_fix_drag = false
@@ -622,19 +635,47 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
   room_count = XMLData.room_count
   giveup_time = Time.now.to_i + giveup_seconds.to_i
   save_stream = Array.new
+  sends = 0
+  remedies = Hash.new(0)
+  last_line = nil
+
+  # Every exit goes through here: restore hands and the buffer, record the
+  # failure (with its cause) unless we moved, return the tri-state value.
+  finish = proc { |value, cause = nil|
+    fill_hands if need_full_hands
+    Script.current.downstream_buffer.unshift(*save_stream.flatten)
+    if value
+      Lich::Common::Move.clear_failure
+    else
+      Lich::Common::Move.record_failure(dir, last_line, cause: cause, attempts: sends)
+    end
+    return value
+  }
 
   put_dir = proc {
     if XMLData.room_count > room_count
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return true
+      finish.call(true)
     end
     waitrt?
     wait_while { stunned? }
     giveup_time = Time.now.to_i + giveup_seconds.to_i
     line_count = 0
     save_stream.push(clear)
+    sends += 1
     put dir
+  }
+
+  # Apply a remedy and re-send, unless this remedy has already been tried
+  # +budget+ times without the move succeeding - then give up with +cause+.
+  # nil (keep the exit): the obstacle is about the character, not the map.
+  remedy = proc { |kind, budget, cause, &fix|
+    remedies[kind] += 1
+    if remedies[kind] > budget
+      echo "move: #{kind} did not help after #{budget} tries.  giving up."
+      finish.call(nil, cause)
+    end
+    fix.call
+    put_dir.call
   }
 
   put_dir.call
@@ -644,80 +685,76 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     unless line.nil?
       save_stream.push(line)
       line_count += 1
+      last_line = line
     end
     if line.nil?
       sleep 0.1
     elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
       # DragonRealms
-      fput 'retreat'
-      fput 'retreat'
-      put_dir.call
+      remedy.call(:retreat, Lich::Common::Move::MAX_REMEDIES, :engaged) {
+        fput 'retreat'
+        fput 'retreat'
+      }
     elsif line =~ /^You can't enter .+ and remain hidden or invisible\.|if he can't see you!$|^You can't enter .+ when you can't be seen\.$|^You can't do that without being seen\.$|^How do you intend to get .*? attention\?  After all, no one can see you right now\.$/
-      fput 'unhide'
-      put_dir.call
+      remedy.call(:unhide, Lich::Common::Move::MAX_REMEDIES, :hidden) { fput 'unhide' }
     elsif (line =~ /^You (?:take a few steps toward|trudge up to|limp towards|march up to|sashay gracefully up to|skip happily towards|sneak up to|stumble toward) a rusty doorknob/) and (dir =~ /door/)
       which = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth', 'eleventh', 'twelfth']
-      # avoid stomping the room for the entire session due to a transient failure
-      dir = dir.to_s
-      if dir =~ /\b#{which.join('|')}\b/
-        dir.sub!(/\b(#{which.join('|')})\b/) { "#{which[which.index($1) + 1]}" }
-      else
-        dir.sub!('door', 'second door')
-      end
-      put_dir.call
+      remedy.call(:door, which.length, :map) {
+        if dir =~ /\b#{which.join('|')}\b/
+          dir.sub!(/\b(#{which.join('|')})\b/) { "#{which[which.index($1) + 1]}" }
+        else
+          dir.sub!('door', 'second door')
+        end
+      }
     elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
       echo 'move: failed'
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return false
+      finish.call(false)
     elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
       echo 'move: failed'
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       # return nil instead of false to show the direction shouldn't be removed from the map database
-      return nil
+      finish.call(nil)
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
-      sleep 1
-      waitrt?
-      put_dir.call
+      remedy.call(:roll, Lich::Common::Move::MAX_ROLLS, :climb) {
+        sleep 1
+        waitrt?
+      }
     elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
-      sleep 1
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      put_dir.call
+      remedy.call(:roll, Lich::Common::Move::MAX_ROLLS, :climb) {
+        sleep 1
+        waitrt?
+        fput 'stand' unless standing?
+        waitrt?
+      }
     elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
       # swims in Sailor's Grief
-      return true
+      finish.call(true)
     elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
-      sleep 0.5
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      if checkleft or checkright
-        need_full_hands = true
-        empty_hands
-      end
-      put_dir.call
+      remedy.call(:roll, Lich::Common::Move::MAX_ROLLS, :climb) {
+        sleep 0.5
+        waitrt?
+        fput 'stand' unless standing?
+        waitrt?
+        if checkleft or checkright
+          need_full_hands = true
+          empty_hands
+        end
+      }
     elsif line == 'You are too injured to be doing any climbing!'
       if (resolve = Spell[9704]) and resolve.known?
-        wait_until { resolve.affordable? }
-        resolve.cast
-        put_dir.call
+        remedy.call(:resolve, Lich::Common::Move::MAX_REMEDIES, :injured) {
+          wait_until { resolve.affordable? }
+          resolve.cast
+        }
       else
-        return nil
+        finish.call(nil, :injured)
       end
     elsif line =~ /^You(?:'re going to| will) have to climb that\./
-      dir.gsub!('go', 'climb')
-      put_dir.call
+      remedy.call(:verb, Lich::Common::Move::MAX_REMEDIES, :map) { dir.gsub!('go', 'climb') }
     elsif line =~ /^You can't climb that\./
-      dir.gsub!('climb', 'go')
-      put_dir.call
+      remedy.call(:verb, Lich::Common::Move::MAX_REMEDIES, :map) { dir.gsub!('climb', 'go') }
     elsif line =~ /^You can't drag/
       if tried_fix_drag
-        fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(*save_stream.flatten)
-        return false
+        finish.call(false)
       elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
         tried_fix_drag = true
         name = (/^You grab (.*?)('s body)? and drag/.match(drag_line).captures.first || /^You are now automatically attempting to drag (.*?) when/.match(drag_line).captures.first)
@@ -731,20 +768,20 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         put_dir.call
       end
     elsif line =~ /^Maybe if your hands were empty|^You figure freeing up both hands might help\.|^You can't .+ with your hands full\.$|^You'll need empty hands to climb that\.$|^It's a bit too difficult to swim holding|^You will need both hands free for such a difficult task\./
-      need_full_hands = true
-      empty_hands
-      put_dir.call
+      remedy.call(:hands, Lich::Common::Move::MAX_REMEDIES, :hands) {
+        need_full_hands = true
+        empty_hands
+      }
     elsif line =~ /(?:appears|seems) to be closed\.$|^You cannot quite manage to squeeze between the stone doors\.$/
       if tried_open
-        fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(*save_stream.flatten)
-        return false
+        finish.call(false, :closed)
       else
         tried_open = true
         fput dir.sub(/go|climb/, 'open')
         put_dir.call
       end
     elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
+      # Waiting is not a remedy that can fail; roundtime always ends.
       if $2.to_i > 1
         sleep($2.to_i - "0.2".to_f)
       else
@@ -752,20 +789,26 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       end
       put_dir.call
     elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
-      fput 'stand'
-      waitrt?
-      put_dir.call
+      # A stand that keeps failing (wounds, encumbrance) used to loop here
+      # forever, 10s of roundtime per try. Bounded now; the cause comes
+      # from the character's state since the failure text is the same
+      # for a heavy pack and for leg wounds.
+      remedy.call(:stand, Lich::Common::Move::MAX_REMEDIES, Lich::Common::Move.stand_failure_cause) {
+        fput 'stand'
+        waitrt?
+      }
     elsif line =~ /^You're still recovering from your recent/
-      sleep 2
-      put_dir.call
+      remedy.call(:recover, Lich::Common::Move::MAX_ROLLS, :roundtime) { sleep 2 }
     elsif line =~ /^The ground approaches you at an alarming rate/
-      sleep 1
-      fput 'stand' unless standing?
-      put_dir.call
+      remedy.call(:fell, Lich::Common::Move::MAX_ROLLS, :climb) {
+        sleep 1
+        fput 'stand' unless standing?
+      }
     elsif line =~ /You go flying down several feet, landing with a/
-      sleep 1
-      fput 'stand' unless standing?
-      put_dir.call
+      remedy.call(:fell, Lich::Common::Move::MAX_ROLLS, :climb) {
+        sleep 1
+        fput 'stand' unless standing?
+      }
     elsif line =~ /^Sorry, you may only type ahead/
       sleep 1
       put_dir.call
@@ -773,19 +816,20 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       wait_while { stunned? }
       put_dir.call
     elsif line =~ /you slip (?:on a patch of ice )?and flail uselessly as you land on your rear(?:\.|!)$|You wobble and stumble only for a moment before landing flat on your face!$|^You slip in the mud and fall flat on your back\!$/
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      put_dir.call
+      remedy.call(:fell, Lich::Common::Move::MAX_ROLLS, :climb) {
+        waitrt?
+        fput 'stand' unless standing?
+        waitrt?
+      }
     elsif line =~ /^You flick your hand (?:up|down)wards and focus your aura on your disk, but your disk only wobbles briefly\.$/
-      put_dir.call
+      remedy.call(:disk, Lich::Common::Move::MAX_REMEDIES, :unknown) { nil }
     elsif line =~ /^You dive into the fast-moving river, but the current catches you and whips you back to shore, wet and battered\.$|^Running through the swampy terrain, you notice a wet patch in the bog|^You flounder around in the water.$|^You blunder around in the water, barely able|^You struggle against the swift current to swim|^You slap at the water in a sad failure to swim|^You work against the swift current to swim/
-      waitrt?
-      put_dir.call
+      remedy.call(:roll, Lich::Common::Move::MAX_ROLLS, :swim) { waitrt? }
     elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
-      fput "stow feet"
-      sleep 1
-      put_dir.call
+      remedy.call(:feet, Lich::Common::Move::MAX_REMEDIES, :unknown) {
+        fput "stow feet"
+        sleep 1
+      }
     elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
       sleep(0.5)
       wait_while { stunned? }
@@ -794,32 +838,27 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
       waitrt?
       put_dir.call
     elsif line == "You don't seem to be able to move to do that."
-      30.times {
-        break if clear.include?('You regain control of your senses!')
+      remedy.call(:held, Lich::Common::Move::MAX_REMEDIES, :unknown) {
+        30.times {
+          break if clear.include?('You regain control of your senses!')
 
-        sleep 0.1
+          sleep 0.1
+        }
       }
-      put_dir.call
     elsif line =~ /^It's pitch dark and you can't see a thing!/
       echo "You will need a light source to continue your journey"
-      return true
+      finish.call(true)
     end
     if XMLData.room_count > room_count
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return true
+      finish.call(true)
     end
     if Time.now.to_i >= giveup_time
       echo "move: no recognized response in #{giveup_seconds} seconds.  giving up."
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return nil
+      finish.call(nil, :unknown)
     end
     if line_count >= giveup_lines
       echo "move: no recognized response after #{line_count} lines.  giving up."
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return nil
+      finish.call(nil, :unknown)
     end
   }
 end
