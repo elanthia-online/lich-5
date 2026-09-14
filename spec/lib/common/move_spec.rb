@@ -117,6 +117,21 @@ RSpec.describe Lich::Common::Move do
     expect(f).to be_frozen
   end
 
+  it 'records :map for every drop-the-exit phrasing, even ones classify reads otherwise' do
+    ['You may not pass.', 'You settle yourself on the bench.', 'Your attempt fails.'].each do |line|
+      game([line])
+      expect(move.move('go bench')).to be(false), line
+      expect(move.last_failure.cause).to eq(:map), line
+    end
+  end
+
+  it 'keeps last_failure per thread' do
+    game(["You can't go there."])
+    move.move('north')
+    expect(move.last_failure.cause).to eq(:map)
+    expect(Thread.new { move.last_failure }.value).to be_nil
+  end
+
   it 'returns nil (keep the exit) when an NPC refuses and records :denied' do
     game(['An unseen force prevents you.'])
     expect(move.move('north')).to be_nil
@@ -171,6 +186,15 @@ RSpec.describe Lich::Common::Move do
       expect(move.move('swim east')).to be_nil
       expect(move.last_failure.cause).to eq(:swim)
       expect(move.last_failure.line).to eq(flounder)
+    end
+
+    it 'does not let a one-shot fix overwrite what the game said to the stand' do
+      overburdened = 'You are overburdened and cannot manage to stand.'
+      # stand (reply kept), then the open fix replies too, then stand exhausts
+      game([cannot, overburdened, 'The gate appears to be closed.', 'The gate is locked.',
+            cannot, struggle, struggle, cannot, struggle, struggle, cannot])
+      expect(move.move('go gate')).to be_nil
+      expect(move.last_failure.line).to eq(overburdened)
     end
 
     it 'blames the pack when overburdened' do
@@ -229,6 +253,13 @@ RSpec.describe Lich::Common::Move do
     fall = 'You start up the cliff but slip after a few feet and fall to the ground.'
     game([fall] * 5, arrive_after: 6)
     expect(move.move('climb cliff')).to be(true)
+  end
+
+  it 'bounds the typeahead wait' do
+    g = game(['Sorry, you may only type ahead 1 command.'] * 40)
+    expect(move.move('north')).to be_nil
+    expect(g.sent.count('north')).to eq(described_class::MAX_ROLLS + 1)
+    expect(move.last_failure.cause).to eq(:roundtime)
   end
 
   it 'does not cap roundtime waits' do

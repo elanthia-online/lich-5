@@ -32,6 +32,12 @@ module Lich
     #   :roundtime   still waiting on roundtime when we gave up
     #   :unknown     none of the above - read +line+
     #
+    # The record is per thread: scripts run on their own threads and several
+    # may be moving one character at once (go2 and a follower, say), so a
+    # single shared slot could be overwritten between a script's move
+    # returning and its read of {last_failure}. Read it from the thread that
+    # called move.
+    #
     # When Lich::Common::Events is present the same record is emitted as
     # 'move.failed', payload the frozen Failure, so a supervisor can hear it.
     module Move
@@ -67,14 +73,14 @@ module Lich
         [:roundtime,  /^\.{3}wait \d|^wait \d/i]
       ].freeze
 
-      @last_failure = nil
-      @mutex = Mutex.new
+      LAST_FAILURE_KEY = :lich_move_last_failure
 
       class << self
-        # The most recent failed move, or nil after a successful one.
+        # The most recent failed move on this thread, or nil after a
+        # successful one.
         # @return [Failure, nil]
         def last_failure
-          @mutex.synchronize { @last_failure }
+          Thread.current[LAST_FAILURE_KEY]
         end
 
         # @param line [String, nil]
@@ -122,7 +128,7 @@ module Lich
         # @return [Failure] the frozen record
         def record_failure(dir, line, cause: nil, attempts: 1)
           failure = Failure.new(dir: dir.to_s.dup, line: line&.to_s&.dup, cause: (cause || classify(line)), attempts: attempts).freeze
-          @mutex.synchronize { @last_failure = failure }
+          Thread.current[LAST_FAILURE_KEY] = failure
           if defined?(Lich::Common::Events)
             begin
               Lich::Common::Events.emit('move.failed', failure)
@@ -136,7 +142,7 @@ module Lich
         # Forget the last failure (move calls this on success).
         # @return [void]
         def clear_failure
-          @mutex.synchronize { @last_failure = nil }
+          Thread.current[LAST_FAILURE_KEY] = nil
         end
 
         # The movement primitive behind the top-level +move+. Sends +dir+
@@ -216,11 +222,13 @@ module Lich
           # then a failure symbol instead of the unbounded ladder the old fput
           # ran, which is what kept the stand loop alive. The reply string is
           # kept per remedy kind so an exhausted remedy can report what the
-          # game actually said to it.
-          command = proc { |cmd|
+          # game actually said to it. Inside a remedy block the kind is the
+          # remedy's own; the one-shot fixes (drag, open, trap) name theirs so
+          # their reply cannot land on whichever remedy ran last.
+          command = proc { |cmd, kind = current_kind|
             reply = fput(cmd, timeout: 3, max_resends: 1, failures: :symbol)
             if reply.is_a?(String)
-              remedy_replies[current_kind] = reply
+              remedy_replies[kind] = reply
               last_line = reply
             end
             reply
@@ -274,8 +282,11 @@ module Lich
                 end
               }
             elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
+              # this exit is wrong for the map, whatever the phrasing; say so
+              # rather than letting classify guess from the text ("You may
+              # not pass." would read as :denied, the keep-the-exit cause)
               echo 'move: failed'
-              finish.call(false)
+              finish.call(false, :map)
             elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
               echo 'move: failed'
               # return nil instead of false to show the direction shouldn't be removed from the map database
@@ -323,12 +334,12 @@ module Lich
               remedy.call(:verb, MAX_REMEDIES, :map) { dir.gsub!('climb', 'go') }
             elsif line =~ /^You can't drag/
               if tried_fix_drag
-                finish.call(false)
+                finish.call(false, :drag)
               elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
                 tried_fix_drag = true
                 name = (/^You grab (.*?)('s body)? and drag/.match(drag_line).captures.first || /^You are now automatically attempting to drag (.*?) when/.match(drag_line).captures.first)
                 target = /^(?:go|climb) (.+)$/.match(dir).captures.first
-                command.call("drag #{name}")
+                command.call("drag #{name}", :drag)
                 dir = "drag #{name} #{target}"
                 put_dir.call
               else
@@ -346,7 +357,7 @@ module Lich
                 finish.call(false, :closed)
               else
                 tried_open = true
-                command.call(dir.sub(/go|climb/, 'open'))
+                command.call(dir.sub(/go|climb/, 'open'), :open)
                 put_dir.call
               end
             elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
@@ -379,8 +390,8 @@ module Lich
                 command.call('stand') unless standing?
               }
             elsif line =~ /^Sorry, you may only type ahead/
-              sleep 1
-              put_dir.call
+              # clears on its own once the queue drains, but bounded all the same
+              remedy.call(:typeahead, MAX_ROLLS, :roundtime) { sleep 1 }
             elsif line == 'You are still stunned.'
               wait_while { stunned? }
               put_dir.call
@@ -400,12 +411,15 @@ module Lich
                 sleep 1
               }
             elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
-              sleep(0.5)
-              wait_while { stunned? }
-              waitrt?
-              command.call('stand') unless standing?
-              waitrt?
-              put_dir.call
+              # the boltstone shatters as it fires, so this should not recur;
+              # bounded anyway rather than trusting that
+              remedy.call(:trap, MAX_REMEDIES, :unknown) {
+                sleep(0.5)
+                wait_while { stunned? }
+                waitrt?
+                command.call('stand', :trap) unless standing?
+                waitrt?
+              }
             elsif line == "You don't seem to be able to move to do that."
               remedy.call(:held, MAX_REMEDIES, :unknown) {
                 30.times {
