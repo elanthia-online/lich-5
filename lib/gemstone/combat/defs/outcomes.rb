@@ -335,7 +335,7 @@ module Lich
 
           # The table now reflects this file; stale? answers for it, not for
           # the document cache (see Supplements.assembled!).
-          Supplements.assembled!
+          Supplements.assembled!(:outcomes)
 
           # Classifies a single game line as an attack outcome.
           #

@@ -50,6 +50,11 @@ module Lich
 
           MESSAGE_PREFIX = '[combat.defs]'
 
+          # File mtime each def module last assembled its table from, keyed
+          # by kind (see .assembled!). Per kind rather than one stamp so a
+          # reload in which one def file failed still reports stale.
+          @assembled_mtimes = {}
+
           # Where the assembly points may place a supplemental attack. Match
           # order is load-bearing (see attacks.rb ALL_ATTACKS), so the player
           # picks a slot rather than a position.
@@ -82,7 +87,9 @@ module Lich
             def path=(new_path)
               @path = new_path
               @loaded_mtime = nil
-              @assembled_mtime = nil
+              # Every table was assembled from the old path, so none of them
+              # answers for the new one.
+              @assembled_mtimes = {}
               reset!
             end
 
@@ -95,14 +102,25 @@ module Lich
             #
             # Deliberately NOT the document cache's stamp (@loaded_mtime):
             # reading a supplement re-parses the file, which every reader
-            # does, but only reload_defs! rebuilds the tables the parser
+            # does, but only a def module rebuilds the table the parser
             # matches against. Sharing one stamp let an inspection call --
             # `loaded` or `summary`, the very things a player runs after an
             # edit -- answer "not stale" while the new definition was still
             # unrecognised, and the login-time reload then skipped it.
+            #
+            # True when ANY assembled kind is behind the file, so a reload
+            # in which one def file failed still reports stale and gets
+            # retried. Only the kinds that have assembled are compared: a
+            # kind whose module was never loaded has no table to be out of
+            # date, and counting it would report stale forever. Before any
+            # def module has loaded there is nothing to answer for, which
+            # reads as stale so a reload is not skipped; the one caller
+            # (Tracker, at login) runs long after they are required.
             def stale?
               current = present? ? File.mtime(path) : nil
-              @assembled_mtime != current
+              return true if @assembled_mtimes.empty?
+
+              @assembled_mtimes.each_value.any? { |stamp| stamp != current }
             end
 
             # Supplemental attack defs for one slot.
@@ -124,7 +142,7 @@ module Lich
             # @return [Array<Outcomes::OutcomeDef>] frozen
             def outcomes = memoize(:outcomes)
 
-            # Records that a def module has just assembled its table from
+            # Records that one def module has just assembled its table from
             # the current file, so {stale?} answers for the tables the
             # parser matches against rather than for the document cache.
             # Called by each def module at the point it splices the
@@ -132,9 +150,16 @@ module Lich
             # which are the only two ways a table is built. Inspecting a
             # reader (`loaded`, `summary`) deliberately does not call it.
             #
+            # Recorded per kind, because reload_defs! reports a def file
+            # that fails to load and carries on with the rest: one shared
+            # stamp let the files that did reload answer for the one that
+            # did not, so stale? went false while that module's previous
+            # table was still live and the login check never retried it.
+            #
+            # @param kind [Symbol] the caller's own kind, e.g. :statuses
             # @return [void]
-            def assembled!
-              @assembled_mtime = present? ? File.mtime(path) : nil
+            def assembled!(kind)
+              @assembled_mtimes[kind.to_sym] = present? ? File.mtime(path) : nil
             end
 
             # Counts per kind, for debug output and support: the first thing

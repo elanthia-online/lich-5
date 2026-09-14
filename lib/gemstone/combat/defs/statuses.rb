@@ -461,7 +461,7 @@ module Lich
 
           # The table now reflects this file; stale? answers for it, not for
           # the document cache (see Supplements.assembled!).
-          Supplements.assembled!
+          Supplements.assembled!(:statuses)
 
           # Parse status effect from line
           def self.parse(line)

@@ -407,7 +407,7 @@ module Lich
 
           # The table now reflects this file; stale? answers for it, not for
           # the document cache (see Supplements.assembled!).
-          Supplements.assembled!
+          Supplements.assembled!(:flares)
 
           # Flare announce lines name the flaring weapon as a link:
           #   Your <a exist="393573117" noun="sword">slim short sword</a> ...

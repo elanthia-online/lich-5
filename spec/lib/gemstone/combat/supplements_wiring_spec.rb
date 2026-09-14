@@ -234,5 +234,39 @@ RSpec.describe 'combat definition supplements wiring' do
       expect(defs::Flares::TABLE).to equal(before)
       expect(messages).to include('flares.rb failed to reload: SyntaxError: boom. Its previous definitions remain in effect.')
     end
+
+    # The files that did reload must not answer for the one that did not.
+    # With a single shared stamp they did, so stale? went false while the
+    # failed module's previous table was still live and the login-time
+    # `reload_defs! if stale?` never retried it.
+    it 'stays stale while one table is still the old one, and clears once it reloads' do
+      supplements.reload_defs!
+      write(<<~YAML)
+        attacks:
+          - name: ice_lance
+            patterns: ['You hurl a lance of ice at (?<target>[^!]+)!']
+        statuses:
+          - name: chilled
+            add: ['(?<target>.+?) shivers uncontrollably\\.']
+      YAML
+      statuses_file = $LOADED_FEATURES.grep(/statuses\.rb\z/).first
+
+      allow(supplements).to receive(:load).and_call_original
+      allow(supplements).to receive(:load).with(statuses_file).and_raise(SyntaxError, 'boom')
+      reloaded = supplements.reload_defs!
+
+      expect(reloaded).not_to include(statuses_file)
+      # The kinds that did reload are current, and the one that did not is
+      # still on its old table -- so the file as a whole is not assembled.
+      expect(parser.parse_attack("You hurl a lance of ice at #{bolded(1, 'x', 'x')}!")[:name]).to eq(:ice_lance)
+      expect(defs::Statuses.parse('a kobold shivers uncontrollably.')).to be_nil
+      expect(supplements.stale?).to be(true)
+
+      # The retry that staleness earns now succeeds.
+      RSpec::Mocks.space.proxy_for(supplements).reset
+      supplements.reload_defs!
+      expect(supplements.stale?).to be(false)
+      expect(defs::Statuses.parse('a kobold shivers uncontrollably.')).to include(status: :chilled)
+    end
   end
 end

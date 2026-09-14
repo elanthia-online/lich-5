@@ -795,7 +795,7 @@ module Lich
 
           # The table now reflects this file; stale? answers for it, not for
           # the document cache (see Supplements.assembled!).
-          Supplements.assembled!
+          Supplements.assembled!(:attacks)
 
           # @return [Table] the current attack table; read once per call
           def self.table = TABLE
