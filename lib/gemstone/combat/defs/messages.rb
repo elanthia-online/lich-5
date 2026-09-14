@@ -188,6 +188,20 @@ module Lich
           # the document cache (see Supplements.assembled!).
           Supplements.assembled!(:messages)
 
+          # Re-evaluate subscriptions against the table just bound above.
+          # Supplements.reload_defs! does this too, but a plain `load` of
+          # this file -- which is all `;hmr combat/defs/` performs, and it
+          # is a separate script this repo does not own -- would otherwise
+          # leave a family holding a live subscriber inactive: the event
+          # would exist in the table while the hook stayed down and nothing
+          # emitted. Doing it here makes any route that rebinds the table
+          # correct, not just the one entry point. Guarded because this file
+          # is also loaded before Combat::Messages exists, and refresh! is
+          # idempotent.
+          if Lich::Gemstone::Combat.const_defined?(:Messages, false)
+            Lich::Gemstone::Combat::Messages.refresh!
+          end
+
           # @return [MessageTable] the current message table
           def self.table = TABLE
 

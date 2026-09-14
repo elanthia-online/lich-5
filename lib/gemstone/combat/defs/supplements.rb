@@ -640,7 +640,13 @@ module Lich
             # nothing" - never a zero or empty string passed off as a fact.
             # Reported once per def so a noisy line cannot flood the client.
             def payload_proc(captures, values, label)
-              values = values.freeze
+              # Deep-freeze the literals: values.dup below is a SHALLOW copy,
+              # so an unfrozen String here is the same object in every
+              # payload this def ever emits, and a consumer that mutates it
+              # (payload[:state] << 'x', .upcase!, .replace) silently
+              # rewrites every later fact. Frozen, such a consumer raises on
+              # its own line instead of corrupting the next event.
+              values = values.transform_values { |v| v.is_a?(String) ? v.dup.freeze : v }.freeze
               captures = captures.freeze
               lambda do |m|
                 payload = values.dup

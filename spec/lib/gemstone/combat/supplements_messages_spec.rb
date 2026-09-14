@@ -115,6 +115,48 @@ RSpec.describe 'combat message supplements' do
       expect(supplements.message_families).to eq([:user_item_prep])
     end
 
+    # values.dup in the data block is a shallow copy, so an unfrozen String
+    # literal would be the same object in every payload the def emits: a
+    # consumer doing payload[:note] << 'x' or .replace would rewrite the
+    # fact every later match reports. Frozen, that consumer raises on its
+    # own line instead of silently corrupting the next event.
+    it 'does not let a consumer mutating a literal rewrite later facts' do
+      write(<<~YAML)
+        messages:
+          - family: user_item_prep
+            event: user_feed_result
+            patterns: ['You feed the (?<what>.+?) and it hums softly\\.']
+            captures: { what: what }
+            values: { state: ready }
+      YAML
+      _event, pattern, data = supplements.messages(:user_item_prep).first
+      line = 'You feed the crystal and it hums softly.'
+
+      first = data.call(pattern.match(line))
+      expect(first[:state]).to eq('ready')
+      expect(first[:state]).to be_frozen
+      expect { first[:state] << ' corrupted' }.to raise_error(FrozenError)
+
+      # An independent later match still reports the fact as written.
+      expect(data.call(pattern.match(line))[:state]).to eq('ready')
+    end
+
+    it 'gives each payload its own hash, so adding a key does not leak either' do
+      write(<<~YAML)
+        messages:
+          - family: user_item_prep
+            event: user_feed_result
+            patterns: ['You feed the (?<what>.+?) and it hums softly\\.']
+            values: { state: ready }
+      YAML
+      _event, pattern, data = supplements.messages(:user_item_prep).first
+      line = 'You feed the crystal and it hums softly.'
+
+      first = data.call(pattern.match(line))
+      first[:injected] = true
+      expect(data.call(pattern.match(line))).to eq(state: 'ready')
+    end
+
     it 'converts a symbol-typed capture and a string literal for a symbol contract key' do
       write(<<~YAML)
         messages:
@@ -285,6 +327,33 @@ RSpec.describe 'combat message supplements' do
       expect(defs::Messages::USER_FAMILIES.map(&:name)).to eq([:user_item_prep])
       expect(defs::Messages::FAMILY_OF[:user_feed_result].name).to eq(:user_item_prep)
       expect(messages.event?(:user_feed_result)).to be(true)
+    end
+
+    # `;hmr combat/defs/` is a separate script that plainly `load`s each def
+    # file; it never calls Supplements.reload_defs!. The def file therefore
+    # refreshes subscriptions itself when it rebinds its table -- otherwise
+    # the event exists while its family stays inactive, the hook stays down
+    # and nothing emits, which is exactly what the documented command did.
+    it 'activates the family when the def file is merely re-loaded, as ;hmr does' do
+      seen = []
+      observers.on(:user_feed_result, name: 'spec-hmr') { |type, data| seen << [type, data] }
+      messages.refresh!
+      expect(messages.active_families).to eq([])
+
+      write(yaml)
+      supplements.reset! # the memo is not ;hmr's to clear either
+      verbose = $VERBOSE
+      $VERBOSE = nil
+      load File.join(LIB_DIR, 'gemstone', 'combat', 'defs', 'messages.rb')
+      $VERBOSE = verbose
+
+      expect(messages.event?(:user_feed_result)).to be(true)
+      expect(messages.active_families.map(&:name)).to eq([:user_item_prep])
+      expect(messages.stats[:installed]).to be_truthy
+
+      messages.process('You feed the crystal and it hums softly.')
+      expect(seen.size).to eq(1)
+      expect(seen.first[1]).to include(what: 'crystal', ok: true)
     end
 
     it 'activates a subscription made before the event existed, and emits definitions_reloaded' do
