@@ -8,8 +8,8 @@ module Lich
     # and a fix (e.g. to source tracking) lands in one place.
     #
     # An including class is +extend+ed with these as class methods and supplies
-    # its own storage via +_hooks+, +_hook_sources+, +_hook_owners+ and
-    # +_hook_persist+, keeping its own +run+.
+    # its own storage via +_hooks+, +_hook_sources+, +_hook_owners+,
+    # +_hook_persist+ and +_hook_priorities+, keeping its own +run+.
     module HookRegistry
       # Registers +action+ under +name+, recording the current script's name as
       # the source (used by {#sources} for display), its object_id as the owner,
@@ -24,17 +24,30 @@ module Lich
       #
       # @param name    [String]
       # @param action  [Proc]
-      # @param persist [Boolean, nil] hook lifetime relative to the script
+      # Higher-priority hooks run first. Hooks with equal priority retain their
+      # registration order, preserving historical behaviour at the default of
+      # zero. A named replacement keeps its original equal-priority position.
+      #
+      # @param persist  [Boolean, nil] hook lifetime relative to the script
+      # @param priority [Numeric] execution priority; higher values run first
       # @return [Proc, false] the stored proc, or false if +action+ is not a Proc
-      def add(name, action, persist: nil)
+      def add(name, action, persist: nil, priority: 0)
         unless action.is_a?(Proc)
           echo "#{hook_label}: not a Proc (#{action})"
+          return false
+        end
+        unless priority.is_a?(Numeric) && priority.real? &&
+               (!priority.respond_to?(:finite?) || priority.finite?)
+          echo "#{hook_label}: priority must be a finite real Numeric (#{priority.inspect})"
           return false
         end
         _hook_sources[name] = (Script.current&.name || "Unknown")
         _hook_owners[name]  = Script.current&.object_id
         _hook_persist[name] = persist
+        _hook_priorities[name] = priority
         _hooks[name] = action
+        invalidate_hook_order!
+        action
       end
 
       # Removes the hook registered under +name+ from every map.
@@ -45,7 +58,10 @@ module Lich
         _hook_sources.delete(name)
         _hook_owners.delete(name)
         _hook_persist.delete(name)
-        _hooks.delete(name)
+        _hook_priorities.delete(name)
+        removed = _hooks.delete(name)
+        invalidate_hook_order!
+        removed
       end
 
       # Invoked from the {ScriptDeath} handler when a script dies. For each hook
@@ -94,7 +110,21 @@ module Lich
         _hook_sources
       end
 
+      # Hook names in execution order. Mutations affect the next dispatch;
+      # runners tolerate a name removed during the current dispatch.
+      # @return [Array<String>]
+      def ordered_hook_names
+        (@ordered_hook_names ||= begin
+          positions = _hooks.keys.each_with_index.to_h
+          _hooks.keys.sort_by { |name| [-_hook_priorities.fetch(name, 0), positions.fetch(name)] }.freeze
+        end).dup
+      end
+
       private
+
+      def invalidate_hook_order!
+        @ordered_hook_names = nil
+      end
 
       # Warns (once per hook name per session) that a script left a hook
       # registered without declaring +persist:+. Surfaces accidental leaks
