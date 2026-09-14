@@ -269,8 +269,12 @@ module Lich
             # binds its table last and in one assignment, its previous
             # complete table stays live.
             #
+            # @param notify [Boolean] run {notify_reloaded} at the end. A caller
+            #   that holds a lock the subscribers must not run under (the
+            #   Tracker's ingestion lock) passes false and notifies itself
+            #   once it has let go.
             # @return [Array<String>] the files that reloaded cleanly
-            def reload_defs!
+            def reload_defs!(notify: true)
               reset!
               @lock.synchronize { @reported_payloads = [] }
               files = $LOADED_FEATURES.grep(DEF_FILE_PATTERN)
@@ -285,7 +289,7 @@ module Lich
               end
               $VERBOSE = verbose
               report_debug("reloaded #{reloaded.size} def files; supplements: #{summary}")
-              notify_reloaded(reloaded)
+              notify_reloaded(reloaded) if notify
               reloaded
             end
 

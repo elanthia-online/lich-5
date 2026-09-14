@@ -375,9 +375,14 @@ module Lich
             @reload_lock.synchronize do
               was_running = !@async_processor.nil?
               shutdown_processor
-              reloaded = Definitions::Supplements.reload_defs!
+              reloaded = Definitions::Supplements.reload_defs!(notify: false)
               initialize_processor if was_running && enabled?
             end
+            # Subscribers to :definitions_reloaded run here, after the lock is
+            # released: under it, a slow handler would stall the game-stream
+            # hook thread for its duration, and one that called back into
+            # reload_defs! would hit recursive locking.
+            Definitions::Supplements.notify_reloaded(reloaded)
             respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
             reloaded
           end

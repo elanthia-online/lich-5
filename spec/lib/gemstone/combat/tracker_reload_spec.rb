@@ -192,6 +192,21 @@ RSpec.describe 'Tracker.reload_defs!' do
     expect(processed.size).to eq(1)
   end
 
+  # Subscribers to :definitions_reloaded are arbitrary script code. Run under
+  # the ingestion lock, a slow one stalls the game-stream hook thread and one
+  # that reloads again hits recursive locking; so they run after release.
+  it 'notifies definitions_reloaded subscribers after releasing the ingestion lock' do
+    lock = tracker.instance_variable_get(:@reload_lock)
+    held = :unset
+    Lich::Gemstone::Combat::Observers.on(:definitions_reloaded, name: 'spec-lock-probe') { |_t, _d| held = lock.locked? }
+
+    tracker.reload_defs!
+
+    expect(held).to be(false)
+  ensure
+    Lich::Gemstone::Combat::Observers.off('spec-lock-probe')
+  end
+
   it 'leaves no worker behind when tracking is off' do
     tracker.send(:initialize_processor)
     tracker.instance_variable_set(:@enabled, false)
