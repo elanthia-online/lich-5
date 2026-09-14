@@ -25,6 +25,7 @@ module Lich
           SkillEnd = /^Training Points: \d+ Phy \d+ Mnt/.freeze
           GoalsDetected = /^Skill goals updated!$/.freeze
           GoalsEnded = /^Further information can be found in the FAQs\.$/.freeze
+          InnCheckedOut = /^Leaving your room, you check back out of .*, wander over to the front desk and hand the room key back to the innkeeper\./.freeze
           PSMStart = /^\w+, the following (?<cat>Ascension Abilities|Armor Specializations|Combat Maneuvers|Feats|Shield Specializations|Weapon Techniques) are available:$/.freeze
           PSM = /^\s+(?<name>[A-z\s\-':]+)\s+(?<command>[a-z]+)\s+(?<ranks>\d+)\/(?<max>\d+).*$/.freeze
           PSMEnd = /^   Subcategory: all$/.freeze
@@ -68,9 +69,12 @@ module Lich
           TicketEtherealScrip = /^\s*Reim - (?<ethereal_scrip>[\d,]+) ethereal scrip\.$/.freeze
           TicketSoulShards = /^\s*Ebon Gate - (?<soul_shards>[\d,]+) soul shards?\.$/.freeze
           TicketRaikhen = /^\s*Rumor Woods - (?<raikhen>[\d,]+) raikhen\.$/.freeze
+          TicketAevit = /^\s*Inquisitor - (?<aevit>[\d,]+) aevit\.$/.freeze
           TicketGold = /^\s*Gold - (?<gold>[\d,]+) gold\.$/.freeze
           WealthSilver = /^You have (?<silver>no|[,\d]+|but one) silver with you\./.freeze
           WealthSilverContainer = /^You are carrying (?<silver>[\d,]+) silver stored within your /.freeze
+          WealthSilverTotal = /^You are carrying a total of (?<silver>[\d,]+) silver\.$/.freeze
+          WealthNotes = /^Total note value: (?<silver>[\d,]+)$/.freeze
           AccountName = /^Account Name:     (?<name>[\w\d\-\_]+)$/.freeze
           AccountSubscription = /^Account Type:     (?<subscription>F2P|Standard|Premium|Platinum)(?: with Shattered)?(?: \(\w+\))?$/.freeze
           ProfileStart = /^PERSONAL INFORMATION$/.freeze
@@ -88,7 +92,9 @@ module Lich
           SilenceNoActive = /^The pall of silence leaves you\./.freeze
           CalmActive = /^A calm washes over you\./.freeze
           CalmNoActive = /^You are enraged by .*? attack!|^The feeling of calm leaves you\./.freeze
-          CutthroatActive = /slices deep into your vocal cords!$|^All you manage to do is cough up some blood\.$/.freeze
+          CutthroatActiveMid = /slices deep into your vocal cords!$/.freeze # mid-line: cannot be part of the anchored fast path
+          CutthroatActiveStart = /^All you manage to do is cough up some blood\.$/.freeze
+          CutthroatActive = Regexp.union(CutthroatActiveMid, CutthroatActiveStart).freeze
           CutthroatNoActive = /^\s*The horrible pain in your vocal cords subsides as you spit out the last of the blood clogging your throat\.$|^That tingles, but there are no head injuries to repair\.$/.freeze
           ThornPoisonStart = /^One of the vines surrounding .*? lashes out at you, driving a thorn into your skin!  You feel poison coursing through your veins\.$/.freeze
           ThornPoisonProgression = /^You begin to feel a strange fatigue, spreading throughout your body\.$|^The strange lassitude is growing worse, making it difficult to keep up with any strenuous activities\.$|^You find yourself gradually slowing down, your muscles trembling with fatigue\.$|^It\'s getting increasingly difficult to move. It feels almost as if the air itself is growing thick as molasses\.$|^No longer able to fight this odd paralysis, you collapse to the ground, as limp as an old washrag\.$/.freeze
@@ -98,6 +104,11 @@ module Lich
           # Adding spell regexes.  Does not save to infomon.db.  Used by Spell and by ActiveSpells
           SpellUpMsgs = /^#{Lich::Common::Spell.upmsgs.join('$|^')}$/o.freeze
           SpellDnMsgs = /^#{Lich::Common::Spell.dnmsgs.join('$|^')}$/o.freeze
+          # Spells that name the character they land on. The alternation is
+          # empty when no spell carries a target-start message, and an empty
+          # union would match every line, so fall back to a pattern that
+          # matches nothing.
+          SpellTargetUpMsgs = (Lich::Common::Spell.target_upmsgs.empty? ? /(?!)/ : /^#{Lich::Common::Spell.target_upmsgs.join('$|^')}$/o).freeze
           SpellsongRenewed = /^Your songs? renews?/.freeze
 
           # Enhancive parsing patterns - from INVENTORY ENHANCIVE TOTALS command
@@ -122,23 +133,33 @@ module Lich
           EnhanciveOff = /^You (?:are no longer|already are not|are not currently) accepting the benefit(?:s)? of (?:your|any) enhancive (?:inventory )?items(?: in your inventory)?\./.freeze
           EnhancivePauses = /^You currently have (?<pauses>\d+) enhancive pauses? available\.$/.freeze
 
-          All = Regexp.union(CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
-                             ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
-                             Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
-                             BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActive,
-                             CutthroatNoActive, SpellUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
-                             SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
-                             Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
-                             TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen,
-                             WealthSilver, WealthSilverContainer, GoalsDetected, GoalsEnded, SpellsongRenewed,
-                             ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
-                             AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
-                             ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
-                             SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
-                             EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
-                             EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
-                             EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
-                             EnhanciveOn, EnhanciveOff, EnhancivePauses)
+          ALL_LIST = [CharRaceProf, CharGenderAgeExpLevel, Stat, StatEnd, Fame, RealExp, AscExp, TotalExp, LTE,
+                      ExprEnd, SkillStart, Skill, SpellRanks, SkillEnd, PSMStart, PSM, PSMEnd, Levelup, SpellsSolo,
+                      Citizenship, NoCitizenship, Society, NoSociety, SleepActive, SleepNoActive, BindActive,
+                      BindNoActive, SilenceActive, SilenceNoActive, CalmActive, CalmNoActive, CutthroatActiveStart,
+                      CutthroatNoActive, SpellUpMsgs, SpellTargetUpMsgs, SpellDnMsgs, Warcries, NoWarcries, SocietyJoin, SocietyStep,
+                      SocietyResign, LearnPSM, UnlearnPSM, LostTechnique, LearnTechnique, UnlearnTechnique,
+                      Resource, Suffused, VolnFavor, GigasArtifactFragments, RedsteelMarks, TicketGeneral, TicketGold,
+                      TicketBlackscrip, TicketBloodscrip, TicketEtherealScrip, TicketSoulShards, TicketRaikhen, TicketAevit,
+                      WealthSilver, WealthSilverContainer, WealthSilverTotal, WealthNotes, GoalsDetected, GoalsEnded, InnCheckedOut, SpellsongRenewed,
+                      ThornPoisonStart, ThornPoisonProgression, ThornPoisonDeprogression, ThornPoisonEnd, CovertArtsCharges,
+                      AccountName, AccountSubscription, ProfileStart, ProfileName, ProfileHouseCHE, ResignCHE, ResignConfirmCHE,
+                      ShadowEssence, ShadowEssenceGain, ShadowEssenceCap, SacrificeMana, SacrificeChannel, SacrificeInfest,
+                      SacrificeFate, SacrificeShift, GemstoneDust, EnhanciveStart, EnhanciveStat, EnhanciveSkillsSection,
+                      EnhanciveSkillRanks, EnhanciveSkillBonus, EnhanciveResourcesSection, EnhanciveResource,
+                      EnhanciveMartialSection, EnhanciveMartialSkill, EnhanciveSpellsSection, EnhanciveSpells,
+                      EnhanciveStatisticsSection, EnhanciveStatistic, EnhanciveEnd, EnhanciveNone,
+                      EnhanciveOn, EnhanciveOff, EnhancivePauses].freeze
+          # Mid-line patterns are matched anywhere in the line, so they cannot be part
+          # of the \A-anchored fast path. Add future mid-line patterns here (wrap in
+          # Regexp.union for more than one); the Parser.parse guard does not change.
+          AllMid = CutthroatActiveMid
+          # Fast-path guard for Parser.parse. Every pattern in ALL_LIST is anchored to
+          # the start of the line, so anchoring the union with \A lets the engine
+          # attempt it only at position 0 instead of scanning every position of long
+          # (usually non-matching) lines -- that scan was ~half of all server-thread
+          # CPU. Mid-line patterns (AllMid) keep their own scanning check.
+          AllStart = Regexp.new('\A(?:' + Regexp.union(ALL_LIST).source + ')').freeze
         end
 
         module State
@@ -199,8 +220,16 @@ module Lich
         end
 
         def self.parse(line)
-          # O(1) vs O(N)
-          return :noop unless line =~ Pattern::All
+          # O(1) vs O(N): the anchored union is attempted only at line start; mid-line
+          # patterns (AllMid) are checked separately.
+          #
+          # No multi-line fallback is needed here (unlike infomon/xmlparser.rb, which
+          # is handed the raw, possibly multi-line server_string). Parser.parse is fed
+          # one physical line at a time -- Game.process_xml_data does
+          # stripped_server.split("\r\n").each { |l| Infomon::Parser.parse(l) } -- and
+          # the server stream is \r\n-aligned, so +line+ never carries an interior
+          # newline whose 2nd+ line an inner ^ anchor would need to match.
+          return :noop unless Pattern::AllStart.match?(line) || Pattern::AllMid.match?(line)
 
           begin
             case line
@@ -255,8 +284,8 @@ module Lich
               :ok
             when Pattern::TotalExp
               match = Regexp.last_match
-              @expr_hold.push(['experience.total_experience', match[:total_experience].delete(',').to_i],
-                              ['experience.deaths_sting', match[:deaths_sting]])
+              @expr_hold.push(['experience.total_experience', match[:total_experience].delete(',').to_i])
+              @expr_hold.push(['experience.deaths_sting', match[:deaths_sting]])
               :ok
             when Pattern::LTE
               match = Regexp.last_match
@@ -313,6 +342,15 @@ module Lich
               else
                 :noop
               end
+            when Pattern::InnCheckedOut
+              respond
+              _respond Lich::Messaging.monsterbold('You just left an Inn.  Lich will gather your updated Stats and skills.')
+              respond
+              respond "[infomon_sync]#{$SEND_CHARACTER}skills"
+              Game._puts("#{$cmd_prefix}skills")
+              respond "[infomon_sync]#{$SEND_CHARACTER}info"
+              Game._puts("#{$cmd_prefix}info")
+              :ok
             when Pattern::PSMStart
               match = Regexp.last_match
               @psm_hold = []
@@ -501,6 +539,10 @@ module Lich
               match = Regexp.last_match
               Infomon.set('currency.raikhen', match[:raikhen].delete(',').to_i)
               :ok
+            when Pattern::TicketAevit
+              match = Regexp.last_match
+              Infomon.set('currency.aevit', match[:aevit].delete(',').to_i)
+              :ok
             when Pattern::WealthSilver
               match = Regexp.last_match
               case match[:silver]
@@ -515,6 +557,14 @@ module Lich
             when Pattern::WealthSilverContainer
               match = Regexp.last_match
               Infomon.set('currency.silver_container', match[:silver].delete(',').to_i)
+              :ok
+            when Pattern::WealthSilverTotal
+              match = Regexp.last_match
+              Infomon.set('currency.silver_total', match[:silver].delete(',').to_i)
+              :ok
+            when Pattern::WealthNotes
+              match = Regexp.last_match
+              Infomon.set('currency.notes', match[:silver].delete(',').to_i)
               :ok
             when Pattern::AccountName
               if Lich::Common::Account.name.nil?
@@ -598,9 +648,29 @@ module Lich
               spell = Spell.list.find do |s|
                 line =~ /^#{s.msgup}$/
               end
-              spell.putup unless spell.active?
+              # A start message while the spell is already up is the game
+              # refreshing it: a refreshable timer resets to its full
+              # duration, anything else keeps the timer it has.
+              spell.putup if !spell.active? || spell.refreshable?
               # add various cooldowns back without affecting parse speed
               Spells.require_cooldown(spell)
+              # The group (EVOKE) version of a spell says so in the caster's
+              # own start message; every other view of the same spell (a
+              # self-cast, or being on the receiving end) leaves the clause
+              # out. That is the only notice the caster gets that a group
+              # casting landed, so it is where the per-target cooldowns start.
+              Group.record_spell_cooldown(spell) if line.include?('your group')
+              :ok
+            when Pattern::SpellTargetUpMsgs
+              # A spell landing on someone else, named in the third person.
+              # The cooldown it starts belongs to that character whoever cast
+              # it, so this counts the same seen from across the room as it
+              # does from the caster.
+              target = Regexp.last_match(:noun)
+              spell = Spell.list.find do |s|
+                s.target_msgup && line =~ /^#{s.target_msgup}$/
+              end
+              Group.record_target_cooldown(spell, target) if spell
               :ok
             when Pattern::SpellDnMsgs
               spell = Spell.list.find do |s|

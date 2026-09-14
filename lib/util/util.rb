@@ -3,6 +3,8 @@ util.rb: Core lich file for collection of utilities to extend Lich capabilities.
 Entries added here should always be accessible from Lich::Util.feature namespace.
 =end
 
+require_relative 'deep_freeze'
+
 module Lich
   module Util
     include Enumerable
@@ -10,9 +12,13 @@ module Lich
     # Normalizes and performs a lookup for an effect based on the provided value.
     #
     # Depending on the type of `val`, this method will:
-    # - For String: Check if the normalized string matches any key in the effect's hash (case-insensitive, underscores replaced with spaces).
+    # - For String: Check if the normalized string matches any key in the effect's hash (case-insensitive, underscores/colons replaced with spaces).
     # - For Integer: Check if the effect is active for the given integer value.
-    # - For Symbol: Check if the normalized symbol matches any key in the effect's hash (case-insensitive, underscores replaced with spaces).
+    # - For Symbol: Check if the normalized symbol matches any key in the effect's hash (case-insensitive, underscores/colons replaced with spaces).
+    #
+    # Both the lookup value and the effect's hash keys are normalized the same way, so a
+    # punctuation-free lookup (e.g. PSM feat names like "covert_art_escape_artist") still
+    # matches an effect key that contains punctuation (e.g. "Covert Art: Escape Artist").
     #
     # @param effect [String] The name of the effect class (without the "Effects::" prefix).
     # @param val [String, Integer, Symbol] The value to look up; can be a string, integer, or symbol.
@@ -21,13 +27,12 @@ module Lich
     def self.normalize_lookup(effect, val)
       caller_type = "Effects::#{effect}"
       case val
-      when String
-        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.downcase.gsub('_', ' '))
+      when String, Symbol
+        normalize = ->(str) { str.to_s.downcase.gsub(':', ' ').gsub('_', ' ').squeeze(' ').strip }
+        (eval caller_type).to_h.transform_keys { |k| normalize.call(k) }.include?(normalize.call(val))
       when Integer
         #      seek = mappings.fetch(val, nil)
         (eval caller_type).active?(val)
-      when Symbol
-        (eval caller_type).to_h.transform_keys(&:to_s).transform_keys(&:downcase).include?(val.to_s.downcase.gsub('_', ' '))
       else
         fail "invalid lookup case #{val.class.name}"
       end
@@ -71,6 +76,71 @@ module Lich
       "Util::#{prefix}-#{now}-#{Random.rand(10000)}"
     end
 
+    # Self-closing tags that toggle persistent client display state (as
+    # opposed to e.g. <prompt>, which self-heals on the next prompt). The raw
+    # server chunk handed to a DownstreamHook proc is not split on line
+    # boundaries, so the server is free to bundle one of these onto the same
+    # chunk as text that quiet: true is about to drop. Silently discarding
+    # that chunk would discard the tag with it -- e.g. dropping a trailing
+    # mono-closing <output class=""/> that rode in on the same chunk as the
+    # <prompt> a quiet-filtered range ends on leaves the frontend stuck in
+    # mono mode until an unrelated, later mono tag happens to close it.
+    #
+    # Only the mono/formatting <output> tag is confirmed to hit this in
+    # practice today. The list is deliberately an array of patterns (not a
+    # single regex) so a future confirmed case -- e.g. pushBold/popBold or
+    # pushStream/popStream -- can be added as its own entry without touching
+    # the filtering logic below. Keep each pattern anchored to a single
+    # self-closing `<tag .../>`, with no capturing groups (String#scan
+    # returns captured subgroups instead of full matches when a pattern has
+    # any, which would silently change what preserve_quiet_state_tags
+    # returns), so a scan can't accidentally absorb surrounding text or
+    # change shape.
+    QUIET_STATE_TAGS = [
+      /<output class="[^"]*"\s*\/>/ # mono/formatting state toggle
+    ].freeze
+
+    # Combines QUIET_STATE_TAGS into a single alternation, scanned once per
+    # chunk. Scanning each pattern separately and concatenating the results
+    # (the original approach) groups matches by pattern rather than by where
+    # they actually appear -- invisible with a single pattern, but as soon as
+    # a second entry is added, two tags from different patterns on the same
+    # chunk would come back in pattern order instead of source order, which
+    # matters when the tags are an open/close pair. A single combined scan
+    # preserves the chunk's real left-to-right order regardless of how many
+    # patterns are registered.
+    QUIET_STATE_TAG_PATTERN = Regexp.union(QUIET_STATE_TAGS).freeze
+
+    # Pulls any QUIET_STATE_TAGS matches out of a chunk that quiet: true is
+    # about to drop, so callers can forward just the tags instead of the
+    # whole chunk.
+    #
+    # The returned string is newline-terminated even though the matched tags
+    # themselves never include one. Every other chunk that reaches this
+    # pipeline is newline/CRLF-terminated as part of the game server's
+    # line-oriented stream framing; a bare, unterminated tag is not a shape
+    # of line this pipeline produced before this method existed. For
+    # sentinel-supporting frontends (currently only Saga -- see
+    # Frontend::ORIGIN_SENTINEL and Game#prefix_origin_sentinel), every
+    # forwarded line gets a leading origin-marker byte that the client is
+    # expected to consume as routing metadata and strip before display. That
+    # worked here once the segment was given the same line termination as
+    # everything else the client already handles; without it, the client had
+    # nothing to delimit an otherwise content-only segment, and the marker
+    # byte fell through to the display as a literal, visible character.
+    #
+    # @param chunk [String] the raw stream chunk being suppressed.
+    # @return [String, nil] the concatenated tag matches, in the order they
+    #   appeared, terminated with a newline; or nil if none were found
+    #   (signals DownstreamHook to drop the chunk entirely, same as before
+    #   this method existed).
+    def self.preserve_quiet_state_tags(chunk)
+      tags = chunk.to_s.scan(QUIET_STATE_TAG_PATTERN)
+      return nil if tags.empty?
+
+      "#{tags.join}\n"
+    end
+
     # Issues a command to the game and captures output between start and end patterns.
     #
     # @param command [String] The command to send.
@@ -105,13 +175,13 @@ module Lich
                 DownstreamHook.remove(name)
                 filter = false
                 if quiet && !ignore_end
-                  next(nil)
+                  next(preserve_quiet_state_tags(line))
                 else
                   line
                 end
               else
                 if quiet
-                  next(nil)
+                  next(preserve_quiet_state_tags(line))
                 else
                   line
                 end
@@ -119,14 +189,14 @@ module Lich
             elsif line =~ start_pattern
               filter = true
               if quiet
-                next(nil)
+                next(preserve_quiet_state_tags(line))
               else
                 line
               end
             else
               line
             end
-          })
+          }, persist: false) # scoped to this command; removed in the ensure below
           use_fput ? fput(command) : put(command)
 
           until (line = get) =~ start_pattern; end
@@ -198,7 +268,7 @@ module Lich
           else
             line
           end
-        })
+        }, persist: false) # scoped to this command; removed in the ensure below
         # script thread
         fput 'info'
         loop {
@@ -284,35 +354,6 @@ module Lich
           raise("Please install the failed gems: #{failed_gems.join(', ')} manually to continue.")
         end
       end
-    end
-
-    ##
-    # Recursively freezes a nested data structure in-place.
-    #
-    # This method ensures that all elements of deeply nested Arrays and Hashes are frozen,
-    # including their keys and values. It helps prevent unintended mutations of static or
-    # constant data, particularly useful for reference tables like weapon, armor, or shield stats.
-    #
-    # @param obj [Object] The object to be deeply frozen. Can be a Hash, Array, or any Ruby object.
-    # @return [Object] The same object, after freezing all its elements recursively.
-    #
-    # @example Freezing a nested hash
-    #   data = { stats: { damage: [1, 2, 3], type: "slash" } }
-    #   Lich::Gemstone::Armaments::Freezer.deep_freeze(data)
-    #   data.frozen?                   # => true
-    #   data[:stats].frozen?           # => true
-    #   data[:stats][:damage].frozen?  # => true
-    def self.deep_freeze(obj)
-      case obj
-      when Hash
-        obj.each do |k, v|
-          deep_freeze(k)
-          deep_freeze(v)
-        end
-      when Array
-        obj.each { |el| deep_freeze(el) }
-      end
-      obj.freeze
     end
   end
 end

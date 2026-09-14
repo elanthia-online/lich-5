@@ -1,0 +1,6 @@
+##### smite abd628f076aebd5f
+# expect: attacks=smite | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+<a exist="-63432397" noun="Grahl">Grahl</a> levels his mithril spikestar at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> and calls down excoriating power to smite him!
+[SMR result: 81 (Open d100: 12, Bonus: 10)]
+Darkness stirs around the triton defender, but nothing comes of it.
+

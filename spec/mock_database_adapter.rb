@@ -92,7 +92,7 @@ module Lich
       self.current_name = 'test_script'
     end
 
-    # Minimal XMLData stub for settings tests — just game and name, with sensible defaults.
+    # Minimal XMLData stub for settings tests - just game and name, with sensible defaults.
     module MockXMLData
       class << self
         attr_writer :game, :name

@@ -194,6 +194,12 @@ RSpec.describe 'wine.rb' do
         expect(result).to eq('C:\\Program Files\\Launcher')
       end
 
+      it 'matches registry key paths case-insensitively' do
+        File.write("#{temp_wine_prefix}/system.reg", system_reg_content)
+        result = Wine.registry_gets('HKEY_LOCAL_MACHINE\\SOFTWARE\\SIMUTRONICS\\LAUNCHER\\Directory')
+        expect(result).to eq('C:\\Program Files\\Launcher')
+      end
+
       it 'reads default (@) registry values' do
         File.write("#{temp_wine_prefix}/system.reg", system_reg_content)
         result = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Classes\\Test\\')

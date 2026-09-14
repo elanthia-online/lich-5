@@ -1,0 +1,6 @@
+##### bearhug 4e5e8d80817f398d
+# expect: attacks=bearhug | res=smr | flares=none | outcomes=evade | dmg=0 | statuses=
+<pushBold/>A <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> charges towards you and attempts to grasp you in a ferocious bearhug!
+[SMR result: 44 (Open d100: 34, Penalty: 3)]
+<pushBold/>A <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> attempts to bearhug you, but you manage to evade its grasp!
+

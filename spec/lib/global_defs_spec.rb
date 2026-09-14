@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'open3'
+require 'rbconfig'
 require_relative '../spec_helper'
 
 # NOTE: We intentionally do NOT `require 'global_defs.rb'` here.
@@ -12,7 +14,7 @@ require_relative '../spec_helper'
 # are scoped to this example group and resolve stubs via normal method lookup.
 
 RSpec.describe '#fput' do
-  # Production fput — mirrors lib/global_defs.rb exactly.
+  # Production fput - mirrors lib/global_defs.rb exactly.
   # Defined locally to avoid polluting the global method table.
   def fput(message, *waitingfor)
     unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
@@ -262,7 +264,7 @@ RSpec.describe '#fput' do
     end
 
     it 'resets the timer on any game response' do
-      # nil, nil → unmatched response (resets timer) → nil, nil → matching response
+      # nil, nil -> unmatched response (resets timer) -> nil, nil -> matching response
       responses = [nil, nil, 'Some unmatched text.', nil, nil, 'Expected match.']
       resp_index = 0
       allow(self).to receive(:get?) do
@@ -273,7 +275,7 @@ RSpec.describe '#fput' do
       allow(self).to receive(:pause)
       allow(self).to receive(:sleep)
 
-      # Time progresses: 30s before response, then 25s after reset — never exceeds 60s window
+      # Time progresses: 30s before response, then 25s after reset - never exceeds 60s window
       frozen_time = Time.now
       time_calls = 0
       allow(Time).to receive(:now) do
@@ -309,5 +311,150 @@ RSpec.describe '#fput' do
 
       multifput('cmd1', 'cmd2')
     end
+  end
+end
+
+require 'common/arg_parser'
+
+RSpec.describe '#parse_args / #display_args bridge' do
+  def parse_args(defn, flex_args = false)
+    Lich::Common::ArgParser.new.parse_args(defn, flex_args)
+  end
+
+  def display_args(defn)
+    Lich::Common::ArgParser.new.display_args(defn)
+  end
+
+  let(:parser) { instance_double(Lich::Common::ArgParser) }
+
+  before do
+    allow(Lich::Common::ArgParser).to receive(:new).and_return(parser)
+  end
+
+  describe '#parse_args' do
+    it 'delegates to Lich::Common::ArgParser#parse_args' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:parse_args).with(defs, false)
+
+      parse_args(defs)
+    end
+
+    it 'forwards the flex_args parameter' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:parse_args).with(defs, true)
+
+      parse_args(defs, true)
+    end
+  end
+
+  describe '#display_args' do
+    it 'delegates to Lich::Common::ArgParser#display_args' do
+      defs = [[:some_defs]]
+      expect(parser).to receive(:display_args).with(defs)
+
+      display_args(defs)
+    end
+  end
+end
+
+RSpec.describe 'global_defs.rb sentinel constants' do
+  let(:source) { File.read(File.join(LIB_DIR, 'global_defs.rb')) }
+
+  describe 'CORE_AUTOSTART sentinel' do
+    it 'defines CORE_AUTOSTART in Lich::Common' do
+      expect(source).to match(/^\s+CORE_AUTOSTART\s*=\s*true\b/)
+    end
+
+    it 'is inside the Lich::Common module block' do
+      lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
+      expect(lich_common_block).not_to be_nil
+      expect(lich_common_block).to include('CORE_AUTOSTART')
+    end
+  end
+
+  describe 'all sentinel constants' do
+    it 'defines CORE_GET_SETTINGS' do
+      expect(source).to match(/CORE_GET_SETTINGS\s*=\s*true/)
+    end
+
+    it 'defines CORE_SCRIPT_LOADER' do
+      expect(source).to match(/CORE_SCRIPT_LOADER\s*=\s*true/)
+    end
+
+    it 'defines CORE_PARSE_ARGS' do
+      expect(source).to match(/CORE_PARSE_ARGS\s*=\s*true/)
+    end
+
+    it 'defines all sentinels in the same module block' do
+      lich_common_block = source[/module Lich\s+module Common.*?end\s+end/m]
+      expect(lich_common_block).not_to be_nil, 'Could not extract module Lich::Common block from source'
+      expect(lich_common_block).to include('CORE_GET_SETTINGS')
+      expect(lich_common_block).to include('CORE_SCRIPT_LOADER')
+      expect(lich_common_block).to include('CORE_PARSE_ARGS')
+      expect(lich_common_block).to include('CORE_AUTOSTART')
+    end
+  end
+end
+
+RSpec.describe 'global_defs.rb built-in script commands' do
+  def run_global_defs_probe(probe)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+
+      $lich_char_regex = /;/
+      $clean_lich_char = ';'
+      Object.const_set(:LICH_VERSION, 'test') unless Object.const_defined?(:LICH_VERSION)
+      Lich.const_set(:MAX_DEBUG_LOGS_DEFAULT, 10) unless Lich.const_defined?(:MAX_DEBUG_LOGS_DEFAULT)
+      XMLData.define_singleton_method(:game) { '' }
+      UpstreamHook.define_singleton_method(:run) { |line| line }
+      Object.send(:define_method, :respond) { |message = nil| puts("RESPOND:\#{message}") }
+      Object.send(:define_method, :new_upstream) { |_line| nil }
+
+      #{probe}
+    RUBY
+    Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+  end
+
+  it 'routes kd through forced script teardown' do
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      Script.define_singleton_method(:kill_all) do |force: false, context: :runtime|
+        puts "KILL_ALL force=#{force} context=#{context}"
+        1
+      end
+      do_client(';kd')
+    RUBY
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('KILL_ALL force=true context=runtime')
+  end
+
+  it 'documents kd in built-in help' do
+    stdout, stderr, status = run_global_defs_probe("do_client(';help')")
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('RESPOND:   ;kd')
+    expect(stdout).to include('including protected and hidden scripts')
+  end
+
+  it 'uses the atomic Script#clear operation' do
+    stdout, stderr, status = run_global_defs_probe(<<~'RUBY')
+      script = Object.new
+      script.define_singleton_method(:clear) do
+        puts 'SCRIPT_CLEAR'
+        %w[one two]
+      end
+      Script.define_singleton_method(:current) { script }
+      puts "RESULT=#{clear.inspect}"
+    RUBY
+
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    expect(stdout).to include('SCRIPT_CLEAR')
+    expect(stdout).to include('RESULT=["one", "two"]')
   end
 end

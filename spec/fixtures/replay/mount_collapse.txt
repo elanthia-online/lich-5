@@ -1,0 +1,8 @@
+##### mount_collapse fc20b4df45592ceb
+# expect: attacks=mount_collapse | res=ssr | flares=none | outcomes=none | dmg=1 | statuses=
+<pushBold/>An <a exist="62656906" noun="knight">infernal death knight</a><popBold/> is pinned beneath <pushBold/>a <a exist="67717998" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/> as it falls!
+   ... 5 points of damage!
+   Blow leaves an imprint on the death knight's chest!
+[SSR result: 150 (Open d100: 62)]
+<pushBold/>An <a exist="62656906" noun="knight">infernal death knight</a><popBold/>'s eyes roll up into his head as his body goes limp on the ground.
+

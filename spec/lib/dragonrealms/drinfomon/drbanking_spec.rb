@@ -69,7 +69,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
       end
     end
 
-    # NOTE: class_variable_set is acceptable here because DRBanking has no reset! method —
+    # NOTE: class_variable_set is acceptable here because DRBanking has no reset! method -
     # only reload!, which re-reads from storage but does not nil out the in-memory cache.
     # Clearing @@accounts_cache forces reload! to build a fresh cache from test data,
     # ensuring each test starts with a clean state. TODO: add DRBanking.reset! to production code.
@@ -660,7 +660,7 @@ RSpec.describe Lich::DragonRealms::DRBanking do
 
       # NOTE: class_variable_set is acceptable here because we are specifically testing
       # that reload! re-reads from storage after the cache is cleared. This verifies the
-      # internal state machine of the caching layer — an intentional implementation test.
+      # internal state machine of the caching layer - an intentional implementation test.
       described_module.class_variable_set(:@@accounts_cache, nil)
       described_module.reload!
 

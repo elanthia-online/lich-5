@@ -3,6 +3,17 @@
 # rubocop changes and DR toplevel command handling (2023-06-28)
 # sadly adding global level script methods (2024-06-12)
 
+# Sentinel constants for dependency.lic gating.
+# When these are defined, dependency.lic skips its inline versions.
+module Lich
+  module Common
+    CORE_GET_SETTINGS = true
+    CORE_SCRIPT_LOADER = true
+    CORE_PARSE_ARGS = true
+    CORE_AUTOSTART = true
+  end
+end
+
 # added 2024
 
 def start_script(script_name, cli_vars = [], flags = Hash.new)
@@ -23,6 +34,67 @@ def force_start_script(script_name, cli_vars = [], flags = {})
   flags = Hash.new unless flags.is_a?(Hash)
   flags[:force] = true
   start_script(script_name, cli_vars, flags)
+end
+
+# Starts scripts that exist and aren't already running.
+# Waits briefly for each script to initialize before continuing.
+# Replaces dependency.lic's custom_require lambda.
+#
+# @param script_names [String, Array<String>] script name(s) to start
+# @return [void]
+def start_scripts_if_available(script_names)
+  script_names = [script_names].flatten.compact
+  return if script_names.empty?
+
+  script_names.each do |script_name|
+    next if Script.running?(script_name)
+    next unless Script.exists?(script_name)
+
+    start_script(script_name)
+    pause 0.05
+    snapshot = Time.now
+    until !Script.running?(script_name) || Time.now - snapshot > 0.25
+      pause 0.05
+    end
+  end
+end
+
+# Returns character settings from YAML profiles.
+# Lazy-initializes $setupfiles on first call.
+#
+# @param character_suffixes [Array<String>] additional profile suffixes to load
+# @return [OpenStruct] merged and transformed settings
+def get_settings(character_suffixes = [])
+  $setupfiles ||= Lich::Common::SetupFiles.new
+  $setupfiles.get_settings(character_suffixes)
+end
+
+# Returns data from a base-{type}.yaml file (e.g. 'spells', 'town', 'items').
+# Lazy-initializes $setupfiles on first call.
+#
+# @param type [String] the data file type (e.g. 'spells', 'town', 'items')
+# @return [OpenStruct] data from base-{type}.yaml
+def get_data(type)
+  $setupfiles ||= Lich::Common::SetupFiles.new
+  $setupfiles.get_data(type)
+end
+
+# Parses script arguments against definition patterns.
+# Delegates to Lich::Common::ArgParser.
+#
+# @param defn [Array<Array<Hash>>] argument definition sets
+# @param flex_args [Boolean] whether to allow unmatched args
+# @return [OpenStruct] matched arguments, or exits with help
+def parse_args(defn, flex_args = false)
+  Lich::Common::ArgParser.new.parse_args(defn, flex_args)
+end
+
+# Displays help/usage information for a script's arguments.
+# Delegates to Lich::Common::ArgParser.
+#
+# @param defn [Array<Array<Hash>>] argument definition sets
+def display_args(defn)
+  Lich::Common::ArgParser.new.display_args(defn)
 end
 
 def before_dying(&code)
@@ -59,8 +131,12 @@ def stop_script(*target_names)
   end
 end
 
-def running?(*snames)
-  snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+def running?(*snames, exact_match: false)
+  if exact_match
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i }) }
+  else
+    snames.each { |checking| (return false) unless (Script.running.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.running.find { |lscr| lscr.name =~ /^#{checking}/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}$/i } || Script.hidden.find { |lscr| lscr.name =~ /^#{checking}/i }) }
+  end
   true
 end
 
@@ -510,8 +586,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
   put_dir = proc {
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     waitrt?
@@ -553,14 +628,12 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return false
     elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
       echo 'move: failed'
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       # return nil instead of false to show the direction shouldn't be removed from the map database
       return nil
     elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
@@ -603,8 +676,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /^You can't drag/
       if tried_fix_drag
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
         tried_fix_drag = true
@@ -625,8 +697,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     elsif line =~ /(?:appears|seems) to be closed\.$|^You cannot quite manage to squeeze between the stone doors\.$/
       if tried_open
         fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(save_stream)
-        Script.current.downstream_buffer.flatten!
+        Script.current.downstream_buffer.unshift(*save_stream.flatten)
         return false
       else
         tried_open = true
@@ -640,7 +711,7 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
         sleep 0.3
       end
       put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing/
+    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
       fput 'stand'
       waitrt?
       put_dir.call
@@ -695,22 +766,19 @@ def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
     end
     if XMLData.room_count > room_count
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return true
     end
     if Time.now.to_i >= giveup_time
       echo "move: no recognized response in #{giveup_seconds} seconds.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
     if line_count >= giveup_lines
       echo "move: no recognized response after #{line_count} lines.  giving up."
       fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(save_stream)
-      Script.current.downstream_buffer.flatten!
+      Script.current.downstream_buffer.unshift(*save_stream.flatten)
       return nil
     end
   }
@@ -732,25 +800,63 @@ def watchhealth(value, theproc = nil, &block)
   }
 end
 
+# Blocks until the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   not already true on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   true, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_until(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or yield
     respond(announce)
   end
-  until yield
+  loop do
+    script&.wait_while_paused!
+    if yield
+      # The predicate may have blocked or yielded control for a while (e.g.
+      # waiting on another thread); re-check pause before honoring its
+      # result and returning to the caller, without re-invoking a
+      # potentially stateful predicate a second time.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
 end
 
+# Blocks while the given block returns truthy.
+#
+# @param announce [String, nil] message to respond with if the condition is
+#   already false on entry
+# @yieldreturn [Boolean] the condition being waited on
+# @return [void]
+# @note Blocks the calling thread while it is itself paused (unless exempt
+#   via +ignore_pause+), both between polls and after the condition becomes
+#   false, before returning control -- so a caller cannot resume past an
+#   active pause here.
 def wait_while(announce = nil)
   priosave = Thread.current.priority
   Thread.current.priority = 0
+  script = Script.current
   unless announce.nil? or !yield
     respond(announce)
   end
-  while yield
+  loop do
+    script&.wait_while_paused!
+    unless yield
+      # See wait_until: re-check pause after the predicate resolves, before
+      # returning control, without re-invoking the predicate.
+      script&.wait_while_paused!
+      break
+    end
     sleep 0.25
   end
   Thread.current.priority = priosave
@@ -890,7 +996,7 @@ def checksaturated
 end
 
 def checkmana(num = nil)
-  Lich.deprecated('checkmana', 'Char.mana')
+  Lich.deprecated('checkmana', 'Char.mana', caller[0])
   if num.nil?
     XMLData.mana
   else
@@ -899,12 +1005,12 @@ def checkmana(num = nil)
 end
 
 def maxmana
-  Lich.deprecated('maxmana', 'Char.maxmana')
+  Lich.deprecated('maxmana', 'Char.maxmana', caller[0])
   XMLData.max_mana
 end
 
 def percentmana(num = nil)
-  Lich.deprecated('percentmana', 'Char.percent_mana')
+  Lich.deprecated('percentmana', 'Char.percent_mana', caller[0])
   if XMLData.max_mana == 0
     percent = 100
   else
@@ -918,7 +1024,7 @@ def percentmana(num = nil)
 end
 
 def checkhealth(num = nil)
-  Lich.deprecated('checkhealth', 'Char.health')
+  Lich.deprecated('checkhealth', 'Char.health', caller[0])
   if num.nil?
     XMLData.health
   else
@@ -927,12 +1033,12 @@ def checkhealth(num = nil)
 end
 
 def maxhealth
-  Lich.deprecated('maxhealth', 'Char.max_health')
+  Lich.deprecated('maxhealth', 'Char.max_health', caller[0])
   XMLData.max_health
 end
 
 def percenthealth(num = nil)
-  Lich.deprecated('percenthealth', 'Char.percent_health')
+  Lich.deprecated('percenthealth', 'Char.percent_health', caller[0])
   if num.nil?
     ((XMLData.health.to_f / XMLData.max_health.to_f) * 100).to_i
   else
@@ -941,7 +1047,7 @@ def percenthealth(num = nil)
 end
 
 def checkspirit(num = nil)
-  Lich.deprecated('checkspirit', 'Char.spirit')
+  Lich.deprecated('checkspirit', 'Char.spirit', caller[0])
   if num.nil?
     XMLData.spirit
   else
@@ -950,12 +1056,12 @@ def checkspirit(num = nil)
 end
 
 def maxspirit
-  Lich.deprecated('maxspirit', 'Char.max_spirit')
+  Lich.deprecated('maxspirit', 'Char.max_spirit', caller[0])
   XMLData.max_spirit
 end
 
 def percentspirit(num = nil)
-  Lich.deprecated('percentspirit', 'Char.percent_spirit')
+  Lich.deprecated('percentspirit', 'Char.percent_spirit', caller[0])
   if num.nil?
     ((XMLData.spirit.to_f / XMLData.max_spirit.to_f) * 100).to_i
   else
@@ -964,7 +1070,7 @@ def percentspirit(num = nil)
 end
 
 def checkstamina(num = nil)
-  Lich.deprecated('checkstamina', 'Char.stamina')
+  Lich.deprecated('checkstamina', 'Char.stamina', caller[0])
   if num.nil?
     XMLData.stamina
   else
@@ -973,12 +1079,12 @@ def checkstamina(num = nil)
 end
 
 def maxstamina()
-  Lich.deprecated('maxstamina', 'Char.max_stamina')
+  Lich.deprecated('maxstamina', 'Char.max_stamina', caller[0])
   XMLData.max_stamina
 end
 
 def percentstamina(num = nil)
-  Lich.deprecated('percentstamina', 'Char.percent_stamina')
+  Lich.deprecated('percentstamina', 'Char.percent_stamina', caller[0])
   if XMLData.max_stamina == 0
     percent = 100
   else
@@ -1009,7 +1115,7 @@ def percentconcentration(num = nil)
 end
 
 def checkstance(num = nil)
-  Lich.deprecated('checkstance', 'Char.stance')
+  Lich.deprecated('checkstance', 'Char.stance', caller[0])
   if num.nil?
     XMLData.stance_text
   elsif (num.is_a?(String)) and (num.to_i == 0)
@@ -1038,7 +1144,7 @@ def checkstance(num = nil)
 end
 
 def percentstance(num = nil)
-  Lich.deprecated('percentstance', 'Char.percent_stance')
+  Lich.deprecated('percentstance', 'Char.percent_stance', caller[0])
   if num.nil?
     XMLData.stance_value
   else
@@ -1047,7 +1153,7 @@ def percentstance(num = nil)
 end
 
 def checkencumbrance(string = nil)
-  Lich.deprecated('checkencumbrance', 'Char.encumbrance')
+  Lich.deprecated('checkencumbrance', 'Char.encumbrance', caller[0])
   if string.nil?
     XMLData.encumbrance_text
   elsif (string.is_a?(Integer)) or (string =~ /^[0-9]+$/ and (string = string.to_i))
@@ -1063,7 +1169,7 @@ def checkencumbrance(string = nil)
 end
 
 def percentencumbrance(num = nil)
-  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance')
+  Lich.deprecated('percentencumbrance', 'Char.percent_encumbrance', caller[0])
   if num.nil?
     XMLData.encumbrance_value
   else
@@ -1355,9 +1461,7 @@ end
 
 def clear(_opt = 0)
   unless (script = Script.current) then respond('--- clear: Unable to identify calling script.'); return false; end
-  to_return = script.downstream_buffer.dup
-  script.downstream_buffer.clear
-  to_return
+  script.clear
 end
 
 def match(label, string)
@@ -1620,6 +1724,25 @@ def put(*messages)
   messages.each { |message| Game.puts(message) }
 end
 
+# Requests an orderly Lich shutdown from a running script.
+#
+# This follows the explicit user-exit shutdown path and requests a game-server
+# exit after local script teardown. The calling script is excluded from the
+# script drain so it can finish the shutdown request.
+#
+# @return [Lich::Common::OrderlyShutdown::Result] shutdown result
+def lich_shutdown
+  current_script = Script.current
+  source = current_script ? "script:#{current_script.name}" : :script
+
+  Lich::Common::OrderlyShutdown.request_user_exit(
+    source: source,
+    current_script: current_script,
+    server_exit_command: "#{$cmd_prefix}exit",
+    active_sessions_lifecycle: (Lich::InternalAPI::ActiveSessions::Lifecycle if defined?(Lich::InternalAPI::ActiveSessions::Lifecycle))
+  )
+end
+
 def quiet_exit
   script = Script.current
   script.quiet = !(script.quiet)
@@ -1726,32 +1849,14 @@ def respond(first = "", *messages)
     str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     if Frontend.supports_mono?
-      str = "<output class=\"mono\"/>\r\n#{str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')}<output class=\"\"/>\r\n"
+      str = "<output class=\"mono\"/>\r\n#{Lich::Common::XmlEntities.encode(str)}<output class=\"\"/>\r\n"
     elsif Frontend.client.eql?('profanity')
-      str = str.gsub('&', '&amp;').gsub('<', '&lt;').gsub('>', '&gt;')
+      str = Lich::Common::XmlEntities.encode(str)
     end
-    # Double-checked locking to avoid interrupting a stream and crashing the client
-    str_sent = false
-    if $_CLIENT_
-      until str_sent
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-      end
-    end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        wait_while { !XMLData.safe_to_respond? }
-        begin
-          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        rescue
-          break
-        end
-      end
-    end
-  rescue
-    puts $!
-    puts $!.backtrace.first
+    $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
+    detachable_clients_respond(str)
+  rescue => e
+    Lich.log "error: respond: #{e}\n\t#{e.backtrace.first}"
   end
 end
 
@@ -1765,28 +1870,11 @@ def _respond(first = "", *messages)
     end
     # str.gsub!(/\r?\n/, "\r\n") if $frontend == 'genie'
     messages.flatten.each { |message| str += sprintf("%s\r\n", message.to_s.chomp) }
-    str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) } # fixme: strip/separate script output?
-    str_sent = false
-    if $_CLIENT_
-      until str_sent
-        wait_while { !XMLData.safe_to_respond? }
-        str_sent = $_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-      end
-    end
-    if $_DETACHABLE_CLIENT_
-      str_sent = false
-      until str_sent
-        wait_while { !XMLData.safe_to_respond? }
-        begin
-          str_sent = $_DETACHABLE_CLIENT_.puts_if(str) { XMLData.safe_to_respond? }
-        rescue
-          break
-        end
-      end
-    end
-  rescue
-    puts $!
-    puts $!.backtrace.first
+    str.split(/\r?\n/).each { |line| Script.new_script_output(line); Buffer.update(line, Buffer::SCRIPT_OUTPUT) }
+    $_CLIENT_.puts_main_stream(str) if $_CLIENT_&.alive?
+    detachable_clients_respond(str)
+  rescue => e
+    Lich.log "error: _respond: #{e}\n\t#{e.backtrace.first}"
   end
 end
 
@@ -1829,6 +1917,7 @@ def unnoded_pulse
 end
 
 require_relative File.join(LIB_DIR, "stash.rb")
+require File.join(LIB_DIR, 'common', 'xml_entities.rb')
 
 def empty_hands
   waitrt?
@@ -2082,7 +2171,7 @@ def sf_to_wiz(line, bypass_multiline: false)
     line = line.gsub("</prompt>\r\n", "</prompt>")
     line = line.gsub("<pushBold/>", "\034GSL\r\n")
     line = line.gsub("<popBold/>", "\034GSM\r\n")
-    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
     line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
     line = line.gsub(/<[^>]+>/, '')
@@ -2101,31 +2190,58 @@ def sf_to_wiz(line, bypass_multiline: false)
   end
 end
 
-def strip_xml(line, type: 'main')
-  return line if line == "\r\n"
-
-  if $strip_xml_multiline[type]
-    $strip_xml_multiline[type] = $strip_xml_multiline[type] + line
-    line = $strip_xml_multiline[type]
+# Strip game markup from a server-stream fragment.
+#
+# @param line [String] one server-stream fragment
+# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
+#   default) the fragment is stripped statelessly. When given, unfinished
+#   pushStream content is accumulated in a process-global, type-keyed buffer
+#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
+#   split across reads is reassembled before stripping. Pass it as a keyword
+#   (type: "main"); the keyword form is the supported call shape.
+# @return [String, nil]
+#   - the stripped text when printable content remains
+#   - nil when the line is entirely whitespace, when stripping leaves no
+#     printable text, or while a typed multiline fragment is still being
+#     accumulated
+# @note nil is a normal return, not an error. Callers commonly feed the result
+#   straight to String#split; that is safe because NilClass#split is patched to
+#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+def strip_xml(line, type: nil)
+  if type.nil?
+    strip_xml_simple(line)
+  else
+    strip_xml_multiline(line, type)
   end
-  if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-    $strip_xml_multiline ||= {}
+end
+
+def strip_xml_simple(line)
+  return nil if line == "\r\n" # short-circuit empty links
+
+  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
+  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
+  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
+  line = line.gsub(/<[^>]+>/, '')
+  line = Lich::Common::XmlEntities.decode(line)
+
+  return nil if line.match?(/\A\s*\z/)
+
+  line
+end
+
+def strip_xml_multiline(line, type)
+  $strip_xml_multiline ||= {}
+  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
+  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
     $strip_xml_multiline[type] = line
     return nil
   end
   $strip_xml_multiline[type] = nil
-
-  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-  line = line.gsub(/<[^>]+>/, '')
-  line = line.gsub('&gt;', '>')
-  line = line.gsub('&lt;', '<')
-
-  return nil if line.gsub("\n", '').gsub("\r", '').gsub(' ', '').length < 1
-
-  return line
+  strip_xml_simple(line)
 end
+
+# Internal helpers for strip_xml; not part of the script-facing API.
+private :strip_xml_simple, :strip_xml_multiline
 
 def monsterbold_start
   if Frontend.supports_gsl?
@@ -2144,6 +2260,196 @@ def monsterbold_end
     '<popBold/>'
   else
     ''
+  end
+end
+
+# Multiple frontends may attach to one persistent detachable listener. The
+# legacy globals remain synchronized for scripts that inspect the primary or
+# the current client list directly.
+$_DETACHABLE_CLIENT_REGISTRY_ ||= Lich::Common::DetachableClientRegistry.new
+$_DETACHABLE_CLIENTS_ ||= []
+$_DETACHABLE_CLIENT_ ||= nil
+
+def sync_detachable_client_globals
+  $_DETACHABLE_CLIENTS_ = $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+  $_DETACHABLE_CLIENT_ = $_DETACHABLE_CLIENT_REGISTRY_.primary
+end
+
+def detachable_clients_snapshot
+  $_DETACHABLE_CLIENT_REGISTRY_.snapshot
+end
+
+def detachable_client_count
+  $_DETACHABLE_CLIENT_REGISTRY_.count
+end
+
+def detachable_client_primary?(client)
+  $_DETACHABLE_CLIENT_REGISTRY_.primary?(client)
+end
+
+def detachable_listener_connected(connected)
+  return unless $_DETACHABLE_LISTENER_
+
+  Lich::InternalAPI::ActiveSessions::Lifecycle.update_listener(
+    host: $_DETACHABLE_LISTENER_[:host],
+    port: $_DETACHABLE_LISTENER_[:port],
+    connected: connected
+  )
+rescue StandardError => e
+  Lich.log "warning: detachable update_listener(#{connected}): #{e}"
+end
+
+def detachable_client_register(client)
+  became_nonempty = $_DETACHABLE_CLIENT_REGISTRY_.register(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(true) if became_nonempty
+  client
+end
+
+def detachable_client_unregister(client)
+  removed, became_empty = $_DETACHABLE_CLIENT_REGISTRY_.unregister(client)
+  sync_detachable_client_globals
+  detachable_listener_connected(false) if removed && became_empty
+  removed
+end
+
+def detachable_clients_respond(string)
+  detachable_clients_snapshot.each do |client|
+    unless client.alive?
+      detachable_client_unregister(client)
+      next
+    end
+
+    # Isolate per-client failures: a raise from one client's socket must not
+    # abort the loop and starve the remaining attached clients of this output.
+    # Mirrors the per-client rescue in detachable_clients_close.
+    begin
+      client.puts_main_stream(string)
+    rescue StandardError => e
+      Lich.log "warning: detachable_clients_respond: #{e}"
+    end
+    detachable_client_unregister(client) unless client.alive?
+  end
+end
+
+def detachable_clients_close
+  clients = $_DETACHABLE_CLIENT_REGISTRY_.remove_all
+  sync_detachable_client_globals
+  clients.each { |client| client.close rescue nil }
+  detachable_listener_connected(false) unless clients.empty?
+  clients.length
+end
+
+# Send one newly attached frontend the game state it missed before attaching.
+def detachable_client_send_init(client)
+  100.times { sleep 0.1; break if XMLData.indicator['IconJOINED'] }
+  init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
+  init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
+  init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
+  init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
+  init_str.concat "<spell>#{Lich::Common::XmlEntities.encode(XMLData.prepared_spell)}</spell>"
+  %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
+    init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
+  end
+  if XMLData.game.to_s.match?(/GS/)
+    init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
+    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.mind_text)}'/>"
+    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.encumbrance_text)}'/>"
+    init_str.concat "<right>#{Lich::Common::XmlEntities.encode(GameObj.right_hand.name)}</right>"
+    init_str.concat "<left>#{Lich::Common::XmlEntities.encode(GameObj.left_hand.name)}</left>"
+    %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
+      if Wounds.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
+      elsif Scars.send(area) > 0
+        init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
+      end
+    end
+  end
+  init_str.concat '<compass>'
+  short_dirs = {
+    'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
+    'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
+    'up' => 'up', 'down' => 'down', 'out' => 'out'
+  }
+  XMLData.room_exits.each do |direction|
+    init_str.concat "<dir value='#{short_dirs[direction]}'/>" if short_dirs.key?(direction)
+  end
+  init_str.concat '</compass>'
+  client.puts_main_stream(init_str)
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_init: #{e}\n\t#{e.backtrace.first}"
+end
+
+def detachable_client_send_player_id(client)
+  tag = nil
+  100.times do
+    break if (tag = Frontend.player_id_tag(XMLData.player_id))
+
+    sleep 0.1
+  end
+  client.puts_main_stream(tag) if tag && client.alive?
+rescue StandardError => e
+  Lich.log "error: detachable_client_send_player_id: #{e}\n\t#{e.backtrace.first}"
+end
+
+def handle_detachable_client(client)
+  unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
+    Thread.new { detachable_client_send_init(client) }
+  end
+  Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
+
+  while (client_string = client.gets)
+    if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
+      Frontend.set_from_client(Regexp.last_match(1).to_i) if defined?(Frontend) && detachable_client_primary?(client)
+      next
+    end
+
+    # Detachable exits run script shutdown inline, so the watchdog must be armed
+    # before that potentially blocking path. Route through the shared dispatch so
+    # the primary and detachable frontend exit paths stay identical; it applies
+    # the same $cmd_prefix prefixing before matching.
+    if Lich::Main::UserExitDispatch.dispatch_detachable_client(client_string, cmd_prefix: $cmd_prefix)
+      break
+    end
+    client_string = "#{$cmd_prefix}#{client_string}"
+
+    begin
+      dispatch_client_input(client_string)
+    rescue StandardError => e
+      respond "--- Lich: error: client_thread: #{e}"
+      respond e.backtrace.first
+      Lich.log "error: client_thread: #{e}\n\t#{e.backtrace.join("\n\t")}"
+    end
+  end
+  Lich::Common::ShutdownLog.info('detachable client disconnected')
+rescue StandardError => e
+  _respond "--- Lich: error: detachable client: #{e}"
+  Lich.log "error: detachable_client_handler: #{e}\n\t#{e.backtrace.join("\n\t")}"
+ensure
+  client.close rescue nil
+  detachable_client_unregister(client)
+  # Mirror the connect-side "listening on" line so an operator sharing the
+  # controlling terminal (for example a wrapper script that exec's a frontend)
+  # sees which session dropped and from where. Emitted after unregister so the
+  # attached count reflects the clients that remain.
+  if $_DETACHABLE_LISTENER_
+    session_name = Lich::Common::SessionLifecycle.resolve_session_name(
+      argv: ARGV, account_character: (Lich::Common::Account.character rescue nil)
+    )
+    $stdout.puts Lich::Main::DetachableClientNotice.disconnected(
+      name: session_name,
+      host: $_DETACHABLE_LISTENER_[:host],
+      port: $_DETACHABLE_LISTENER_[:port],
+      attached: detachable_client_count
+    ) rescue nil
+  end
+  Lich::Common::ShutdownLog.info("detachable client cleaned up (#{detachable_client_count} attached)")
+end
+
+def dispatch_client_input(client_string)
+  Lich::Common::ClientInputDispatcher.dispatch(client_string) do |serialized_string|
+    $_IDLETIMESTAMP_ = Time.now
+    do_client(serialized_string)
   end
 end
 
@@ -2177,9 +2483,9 @@ def do_client(client_string)
       end
       nil
     elsif cmd =~ /^ka$|^kill\s?all$|^stop\s?all$/
-      did_something = false
-      Script.running.find_all { |s_check| not s_check.no_kill_all }.each { |s_check| s_check.kill; did_something = true }
-      respond('--- Lich: no scripts to kill') unless did_something
+      respond('--- Lich: no scripts to kill') if Script.kill_all.zero?
+    elsif cmd == 'kd'
+      respond('--- Lich: no scripts to kill') if Script.kill_all(:force => true).zero?
     elsif cmd =~ /^pa$|^pause\s?all$/
       did_something = false
       Script.running.find_all { |s_check| not s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.pause; did_something = true }
@@ -2349,6 +2655,7 @@ def do_client(client_string)
       end
       respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
       Lich.hide_uid_flag = new_value
+      respond "Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
     elsif cmd =~ /^display lichid(?: (true|false))?/i
       new_value = !(Lich.display_lichid)
       case Regexp.last_match(1)
@@ -2369,6 +2676,15 @@ def do_client(client_string)
       end
       respond "Changing Lich to display RealID#s to #{new_value}"
       Lich.display_uid = new_value
+    elsif XMLData.game =~ /^DR/ && cmd =~ /^display roomid(?:\s+(title|line|both))?/i
+      requested = Regexp.last_match(1)&.downcase
+      if requested.nil?
+        respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
+        respond "Usage: ;display roomid <title|line|both>  (title = in the room name line, line = a Room Number line below the room, both = both places)"
+      else
+        Lich.display_roomid_location = requested
+        respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
+      end
     elsif cmd =~ /^display exits?(?: (true|false))?/i
       new_value = !(Lich.display_exits)
       case Regexp.last_match(1)
@@ -2389,6 +2705,26 @@ def do_client(client_string)
       end
       respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
       Lich.display_stringprocs = new_value
+    elsif cmd =~ /^display roomlinks?(?: (true|false))?/i
+      new_value = !(Lich.display_room_links)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room exits as clickable command links to #{new_value}"
+      Lich.display_room_links = new_value
+    elsif cmd =~ /^display roommono(?: (true|false))?/i
+      new_value = !(Lich.display_room_mono)
+      case Regexp.last_match(1)
+      when 'true'
+        new_value = true
+      when 'false'
+        new_value = false
+      end
+      respond "Changing Lich to display room information in monospace font to #{new_value}"
+      Lich.display_room_mono = new_value
     elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
       if running?('exp-monitor')
         respond "Error: exp-monitor.lic script is currently running"
@@ -2435,6 +2771,22 @@ def do_client(client_string)
       respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
       respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
       respond
+    elsif (debuglogs_match = cmd.match(/^debuglogs?\s+(?<val>\d+)$/i))
+      new_limit = debuglogs_match[:val].to_i
+      Lich.max_debug_logs = new_limit
+      respond "--- Lich: debug log retention set to #{Lich.max_debug_logs} files"
+    elsif cmd =~ /^debuglogs?$/i
+      respond
+      respond "--- Lich: Debug Log Retention ---"
+      respond "  Current limit:  #{Lich.max_debug_logs} files"
+      respond "  Default:        #{Lich::MAX_DEBUG_LOGS_DEFAULT} files"
+      respond
+      respond "Usage:"
+      respond "  #{$clean_lich_char}debuglogs            show current setting"
+      respond "  #{$clean_lich_char}debuglogs <number>   set retention limit"
+      respond
+    elsif cmd =~ /^debuglogs?\b/i
+      respond "--- Lich: invalid argument. Usage: #{$clean_lich_char}debuglogs [number]"
     elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
       update_parameter = $1.dup
       Lich::Util::Update.request("#{update_parameter}")
@@ -2483,6 +2835,7 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}ua                        ''"
       respond "   #{$clean_lich_char}kill all                  kill all scripts"
       respond "   #{$clean_lich_char}ka                        ''"
+      respond "   #{$clean_lich_char}kd                        kill all scripts, including protected and hidden scripts"
       respond "   #{$clean_lich_char}list all                  show all running scripts"
       respond "   #{$clean_lich_char}la                        ''"
       respond
@@ -2503,6 +2856,9 @@ def do_client(client_string)
       respond "   #{$clean_lich_char}send to <script> <line>   send a line to a specific script"
       respond
       respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
+      respond "   #{$clean_lich_char}debuglogs                 show debug log retention setting"
+      respond "   #{$clean_lich_char}debuglogs <number>        set how many debug logs to keep (default: #{Lich::MAX_DEBUG_LOGS_DEFAULT})"
+      respond
       respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
       respond "                              see #{$clean_lich_char}lich5-update --help"
       respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
@@ -2514,12 +2870,15 @@ def do_client(client_string)
         respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
         respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
       elsif XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display flaguid           toggle display of RealID in Room Title with FLAG ShowRoomID (required for Lich5 to be ON)"
+        respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
+        respond "   #{$clean_lich_char}display roomid <where>    where to show room id/RealID: title (room name line), line (below-room line), or both"
       end
       respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
       respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
       respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
       respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
+      respond "   #{$clean_lich_char}display roomlinks         toggle rendering of room exits as clickable command links vs plain text"
+      respond "   #{$clean_lich_char}display roommono          toggle rendering of Lich room information in monospace font vs game font"
       if XMLData.game =~ /^DR/
         respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
         respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"

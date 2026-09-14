@@ -1,0 +1,7 @@
+##### grasp_arms 7394308ba49ee46a
+# expect: attacks=none | res=none | flares=none | outcomes=none | dmg=1 | statuses=stunned/add
+A pair of mangled arms quickly snatch at <pushBold/>a <a exist="18221406" noun="mariner">milky-eyed drowned mariner</a><popBold/>, dragging her down before retreating into the muck!
+   ... 10 points of damage!
+   Blow to the diaphragm.
+   <pushBold/>The <a exist="68543607" noun="mariner">drowned mariner</a><popBold/> is stunned!
+

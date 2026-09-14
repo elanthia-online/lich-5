@@ -258,6 +258,28 @@ RSpec.describe Lich::DragonRealms::DRSkill do
     end
   end
 
+  describe '.clear_mind cap guard (BUG FIX)' do
+    it 'zeroes mindstate for a non-capped skill' do
+      described_class.new('Athletics', 500, 20, 50)
+
+      described_class.clear_mind('Athletics')
+
+      expect(described_class.getxp('Athletics')).to eq(0)
+    end
+
+    # A capped skill (rank >= 1750) must stay pinned to 34/34 through clear_mind
+    # like initialize/update do, otherwise trainer scripts (e.g. t2, athletics)
+    # see a 0 mindstate and re-train a capped skill.
+    it 'keeps a capped skill (rank >= 1750) pinned to 34' do
+      described_class.new('Athletics', 1750, 34, 0)
+      expect(described_class.getxp('Athletics')).to eq(34)
+
+      described_class.clear_mind('Athletics')
+
+      expect(described_class.getxp('Athletics')).to eq(34)
+    end
+  end
+
   describe '#lookup_skillset nil guard (BUG FIX)' do
     it 'returns nil for unknown skill without crashing' do
       # Create a skill with an unknown name directly

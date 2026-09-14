@@ -1,5 +1,7 @@
 require 'fiddle'
+require 'open3'
 require 'rbconfig'
+require_relative 'gtk_compaction'
 
 module Lich
   module Util
@@ -263,7 +265,7 @@ module Lich
         # Perform a complete memory release cycle
         #
         # Prunes stale entries from the GameObj shared identity index using the
-        # current interval as the TTL — any index entry not seen within the last
+        # current interval as the TTL - any index entry not seen within the last
         # +@interval+ seconds (and not held in an active registry) is evicted
         # before the GC and OS-level release steps run. This ensures the index
         # stays lean and the subsequent GC pass has the most to reclaim.
@@ -439,13 +441,16 @@ module Lich
         # Run Ruby's garbage collector
         #
         # Performs a full mark and immediate sweep, and attempts to compact
-        # the heap if the Ruby version supports it.
+        # the heap if the Ruby version supports it. Compaction is routed
+        # through Lich::Util::GtkCompaction, which keeps it safe to use
+        # alongside gtk3 -- see that module for why a plain GC.compact call
+        # isn't safe once gtk3 is loaded.
         #
         # @return [void]
         # @api private
         def run_gc
           GC.start(full_mark: true, immediate_sweep: true)
-          GC.compact if GC.respond_to?(:compact)
+          Lich::Util::GtkCompaction.safe_compact!
         end
 
         # Release memory back to the operating system
@@ -658,22 +663,25 @@ module Lich
         def get_process_memory_windows
           # Method 1: Try GetProcessMemoryInfo via PSAPI (most reliable, no console)
           begin
-            return get_memory_via_psapi
-          rescue => e
+            memory = get_memory_via_psapi
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "GetProcessMemoryInfo failed: #{e.message}" if @verbose
           end
 
           # Method 2: Try WMI via WIN32OLE (no console, but slower)
           begin
-            return get_memory_via_wmi
-          rescue => e
+            memory = get_memory_via_wmi
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "WMI failed: #{e.message}" if @verbose
           end
 
           # Method 3: PowerShell with hidden window (last resort)
           begin
-            return get_memory_via_powershell
-          rescue => e
+            memory = get_memory_via_powershell
+            return memory unless memory.nil?
+          rescue StandardError, LoadError => e
             log "PowerShell failed: #{e.message}" if @verbose
           end
 
@@ -763,11 +771,19 @@ module Lich
           # Use PowerShell with hidden window as last resort
           script = "(Get-Process -Id #{Process.pid}).WorkingSet64"
 
-          # Use PowerShell with WindowStyle Hidden to prevent console window
-          output = `powershell.exe -WindowStyle Hidden -NoProfile -Command "#{script}" 2>NUL`
+          # Use argv form so Ruby launches PowerShell directly instead of
+          # inserting a visible cmd.exe process around the hidden fallback.
+          output, _error, status = Open3.capture3(
+            'powershell.exe',
+            '-WindowStyle', 'Hidden',
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command', script
+          )
 
-          if output && !output.empty?
-            return output.strip.to_f / (1024.0 * 1024.0)
+          value = output.strip
+          if status.success? && value.match?(/\A\d+\z/)
+            return value.to_f / (1024.0 * 1024.0)
           end
 
           nil
@@ -778,12 +794,12 @@ module Lich
       @instance = nil
 
       class << self
-        # @api private Internal plumbing for Manager → launcher communication.
+        # @api private Internal plumbing for Manager -> launcher communication.
         #   No compatibility guarantee. Do not call from external scripts.
         # @return [Queue] the command queue for communicating with the launcher thread
         attr_reader :command_queue
 
-        # @api private Internal plumbing for Manager → launcher communication.
+        # @api private Internal plumbing for Manager -> launcher communication.
         #   No compatibility guarantee. Do not call from external scripts.
         # @return [Thread, nil] the current worker thread
         attr_reader :worker_thread

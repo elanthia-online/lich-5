@@ -210,6 +210,7 @@ module Lich
           category_box = Gtk::Box.new(:vertical, 5)
           category_box.border_width = 10
 
+          # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
           uppercase_icon = Gtk::Label.new
           uppercase_icon.markup = "<span foreground='gray'>✗</span>"
           uppercase_label = Gtk::Label.new("Uppercase letters (A-Z)")
@@ -248,6 +249,7 @@ module Lich
           length_item = Gtk::Box.new(:horizontal, 5)
           length_item.pack_start(length_icon, expand: false)
           length_item.pack_start(length_label, expand: true)
+          # rubocop:enable Custom/AsciiOnlySource
           category_box.pack_start(length_item, expand: false)
 
           category_frame.add(category_box)
@@ -284,9 +286,13 @@ module Lich
             if password_entry.text.empty? && confirm_entry.text.empty?
               match_status.markup = ""
             elsif password_entry.text == confirm_entry.text && !password_entry.text.empty?
+              # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
               match_status.markup = "<span foreground='#44ff44'>✓ Passwords match</span>"
+              # rubocop:enable Custom/AsciiOnlySource
             else
+              # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
               match_status.markup = "<span foreground='#ff4444'>✗ Passwords do not match</span>"
+              # rubocop:enable Custom/AsciiOnlySource
             end
           end
 
@@ -477,9 +483,11 @@ module Lich
           # Success Message
           # ====================================================================
           success_message = Gtk::Label.new
+          # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
           success_message.markup = "<b>✓ Password Successfully Saved</b>\n\n" +
                                    "Your master password has been restored to your system Keychain.\n" +
                                    "You can now access your encrypted credentials."
+          # rubocop:enable Custom/AsciiOnlySource
           success_message.wrap = true
           success_message.justify = :center
           content_box.pack_start(success_message, expand: false)
@@ -596,9 +604,13 @@ module Lich
 
         def update_category_icon(icon_label, has_category, color_code)
           if has_category
+            # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
             icon_label.markup = "<span foreground='#{color_code}'>✓</span>"
+            # rubocop:enable Custom/AsciiOnlySource
           else
+            # rubocop:disable Custom/AsciiOnlySource -- GTK markup displays Unicode status glyphs correctly.
             icon_label.markup = "<span foreground='gray'>✗</span>"
+            # rubocop:enable Custom/AsciiOnlySource
           end
         end
 

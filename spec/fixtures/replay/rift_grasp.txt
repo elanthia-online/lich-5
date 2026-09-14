@@ -1,0 +1,6 @@
+##### rift_grasp 566b575f2a474e7f
+# expect: attacks=none | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+Shadowy, fleshless limbs snatch from the other side the ghostly rift, their grasping claws flailing blindly through the aperture!
+[SMR result: 58 (Open d100: 67)]
+You twist away from the shadowy, skeletal limbs!
+

@@ -1,0 +1,11 @@
+##### divine_wrath 56bff4e8872f5d38
+# expect: attacks=divine_wrath | res=cs_td | flares=none | outcomes=ward_failed | dmg=2 | statuses=
+Within the reddish haze, the man brings his forging-hammer sharply down upon the anvil, producing a loud clang.
+  CS: +594 - TD: +484 + CvA: +25 + d100: +72 == +207
+  Warding failed!
+   ... and hits for 41 points of damage!
+   ... 40 points of damage!
+   A massive blow to the left shoulder hoists the mist-wreathed banshee high into the air.
+   It hangs there a moment, suspended, before falling forward.
+Cast Roundtime 1 Second.
+

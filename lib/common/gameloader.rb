@@ -27,13 +27,16 @@ module Lich
         require File.join(LIB_DIR, 'attributes', 'skills.rb')
         require File.join(LIB_DIR, 'attributes', 'enhancive.rb')
         require File.join(LIB_DIR, 'gemstone', 'society.rb')
+        require File.join(LIB_DIR, 'gemstone', 'fog.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'status.rb')
+        require File.join(LIB_DIR, 'gemstone', 'stance.rb')
         require File.join(LIB_DIR, 'gemstone', 'experience.rb')
         require File.join(LIB_DIR, 'attributes', 'spellsong.rb')
         require File.join(LIB_DIR, 'gemstone', 'infomon', 'activespell.rb')
         require File.join(LIB_DIR, 'gemstone', 'psms.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
         require File.join(LIB_DIR, 'gemstone', 'currency.rb')
+        require File.join(LIB_DIR, 'gemstone', 'bank.rb')
         # require File.join(LIB_DIR, 'gemstone', 'character', 'disk.rb') # dup
         require File.join(LIB_DIR, 'gemstone', 'group.rb')
         require File.join(LIB_DIR, 'gemstone', 'critranks')
@@ -55,8 +58,10 @@ module Lich
         self.common_before
         require File.join(LIB_DIR, 'common', 'map', 'map_dr.rb')
         require File.join(LIB_DIR, 'attributes', 'char.rb')
+        require File.join(LIB_DIR, 'dragonrealms', 'dependency', 'settings_config.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
+        require File.join(LIB_DIR, 'dragonrealms', 'creature.rb')
         DRInfomon.watch!
         self.common_after
       end
@@ -66,7 +71,7 @@ module Lich
         PostLoad.register("settings_init") do
           # When the game server sends malformed <settingsInfo  space not found ...> XML,
           # it means this character has never logged in with the Wrayth client.
-          # The reactive fix in handle_xml_error patches the XML and sets the flag.
+          # Game.fix_invalid_settings_info patches the XML and sets the flag.
           # Here we send a dummy <db> command to seed a valid client record so
           # the server sends properly formatted settingsInfo on future connects.
           if GameBase::Game.settings_init_needed?

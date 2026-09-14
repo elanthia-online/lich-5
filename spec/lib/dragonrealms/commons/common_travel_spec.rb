@@ -10,10 +10,12 @@ DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 RSpec.describe DRCT do
   before(:each) do
     Lich::Messaging.clear_messages!
-    allow(Room).to receive(:current).and_return(OpenStruct.new(id: 19_073, dijkstra: [nil, {}]))
+    # Room.room_double defines real methods, so dijkstra accepts the
+    # target list production passes it rather than raising ArgumentError.
+    allow(Room).to receive(:current).and_return(Room.room_double(id: 19_073))
   end
 
-  # ─── Constants ─────────────────────────────────────────────────────
+  # --- Constants -----------------------------------------------------
 
   describe 'constants' do
     it 'DIRECTION_REVERSE is frozen' do
@@ -61,7 +63,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── sell_item ─────────────────────────────────────────────────────
+  # --- sell_item -----------------------------------------------------
 
   describe '.sell_item' do
     before(:each) do
@@ -98,7 +100,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── buy_item ──────────────────────────────────────────────────────
+  # --- buy_item ------------------------------------------------------
 
   describe '.buy_item' do
     before(:each) do
@@ -154,7 +156,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── ask_for_item? ─────────────────────────────────────────────────
+  # --- ask_for_item? -------------------------------------------------
 
   describe '.ask_for_item?' do
     before(:each) do
@@ -182,7 +184,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── order_item ────────────────────────────────────────────────────
+  # --- order_item ----------------------------------------------------
 
   describe '.order_item' do
     before(:each) do
@@ -202,7 +204,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── dispose ───────────────────────────────────────────────────────
+  # --- dispose -------------------------------------------------------
 
   describe '.dispose' do
     it 'returns immediately when item is nil' do
@@ -230,7 +232,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── refill_lockpick_container ─────────────────────────────────────
+  # --- refill_lockpick_container -------------------------------------
 
   describe '.refill_lockpick_container' do
     let(:lockpick_type) { 'steel' }
@@ -316,7 +318,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── walk_to ───────────────────────────────────────────────────────
+  # --- walk_to -------------------------------------------------------
 
   describe '.walk_to' do
     it 'returns false for nil target' do
@@ -381,11 +383,11 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── tag_to_id ─────────────────────────────────────────────────────
+  # --- tag_to_id -----------------------------------------------------
 
   describe '.tag_to_id' do
     it 'returns nil and logs when no targets found' do
-      allow(Map).to receive(:list).and_return([])
+      allow(Map).to receive(:rooms_by_tag).and_return([])
       result = DRCT.tag_to_id('bank')
 
       expect(result).to be_nil
@@ -394,9 +396,8 @@ RSpec.describe DRCT do
     end
 
     it 'returns current room ID when already at target' do
-      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100, dijkstra: [nil, {}]))
-      room_obj = OpenStruct.new(id: 100, tags: ['bank'])
-      allow(Map).to receive(:list).and_return([room_obj])
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 100, dijkstra: [{}, {}]))
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100])
 
       result = DRCT.tag_to_id('bank')
       expect(result).to eq(100)
@@ -407,8 +408,7 @@ RSpec.describe DRCT do
       allow(current).to receive(:dijkstra).with([100, 200]).and_return([nil, { 100 => 5, 200 => 10 }])
       allow(Room).to receive(:current).and_return(current)
       room_a = OpenStruct.new(id: 100, tags: ['bank'])
-      room_b = OpenStruct.new(id: 200, tags: ['bank'])
-      allow(Map).to receive(:list).and_return([room_a, room_b])
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100, 200])
       allow(Map).to receive(:[]).with(100).and_return(room_a)
 
       result = DRCT.tag_to_id('bank')
@@ -419,8 +419,7 @@ RSpec.describe DRCT do
       current = OpenStruct.new(id: 1)
       allow(current).to receive(:dijkstra).with([100]).and_return([nil, {}])
       allow(Room).to receive(:current).and_return(current)
-      room_a = OpenStruct.new(id: 100, tags: ['bank'])
-      allow(Map).to receive(:list).and_return([room_a])
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100])
 
       result = DRCT.tag_to_id('bank')
       expect(result).to be_nil
@@ -431,8 +430,7 @@ RSpec.describe DRCT do
       current = OpenStruct.new(id: 1)
       allow(current).to receive(:dijkstra).with([100]).and_return([nil, { 100 => 5 }])
       allow(Room).to receive(:current).and_return(current)
-      room_a = OpenStruct.new(id: 100, tags: ['bank'])
-      allow(Map).to receive(:list).and_return([room_a])
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100])
       allow(Map).to receive(:[]).with(100).and_return(nil)
 
       result = DRCT.tag_to_id('bank')
@@ -440,15 +438,61 @@ RSpec.describe DRCT do
       expect(Lich::Messaging.messages.last[:message]).to include('Something went wrong')
     end
 
+    it 'selects the nearest target when room ids are far apart' do
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra).with([12, 999_000])
+                                          .and_return([{}, { 12 => 40.0, 999_000 => 2.5 }])
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12, 999_000])
+      allow(Map).to receive(:[]).with(999_000).and_return(OpenStruct.new(id: 999_000))
+
+      expect(DRCT.tag_to_id('bank')).to eq(999_000)
+    end
+
+    it 'drops unreachable targets even at very high room ids' do
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra).with([12, 999_000])
+                                          .and_return([{}, { 12 => 3.0 }])
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12, 999_000])
+      allow(Map).to receive(:[]).with(12).and_return(OpenStruct.new(id: 12))
+
+      expect(DRCT.tag_to_id('bank')).to eq(12)
+    end
+
+    it 'reads targets from the tag index rather than scanning the room list' do
+      # Non-empty so execution runs past the empty-target early return and the
+      # trap stays armed through the rest of the method, not just the top.
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra).with([100]).and_return([{}, { 100 => 5 }])
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([100])
+      allow(Map).to receive(:[]).with(100).and_return(OpenStruct.new(id: 100))
+      allow(Map).to receive(:list).and_raise('tag_to_id must not scan Map.list')
+
+      expect(DRCT.tag_to_id('bank')).to eq(100)
+    end
+
     it 'does not call exit (returns nil instead)' do
-      allow(Map).to receive(:list).and_return([])
+      allow(Map).to receive(:rooms_by_tag).and_return([])
       # If exit were called, this would raise SystemExit
       result = DRCT.tag_to_id('bank')
       expect(result).to be_nil
     end
+
+    it 'reports and returns nil when pathfinding fails' do
+      current = OpenStruct.new(id: 1)
+      allow(current).to receive(:dijkstra).and_return(nil)
+      allow(Room).to receive(:current).and_return(current)
+      allow(Map).to receive(:rooms_by_tag).with('bank').and_return([12])
+      allow(Lich::Messaging).to receive(:msg)
+
+      expect(DRCT.tag_to_id('bank')).to be_nil
+      expect(Lich::Messaging).to have_received(:msg).with('bold', /Pathfinding failed/)
+    end
   end
 
-  # ─── retreat ───────────────────────────────────────────────────────
+  # --- retreat -------------------------------------------------------
 
   describe '.retreat' do
     it 'calls DRC.retreat when NPCs are present' do
@@ -476,7 +520,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── reverse_path ──────────────────────────────────────────────────
+  # --- reverse_path --------------------------------------------------
 
   describe '.reverse_path' do
     it 'reverses a simple north-east path' do
@@ -517,7 +561,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── sort_destinations ─────────────────────────────────────────────
+  # --- sort_destinations ---------------------------------------------
 
   describe '.sort_destinations' do
     it 'sorts rooms by shortest distance' do
@@ -555,9 +599,35 @@ RSpec.describe DRCT do
       result = DRCT.sort_destinations([100, 200])
       expect(result).to eq([100])
     end
+
+    it 'sorts destinations with widely separated room ids' do
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra).with(1)
+                                      .and_return([{}, { 7 => 9.0, 888_000 => 1.0 }])
+
+      expect(DRCT.sort_destinations([888_000, 7])).to eq([888_000, 7])
+    end
+
+    it 'sorts without raising when the current room has no distance' do
+      # Defensive: dijkstra seeds the source at 0, so this state is not reachable
+      # through Map.dijkstra. The delete_if keeps the current room
+      # regardless, so the comparator must tolerate a missing distance.
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra).with(1).and_return([{}, { 7 => 2.0 }])
+
+      expect { DRCT.sort_destinations([1, 7]) }.not_to raise_error
+      expect(DRCT.sort_destinations([1, 7])).to eq([7, 1])
+    end
+
+    it 'hands back the requested list when pathfinding fails' do
+      allow(Room).to receive(:current).and_return(OpenStruct.new(id: 1))
+      allow(Map).to receive(:dijkstra).with(1).and_return(nil)
+
+      expect(DRCT.sort_destinations([7, 888_000])).to eq([7, 888_000])
+    end
   end
 
-  # ─── time_to_room ──────────────────────────────────────────────────
+  # --- time_to_room --------------------------------------------------
 
   describe '.time_to_room' do
     it 'returns shortest distance between rooms' do
@@ -569,9 +639,30 @@ RSpec.describe DRCT do
       allow(Map).to receive(:dijkstra).with(100, 999).and_return([nil, {}])
       expect(described_class.time_to_room(100, 999)).to be_nil
     end
+
+    it 'reports time to a very high room id' do
+      allow(Map).to receive(:dijkstra).with(1, 888_000)
+                                      .and_return([{}, { 888_000 => 12.5 }])
+
+      expect(DRCT.time_to_room(1, 888_000)).to eq(12.5)
+    end
+
+    it 'normalizes a String destination to an Integer room id' do
+      allow(Map).to receive(:dijkstra).with(1, 888_000)
+                                      .and_return([{}, { 888_000 => 12.5 }])
+
+      expect(DRCT.time_to_room(1, '888000')).to eq(12.5)
+    end
+
+    it 'returns nil without raising when pathfinding fails' do
+      allow(Map).to receive(:dijkstra).with(1, 888_000).and_return(nil)
+
+      expect { DRCT.time_to_room(1, 888_000) }.not_to raise_error
+      expect(DRCT.time_to_room(1, 888_000)).to be_nil
+    end
   end
 
-  # ─── get_hometown_target_id ────────────────────────────────────────
+  # --- get_hometown_target_id ----------------------------------------
 
   describe '.get_hometown_target_id' do
     it 'returns target ID on first attempt' do
@@ -603,7 +694,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── find_empty_room ───────────────────────────────────────────────
+  # --- find_empty_room -----------------------------------------------
 
   describe '.find_empty_room' do
     before(:each) do
@@ -691,7 +782,7 @@ RSpec.describe DRCT do
     end
   end
 
-  # ─── find_sorted_empty_room ────────────────────────────────────────
+  # --- find_sorted_empty_room ----------------------------------------
 
   describe '.find_sorted_empty_room' do
     it 'sorts rooms before searching' do

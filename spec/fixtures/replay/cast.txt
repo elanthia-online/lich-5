@@ -1,0 +1,7 @@
+##### cast 61bc41d62521a595
+# expect: attacks=cast | res=none | flares=none | outcomes=intercept | dmg=0 | statuses=
+<a exist="-30591636" noun="Preacher">Preacher</a> gestures at <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/>.
+The evanescent shield shrouding <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> flares to life and absorbs the essence of the spell, dissipating it harmlessly.
+[Moonsedge, Ash and Umbral - 32424] (u4577027)
+Vibrantly colorful to the point of being lurid, the collapsed remnant of a fortuneteller's tent drape over the cobblestones of the intersection.  Sitting upright before the spill of fabric and broken furnishings and oddly untouched, a crystal ball is aglow with refracted moonlight.  Several embossed fortune cards flap in the stiff breeze, painted with elaborate figures and scenes.  You also see a massive black ora sword adorned with a trio of blue-black diamonds.
+

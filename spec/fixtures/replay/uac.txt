@@ -1,0 +1,7 @@
+##### uac dd2db919ea16c55b
+# expect: attacks=uac | res=uaf_udf | flares=none | outcomes=none | dmg=1 | statuses=
+<a exist="-25819721" noun="Buccaneer">Buccaneer</a> attempts to kick <pushBold/>an <a exist="75445853" noun="vampire">ashen patrician vampire</a><popBold/>!
+  UAF: 728 vs UDF: 682 = 1.067 * MM: 82 + d100: 28 = 115
+  ... and hit for 5 points of damage!
+  Fast kick to chest doesn't even make the patrician vampire blink.
+

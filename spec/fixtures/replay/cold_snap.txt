@@ -1,0 +1,9 @@
+##### cold_snap 237fa04df5ebc09c
+# expect: attacks=cold_snap | res=cs_td | flares=none | outcomes=warded | dmg=0 | statuses=
+An airy mist rolls into the area, carrying a harsh chill with it.
+  CS: +444 - TD: +558 + CvA: -36 + d100: +40 - +30 == -140
+  Warded off!
+The mist leaves a thin layer of ice on your lower half, but you easily shake it off.
+Heavy hoofbeats herald the arrival of an immense gold-bristled hinterboar.
+You are now in an offensive stance.
+

@@ -10,6 +10,8 @@ require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'
 require_relative 'gui/favorites_manager'
+require_relative 'gui/frontend_manager_tab'
+require_relative 'gui/frontend_selector'
 require_relative 'gui/game_selection'
 require_relative 'gui/login_tab_utils'
 require_relative 'gui/manual_login_tab'
@@ -251,7 +253,7 @@ module Lich
     #
     # Configures the communication system that allows tabs to notify
     # each other of data changes for real-time synchronization.
-    # Enhanced to include manual login tab cache refresh for account/character removal events.
+    # Refreshes every entry cache after data mutations, including launch-setting edits.
     #
     # @return [void]
     def setup_cross_tab_communication
@@ -263,10 +265,7 @@ module Lich
         # Refresh saved login tab for all data changes to ensure synchronization
         @saved_login_tab.refresh_data if @saved_login_tab
 
-        # Refresh manual login tab cache when accounts are removed to prevent stale data
-        if @manual_login_tab && (change_type == :account_removed || change_type == :character_removed)
-          @manual_login_tab.refresh_entry_data
-        end
+        @manual_login_tab.refresh_entry_data if @manual_login_tab
 
         # Sanitize data before logging to prevent password exposure
         sanitized_data = data.dup
@@ -292,6 +291,7 @@ module Lich
     # with appropriate callbacks and UI elements.
     #
     # @return [void]
+    # @api private
     def create_tab_instances
       # Create callbacks for saved login tab
       saved_login_callbacks = {
@@ -306,7 +306,8 @@ module Lich
             login_info[:user_id],
             login_info[:char_name],
             login_info[:game_code],
-            login_info[:frontend]
+            login_info[:frontend],
+            login_info[:custom_launch]
           )
             # Reload entry_data from updated YAML to stay in sync
             begin
@@ -327,6 +328,9 @@ module Lich
         },
         on_add_character: ->(character:, instance:, frontend:) {
           # Handle adding a character
+        },
+        on_error: ->(message) {
+          @msgbox.call(message)
         },
         on_theme_change: ->(state) {
           # Update theme state for all components
@@ -411,6 +415,15 @@ module Lich
         @autosort_state
       )
 
+      @frontend_manager_tab = Lich::Common::GUI::FrontendManagerTab.new(
+        data_dir: DATA_DIR,
+        on_changed: -> {
+          @saved_login_tab&.refresh_frontends
+          @manual_login_tab&.refresh_frontends
+          @account_manager_ui&.refresh_frontends
+        }
+      )
+
       # Get UI elements from tabs
       @saved_login_ui = @saved_login_tab.ui_elements
       @manual_login_ui = @manual_login_tab.ui_elements
@@ -418,6 +431,7 @@ module Lich
       # Set references to UI elements
       @quick_game_entry_tab = @saved_login_tab.tab_widget
       @game_entry_tab = @manual_login_tab.tab_widget
+      @frontends_tab = @frontend_manager_tab.widget
       @custom_launch_entry = @manual_login_ui[:custom_launch_entry]
       @custom_launch_dir = @manual_login_ui[:custom_launch_dir]
       @bonded_pair_char = @saved_login_ui[:bonded_pair_char]
@@ -430,6 +444,7 @@ module Lich
     # Creates the notebook widget and adds all tabs to it.
     #
     # @return [void]
+    # @api private
     def setup_notebook
       @notebook = Gtk::Notebook.new
 
@@ -465,6 +480,7 @@ module Lich
 
       # Add the account management tab to the main notebook
       @notebook.append_page(@account_mgmt_tab, Gtk::Label.new('Account Management'))
+      @notebook.append_page(@frontends_tab, Gtk::Label.new('Frontends'))
 
       # Set tab position
       @notebook.set_tab_pos(:top)
@@ -492,15 +508,8 @@ module Lich
       window_settings = Lich::Common::GUI::WindowSettings.load(DATA_DIR)
       Lich::Common::GUI::WindowSettings.apply_to_window(@window, window_settings)
 
-      @window.signal_connect('delete_event') {
-        # Save window geometry before destruction
-        save_window_geometry
-
-        # Clean up cross-tab communication
-        @tab_communicator.clear_callbacks if @tab_communicator
-        @window.destroy unless @window.destroyed?
-        @done = true
-      }
+      @window.signal_connect('delete_event') { handle_window_delete_event }
+      @window.signal_connect('destroy') { handle_window_destroy }
 
       # Apply initial theme to window
       if @theme_state
@@ -548,6 +557,33 @@ module Lich
       )
     end
 
+    # Handles a user-initiated window close request.
+    #
+    # GTK expects `delete_event` handlers to either veto closure or allow the
+    # default destroy path to proceed. We save launcher state here and let GTK
+    # perform the actual widget destruction so shutdown does not become
+    # re-entrant inside the close signal callback.
+    #
+    # @return [Boolean] false to allow GTK to destroy the window normally
+    def handle_window_delete_event
+      save_window_geometry
+      false
+    end
+
+    # Finalizes launcher shutdown state once GTK has destroyed the main window.
+    #
+    # This callback is intentionally idempotent because both user-driven closes
+    # and programmatic single-launch shutdown flow through the same destroy path.
+    #
+    # @return [void]
+    def handle_window_destroy
+      return if @window_destroyed
+
+      @window_destroyed = true
+      @tab_communicator.clear_callbacks if @tab_communicator
+      @done = true
+    end
+
     # Applies button style for light mode
     #
     # Sets a lighter background color for buttons when in light mode.
@@ -584,8 +620,9 @@ module Lich
     #
     # @return [void]
     def hide_optional_elements
-      @custom_launch_entry.visible = false
-      @custom_launch_dir.visible = false
+      # Manual Login owns its checkbox visibility, including Custom's initial
+      # selection when no installed client is available. Its fields opt out of
+      # show_all, so window refreshes need not reset that selection here.
       @bonded_pair_char.visible = false
       @bonded_pair_inst.visible = false
       @slider_box.visible = false
@@ -594,14 +631,18 @@ module Lich
     end
 
     # Handles launch action for both saved and manual tabs.
-    # In persistent launcher mode the GUI stays open and launches a child process.
-    # In default mode behavior remains unchanged (single launch and close).
+    # Persistent launcher mode is intentionally scoped to saved-entry launches.
+    # Manual login launches keep single-launch semantics to avoid form-reset friction.
     #
     # @param launch_data [Array<String>] Prepared launch data from auth flow
     # @param login_context [Hash, nil] Optional launch context from GUI tabs
     # @return [void]
     def handle_play_action(launch_data, login_context = nil)
-      if @persistent_launcher_mode
+      if managed_launch_completed?(login_context)
+        # Saga has already launched and owns authentication. Single-launch mode
+        # only needs to close; persistent mode remains available for more starts.
+        close_launcher_window unless @persistent_launcher_mode
+      elsif use_persistent_launcher?(login_context)
         # Persistent mode: launch child session, keep the launcher window active.
         if login_context.is_a?(Hash) && !login_context.key?(:dark_mode)
           # Propagate the current launcher theme state into detached child startup.
@@ -617,13 +658,41 @@ module Lich
           @msgbox.call("Failed to launch session: #{launch_result[:error]}") if @msgbox
         end
       else
-        # Regression-safe default path: preserve single-launch behavior exactly.
+        # Default/single-launch path: used when persistent mode is disabled OR
+        # when launch originates from manual login.
         @launch_data = launch_data
-        Gtk.queue {
-          @window.destroy unless @window.destroyed?
-          @done = true
-        }
+        close_launcher_window
       end
+    end
+
+    # Returns whether the frontend session was launched before this lifecycle
+    # callback. Such launches must never be sent through SessionLauncher again.
+    #
+    # @param login_context [Hash, nil]
+    # @return [Boolean]
+    def managed_launch_completed?(login_context)
+      login_context.is_a?(Hash) && login_context[:managed_launch_completed] == true
+    end
+
+    # Returns true only for saved-entry launches while persistent mode is enabled.
+    # A manual login qualifies only after its requested saved entry was written.
+    #
+    # @param login_context [Hash, nil]
+    # @return [Boolean]
+    def use_persistent_launcher?(login_context)
+      return false unless @persistent_launcher_mode
+      return true unless login_context.is_a?(Hash)
+
+      saved_entry_context?(login_context)
+    end
+
+    # Saved-entry callbacks carry account credentials in context.
+    #
+    # @param login_context [Hash]
+    # @return [Boolean]
+    def saved_entry_context?(login_context)
+      login_context[:saved_entry] == true ||
+        (login_context.key?(:user_id) && login_context.key?(:password))
     end
 
     # Saves entry data if needed
@@ -647,11 +716,35 @@ module Lich
     # @return [Array, nil] Launch data if available
     def return_launch_data_or_exit
       if @launch_data.nil?
-        Gtk.queue { Gtk.main_quit }
+        Lich::Common.shutdown_gtk_before_exit
         exit
       end
 
       @launch_data
+    end
+
+    # Closes the launcher window through GTK's normal destroy path.
+    #
+    # Single-launch mode uses the same close sequence as a user clicking the
+    # window close button so all launcher cleanup remains centralized.
+    #
+    # @return [void]
+    def close_launcher_window
+      queued = Gtk.queue { destroy_launcher_window }
+      return if queued
+
+      destroy_launcher_window
+      handle_window_destroy
+    end
+
+    # Saves launcher geometry and destroys the window when it is still live.
+    #
+    # @return [void]
+    def destroy_launcher_window
+      return if @window.nil? || (@window.respond_to?(:destroyed?) && @window.destroyed?)
+
+      save_window_geometry
+      @window.destroy
     end
   end
 end

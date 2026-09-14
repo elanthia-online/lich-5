@@ -1,0 +1,6 @@
+##### ambush 8025f575a721aa6c
+# expect: attacks=ambush | res=as_ds | flares=none | outcomes=miss | dmg=0 | statuses=
+<pushBold/><a exist="38727252" noun="cannibal">With an ululating shriek, a bloody halfling cannibal</a><popBold/> leaps from the shadows and hurtles at you, swinging wildly with a drake scimitar!
+  AS: +444 vs DS: +695 with AvD: +12 + d100 roll: +52 = -187
+   A clean miss.
+

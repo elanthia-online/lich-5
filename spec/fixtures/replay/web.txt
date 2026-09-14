@@ -1,0 +1,6 @@
+##### web ea5f7aaa9910c2e3
+# expect: attacks=web | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+Cloudy wisps swirl about you.
+[SMR result: 62 (Open d100: 55, Penalty: 3)]
+The wisps dissipate harmlessly into the air.
+

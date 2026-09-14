@@ -27,6 +27,8 @@
 # @see DRC Core common module
 # @see EquipmentManager Higher-level gear management
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRCI
@@ -52,7 +54,21 @@ module Lich
       end
 
       ## How to add new trash receptacles https://github.com/elanthia-online/dr-scripts/wiki/Adding-new-trash-receptacles
+      # Default trash-receptacle nouns. Players extend this at runtime via the
+      # +custom_trash_storage+ setting; see {trash_storage} and
+      # {Lich::DragonRealms::CustomSubstitutions}.
       TRASH_STORAGE = %w[arms barrel basin basket bin birdbath bucket chamberpot gloop hole log puddle statue stump tangle tree turtle urn gelapod].freeze
+
+      # Recognized trash-receptacle nouns: the built-in {TRASH_STORAGE} defaults
+      # merged with the player's +custom_trash_storage+ additions. Lets a player
+      # teach {dispose_trash} about a receptacle their town has that Lich does
+      # not yet know, without a Lich release.
+      #
+      # @return [Array<String>] recognized trash-receptacle nouns
+      # @see CustomSubstitutions.resolve
+      def trash_storage
+        CustomSubstitutions.resolve(:custom_trash_storage, TRASH_STORAGE, type: :names)
+      end
 
       DROP_TRASH_SUCCESS_PATTERNS = [
         /^You drop/,
@@ -211,6 +227,8 @@ module Lich
       UNTIE_ITEM_FAILURE_PATTERNS = [
         /^You don't seem to be able to move/,
         /^You fumble with the ties/,
+        /^You are a little too busy/,
+        /^You are a bit too busy/,
         /^Untie what/,
         /^What were you referring/
       ].freeze
@@ -237,7 +255,9 @@ module Lich
         /you unlace/,
         /^You slam the heels/,
         /^You work your way out/,
-        /^With masterful grace, you ready/
+        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
+        /^With masterful grace, you ready/,
+        /^A brisk chill leaves you as you/ # cold-enchanted items (e.g., ice-veined leather gloves)
       ].freeze
 
       REMOVE_ITEM_FAILURE_PATTERNS = [
@@ -247,7 +267,6 @@ module Lich
         /^You don't seem to be able to move/,
         /^Remove what/,
         /^I could not/,
-        /^Grunting with momentary exertion/, # Grunting with momentary exertion, you grip each of your heavy combat boots in turn by the heel, and pull them off.
         /^What were you/
       ].freeze
 
@@ -449,11 +468,15 @@ module Lich
       #   "You remain concealed by your surroundings, convinced that your unloading of the crossbow went unobserved."
       #
       # @see UNLOAD_WEAPON_FAILURE_PATTERNS
+      # The game may prepend an aim/firing timer tag to the unload line, e.g.
+      #   "<dialogData id='AimTimerDialog'><timer id='firingTimer' value='0' /> </dialogData>You unload the shortbow."
+      # The optional `(?:<dialogData.*?<\/dialogData>)?` prefix lets the patterns
+      # match whether or not the tag is present, without assuming its inner values.
       UNLOAD_WEAPON_SUCCESS_PATTERNS = [
-        /^You unload/,
+        /^(?:<dialogData.*?<\/dialogData>)?You unload/,
         /^Your .* fall.*to your feet\.$/,
         /As you release the string/,
-        /^You .* unloading/
+        /^(?:<dialogData.*?<\/dialogData>)?You .* unloading/
       ].freeze
 
       # Failure patterns for the UNLOAD verb.
@@ -500,7 +523,7 @@ module Lich
         /^You slowly open/,
         /^The .* opens/,
         /^You unbutton/,
-        /(It's|is) already open/,
+        /([Ii]t's|is) already open/,
         /^You spread your arms, carefully holding your bag well away from your body/
       ].freeze
 
@@ -681,10 +704,11 @@ module Lich
           end
         end
 
+        recognized_trash = trash_storage
         trashcans = DRRoom.room_objs
                           .reject { |obj| obj =~ /azure \w+ tree/ }
                           .map { |long_name| DRC.get_noun(long_name) }
-                          .select { |obj| TRASH_STORAGE.include?(obj) }
+                          .select { |obj| recognized_trash.include?(obj) }
 
         trashcans.each do |trashcan|
           if trashcan == 'gloop'
@@ -1196,26 +1220,48 @@ module Lich
 
       # Gets an item without "my " prefix qualification.
       #
-      # Issues the GET command and checks for success/failure responses.
-      # Falls back to eddy portal retrieval if container is a portal.
+      # Issues the GET command, then verifies success by checking whether
+      # the item's noun appears in either hand via the XML game-object
+      # feed (+in_hands?+) rather than relying on text-pattern matching
+      # of the game response. This avoids false positives from combat
+      # messages (e.g. "You get a startling sensation" matching +/^You get/+).
+      #
+      # The success and failure patterns are still passed to +bput+ so it
+      # returns promptly once the game has responded, but the return value
+      # of +bput+ is not used to determine success.
+      #
+      # A short polling loop (up to 1 second) accommodates XML feed lag
+      # between the text response and the GameObj update.
       #
       # @param item [String] item name (unqualified)
       # @param container [String, nil] container name (unqualified), or nil
       # @return [Boolean] true if item was retrieved successfully
       # @api private
+      #
+      # @example Basic retrieval
+      #   get_item_unsafe("backpack")  #=> true (if backpack is now in hand)
+      #
+      # @example With container
+      #   get_item_unsafe("sword", "chest")  #=> true
+      #
+      # @see .in_hands?
+      # @see .get_item?
       def get_item_unsafe(item, container = nil)
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)
-        case DRC.bput("get #{item} #{from}", GET_ITEM_SUCCESS_PATTERNS, GET_ITEM_FAILURE_PATTERNS)
-        when *GET_ITEM_SUCCESS_PATTERNS
-          return true
-        else
-          if container =~ /\bportal\b/i
-            return get_item_from_eddy_portal?(item, container)
-          else
-            return false
-          end
+
+        noun = DRC.get_noun(item)
+        DRC.bput("get #{item} #{from}", GET_ITEM_FAILURE_PATTERNS, GET_ITEM_SUCCESS_PATTERNS)
+
+        10.times do
+          break if in_hands?(noun)
+          sleep 0.1
         end
+
+        return true if in_hands?(noun)
+        return get_item_from_eddy_portal?(item, container) if container =~ /\bportal\b/i
+
+        false
       end
 
       # Gets an item from an eddy portal after forcing a content refresh.

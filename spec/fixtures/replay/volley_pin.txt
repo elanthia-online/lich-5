@@ -1,0 +1,14 @@
+##### volley_pin a77e61db487ab1ad
+# expect: attacks=pindown | res=smr | flares=none | outcomes=none | dmg=0 | statuses=immobilized/add
+Without bothering to aim, you loose a chaotic hail of arrows to pin down your foes!
+[SMR result: 185 (Open d100: 80)]
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> narrowly avoids being skewered!
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> is rooted in place!
+[SMR result: 281 (Open d100: 68, Bonus: 79)]
+<pushBold/>A <a exist="61408069" noun="siren">siren</a><popBold/> narrowly avoids being skewered!
+<pushBold/>A <a exist="61408069" noun="siren">siren</a><popBold/> is rooted in place!
+[SMR result: 137 (Open d100: 30)]
+Arrows thud into the ground around <pushBold/>a <a exist="39300001" noun="executioner">triton executioner</a><popBold/>, keeping him at bay!
+<pushBold/>A <a exist="39300001" noun="executioner">triton executioner</a><popBold/> is rooted in place!
+Roundtime: 3 sec.
+

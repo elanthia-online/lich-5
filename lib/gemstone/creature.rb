@@ -1,5 +1,8 @@
+# frozen_string_literal: true
+
 require 'singleton'
 require 'ostruct'
+require_relative '../common/creature/creature_base'
 
 module Lich
   module Gemstone
@@ -7,31 +10,43 @@ module Lich
     class CreatureTemplate
       @@templates = {}
       @@loaded = false
-      @@max_templates = 500 # Prevent unbounded template cache growth
 
       attr_reader :name, :url, :picture, :level, :family, :type,
-                  :undead, :otherclass, :areas, :bcs, :max_hp,
+                  :undead, :boss, :boss_type, :otherclass, :areas, :bcs, :max_hp,
                   :speed, :height, :size, :attack_attributes,
                   :defense_attributes, :treasure, :messaging,
-                  :special_other, :abilities, :alchemy
+                  :special_other, :abilities, :alchemy, :equipment
 
       BOON_ADJECTIVES = %w[
         adroit afflicted apt barbed belligerent blurry canny combative dazzling deft diseased drab
         dreary ethereal flashy flexile flickering flinty frenzied ghastly ghostly gleaming glittering
         glorious glowing grotesque hardy illustrious indistinct keen lanky luminous lustrous muculent
-        nebulous oozing pestilent radiant raging ready resolute robust rune-covered shadowy shifting
-        shimmering shining sickly green sinuous slimy sparkling spindly spiny stalwart steadfast stout
-        tattoed tenebrous tough twinkling unflinching unyielding wavering wispy
+        nebulous oozing pestilent radiant raging ready resolute robust rune-covered shadowy shielded
+        shifting shimmering shining sickly green sinuous slimy sparkling spindly spiny stalwart steadfast stout
+        tattoed tattooed tenebrous tough twinkling unflinching unyielding wavering wispy
       ]
 
       def initialize(data)
         @name = data[:name]
         @url = data[:url]
         @picture = data[:picture]
-        @level = data[:level].to_i
+        @level = data[:level]&.to_i
         @family = data[:family]
         @type = data[:type]
         @undead = data[:undead]
+        # Tri-state (true/false/nil) - nil means uncatalogued/unknown, not false.
+        @blood = data[:blood]
+        @bones = data[:bones]
+        @limbs = data[:limbs]
+        @witherable = data[:witherable]
+        @sympathy = data[:sympathy]
+        @muggable = data[:muggable]
+        @sleepable = data[:sleepable]
+        @boss = data[:boss]
+        # nil | "pack" | "miniboss" | "boss" - bestiary classification
+        # ("boss" = the once-per-30-days uniques). Zone-dependent for a
+        # few creatures; the template carries the highest tier.
+        @boss_type = data[:boss_type]
         @otherclass = data[:otherclass] || []
         @areas = data[:areas] || []
         @bcs = data[:bcs]
@@ -56,27 +71,31 @@ module Lich
         @special_other = data[:special_other]
         @abilities = data[:abilities] || []
         @alchemy = data[:alchemy] || []
+        # Items seen on the creature via LOOK, as plain strings.
+        @equipment = data[:equipment] || []
       end
 
       # Load all templates from files
-      def self.load_all
+      # dir defaults to the real templates directory; overridable so tests
+      # can load an isolated fixture directory instead.
+      def self.load_all(dir = File.join(File.dirname(__FILE__), 'creatures'))
         return if @@loaded
-
-        templates_dir = File.join(File.dirname(__FILE__), 'creatures')
-        return unless File.directory?(templates_dir)
+        return unless File.directory?(dir)
 
         template_count = 0
-        Dir[File.join(templates_dir, '*.rb')].each do |path|
+        Dir[File.join(dir, '*.rb')].each do |path|
           next if File.basename(path) == '_creature_template.rb'
 
-          # Check template limit
-          if template_count >= @@max_templates
-            respond "--- warning: Template cache limit (#{@@max_templates}) reached, skipping remaining templates" if $creature_debug
-            break
-          end
-
-          template_name = File.basename(path, '.rb').tr('_', ' ')
-          normalized_name = fix_template_name(template_name)
+          # Filename-derived name, used only as a fallback for files that
+          # don't set their own :name - the file's own value takes priority
+          # so a name with characters the filename can't represent (a
+          # hyphen, an apostrophe) still round-trips correctly. Both the
+          # display name and the lookup key come from the same source now;
+          # previously both were overwritten from the filename regardless of
+          # what the file itself said, silently breaking lookup for any
+          # creature whose real name a slugified filename can't represent
+          # exactly (e.g. "shield-maiden" -> "shield_maiden" -> "shield maiden").
+          fallback_name = File.basename(path, '.rb').tr('_', ' ')
 
           begin
             # Safer loading with validation
@@ -84,12 +103,19 @@ module Lich
             data = load_template_data(file_content, path)
             next unless data.is_a?(Hash)
 
-            data[:name] = template_name
+            data[:name] = fallback_name if data[:name].to_s.strip.empty?
+            normalized_name = fix_template_name(data[:name])
+            if @@templates.key?(normalized_name) && $creature_debug
+              respond "--- warning: '#{fallback_name}' collides with an already-loaded template on lookup key '#{normalized_name}' - one will silently overwrite the other"
+            end
             template = new(data)
             @@templates[normalized_name] = template
             template_count += 1
-          rescue => e
-            respond "--- error loading template #{template_name}: #{e.message}" if $creature_debug
+          rescue StandardError, ScriptError => e
+            # ScriptError (SyntaxError's parent) isn't a StandardError, so a
+            # single template file with malformed Ruby would otherwise abort
+            # load_all entirely instead of just being skipped.
+            respond "--- error loading template #{fallback_name}: #{e.message}" if $creature_debug
           end
         end
 
@@ -141,6 +167,126 @@ module Lich
         @@templates.values.uniq
       end
 
+      # All game uids the creature is found at, expanded from the stored
+      # ranges (memoized - ranges stay compact on disk).
+      def uids
+        @uids ||= @areas.flat_map { |a| Array(a[:uids]).flat_map(&:to_a) }.uniq.sort
+      end
+
+      # Whether the creature is found at the given game room uid. Checks
+      # the ranges directly, so no expansion cost.
+      def found_at_uid?(uid)
+        @areas.any? { |a| Array(a[:uids]).any? { |r| r.cover?(uid) } }
+      end
+
+      # Templates for the creatures found at the given game room uid.
+      def self.at_uid(uid)
+        all.select { |t| t.found_at_uid?(uid) }
+      end
+
+      # ---- consumer views (need the Lich mapdb loaded) ----------------
+      # Everything below converts uid -> Lich room id at call time via
+      # Map.ids_from_uid, so stored data survives mapdb renumbering. Gaps
+      # in the game's uid numbering never matter here: each uid converts
+      # individually, and uids the mapdb doesn't know yet simply drop out
+      # until someone maps those rooms.
+
+      # Every Lich room id the creature is found in, across all areas -
+      # ranges combined, deduped, sorted.
+      def rooms
+        @rooms ||= uids.flat_map { |u| Lich::Common::Map.ids_from_uid(u) }.uniq.sort
+      end
+
+      # {area name => [Lich room ids]} - the per-area display view
+      # (eBestiary and friends).
+      def rooms_by_area
+        @rooms_by_area ||= @areas.to_h do |a|
+          ids = Array(a[:uids]).flat_map { |r| r.flat_map { |u| Lich::Common::Map.ids_from_uid(u) } }
+          [a[:name], ids.uniq.sort]
+        end
+      end
+
+      # Rooms bordering the creature's rooms: connected by an edge - in
+      # either direction - to a room the creature is found in, without
+      # being one themselves (bigshot's perimeter list). The reverse-edge
+      # pass scans the map once; the result is memoized.
+      def boundary_rooms
+        @boundary_rooms ||= begin
+          inside = {}
+          rooms.each { |id| inside[id] = true }
+          border = {}
+          inside.each_key do |id|
+            room = Lich::Common::Map[id] or next
+            (room.wayto || {}).each_key do |dest|
+              d = dest.to_i
+              border[d] = true unless inside[d]
+            end
+          end
+          Lich::Common::Map.list.compact.each do |room|
+            next if inside[room.id] || border[room.id]
+
+            border[room.id] = true if (room.wayto || {}).keys.any? { |dest| inside[dest.to_i] }
+          end
+          border.keys.sort
+        end
+      end
+
+      # Returns whether the bestiary template says the creature has blood.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def has_blood?
+        @blood
+      end
+
+      # Returns whether the bestiary template says the creature has bones.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def has_bones?
+        @bones
+      end
+
+      # Returns whether Limb Disruption (708) has limbs to target on this
+      # creature ("The X has no limbs left!" on a fresh target = false).
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def has_limbs?
+        @limbs
+      end
+
+      # Returns whether Wither (1115) has a body to attack on this
+      # creature. Not about limbs - the spell strikes all thirteen
+      # locations, chest and abdomen most often - and not about
+      # corporeality either: it works on non-corporeal undead (wraiths,
+      # spectres, lost souls) and fails on the golem and elemental
+      # families.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def witherable?
+        @witherable
+      end
+
+      # Returns whether Sympathy (1120) can affect this creature.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def sympathy?
+        @sympathy
+      end
+
+      # Returns whether the bestiary template says the creature can be mugged.
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def muggable?
+        @muggable
+      end
+
+      # Returns whether the creature can be put to sleep. False comes from
+      # the game's own refusal ("does not seem to be affected").
+      #
+      # @return [Boolean, nil] true or false when catalogued; nil when unknown.
+      def sleepable?
+        @sleepable
+      end
+
       private
 
       def normalize_spells(spells)
@@ -166,11 +312,15 @@ module Lich
       end
     end
 
-    # Individual creature instance (runtime tracking with ID)
+    # Individual GemStone creature instance (runtime tracking with ID).
+    #
+    # Shares its id-keyed registry, room roster and `<crtrStatus>` status/flag
+    # handling with DragonRealms via the {Lich::Common::CreatureBase} mixin; the
+    # GemStone-specific layer here adds bestiary templates, UCS (Unarmed Combat
+    # System) tracking, HP/injury modelling and the GemStone `valid_target?`
+    # exclusions.
     class CreatureInstance
-      @@instances = {}
-      @@max_size = 1000
-      @@auto_register = true
+      include Lich::Common::CreatureBase
 
       attr_accessor :id, :noun, :name, :status, :injuries, :health, :damage_taken, :created_at, :fatal_crit, :status_timestamps,
                     :ucs_smote, :ucs_updated
@@ -181,100 +331,44 @@ module Lich
       UCS_TTL = 120        # UCS data expires after 2 minutes
       UCS_SMITE_TTL = 15   # Smite effect expires after 15 seconds
 
-      # Status effect durations (in seconds) for auto-cleanup
-      # nil = no auto-cleanup (waits for removal message)
-      STATUS_DURATIONS = {
-        'breeze'      => 6, # 6 seconds roundtime
-        'bind'        => 10, # 10 seconds typical
-        'web'         => 8, # 8 seconds typical
-        'entangle'    => 10, # 10 seconds typical
-        'hypnotism'   => 12, # 12 seconds typical
-        'calm'        => 15, # 15 seconds typical
-        'mass_calm'   => 15, # 15 seconds typical
-        'sleep'       => 8, # 8 seconds typical (can wake early)
-        # Statuses with reliable removal messages - no duration needed
-        'stunned'     => nil, # Has removal messages
-        'immobilized' => nil, # Has removal messages
-        'prone'       => nil,         # Has removal messages
-        'blind'       => nil,         # Has removal messages
-        'sunburst'    => nil, # Has removal messages
-        'webbed'      => nil, # Has removal messages
-        'poisoned'    => nil # Has removal messages
-      }.freeze
+      # Seconds per stun round. Critical tables express stun in *rounds*
+      # (a rank-5 crit's `stunned: 5` means five rounds), while their
+      # `roundtime` field is already in seconds - the two units live side by
+      # side in the same CritRanks hash, so never mix them.
+      STUN_ROUND_SECONDS = 5
 
       def initialize(id, noun, name)
         @id = id.to_i
         @noun = noun
         @name = name
-        @status = []
+        initialize_status_tracking
         @injuries = Hash.new(0)
         @health = nil
         @damage_taken = 0
         @created_at = Time.now
         @fatal_crit = false
-        @status_timestamps = {}
         @ucs_position = nil
         @ucs_tierup = nil
         @ucs_smote = nil
         @ucs_updated = nil
+        @amputated = []
+        @stun_rounds = nil
+        @stun_estimated_until = nil
       end
 
-      # Get the template for this creature
+      # Get the template for this creature. Sentinel-cached so a creature with
+      # no template doesn't redo the name lookup (downcase + boon regex) on
+      # every call the way `||=` would.
       def template
-        @template ||= CreatureTemplate[@name]
+        return @template if defined?(@template_looked_up)
+
+        @template_looked_up = true
+        @template = CreatureTemplate[@name]
       end
 
       # Check if creature has template data
       def has_template?
         !template.nil?
-      end
-
-      # Add status to creature
-      def add_status(status, duration = nil)
-        return if @status.include?(status)
-
-        @status << status
-
-        # Set expiration timestamp for timed statuses
-        status_key = status.to_s.downcase
-        duration ||= STATUS_DURATIONS[status_key]
-        if duration
-          @status_timestamps[status] = Time.now + duration
-          respond "  +status: #{status} (expires in #{duration}s)" if $creature_debug
-        else
-          respond "  +status: #{status} (no auto-expiry)" if $creature_debug
-        end
-      end
-
-      # Remove status from creature
-      def remove_status(status)
-        @status.delete(status)
-        @status_timestamps.delete(status)
-        respond "  -status: #{status}" if $creature_debug
-      end
-
-      # Clean up expired status effects
-      def cleanup_expired_statuses
-        return unless @status_timestamps && !@status_timestamps.empty?
-
-        now = Time.now
-        @status_timestamps.select { |_status, expires_at| expires_at <= now }.keys.each do |expired_status|
-          @status.delete(expired_status)
-          @status_timestamps.delete(expired_status)
-          respond "  ~status: #{expired_status} (auto-expired)" if $creature_debug
-        end
-      end
-
-      # Check if creature has a specific status
-      def has_status?(status)
-        cleanup_expired_statuses # Clean up expired statuses first
-        @status.include?(status.to_s)
-      end
-
-      # Get all current statuses
-      def statuses
-        cleanup_expired_statuses # Clean up expired statuses first
-        @status.dup
       end
 
       # UCS (Unarmed Combat System) tracking methods
@@ -299,21 +393,21 @@ module Lich
 
         @ucs_position = new_tier
         @ucs_updated = Time.now
-        respond "  UCS: position=#{new_tier}" if $creature_debug
+        debug_log("UCS: position=#{new_tier}")
       end
 
       # Set UCS tierup vulnerability
       def set_ucs_tierup(attack_type)
         @ucs_tierup = attack_type
         @ucs_updated = Time.now
-        respond "  UCS: tierup=#{attack_type}" if $creature_debug
+        debug_log("UCS: tierup=#{attack_type}")
       end
 
       # Mark creature as smote (crimson mist applied)
       def smite!
         @ucs_smote = Time.now
         @ucs_updated = Time.now
-        respond "  UCS: smote!" if $creature_debug
+        debug_log("UCS: smote!")
       end
 
       # Check if creature is currently smote
@@ -333,7 +427,7 @@ module Lich
       def clear_smote
         @ucs_smote = nil
         @ucs_updated = Time.now
-        respond "  UCS: smote cleared" if $creature_debug
+        debug_log("UCS: smote cleared")
       end
 
       # Check if UCS data has expired
@@ -354,11 +448,100 @@ module Lich
         @ucs_tierup
       end
 
+      # Records a crit-table stun estimate, in rounds.
+      #
+      # This is deliberately *not* stored as a timed entry in @status. The
+      # authoritative stun boolean is owned by <crtrStatus> and the combat
+      # message parser (see STATUS_DURATIONS, where 'stunned' is nil on
+      # purpose); expiring it on a table-derived timer would clear stun while
+      # a resisted-or-stacked creature is still stunned, and report
+      # `muckled?` false when acting is still unsafe. So the estimate lives
+      # alongside the boolean and is advisory only.
+      #
+      # Stun does not cleanly stack, so a new estimate extends but never
+      # shortens an existing one.
+      #
+      # @param rounds [Integer] stun rounds from the critical table.
+      # @param at [Time] when the game applied the crit (prompt time, not
+      #   parse time - the async parser can lag the server).
+      # @return [void]
+      def add_stun_estimate(rounds, at: Time.now)
+        rounds = rounds.to_i
+        return if rounds <= 0
+
+        expires_at = at + (rounds * STUN_ROUND_SECONDS)
+        return if @stun_estimated_until && @stun_estimated_until >= expires_at
+
+        @stun_rounds = rounds
+        @stun_estimated_until = expires_at
+        debug_log("+stun estimate: #{rounds} round#{'s' unless rounds == 1} (~#{rounds * STUN_ROUND_SECONDS}s)")
+      end
+
+      # Estimated stun rounds from the last crit, or nil when the estimate has
+      # lapsed or stun is no longer active.
+      #
+      # @return [Integer, nil]
+      def stun_rounds
+        return nil unless stun_estimate_active?
+        @stun_rounds
+      end
+
+      # Estimated seconds of stun remaining.
+      #
+      # Advisory: derived from the critical table, not observed. Returns 0.0
+      # when no estimate is active. Callers deciding whether it is safe to act
+      # should gate on `muckled?`/`has_status?('stunned')` and use this only to
+      # size the window.
+      #
+      # @return [Float]
+      def stunned_for
+        return 0.0 unless stun_estimate_active?
+        [@stun_estimated_until - Time.now, 0.0].max.round(1)
+      end
+
+      # Clears any crit-derived stun estimate (creature shook off the stun).
+      #
+      # @return [void]
+      def clear_stun_estimate
+        @stun_rounds = nil
+        @stun_estimated_until = nil
+      end
+
+      # Marks a body part as amputated.
+      #
+      # Distinct from @injuries, which accumulates rank: an amputated limb is
+      # gone rather than wounded, cannot be wounded further, and stays gone.
+      #
+      # @param body_part [String, Symbol] one of BODY_PARTS.
+      # @return [void]
+      def amputate!(body_part)
+        unless BODY_PARTS.include?(body_part.to_s)
+          raise ArgumentError, "Invalid body part: #{body_part}"
+        end
+        return if @amputated.include?(body_part.to_s)
+
+        @amputated << body_part.to_s
+        debug_log("+amputated: #{body_part}")
+      end
+
+      # @return [Boolean] whether a body part has been amputated.
+      def amputated?(body_part)
+        @amputated.include?(body_part.to_s)
+      end
+
+      # @return [Array<String>] every amputated body part.
+      def amputated_parts
+        @amputated.dup
+      end
+
       # Add injury to body part
       def add_injury(body_part, amount = 1)
         unless BODY_PARTS.include?(body_part.to_s)
           raise ArgumentError, "Invalid body part: #{body_part}"
         end
+        # An amputated limb cannot accrue further wound rank - it is gone.
+        return if amputated?(body_part)
+
         @injuries[body_part.to_sym] += amount
       end
 
@@ -426,9 +609,55 @@ module Lich
         hp_percent <= threshold
       end
 
+      # Statuses that satisfy Coup de Grace's "incapacitated in some way"
+      # requirement, unlocking the (rank * 10)% threshold instead of
+      # (rank * 5)%. Positional states (prone/kneeling/sitting) are
+      # deliberately excluded.
+      COUP_INCAP_STATUSES = %w[stunned immobilized webbed sleeping bound].freeze
+
+      # Check if creature currently qualifies for Coup de Grace at the given
+      # trained rank: at or below (rank * 10)% of max HP when incapacitated,
+      # (rank * 5)% otherwise, hard-capped at 200 HP either way. The cap is
+      # what binds on large creatures, so this compares raw HP, not percent.
+      def coup_eligible?(rank)
+        return false unless rank.to_i > 0
+        return false unless current_hp && max_hp && max_hp > 0
+        incap = COUP_INCAP_STATUSES.any? { |s| has_status?(s) }
+        threshold = [(max_hp * rank.to_i * (incap ? 10 : 5)) / 100.0, 200].min
+        current_hp <= threshold
+      end
+
       # Check if creature is dead (0 HP)
       def dead?
         current_hp == 0
+      end
+
+      # Checks whether this creature should be considered attackable.
+      #
+      # Uses the same decoy and appendage exclusions as `GameObj.targets`, but
+      # uses structured death data from <crtrStatus> and HP tracking instead of
+      # regex-matching a status string.
+      #
+      # @return [Boolean]
+      def valid_target?
+        return false if crtr_flag?(:dead) || dead?
+        return false if @name =~ /^animated\b/i && @name !~ /^animated slush/i
+        return false if @noun =~ /^(?:arm|appendage|claw|limb|pincer|tentacle)s?$|^(?:palpus|palpi)$/i &&
+                        @name !~ /(?:amaranthine|ghostly|grizzled|ancient) kraken tentacle/i
+
+        true
+      end
+
+      # Creature-side analog of Lich::Gemstone::Status.muckled? (the player's
+      # own "can't act right now" check). Deliberately narrower than
+      # everything tracked in @status: excludes penalty-only conditions
+      # (disoriented), positional ones (prone/kneeling/sitting/flying/
+      # hovering), and calm (the player version excludes that too, tracking
+      # it separately) - this is only the statuses that actually prevent
+      # acting, not ones that merely penalize or reposition.
+      def muckled?
+        has_status?('webbed') || crtr_flag?(:dead) || dead? || has_status?('stunned') ||
+          has_status?('sleeping') || has_status?('immobilized') || has_status?('rooted')
       end
 
       # Reset damage (creature healed or respawned)
@@ -453,85 +682,69 @@ module Lich
           created_at: @created_at,
           ucs_position: ucs_position,
           ucs_tierup: ucs_tierup,
-          ucs_smote: smote?
+          ucs_smote: smote?,
+          amputated: amputated_parts,
+          stun_rounds: stun_rounds,
+          stunned_for: stunned_for
         }
       end
 
-      # Class methods for registry management
-      class << self
-        # Configure registry
-        def configure(max_size: 1000, auto_register: true)
-          @@max_size = max_size
-          @@auto_register = auto_register
-        end
+      private
 
-        # Check if auto-registration is enabled
-        def auto_register?
-          @@auto_register
-        end
-
-        # Get current registry size
-        def size
-          @@instances.size
-        end
-
-        # Check if registry is full
-        def full?
-          size >= @@max_size
-        end
-
-        # Register a new creature instance
-        def register(name, id, noun = nil)
-          return nil unless auto_register?
-          return @@instances[id.to_i] if @@instances[id.to_i] # Already exists
-
-          # Auto-cleanup old instances if registry is full - get progressively more aggressive
-          if full?
-            # Try 120 minutes, then 15 minute intervals.
-            [7200, 6300, 5400, 4500, 3600, 2700, 1800, 900].each do |age_threshold|
-              removed = cleanup_old(age_threshold)
-              respond "--- Auto-cleanup: removed #{removed} old creatures (threshold: #{age_threshold}s)" if removed > 0 && $creature_debug
-              break unless full?
-            end
-            return nil if full? # Still full after all cleanup attempts
-          end
-
-          instance = new(id, noun, name)
-          @@instances[id.to_i] = instance
-          respond "--- Creature registered: #{name} (#{id})" if $creature_debug
-          instance
-        end
-
-        # Lookup creature by ID
-        def [](id)
-          @@instances[id.to_i]
-        end
-
-        # Get all registered instances
-        def all
-          @@instances.values
-        end
-
-        # Clear all instances (session reset)
-        def clear
-          @@instances.clear
-        end
-
-        # Remove old instances (cleanup)
-        def cleanup_old(max_age_seconds = 600)
-          cutoff = Time.now - max_age_seconds
-          removed = @@instances.select { |_id, instance| instance.created_at < cutoff }.size
-          @@instances.reject! { |_id, instance| instance.created_at < cutoff }
-          removed
-        end
+      # Whether a crit-derived stun estimate is still meaningful.
+      #
+      # Gated on the authoritative status as well as the clock: once the feed
+      # or a removal message says the creature is no longer stunned, the
+      # estimate is stale regardless of remaining time.
+      def stun_estimate_active?
+        return false unless @stun_estimated_until
+        return false if @stun_estimated_until <= Time.now
+        has_status?('stunned')
       end
     end
 
-    # Main Creature module - provides the public API
+    # Public Creature API for GemStone runtime creature tracking.
+    #
+    # A thin facade: every call delegates to {CreatureInstance}, which mixes in
+    # the shared id-keyed registry, room roster and `targets`/`in_room` query
+    # methods from {Lich::Common::CreatureBase}.
     module Creature
+      # Toggles live echo of status, flag, and registration changes.
+      #
+      # @param level [Boolean, Symbol] false disables debug output; true or
+      #   `:changes` reports changes only; `:all` reports every <crtrStatus>
+      #   flag; `:active` reports only active <crtrStatus> flags.
+      # @return [Boolean, Symbol] the configured debug value.
+      def self.debug_on(level = :changes)
+        $creature_debug = level
+      end
+
       # Lookup creature instance by ID
       def self.[](id)
         CreatureInstance[id]
+      end
+
+      # Returns attackable hostile creatures currently in the room.
+      #
+      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
+      # @return [Array<CreatureInstance>]
+      def self.targets(*filters)
+        CreatureInstance.targets(*filters)
+      end
+
+      # Returns all tracked creatures currently in the room.
+      #
+      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
+      # @return [Array<CreatureInstance>]
+      def self.in_room(*filters)
+        CreatureInstance.in_room(*filters)
+      end
+
+      # Empties the current room roster.
+      #
+      # @return [void]
+      def self.clear_room
+        CreatureInstance.clear_room
       end
 
       # Register a new creature
@@ -549,8 +762,9 @@ module Lich
         {
           instances: CreatureInstance.size,
           templates: CreatureTemplate.all.size,
-          max_size: CreatureInstance.class_variable_get(:@@max_size),
-          auto_register: CreatureInstance.auto_register?
+          max_size: CreatureInstance.max_size,
+          auto_register: CreatureInstance.auto_register?,
+          cleanup_max_age: CreatureInstance.cleanup_max_age
         }
       end
 
@@ -559,9 +773,18 @@ module Lich
         CreatureInstance.clear
       end
 
-      # Cleanup old instances
-      def self.cleanup_old(**options)
-        CreatureInstance.cleanup_old(**options)
+      # Removes creatures unseen for longer than the given age (in seconds).
+      #
+      # Positional to match {CreatureInstance#cleanup_old} (supplied by
+      # {Lich::Common::CreatureBase}). The registry sweeps itself on a
+      # wall-clock throttle from {CreatureInstance#register}; this is for
+      # scripts that want an immediate sweep at a chosen cutoff.
+      #
+      # @param max_age_seconds [Integer] age cutoff in seconds; defaults to
+      #   the configured cleanup_max_age.
+      # @return [Integer] number of instances removed.
+      def self.cleanup_old(max_age_seconds = CreatureInstance.cleanup_max_age)
+        CreatureInstance.cleanup_old(max_age_seconds)
       end
 
       # Generate damage report for HP analysis
@@ -599,6 +822,8 @@ module Lich
           skin: nil,
           magic_items: nil,
           other: nil,
+          armaments: nil,
+          transmogs: nil,
           blunt_required: false
         }.merge(data)
       end
@@ -607,6 +832,8 @@ module Lich
       def has_gems? = !!@data[:gems]
       def has_boxes? = !!@data[:boxes]
       def has_skin? = !!@data[:skin]
+      def has_armaments? = !!(@data[:armaments] && !Array(@data[:armaments]).empty?)
+      def has_transmogs? = !!(@data[:transmogs] && !Array(@data[:transmogs]).empty?)
       def blunt_required? = !!@data[:blunt_required]
 
       def to_h = @data
@@ -614,13 +841,21 @@ module Lich
 
     class Messaging
       attr_accessor :description, :arrival, :flee, :death,
-                    :spell_prep, :frenzy, :sympathy, :bite,
-                    :claw, :attack, :enrage, :mstrike
+                    :decay, :search, :spell_prep, :frenzy,
+                    :sympathy, :bite, :claw, :attack,
+                    :attacks, :enrage, :mstrike, :stand,
+                    :stun_break, :ambient
 
+      # Every form a placeholder can take in a real game line. The lists
+      # are alternatives in the generated regex, so a form that is missing
+      # here makes an otherwise-correct message unmatchable - "its" and
+      # "their" (possessives) and "out" (a flee direction) were absent.
       PLACEHOLDER_MAP = {
-        Pronoun: %w[He Her His It She],
-        pronoun: %w[he her his it she],
-        direction: %w[north south east west up down northeast northwest southeast southwest],
+        Pronoun: %w[He She It His Her Its Their Him Them Himself Herself Itself Themselves],
+        pronoun: %w[he she it his her its their him them himself herself itself themselves],
+        Reflexive: %w[Himself Herself Itself Themselves],
+        reflexive: %w[himself herself itself themselves],
+        direction: %w[north south east west up down out northeast northwest southeast southwest],
         weapon: %w[RAW:.+?]
       }
 
@@ -653,13 +888,16 @@ module Lich
         end
       end
 
+      # Returns the placeholder captures ({} for a literal hit) when +str+
+      # is one of the field's messages, else nil. Arrays are the common
+      # case - most creatures have several variants of a message - so a
+      # match against any variant counts.
       def match(field, str)
-        msg = send(field)
-        if msg.is_a?(PlaceholderTemplate)
-          msg.match(str)
-        else
-          msg == str ? {} : nil
+        Array(send(field)).each do |msg|
+          hit = msg.is_a?(PlaceholderTemplate) ? msg.match(str) : (msg == str ? {} : nil)
+          return hit if hit
         end
+        nil
       end
     end
 
@@ -742,6 +980,18 @@ module Lich
         @regex_cache[cache_key] = regex
       end
 
+      # Public: Messaging#match calls this on the template it holds. It
+      # sat below the `private` keyword, so every templated message
+      # raised NoMethodError on match - the placeholder machinery could
+      # render a line but never recognize one.
+      def match(str, literals = {})
+        regex = to_regex(literals)
+        m = regex.match(str)
+        return nil unless m
+
+        m.names.any? ? m.named_captures.transform_keys(&:to_sym) : m.captures
+      end
+
       private
 
       def build_regex(literals)
@@ -756,13 +1006,6 @@ module Lich
           end
         end
         Regexp.new("#{pattern}")
-      end
-
-      def match(str, literals = {})
-        regex = to_regex(literals)
-        m = regex.match(str)
-        return nil unless m
-        m.names.any? ? m.named_captures.transform_keys(&:to_sym) : m.captures
       end
     end
   end

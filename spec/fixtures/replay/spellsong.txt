@@ -1,0 +1,21 @@
+##### spellsong d08de94c1027229e
+# expect: attacks=spellsong,sonic_disruption | res=cs_td | flares=none | outcomes=ward_failed | dmg=1 | statuses=
+# mixed exchange - this def never appears alone in the corpus
+You weave another verse into your harmony, directing the sound of your voice at <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+  CS: +519 - TD: +385 + CvA: +19 + d100: +98 == +251
+  Warding failed!
+  <pushBold/>An <a exist="29443877" noun="seer">Ithzir seer</a><popBold/> reels under the force of the sonic vibrations!
+  Sound waves disrupt for 126 damage!
+<pushBold/>The <a exist="29443877" noun="seer">Ithzir seer</a><popBold/> vainly struggles to rise, then goes still.
+The light blue glow leaves <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+The powerful look leaves <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+<pushBold/>An <a exist="29443877" noun="seer">Ithzir seer</a><popBold/> seems to lose an aura of confidence.
+The dim aura fades from around <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+<pushBold/>The <a exist="29443877" noun="seer">Ithzir seer</a><popBold/> no longer bristles with energy.
+The deep blue glow leaves <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+The opalescent aura fades from around <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+The wall of force disappears from around <pushBold/>an <a exist="29443877" noun="seer">Ithzir seer</a><popBold/>.
+Sing Roundtime 3 Seconds.
+GSL
+Extra Kills currently at: 2 of 200GSM
+

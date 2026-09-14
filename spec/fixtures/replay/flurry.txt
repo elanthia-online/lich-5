@@ -1,0 +1,12 @@
+##### flurry 6f4398fbe786b7fb
+# expect: attacks=flurry | res=as_ds | flares=none | outcomes=none | dmg=2 | statuses=
+With fluid motion, you guide your flashing blade, slicing toward <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/> at the apex of its deadly arc!
+  AS: +618 vs DS: +177 with AvD: -15 + d100 roll: +80 = +506
+   ... and hit for 50 points of damage!
+   Strike pierces gall bladder!
+  That's gotta hurt!
+  AS: +618 vs DS: +172 with AvD: -15 + d100 roll: +11 = +442
+   ... and hit for 44 points of damage!
+   Strike connects with shoulder blade!
+Roundtime: 1 sec.
+

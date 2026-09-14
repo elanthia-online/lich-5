@@ -62,11 +62,12 @@ module Lich
   end
 end
 
-# Gtk/Gdk stubs — empty implementations satisfy constant lookups and method calls
+# Gtk/Gdk stubs - empty implementations satisfy constant lookups and method calls
 # made by production GUI code at load time and during tests.
 module Gtk
   def self.queue; yield if block_given?; end
   def self.main_quit; end
+  def self.lich_main_quit; end
 
   class Window
     def initialize(_type); end
@@ -121,7 +122,7 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib') unles
 
 # Load production code AFTER Gtk/Gdk mocks are defined above.
 # These files reference Gtk:: constants at load time; loading them before the mocks
-# exist causes NameError. Individual specs must NOT require these files themselves —
+# exist causes NameError. Individual specs must NOT require these files themselves -
 # they must rely on this ordered load to ensure the mock environment is in place.
 require 'common/gui_login'
 require 'common/gui/account_manager'

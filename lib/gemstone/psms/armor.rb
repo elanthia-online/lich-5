@@ -210,36 +210,13 @@ module Lich
       def Armor.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Armor.available?(name, forcert_count: forcert_count)
 
-        name_normalized = PSMS.name_normal(name)
-        technique = @@armor_techniques.fetch(PSMS.find_name(name_normalized, "Armor")[:long_name])
-        usage = technique[:usage]
-        return if usage.nil?
+        usage_cmd = Armor.command(name, target, forcert_count: forcert_count)
+        return if usage_cmd.nil?
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./i
+        results_regex = Armor.results_regex(name, results_of_interest: results_of_interest)
 
-        results_regex = Regexp.union(
-          PSMS::FAILURES_REGEXES,
-          /^#{name} what\?$/i,
-          in_cooldown_regex,
-          technique[:regex],
-          /^Roundtime: [0-9]+ sec\.$/,
-          /^\w+ [a-z]+ not wearing any armor that you can work with\.$/
-        )
-
-        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
-
-        usage_cmd = "armor #{usage}"
-        if target.is_a?(GameObj)
-          usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
-          usage_cmd += " ##{target}"
-        elsif target != ""
-          usage_cmd += " #{target}"
-        end
-
-        if forcert_count > 0
-          usage_cmd += " forcert"
-        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+        # with forcert we don't want to wait for rt, but we need to otherwise
+        unless forcert_count > 0
           waitrt?
           waitcastrt?
         end
@@ -250,6 +227,31 @@ module Lich
           usage_result = dothistimeout usage_cmd, 5, results_regex
         end
         usage_result
+      end
+
+      # The command {Armor.use} sends for a technique, without sending it.
+      #
+      # @param name [String] The name of the armor technique
+      # @param target [String, Integer, GameObj] The target (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] e.g. "armor blessing", nil when the technique has no usage
+      def Armor.command(name, target = "", forcert_count: 0)
+        technique = @@armor_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Armor")[:long_name])
+        return nil if technique[:usage].nil?
+
+        PSMS.command("armor", technique[:usage], target, forcert_count: forcert_count)
+      end
+
+      # Every line that answers the technique's command: the regex {Armor.use} waits on.
+      #
+      # @param name [String] The name of the armor technique
+      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
+      # @return [Regexp]
+      def Armor.results_regex(name, results_of_interest: nil)
+        technique = @@armor_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Armor")[:long_name])
+        PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/,
+                           /^\w+ [a-z]+ not wearing any armor that you can work with\.$/,
+                           results_of_interest: results_of_interest)
       end
 
       # Returns the "success" regex associated with a given armor technique name.

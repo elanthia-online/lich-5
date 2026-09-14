@@ -166,7 +166,11 @@ module Lich
                         .reject { |item| [DRC.right_hand, DRC.left_hand].grep(item.short_regex).any? ? (stow_weapon(item.short_name) || true) : false }
 
         Lich::Messaging.msg("plain", "EquipmentManager: wear missing items #{missing_items}") if !missing_items.empty? && UserVars.equipmanager_debug
-        missing_items.reject { |item| wear_item?(item) }
+        missing_items.reject do |item|
+          item_copy = item.dup
+          item_copy.instance_variable_set(:@worn, false)
+          wear_item?(item_copy)
+        end
       end
 
       # Removes currently worn combat items that are not in the target gear set.
@@ -310,19 +314,23 @@ module Lich
           return false
         end
 
-        if get_item?(weapon)
-          swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
-          if DRCI.in_right_hand?(weapon)
-            case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
-            when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
-              return true
-            else
-              return false
-            end
+        return false unless get_item?(weapon)
+
+        swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
+
+        # We want the weapon in the LEFT (off) hand. If it landed in the right hand
+        # (e.g. get placed it there), swap it over; if it's already in the left
+        # hand, we're done -- previously this returned false in that case.
+        if DRCI.in_right_hand?(weapon)
+          case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
+          when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
+            return true
+          else
+            return false
           end
         end
 
-        return false
+        DRCI.in_left_hand?(weapon)
       end
 
       # @deprecated Use {#wield_weapon_offhand?} instead.
@@ -353,7 +361,7 @@ module Lich
         if get_item?(weapon)
           swap_to_skill?(weapon.name, skill) if skill && weapon.swappable
 
-          if offhand && DRC.right_hand
+          if offhand && DRCI.in_right_hand?(weapon)
             case DRC.bput('swap', *DRCI::SWAP_HANDS_SUCCESS_PATTERNS, *DRCI::SWAP_HANDS_FAILURE_PATTERNS)
             when *DRCI::SWAP_HANDS_SUCCESS_PATTERNS
               return true
@@ -436,12 +444,10 @@ module Lich
         todo.all? do |held_item|
           if (info = gear_set_items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
-            stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS)
-            true
+            stow_helper("wear my #{info.short_name}", info.short_name, *DRCI::WEAR_ITEM_SUCCESS_PATTERNS, failure_patterns: DRCI::WEAR_ITEM_FAILURE_PATTERNS)
           elsif (info = items.find { |item| item.short_regex =~ held_item })
             unload_weapon(info.short_name) if info.needs_unloading
             stow_by_type(info)
-            true
           else
             false
           end
@@ -455,52 +461,119 @@ module Lich
         return_held_gear || DRCI.stow_hands
       end
 
+      # Non-recoverable untie failure patterns that should return false
+      # immediately in {#get_item_helper}. Contains every entry from
+      # {DRCI::UNTIE_ITEM_FAILURE_PATTERNS} EXCEPT the "too busy" patterns
+      # which are recoverable (retreat / stop playing) and live in the
+      # +:failures+ array instead.
+      #
+      # For +:worn+ and +:stowed+/+:transform+, exhausted is set directly to
+      # the full DRCI failure constant because their +:failures+ entries don't
+      # overlap. +:tied+ is the exception -- "too busy" appears in both DRCI
+      # failures and the recoverable +:failures+ array, so this curated subset
+      # excludes them to prevent the exhausted branch from swallowing recovery.
+      #
+      # If a new pattern is added to {DRCI::UNTIE_ITEM_FAILURE_PATTERNS},
+      # it must be categorized here or in +:failures+ -- the coverage spec
+      # enforces that no DRCI failure falls through to the timeout branch.
+      UNTIE_EXHAUSTED_PATTERNS = [
+        /^You don't seem to be able to move/,
+        /^You fumble with the ties/,
+        /^Untie what/,
+        /^What were you referring/
+      ].freeze
+
       # Builds a hash of verb configurations for retrieving an item by type.
       #
-      # Each type (:worn, :tied, :stowed, :transform) maps to a hash with
-      # the game verb, match patterns, failure patterns, and recovery procs.
+      # Each type (+:worn+, +:tied+, +:stowed+, +:transform+) maps to a hash
+      # with the game verb, match patterns, failure patterns, and recovery procs.
+      # Match patterns reference DRCI constants so that new game messages added
+      # to DRCI are automatically picked up here.
+      #
+      # The +matches+ array is passed to +bput+ and must include success,
+      # failure, and exhausted patterns so +bput+ returns promptly.
+      # +get_item_helper+ then triages the response:
+      #
+      # - +exhausted+: non-recoverable failure -- return false immediately
+      # - +failures+: recoverable error -- run +failure_recovery+ proc
+      # - everything else: success -- wait for hand contents to change
       #
       # @param item [DRC::Item] item to build verb data for
       # @return [Hash{Symbol => Hash}] verb configuration keyed by retrieval type
+      #
+      # @see #get_item_helper Consumer of the returned hash
+      # @see DRCI::REMOVE_ITEM_SUCCESS_PATTERNS
+      # @see DRCI::UNTIE_ITEM_SUCCESS_PATTERNS
+      # @see DRCI::GET_ITEM_SUCCESS_PATTERNS
       # @api private
       def verb_data(item)
         {
           worn: {
             verb: 'remove',
-            matches: [/^You .*#{item.short_regex}/, /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/, 'you tug', 'Remove what', "You aren't wearing that", 'slide themselves off of your', 'you manage to loosen', 'you ready the', /^A brisk chill leaves you as you/],
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You (get|sling|pull|work|loosen|slide|remove|yank|unbuckle).*#{item.name}/,
+              *DRCI::REMOVE_ITEM_SUCCESS_PATTERNS,
+              *DRCI::REMOVE_ITEM_FAILURE_PATTERNS
+            ],
             failures: [/^You (get|sling|pull|work|slide|remove|yank|unbuckle) $/],
             failure_recovery: proc { |noun| DRC.bput("wear my #{noun}", '^You ') },
-            exhausted: ['Remove what', "You aren't wearing that"]
+            exhausted: DRCI::REMOVE_ITEM_FAILURE_PATTERNS
           },
           tied: {
             verb: 'untie',
-            matches: [/^You .*#{item.short_regex}/, "^You remove.*#{item.name}", /^.*you untie your .*#{item.short_regex} from it./, '^What were you referring', '^Untie what', '^You are a little too busy', '^You are a bit too busy'],
-            failures: ['You remove', /^You are a little too busy/, /^You are a bit too busy/],
-            failure_recovery: proc { |_noun, item_to_recover, *matches|
-                                case matches
-                                when ['You are a little too busy']
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You remove.*#{item.name}/,
+              /^.*you untie your .*#{item.short_regex} from it./,
+              *DRCI::UNTIE_ITEM_SUCCESS_PATTERNS,
+              *DRCI::UNTIE_ITEM_FAILURE_PATTERNS
+            ],
+            # NOTE: /^You remove$/ (with end anchor) prevents matching successful
+            # untie responses like "You remove a sword from your belt" -- only
+            # matches the bare "You remove" edge case.
+            failures: [/^You remove$/, /^You are a little too busy/, /^You are a bit too busy/],
+            # NOTE: response is accepted as a single String (not *splat) so that
+            # case/when uses Regexp#=== for proper pattern matching. The original
+            # *matches splat wrapped the response in an Array, making Regexp-based
+            # when clauses silently fall through to else.
+            failure_recovery: proc { |_noun, item_to_recover, response|
+                                case response
+                                when /You are a little too busy/
                                   DRC.retreat
                                   get_item?(item_to_recover)
-                                when ['You are a bit too busy']
+                                when /You are a bit too busy/
                                   DRC.stop_playing
                                   get_item?(item_to_recover)
                                 else
                                   stow_weapon
                                 end
                               },
-            exhausted: ['What were you referring', 'Untie what']
+            exhausted: UNTIE_EXHAUSTED_PATTERNS
           },
           stowed: {
             verb: 'get',
-            matches: [/^You .*#{item.short_regex}/, "^You .*#{item.name}", '^The.* slides easily out', '^What were you referring', 'But that is already', 'You are already'],
-            failures: ['You get', /But that is already/],
+            matches: [
+              /^You .*#{item.short_regex}/,
+              /^You .*#{item.name}/,
+              *DRCI::GET_ITEM_SUCCESS_PATTERNS,
+              *DRCI::GET_ITEM_FAILURE_PATTERNS,
+              /^The.* slides easily out/,
+              /But that is already/
+            ],
+            failures: [/^You get$/, /But that is already/],
             failure_recovery: proc { |noun| DRC.bput("stow my #{noun}", 'You put', 'But that is already in') },
-            exhausted: ['What were you referring']
+            exhausted: DRCI::GET_ITEM_FAILURE_PATTERNS
           },
           transform: {
             verb: item.transform_verb,
-            matches: [item.transform_text],
-            failures: ["You'll need a free hand to do that!", "You don't seem to be holding"],
+            matches: [
+              item.transform_text,
+              /You'll need a free hand to do that!/,
+              /You don't seem to be holding/,
+              *DRCI::GET_ITEM_FAILURE_PATTERNS
+            ],
+            failures: [/You'll need a free hand to do that!/, /You don't seem to be holding/],
             failure_recovery: proc do |noun|
                                 DRCI.stow_hand('left') if DRC.left_hand && DRC.left_hand !~ /#{noun}/i
                                 DRCI.stow_hand('right') if DRC.right_hand && DRC.right_hand !~ /#{noun}/i
@@ -509,9 +582,9 @@ module Lich
                                   next
                                 end
                                 item.worn ? DRC.bput("remove my #{noun}", '^You') : DRC.bput("get my #{noun}", '^You')
-                                DRC.bput("#{item.transform_verb} my #{item.short_name}", verb_data(item)[:matches])
+                                DRC.bput("#{item.transform_verb} my #{item.short_name}", *verb_data(item)[:transform][:matches])
                               end,
-            exhausted: ['What were you referring']
+            exhausted: DRCI::GET_ITEM_FAILURE_PATTERNS
           }
         }
       end
@@ -540,6 +613,26 @@ module Lich
           return false
         end
 
+        # For non-transform types, verify success via the XML game-object
+        # feed rather than trusting bput's text match. This prevents false
+        # positives where an unrelated game message (e.g., "You get the
+        # feeling...") matches /^You get/ in GET_ITEM_SUCCESS_PATTERNS,
+        # causing bput to return "You get" which then triggers the failure
+        # recovery proc and stows the item that was just retrieved.
+        # See elanthia-online/lich-5#1286 for the same approach in
+        # DRCI.get_item_unsafe.
+        # Transform is excluded because the item changes identity (e.g.,
+        # orb -> armor) so noun verification against the original item
+        # would fail.
+        if type != :transform
+          noun = DRC.get_noun(item.short_name)
+          10.times do
+            break if item_noun_in_hands?(noun)
+            pause 0.05
+          end
+          return true if item_noun_in_hands?(noun)
+        end
+
         case response
         when 'You are already holding'
           return true
@@ -547,8 +640,10 @@ module Lich
           return false
         when *data[:failures]
           data[:failure_recovery].call(item.name, item, response)
-          # After recovery, check if item is now in hand
-          return DRCI.in_hands?(item)
+          # Check if hands changed from pre-command snapshot, consistent with
+          # the success (else) branch. Using in_hands?(item) here would fail
+          # for :transform where the item changes identity (e.g., orb -> armor).
+          return snapshot != [DRC.left_hand, DRC.right_hand]
         else
           # Wait for hands to change with a timeout to prevent infinite loop
           timeout = Time.now + 5
@@ -559,6 +654,21 @@ module Lich
           end
           return true
         end
+      end
+
+      # Checks whether the given noun is in either hand via GameObj XML feed.
+      #
+      # Uses +DRC.left_hand_noun+ / +DRC.right_hand_noun+ which read
+      # +GameObj.noun+ directly, bypassing +fix_dr_bullshit+ name
+      # truncation that can drop interior words from multi-word item
+      # names (e.g., "steel foil with a sandalwood hilt" becomes
+      # "steel hilt", losing the "foil" noun entirely).
+      #
+      # @param noun [String] item noun to look for (e.g., "foil", "sword")
+      # @return [Boolean] true if noun matches either hand's GameObj noun
+      # @api private
+      def item_noun_in_hands?(noun)
+        [DRC.left_hand_noun, DRC.right_hand_noun].compact.include?(noun)
       end
 
       # Turns a multi-form weapon to a different weapon form (e.g., Damaris weapons).
@@ -680,11 +790,15 @@ module Lich
       # @see DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS
       def unload_weapon(name)
         result = DRC.bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
+        waitrt? # wait out the unload roundtime so the ammo/hand state has settled before we act on it
+
         ammo_match = result&.match(/^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/)
-        if ammo_match
-          # Ammo fell to ground because hands are full.
-          # Lower weapon, stow ammo, then pick it back up.
-          ammo = ammo_match[:ammo]
+        ground_match = result&.match?(/As you release the string/) ? result.match(/the (?<ammo>\w+) tumbles/) : nil
+
+        if ammo_match || ground_match
+          # Ammo ended up on the GROUND (hands were full, or it tumbled). Lower the
+          # weapon, stow the ammo from your feet, then pick the weapon back up.
+          ammo = (ammo_match || ground_match)[:ammo]
           unless DRCI.lower_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
             return
@@ -693,31 +807,21 @@ module Lich
           unless DRCI.get_item?(name)
             Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
           end
-        elsif result&.match?(/As you release the string/)
-          # Ammo tumbled to the ground (e.g., "As you release the string, the arrow tumbles to the ground.")
-          # Same recovery as ammo falling to feet: lower weapon, stow ammo, pick weapon back up.
-          ammo_ground_match = result.match(/the (?<ammo>\w+) tumbles/)
-          if ammo_ground_match
-            ammo = ammo_ground_match[:ammo]
-            unless DRCI.lower_item?(name)
-              Lich::Messaging.msg("bold", "EquipmentManager: Unable to lower #{name} to pick up ammo")
-              return
-            end
-            DRCI.put_away_item?(ammo)
-            unless DRCI.get_item?(name)
-              Lich::Messaging.msg("bold", "EquipmentManager: Unable to pick #{name} back up after unloading")
-            end
-          end
-        elsif result&.match?(/^(?:You unload|You .* unloading)/)
-          # Ammo is in hand, stow whichever hand isn't holding the weapon.
-          unless DRCI.in_left_hand?(name)
-            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from left hand") unless DRCI.stow_hand('left')
-          end
-          unless DRCI.in_right_hand?(name)
-            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from right hand") unless DRCI.stow_hand('right')
+        elsif result && DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS.any? { |pattern| pattern.match?(result) }
+          # Unload succeeded with the ammo now in a hand. Stow whichever hand is NOT
+          # the weapon, comparing by NOUN against the actual hand contents -- robust to
+          # the <dialogData ...AimTimer...> tag the game prepends (which the old
+          # ^-anchored /^(?:You unload|...)/ branch missed) and to ammo nouns that
+          # contain the weapon noun (e.g. "crossbow bolt"). Guarded on a positive
+          # success match so an unload failure or a bput timeout can't stow an
+          # unrelated off-hand item.
+          weapon_noun = DRC.get_noun(name)
+          [['left', DRC.left_hand], ['right', DRC.right_hand]].each do |side, held|
+            next if held.nil? || DRC.get_noun(held) == weapon_noun
+
+            Lich::Messaging.msg("bold", "EquipmentManager: Unable to stow ammo from #{side} hand") unless DRCI.stow_hand(side)
           end
         end
-        waitrt?
       end
 
       # Stows a weapon in its configured location (sheath, wear, tie, container, or general stow).

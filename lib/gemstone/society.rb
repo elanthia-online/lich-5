@@ -134,6 +134,25 @@ module Lich
       end
 
       ##
+      # The command a society ability's +use+ sends, without sending it.
+      #
+      # An entry with a `:usage` string sends that verb ("signal", "smite");
+      # any other sends `<prefix> <short_name>` ("sign of striking"). A
+      # GameObj or Integer target is appended as `#id`, a String as given.
+      #
+      # @param entry [Hash] The resolved ability metadata (from the reader's `[]`)
+      # @param prefix [String] "sign of", "sigil of" or "symbol of"
+      # @param target [String, Integer, GameObj, nil] Optional target
+      # @return [String] e.g. "symbol of holiness", "sigil of contact #12345"
+      #
+      def self.command(entry, prefix, target = nil)
+        base = entry[:usage] || "#{prefix} #{entry[:short_name]}"
+        target = "##{target.id}" if target.respond_to?(:id) && !target.is_a?(String)
+        target = "##{target}" if target.is_a?(Integer)
+        "#{base} #{target}".strip
+      end
+
+      ##
       # Defines singleton accessors for both short and long names on a given target class.
       #
       # Method names are normalized using {Lich::Util.normalize_name}, which ensures

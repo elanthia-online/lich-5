@@ -2,7 +2,7 @@
 
 require_relative '../../../spec_helper'
 
-# Helper class for GameObj mock — used with stub_const in tests
+# Helper class for GameObj mock - used with stub_const in tests
 # NOTE: GameObj is NOT defined at top level to avoid conflicts with qstrike_spec
 DRC_MOCK_GAME_OBJ = Class.new do
   attr_accessor :name, :noun
@@ -38,6 +38,15 @@ $ENC_MAP = {
 $box_regex = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/ unless defined?($box_regex)
 $fake_stormfront = false unless defined?($fake_stormfront)
 
+# Box vocabulary constants normally provided by drvariables.rb (not loaded here);
+# box_list_to_adj_and_noun builds its match regex from these.
+module Lich
+  module DragonRealms
+    BOX_WOODS = %w[brass copper deobar driftwood iron ironwood mahogany oaken pine steel wooden].freeze unless defined?(BOX_WOODS)
+    BOX_CONTAINERS = %w[box caddy casket chest coffer crate skippet strongbox trunk].freeze unless defined?(BOX_CONTAINERS)
+  end
+end
+
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common.rb')
 DRC = Lich::DragonRealms::DRC unless defined?(DRC)
@@ -45,6 +54,9 @@ DRC = Lich::DragonRealms::DRC unless defined?(DRC)
 RSpec.describe Lich::DragonRealms::DRC do
   before(:each) do
     Lich::Messaging.clear_messages!
+    # Rebuild memoized custom-substitution lists so a stub in one example does
+    # not leak its merged list into the next (see CustomSubstitutions.reset!).
+    Lich::DragonRealms::CustomSubstitutions.reset!
     # Stub GameObj with a temporary mock if not already defined by other specs
     stub_const('GameObj', DRC_MOCK_GAME_OBJ) unless defined?(::GameObj)
   end
@@ -59,6 +71,7 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('COMMON_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::COMMON_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('RACIAL_RANGED_WEAPONS_PATTERN is frozen') { expect(described_class::RACIAL_RANGED_WEAPONS_PATTERN).to be_frozen }
     it('FLAVOR_TEXT_PATTERN is frozen') { expect(described_class::FLAVOR_TEXT_PATTERN).to be_frozen }
+    it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
 
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
       match = "...wait 3".match(described_class::WAIT_RESPONSE_PATTERN)
@@ -90,23 +103,111 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.remove_flavor_text' do
+    def stub_flavor_patterns(patterns)
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_flavor_text_patterns: patterns))
+    end
+
     it('returns item unchanged when no flavor text') { expect(described_class.remove_flavor_text('a sword')).to eq('a sword') }
     it('strips "adorned with" flavor text') { expect(described_class.remove_flavor_text('a sword adorned with rubies of deep crimson')).to eq('a sword') }
     it('strips "decorated with" flavor text') { expect(described_class.remove_flavor_text('a shield decorated with a golden crest')).to eq('a shield') }
     it('strips "carved with" flavor text') { expect(described_class.remove_flavor_text('a staff carved with runes of ancient design')).to eq('a staff') }
+
+    it 'strips flavor the built-in pattern misses using a player-added pattern' do
+      # A marker the built-in FLAVOR_TEXT_PATTERN does not touch, so this isolates
+      # the user-pattern path.
+      stub_flavor_patterns(['\s?::.*'])
+      expect(described_class.remove_flavor_text('a sword ::soulbound::')).to eq('a sword')
+    end
+
+    it 'still applies the built-in pattern when a user pattern is invalid, and warns' do
+      stub_flavor_patterns(['(unclosed'])
+      expect(described_class.remove_flavor_text('a sword adorned with rubies of deep crimson')).to eq('a sword')
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_flavor_text_patterns[0] skipped')
+    end
   end
 
   describe '.box_list_to_adj_and_noun' do
+    def stub_box_settings(**values)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings).and_return(OpenStruct.new(values))
+    end
+
     it('parses a single box') { expect(described_class.box_list_to_adj_and_noun('a wooden strongbox')).to eq(['wooden strongbox']) }
     it('converts ironwood to iron') { expect(described_class.box_list_to_adj_and_noun('an ironwood crate')).to eq(['iron crate']) }
     it('returns empty array for empty string') { expect(described_class.box_list_to_adj_and_noun('')).to eq([]) }
+
+    it 'recognizes a player-added box wood' do
+      stub_box_settings(custom_box_woods: ['faenor'])
+      expect(described_class.box_list_to_adj_and_noun('a polished faenor chest')).to eq(['faenor chest'])
+    end
+
+    it 'recognizes a player-added box container' do
+      stub_box_settings(custom_box_containers: ['reliquary'])
+      expect(described_class.box_list_to_adj_and_noun('a battered steel reliquary')).to eq(['steel reliquary'])
+    end
+
+    it 'applies a player-added box substitution to a recognized box' do
+      stub_box_settings(custom_box_woods: ['faenor'], custom_box_substitutions: [%w[faenor faewood]])
+      expect(described_class.box_list_to_adj_and_noun('a polished faenor chest')).to eq(['faewood chest'])
+    end
+
+    it 'still parses built-in boxes when a custom wood entry is malformed' do
+      stub_box_settings(custom_box_woods: [123])
+      expect(described_class.box_list_to_adj_and_noun('an ironwood crate')).to eq(['iron crate'])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join).to include('custom_box_woods[0] skipped')
+    end
   end
 
   describe '.scroll_list_to_adj_and_noun' do
+    # Lets an example supply user additions the way get_settings would.
+    def stub_scroll_settings(additions)
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_scroll_substitutions: additions))
+    end
+
     it('removes article from single scroll') { expect(described_class.scroll_list_to_adj_and_noun(' a blue scroll')).to eq(['blue scroll']) }
     it('removes label text') { expect(described_class.scroll_list_to_adj_and_noun(' a blue scroll labeled with runes')).to eq(['blue scroll']) }
     it('converts papyrus roll to papyrus.roll') { expect(described_class.scroll_list_to_adj_and_noun(' a papyrus roll')).to eq(['papyrus.roll']) }
     it('simplifies icy blue to blue') { expect(described_class.scroll_list_to_adj_and_noun(' an icy blue parchment')).to eq(['blue parchment']) }
+
+    it 'reduces the built-in symbol-torn scale scroll to its gettable noun' do
+      expect(described_class.scroll_list_to_adj_and_noun(' a large midnight-blue scale torn with symbols'))
+        .to eq(['midnight-blue scale'])
+    end
+
+    it 'applies a user-added scroll substitution from settings' do
+      stub_scroll_settings([['weird prismatic scroll of doom', 'doom scroll']])
+      expect(described_class.scroll_list_to_adj_and_noun(' a weird prismatic scroll of doom'))
+        .to eq(['doom scroll'])
+    end
+
+    it 'applies a user addition before the keyword-collapse would mangle it' do
+      # Without a pre-collapse rewrite, "aqua blue vellum scroll" collapses on
+      # the "vellum" keyword to "aqua blue vellum"; the user rule fixes it.
+      stub_scroll_settings([['aqua blue vellum scroll', 'aqua scroll']])
+      expect(described_class.scroll_list_to_adj_and_noun(' an aqua blue vellum scroll'))
+        .to eq(['aqua scroll'])
+    end
+
+    it 'skips a malformed user entry, warns, and still applies the defaults' do
+      stub_scroll_settings([['only one element']])
+      expect(described_class.scroll_list_to_adj_and_noun(' a papyrus roll')).to eq(['papyrus.roll'])
+      warning = Lich::Messaging.messages.find { |m| m[:message].include?('custom_scroll_substitutions[0] skipped') }
+      expect(warning).not_to be_nil
+      expect(warning[:message]).to include('expected a [from, to] pair')
+    end
+
+    it 'falls back to defaults when the settings value is not a list' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_scroll_substitutions: 'not-a-list'))
+      expect(described_class.scroll_list_to_adj_and_noun(' an icy blue parchment')).to eq(['blue parchment'])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_scroll_substitutions ignored')
+    end
   end
 
   describe '.text2num' do
@@ -306,13 +407,163 @@ RSpec.describe Lich::DragonRealms::DRC do
   end
 
   describe '.set_stance' do
-    before { allow(described_class).to receive(:bput).and_return('Setting your') }
+    before do
+      allow(described_class).to receive(:bput).and_return('Setting your')
+    end
 
-    it('uses divisor 50 for Paladin') { allow(DRStats).to receive(:guild).and_return('Paladin'); allow(DRSkill).to receive(:getrank).and_return(200); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 84 0', /Setting your/) }
-    it('uses divisor 60 for Barbarian') { allow(DRStats).to receive(:guild).and_return('Barbarian'); allow(DRSkill).to receive(:getrank).and_return(300); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 85 0', /Setting your/) }
-    it('uses divisor 70 for other guilds') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(700); described_class.set_stance('parry'); expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/) }
-    it('swaps secondary and tertiary for shield') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(1400); described_class.set_stance('shield'); expect(described_class).to have_received(:bput).with('stance set 100 0 100', /Setting your/) }
-    it('handles overflow points for shield') { allow(DRStats).to receive(:guild).and_return('Warrior Mage'); allow(DRSkill).to receive(:getrank).and_return(2100); described_class.set_stance('shield'); expect(described_class).to have_received(:bput).with('stance set 100 10 100', /Setting your/) }
+    context 'guild divisors' do
+      it('uses divisor 50 for Paladin') do
+        allow(DRStats).to receive(:guild).and_return('Paladin')
+        allow(DRSkill).to receive(:getrank).and_return(500)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Barbarian') do
+        allow(DRStats).to receive(:guild).and_return('Barbarian')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Ranger') do
+        allow(DRStats).to receive(:guild).and_return('Ranger')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 9', /Setting your/)
+      end
+
+      it('uses divisor 60 for Trader') do
+        allow(DRStats).to receive(:guild).and_return('Trader')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 60 for Commoner') do
+        allow(DRStats).to receive(:guild).and_return('Commoner')
+        allow(DRSkill).to receive(:getrank).and_return(600)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it('uses divisor 70 for other guilds') do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+    end
+
+    context 'skill priority placement (STANCE SET <evasion> <parry> <shield>)' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+        allow(DRSkill).to receive(:getrank).and_return(700)
+      end
+
+      it 'places 100 in evasion slot for evasion' do
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+
+      it 'places 100 in parry slot for parry' do
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 90 100 0', /Setting your/)
+      end
+
+      it 'places 100 in shield slot for shield' do
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 90 0 100', /Setting your/)
+      end
+
+      it 'defaults to evasion for unknown skill' do
+        described_class.set_stance('stealth')
+        expect(described_class).to have_received(:bput).with('stance set 100 90 0', /Setting your/)
+      end
+    end
+
+    context 'secondary/tertiary overflow' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Warrior Mage')
+      end
+
+      it 'caps secondary at 100 and puts overflow into tertiary' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 10', /Setting your/)
+      end
+
+      it 'distributes overflow correctly for parry priority' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 10', /Setting your/)
+      end
+
+      it 'distributes overflow correctly for shield priority' do
+        allow(DRSkill).to receive(:getrank).and_return(2100)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 10 100', /Setting your/)
+      end
+    end
+
+    context 'edge cases' do
+      before do
+        allow(DRStats).to receive(:guild).and_return('Empath')
+      end
+
+      it 'handles zero Defending rank' do
+        allow(DRSkill).to receive(:getrank).and_return(0)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 80 100 0', /Setting your/)
+      end
+
+      it 'handles exact boundary where points equal 100' do
+        allow(DRSkill).to receive(:getrank).and_return(1400)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 0 100', /Setting your/)
+      end
+
+      it 'is case-insensitive for skill name' do
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('PARRY')
+        expect(described_class).to have_received(:bput).with('stance set 90 100 0', /Setting your/)
+      end
+
+      it 'handles mixed case skill name' do
+        allow(DRSkill).to receive(:getrank).and_return(700)
+        described_class.set_stance('Shield')
+        expect(described_class).to have_received(:bput).with('stance set 90 0 100', /Setting your/)
+      end
+
+      it 'handles very high Defending rank' do
+        allow(DRSkill).to receive(:getrank).and_return(5000)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 51', /Setting your/)
+      end
+    end
+
+    context 'verified in-game values' do
+      it 'Ranger 1750 Defending, evasion priority' do
+        allow(DRStats).to receive(:guild).and_return('Ranger')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('evasion')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 9', /Setting your/)
+      end
+
+      it 'Moon Mage 1750 Defending, parry priority' do
+        allow(DRStats).to receive(:guild).and_return('Moon Mage')
+        allow(DRSkill).to receive(:getrank).and_return(1750)
+        described_class.set_stance('parry')
+        expect(described_class).to have_received(:bput).with('stance set 100 100 5', /Setting your/)
+      end
+
+      it 'Empath 1527 Defending, shield priority' do
+        allow(DRStats).to receive(:guild).and_return('Empath')
+        allow(DRSkill).to receive(:getrank).and_return(1527)
+        described_class.set_stance('shield')
+        expect(described_class).to have_received(:bput).with('stance set 100 1 100', /Setting your/)
+      end
+    end
   end
 
   describe '.assess_teach' do
@@ -422,6 +673,45 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:bput).and_return('You stand')
       described_class.fix_standing
       expect(described_class).to have_received(:bput).at_least(:once)
+    end
+
+    # Issue #3668: these states are in the STAND match list but never make
+    # standing? true, so the pre-fix loop spammed STAND forever. Each helper
+    # here raises on a second STAND, turning an infinite loop into a failure
+    # instead of a hang.
+    shared_examples 'a non-recoverable posture' do |message|
+      it "issues STAND exactly once then stops when the game says #{message.inspect}" do
+        allow(described_class).to receive(:standing?).and_return(false)
+        stand_attempts = 0
+        allow(described_class).to receive(:bput) do |*_args|
+          stand_attempts += 1
+          raise "fix_standing looped: STAND spammed on #{message.inspect}" if stand_attempts > 1
+          message
+        end
+        described_class.fix_standing
+        expect(stand_attempts).to eq(1)
+      end
+    end
+
+    include_examples 'a non-recoverable posture', "You're unconscious"
+    include_examples 'a non-recoverable posture', "You're plummeting to your death"
+    include_examples 'a non-recoverable posture', 'prevents you from standing'
+    include_examples 'a non-recoverable posture', "You don't seem to be able to move to do that"
+    include_examples 'a non-recoverable posture', 'You are overburdened and cannot'
+    include_examples 'a non-recoverable posture', 'weight of all your possessions'
+    include_examples 'a non-recoverable posture', "There's no room to do much of anything here"
+
+    it 'keeps retrying on a recoverable state (unbalanced) until standing succeeds' do
+      standing_checks = [false, false, true]
+      allow(described_class).to receive(:standing?) { standing_checks.shift }
+      stand_results = ['You are so unbalanced', 'You stand']
+      allow(described_class).to receive(:bput) { stand_results.shift }
+      described_class.fix_standing
+      expect(described_class).to have_received(:bput).twice
+    end
+
+    it 'does not treat a plain "You stand" success as a non-recoverable state' do
+      expect('You stand').not_to match(described_class::CANNOT_STAND_PATTERN)
     end
   end
 
@@ -752,9 +1042,9 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(described_class.safe_pause_list).to be false
       end
 
-      it 'pauses scripts and returns their names' do
+      it 'pauses scripts and returns the paused Script objects' do
         result = described_class.safe_pause_list
-        expect(result).to eq(['other'])
+        expect(result).to eq([mock_script])
       end
     end
 
@@ -764,11 +1054,29 @@ RSpec.describe Lich::DragonRealms::DRC do
       end
 
       it 'unpauses scripts and releases lock' do
-        described_class.safe_pause_list
+        paused = described_class.safe_pause_list
         mock_script.paused = true
-        described_class.safe_unpause_list(['other'])
+        described_class.safe_unpause_list(paused)
         expect(mock_script).to have_received(:unpause)
         expect($safe_pause_lock.owned?).to be false
+      end
+
+      # Regression: safe_pause_list used to hand back script *names* and
+      # safe_unpause_list re-derived the unpause set from a fresh
+      # Script.running scan, matching by name. Any script that left
+      # Script.running between pause and unpause (gone hidden, or mid
+      # start/teardown) was silently dropped and stranded paused forever,
+      # while the log still claimed it was unpaused. Capturing and restoring
+      # the exact objects fixes this.
+      it 'unpauses a paused script even after it leaves Script.running' do
+        paused = described_class.safe_pause_list
+        expect(paused).to eq([mock_script])
+        mock_script.paused = true
+        # The script goes hidden / deregisters: no longer visible to a live
+        # Script.running rescan.
+        allow(Script).to receive(:running).and_return([])
+        described_class.safe_unpause_list(paused)
+        expect(mock_script).to have_received(:unpause)
       end
 
       context 'when list is empty' do
@@ -785,6 +1093,41 @@ RSpec.describe Lich::DragonRealms::DRC do
           described_class.safe_unpause_list([])
           expect($safe_pause_lock.owned?).to be false
         end
+      end
+    end
+
+    # Regression: a script that gets pause_script'd while holding
+    # $safe_pause_lock is a live-but-suspended thread that keeps the mutex, so
+    # every peer deadlocks on try_lock. The holder must be made immune to pause
+    # (ignore_pause) for as long as it owns the lock, then restored.
+    describe 'lock holder pause immunity' do
+      let(:holder) { Script.new.tap { |s| s.name = 'holder'; s.ignore_pause = false } }
+
+      before { allow(Script).to receive(:self).and_return(holder) }
+
+      it 'makes the lock holder immune to pause while it holds the lock' do
+        described_class.safe_pause_list
+        expect(holder.ignore_pause).to be true
+      end
+
+      it 'restores the holder pause setting when the lock is released' do
+        paused = described_class.safe_pause_list
+        described_class.safe_unpause_list(paused)
+        expect(holder.ignore_pause).to be false
+      end
+
+      it 'restores a pre-existing ignore_pause=true rather than clobbering it' do
+        holder.ignore_pause = true
+        described_class.safe_pause_list
+        expect(holder.ignore_pause).to be true
+        described_class.safe_unpause_list([])
+        expect(holder.ignore_pause).to be true
+      end
+
+      it 'does not grant immunity when the lock cannot be acquired' do
+        $safe_pause_lock.lock
+        expect(described_class.safe_pause_list).to be false
+        expect(holder.ignore_pause).to be false
       end
     end
   end

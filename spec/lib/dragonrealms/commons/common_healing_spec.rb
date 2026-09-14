@@ -7,7 +7,7 @@ require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing-data.rb')
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-healing.rb')
 
 RSpec.describe Lich::DragonRealms::DRCH do
-  # ─── Wound class ──────────────────────────────────────────────────────
+  # --- Wound class ------------------------------------------------------
 
   describe described_class::Wound do
     describe '#initialize' do
@@ -168,7 +168,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── HealthResult class ───────────────────────────────────────────────
+  # --- HealthResult class -----------------------------------------------
 
   describe described_class::HealthResult do
     describe '#initialize' do
@@ -182,6 +182,19 @@ RSpec.describe Lich::DragonRealms::DRCH do
         expect(result.diseased).to be false
         expect(result.score).to eq(0)
         expect(result.dead).to be false
+        expect(result.vitality).to eq(100)
+      end
+    end
+
+    describe '#vitality' do
+      it 'stores remaining vitality percentage' do
+        result = described_class.new(vitality: 1)
+        expect(result.vitality).to eq(1)
+      end
+
+      it 'is accessible via backward-compatible string key' do
+        result = described_class.new(vitality: 55)
+        expect(result['vitality']).to eq(55)
       end
     end
 
@@ -244,7 +257,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── strip_xml ────────────────────────────────────────────────────────
+  # --- strip_xml --------------------------------------------------------
 
   describe '.strip_xml' do
     it 'strips XML pushStream and other tags from health output lines' do
@@ -273,7 +286,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── calculate_score ──────────────────────────────────────────────────
+  # --- calculate_score --------------------------------------------------
 
   describe '.calculate_score' do
     it 'returns 0 for no wounds' do
@@ -302,7 +315,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_health_lines ──────────────────────────────────────────────
+  # --- parse_health_lines ----------------------------------------------
 
   describe '.parse_health_lines' do
     it 'parses a healthy person' do
@@ -475,7 +488,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_bleeders ──────────────────────────────────────────────────
+  # --- parse_bleeders --------------------------------------------------
 
   describe '.parse_bleeders' do
     it 'returns empty hash when no bleeding section' do
@@ -557,7 +570,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_wounds ────────────────────────────────────────────────────
+  # --- parse_wounds ----------------------------------------------------
 
   describe '.parse_wounds' do
     it 'returns empty hash for nil' do
@@ -623,7 +636,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_parasites ─────────────────────────────────────────────────
+  # --- parse_parasites -------------------------------------------------
 
   describe '.parse_parasites' do
     it 'returns empty hash for nil' do
@@ -649,7 +662,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_lodged_items ──────────────────────────────────────────────
+  # --- parse_lodged_items ----------------------------------------------
 
   describe '.parse_lodged_items' do
     it 'returns empty hash for nil' do
@@ -681,7 +694,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── parse_perceived_health_lines ────────────────────────────────────
+  # --- parse_perceived_health_lines ------------------------------------
 
   describe '.parse_perceived_health_lines' do
     it 'parses wound details from perceive output' do
@@ -762,6 +775,39 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(result.score).to eq(4)
     end
 
+    it 'detects vitality damage with remaining percentage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Tenuk.',
+        'He is dead.',
+        'Wounds to the RIGHT LEG:',
+        'Fresh External:  cuts and bruises about the right leg -- more than minor',
+        'Tenuk is suffering from a life threatening loss of vitality (99%).',
+        '(Tenuk has 1% vitality remaining.)',
+        'He is completely exhausted.'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(1)
+      expect(result.dead).to be true
+    end
+
+    it 'detects moderate vitality damage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Navesi.',
+        '(Navesi has 55% vitality remaining.)'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(55)
+    end
+
+    it 'defaults to 100% vitality when no vitality damage' do
+      lines = [
+        'You sense a successful empathic link has been forged between you and Navesi.',
+        'Navesi has no injuries to speak of.'
+      ]
+      result = described_class.parse_perceived_health_lines(lines)
+      expect(result.vitality).to eq(100)
+    end
+
     it 'handles multiple severity levels' do
       lines = [
         'Your injuries include...',
@@ -777,7 +823,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── skilled_to_tend_wound? ──────────────────────────────────────────
+  # --- skilled_to_tend_wound? ------------------------------------------
 
   describe '.skilled_to_tend_wound?' do
     it 'returns true when skilled enough for external' do
@@ -816,7 +862,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── Game I/O methods ────────────────────────────────────────────────
+  # --- Game I/O methods ------------------------------------------------
 
   describe '.check_health' do
     it 'returns HealthResult on timeout' do
@@ -978,9 +1024,116 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(described_class.bind_wound('right arm')).to be false
     end
 
+    it 'returns true when parasite slips free' do
+      allow(DRC).to receive(:bput).and_return('The blood mite slips free and quickly slithers away, vanishing from sight within moments.')
+      expect(described_class.bind_wound('right eye')).to be true
+    end
+
+    it 'returns false on careless attempt' do
+      allow(DRC).to receive(:bput).and_return('You carelessly attempt to remove the blood mite from your neck leaving the wound more severe than before.')
+      expect(described_class.bind_wound('neck')).to be false
+    end
+
+    it 'returns false on foolish attempt' do
+      allow(DRC).to receive(:bput).and_return('You foolishly attempt to remove the blood mite from your right eye tearing the flesh and horribly aggravating the wound!')
+      expect(described_class.bind_wound('right eye')).to be false
+    end
+
     it 'passes person parameter to bput' do
       expect(DRC).to receive(:bput).with('tend Muleoak right arm', any_args).and_return('You work carefully at tending')
       described_class.bind_wound('right arm', 'Muleoak')
+    end
+
+    # -- Dislodged lodged items (crossbow bolts, arrows, ...) -----------------
+    #
+    # Tending out a lodged item drops it into a free hand; bind_wound disposes
+    # that item and re-tends. The disposal must target ONLY the item just
+    # removed, and only while it is actually in hand -- otherwise a blind
+    # dispose_trash would GET a same-named item from a worn container (the
+    # character's own ammunition) if the removed item has vanished (e.g. the
+    # Droughtman's Maze yanks you out and clears your hands the instant the bolt
+    # drops). in_hands? / dispose_trash come from the shared spec_helper DRCI.
+    context 'when a tend dislodges a lodged item' do
+      let(:removed_abdomen) do
+        'You skillfully remove the crossbow bolt from your abdomen leaving the wound no worse than it was before.'
+      end
+      let(:tended) { 'That area is not bleeding.' }
+
+      it 'disposes the removed item when it is in hand, then re-tends to a terminal' do
+        allow(DRC).to receive(:bput).and_return(removed_abdomen, tended)
+        allow(DRCI).to receive(:in_hands?).with('crossbow bolt').and_return(true)
+        expect(DRCI).to receive(:dispose_trash).with('crossbow bolt', anything, anything)
+
+        expect(described_class.bind_wound('abdomen')).to be true
+      end
+
+      it 'does NOT dispose (never grabs a like-named item) when the dislodged item is gone from hand' do
+        # The regression: hand cleared by the maze eject before disposal runs.
+        allow(DRC).to receive(:bput).and_return(removed_abdomen, tended)
+        allow(DRCI).to receive(:in_hands?).with('crossbow bolt').and_return(false)
+        expect(DRCI).not_to receive(:dispose_trash)
+
+        described_class.bind_wound('abdomen')
+      end
+
+      it 'treats a nil in-hands result as not-in-hand and skips disposal' do
+        allow(DRC).to receive(:bput).and_return(removed_abdomen, tended)
+        allow(DRCI).to receive(:in_hands?).and_return(nil)
+        expect(DRCI).not_to receive(:dispose_trash)
+
+        described_class.bind_wound('abdomen')
+      end
+
+      it 'checks in-hands against the exact removed item, not the whole message' do
+        allow(DRC).to receive(:bput).and_return(removed_abdomen, tended)
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+
+        described_class.bind_wound('abdomen')
+
+        expect(DRCI).to have_received(:in_hands?).with('crossbow bolt')
+      end
+
+      it 'captures a "some"-quantified dislodged item' do
+        removed_plural = 'You deftly remove some crossbow bolts from your abdomen leaving the wound no worse than it was before.'
+        allow(DRC).to receive(:bput).and_return(removed_plural, tended)
+        allow(DRCI).to receive(:in_hands?).with('crossbow bolts').and_return(true)
+        expect(DRCI).to receive(:dispose_trash).with('crossbow bolts', anything, anything)
+
+        described_class.bind_wound('abdomen')
+      end
+
+      it 'keeps dislodging and disposing each removed item until the area yields a terminal' do
+        removed_bolt = 'You deftly remove a crossbow bolt from your chest leaving the wound no worse than it was before.'
+        removed_arrow = 'You skillfully remove the arrow from your chest leaving the wound no worse than it was before.'
+        allow(DRC).to receive(:bput).and_return(removed_bolt, removed_arrow, 'You work carefully at tending your wound.')
+        allow(DRCI).to receive(:in_hands?).and_return(true)
+        expect(DRCI).to receive(:dispose_trash).with('crossbow bolt', anything, anything).ordered
+        expect(DRCI).to receive(:dispose_trash).with('arrow', anything, anything).ordered
+
+        expect(described_class.bind_wound('chest')).to be true
+      end
+
+      it 'does not attempt disposal (or an in-hands check) for a dislodge line with no removable item' do
+        # The clay-fragment dislodge line matches TEND_DISLODGE_PATTERNS but has
+        # no "remove <item> from" capture, so dislodge_match is nil.
+        allow(DRC).to receive(:bput).and_return('As you reach for the clay fragment it crumbles to dust.', tended)
+        expect(DRCI).not_to receive(:in_hands?)
+        expect(DRCI).not_to receive(:dispose_trash)
+
+        described_class.bind_wound('chest')
+      end
+
+      it 'preserves the person argument across dislodge recursion' do
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+        allow(DRC).to receive(:bput).and_return(
+          'You skillfully remove the crossbow bolt from your chest leaving the wound no worse than it was before.',
+          tended
+        )
+
+        described_class.bind_wound('chest', 'Muleoak')
+
+        expect(DRC).to have_received(:bput).with('tend Muleoak chest', any_args).twice
+      end
     end
   end
 
@@ -1008,7 +1161,7 @@ RSpec.describe Lich::DragonRealms::DRCH do
     end
   end
 
-  # ─── Data constants ──────────────────────────────────────────────────
+  # --- Data constants --------------------------------------------------
 
   describe 'data constants' do
     it 'freezes BLEED_RATE_TO_SEVERITY' do

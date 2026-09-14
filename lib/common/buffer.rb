@@ -2,6 +2,8 @@
 # 2024-06-13
 # has rubocop error Lint/HashCompareByIdentity - cop disabled until reviewed
 
+require_relative 'throttle'
+
 module Lich
   module Common
     module Buffer
@@ -17,6 +19,11 @@ module Lich
       @@offset            = 0
       @@buffer            = Array.new
       @@max_size          = 3000
+      # @@index / @@streams are keyed by Thread#object_id and were never pruned,
+      # so every thread that ever read the buffer leaked an entry that outlived
+      # it. maybe_cleanup sweeps dead-thread entries from the registration path,
+      # at most once every 60s via this throttle.
+      @@cleanup_throttle  = Throttle.new(60.0)
       def Buffer.gets
         thread_id = Thread.current.object_id
         if @@index[thread_id].nil?
@@ -24,6 +31,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         line = nil
         loop {
@@ -49,6 +57,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         line = nil
         loop {
@@ -70,8 +79,13 @@ module Lich
 
       def Buffer.rewind
         thread_id = Thread.current.object_id
-        @@index[thread_id] = @@offset
-        @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
+        # Hold the mutex: for a thread whose first Buffer call is rewind this
+        # adds new keys, which must not race a concurrent cleanup delete_if
+        # (Ruby raises on a key added during iteration).
+        @@mutex.synchronize {
+          @@index[thread_id] = @@offset
+          @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
+        }
         return self
       end
 
@@ -82,6 +96,7 @@ module Lich
             @@index[thread_id] = (@@offset + @@buffer.length)
             @@streams[thread_id] ||= DOWNSTREAM_STRIPPED
           }
+          maybe_cleanup
         end
         lines = Array.new
         loop {
@@ -120,23 +135,42 @@ module Lich
 
       # rubocop:disable Lint/HashCompareByIdentity
       def Buffer.streams
-        @@streams[Thread.current.object_id]
+        @@mutex.synchronize { @@streams[Thread.current.object_id] }
       end
 
       def Buffer.streams=(val)
         if (!val.is_a?(Integer)) or ((val & 63) == 0)
           respond "--- Lich: error: invalid streams value\n\t#{$!.caller[0..2].join("\n\t")}"
         else
-          @@streams[Thread.current.object_id] = val
+          # Hold the mutex: setting streams for a thread that has not registered
+          # yet adds a new key, which must not race the cleanup delete_if sweep
+          # (Ruby raises on a key added during iteration).
+          @@mutex.synchronize { @@streams[Thread.current.object_id] = val }
         end
       end
 
       # rubocop:enable Lint/HashCompareByIdentity
+      # Removes @@index / @@streams entries whose thread is no longer alive.
+      # Snapshots the live thread ids once rather than recomputing them per
+      # entry, and holds the mutex so it cannot race with a concurrent reader
+      # mutating the same hashes.
       def Buffer.cleanup
-        @@index.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
-        @@streams.delete_if { |k, _v| not Thread.list.any? { |t| t.object_id == k } }
+        @@mutex.synchronize {
+          live_ids = Thread.list.map(&:object_id)
+          @@index.delete_if { |k, _v| !live_ids.include?(k) }
+          @@streams.delete_if { |k, _v| !live_ids.include?(k) }
+        }
         return self
       end
+
+      # Throttled automatic {Buffer.cleanup}, invoked from the thread-registration
+      # path so dead-thread entries do not accumulate over a long session. Must
+      # be called outside @@mutex (cleanup acquires it; Ruby mutexes are not
+      # reentrant).
+      def Buffer.maybe_cleanup
+        @@cleanup_throttle.run { cleanup }
+      end
+      private_class_method :maybe_cleanup
     end
   end
 end

@@ -15,7 +15,6 @@ RSpec.describe Lich::Common::SessionLauncher do
 
   before(:each) do
     allow(Lich::Common::Authentication::LoginHelpers).to receive(:format_launch_flag).and_return('--GST')
-    allow(described_class).to receive(:windows?).and_return(false)
     allow(RbConfig).to receive(:ruby).and_return('/usr/bin/ruby')
     # Keep legacy spawn assertions stable unless explicitly testing optional passthrough.
     allow(described_class).to receive(:optional_spawn_flags).and_return([])
@@ -68,10 +67,71 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'maps Saga launch data back to the Saga CLI selector' do
+    saga_launch_data = launch_data.reject { |line| line.start_with?('GAME=') }
+    saga_launch_data.concat(['CHARACTER=Tsetem', 'GAME=SAGA'])
+
+    described_class.launch(saga_launch_data)
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--saga',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
   it 'returns structured error when character is missing' do
     result = described_class.launch(launch_data)
     expect(result[:ok]).to be false
     expect(result[:error]).to include('missing character')
+  end
+
+  it 'prefers the stable frontend identity carried in launch data over legacy GAME mapping' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'FRONTEND=vellum'])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--frontend=vellum',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
+  end
+
+  it 'does not reuse a registry-derived custom command as a saved-entry filter' do
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem', 'FRONTEND=vellum'],
+      launch_context: { frontend: 'vellum', custom_launch: nil }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--frontend=vellum',
+      hash_including(chdir: anything)
+    )
+  end
+
+  it 'falls back to legacy GAME mapping when stable frontend identity is blank' do
+    described_class.launch(launch_data + ['CHARACTER=Tsetem', 'FRONTEND='])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: anything)
+    )
   end
 
   it 'returns structured error details when launch_data is invalid' do
@@ -80,10 +140,18 @@ RSpec.describe Lich::Common::SessionLauncher do
   end
 
   it 'uses rubyw on Windows' do
-    allow(described_class).to receive(:windows?).and_return(true)
+    allow(Lich::Common::Frontend).to receive(:platform_key).and_return(:windows)
     allow(RbConfig).to receive(:ruby).and_return('C:/Ruby/bin/ruby.exe')
+    allow(File).to receive(:file?).with('C:/Ruby/bin/rubyw.exe').and_return(true)
 
     expect(described_class.send(:ruby_binary)).to eq('C:/Ruby/bin/rubyw.exe')
+  end
+
+  it 'delegates Ruby selection to the shared resolver' do
+    allow(Lich::Common::RubyExecutable).to receive(:resolve).and_return('/opt/ruby/bin/ruby')
+
+    expect(described_class.send(:ruby_binary)).to eq('/opt/ruby/bin/ruby')
+    expect(Lich::Common::RubyExecutable).to have_received(:resolve)
   end
 
   it 'forwards optional dark mode and directory flags only when defined' do
@@ -135,6 +203,159 @@ RSpec.describe Lich::Common::SessionLauncher do
       '--stormfront',
       '--custom-launch=/path/to/custom',
       '--data=/tmp/alt-data',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'forwards an explicit active_session_dir override' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        active_session_dir: '/tmp/shared-active-sessions'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'still forwards active_session_dir even when it matches this process own constant' do
+    # active-session-dir has no constants.rb default the way DATA_DIR/SCRIPT_DIR
+    # do, so a spawned child cannot re-derive the parent's ACTIVE_SESSION_DIR on
+    # its own -- unlike the other path flags, "matches the current value" must
+    # never be treated as "the child would get this anyway" and suppressed.
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('ACTIVE_SESSION_DIR', '/tmp/shared-active-sessions')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        active_session_dir: '/tmp/shared-active-sessions'
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'inherits this process active_session_dir when the launch context omits it' do
+    # Production GUI launch contexts (GuiLogin#handle_play_action) carry account
+    # and frontend keys only, never directory overrides. Without inheritance the
+    # parent's --active-session-dir is dropped on every child, and each one
+    # coordinates through its own TEMP_DIR instead of the shared registry.
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('ACTIVE_SESSION_DIR', '/tmp/shared-active-sessions')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        user_id: 'someaccount',
+        saved_entry: true
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'inherits this process active_session_dir when no launch_context is given at all' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('ACTIVE_SESSION_DIR', '/tmp/shared-active-sessions')
+
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'])
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      '--active-session-dir=/tmp/shared-active-sessions',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'treats an explicitly empty active_session_dir as an opt-out rather than inheriting' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    stub_const('ACTIVE_SESSION_DIR', '/tmp/shared-active-sessions')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: {
+        frontend: 'stormfront',
+        active_session_dir: nil
+      }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
+      hash_including(chdir: '/tmp/lich-home')
+    )
+  end
+
+  it 'emits no active-session-dir flag when this process has none' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('LICH_DIR', '/tmp/lich-home')
+    hide_const('ACTIVE_SESSION_DIR') if Object.const_defined?(:ACTIVE_SESSION_DIR)
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: { frontend: 'stormfront' }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby',
+      File.expand_path($PROGRAM_NAME),
+      '--login', 'Tsetem',
+      '--GST',
+      '--stormfront',
+      '--custom-launch=/path/to/custom',
       hash_including(chdir: '/tmp/lich-home')
     )
   end

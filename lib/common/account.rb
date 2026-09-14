@@ -53,7 +53,7 @@ module Lich
 
       def self.members=(value)
         potential_members = {}
-        for code_name in value.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t^\n]+/)
+        for code_name in value.sub(/^C\t[0-9]+\t[0-9]+\t[0-9]+\t[0-9]+[\t\n]/, '').scan(/[^\t]+\t[^\t\n]+/)
           char_code, char_name = code_name.split("\t")
           potential_members[char_code] = char_name
         end

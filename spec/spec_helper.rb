@@ -36,6 +36,7 @@ require 'rspec'
 require 'date'
 require 'tmpdir'
 require 'ostruct'
+require 'fileutils'
 
 # =============================================================================
 # Path Constants
@@ -67,6 +68,18 @@ RSpec.configure do |config|
     # Core game state
     XMLData.reset if defined?(XMLData) && XMLData.respond_to?(:reset)
     Script.current = nil if defined?(Script)
+    # Room.current memoizes its double, so clear it or one example's room
+    # identity leaks into the next.
+    Room.current = nil if defined?(Room) && Room.respond_to?(:current=)
+    # The map specs add these XMLData fields themselves, so XMLData.reset does
+    # not know about them and a value assigned in one example survives into the
+    # next. A stale room_window_disabled is the dangerous one: it makes the
+    # matchers skip their description check without failing anything.
+    if defined?(XMLData) && XMLData.respond_to?(:room_window_disabled=)
+      XMLData.room_window_disabled = false
+      XMLData.room_exits_string = nil
+      XMLData.room_count = nil
+    end
     $_SERVERBUFFER_&.clear
     $_CLIENTBUFFER_&.clear
     $_LASTUPSTREAM_ = nil
@@ -74,12 +87,26 @@ RSpec.configure do |config|
     # Lich messaging
     Lich::Messaging.clear_messages! if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:clear_messages!)
     Lich.reset_display_expgains! if defined?(Lich) && Lich.respond_to?(:reset_display_expgains!)
+    Lich.display_roomid_location = nil if defined?(Lich) && Lich.respond_to?(:display_roomid_location=)
     Lich.db.reset! if defined?(Lich) && Lich.respond_to?(:db) && Lich.db.respond_to?(:reset!)
+    Lich::Common::DB_Store.reset! if defined?(Lich::Common::DB_Store) && Lich::Common::DB_Store.respond_to?(:reset!)
+    # Drain Infomon's async write queue so a queued INSERT from a prior example
+    # cannot land in a later example's freshly reset table (seed/timing-dependent
+    # cross-file leakage). Specs that need a clean slate still call reset! themselves.
+    Lich::Gemstone::Infomon.flush if defined?(Lich::Gemstone::Infomon) && Lich::Gemstone::Infomon.respond_to?(:flush)
+
+    # Lich::Common::Account state (class-level accessors leak across specs)
+    if defined?(Lich::Common::Account)
+      Lich::Common::Account.name = nil if Lich::Common::Account.respond_to?(:name=)
+      Lich::Common::Account.game_code = nil if Lich::Common::Account.respond_to?(:game_code=)
+      Lich::Common::Account.character = nil if Lich::Common::Account.respond_to?(:character=)
+      Lich::Common::Account.subscription = nil if Lich::Common::Account.respond_to?(:subscription=)
+    end
 
     # DR production classes - only if they're loaded (may override mocks)
     Lich::DragonRealms::DRExpMonitor.reset! if defined?(Lich::DragonRealms::DRExpMonitor) && Lich::DragonRealms::DRExpMonitor.respond_to?(:reset!)
 
-    # Game objects — clear registries via class_variable_set (no test methods in production)
+    # Game objects - clear registries via class_variable_set (no test methods in production)
     # NOTE: class_variable_set used because GameObj is a production class with no reset! method
     if defined?(Lich::Common::GameObj)
       g = Lich::Common::GameObj
@@ -89,9 +116,27 @@ RSpec.configure do |config|
       end
       g.class_variable_set(:@@right_hand, nil) if g.class_variable_defined?(:@@right_hand)
       g.class_variable_set(:@@left_hand, nil) if g.class_variable_defined?(:@@left_hand)
+
+      # Staged registry refresh buffers (present once lib/common/gameobj.rb is
+      # loaded). nil when idle; reset so a refresh left open by one example
+      # never leaks into the next.
+      %i[@@staging_inv @@staging_reserve @@staging_loot @@staging_npcs
+         @@staging_npc_status @@staging_pcs @@staging_pc_status @@staging_room_desc
+         @@staging_fam_room_desc @@staging_fam_loot @@staging_fam_npcs
+         @@staging_fam_pcs].each do |cv|
+        g.class_variable_set(cv, nil) if g.class_variable_defined?(cv)
+      end
+      g.class_variable_set(:@@staging_contents, {}) if g.class_variable_defined?(:@@staging_contents)
+      g.class_variable_set(:@@staging_all_contents, {}) if g.class_variable_defined?(:@@staging_all_contents)
+      # Full-container INV LIST refresh flag: reset so a refresh opened (and not
+      # committed/discarded) by one example never leaks into the next, where it
+      # would silently route new_inv into staging instead of the live registry.
+      g.class_variable_set(:@@staging_all_containers, false) if g.class_variable_defined?(:@@staging_all_containers)
+      # Identity-keyed like the production initializer; a plain {} would break buffer scoping.
+      g.class_variable_set(:@@pending_metadata, {}.compare_by_identity) if g.class_variable_defined?(:@@pending_metadata)
     end
 
-    # DR mocks from spec_helper — these have reset! defined in the mock (not production)
+    # DR mocks from spec_helper - these have reset! defined in the mock (not production)
     Flags.reset! if defined?(Flags) && Flags.respond_to?(:reset!)
     UserVars.reset! if defined?(UserVars) && UserVars.respond_to?(:reset!)
     DRC.reset! if defined?(DRC) && DRC.respond_to?(:reset!)
@@ -100,7 +145,7 @@ RSpec.configure do |config|
     DRSpells.reset! if defined?(DRSpells) && DRSpells.respond_to?(:reset!)
     DRRoom.reset! if defined?(DRRoom) && DRRoom.respond_to?(:reset!)
 
-    # DR production classes — use class_variable_set (no reset! in production)
+    # DR production classes - use class_variable_set (no reset! in production)
     # NOTE: class_variable_set used because DRParser is a production module with no reset! method
     if defined?(Lich::DragonRealms::DRParser) && Lich::DragonRealms::DRParser.class_variable_defined?(:@@parsing_exp_mods_output)
       Lich::DragonRealms::DRParser.class_variable_set(:@@parsing_exp_mods_output, false)
@@ -214,6 +259,7 @@ RSpec.shared_context 'DRParser stubs' do
     allow(drstats_class).to receive(:tdps=)
     allow(drstats_class).to receive(:favors=)
     allow(drstats_class).to receive(:balance=)
+    allow(drstats_class).to receive(:position=)
     allow(drstats_class).to receive(:strength=)
     allow(drstats_class).to receive(:agility=)
     allow(drstats_class).to receive(:discipline=)
@@ -272,6 +318,203 @@ RSpec.shared_context 'DRParser stubs' do
   end
 end
 
+RSpec.shared_context 'mock GTK hardening environment' do
+  before(:context) do
+    @tmpdir = Dir.mktmpdir(tmpdir_prefix)
+    @saved_consts = {}
+    @saved_gtk_hardening_consts = {}
+
+    %i[Gtk GLib GdkPixbuf LICH_DIR].each do |name|
+      next unless Object.const_defined?(name)
+
+      @saved_consts[name] = Object.const_get(name)
+      Object.send(:remove_const, name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      next unless Lich::Common.const_defined?(name, false)
+
+      @saved_gtk_hardening_consts[name] = Lich::Common.const_get(name, false)
+      Lich::Common.send(:remove_const, name)
+    end
+
+    glib_mod = Module.new
+    base_instantiatable = Module.new do
+      def signal_connect(signal, *_args, &block)
+        if signal.to_s != 'destroy' && @signal_connect_failures_remaining.to_i.positive?
+          @signal_connect_failures_remaining -= 1
+          raise 'signal registration failed'
+        end
+
+        if signal.to_s == 'destroy' && @destroy_connect_failures_remaining.to_i.positive?
+          @destroy_connect_failures_remaining -= 1
+          raise 'destroy hook failed'
+        end
+
+        @signals ||= Hash.new { |hash, key| hash[key] = [] }
+        @signals[signal.to_s] << block if block
+        @signals[signal.to_s].length
+      end
+
+      def fail_next_destroy_connection!
+        @destroy_connect_failures_remaining = @destroy_connect_failures_remaining.to_i + 1
+      end
+
+      def fail_next_signal_connection!
+        @signal_connect_failures_remaining = @signal_connect_failures_remaining.to_i + 1
+      end
+
+      def signal_blocks(signal)
+        @signals ||= {}
+        @signals[signal.to_s] || []
+      end
+
+      def emit(signal, *args)
+        @signals ||= {}
+        (@signals[signal.to_s] || []).map { |block| block.call(*args) }
+      end
+    end
+    instantiatable_mod = Module.new
+    instantiatable_mod.include(base_instantiatable)
+    glib_mod.const_set(:Instantiatable, instantiatable_mod)
+
+    timeout_mod = Module.new
+    timeout_mod.singleton_class.class_eval do
+      attr_accessor :blocks, :next_id
+
+      def add(*_args, &block)
+        self.blocks ||= {}
+        self.next_id ||= 0
+        self.next_id += 1
+        self.blocks[self.next_id] = block
+        self.next_id
+      end
+    end
+    glib_mod.const_set(:Timeout, timeout_mod)
+
+    idle_mod = Module.new
+    idle_mod.singleton_class.class_eval do
+      attr_accessor :blocks, :next_id
+
+      def add(*_args, &block)
+        self.blocks ||= {}
+        self.next_id ||= 0
+        self.next_id += 1
+        self.blocks[self.next_id] = block
+        self.next_id
+      end
+    end
+    glib_mod.const_set(:Idle, idle_mod)
+    Object.const_set(:GLib, glib_mod)
+
+    gtk_mod = Module.new
+    gtk_mod.singleton_class.class_eval do
+      attr_accessor :main_level, :main_calls, :main_quit_calls, :main_quit_failure
+
+      def main(*)
+        self.main_calls ||= 0
+        self.main_calls += 1
+        :main_called
+      end
+
+      def main_quit(*)
+        raise 'main_quit boom' if main_quit_failure
+
+        self.main_quit_calls ||= 0
+        self.main_quit_calls += 1
+        :main_quit_called
+      end
+    end
+
+    widget_class = Class.new do
+      include GLib::Instantiatable
+
+      def destroy
+        return self if destroyed?
+
+        @destroyed = true
+        emit('destroy')
+        self
+      end
+
+      def destroyed?
+        !!@destroyed
+      end
+    end
+    gtk_mod.const_set(:Widget, widget_class)
+    Object.const_set(:Gtk, gtk_mod)
+
+    pixbuf_mod = Module.new
+    pixbuf_class = Class.new do
+      def self.new(*)
+        Object.new
+      end
+    end
+    pixbuf_mod.const_set(:Pixbuf, pixbuf_class)
+    Object.const_set(:GdkPixbuf, pixbuf_mod)
+    Object.const_set(:LICH_DIR, @tmpdir)
+
+    @original_dir = Dir.pwd
+    Dir.chdir(@tmpdir)
+    load File.expand_path('../lib/common/gtk.rb', __dir__)
+  end
+
+  after(:context) do
+    Dir.chdir(@original_dir) if @original_dir
+
+    %i[Gtk GLib GdkPixbuf LICH_DIR].each do |name|
+      Object.send(:remove_const, name) if Object.const_defined?(name)
+    end
+
+    %i[
+      GtkSignalHandlerRetention
+      GtkTimeoutRetention
+      GtkIdleRetention
+      GtkMainLoopGuards
+    ].each do |name|
+      Lich::Common.send(:remove_const, name) if Lich::Common.const_defined?(name, false)
+    end
+
+    @saved_consts.each do |name, value|
+      Object.const_set(name, value)
+    end
+
+    @saved_gtk_hardening_consts.each do |name, value|
+      Lich::Common.const_set(name, value)
+    end
+
+    FileUtils.remove_entry(@tmpdir) if @tmpdir && File.exist?(@tmpdir)
+  end
+
+  before do
+    Gtk.main_level = 0
+    Gtk.main_calls = 0
+    Gtk.main_quit_calls = 0
+    Gtk.main_quit_failure = false if Gtk.respond_to?(:main_quit_failure=)
+    GLib::Timeout.blocks = {}
+    GLib::Timeout.next_id = 0
+    GLib::Idle.blocks = {}
+    GLib::Idle.next_id = 0
+    Lich::Common.with_gtk_registry_lock do
+      Lich::Common.gtk_signal_handlers.clear
+      Lich::Common.gtk_timeout_callbacks.clear
+      Lich::Common.gtk_idle_callbacks.clear
+    end
+    stub_const('Script', Class.new) unless defined?(Script)
+    allow(Script).to receive(:current).and_return(nil)
+    allow(Lich).to receive(:log)
+  end
+
+  def tmpdir_prefix
+    raise NotImplementedError, 'define tmpdir_prefix in the including spec'
+  end
+end
+
 # =============================================================================
 # Global Output Methods
 # =============================================================================
@@ -305,6 +548,7 @@ module XMLData
   @game = "rspec"
   @name = "testing"
   @server_time = Time.at(1234567890)
+  @current_target_ids = []
 
   @room_title = ''
   @room_description = ''
@@ -316,8 +560,9 @@ module XMLData
   @dr_active_spells_stellar_percentage = 0
 
   class << self
-    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time
+    attr_accessor :game, :name, :room_id, :room_title, :room_description, :room_exits, :injury_mode, :stamina, :server_time, :previous_nav_rm, :show_room_id
     attr_accessor :dr_active_spells, :dr_active_spells_slivers, :dr_active_spells_stellar_percentage
+    attr_accessor :current_target_ids
 
     def indicator
       { 'IconSTUNNED' => 'n', 'IconDEAD' => 'n', 'IconWEBBED' => false }
@@ -350,6 +595,8 @@ module XMLData
       @dialogs = {}
       @injuries = {}
       @room_id = 0
+      @previous_nav_rm = nil
+      @show_room_id = false
       @room_title = ''
       @room_description = ''
       @room_exits = []
@@ -359,6 +606,7 @@ module XMLData
       @dr_active_spells = {}
       @dr_active_spells_slivers = 0
       @dr_active_spells_stellar_percentage = 0
+      @current_target_ids = []
       # Clear any dynamically added attributes (e.g., prepared_spell from arcana specs)
       @prepared_spell = nil if instance_variable_defined?(:@prepared_spell)
     end
@@ -371,7 +619,7 @@ end
 # Represents running scripts. Full implementation for testing pause/unpause.
 
 class Script
-  attr_accessor :paused, :no_pause_all, :name
+  attr_accessor :paused, :no_pause_all, :name, :ignore_pause
 
   def paused?
     @paused || false
@@ -441,7 +689,7 @@ end unless defined?(ExecScript)
 # =============================================================================
 # Core Lich namespace. Fine-grained per-component guards let this file load in
 # either order relative to login_spec_helper (which may define a minimal Lich
-# first). Each piece is added only if absent — no coarse all-or-nothing guard.
+# first). Each piece is added only if absent - no coarse all-or-nothing guard.
 
 module Lich
   # MockDB: in-memory store answering the SQL query patterns used by lich-5's
@@ -480,9 +728,9 @@ module Lich
   @db = MockDB.new unless instance_variable_defined?(:@db)
 
   class << self
-    # attr_accessor is idempotent — reopening Lich and re-declaring these is safe.
-    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits
-    attr_accessor :display_expgains
+    # attr_accessor is idempotent - reopening Lich and re-declaring these is safe.
+    attr_accessor :display_lichid, :display_uid, :hide_uid_flag, :display_stringprocs, :display_exits, :display_room_links, :display_room_mono
+    attr_accessor :display_expgains, :display_roomid_location
 
     def db
       @db ||= MockDB.new
@@ -518,7 +766,7 @@ module Lich
         @messages ||= []
       end unless respond_to?(:messages)
 
-      # clear_messages! is test-only infrastructure — production Lich::Messaging
+      # clear_messages! is test-only infrastructure - production Lich::Messaging
       # never defines it. Always add it so assertion teardown works regardless of
       # which Messaging (mock or production) was loaded first.
       def clear_messages!
@@ -527,6 +775,64 @@ module Lich
     end
   end
 end
+
+# =============================================================================
+# DB_Store Mock
+# =============================================================================
+# In-memory replacement for the SQLite-backed script_auto_settings store.
+# Matches the production API from lib/common/db_store.rb.
+
+module Lich
+  module Common
+    module DB_Store
+      @store = {}
+
+      class << self
+        def read(scope, script)
+          case script
+          when 'vars', 'uservars'
+            get_vars(scope)
+          else
+            get_data(scope, script)
+          end
+        end
+
+        def save(scope, script, val)
+          case script
+          when 'vars', 'uservars'
+            store_vars(scope, val)
+          else
+            store_data(scope, script, val)
+          end
+        end
+
+        def get_data(scope, script)
+          @store ||= {}
+          @store["#{scope}::#{script}"] || {}
+        end
+
+        def get_vars(scope)
+          @store ||= {}
+          @store["#{scope}::vars"] || {}
+        end
+
+        def store_data(scope, script, val)
+          @store ||= {}
+          @store["#{scope}::#{script}"] = val
+        end
+
+        def store_vars(scope, val)
+          @store ||= {}
+          @store["#{scope}::vars"] = val
+        end
+
+        def reset!
+          @store = {}
+        end
+      end
+    end
+  end
+end unless defined?(Lich::Common::DB_Store)
 
 # =============================================================================
 # Effects Mock
@@ -596,24 +902,99 @@ end
 # end
 
 # =============================================================================
+# =============================================================================
+# Game Map class loader
+# =============================================================================
+# map_gs.rb and map_dr.rb both define Lich::Common::Map. Requiring both in one
+# process reopens the same class, so whichever loads last owns every method they
+# both define, including #initialize. That would leave each game's specs at the
+# mercy of the order RSpec happens to load spec files in.
+#
+# Map specs call MapLoader.use to get the class they need. Swapping costs about
+# 2 ms and only happens when the other game is currently loaded, so calling this
+# from a plain before hook is cheap. The map files are required lazily so specs
+# that never touch the map are unaffected.
+module MapLoader
+  MAP_DIR = File.expand_path('../lib/common/map', __dir__)
+
+  class << self
+    # @param game [Symbol] :gs or :dr
+    # @return [Class] Lich::Common::Map for that game
+    def use(game)
+      require 'common/map/map_base'
+      return ::Lich::Common::Map if @loaded == game && map_constants_present?
+
+      %i[Room Map].each do |const|
+        ::Lich::Common.send(:remove_const, const) if ::Lich::Common.const_defined?(const, false)
+      end
+      Kernel.load File.join(MAP_DIR, "map_#{game}.rb")
+      @loaded = game
+      ::Lich::Common::Map
+    end
+
+    # @return [Symbol, nil] the game currently loaded
+    attr_reader :loaded
+
+    private
+
+    # @loaded is only set after a successful load, so a load that raises part
+    # way through leaves it pointing at a game whose constants have already been
+    # removed. Check them before trusting the cache, or the next call for that
+    # game reports an uninitialized constant instead of just reloading.
+    # @return [Boolean]
+    def map_constants_present?
+      %i[Map Room].all? { |const| ::Lich::Common.const_defined?(const, false) }
+    end
+  end
+end
+
 # Room and Map Mocks
 # =============================================================================
 # Navigation infrastructure. Provides minimal implementation for testing.
 
 class Room
   class << self
+    # Production calls Room.current.dijkstra(target_list) with an
+    # argument, and an OpenStruct attribute reader takes none. Define real
+    # methods so an example that forgets to stub gets an empty result rather
+    # than an ArgumentError.
+    # @param id [Integer] room id the double should report
+    # @return [OpenStruct] a Room stand-in whose pathfinding methods accept the
+    #   arguments production passes, unlike a bare OpenStruct attribute
+    def room_double(id: 1234)
+      double = OpenStruct.new(tags: [], id: id)
+      def double.dijkstra(*_args) = [{}, {}]
+      def double.dijkstra_hashes(*_args) = [{}, {}]
+      double
+    end
+
     attr_writer :current
 
     def current
-      @current ||= OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+      @current ||= room_double
     end
 
     def id
       1234
     end
 
-    def [](_key)
-      OpenStruct.new(tags: [], id: 1234, dijkstra: [nil, {}])
+    # Resolve the key the way production would, so a lookup keeps its identity
+    # instead of always reporting the default. Integer and numeric-string keys
+    # are the room id; a "u1234" key is a uid lookup, and this stand-in maps a
+    # uid to the same number rather than inventing an unrelated id.
+    def [](key)
+      room_double(id: mock_room_id(key))
+    end
+
+    # @param key [Integer, String] room id, numeric string, uid or title
+    # @return [Integer] id the stand-in should report
+    def mock_room_id(key)
+      case key
+      when Integer then key
+      when /\Au(-?\d+)\z/i then Regexp.last_match(1).to_i
+      when /\A-?\d+\z/ then key.to_i
+      else 1234
+      end
     end
   end
 end unless defined?(Room)
@@ -637,7 +1018,15 @@ class Map
     end
 
     def dijkstra(_id, _target = nil)
-      [nil, {}]
+      [{}, {}]
+    end
+
+    def dijkstra_hashes(_id, _target = nil)
+      [{}, {}]
+    end
+
+    def rooms_by_tag(_tag_name)
+      []
     end
 
     def findpath(_room, _target)
@@ -666,7 +1055,27 @@ module DownstreamHook
   def self.run(data)
     data
   end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
 end unless defined?(DownstreamHook)
+
+# =============================================================================
+# UpstreamHook Mock
+# =============================================================================
+
+module UpstreamHook
+  def self.run(data)
+    data
+  end
+
+  # Matches the production surface used by the ScriptDeath cleanup.
+  def self.cleanup_on_death(_owner_id)
+    0
+  end
+end unless defined?(UpstreamHook)
 
 # =============================================================================
 # Char Mock
@@ -694,6 +1103,7 @@ $fake_stormfront ||= false
 $_CLIENT_ ||= Object.new.tap do |obj|
   def obj.write(_data); end
   def obj.closed?; false; end
+  def obj.alive?; true; end
 end
 $_DETACHABLE_CLIENT_ ||= nil
 $pause_all_lock ||= Mutex.new
@@ -794,6 +1204,22 @@ module Lich
         def clear_npcs
           @@npcs = []
         end
+
+        # Mirrors the production API so XMLParser#reset - which discards
+        # in-flight staged refreshes when resynchronizing - works against this
+        # lightweight double. The double has no staging buffers, so it is a
+        # no-op here.
+        def discard_staged_refreshes
+          nil
+        end
+
+        # Room-collection clears the <nav> handler invokes on arrival. The mock only needs
+        # them to exist as no-ops so xmlparser specs can drive a real <nav> tag end-to-end.
+        def clear_loot; end
+
+        def clear_pcs; end
+
+        def clear_room_desc; end
 
         def set_right_hand(obj)
           @right_hand = obj
@@ -1267,11 +1693,20 @@ class DRRoom
   class << self
     attr_accessor :npcs, :pcs, :group_members, :room_objs
 
+    # Clear through the accessors, not the mock's instance variables. When the
+    # production DRRoom (lib/dragonrealms/drinfomon/drroom.rb) is loaded in the
+    # same process it reopens DRRoom and redefines the accessors to read/write
+    # class variables (@@npcs, ...), while this mock's reset! kept assigning the
+    # class-level instance variables (@npcs, ...). The two no longer refer to the
+    # same storage, so reset! silently failed to clear production state and NPCs
+    # leaked between examples (a later cambrinth spec would spin in an endless
+    # retreat loop). Routing through the setters writes to whichever storage the
+    # live accessor uses; respond_to? guards attributes the mock lacks.
     def reset!
-      @npcs = []
-      @pcs = []
-      @group_members = []
-      @room_objs = []
+      %i[npcs pcs group_members room_objs pcs_prone pcs_sitting dead_npcs].each do |attribute|
+        setter = :"#{attribute}="
+        public_send(setter, []) if respond_to?(setter)
+      end
     end
   end
 end unless defined?(DRRoom)
@@ -1297,6 +1732,21 @@ module DRCT
     end
   end
 end unless defined?(DRCT)
+
+# -----------------------------------------------------------------------------
+# DRCM - Money module
+# -----------------------------------------------------------------------------
+module DRCM
+  class << self
+    def ensure_copper_on_hand(_copper, _settings = nil, _hometown = nil)
+      true
+    end
+
+    def town_currency(_hometown)
+      'Kronars'
+    end
+  end
+end unless defined?(DRCM)
 
 # -----------------------------------------------------------------------------
 # DRCMM - Moon mage module
@@ -1357,6 +1807,7 @@ Lich::DragonRealms::DRSpells = DRSpells unless defined?(Lich::DragonRealms::DRSp
 Lich::DragonRealms::DRRoom = DRRoom unless defined?(Lich::DragonRealms::DRRoom)
 Lich::DragonRealms::DRExpMonitor = DRExpMonitor unless defined?(Lich::DragonRealms::DRExpMonitor)
 Lich::DragonRealms::DRCA = DRCA unless defined?(Lich::DragonRealms::DRCA)
+Lich::DragonRealms::DRCM = DRCM unless defined?(Lich::DragonRealms::DRCM)
 Lich::DragonRealms::DRCT = DRCT unless defined?(Lich::DragonRealms::DRCT)
 Lich::DragonRealms::DRCMM = DRCMM unless defined?(Lich::DragonRealms::DRCMM)
 Lich::DragonRealms::DRCTH = DRCTH unless defined?(Lich::DragonRealms::DRCTH)
@@ -1382,6 +1833,14 @@ module Frontend
 
     def supports_gsl?
       false
+    end
+
+    def supports_mono?(_fe = nil)
+      false
+    end
+
+    def supports_room_window?(_fe = nil)
+      %w[wrayth stormfront saga].include?(client)
     end
 
     def client
@@ -1445,6 +1904,13 @@ end unless defined?(Lich::Util)
 module Kernel
   def pause(_seconds = nil); end unless method_defined?(:pause)
 
+  # Stands in for the real global_defs get_settings (character-scoped settings).
+  # Returns an OpenStruct so any setting key (e.g. worn_trashcan) reads back nil
+  # by default; override per example with allow(self).to receive(:get_settings).
+  def get_settings(_character_suffixes = [])
+    OpenStruct.new
+  end unless method_defined?(:get_settings)
+
   def waitrt?; end unless method_defined?(:waitrt?)
 
   def waitcastrt?; end unless method_defined?(:waitcastrt?)
@@ -1455,7 +1921,7 @@ module Kernel
 
   def put(_cmd); end unless method_defined?(:put)
 
-  # NOTE: `clear` MUST be private — a public Kernel `clear` is inherited by all objects,
+  # NOTE: `clear` MUST be private - a public Kernel `clear` is inherited by all objects,
   # causing `Effects::Buffs.respond_to?(:clear)` to return true in qstrike_spec,
   # which breaks buff cleanup.
   def clear; end unless method_defined?(:clear)

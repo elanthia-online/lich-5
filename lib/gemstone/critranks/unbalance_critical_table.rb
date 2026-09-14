@@ -719,7 +719,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 2,
                                   :secondary_wound => nil,
-                                  :regex           => /^.*? knocked back and stunned./ },
+                                  :regex           => /^.*? [Kk]nocked back and stunned./ },
                            8 =>
                                 { :type            => "unbalance",
                                   :location        => "chest",

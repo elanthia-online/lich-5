@@ -553,7 +553,9 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       end
 
       it 'handles unicode characters in password' do
+        # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixture exercises encryption round-trip behavior.
         unicode_password = 'pässwörd123日本語'
+        # rubocop:enable Custom/AsciiOnlySource
 
         encrypted = described_class.encrypt_password(
           unicode_password,

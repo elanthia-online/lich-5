@@ -16,9 +16,76 @@ DRCS = Lich::DragonRealms::DRCS unless defined?(DRCS)
 RSpec.describe Lich::DragonRealms::DRCS do
   before(:each) do
     Lich::Messaging.clear_messages!
+    # Rebuild memoized custom-adjective lists between examples.
+    Lich::DragonRealms::CustomSubstitutions.reset!
   end
 
-  # ─── Constants ──────────────────────────────────────────────────────
+  # --- custom_summoned_weapon_adjectives ------------------------------
+
+  describe '.custom_summoned_weapon_adjectives' do
+    def stub_adjective_settings(value)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: value))
+    end
+
+    it 'returns an empty list when nothing is configured' do
+      expect(described_class.custom_summoned_weapon_adjectives).to eq([])
+    end
+
+    it 'includes the plural custom list from settings' do
+      stub_adjective_settings(%w[flamewreathed frostbound])
+      expect(described_class.custom_summoned_weapon_adjectives).to eq(%w[flamewreathed frostbound])
+    end
+
+    it 'includes the legacy singular summoned_weapons_adjective setting' do
+      expect(described_class.custom_summoned_weapon_adjectives(OpenStruct.new(summoned_weapons_adjective: 'stormforged')))
+        .to include('stormforged')
+    end
+
+    it 'does not duplicate the legacy value when it is also in the plural list' do
+      stub_adjective_settings(['stormforged'])
+      expect(described_class.custom_summoned_weapon_adjectives(OpenStruct.new(summoned_weapons_adjective: 'stormforged')))
+        .to eq(['stormforged'])
+    end
+
+    it 'skips a malformed plural entry and warns' do
+      stub_adjective_settings([42])
+      expect(described_class.custom_summoned_weapon_adjectives).to eq([])
+      expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+        .to include('custom_summoned_weapons_adjectives[0] skipped')
+    end
+  end
+
+  # --- base_summoned_weapon (adjective stripping) ---------------------
+
+  describe '.base_summoned_weapon' do
+    def stub_adjectives(value)
+      allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: value))
+    end
+
+    it 'strips a single custom adjective' do
+      stub_adjectives(['flamewreathed'])
+      expect(described_class.base_summoned_weapon('flamewreathed sword')).to eq(' sword')
+    end
+
+    it 'strips the longest adjective when one is a substring of another' do
+      # ['flame','flamewreathed'] must strip 'flamewreathed', not 'flame' (which
+      # would leave a bogus "wreathed sword").
+      [%w[flame flamewreathed], %w[flamewreathed flame]].each do |ordering|
+        Lich::DragonRealms::CustomSubstitutions.reset!
+        stub_adjectives(ordering)
+        expect(described_class.base_summoned_weapon('flamewreathed sword')).to eq(' sword')
+      end
+    end
+
+    it 'returns the weapon unchanged when no custom adjective matches' do
+      stub_adjectives(['frostbound'])
+      expect(described_class.base_summoned_weapon('electric sword')).to eq('electric sword')
+    end
+  end
+
+  # --- Constants ------------------------------------------------------
 
   describe 'constants' do
     it 'freezes all array/hash constants' do
@@ -42,7 +109,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── get_ingot ──────────────────────────────────────────────────────
+  # --- get_ingot ------------------------------------------------------
 
   describe '.get_ingot' do
     it 'returns true and does nothing when ingot is nil' do
@@ -74,7 +141,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── stow_ingot ────────────────────────────────────────────────────
+  # --- stow_ingot ----------------------------------------------------
 
   describe '.stow_ingot' do
     it 'returns true and does nothing when ingot is nil' do
@@ -94,7 +161,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── break_summoned_weapon ─────────────────────────────────────────
+  # --- break_summoned_weapon -----------------------------------------
 
   describe '.break_summoned_weapon' do
     it 'returns early when item is nil' do
@@ -108,7 +175,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── summon_admittance ─────────────────────────────────────────────
+  # --- summon_admittance ---------------------------------------------
 
   describe '.summon_admittance' do
     it 'sends summon admittance and waits' do
@@ -131,7 +198,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── summon_weapon ─────────────────────────────────────────────────
+  # --- summon_weapon -------------------------------------------------
 
   describe '.summon_weapon' do
     context 'as a Moon Mage' do
@@ -201,7 +268,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── identify_summoned_weapon ──────────────────────────────────────
+  # --- identify_summoned_weapon --------------------------------------
 
   describe '.identify_summoned_weapon' do
     context 'as a Moon Mage' do
@@ -271,6 +338,21 @@ RSpec.describe Lich::DragonRealms::DRCS do
         expect(described_class.identify_summoned_weapon).to eq('icy halberd')
       end
 
+      it 'identifies a weapon with a player-added custom adjective (plural setting)' do
+        allow(Lich::DragonRealms::CustomSubstitutions).to receive(:get_settings)
+          .and_return(OpenStruct.new(custom_summoned_weapons_adjectives: ['flamewreathed']))
+        allow(DRC).to receive(:right_hand).and_return('flamewreathed sword')
+        allow(DRCI).to receive(:tap).with('flamewreathed sword').and_return('You tap a flamewreathed sword that you are holding.')
+        expect(described_class.identify_summoned_weapon).to eq('flamewreathed sword')
+      end
+
+      it 'still recognizes the legacy singular summoned_weapons_adjective setting' do
+        allow(DRC).to receive(:right_hand).and_return('frostbound sword')
+        allow(DRCI).to receive(:tap).with('frostbound sword').and_return('You tap a frostbound sword that you are holding.')
+        settings = OpenStruct.new(summoned_weapons_adjective: 'frostbound')
+        expect(described_class.identify_summoned_weapon(settings)).to eq('frostbound sword')
+      end
+
       it 'handles custom adjective from settings' do
         settings = double('settings', summoned_weapons_adjective: 'blazing')
         allow(DRC).to receive(:right_hand).and_return('blazing sword')
@@ -293,7 +375,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── shape_summoned_weapon ─────────────────────────────────────────
+  # --- shape_summoned_weapon -----------------------------------------
 
   describe '.shape_summoned_weapon' do
     context 'as a Moon Mage' do
@@ -377,7 +459,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── turn_summoned_weapon ──────────────────────────────────────────
+  # --- turn_summoned_weapon ------------------------------------------
 
   describe '.turn_summoned_weapon' do
     before do
@@ -397,7 +479,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── push_summoned_weapon ──────────────────────────────────────────
+  # --- push_summoned_weapon ------------------------------------------
 
   describe '.push_summoned_weapon' do
     before do
@@ -422,7 +504,7 @@ RSpec.describe Lich::DragonRealms::DRCS do
     end
   end
 
-  # ─── pull_summoned_weapon ──────────────────────────────────────────
+  # --- pull_summoned_weapon ------------------------------------------
 
   describe '.pull_summoned_weapon' do
     before do

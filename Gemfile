@@ -2,6 +2,7 @@
 When building Gemfile.lock file, please add additional platforms to the file via the following command:
 
 bundle lock \
+  --add-platform aarch64-darwin \
   --add-platform aarch64-linux \
   --add-platform aarch64-linux-gnu \
   --add-platform aarch64-linux-musl \
@@ -65,12 +66,12 @@ gem "openssl"
 gem "open-uri"
 gem "os"
 gem "ostruct"
+gem "ox"
 gem "rake"
 gem "redis"
 gem "resolv"
 gem "rexml"
 gem "sequel"
-gem "set"
 gem "tempfile"
 gem "terminal-table"
 gem "time"

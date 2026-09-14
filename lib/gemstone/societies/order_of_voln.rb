@@ -425,13 +425,26 @@ module Lich
           end
 
           if self.available?(symbol_name)
-            command = symbol[:usage] || "symbol of #{symbol[:short_name]}"
             waitrt?
             waitcastrt?
-            fput "#{command} #{target}".strip
+            fput Society.command(symbol, "symbol of", target)
           else
             Lich::Messaging.msg("warn", "You cannot use the #{symbol_name} symbol right now.")
           end
+        end
+
+        ##
+        # The command {use} sends for a symbol, without sending it.
+        #
+        # @param symbol_name [String] The short or long name of the symbol
+        # @param target [String, Integer, GameObj, nil] Optional target (a GameObj or id as `#id`)
+        # @return [String, nil] e.g. "symbol of holiness", nil when the symbol is unknown
+        #
+        def self.command(symbol_name, target = nil)
+          symbol = self[symbol_name]
+          return nil unless symbol
+
+          Society.command(symbol, "symbol of", target)
         end
 
         ##

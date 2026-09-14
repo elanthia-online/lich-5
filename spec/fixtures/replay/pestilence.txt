@@ -1,0 +1,14 @@
+##### pestilence 7e7279b21e2a0123
+# expect: attacks=pestilence | res=none | flares=none | outcomes=none | dmg=1 | statuses=
+You exhale a virulent green mist toward <pushBold/>a <a exist="11732350" noun="mass">brackish bilge mass</a><popBold/>, instantly infecting it.  The bilge mass convulses violently!
+   ... 25 points of damage!
+          Level: 100                         Fame: 5,188,796,585
+     Experience: 29,029,215             Field Exp: 1,283/1,266
+  Ascension Exp: 42,619,231         Recent Deaths: 0
+      Total Exp: 71,648,446         Death's Sting: None
+  Long-Term Exp: 0                          Deeds: 0
+ Exp to next TP: 785              Exp to next ATP: 30,769
+      PTPs/MTPs: 7/0                         ATPs: 0
+Your mind is completely saturated.  It is imperative that you rest immediately!
+You have been experiencing the Wisdom of the Ages for 19 months.
+

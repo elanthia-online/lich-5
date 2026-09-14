@@ -8,6 +8,7 @@
 require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
+require_relative 'messages'
 require_relative '../../common/db_store'
 
 module Lich
@@ -39,8 +40,16 @@ module Lich
         @settings = {}
         @async_processor = nil
         @buffer = []
-        @chunks_processed = 0
         @initialized = false
+        @source_sequence = 0
+        @buffer_source = nil
+        @buffer_source_invalid = false
+        # Thread count to restore when debug mode is turned off. Deliberately
+        # an ivar rather than a setting: `configure` persists settings to
+        # DB_Store, so stashing it there would write max_threads: 0 to disk
+        # and leave the character parsing inline forever if debug were never
+        # cleanly disabled.
+        @pre_debug_threads = nil
 
         # Default settings for combat tracking
         DEFAULT_SETTINGS = {
@@ -49,16 +58,56 @@ module Lich
           track_wounds: true,
           track_statuses: true,
           track_ucs: true,          # Track UCS (position, tierup, smite)
+          emit_attacks: false,      # Emit whole parsed events (:attack blob) for recorder-class subscribers
           max_threads: 2,           # Keep threading for performance
           debug: false,
           buffer_size: 200,         # Increase for large combat chunks
-          fallback_max_hp: 350,     # Default max HP when template unavailable
-          cleanup_interval: 100,    # Cleanup creature registry every N chunks
-          cleanup_max_age: 600      # Remove creatures older than N seconds (10 minutes)
+          fallback_max_hp: 350      # Default max HP when template unavailable
         }.freeze
+
+        # Settings this tracker no longer reads. Dropped from persisted
+        # settings on load so they neither linger in stats nor get re-saved.
+        # Creature registry retention now lives on the registry itself:
+        # Creature.configure(cleanup_max_age:).
+        RETIRED_SETTINGS = %i[cleanup_interval cleanup_max_age].freeze
 
         class << self
           attr_reader :settings, :buffer
+
+          # Subscribe to parsed combat events (see Combat::Observers for
+          # event types, payloads, and the subscriber contract - callbacks
+          # may run on worker threads; never send game commands from one).
+          # Message events (:disarm_seen, :ambusher, :bolted ... see
+          # Combat::Messages) subscribe the same way and need the tracker
+          # neither enabled nor scanning creatures: their hook goes up with
+          # the first subscription.
+          #
+          # @example
+          #   Combat::Tracker.on(:damage) { |type, data| queue << data }
+          #   Combat::Tracker.on(:damage, name: 'mybar') { ... } # idempotent
+          # @return [Proc] handler; pass to {off} to unsubscribe
+          def on(*types, name: nil, &block)
+            Observers.on(*types, name: name, &block)
+          end
+
+          # Unsubscribe a handler returned by {on}, or by its name:.
+          def off(handler_or_name)
+            Observers.off(handler_or_name)
+          end
+
+          # Binding-only observation. Never initializes/enables the tracker or
+          # stamps delayed parser work. Game.thread is the stream parser owner.
+          # @return [Hash, nil] frozen connection/game/character/room binding,
+          #   or nil when unavailable or changed during observation; not a receipt
+          #   timestamp or proof that any combat event belongs to this context
+          def observation_context
+            first = observation_binding
+            return nil unless first && first == observation_binding
+
+            first.freeze
+          rescue StandardError
+            nil
+          end
 
           # Check if combat tracking is enabled
           #
@@ -66,6 +115,11 @@ module Lich
           #
           # @return [Boolean] true if tracking is active
           def enabled?
+            # Before login data is available we can't load per-character
+            # settings; report disabled instead of sleeping on the caller's
+            # thread (the background init thread completes setup once ready).
+            return false unless @initialized || xmldata_ready?
+
             initialize! unless @initialized
             @enabled && @settings[:enabled]
           end
@@ -107,27 +161,62 @@ module Lich
             respond "[Combat] Combat tracking disabled" if debug?
           end
 
-          # Check if debug mode is enabled
+          # Debug levels, in the order they were introduced. `true` is kept
+          # as an alias for :verbose so settings saved before levels existed
+          # still resolve.
+          DEBUG_LEVELS = %i[summary verbose].freeze
+
+          # Check if debug mode is enabled, or whether a specific level is.
           #
-          # @return [Boolean] true if debug logging is active
-          def debug?
-            @settings[:debug] || $combat_debug
+          # Called bare it returns the active level (truthy), which keeps every
+          # existing `if Tracker.debug?` guard working unchanged.
+          #
+          # @param level [Symbol, nil] :verbose or :summary to test one level
+          # @return [Symbol, Boolean, nil] active level, or whether `level` is on
+          def debug?(level = nil)
+            current = @settings[:debug] || $combat_debug
+            current = :verbose if current == true
+            return current unless level
+
+            current == level
           end
 
           # Enable debug logging
           #
+          # Forces inline processing (max_threads: 0) for the duration, so
+          # debug output appears in true order relative to the game text
+          # instead of interleaving from the async worker.
+          #
+          # @param level [Symbol] :verbose for the line-by-line parse trace,
+          #   :summary for one line per persisted event
           # @return [void]
-          def enable_debug!
-            configure(debug: true, enabled: true)
-            respond "[Combat] Debug mode enabled"
+          def enable_debug!(level = :verbose)
+            level = :verbose if level == true
+            unless DEBUG_LEVELS.include?(level)
+              respond "[Combat] Unknown debug level #{level.inspect} (expected #{DEBUG_LEVELS.map(&:inspect).join(' or ')})"
+              return
+            end
+
+            initialize! unless @initialized
+            # Only capture on the first enable - a second call while already
+            # in debug would otherwise record the forced 0 as the value to
+            # restore, stranding the character inline.
+            @pre_debug_threads = @settings[:max_threads] unless debug?
+            configure(debug: level, enabled: true, max_threads: 0)
+            respond "[Combat] Debug mode enabled (#{level}, inline processing)"
           end
 
           # Disable debug logging
           #
+          # Restores the thread count debug mode took over.
+          #
           # @return [void]
           def disable_debug!
-            configure(debug: false)
-            respond "[Combat] Debug mode disabled"
+            initialize! unless @initialized
+            restore = @pre_debug_threads || DEFAULT_SETTINGS[:max_threads]
+            @pre_debug_threads = nil
+            configure(debug: false, max_threads: restore)
+            respond "[Combat] Debug mode disabled (max_threads: #{restore})"
           end
 
           # Set fallback HP value for creatures without templates
@@ -146,31 +235,47 @@ module Lich
 
           # Process a chunk of game lines
           #
-          # Filters for combat-relevant lines and processes them.
-          # Triggers periodic cleanup of old creature instances.
+          # Filters for combat-relevant lines and processes them. Creature
+          # registry housekeeping is not done here: the registry sweeps
+          # itself on a wall-clock throttle (CreatureBase::ClassMethods#housekeep),
+          # so it stays bounded whether or not tracking is enabled.
           #
           # @param chunk [Array<String>] Game lines to process
+          # @param source [Hash, nil] optional ingestion context forwarded to the
+          #   processor; omission preserves the legacy unverified-source path
           # @return [void]
-          def process(chunk)
+          def process(chunk, source: nil)
             return unless enabled?
             return if chunk.empty?
 
             # Quick filter - only process if combat-related content present
             return unless chunk.any? { |line| combat_relevant?(line) }
 
-            if @settings[:max_threads] > 1
-              @async_processor.process_async(chunk)
+            if @async_processor
+              @async_processor.process_async(chunk, source: source)
             else
-              Processor.process(chunk)
-            end
-
-            # Periodic cleanup of old creature instances
-            @chunks_processed += 1
-            if @chunks_processed >= @settings[:cleanup_interval]
-              cleanup_creatures
-              @chunks_processed = 0
+              Processor.process(chunk, source: source)
             end
           end
+
+          # Single compiled filter for combat-relevant content. One regex scan
+          # replaces ~11 include? calls plus a regex per line; alternation of
+          # literals compiles to an efficient multi-substring search.
+          COMBAT_RELEVANT_PATTERN = Regexp.union(
+            'points of damage',
+            ' damage!', # roll-based short form ("... 6 damage!")
+            # has no "points of" - chunks holding
+            # only these were dropped entirely
+            '<pushBold/>',              # Creatures
+            '**',                       # Flares
+            'AS:',                      # Attack rolls
+            'swing', 'thrust', 'cast', 'gesture',
+            'positioning against',      # UCS position
+            'vulnerable to a followup', # UCS tierup
+            'crimson mist'              # UCS smite
+          ).freeze
+
+          COMBAT_RESOLUTION_PATTERN = /\b(?:hit|miss|parr|block|dodge)\b/i.freeze
 
           # Check if line contains combat-relevant content
           #
@@ -179,18 +284,7 @@ module Lich
           # @param line [String] Game line to check
           # @return [Boolean] true if line may contain combat events
           def combat_relevant?(line)
-            line.include?('swing') ||
-              line.include?('thrust') ||
-              line.include?('cast') ||
-              line.include?('gesture') ||
-              line.include?('points of damage') ||
-              line.include?('**') || # Flares
-              line.include?('<pushBold/>') || # Creatures
-              line.include?('AS:') || # Attack rolls
-              line.include?('positioning against') || # UCS position
-              line.include?('vulnerable to a followup') || # UCS tierup
-              line.include?('crimson mist') || # UCS smite
-              line.match?(/\b(?:hit|miss|parr|block|dodge)\b/i)
+            COMBAT_RELEVANT_PATTERN.match?(line) || COMBAT_RESOLUTION_PATTERN.match?(line)
           end
 
           # Update tracker settings
@@ -244,24 +338,57 @@ module Lich
 
           private
 
-          def cleanup_creatures
-            return unless defined?(Creature)
+          # A room/stream change can occur inside one input string BEFORE our
+          # hook sees it, because XML parsing runs first. Such fragments cannot
+          # safely be labelled with their post-parse room. Ordinary links,
+          # pushBold/popBold and prompt delimiters are intentionally allowed.
+          SOURCE_TRANSITION = /<\/?(?:pushStream|popStream|clearStream|streamWindow|compDef|compass|app|nav)\b|<(?:component|style)\b[^>]*\bid=['"]room|<[^>]*\z/i.freeze
+          ROOM_ROSTER_REFRESH = /\A<component id=(['"])room (?:objs|players)\1>(?:(?!<\/?component\b).)*<\/component>\s*\z/m.freeze
 
-            max_age = @settings[:cleanup_max_age]
-            removed = Creature.cleanup_old(max_age)
+          # The processor already discards component lines. A complete roster
+          # refresh does not change XMLParser's room epoch, so keep it out of
+          # the combat buffer rather than invalidating the next real attack.
+          # Mixed, nested, split and transition-bearing fragments remain guarded.
+          def room_roster_refresh?(server_string)
+            ROOM_ROSTER_REFRESH.match?(server_string) &&
+              !SOURCE_TRANSITION.match?(server_string.sub(/\A<component[^>]*>/, ''))
+          end
 
-            if removed && removed > 0
-              respond "[Combat] Cleaned up #{removed} old creature instances (age > #{max_age}s)" if debug?
-            end
-          rescue => e
-            respond "[Combat] Error during creature cleanup: #{e.message}" if debug?
+          # Read the current parser owner and XML character/room identity.
+          # @return [Hash, nil] scalar binding, or nil if identity is unavailable
+          # @api private
+          def observation_binding
+            thread = Game.thread if defined?(Game) && Game.respond_to?(:thread)
+            return nil unless thread.is_a?(Thread) && thread.alive?
+
+            game, character, epoch = XMLData.game, XMLData.name, XMLData.room_count
+            return nil unless game.is_a?(String) && !game.empty? && character.is_a?(String) && !character.empty? && epoch.is_a?(Integer) && epoch >= 0
+
+            { connection_id: thread.object_id, game: game.dup.freeze,
+              character: character.dup.freeze, room_epoch: epoch }
+          end
+
+          # Attach receipt provenance only to unambiguous main-stream fragments.
+          # @param server_string [String] fragment currently handled by the hook
+          # @return [Hash, nil] frozen ingestion source, or nil for ambiguous data
+          # @api private
+          def ingest_source(server_string)
+            context = observation_context
+            @source_sequence = (@source_sequence || 0) + 1
+            return nil unless context && Game.thread.equal?(Thread.current) && XMLData.in_stream == false && !SOURCE_TRANSITION.match?(server_string)
+            received_at = Game.current_ingress_time
+            return nil unless received_at.is_a?(Numeric) && received_at.real? && received_at.finite? && received_at >= 0
+
+            context.merge(sequence: @source_sequence, received_at: received_at).freeze
+          rescue StandardError
+            nil
           end
 
           def load_settings
             # Load from DB_Store with per-character scope
             scope = "#{XMLData.game}:#{XMLData.name}"
             stored_settings = Lich::Common::DB_Store.read(scope, 'lich_combat_tracker')
-            @settings = DEFAULT_SETTINGS.merge(stored_settings)
+            @settings = DEFAULT_SETTINGS.merge(stored_settings.reject { |key, _| RETIRED_SETTINGS.include?(key.to_sym) })
           end
 
           def save_settings
@@ -271,7 +398,10 @@ module Lich
           end
 
           def initialize_processor
-            return unless @settings[:max_threads] > 1
+            # max_threads <= 0 means process inline on the hook thread
+            # (debugging aid); otherwise use the ordered async worker so
+            # parsing never delays the game stream.
+            return unless @settings[:max_threads] > 0
             @async_processor = AsyncProcessor.new(@settings[:max_threads])
           end
 
@@ -285,15 +415,33 @@ module Lich
             @hook_id = 'Combat::Tracker::downstream'
 
             segment_buffer = proc do |server_string|
+              next server_string if room_roster_refresh?(server_string)
+
+              incoming_source = ingest_source(server_string)
+              if @buffer.empty?
+                @buffer_source, @buffer_source_invalid = incoming_source, incoming_source.nil?
+              elsif !incoming_source || !@buffer_source ||
+                    !%i[connection_id game character room_epoch].all? { |key| incoming_source[key] == @buffer_source[key] }
+                @buffer_source_invalid = true
+              end
               @buffer << server_string
 
               # Process on prompt (natural break in game flow)
               if server_string.include?('<prompt time=')
                 chunk = @buffer.slice!(0, @buffer.size)
+                source = @buffer_source_invalid ? nil : @buffer_source
+                @buffer_source, @buffer_source_invalid = nil, false
 
-                # Check if THIS chunk contains creatures (no persistent state)
-                if chunk.any? { |line| line.match?(/<pushBold\/>.+?<a exist="[^"]+"[^>]*>.+?<\/a><popBold\/>/) }
-                  process(chunk) unless chunk.empty?
+                # Check if THIS chunk contains creatures (no persistent state).
+                # Substring checks are equivalent to the old backtracking regex
+                # for gating purposes and far cheaper per line.
+                # ...or an environmental / self-inflicted tick, which names no
+                # creature at all (frigid wind, thorn-bow recoil).
+                if chunk.any? { |line|
+                  (line.include?('<pushBold/>') && line.include?('<a exist=')) ||
+                  Definitions::Attacks.attackerless_line?(line)
+                }
+                  process(chunk, source: source) unless chunk.empty?
                   respond "[Combat] Processed chunk with creatures (#{chunk.size} lines)" if debug?
                 else
                   respond "[Combat] Discarded non-combat chunk (#{chunk.size} lines)" if debug?
@@ -303,17 +451,20 @@ module Lich
               # Prevent buffer overflow
               if @buffer.size > @settings[:buffer_size]
                 @buffer.shift(@buffer.size - @settings[:buffer_size])
+                @buffer_source_invalid = true
               end
 
               server_string
             end
 
-            DownstreamHook.add(@hook_id, segment_buffer)
+            DownstreamHook.add(@hook_id, segment_buffer, persist: true) # tracker manages its own removal
           end
 
           def remove_downstream_hook
             DownstreamHook.remove(@hook_id) if @hook_id
             @hook_id = nil
+            @buffer.clear
+            @buffer_source, @buffer_source_invalid = nil, false
           end
 
           # Initialize tracker from saved settings
@@ -322,11 +473,16 @@ module Lich
           # Called lazily on first access when XMLData is available.
           #
           # @return [void]
+          # True once XMLData has game and character name (settings scope)
+          def xmldata_ready?
+            !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
+          end
+
           def initialize!
             return if @initialized
 
             # Wait until XMLData is ready (avoid wrong scope)
-            sleep 0.1 until !XMLData.game.nil? && !XMLData.game.empty? && !XMLData.name.nil? && !XMLData.name.empty?
+            sleep 0.1 until xmldata_ready?
 
             @initialized = true
             load_settings

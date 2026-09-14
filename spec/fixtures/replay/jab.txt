@@ -1,0 +1,10 @@
+##### jab de1c503aca14ff2b
+# expect: attacks=jab | res=uaf_udf | flares=none | outcomes=miss | dmg=0 | statuses=
+You attempt to jab <pushBold/>a <a exist="67717998" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>!
+Your attack is hindered by holding a golvern targe displaying concentric rings of crimson and navy!
+You have good positioning against <pushBold/>a <a exist="67717998" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>.
+  UAF: 681 vs UDF: 918 = 0.741 * MM: 81 + d100: 18 = 78
+  A close miss!
+Roundtime: 2 sec.
+Roundtime changed to 1 second.
+

@@ -1,0 +1,18 @@
+  a <a exist="127036542" noun="arcarium">dark sapphire vangaris arcarium</a>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='50%' top='0%' width='25%' height='100%'/><progressBar id='stamina' value='49' text='stamina 78/159' left='50%' customText='t' top='0%' width='25%' height='100%'/></dialogData>You nock a faewood <a exist="127452232" noun="arrow">arrow</a> fletched with plain white feathers in your <a exist="127036411" noun="bow">glowbark long bow</a>.
+You feel drained.
+
+ ** Your <a exist="127036411" noun="bow">glowbark long bow</a> glows brightly for a moment, consuming the magical energies around <pushBold/>the <a exist="127450732" noun="mastodon">armored battle mastodon</a><popBold/>! **
+ [SMR result: 175 (Open d100: 29, Bonus: 73)]
+   ... 15 points of damage!
+   <pushBold/>The <a exist="127450732" noun="mastodon">armored battle mastodon</a><popBold/>'s skull cracks with an audible "Pop"!
+
+You fire a faewood arrow at <pushBold/>a <a exist="127450732" noun="mastodon">heavily armored battle mastodon</a><popBold/>!
+  AS: +630 vs DS: +291 with AvD: +20 + d100 roll: +100 = +459
+   ... and hit for 90 points of damage!
+   Attack punctures the eye and connects with something really vital!
+As <pushBold/>a <a exist="127450732" noun="mastodon">heavily armored battle mastodon</a><popBold/> collapses, <pushBold/><a exist="127450732" noun="mastodon">it</a><popBold/> lets out a shrill trumpet of despair.  <pushBold/><a exist="127450732" noun="mastodon">Its</a><popBold/> trunk flails futilely before slamming to the ground, still.
+<pushBold/>A <a exist="127450732" noun="mastodon">heavily armored battle mastodon</a><popBold/> appears to recover some strength.
+The arrow sticks in <pushBold/>a <a exist="127450732" noun="mastodon">heavily armored battle mastodon</a><popBold/>'s left eye!
+Roundtime: 3 sec.
+Roundtime changed to 1 second.

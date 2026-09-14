@@ -1,0 +1,29 @@
+##### subdue 04b467e4a9f409c8
+# expect: attacks=subdue | res=smr | flares=none | outcomes=none | dmg=0 | statuses=paralyzed/add
+You spring from hiding and aim a blow at <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/>'s head!
+[SMR result: 185 (Open d100: 54, Bonus: 1)]
+<pushBold/>The <a exist="67597902" noun="radical">triton radical</a><popBold/> is paralyzed and is driven to its knees!
+You retreat back into the shadows.
+Roundtime: 3 sec.
+
+##### subdue 93a86e4d5374ac51
+# expect: attacks=subdue | res=smr | flares=ensorcell | outcomes=none | dmg=0 | statuses=paralyzed/add
+You spring from hiding and aim a blow at <pushBold/>a <a exist="61408069" noun="siren">siren</a><popBold/>'s head!
+[SMR result: 186 (Open d100: 14, Bonus: 16)]
+<pushBold/>The <a exist="61408069" noun="siren">siren</a><popBold/> is paralyzed!
+ ** Necrotic energy from your dark vultite scramasax overflows into you! **
+   You feel energized!
+You retreat back into the shadows.
+Roundtime: 3 sec.
+
+##### subdue 8b88499a2c375eb9
+# expect: attacks=subdue | res=smr | flares=necromancy_flourish | outcomes=none | dmg=1 | statuses=paralyzed/add
+You spring from hiding and aim a blow at <pushBold/>a <a exist="64700962" noun="outlaw">dwarven outlaw</a><popBold/>'s head!
+[SMR result: 193 (Open d100: 73, Penalty: 3)]
+<pushBold/>The <a exist="64700962" noun="outlaw">dwarven outlaw</a><popBold/> is paralyzed and is driven to its knees!
+** A sickly green aura radiates from a sard-pommeled dark vultite scramasax and seeps into <pushBold/>a <a exist="64700962" noun="outlaw">dwarven outlaw</a><popBold/>'s wounds! **
+   ... 5 points of damage!
+   <pushBold/>The <a exist="64700962" noun="outlaw">dwarven outlaw</a><popBold/>'s right leg jerks momentarily.
+You retreat back into the shadows.
+Roundtime: 3 sec.
+

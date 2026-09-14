@@ -1,0 +1,93 @@
+##### fire 15aaaedeef270c12
+# expect: attacks=fire | res=as_ds | flares=none | outcomes=none | dmg=1 | statuses=
+<a exist="-58152690" noun="Strang">Strang</a> nocks a faewood arrow in his ruic longbow.
+<a exist="-58152690" noun="Strang">Strang</a> fires a faewood arrow at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>!
+  AS: +609 vs DS: +219 with AvD: +20 + d100 roll: +45 = +455
+   ... and hits for 100 points of damage!
+   Hard blow strikes deep into the right eye socket.
+   Within moments the eyeball pops back out!
+The arrow sails through <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> and off into the distance.
+
+##### fire f56800f12f14de17
+# expect: attacks=fire | res=as_ds | flares=arcane_reflex | outcomes=none | dmg=1 | statuses=tangleweed/remove
+You take aim and fire a faewood arrow at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>!
+You hear the soft tinkle of rolling dice, followed by the sound of coins dropping!
+  AS: +585 vs DS: +210 with AvD: +20 + d100 roll: +90 = +485
+   ... and hit for 107 points of damage!
+   Slash to <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s right eye!
+   Vitreous fluid spews forth!
+   Seeya!
+<pushBold/>The <a exist="11755131" noun="combatant">triton combatant</a><popBold/> gurgles once and goes still, a wrathful look on her face.
+<pushBold/>A <a exist="11755131" noun="combatant">triton combatant</a><popBold/> appears to recover some strength.
+Vital energy infuses you, hastening your arcane reflexes!
+The arrow sticks in <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s right eye!
+Roundtime: 3 sec.
+
+##### fire a8b2c5094bb01034
+# expect: attacks=fire | res=as_ds | flares=natures_decay,arcane_reflex | outcomes=none | dmg=1 | statuses=natures_decay/add
+You take aim and fire a faewood arrow at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>!
+  AS: +595 vs DS: +203 with AvD: +20 + d100 roll: +84 = +496
+   ... and hit for 99 points of damage!
+   Blow to the right eye slides through head.
+   The triton defender twitches violently, then shudders slightly as the wound seals.
+An earthy, sweet aroma clings to <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> in a murky haze, accompanied by soot brown specks of leaf mold.
+Vital energy infuses you, hastening your arcane reflexes!
+The arrow streaks into <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>'s right eye and off into the distance.
+Roundtime: 3 sec.
+
+##### fire 787f34e6f79a99fb
+# expect: attacks=fire | res=smr,as_ds | flares=dispel | outcomes=none | dmg=2 | statuses=
+<a exist="-58152690" noun="Strang">Strang</a> nocks a faewood arrow in his ruic longbow.
+<a exist="-58152690" noun="Strang">Strang</a> fires a faewood arrow at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>!
+ ** <a exist="-58152690" noun="Strang">Strang</a>'s ruic longbow glows brightly for a moment, consuming the magical energies around <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/>! **
+ [SMR result: 136 (Open d100: 27, Bonus: 36)]
+   ... 25 points of damage!
+   Blood in <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s weapon arm boils, sending up a red mist.
+  AS: +585 vs DS: +242 with AvD: +20 + d100 roll: +20 = +383
+   ... and hits for 60 points of damage!
+   Slash across right eye!
+  Hope the left is working.
+The arrow sticks in <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s right eye!
+
+##### fire bce835514c94066b
+# expect: attacks=fire | res=smr,as_ds | flares=dispel,arcane_reflex | outcomes=none | dmg=2 | statuses=tangleweed/remove
+You take aim and fire a faewood arrow at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>!
+ ** Your ruic longbow glows brightly for a moment, consuming the magical energies around <pushBold/>the <a exist="11755131" noun="combatant">triton combatant</a><popBold/>! **
+ [SMR result: 182 (Open d100: 47, Bonus: 55)]
+   ... 15 points of damage!
+   <pushBold/>The <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s intestines knot themselves.  Painful.
+  AS: +585 vs DS: +178 with AvD: +20 + d100 roll: +81 = +508
+   ... and hit for 88 points of damage!
+   Attack punctures the eye and connects with something really vital!
+<pushBold/>The <a exist="11755131" noun="combatant">triton combatant</a><popBold/> gurgles once and goes still, a wrathful look on her face.
+<pushBold/>A <a exist="11755131" noun="combatant">triton combatant</a><popBold/> appears to recover some strength.
+Vital energy infuses you, hastening your arcane reflexes!
+The arrow sticks in <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s right eye!
+Roundtime: 3 sec.
+
+##### fire 3072df91a1e0b3db
+# expect: attacks=fire | res=as_ds | flares=spirit_animal | outcomes=none | dmg=2 | statuses=
+You take aim and fire a faewood arrow at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>!
+  AS: +595 vs DS: +203 with AvD: +20 + d100 roll: +92 = +504
+   ... and hit for 78 points of damage!
+   Hard blow to the left hand sends fingers flying.
+   Alas, they reform soundlessly from thin air.
+Riotous misty green energy races along the surface of the longbow, slender tendrils rising up to coalesce into the ethereal form of a stocky honey badger.
+** Hackles bristling and body tensed into a fearless stance, a stocky ethereal honey badger charges forward with a fierce growl as a band of wavering honey badgers made of shifting misty green light surge forth! **
+   ... 5 points of damage!
+   A weak slap on the wrist.
+   That's not going to reform a soul.
+The arrow sails through <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> and off into the distance.
+Roundtime: 3 sec.
+
+##### fire 6a07b92017485289
+# expect: attacks=fire | res=as_ds | flares=breeze | outcomes=none | dmg=1 | statuses=
+<a exist="-58152690" noun="Strang">Strang</a> nocks a faewood arrow in his ruic longbow.
+<a exist="-58152690" noun="Strang">Strang</a> fires a faewood arrow at <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>!
+  AS: +585 vs DS: +244 with AvD: +20 + d100 roll: +11 = +372
+   ... and hits for 58 points of damage!
+   Slash across right eye!
+  Hope the left is working.
+<pushBold/>A <a exist="11755131" noun="combatant">triton combatant</a><popBold/> is buffeted by a sudden gust of wind!
+The arrow sticks in <pushBold/>a <a exist="11755131" noun="combatant">triton combatant</a><popBold/>'s right eye!
+

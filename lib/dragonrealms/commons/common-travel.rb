@@ -154,7 +154,7 @@ module Lich
         count.times do
           buy_item(room, "#{lockpick_type} lockpick")
           unless DRCI.put_away_item_unsafe?('my lockpick', "my #{container}", 'on')
-            Lich::Messaging.msg('bold', "DRCT: Failed to put lockpick on #{container}. Check your lockpick settings — mixing types in a container is not allowed.")
+            Lich::Messaging.msg('bold', "DRCT: Failed to put lockpick on #{container}. Check your lockpick settings - mixing types in a container is not allowed.")
             break
           end
         end
@@ -164,19 +164,32 @@ module Lich
         move('out') if XMLData.room_exits.include?('out')
       end
 
-      def walk_to(target_room, restart_on_fail = true)
+      # Maximum number of times walk_to will retry navigation before giving up.
+      # Prevents unbounded recursion (and eventual SystemStackError) when the
+      # game server connection is lost or go2 repeatedly fails.
+      MAX_WALK_TO_RETRIES = 3
+
+      # Navigate to +target_room+ using the go2 script.
+      #
+      # @param target_room [Integer, String] room id or map tag (e.g. 'bank')
+      # @param restart_on_fail [Boolean] retry navigation on failure
+      # @param retry_depth [Integer] internal counter -- callers should not set this
+      # @return [Boolean] true if the character is now in the target room
+      def walk_to(target_room, restart_on_fail = true, retry_depth: 0)
         target_room = tag_to_id(target_room) if target_room.is_a?(String) && target_room.count("a-zA-Z") > 0
 
         return false if target_room.nil?
 
         room_num = target_room.to_i
-        return true if room_num == Room.current.id
+        # Room.current is nil when the room could not be resolved. Under Lich's
+        # NilClass patch nil.id yielded nil, so the comparison simply failed.
+        return true if room_num == Room.current&.id
 
         DRC.fix_standing
 
-        if Room.current.id.nil?
+        if Room.current&.id.nil?
           Lich::Messaging.msg('plain', "DRCT: In an unknown room, manually attempting to navigate to #{room_num}")
-          rooms = Map.list.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
+          rooms = Map.list.compact.select { |room| room.description.include?(XMLData.room_description.strip) && room.title.include?(XMLData.room_title) }
           if rooms.empty? || rooms.length > 1
             Lich::Messaging.msg('bold', 'DRCT: Failed to find a matching room from unknown location.')
             return false
@@ -195,7 +208,11 @@ module Lich
           else
             move way
           end
-          return walk_to(room_num)
+          if retry_depth >= MAX_WALK_TO_RETRIES
+            Lich::Messaging.msg('bold', "DRCT: Failed to navigate from unknown room after #{MAX_WALK_TO_RETRIES} retries, giving up.")
+            return false
+          end
+          return walk_to(room_num, true, retry_depth: retry_depth + 1)
         end
 
         script_handle = start_script('go2', [room_num.to_s], force: true)
@@ -245,15 +262,19 @@ module Lich
         end
 
         if room_num != Room.current.id && restart_on_fail
-          Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again.")
-          walk_to(room_num)
+          if retry_depth >= MAX_WALK_TO_RETRIES
+            Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num} after #{MAX_WALK_TO_RETRIES} retries, giving up.")
+            return false
+          end
+          Lich::Messaging.msg('bold', "DRCT: Failed to navigate to room #{room_num}, attempting again (#{retry_depth + 1}/#{MAX_WALK_TO_RETRIES}).")
+          return walk_to(room_num, true, retry_depth: retry_depth + 1)
         end
         room_num == Room.current.id
       end
 
       def tag_to_id(target)
         start_room = Room.current.id
-        target_list = Map.list.find_all { |room| room.tags.include?(target) }.collect { |room| room.id }
+        target_list = Map.rooms_by_tag(target)
 
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: No go2 targets matching '#{target}' found.")
@@ -265,6 +286,11 @@ module Lich
           return start_room
         end
         _previous, shortest_distances = Room.current.dijkstra(target_list)
+        if shortest_distances.nil?
+          Lich::Messaging.msg('bold', "DRCT: Pathfinding failed while looking for a '#{target}' tag.")
+          return nil
+        end
+
         target_list.delete_if { |room_id| shortest_distances[room_id].nil? }
         if target_list.empty?
           Lich::Messaging.msg('bold', "DRCT: Couldn't find a path from here to any room with a '#{target}' tag.")
@@ -339,8 +365,14 @@ module Lich
       def sort_destinations(target_list)
         target_list = target_list.collect(&:to_i)
         _previous, shortest_distances = Map.dijkstra(Room.current.id)
+        # Pathfinding failed; hand back what was asked for rather than nothing.
+        return target_list if shortest_distances.nil?
+
         target_list.delete_if { |room_num| shortest_distances[room_num].nil? && room_num != Room.current.id }
-        target_list.sort { |a, b| shortest_distances[a] <=> shortest_distances[b] }
+        # The current room is kept above even without a distance, so sort on a
+        # fallback rather than handing nil to the comparator. dijkstra seeds the
+        # source at 0, so this is defensive rather than a live case.
+        target_list.sort_by { |room_num| shortest_distances[room_num] || Float::INFINITY }
       end
 
       def find_sorted_empty_room(search_rooms, idle_room, predicate = nil)
@@ -349,7 +381,12 @@ module Lich
       end
 
       def time_to_room(origin, destination)
+        # Results are keyed by Integer room id, and dijkstra only terminates
+        # early when the destination compares as an Integer.
+        destination = destination.to_i
         _previous, shortest_paths = Map.dijkstra(origin, destination)
+        return nil if shortest_paths.nil?
+
         shortest_paths[destination]
       end
 

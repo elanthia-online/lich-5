@@ -50,6 +50,16 @@ module Lich
       # Maximum seconds of RT reduction (reasonable upper bound)
       MAX_REDUCTION = 8
 
+      # MSTRIKE's own stamina cost (Multi Opponent Combat/Multistrike):
+      # nothing outside its recovery period; during it, base + per * weapon
+      # speed, where a second weapon adds (its speed - 2, at least 0).
+      MSTRIKE_COST = {
+        open: { base: 20, per_speed: 3 },
+        focused: { base: 30, per_speed: 4 }
+      }.freeze
+      # The cooldown Effects names while MSTRIKE is in its recovery period
+      MSTRIKE_COOLDOWN = 'Multi-Strike'
+
       # Valid combat actions that can use QSTRIKE
       VALID_ACTIONS = %w[
         ascension ambush attack cheapshot cman cock disarm feat fire
@@ -258,7 +268,8 @@ module Lich
         adaptive = default(:adaptive) if adaptive.nil?
 
         attack_name = normalize_attack_name(attack)
-        attack_cost = lookup_attack_cost(attack_name)
+        # A targeted mstrike is a focused one, whatever the name says
+        attack_cost = attack_name == 'mstrike' && target ? mstrike_cost(focused: true) : lookup_attack_cost(attack_name)
 
         # Determine the actual reduction to attempt
         actual_reduction = resolve_reduction(reduction, reserve, attack_cost)
@@ -630,12 +641,53 @@ module Lich
         [:Shield, :@@shield_techniques, :shield],
       ].freeze
 
-      # Look up stamina cost for a CMan or Weapon technique
+      # === MSTRIKE ===
+
+      # MSTRIKE's stamina cost right now: free outside its recovery period
+      # (the Multi-Strike cooldown), else MSTRIKE_COST by kind and weapon
+      # speed. Not in the technique tables, so priced here.
+      #
+      # @param focused [Boolean] a focused (single target) strike, else open
+      # @return [Integer] Stamina cost
+      def self.mstrike_cost(focused: false)
+        return 0 unless mstrike_recovering?
+
+        cost = MSTRIKE_COST.fetch(focused ? :focused : :open)
+        cost[:base] + cost[:per_speed] * mstrike_weapon_speed
+      end
+
+      # Is MSTRIKE in its recovery period (its cooldown active)?
+      #
+      # @return [Boolean]
+      def self.mstrike_recovering?
+        return false unless defined?(Effects::Cooldowns)
+
+        Effects::Cooldowns.active?(MSTRIKE_COOLDOWN)
+      end
+
+      # The weapon speed MSTRIKE's cost is priced on: the primary weapon's
+      # base speed, plus (offhand speed - 2, at least 0) for a second
+      # weapon; a shield or an empty hand adds nothing.
+      #
+      # @return [Integer]
+      def self.mstrike_weapon_speed
+        primary = ranged_weapon? ? GameObj.left_hand : GameObj.right_hand
+        offhand = ranged_weapon? ? GameObj.right_hand : GameObj.left_hand
+        speed = weapon_speed_for(primary)[:base_rt]
+        off = weapon_speed_for(offhand)[:base_rt]
+        speed += [off - 2, 0].max if off.positive?
+        speed
+      end
+
+      # Look up stamina cost for a CMan or Weapon technique, or for MSTRIKE
+      # ("mstrike" is an open strike, "mstrike_focused" / "focused_mstrike"
+      # a focused one)
       #
       # @param name [String, Symbol] Attack name
       # @return [Integer] Stamina cost, or 0 if not found
       def self.lookup_attack_cost(name)
         name = name.to_s.downcase.gsub(/[\s-]+/, '_')
+        return mstrike_cost(focused: name.include?('focus')) if name =~ /\Amstrike(?:_|\z)|_mstrike\z/
 
         # Handle explicit type prefixes for disambiguation
         TECHNIQUE_MODULES.each do |_, _, type|

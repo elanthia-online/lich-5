@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
+require_relative 'manual_frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'theme_utils'
 
@@ -108,7 +109,27 @@ module Lich
           end
         end
 
+        # Refreshes the shared frontend dropdown after Frontends settings change.
+        # @return [void]
+        def refresh_frontends
+          @frontend_selector&.reload!
+          nil
+        end
+
         private
+
+        # Refreshes saved entries before or after a quick-save operation.
+        # Keeps the existing cache when the entry store cannot be read.
+        #
+        # @return [Boolean] true when saved entries were refreshed
+        # @api private
+        def refresh_entry_data_for_quick_save
+          @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+          true
+        rescue StandardError => e
+          Lich.log "error: Failed to refresh entry data for quick save: #{e.message}"
+          false
+        end
 
         # Applies the current theme state to all UI elements
         #
@@ -162,7 +183,7 @@ module Lich
           liststore, @treeview, sw = create_character_list
 
           # Create frontend selection
-          frontend_box, _stormfront_option, wizard_option, avalon_option, suks_option = create_frontend_selection
+          frontend_box, frontend_selector = create_frontend_selection
 
           # Create custom launch options
           custom_launch_option = create_custom_launch_options
@@ -171,7 +192,9 @@ module Lich
           @make_quick_option = Gtk::CheckButton.new('Save this info for quick game entry')
 
           # Create favorites option
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           @make_favorite_option = Gtk::CheckButton.new('★ Mark as favorite')
+          # rubocop:enable Custom/AsciiOnlySource
           @make_favorite_option.set_tooltip_text('Mark this character as a favorite for quick access')
 
           # Create play button
@@ -199,11 +222,11 @@ module Lich
 
           # Set up event handlers
           setup_custom_launch_handler(custom_launch_option)
-          setup_avalon_option_handler(avalon_option, custom_launch_option)
+          setup_native_launch_handler(frontend_selector, custom_launch_option)
           setup_connect_button_handler(connect_button, disconnect_button, user_id_entry, pass_entry, liststore)
           setup_treeview_handler(@treeview, play_button)
           setup_disconnect_button_handler(disconnect_button, play_button, connect_button, user_id_entry, pass_entry, liststore)
-          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
+          setup_play_button_handler(play_button, @treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           setup_entry_key_handlers(user_id_entry, pass_entry, connect_button)
         end
 
@@ -281,22 +304,11 @@ module Lich
 
         # Creates frontend selection components
         #
-        # @return [Array] Array containing frontend_box and radio buttons
+        # @return [Array] Array containing frontend_box and shared selector
+        # @api private
         def create_frontend_selection
-          stormfront_option = Gtk::RadioButton.new(label: 'Wrayth')
-          wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: stormfront_option)
-          avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: stormfront_option)
-          suks_option = Gtk::RadioButton.new(label: 'suks', member: stormfront_option)
-
-          frontend_box = Gtk::Box.new(:horizontal, 10)
-          frontend_box.pack_start(stormfront_option, expand: false, fill: false, padding: 0)
-          frontend_box.pack_start(wizard_option, expand: false, fill: false, padding: 0)
-          if RUBY_PLATFORM =~ /darwin/i
-            frontend_box.pack_start(avalon_option, expand: false, fill: false, padding: 0)
-          end
-          # frontend_box.pack_start(suks_option, false, false, 0)
-
-          [frontend_box, stormfront_option, wizard_option, avalon_option, suks_option]
+          @frontend_selector = ManualFrontendSelector.new
+          [@frontend_selector.widget, @frontend_selector]
         end
 
         # Creates custom launch options
@@ -310,6 +322,8 @@ module Lich
           @custom_launch_dir = LoginTabUtils.create_custom_launch_dir
 
           # Initially hide custom launch options
+          @custom_launch_entry.no_show_all = true
+          @custom_launch_dir.no_show_all = true
           @custom_launch_entry.visible = false
           @custom_launch_dir.visible = false
 
@@ -347,20 +361,28 @@ module Lich
           }
         end
 
-        # Sets up avalon option toggle handler
+        # Disables Custom Launch for catalog entries with native-only launchers.
         #
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param frontend_selector [ManualFrontendSelector]
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
-        def setup_avalon_option_handler(avalon_option, custom_launch_option)
-          avalon_option.signal_connect('toggled') {
-            if avalon_option.active?
+        def setup_native_launch_handler(frontend_selector, custom_launch_option)
+          update_custom_launch = lambda do |selector|
+            if selector.custom?
+              custom_launch_option.sensitive = true
+              custom_launch_option.active = true
+              @custom_launch_entry.visible = true
+              @custom_launch_dir.visible = true
+            elsif selector.native_launch_only?
               custom_launch_option.active = false
               custom_launch_option.sensitive = false
             else
               custom_launch_option.sensitive = true
             end
-          }
+          end
+
+          frontend_selector.on_change { |selector| update_custom_launch.call(selector) }
+          update_custom_launch.call(frontend_selector)
         end
 
         # Sets up connect button click handler
@@ -386,16 +408,17 @@ module Lich
                   password: pass_entry.text,
                   legacy: true
                 )
+              rescue Authentication::FatalAuthError, StandardError => e
+                liststore.clear
+                report_connect_error(e.message, connect_button, disconnect_button, user_id_entry, pass_entry)
+                next true
               end
               if login_info.to_s =~ /error/i
-                # Call the error callback if provided
-                if @callbacks.on_error
-                  @callbacks.on_error.call("\nSomething went wrong... probably invalid user ID or password.\n\nserver response: #{login_info}")
-                end
-                connect_button.sensitive = true
-                disconnect_button.sensitive = false
-                user_id_entry.sensitive = true
-                pass_entry.sensitive = true
+                liststore.clear
+                report_connect_error(
+                  "\nSomething went wrong... probably invalid user ID or password.\n\nserver response: #{login_info}",
+                  connect_button, disconnect_button, user_id_entry, pass_entry
+                )
               else
                 # Populate character list
                 liststore.clear
@@ -462,12 +485,11 @@ module Lich
         # @param treeview [Gtk::TreeView] Tree view for character list
         # @param user_id_entry [Gtk::Entry] User ID entry field
         # @param pass_entry [Gtk::Entry] Password entry field
-        # @param wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param avalon_option [Gtk::RadioButton] Avalon radio button
-        # @param suks_option [Gtk::RadioButton] Suks radio button
+        # @param frontend_selector [ManualFrontendSelector] available frontend selector
         # @param custom_launch_option [Gtk::CheckButton] Custom launch option checkbox
         # @return [void]
-        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, wizard_option, avalon_option, suks_option, custom_launch_option)
+        # @api private
+        def setup_play_button_handler(play_button, treeview, user_id_entry, pass_entry, frontend_selector, custom_launch_option)
           play_button.signal_connect('clicked') {
             play_button.sensitive = false
 
@@ -476,20 +498,30 @@ module Lich
             # Fixed assignment in condition
             selected_iter = selection.selected
             if selected_iter
-              # Determine frontend
-              if wizard_option.active?
-                frontend = 'wizard'
-              elsif avalon_option.active?
-                frontend = 'avalon'
-              elsif suks_option.active?
-                frontend = 'suks'
-              else
-                frontend = 'stormfront' # default frontend
+              frontend = frontend_selector.selected_id
+              unless frontend
+                @callbacks.on_error&.call('No supported frontend is available.')
+                play_button.sensitive = true
+                next
               end
 
               # Determine custom launch settings
-              custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text : nil
-              custom_launch_dir = custom_launch_option.active? ? @custom_launch_dir.child.text : nil
+              custom_launch = custom_launch_option.active? ? @custom_launch_entry.child.text.to_s.strip : nil
+              custom_launch = nil unless LoginTabUtils.custom_launch?(custom_launch)
+              custom_launch_dir = custom_launch ? @custom_launch_dir.child.text.to_s.strip : nil
+              custom_launch_dir = nil if custom_launch_dir == ''
+
+              if (frontend_selector.custom? || custom_launch_option.active?) && custom_launch.nil?
+                @callbacks.on_error&.call('Enter a custom launch command before playing.')
+                play_button.sensitive = true
+                next
+              end
+
+              if custom_launch.nil? && !frontend_selector.launchable?(refresh: true)
+                @callbacks.on_error&.call("#{Frontend.display_name(frontend)} is no longer available.")
+                play_button.sensitive = true
+                next
+              end
 
               # Normalize account name to UPCASE and character name to Title case
               normalized_account = user_id_entry.text.upcase
@@ -513,9 +545,13 @@ module Lich
 
               # Initialize save success tracking for synchronization
               save_success = true
+              quick_save_requested = @make_quick_option.active?
+              # Re-read before the whole-collection save even if a cross-tab
+              # notification was missed. Do not save the tab's opening snapshot.
+              save_success = refresh_entry_data_for_quick_save if quick_save_requested
 
               # Save quick entry if selected
-              if @make_quick_option.active?
+              if quick_save_requested && save_success
                 # Preserve encryption_mode from existing entries to prevent silent downgrade
                 existing_encryption_mode = @entry_data.first&.[](:encryption_mode) || :plaintext
                 entry_data = { :char_name => normalized_character, :game_code => selected_iter[0], :game_name => selected_iter[1], :user_id => normalized_account, :password => pass_entry.text, :frontend => frontend, :custom_launch => custom_launch, :custom_launch_dir => custom_launch_dir, :encryption_mode => existing_encryption_mode }
@@ -562,7 +598,7 @@ module Lich
                   # Reset save flag to prevent duplicate save on window destruction
                   @save_entry_data = false
                   # Refresh local cache with normalized data after successful save
-                  @entry_data = Lich::Common::Authentication::EntryStore.load_saved_entries(@data_dir, @autosort_state)
+                  refresh_entry_data_for_quick_save
                   # Trigger main GUI cache refresh only once after successful save
                   @callbacks.on_save.call(entry_data) if @callbacks.on_save
                 else
@@ -575,7 +611,14 @@ module Lich
               if @make_favorite_option.active? && save_success
                 begin
                   # Add character to favorites with precise frontend matching - use normalized values
-                  favorite_success = FavoritesManager.add_favorite(@data_dir, normalized_account, normalized_character, selected_iter[0], frontend)
+                  favorite_success = FavoritesManager.add_favorite(
+                    @data_dir,
+                    normalized_account,
+                    normalized_character,
+                    selected_iter[0],
+                    frontend,
+                    custom_launch
+                  )
 
                   if favorite_success
                     # Single optimized cache refresh after favorite marking
@@ -623,7 +666,8 @@ module Lich
                   char_name: normalized_character,
                   game_code: selected_iter[0],
                   frontend: frontend,
-                  custom_launch: custom_launch
+                  custom_launch: custom_launch,
+                  saved_entry: quick_save_requested && save_success
                 }
 
                 # Backward compatibility: support both 1-arg and 2-arg callback handlers.
@@ -664,6 +708,25 @@ module Lich
               false
             end
           }
+        end
+
+        # Reports an authentication error and resets the login form to an editable state.
+        # Delegates error presentation to {Authentication::GUI.show_error_dialog} so that
+        # manual-login and saved-login tabs display identical error dialogs.
+        #
+        # @param message [String] Error message to display as dialog secondary text
+        # @param connect_button [Gtk::Button] Connect button to re-enable and used as
+        #   dialog parent anchor via +toplevel+
+        # @param disconnect_button [Gtk::Button] Disconnect button to disable
+        # @param user_id_entry [Gtk::Entry] User ID entry to re-enable
+        # @param pass_entry [Gtk::Entry] Password entry to re-enable
+        # @return [void]
+        def report_connect_error(message, connect_button, disconnect_button, user_id_entry, pass_entry)
+          connect_button.sensitive = true
+          disconnect_button.sensitive = false
+          user_id_entry.sensitive = true
+          pass_entry.sensitive = true
+          Authentication::GUI.show_error_dialog(connect_button, message)
         end
       end
     end

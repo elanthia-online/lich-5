@@ -1,0 +1,11 @@
+##### channel 8f1ac6826affe5ea
+# expect: attacks=channel | res=none | flares=none | outcomes=none | dmg=0 | statuses=
+<a exist="-81737382" noun="Gordo">Gordo</a> channels at <pushBold/>a <a exist="29472618" noun="spikestar">perfect oak-handled steel spikestar</a><popBold/>.
+<a exist="-81737382" noun="Gordo">Gordo</a> concentrates deeply for a moment, but nothing else seems to happen.
+Speaking to Tevye, Nexushealbot says, "I'm running low on mana."
+Speaking to Zelas, Nexushealbot says, "I'm running low on mana."
+Indy just arrived.
+Indy joins Nexushealbot's group.
+<a exist="-81737382" noun="Gordo">Gordo</a> offers Treeze <pushBold/>a <a exist="29472618" noun="spikestar">perfect oak-handled steel spikestar</a><popBold/>.
+Treeze accepts <a exist="-81737382" noun="Gordo">Gordo</a>'s steel spikestar.
+

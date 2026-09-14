@@ -1,0 +1,7 @@
+##### haymaker cf0a681054b22bfe
+# expect: attacks=haymaker | res=smr | flares=none | outcomes=block | dmg=0 | statuses=
+<pushBold/>A <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/> clenches its right fist and brings its arm back for a roundhouse punch aimed at you!
+[SMR result: 27 (Open d100: 42, Penalty: 20)]
+You manage to deflect <pushBold/>a <a exist="14659762" noun="grotesque">horned basalt grotesque</a><popBold/>'s blow in the nick of time!
+Beaver Enthusiast Mitch just came down a stone and bloodwood staircase.
+

@@ -1,0 +1,6 @@
+##### shield_charge 5d3584b99bd1f39a
+# expect: attacks=shield_charge | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+<a exist="-63432397" noun="Grahl">Grahl</a> charges forward at <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> with his spiked vultite greatshield and attempts a shield charge!
+[SMR result: 93 (Open d100: 12, Bonus: 10)]
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> deftly avoids the charge.
+

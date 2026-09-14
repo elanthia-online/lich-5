@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+inheritance: true
+
+reviews:
+  auto_review:
+    enabled: false
+    auto_incremental_review: false
+    drafts: false
+    base_branches: []
+
+  pre_merge_checks:
+    docstrings:
+      mode: warning
+      threshold: 60
+
+  path_instructions:
+    - path: "spec/**/*.rb"
+      instructions: >
+        These are RSpec spec files. Do not evaluate or report missing YARD
+        docstrings. RSpec describe, context, and it text is the documentation
+        for spec behavior. Exclude these files from the docstring coverage
+        percentage entirely.
+
+code_generation:
+  docstrings:
+    path_instructions:
+      - path: "spec/**/*.rb"
+        instructions: >
+          Do not generate YARD docstrings for RSpec spec files.
+
+chat:
+  art: false
+  allow_non_org_members: false

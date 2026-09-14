@@ -1348,7 +1348,7 @@ module Lich
                                   :slowed          => false,
                                   :wound_rank      => 3,
                                   :secondary_wound => { :location => "nerves", :wound_rank => 3 },
-                                  :regex           => /^Massive electrical bolt burns a hole through the back and kidneys./ } },
+                                  :regex           => /^Massive electrical bolt burns a hole through the back and kidneys.?/ } },
           :right_arm  =>
                          { 0 =>
                                 { :type            => "lightning",

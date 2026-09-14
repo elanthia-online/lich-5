@@ -17,6 +17,22 @@ RSpec.describe Lich::Common::Spell do
     end
   end
 
+  describe '.results_regex' do
+    it 'is the union of lines cast waits on, plus any extra lines' do
+      regex = Lich::Common::Spell.results_regex
+      expect(regex).to match('Cast Roundtime 3 Seconds.')
+      expect(regex).to match('Cast at what?')
+      expect(regex).to match("But you don't have any mana!")
+      expect(regex).to match('Your magic fizzles ineffectually.')
+      expect(regex).to match('You do not currently have a target.')
+      expect(regex).not_to match('You swing a broadsword at an orc!')
+
+      extra = Lich::Common::Spell.results_regex(results_of_interest: /^Roundtime: \d+ sec\.$/)
+      expect(extra).to match('Roundtime: 3 sec.')
+      expect(extra).to match('Cast at what?')
+    end
+  end
+
   describe '.[]' do
     context 'when looking up by number' do
       it 'finds Spirit Warding I by number 101' do
@@ -97,6 +113,14 @@ RSpec.describe Lich::Common::Spell do
 
     it 'has end message (msgdn)' do
       expect(spirit_warding.msgdn).to include('light blue glow leaves you')
+    end
+
+    it 'preserves verbatim whitespace in message regexes' do
+      # msgup/msgdn are matched as regexes against the live game stream, which
+      # puts two spaces after a sentence period. The XML loader must not collapse
+      # that whitespace or the pattern stops matching (regression guard for the
+      # REXML -> Ox conversion: Ox collapses whitespace unless told not to).
+      expect(Lich::Common::Spell[215].msgup).to include(".  You feel charged with extra vitality")
     end
   end
 

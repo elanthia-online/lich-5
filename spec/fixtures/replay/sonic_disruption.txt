@@ -1,0 +1,14 @@
+##### sonic_disruption 1968796140717c71
+# expect: attacks=sonic_disruption | res=cs_td | flares=none | outcomes=ward_failed | dmg=2 | statuses=
+  <pushBold/>A <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> reels under the force of the sonic vibrations!
+  Sound waves disrupt for 158 damage!
+You hear a sound like a child weeping as a white glow separates itself from the triton defender's body and rises into the heavens.
+The spectral form of the triton defender tenses in agony as she begins to dissolve from the bottom up!
+  CS: +534 - TD: +340 + CvA: +25 + d100: +65 == +284
+  Warding failed!
+  <pushBold/>A <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> reels under the force of the sonic vibrations!
+  Sound waves disrupt for 146 damage!
+You hear a sound like a child weeping as a white glow separates itself from the triton defender's body and rises into the heavens.
+The spectral form of the triton defender tenses in agony as he begins to dissolve from the bottom up!
+Sing Roundtime 3 Seconds.
+

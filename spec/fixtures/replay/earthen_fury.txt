@@ -1,0 +1,7 @@
+##### earthen_fury b8de7288b9324ebf
+# expect: attacks=earthen_fury | res=smr | flares=none | outcomes=evade | dmg=0 | statuses=
+Craggy debris explodes from the ground beneath you!
+[SMR result: 23 (Open d100: 43)]
+You dodge out of the way!
+You put the Excalibur in your black leather pack.
+

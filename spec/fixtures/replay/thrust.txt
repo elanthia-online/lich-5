@@ -1,0 +1,7 @@
+##### thrust 426c2cf8c7975847
+# expect: attacks=thrust | res=as_ds | flares=none | outcomes=miss | dmg=0 | statuses=
+<pushBold/>A <a exist="92683529" noun="defender">spectral triton defender</a><popBold/> thrusts with a lackluster blue steel harpoon at you!
+  AS: +424 vs DS: +494 with AvD: +29 + d100 roll: +92 = +51
+   A clean miss.
+You are now in a guarded stance.
+

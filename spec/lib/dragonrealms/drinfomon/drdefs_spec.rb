@@ -119,6 +119,24 @@ RSpec.describe Lich::DragonRealms do
       it 'is case insensitive' do
         expect('Mahtra WHO IS LYING DOWN').to match(pattern)
       end
+
+      # Issue #4529: HidePostStrings renders posture as "(prone)"
+      it 'matches the "(prone)" HidePostStrings short form' do
+        expect('Mahtra (prone)').to match(pattern)
+      end
+
+      it 'matches "(prone)" case insensitively' do
+        expect('Mahtra (PRONE)').to match(pattern)
+      end
+
+      it 'does not match a sitting player in either form' do
+        expect('Mahtra who is sitting').not_to match(pattern)
+        expect('Mahtra (sitting)').not_to match(pattern)
+      end
+
+      it 'does not match a player with no posture' do
+        expect('Mahtra').not_to match(pattern)
+      end
     end
 
     describe 'SITTING' do
@@ -130,6 +148,24 @@ RSpec.describe Lich::DragonRealms do
 
       it 'is case insensitive' do
         expect('Mahtra WHO IS SITTING').to match(pattern)
+      end
+
+      # Issue #4529: HidePostStrings renders posture as "(sitting)"
+      it 'matches the "(sitting)" HidePostStrings short form' do
+        expect('Mahtra (sitting)').to match(pattern)
+      end
+
+      it 'matches "(sitting)" case insensitively' do
+        expect('Mahtra (SITTING)').to match(pattern)
+      end
+
+      it 'does not match a prone player in either form' do
+        expect('Mahtra who is lying down').not_to match(pattern)
+        expect('Mahtra (prone)').not_to match(pattern)
+      end
+
+      it 'does not match a mount described as "sitting astride its back"' do
+        expect('a warhorse with a saddle sitting astride its back').not_to match(pattern)
       end
     end
 
@@ -440,6 +476,23 @@ RSpec.describe Lich::DragonRealms do
       end
     end
 
+    context 'with the "(prone)" HidePostStrings short form (issue #4529)' do
+      it 'extracts the name from a "(prone)" player' do
+        result = helper.find_pcs_prone('Mahtra (prone)')
+        expect(result).to eq(['Mahtra'])
+      end
+
+      it 'handles a mix of long-form and short-form prone players' do
+        result = helper.find_pcs_prone('Mahtra who is lying down and Quilsilgas (prone)')
+        expect(result).to contain_exactly('Mahtra', 'Quilsilgas')
+      end
+
+      it 'does not treat a "(sitting)" player as prone' do
+        result = helper.find_pcs_prone('Mahtra (sitting)')
+        expect(result).to eq([])
+      end
+    end
+
     context 'with no prone players' do
       it 'returns empty array' do
         result = helper.find_pcs_prone('Mahtra and Quilsilgas')
@@ -478,6 +531,23 @@ RSpec.describe Lich::DragonRealms do
       it 'returns multiple sitting players' do
         result = helper.find_pcs_sitting('Mahtra who is sitting and Quilsilgas who is sitting')
         expect(result).to contain_exactly('Mahtra', 'Quilsilgas')
+      end
+    end
+
+    context 'with the "(sitting)" HidePostStrings short form (issue #4529)' do
+      it 'extracts the name from a "(sitting)" player' do
+        result = helper.find_pcs_sitting('Mahtra (sitting)')
+        expect(result).to eq(['Mahtra'])
+      end
+
+      it 'handles a mix of long-form and short-form sitting players' do
+        result = helper.find_pcs_sitting('Mahtra who is sitting and Quilsilgas (sitting)')
+        expect(result).to contain_exactly('Mahtra', 'Quilsilgas')
+      end
+
+      it 'does not treat a "(prone)" player as sitting' do
+        result = helper.find_pcs_sitting('Mahtra (prone)')
+        expect(result).to eq([])
       end
     end
 
@@ -741,6 +811,13 @@ RSpec.describe Lich::DragonRealms do
   end
 
   describe '#normalize_creature_names' do
+    before(:each) do
+      # Rebuild the memoized merged list so a per-example get_settings stub does
+      # not leak into other examples (see CustomSubstitutions.reset!).
+      Lich::DragonRealms::CustomSubstitutions.reset!
+      Lich::Messaging.clear_messages!
+    end
+
     it 'normalizes alfar warrior variants' do
       expect(helper.normalize_creature_names('a savage alfar warrior')).to eq('alfar warrior')
     end
@@ -755,6 +832,35 @@ RSpec.describe Lich::DragonRealms do
 
     it 'leaves other creatures unchanged' do
       expect(helper.normalize_creature_names('goblin')).to eq('goblin')
+    end
+
+    it 'normalizes a player-added creature from settings' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_creature_normalizations: ['grumpy war yak']))
+      expect(helper.normalize_creature_names('a grumpy war yak that is charging')).to eq('grumpy war yak')
+    end
+
+    it 'skips a malformed user entry, warns, and keeps the built-in defaults' do
+      allow(Lich::DragonRealms::CustomSubstitutions)
+        .to receive(:get_settings)
+        .and_return(OpenStruct.new(custom_creature_normalizations: [42]))
+      expect(helper.normalize_creature_names('a savage alfar warrior')).to eq('alfar warrior')
+      warning = Lich::Messaging.messages.find { |m| m[:message].include?('custom_creature_normalizations[0] skipped') }
+      expect(warning).not_to be_nil
+      expect(warning[:message]).to include('expected a non-empty string')
+    end
+
+    it 'keeps the most specific name when one entry is a substring of another' do
+      # Regardless of list order, the longest containing name wins -- a generic
+      # alias must not re-collapse a more specific one.
+      [['grumpy war yak', 'war yak'], ['war yak', 'grumpy war yak']].each do |ordering|
+        Lich::DragonRealms::CustomSubstitutions.reset!
+        allow(Lich::DragonRealms::CustomSubstitutions)
+          .to receive(:get_settings)
+          .and_return(OpenStruct.new(custom_creature_normalizations: ordering))
+        expect(helper.normalize_creature_names('a grumpy war yak that is charging')).to eq('grumpy war yak')
+      end
     end
   end
 

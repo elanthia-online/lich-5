@@ -1,32 +1,60 @@
 #!/usr/bin/env ruby
 # encoding: US-ASCII
 
-#####
+#######
 # Lich - https://github.com/elanthia-online/lich-5
 # Licensed under BSD 3-Clause License (see LICENSE file)
-#####
+#######
 
 # process ARGV for constants before loading constants.rb: issue #304
 for arg in ARGV
   if arg =~ /^--(?:home)=(.+)[\\\/]?$/i
     LICH_DIR = $1
-  elsif arg =~ /^--temp=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:temp|temp-dir)=(.+)[\\\/]?$/i
     TEMP_DIR = $1
-  elsif arg =~ /^--scripts=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:scripts|script-dir)=(.+)[\\\/]?$/i
     SCRIPT_DIR = $1
-  elsif arg =~ /^--maps=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:maps|map-dir)=(.+)[\\\/]?$/i
     MAP_DIR = $1
-  elsif arg =~ /^--logs=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:logs|log-dir)=(.+)[\\\/]?$/i
     LOG_DIR = $1
-  elsif arg =~ /^--backup=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:backup|backup-dir)=(.+)[\\\/]?$/i
     BACKUP_DIR = $1
-  elsif arg =~ /^--data=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:data|data-dir)=(.+)[\\\/]?$/i
     DATA_DIR = $1
-  elsif arg =~ /^--lib=(.+)[\\\/]?$/i
+  elsif arg =~ /^--(?:lib|lib-dir)=(.+)[\\\/]?$/i
     LIB_DIR = $1
+  elsif arg =~ /^--(?:active-session-dir)=(.+)[\\\/]?$/i
+    ACTIVE_SESSION_DIR = $1
   end
 end
 
+if defined? LIB_DIR
+  require File.join(LIB_DIR, 'constants.rb')
+else
+  require_relative('./lib/constants.rb')
+end
+require File.join(LIB_DIR, 'version.rb')
+
+# --help and --version print to stdout and exit. They read ARGV, and they touch
+# no gem, no directory, and no database. Dispatch them here, before the gem
+# check and before lib/init.rb's `require 'gtk3'`, so a runtime that cannot
+# load a toolkit can still report how to launch without one.
+require File.join(LIB_DIR, 'main', 'early_exit.rb')
+Lich::Main::EarlyExit.dispatch!
+
+require File.join(LIB_DIR, 'gemcheck.rb')
+Lich::GemCheck.verify!(*Lich::GemCheck.startup_groups)
+
+# Must run before lib/init.rb's `require 'gtk3'` -- install! sets up a
+# wrapper around gobject-introspection's converter registration that has to
+# be in place before gdk3/pango's own loaders run, or it can't do its job.
+# Requiring the file alone does not install anything (deliberately -- see
+# lib/util/gtk_compaction.rb); install! has to be called explicitly.
+require File.join(LIB_DIR, 'util', 'gtk_compaction.rb')
+Lich::Util::GtkCompaction.install!
+
+# TODO: Move all local requires to top of file
 require 'base64'
 require 'digest/md5'
 require 'digest/sha1'
@@ -35,6 +63,7 @@ require 'json'
 require 'monitor'
 require 'net/http'
 require 'ostruct'
+require 'ox'
 require 'resolv'
 require 'rexml/document'
 require 'rexml/streamlistener'
@@ -45,17 +74,15 @@ require 'time'
 require 'yaml'
 require 'zlib'
 
-# TODO: Move all local requires to top of file
-if defined? LIB_DIR
-  require File.join(LIB_DIR, 'constants.rb')
-else
-  require_relative('./lib/constants.rb')
-end
-require File.join(LIB_DIR, 'version.rb')
-
 require File.join(LIB_DIR, 'lich.rb')
 require File.join(LIB_DIR, 'init.rb')
-require File.join(LIB_DIR, 'common', 'front-end.rb')
+require File.join(LIB_DIR, 'common', 'frontend.rb')
+require File.join(LIB_DIR, 'common', 'frontend_locator.rb')
+require File.join(LIB_DIR, 'common', 'frontend_settings.rb')
+Lich::Common::FrontendSettings.load!(data_dir: DATA_DIR)
+require File.join(LIB_DIR, 'common', 'frontend_launcher.rb')
+require File.join(LIB_DIR, 'internal_api', 'active_sessions.rb')
+require File.join(LIB_DIR, 'api', 'active_sessions.rb')
 require File.join(LIB_DIR, 'update.rb')
 
 # TODO: Need to split out initiatilzation functions to move require to top of file
@@ -71,11 +98,15 @@ require File.join(LIB_DIR, 'common', 'class_exts', 'numeric.rb')
 require File.join(LIB_DIR, 'common', 'class_exts', 'string.rb')
 require File.join(LIB_DIR, 'common', 'class_exts', 'stringproc.rb')
 require File.join(LIB_DIR, 'common', 'class_exts', 'synchronizedsocket.rb')
+require File.join(LIB_DIR, 'common', 'client_input_dispatcher.rb')
+require File.join(LIB_DIR, 'common', 'detachable_client_registry.rb')
 require File.join(LIB_DIR, 'common', 'limitedarray.rb')
 require File.join(LIB_DIR, 'common', 'xmlparser.rb')
 require File.join(LIB_DIR, 'common', 'upstreamhook.rb')
 require File.join(LIB_DIR, 'common', 'downstreamhook.rb')
+require File.join(LIB_DIR, 'common', 'socket_read_hook.rb')
 require File.join(LIB_DIR, 'common', 'settings.rb')
+require File.join(LIB_DIR, 'common', 'feature_flags.rb')
 require File.join(LIB_DIR, 'common', 'settings', 'gamesettings.rb')
 require File.join(LIB_DIR, 'common', 'settings', 'charsettings.rb')
 require File.join(LIB_DIR, 'common', 'vars.rb')
@@ -99,8 +130,13 @@ require File.join(LIB_DIR, 'common', 'sharedbuffer.rb')
 require File.join(LIB_DIR, 'gemstone', 'spellranks.rb')
 
 require File.join(LIB_DIR, 'common', 'socketconfigurator.rb')
+require File.join(LIB_DIR, 'common', 'reusable_tcp_server.rb')
 require File.join(LIB_DIR, 'games.rb')
 require File.join(LIB_DIR, 'common', 'gameobj.rb')
+require File.join(LIB_DIR, 'common', 'inventory.rb')
+require File.join(LIB_DIR, 'common', 'arg_parser.rb')
+require File.join(LIB_DIR, 'common', 'setup_files.rb')
+require File.join(LIB_DIR, 'common', 'settings_transformer.rb')
 
 #
 # Program start
@@ -126,6 +162,11 @@ require File.join(LIB_DIR, 'common', 'uservars.rb')
 if defined?(Gtk)
   Thread.current.priority = -10
   Gtk.main
+  # Terminal teardown backstop: Gtk.main has returned, so we are on the GTK
+  # thread with the loop unwound. Sweep any widgets a route that bypassed the
+  # orchestrated exits left alive, before the interpreter finalizer disposes
+  # them in an unsafe order and segfaults. Idempotent after a clean shutdown.
+  Lich::Common.shutdown_gtk_before_exit(direct: true)
 else
   @main_thread.join
 end

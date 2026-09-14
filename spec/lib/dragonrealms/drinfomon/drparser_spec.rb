@@ -1,10 +1,17 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lich.rbw in production)
 
 # Load dependencies
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
+# so it observes the actual container contents. spec_helper installs a
+# lightweight GameObj double; requiring the production file reopens it with the
+# real implementation. This is idempotent -- in the combined suite gameobj_spec
+# has already loaded it -- and mirrors how gameobj_spec obtains the real class.
+require_relative '../../../../lib/common/gameobj'
 
 # Stub DRBanking to avoid loading its dependencies
 module Lich
@@ -67,6 +74,36 @@ RSpec.describe Lich::DragonRealms::DRParser do
     # NOTE: class_variable_set used because DRParser is a production module with no reset! method
     described_class.class_variable_set(:@@parsing_exp_mods_output, false)
     described_class.class_variable_set(:@@parsing_inventory_get, false)
+    described_class.class_variable_set(:@@shutdown_at, nil)
+  end
+
+  describe 'game shutdown tracking' do
+    it 'reports no shutdown initially' do
+      expect(described_class.shutting_down?).to be false
+      expect(described_class.shutdown_minutes).to be_nil
+    end
+
+    it 'records a pending shutdown from a notice line' do
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 15 minutes for routine maintenance.')
+      expect(described_class.shutting_down?).to be true
+      expect(described_class.shutdown_minutes).to eq(15)
+    end
+
+    it 'recomputes the estimate as the warnings count down' do
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 15 minutes for routine maintenance.')
+      described_class.check_game_shutdown('DragonRealms will be shutting down in 1 minute for routine maintenance.')
+      expect(described_class.shutdown_minutes).to eq(1)
+    end
+
+    it 'ignores lines that are not shutdown notices' do
+      described_class.check_game_shutdown('You glance around the room.')
+      expect(described_class.shutting_down?).to be false
+    end
+
+    it 'never reports negative minutes once the target time passes' do
+      described_class.class_variable_set(:@@shutdown_at, Time.now - 120)
+      expect(described_class.shutdown_minutes).to eq(0)
+    end
   end
 
   describe 'Pattern constants' do
@@ -106,6 +143,38 @@ RSpec.describe Lich::DragonRealms::DRParser do
         match = line.match(described_class::Pattern::RoomPlayers)
         expect(match).not_to be_nil
         expect(match[:players]).to eq('Mahtra and Quilsilgas')
+      end
+    end
+
+    describe 'GameShutdown' do
+      # Real announcement lines captured from a routine maintenance shutdown.
+      {
+        15 => 'DragonRealms will be shutting down in 15 minutes for routine maintenance.  Please be sure to gather your things and be prepared to exit the game at that time.',
+        10 => 'DragonRealms will be shutting down in 10 minutes for routine maintenance.  Please be sure to gather your things and be prepared to exit the game at that time.',
+        5  => 'DragonRealms will be shutting down in 5 minutes for routine maintenance.  Please gather your things and exit the game as soon as possible.',
+        2  => 'DragonRealms will be shutting down in 2 minutes for routine maintenance.  Please gather your things and exit the game as soon as possible.',
+        1  => 'DragonRealms will be shutting down in 1 minute for routine maintenance.  Please gather your things and exit the game as soon as possible.'
+      }.each do |minutes, line|
+        it "captures #{minutes} from the #{minutes}-minute notice" do
+          match = line.match(described_class::Pattern::GameShutdown)
+          expect(match).not_to be_nil
+          expect(match[:minutes].to_i).to eq(minutes)
+        end
+      end
+
+      it 'matches even with an Announcement prefix' do
+        line = 'Announcement: DragonRealms will be shutting down in 1 minute for routine maintenance.'
+        match = line.match(described_class::Pattern::GameShutdown)
+        expect(match[:minutes].to_i).to eq(1)
+      end
+
+      it 'does not match unrelated lines' do
+        expect('You glance around the room.'.match(described_class::Pattern::GameShutdown)).to be_nil
+      end
+
+      it 'does not match the phrase quoted mid-line (chat/speech)' do
+        line = 'Someone says, "DragonRealms will be shutting down in 5 minutes, lol."'
+        expect(line.match(described_class::Pattern::GameShutdown)).to be_nil
       end
     end
 
@@ -207,9 +276,140 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(match[:rate].strip).to eq('learning')
       end
     end
+
+    describe 'BalanceValue' do
+      it 'matches a standalone balance line' do
+        line = "You are solidly balanced."
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('solidly')
+      end
+
+      it 'matches a bracketed balance line' do
+        line = "[You're adeptly balanced]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('adeptly')
+      end
+
+      it 'matches a balance line preceded by wound and condition status' do
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('incredibly')
+      end
+
+      it 'matches the "off balance" form without a trailing d' do
+        line = "[You're battered (73%), winded (100%), off balance with opponent dominating.]"
+        match = line.match(described_class::Pattern::BalanceValue)
+        expect(match).not_to be_nil
+        expect(match[:balance]).to eq('off')
+      end
+
+      it 'captures the full multi-word balance value rather than a substring' do
+        # "slightly off" must not be truncated to "off"; "somewhat off" likewise.
+        {
+          "[You're battered (70%), winded (97%), slightly off balance and in strong position.]" => 'slightly off',
+          "[You're somewhat off balance.]"                                                      => 'somewhat off',
+          "[You're very badly balanced with opponent overwhelming you.]"                        => 'very badly'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::BalanceValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:balance]).to eq(expected)
+        end
+      end
+    end
+
+    describe 'PositionValue' do
+      it 'captures the "and" position clause' do
+        line = "[You're solidly balanced and in good position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in good position')
+      end
+
+      it 'captures the "with" position clause' do
+        line = "[You're badly balanced with opponent dominating.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('opponent dominating')
+      end
+
+      it 'captures the neutral "no advantage" clause' do
+        line = "[You're nimbly balanced with no advantage.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('no advantage')
+      end
+
+      it 'captures both "overwhelming opponent" phrasings' do
+        {
+          "[You're incredibly balanced and overwhelming opponent.]"      => 'overwhelming opponent',
+          "[You're incredibly balanced and overwhelming your opponent.]" => 'overwhelming your opponent'
+        }.each do |line, expected|
+          match = line.match(described_class::Pattern::PositionValue)
+          expect(match).not_to be_nil, "expected #{line.inspect} to match"
+          expect(match[:position]).to eq(expected)
+        end
+      end
+
+      it 'captures the full multi-word position rather than a substring' do
+        line = "[You're solidly balanced and in very strong position.]"
+        match = line.match(described_class::Pattern::PositionValue)
+        expect(match).not_to be_nil
+        expect(match[:position]).to eq('in very strong position')
+      end
+    end
   end
 
   describe '.parse' do
+    describe 'balance parsing' do
+      it 'sets balance index from a combat-status line' do
+        # 'incredibly' is the last entry in DR_BALANCE_VALUES
+        expected_index = Lich::DragonRealms::DR_BALANCE_VALUES.index('incredibly')
+        expect(drstats_class).to receive(:balance=).with(expected_index)
+
+        line = "[You're battered (71%), winded (100%), mighty (100%), incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'sets both balance and position from a combat-status line' do
+        expect(drstats_class).to receive(:balance=).with(Lich::DragonRealms::DR_BALANCE_VALUES.index('solidly'))
+        expect(drstats_class).to receive(:position=).with(-1)
+
+        line = "[You're bruised, solidly balanced and opponent has slight advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a positive position when winning' do
+        expect(drstats_class).to receive(:position=).with(8)
+
+        line = "[You're incredibly balanced and in dominating position.]"
+        described_class.parse(line)
+      end
+
+      it 'maps "overwhelming your opponent" to the maximum position' do
+        expect(drstats_class).to receive(:position=).with(9)
+
+        line = "[You're incredibly balanced and overwhelming your opponent.]"
+        described_class.parse(line)
+      end
+
+      it 'sets a neutral position for "no advantage"' do
+        expect(drstats_class).to receive(:position=).with(0)
+
+        line = "[You're nimbly balanced with no advantage.]"
+        described_class.parse(line)
+      end
+
+      it 'does not set position for a bare balance line' do
+        expect(drstats_class).not_to receive(:position=)
+
+        line = "You are solidly balanced."
+        described_class.parse(line)
+      end
+    end
+
     describe 'gender/age/circle parsing' do
       it 'sets DRStats values from INFO output' do
         # Real code strips whitespace
@@ -374,13 +574,16 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
     end
 
-    describe 'RoomID warning' do
-      it 'sends warning message when RoomID is turned off' do
-        expect(Lich::Messaging).to receive(:msg).with("bold", /DRParser:.*ShowRoomID/)
-        expect(Lich::Messaging).to receive(:msg).with("plain", /DRParser:.*flaguid/)
+    describe 'RoomID toggle (no longer enforced)' do
+      it 'ignores the "no longer see room IDs" line without warning or re-enabling the flag' do
+        # Room UIDs now come from the <nav> tag regardless of the ShowRoomID flag, so turning
+        # it off is a valid player choice: Lich must neither nag nor send a command to force
+        # the flag back on (the old handler ran put("flag showroomid on")).
+        expect(Lich::Messaging).not_to receive(:msg)
+        expect(described_class).not_to receive(:put)
 
         line = "You will no longer see room IDs when LOOKing in the game and room windows."
-        described_class.parse(line)
+        expect { described_class.parse(line) }.not_to raise_error
       end
     end
 
@@ -470,46 +673,520 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
   end
 
-  describe 'inventory search parsing' do
+  describe 'inventory scrape parsing' do
     before(:each) do
       allow(GameObj).to receive(:clear_inv)
       allow(GameObj).to receive(:clear_all_containers)
+      described_class.class_variable_set(:@@parsing_inventory_get, false)
+      described_class.class_variable_set(:@@inventory_partial, false)
     end
 
-    describe 'when InventoryGetStart pattern matches' do
-      let(:inv_search_line) { 'You rummage about your person, looking for' }
-
-      it 'calls GameObj.clear_inv' do
-        expect(GameObj).to receive(:clear_inv)
-
-        described_class.parse(inv_search_line)
+    describe 'headers' do
+      it 'InventoryListStart matches the INV LIST header only' do
+        expect('You take a moment and rummage about your person, taking stock of your possessions...')
+          .to match(described_class::Pattern::InventoryListStart)
+        expect('You rummage about your person, looking for pouch...')
+          .not_to match(described_class::Pattern::InventoryListStart)
       end
 
-      it 'calls GameObj.clear_all_containers' do
-        expect(GameObj).to receive(:clear_all_containers)
-
-        described_class.parse(inv_search_line)
+      it 'InventorySearchStart matches the INV SEARCH / category header' do
+        expect('You rummage about your person, looking for pouch...')
+          .to match(described_class::Pattern::InventorySearchStart)
+        expect('You rummage about your person, looking for armor and shields...')
+          .to match(described_class::Pattern::InventorySearchStart)
       end
 
-      it 'sets @@parsing_inventory_get to true' do
-        described_class.parse(inv_search_line)
+      it 'InventorySearchStart matches the real <roundTime/>-prefixed header' do
+        expect("<roundTime value='1788496743'/>You rummage about your person, looking for pouch...")
+          .to match(described_class::Pattern::InventorySearchStart)
+      end
+
+      # Adversarial: a header quoted mid-line (speech/thought/book) must NOT open
+      # a scrape -- for the SEARCH header this would open a *mutating* upsert.
+      # This is why both patterns are anchored to the stream-line start.
+      it 'neither header matches the phrase quoted mid-line in speech' do
+        line = %(Someone says, "You rummage about your person, looking for trouble.")
+        expect(line).not_to match(described_class::Pattern::InventorySearchStart)
+        expect(line).not_to match(described_class::Pattern::InventoryListStart)
+      end
+
+      it 'neither header matches the phrase embedded after prose' do
+        line = 'She watched as you take a moment and rummage about your person, taking stock of your possessions.'
+        expect(line).not_to match(described_class::Pattern::InventoryListStart)
+      end
+
+      it 'does NOT match an arbitrary non-roundTime tag glued before the search header' do
+        expect("<pushStream id='thought'/>You rummage about your person, looking for pouch...")
+          .not_to match(described_class::Pattern::InventorySearchStart)
+      end
+    end
+
+    describe 'when the INV LIST (complete) header matches' do
+      let(:inv_list_line) { 'You take a moment and rummage about your person, taking stock of your possessions...' }
+
+      it 'opens a staged full refresh (NOT a destructive clear), enters parsing, and is NOT partial' do
+        # The full replacement is now staged so the live model stays visible until
+        # a clean terminator commits it -- the header must not wipe anything.
+        expect(GameObj).not_to receive(:clear_inv)
+        expect(GameObj).not_to receive(:clear_all_containers)
+        expect(GameObj).to receive(:begin_inv)
+        expect(GameObj).to receive(:begin_all_containers)
+
+        described_class.parse(inv_list_line)
 
         # NOTE: class_variable_get is acceptable here - we're verifying the parser
-        # correctly transitions to inventory parsing state after matching the trigger line.
+        # correctly transitions to inventory parsing state after the trigger line.
         expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be false
       end
     end
 
-    describe 'InventoryGetStart pattern' do
-      it 'matches inv search command output' do
-        line = 'You rummage about your person, looking for'
-        expect(line).to match(described_class::Pattern::InventoryGetStart)
+    describe 'when the INV SEARCH (partial) header matches' do
+      let(:inv_search_line) { 'You rummage about your person, looking for pouch...' }
+
+      it 'enters parsing in partial mode WITHOUT clearing the model' do
+        expect(GameObj).not_to receive(:clear_inv)
+        expect(GameObj).not_to receive(:clear_all_containers)
+
+        described_class.parse(inv_search_line)
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be true
+      end
+    end
+
+    describe 'scrape safety valve (interrupted stream)' do
+      it 'resets an unclosed scrape on the next <prompt> so later <d cmd> links are not hijacked' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be true
+
+        # Stream is interrupted -- no <output class=""/> arrives, just a prompt.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+
+        # A later stray get-link in ordinary output must NOT be parsed as inventory.
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.parse("<d cmd='get #999'>a random link</d>")
       end
 
-      it 'matches partial inv search output' do
-        line = 'You rummage about your person, looking for all items'
-        expect(line).to match(described_class::Pattern::InventoryGetStart)
+      it 'also clears PARTIAL mode when a prompt ends an interrupted search scrape' do
+        described_class.parse("<roundTime value='1'/>You rummage about your person, looking for pouch...")
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be true
+
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+        expect(described_class.class_variable_get(:@@inventory_partial)).to be false
+
+        # A stray get-link afterward must NOT be upserted into the live model.
+        expect(GameObj).not_to receive(:upsert_inv)
+        described_class.parse("<d cmd='get #999'>a random link</d>")
       end
+    end
+
+    # Non-mocked, drives the REAL GameObj end-to-end to prove the COMPLETE INV
+    # LIST path is atomic: the previous model stays visible until a clean
+    # terminator commits the staged replacement, and an interrupted listing
+    # keeps the old model instead of leaving it half-updated.
+    describe 'atomic full INV LIST refresh (real GameObj)' do
+      before do
+        GameObj.class_variable_set(:@@inv, [])
+        GameObj.class_variable_set(:@@contents, {})
+        GameObj.class_variable_set(:@@staging_inv, nil)
+        GameObj.class_variable_set(:@@staging_contents, {})
+        GameObj.class_variable_set(:@@staging_all_containers, false)
+        GameObj.class_variable_set(:@@index, {})
+        described_class.class_variable_set(:@@parsing_inventory_get, false)
+        described_class.class_variable_set(:@@inventory_partial, false)
+        allow(Lich::Messaging).to receive(:msg)
+
+        # Seed a known model: a worn cloak (#10) holding a gem (#11).
+        GameObj.new_inv('10', nil, 'cloak', nil, 'remove #10')
+        GameObj.new_inv('11', nil, 'gem', '10', 'get #11 in #10')
+      end
+
+      def ids(list) = Array(list).map(&:id)
+
+      it 'leaves the previous model visible while the listing streams (no up-front wipe)' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        # Nothing committed yet: the old cloak+gem are still the published model.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(GameObj.containers).to have_key('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      it 'atomically replaces the model on the clean terminator, dropping absent containers' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+        described_class.parse('<output class=""/>')
+
+        expect(ids(GameObj.inv)).to contain_exactly('20')
+        # The cloak was not in the new listing, so its container entry is dropped.
+        expect(GameObj.containers).not_to have_key('10')
+      end
+
+      it 'keeps the previous model and warns when the listing is interrupted by a prompt' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        described_class.parse("  <d cmd='remove #20'>a backpack</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Interrupted: a prompt arrives with no closing <output class=""/>.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # Old model intact; the half-streamed backpack was discarded.
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+      end
+
+      # Regression: in production Game.process_xml_data runs XMLParser BEFORE
+      # DRParser, so the interrupting <prompt> first fires
+      # GameObj.commit_all_containers (the ordinary per-container publish) and
+      # only afterwards does DRParser discard the refresh. commit_all_containers
+      # must refuse to publish while a full refresh is open, or it commits the
+      # partial listing before the discard can run -- corrupting the model while
+      # still warning that the previous inventory was kept.
+      it 'does not commit a partial full refresh when XMLParser commits at the prompt first' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # Listing streams the cloak with a DIFFERENT child (#12) than published (#11).
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #12 in #10'>a coin</d>")
+
+        expect(Lich::Messaging).to receive(:msg).with('warn', /inv list.*did not finish/i)
+        # Production order at the prompt: XMLParser publishes containers first...
+        GameObj.commit_all_containers
+        # ...then DRParser sees the interrupted scrape and discards it.
+        described_class.parse('<prompt time="123">&gt;</prompt>')
+
+        # The premature commit must NOT have replaced #11 with #12.
+        expect(ids(GameObj.containers['10'])).to contain_exactly('11')
+        expect(ids(GameObj.inv)).to contain_exactly('10')
+      end
+
+      it 'does not resurrect an item picked into a hand mid-listing when the staged list commits' do
+        described_class.parse('You take a moment and rummage about your person, taking stock of your possessions...')
+        # The listing streams the gem (#11) as still inside the cloak...
+        described_class.parse("  <d cmd='remove #10'>a cloak</d>")
+        described_class.parse("     -<d cmd='get #11 in #10'>a gem</d>")
+        # ...but it is then picked into a hand before the list commits.
+        GameObj.remove_inv_item('11')
+        described_class.parse('<output class=""/>')
+
+        # The commit must not re-add the picked-up gem to the cloak.
+        expect(ids(GameObj.containers['10'] || [])).not_to include('11')
+      end
+    end
+  end
+
+  describe '.parse additional state' do
+    describe 'stat values' do
+      it 'sets multiple stats scanned from a single INFO line' do
+        expect(drstats_class).to receive(:intelligence=).with(80)
+        expect(drstats_class).to receive(:wisdom=).with(90)
+        described_class.parse('Intelligence    :   80   Wisdom          :   90')
+      end
+    end
+
+    describe 'balance' do
+      it 'sets the balance index from a balance line' do
+        expect(drstats_class).to receive(:balance=).with(0)
+        described_class.parse('You are completely balanced.')
+      end
+    end
+
+    describe 'mindstate clear' do
+      it 'clears the mind for a skill on an empty exp component' do
+        expect(drskill_class).to receive(:clear_mind).with('Evasion')
+        described_class.parse("<component id='exp Evasion'></component>")
+      end
+    end
+
+    describe 'exp columns' do
+      it 'updates a skill from a plain-text exp column line' do
+        expect(drskill_class).to receive(:update).with(a_string_matching(/Evasion/), '565', anything, '39')
+        described_class.parse('         Evasion:  565 39% thoughtful')
+      end
+    end
+
+    describe 'brief exp' do
+      it 'updates skill and rate from BRIEFEXP ON output' do
+        expect(drskill_class).to receive(:update).with('Evasion', 565, '2', '39')
+        described_class.parse("<component id='exp Evasion'><d cmd='skill Evasion'>     Eva:  565 39%  [ 2/34]</d></component>")
+      end
+    end
+
+    describe 'spellbook format toggle' do
+      it 'sets the spellbook format from the SPELLS verb toggle' do
+        drspells_class.reset!
+        described_class.parse('You will see column-formatted output for the SPELLS verb.')
+        expect(drspells_class.spellbook_format).to eq('column-formatted')
+      end
+    end
+
+    describe 'spell-list capture triggers' do
+      it 'starts grabbing known spells' do
+        expect(drspells_class).to receive(:grabbing_known_spells=).with(true)
+        described_class.parse('You recall the spells you have learned from your training.')
+      end
+
+      it 'starts grabbing barbarian abilities' do
+        expect(drspells_class).to receive(:check_known_barbarian_abilities=).with(true)
+        described_class.parse('You know the Berserks: Avalanche, Drought.')
+      end
+
+      it 'starts grabbing thief khri' do
+        expect(drspells_class).to receive(:grabbing_known_khri=).with(true)
+        described_class.parse('From the Subtlety tree, you know the following khri: Darken (Aug)')
+      end
+    end
+
+    describe 'subscription premium normalization' do
+      before do
+        allow(Lich::Common::Account).to receive(:subscription).and_call_original
+        allow(Lich::Common::Account).to receive(:subscription=).and_call_original
+        Lich::Common::Account.subscription = nil
+      end
+
+      it 'normalizes Platinum to Premium' do
+        described_class.parse('Current Account Status: Platinum')
+        expect(Lich::Common::Account.subscription).to eq('PREMIUM')
+      end
+    end
+  end
+
+  describe '.check_known_spells' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:grabbing_known_spells).and_return(true)
+    end
+
+    it 'detects column-formatted output from the mono tag' do
+      described_class.check_known_spells('<output class="mono"/>')
+      expect(drspells_class.spellbook_format).to eq('column-formatted')
+    end
+
+    it 'parses a spell name from column-formatted slot info' do
+      drspells_class.spellbook_format = 'column-formatted'
+      line = '<popBold/>     maf  Manifest Force                  Slot(s): 1   Min Prep: 1     Max Prep: 100'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_spells).to include('Manifest Force' => true)
+    end
+
+    it 'parses spells from a non-column chapter line' do
+      line = 'In the chapter entitled "Analogous Patterns", you have notes on the Manifest Force [maf] and Gauge Flow [gaf] spells.'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_spells).to include('Manifest Force' => true, 'Gauge Flow' => true)
+    end
+
+    it 'parses magic feats, splitting the non-Oxford "and"' do
+      line = 'You recall proficiency with the magic feats of Sorcerous Patterns, Alternate Preparation and Augmentation Mastery.'
+      described_class.check_known_spells(line)
+      expect(drspells_class.known_feats).to include('Sorcerous Patterns' => true, 'Alternate Preparation' => true, 'Augmentation Mastery' => true)
+    end
+
+    it 'stops grabbing on the spells-end line' do
+      expect(drspells_class).to receive(:grabbing_known_spells=).with(false)
+      described_class.check_known_spells('You can use SPELL STANCE [HELP] to view or modify your spellcasting preferences.')
+    end
+  end
+
+  describe '.check_known_barbarian_abilities' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:check_known_barbarian_abilities).and_return(true)
+    end
+
+    it 'parses known berserks into known_spells' do
+      described_class.check_known_barbarian_abilities('You know the Berserks:<pushBold/> Avalanche, Drought.')
+      expect(drspells_class.known_spells).to include('Avalanche' => true, 'Drought' => true)
+    end
+
+    it 'parses known masteries into known_feats' do
+      described_class.check_known_barbarian_abilities('<popBold/>You know the Masteries:<pushBold/> Juggernaut, Duelist.')
+      expect(drspells_class.known_feats).to include('Juggernaut' => true, 'Duelist' => true)
+    end
+
+    it 'stops on the training-remaining line' do
+      expect(drspells_class).to receive(:check_known_barbarian_abilities=).with(false)
+      described_class.check_known_barbarian_abilities('You recall that you have 0 training sessions remaining with the Guild.')
+    end
+  end
+
+  describe '.check_known_thief_khri' do
+    before do
+      drspells_class.reset!
+      allow(drspells_class).to receive(:grabbing_known_khri).and_return(true)
+    end
+
+    it 'parses khri names, stripping the type annotations' do
+      line = 'From the Subtlety tree, you know the following khri: Darken (Aug), Dampen (Util/Ward), Strike (Aug)'
+      described_class.check_known_thief_khri(line)
+      expect(drspells_class.known_spells).to include('Darken' => true, 'Dampen' => true, 'Strike' => true)
+    end
+
+    it 'stops on the available-slots line' do
+      expect(drspells_class).to receive(:grabbing_known_khri=).with(false)
+      described_class.check_known_thief_khri('You have 7 available slots.')
+    end
+  end
+
+  describe '.populate_inventory_get' do
+    before(:each) do
+      allow(GameObj).to receive(:new_inv)
+      allow(GameObj).to receive(:upsert_inv)
+      described_class.class_variable_set(:@@parsing_inventory_get, true)
+      # Default to COMPLETE (INV LIST) mode for the existing add cases.
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    it 'parses a top-level item, stripping a leading article' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'small pouch', nil, 'get #12345', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345'>a small pouch</d>")
+    end
+
+    it 'strips a capitalized leading article (e.g. from INV SEARCH output)' do
+      expect(GameObj).to receive(:new_inv).with('12345', nil, 'soft gem pouch', nil, 'get #12345', nil)
+      described_class.populate_inventory_get("<d cmd='get #12345'>A soft gem pouch</d>")
+    end
+
+    it 'parses a nested item with its container' do
+      expect(GameObj).to receive(:new_inv).with('1', nil, 'sack', '2', 'get #1 in #2', nil)
+      described_class.populate_inventory_get("<d cmd='get #1 in #2'>a sack</d>")
+    end
+
+    it 'parses an item line with trailing location prose after the </d> element' do
+      expect(GameObj).to receive(:new_inv).with('8286821', nil, 'papyrus parchment', '8286816', 'get #8286821 in #8286816', nil)
+      described_class.populate_inventory_get("<d cmd='get #8286821 in #8286816'>a papyrus parchment</d> is in a black winter cloak.")
+    end
+
+    it 'does NOT store a held item ("... is in your right hand") as worn inventory' do
+      # The item is in a hand, tracked by the <right> stream -- storing it here
+      # (cmd has no container -> worn inv) would recreate the held/worn duplicate.
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).not_to receive(:upsert_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your right hand.")
+    end
+
+    it 'also skips the worn store for a left-hand item' do
+      expect(GameObj).not_to receive(:new_inv)
+      expect(GameObj).to receive(:remove_inv_item).with('8761784')
+      described_class.populate_inventory_get("<d cmd='get #8761784'>a seagull feather quill</d> is in your left hand.")
+    end
+
+    it 'parses an inv list worn item linked with a remove command into inv' do
+      expect(GameObj).to receive(:new_inv).with('10859433', nil, 'hooded electroweave cloak', nil, 'remove #10859433', nil)
+      described_class.populate_inventory_get("  <d cmd='remove #10859433'>a hooded electroweave cloak</d>")
+    end
+
+    it 'parses an inv list nested item despite the leading dash and indentation' do
+      expect(GameObj).to receive(:new_inv).with('10859466', nil, 'dirty inkpot', '10859433', 'get #10859466 in #10859433', nil)
+      described_class.populate_inventory_get("     -<d cmd='get #10859466 in #10859433'>a dirty inkpot</d>")
+    end
+
+    # A doubly-nested line establishes ONLY the item -> immediate parent
+    # (#10956107) edge. It must NOT also synthesize the middle-container ->
+    # grandparent ('a watery portal') edge with a nil name: INV LIST lists
+    # #10956107 on its own line with its real name, so a second nil-name
+    # placement would be a phantom duplicate (find_or_create dedups on
+    # "id|noun|name", so the nil-name copy never collides). See the non-mocked
+    # regression below for the duplicate itself.
+    it 'parses a doubly-nested inv list item without re-registering the middle container' do
+      expect(GameObj).to receive(:new_inv).with('10956111', nil, 'rosemary-dusted pumpkin and apple tart drizzled with an amber glaze', '10956107', 'get #10956111 in #10956107 in a watery portal', nil)
+      # The middle container (#10956107) is never re-added from this child line.
+      expect(GameObj).not_to receive(:new_inv).with('10956107', anything, anything, anything, anything, anything)
+      described_class.populate_inventory_get("        -<d cmd='get #10956111 in #10956107 in a watery portal'>a rosemary-dusted pumpkin and apple tart drizzled with an amber glaze</d>")
+    end
+
+    it 'stops parsing and clears partial mode on the output-class-empty tag' do
+      described_class.class_variable_set(:@@inventory_partial, true)
+      described_class.populate_inventory_get('<output class=""/>')
+      expect(described_class.class_variable_get(:@@parsing_inventory_get)).to be false
+      expect(described_class.class_variable_get(:@@inventory_partial)).to be false
+    end
+
+    context 'in PARTIAL (INV SEARCH / category) mode' do
+      before(:each) { described_class.class_variable_set(:@@inventory_partial, true) }
+
+      it 'upserts a matched item instead of a plain add' do
+        expect(GameObj).to receive(:upsert_inv).with('11404650', nil, 'soft gem pouch', '11404639', 'get #11404650 in #11404639', nil)
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.populate_inventory_get("  <d cmd='get #11404650 in #11404639'>A soft gem pouch</d> is in a sky blue thigh quiver.")
+      end
+
+      it 'upserts a matched worn item (remove link) into inv' do
+        expect(GameObj).to receive(:upsert_inv).with('11404268', nil, 'red pouch embroidered with a pork chop', nil, 'remove #11404268', nil)
+        described_class.populate_inventory_get("  <d cmd='remove #11404268'>A red pouch embroidered with a pork chop</d> is being worn.")
+      end
+
+      # Adversarial (#5): a filtered scrape of a deeply-nested item must NOT touch
+      # the intermediate container. Routing it through upsert_inv with name=nil
+      # would blank that container's real name and pull a worn parent out of
+      # GameObj.inv. So the middle container is left alone in partial mode.
+      it 'does NOT upsert the intermediate container for a doubly-nested match' do
+        # Only the matched item itself is upserted...
+        expect(GameObj).to receive(:upsert_inv).with('10956111', nil, 'rosemary-dusted pumpkin and apple tart drizzled with an amber glaze', '10956107', 'get #10956111 in #10956107 in a watery portal', nil)
+        # ...never the middle container (#10956107) with a nil name.
+        expect(GameObj).not_to receive(:upsert_inv).with('10956107', anything, anything, anything, anything, anything)
+        expect(GameObj).not_to receive(:new_inv)
+        described_class.populate_inventory_get("        -<d cmd='get #10956111 in #10956107 in a watery portal'>a rosemary-dusted pumpkin and apple tart drizzled with an amber glaze</d>")
+      end
+    end
+  end
+
+  # Regression (NON-MOCKED): drives the real GameObj model end-to-end. Kept in
+  # its own describe -- OUTSIDE '.populate_inventory_get', whose before(:each)
+  # stubs new_inv -- precisely so new_inv is NOT stubbed here. This is the case
+  # the mocked tests cannot see: they stub new_inv, so they never observe the
+  # resulting duplicate in GameObj.containers. We feed a real doubly-nested
+  # INV LIST fragment (middle container listed on its own line AND as the parent
+  # of nested items, exactly as DR emits it) and assert each id lands in its
+  # parent container exactly once, with its real name and no nil phantom.
+  describe 'doubly-nested INV LIST against the real GameObj (duplicate regression)' do
+    before(:each) do
+      # GameObj has no reset! -- clear the production registries and identity
+      # index this test touches so it is isolated from earlier examples.
+      %i[@@inv @@contents @@index].each do |cv|
+        GameObj.class_variable_get(cv).clear if GameObj.class_variable_defined?(cv)
+      end
+      described_class.class_variable_set(:@@parsing_inventory_get, true)
+      # COMPLETE (INV LIST) mode. Harmless where the flag is not yet read; keeps
+      # the scrape in replace-not-upsert mode once partial scrapes are added.
+      described_class.class_variable_set(:@@inventory_partial, false)
+    end
+
+    # Raw INV LIST lines: a single leading dash + indentation at every depth.
+    # #10783170 is the middle container -- it appears on its own line and as the
+    # parent of the two nested items.
+    let(:inv_list_lines) do
+      [
+        "      -<d cmd='get #10783170 in a watery portal'>a deep-green square tin (closed)</d>",
+        "         -<d cmd='get #10783174 in #10783170 in a watery portal'>a sheet of red parchment</d>",
+        "         -<d cmd='get #10783173 in #10783170 in a watery portal'>a tart</d>"
+      ]
+    end
+
+    it 'registers the middle container in its parent exactly once (no nil-name phantom)' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      portal = GameObj.containers['a watery portal'] || []
+      mids = portal.select { |o| o.id == '10783170' }
+
+      # Before the fix this was 2: the real 'deep-green square tin (closed)' plus
+      # a nil-name phantom synthesized from the nested item lines.
+      expect(mids.size).to eq(1)
+      expect(mids.first.name).to eq('deep-green square tin (closed)')
+      expect(portal.map(&:name)).not_to include(nil)
+    end
+
+    it 'places the nested contents under the middle container once each' do
+      inv_list_lines.each { |line| described_class.populate_inventory_get(line) }
+
+      contents = GameObj.containers['10783170'] || []
+      expect(contents.map(&:id)).to contain_exactly('10783174', '10783173')
+      expect(contents.map(&:name)).to contain_exactly('sheet of red parchment', 'tart')
     end
   end
 end

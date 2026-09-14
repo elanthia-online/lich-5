@@ -1,0 +1,35 @@
+An ominous shadow falls over your surroundings as a whistling hail of arrows arcs down from above!
+[SMR result: 29 (Open d100: -56)]
+<pushBold/>A <a exist="126382122" noun="warg">niveous giant warg</a><popBold/> dodges an incoming arrow!
+[SMR result: 197 (Open d100: 81, Bonus: 25)]
+An arrow finds its mark!  <pushBold/>A <a exist="126394827" noun="mastodon">heavily armored battle mastodon</a><popBold/> is hit!
+<pushBold/>A <a exist="126394827" noun="mastodon">heavily armored battle mastodon's</a><popBold/> aura absorbs some of the damage!
+   ... 10 points of damage!
+   Strike pierces upper arm!
+The arrow breaks into tiny fragments.
+[SMR result: 221 (Open d100: 20, Bonus: 103)]
+<pushBold/>A <a exist="126396667" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/> is transfixed by an arrow's descent!
+<pushBold/>A <a exist="126396667" noun="shield-maiden">brawny gigas shield-maiden's</a><popBold/> aura absorbs some of the damage!
+   ... 35 points of damage!
+   Blow shatters knee and severs lower leg!
+The arrow breaks into tiny fragments.
+[SMR result: 157 (Open d100: 75, Bonus: 1)]
+<pushBold/>A <a exist="126531776" noun="warg">niveous giant warg</a><popBold/> is struck by a falling arrow!
+   ... 15 points of damage!
+   Beautiful head shot!
+  That ear will be missed!
+   The <pushBold/><a exist="126531776" noun="warg">giant warg</a><popBold/> is stunned!
+The arrow breaks into tiny fragments.
+[SMR result: 101 (Open d100: 18, Bonus: 1)]
+An arrow pierces <pushBold/>a <a exist="126402254" noun="warg">niveous giant warg</a><popBold/>!
+<pushBold/>A <a exist="126402254" noun="warg">niveous giant warg's</a><popBold/> aura absorbs some of the damage!
+   ... 10 points of damage!
+   Wild slash scratches the back of <pushBold/>the <a exist="126402254" noun="warg">giant warg</a><popBold/>'s hand.
+The arrow breaks into tiny fragments.
+[SMR result: 252 (Open d100: 86, Bonus: 75)]
+<pushBold/>A <a exist="126485476" noun="mastodon">heavily armored battle mastodon</a><popBold/> is struck by a falling arrow!
+   ... 30 points of damage!
+   Fine shot pierces jugular vein!  The brain wonders where all its oxygen went, briefly.
+As <pushBold/>a <a exist="126485476" noun="mastodon">heavily armored battle mastodon</a><popBold/> collapses, <pushBold/><a exist="126485476" noun="mastodon">it</a><popBold/> lets out a shrill trumpet of despair.  <pushBold/><a exist="126485476" noun="mastodon">Its</a><popBold/> trunk flails futilely before slamming to the ground, still.
+The arrow breaks into tiny fragments.
+The air clears as the deadly volley of arrows abates.

@@ -9,27 +9,6 @@ if File.exist?("#{DATA_DIR}/lich.sav")
   exit
 end
 
-if Gem::Version.new(RUBY_VERSION) < Gem::Version.new(REQUIRED_RUBY)
-  if (RUBY_PLATFORM =~ /mingw|win/) and (RUBY_PLATFORM !~ /darwin/i)
-    require 'win32ole'
-    shell = WIN32OLE.new('WScript.Shell')
-    message = "!!ALERT!!\nYour version #{RUBY_VERSION} of Ruby is too old!\nUpgrade Ruby to version #{REQUIRED_RUBY} or newer!\nClick OK to launch browser to go to documentation now!"
-    title = "Lich v#{LICH_VERSION}"
-    type = 1 + 64  # OK/Cancel buttons + Information icon
-    result = shell.Popup(message, 0, title, type)
-
-    if result == 1 # OK button clicked
-      shell.Run("https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich")
-    end
-  else
-    puts "!!ALERT!!"
-    puts "Your version #{RUBY_VERSION} of Ruby is too old!"
-    puts "Upgrade Ruby to version #{REQUIRED_RUBY} or newer!"
-    puts "Go to https://github.com/elanthia-online/lich-5/wiki/Documentation-for-Installing-and-Upgrading-Lich for more info!"
-  end
-  exit
-end
-
 require_relative 'wine'
 
 begin
@@ -43,69 +22,6 @@ rescue
   nil
 end
 
-# find the FE locations for Win and for Linux | WINE
-
-if (RUBY_PLATFORM =~ /mingw|win/i) && (RUBY_PLATFORM !~ /darwin/i)
-  require 'win32/registry'
-  include Win32
-
-  paths = ['SOFTWARE\\WOW6432Node\\Simutronics\\STORM32',
-           'SOFTWARE\\WOW6432Node\\Simutronics\\WIZ32']
-
-  def key_exists?(path)
-    Registry.open(Registry::HKEY_LOCAL_MACHINE, path, ::Win32::Registry::KEY_READ)
-    true
-  rescue StandardError
-    false
-  end
-
-  paths.each do |path|
-    next unless key_exists?(path)
-
-    Registry.open(Registry::HKEY_LOCAL_MACHINE, path).each_value do |_subkey, _type, data|
-      dirloc = data
-      if path =~ /WIZ32/
-        $wiz_fe_loc = dirloc
-      elsif path =~ /STORM32/
-        $sf_fe_loc = dirloc
-      else
-        Lich.log("Hammer time, couldn't find me a SIMU FE on a Windows box")
-      end
-    end
-  end
-elsif defined?(Wine)
-  ## reminder Wine is defined in the file wine.rb by confirming prefix, directory and executable
-  unless (sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\STORM32\\Directory'))
-    sf_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\STORM32\\Directory')
-  end
-  unless (wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Simutronics\\WIZ32\\Directory'))
-    wiz_fe_loc_temp = Wine.registry_gets('HKEY_LOCAL_MACHINE\\Software\\Wow6432Node\\Simutronics\\WIZ32\\Directory')
-  end
-  ## at this point, the temp variables are either FalseClass or have what wine believes is the Directory subkey from registry
-  ## fix it up so we can use it on a *nix based system.  If the return is FalseClass, leave it FalseClass
-  sf_fe_loc_temp ? $sf_fe_loc = sf_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
-  wiz_fe_loc_temp ? $wiz_fe_loc = wiz_fe_loc_temp.gsub('\\', '/').gsub('C:', Wine::PREFIX + '/drive_c') : :noop
-  ## if we have a String class (directory) and the directory exists -- no error detectable at this level
-  ## if we have a nil, we have no directory, or if we have a path but cannot find that path (directory) we have an error
-  if $sf_fe_loc.nil? # no directory
-    Lich.log("STORM equivalent FE is not installed under WINE.") if $debug
-  else
-    unless $sf_fe_loc.is_a? String and File.exist?($sf_fe_loc) # cannot confirm directory location
-      Lich.log("Cannot find STORM equivalent FE to launch under WINE.")
-    end
-  end
-  if $wiz_fe_loc.nil? # no directory
-    Lich.log("WIZARD FE is not installed under WINE.") if $debug
-  else
-    unless $wiz_fe_loc.is_a? String and File.exist?($wiz_fe_loc) # cannot confirm directory location
-      Lich.log("Cannot find WIZARD FE to launch under WINE.")
-    end
-  end
-  if $sf_fe_loc.nil? and $wiz_fe_loc.nil? # got nuttin - no FE installed under WINE in registry (or something changed. . . )
-    Lich.log("This system has WINE installed but does not have a suitable FE from Simu installed under WINE.")
-  end
-  ## We have either declared an error, or the global variables for Simu FE are populated with a confirmed path
-end
 ## The following should be deprecated with the direct-frontend-launch-method
 ## TODO: remove as part of chore/Remove unnecessary Win32 calls
 ## Temporarily reinstatated for DR
@@ -469,121 +385,72 @@ end
 
 begin
   require 'sqlite3'
-rescue LoadError
-  if defined?(Win32)
-    r = Win32.MessageBox(:lpText => "Lich needs sqlite3 to save settings and data, but it is not installed.\n\nWould you like to install sqlite3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-    if r == Win32::IDIYES
-      r = Win32.GetModuleFileName
-      if r[:return] > 0
-        ruby_bin_dir = File.dirname(r[:lpFilename])
-        if File.exist?("#{ruby_bin_dir}\\gem.bat")
-          verb = (Win32.isXP? ? 'open' : 'runas')
-          r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
-          if r[:return] > 0
-            pid = r[:hProcess]
-            sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-            r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-          else
-            # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-            r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\#{gem_file}", :lpParameters => 'install sqlite3 --no-ri --no-rdoc')
-            if r <= 32
-              Win32.MessageBox(:lpText => "error: failed to start the sqlite3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\#{gem_file}\", :lpParameters => \"install sqlite3 --no-ri --no-rdoc'\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-              exit
-            end
-            r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-          end
-          if r == Win32::IDIOK
-            if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
-              Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
-            else
-              Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-            end
-          else
-            # user doesn't want to restart Lich
-          end
-        else
-          Win32.MessageBox(:lpText => "error: Could not find gem.cmd or gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-        end
-      else
-        Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-      end
-    else
-      # user doesn't want to install sqlite3 gem
+rescue LoadError => sqlite_load_error
+  # sqlite3 is a required dependency. It is restored only from an approved,
+  # hash-verified Ruby4Lich5 manifest unit; this never falls back to `gem
+  # install` or a user GEM_HOME.
+  unless Lich::GemCheck.self_healing_supported?
+    Lich::GemCheck.alert(missing: ['sqlite3'], groups: [:default], error: sqlite_load_error)
+    exit 1
+  end
+
+  result = Lich::GemCheck.recover_with_consent!(['sqlite3'], force: true, groups: [:default])
+  if result.nil?
+    exit 1
+  elsif result.restart_required
+    exit 0
+  elsif result.success?
+    begin
+      require 'sqlite3'
+    rescue LoadError => e
+      Lich::GemCheck.alert(missing: ['sqlite3'], groups: [:default], error: e)
+      exit 1
     end
   else
-    # fixme: no sqlite3 on Linux/Mac
-    puts "The sqlite3 gem is not installed (or failed to load), you may need to: gem install sqlite3"
+    Lich::GemCheck.alert(
+      missing: ['sqlite3'], groups: [:default], error: Lich::DependencyRecovery::Error.new(result.error)
+    )
+    exit 1
   end
-  exit
 end
 
-unless (ARGV.grep(/^--no-(?:gtk|gui)$/).any? || RUBY_PLATFORM !~ /mingw/ && (ENV['DISPLAY'].nil? && !ARGV.include?('--gtk')))
+unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
   begin
     require 'gtk3'
     HAVE_GTK = true
-  rescue LoadError
-    if (ENV['RUN_BY_CRON'].nil? or ENV['RUN_BY_CRON'] == 'false') and ARGV.empty? or ARGV.any? { |any_arg| any_arg =~ /^--gui$/ } or not $stdout.isatty
-      if defined?(Win32)
-        r = Win32.MessageBox(:lpText => "Lich uses gtk3 to create windows, but it is not installed.  You can use Lich from the command line (ruby lich.rbw --help) or you can install gtk3 for a point and click interface.\n\nWould you like to install gtk3 now?", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_YESNO | Win32::MB_ICONQUESTION))
-        if r == Win32::IDIYES
-          r = Win32.GetModuleFileName
-          if r[:return] > 0
-            ruby_bin_dir = File.dirname(r[:lpFilename])
-            if File.exist?("#{ruby_bin_dir}\\gem.cmd")
-              gem_file = 'gem.cmd'
-            elsif File.exist?("#{ruby_bin_dir}\\gem.bat")
-              gem_file = 'gem.bat'
-            else
-              gem_file = nil
-            end
-            if gem_file
-              verb = (Win32.isXP? ? 'open' : 'runas')
-              r = Win32.ShellExecuteEx(:fMask => Win32::SEE_MASK_NOCLOSEPROCESS, :lpVerb => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
-              if r[:return] > 0
-                pid = r[:hProcess]
-                sleep 1 while Win32.GetExitCodeProcess(:hProcess => pid)[:lpExitCode] == Win32::STILL_ACTIVE
-                r = Win32.MessageBox(:lpText => "Install finished.  Lich will restart now.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              else
-                # ShellExecuteEx failed: this seems to happen with an access denied error even while elevated on some random systems
-                r = Win32.ShellExecute(:lpOperation => verb, :lpFile => "#{ruby_bin_dir}\\gem.bat", :lpParameters => 'install gtk3 --no-ri --no-rdoc')
-                if r <= 32
-                  Win32.MessageBox(:lpText => "error: failed to start the gtk3 installer\n\nfailed command: Win32.ShellExecute(:lpOperation => #{verb.inspect}, :lpFile => \"#{ruby_bin_dir}\\gem.bat\", :lpParameters => \"install gtk3 --no-ri --no-rdoc\")\n\nerror code: #{Win32.GetLastError}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                  exit
-                end
-                r = Win32.MessageBox(:lpText => "When the installer is finished, click OK to restart Lich.", :lpCaption => "Lich v#{LICH_VERSION}", :uType => Win32::MB_OKCANCEL)
-              end
-              if r == Win32::IDIOK
-                if File.exist?("#{ruby_bin_dir}\\rubyw.exe")
-                  Win32.ShellExecute(:lpOperation => 'open', :lpFile => "#{ruby_bin_dir}\\rubyw.exe", :lpParameters => "\"#{File.expand_path($PROGRAM_NAME)}\"")
-                else
-                  Win32.MessageBox(:lpText => "error: failed to find rubyw.exe; can't restart Lich for you", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-                end
-              else
-                # user doesn't want to restart Lich
-              end
-            else
-              Win32.MessageBox(:lpText => "error: Could not find gem.bat in directory #{ruby_bin_dir}", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-            end
-          else
-            Win32.MessageBox(:lpText => "error: GetModuleFileName failed", :lpCaption => "Lich v#{LICH_VERSION}", :uType => (Win32::MB_OK | Win32::MB_ICONERROR))
-          end
-        else
-          # user doesn't want to install gtk3 gem
+  rescue LoadError => gtk_load_error
+    # gtk3 stands for the whole GTK runtime unit in the manifest. A missing
+    # native dependency therefore restores the complete, ordered closure.
+    if Lich::GemCheck.self_healing_supported?
+      result = Lich::GemCheck.recover_with_consent!(['gtk3'], force: true, groups: [:gtk])
+      if result.nil?
+        exit 1
+      elsif result.restart_required
+        exit 0
+      elsif result.success?
+        begin
+          require 'gtk3'
+          HAVE_GTK = true
+        rescue LoadError => recovered_error
+          Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: recovered_error)
+          exit 1
         end
       else
-        # fixme: no gtk3 on Linux/Mac
-        puts "The gtk3 gem is not installed (or failed to load), you may need to: gem install gtk3"
+        Lich::GemCheck.alert(
+          missing: ['gtk3'], groups: [:gtk], error: Lich::DependencyRecovery::Error.new(result.error)
+        )
+        exit 1
       end
-      exit
     else
-      # gtk is optional if command line arguments are given or started in a terminal
-      HAVE_GTK = false
-      @early_gtk_error = "warning: failed to load GTK\n\t#{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      # GTK is required unless the user explicitly selected a headless launch.
+      # Do not infer that choice from DISPLAY, TTY, or cron environment state.
+      Lich::GemCheck.alert(missing: ['gtk3'], groups: [:gtk], error: gtk_load_error)
+      exit 1
     end
   end
 else
   HAVE_GTK = false
-  @early_gtk_error = "info: DISPLAY environment variable is not set; not trying gtk"
+  @early_gtk_error = 'info: GTK disabled by command-line option'
 end
 
 unless File.exist?(LICH_DIR)
@@ -702,20 +569,7 @@ end
 
 Lich.init_db
 
-#
-# only keep the last 20 debug files
-#
-
-DELETE_CANDIDATES = %r[^debug(?:-\d+)+\.log$]
-if Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.length > 20 # avoid NIL response
-  Dir.entries(TEMP_DIR).find_all { |fn| fn =~ DELETE_CANDIDATES }.sort.reverse[20..-1].each { |oldfile|
-    begin
-      File.delete(File.join(TEMP_DIR, oldfile))
-    rescue
-      Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-    end
-  }
-end
+Lich.cleanup_debug_logs(TEMP_DIR)
 
 # todo: deprecate / remove for Ruby 3.2.1?
 if (RUBY_VERSION =~ /^2\.[012]\./)

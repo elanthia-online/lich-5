@@ -1,0 +1,8 @@
+##### natural a76f3492e144b3fe
+# expect: attacks=natural | res=none | flares=none | outcomes=evade | dmg=0 | statuses=
+<pushBold/>A <a exist="24370632" noun="griffin">war griffin</a><popBold/> swoops down from high overhead!
+<pushBold/>A <a exist="24370632" noun="griffin">war griffin</a><popBold/> tries to bite you!
+You evade the attack with ease!
+You change your tune slightly, adding the element for Song of Sonic Disruption to your song...
+Your spellsong is ready.
+

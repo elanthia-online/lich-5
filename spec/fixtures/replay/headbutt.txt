@@ -1,0 +1,7 @@
+##### headbutt dd3e0a46f65dc146
+# expect: attacks=headbutt | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+<pushBold/>A <a exist="67717998" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/> charges towards you and attempts a headbutt!
+[SMR result: 69 (Open d100: 75)]
+You deftly avoid <pushBold/>a <a exist="67717998" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>'s headbutt!
+You are now in an offensive stance.
+

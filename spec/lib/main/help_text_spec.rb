@@ -1,0 +1,106 @@
+# frozen_string_literal: true
+
+require 'rspec'
+
+# login_spec_helper sets up Lich::Util, which game_selection pulls in transitively
+# by way of Authentication::LoginHelpers.
+require_relative '../../login_spec_helper'
+require_relative '../../../lib/main/help_text'
+require_relative '../../../lib/common/gui/game_selection'
+
+RSpec.describe Lich::Main::HelpText do
+  describe '.render' do
+    it 'shows the concise overview by default' do
+      output = described_class.render
+
+      expect(output).to include('Lich 5')
+      expect(output).to include('lich --help login')
+      expect(output).not_to include('--install')
+    end
+
+    it 'renders login help with headless guidance' do
+      output = described_class.render('login')
+
+      expect(output).to include('--headless PORT')
+      expect(output).to include('--headless auto')
+      expect(output).to include('--save')
+      expect(output).to include('Native saved Saga entries use Saga-managed Via Lich login')
+      expect(output).to include('require the matching account credentials to be saved in Saga.')
+    end
+
+    it 'documents the refresh-characters and add-character account commands' do
+      output = described_class.render('accounts')
+
+      expect(output).to include('--refresh-characters ACCOUNT [--frontend FRONTEND]')
+      expect(output).to include('--add-character ACCOUNT CHAR_NAME')
+    end
+
+    it 'lists every game code --game-code accepts' do
+      output = described_class.render('accounts')
+
+      Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.each do |code|
+        name = Lich::Common::GUI::GameSelection::GAME_MAPPING.fetch(code)
+        expect(output).to match(/\b#{code}\s+#{Regexp.escape(name)}/)
+      end
+    end
+
+    it 'does not document game codes the login validator rejects' do
+      output = described_class.render('accounts')
+
+      %w[GS4 GSX].each do |retired_code|
+        expect(Lich::Common::Authentication::LoginHelpers.valid_game_code?(retired_code)).to be(false)
+        expect(output).not_to include(retired_code)
+      end
+    end
+
+    it 'maps diagnostics requests to automation help' do
+      output = described_class.render('diagnostics')
+
+      expect(output).to include('Lich Help: automation')
+      expect(output).to include('--active-sessions')
+      expect(output).to include('--session-info NAME')
+      expect(output).to include('--active-session-dir=PATH')
+    end
+
+    it 'requires an explicit flag to suppress the default GTK GUI' do
+      output = described_class.render('advanced')
+
+      expect(output).to include('--no-gui, --no-gtk  Run without the GTK GUI (aliases)')
+      expect(output).to include('The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,')
+      expect(output).to include('including when using --headless.')
+    end
+
+    it 'documents multi-client detachable behavior' do
+      output = described_class.render('advanced')
+
+      expect(output).to include('Multiple frontends may attach to one detachable port.')
+      expect(output).to include('commands from all attached frontends are processed serially')
+    end
+
+    it 'lists every supported path option' do
+      output = described_class.render('paths')
+
+      expect(output).to include('--home=PATH')
+      expect(output).to include('--script-dir=PATH')
+      expect(output).to include('--data-dir=PATH')
+      expect(output).to include('--temp-dir=PATH')
+      expect(output).to include('--map-dir=PATH')
+      expect(output).to include('--log-dir=PATH')
+      expect(output).to include('--backup-dir=PATH')
+      expect(output).to include('--lib-dir=PATH')
+      expect(output).to include('--hosts-dir=PATH')
+      expect(output).to include('--hosts-file=PATH')
+      expect(output).to include('--active-session-dir=PATH')
+    end
+  end
+
+  describe '.topic_from_argv' do
+    it 'extracts the topic after --help' do
+      expect(described_class.topic_from_argv(%w[--help login], '--help')).to eq('login')
+    end
+
+    it 'extracts the topic from inline --help syntax' do
+      expect(described_class.topic_from_argv(['--help=accounts'], '--help=accounts')).to eq('accounts')
+    end
+  end
+end

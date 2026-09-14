@@ -1,0 +1,8 @@
+##### tackle 34ea6b6b62aaa629
+# expect: attacks=tackle | res=smr | flares=none | outcomes=none | dmg=0 | statuses=
+The profane energies animating <pushBold/>a <a exist="26090016" noun="ghast">cadaverous tatterdemalion ghast</a><popBold/> wash over his necrotic flesh, coalescing into a wash of blackness that whirls through his eyes.  <pushBold/>A <a exist="26090016" noun="ghast">cadaverous tatterdemalion ghast</a><popBold/> shakes his head clear and his withered lips curl back in a snarl.
+<pushBold/>A <a exist="26090016" noun="ghast">cadaverous tatterdemalion ghast</a><popBold/> hurls himself at you!
+The evanescent shield shrouding you flares to life and thickens to create a substantial buffer around you.
+[SMR result: 40 (Open d100: 61, Penalty: 12)]
+<pushBold/>A <a exist="26090016" noun="ghast">cadaverous tatterdemalion ghast</a><popBold/> fails to bring you down, but manages to scramble to his feet!
+

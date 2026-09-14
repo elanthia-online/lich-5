@@ -92,6 +92,7 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     end
 
     context 'with special characters in password' do
+      # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode password fixtures exercise credential encoding.
       special_passwords = [
         'p@ssw0rd!',
         'pässwörd',
@@ -99,6 +100,7 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
         "p'ss\"w@rd",
         'p\nw\t\r'
       ]
+      # rubocop:enable Custom/AsciiOnlySource
 
       special_passwords.each do |special_pass|
         it "handles password with special characters: #{special_pass.inspect}" do
@@ -239,11 +241,13 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
         allow(Lich).to receive(:log)
 
         # Store credential with UTF-8 string to test encoding
+        # rubocop:disable Custom/AsciiOnlySource -- Intentional Unicode strings exercise UTF-16LE boundary conversion.
         result = described_class.store_credential(
           'тест.service',
           'пользователь',
           'пароль'
         )
+        # rubocop:enable Custom/AsciiOnlySource
 
         expect([true, false]).to include(result)
       end

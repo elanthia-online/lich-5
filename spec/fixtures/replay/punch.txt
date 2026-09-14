@@ -1,0 +1,18 @@
+##### punch 2d6b699f7e00c5a2
+# expect: attacks=ambush,punch | res=uaf_udf,smr | flares=none | outcomes=none | dmg=1 | statuses=
+You boldly accost <pushBold/>a <a exist="44861735" noun="banshee">flickering mist-wreathed banshee</a><popBold/>, your attack masking your larcenous intent!
+You leap from hiding to strike!
+You attempt to punch <pushBold/>a <a exist="44861735" noun="banshee">flickering mist-wreathed banshee</a><popBold/>!
+Your attack is hindered by holding a golvern targe displaying concentric rings of crimson and navy!
+You have good positioning against <pushBold/>a <a exist="44861735" noun="banshee">flickering mist-wreathed banshee</a><popBold/>.
+  UAF: 681 vs UDF: 441 = 1.544 * MM: 95 + d100: 81 = 227
+  ... and hit for 67 points of damage!
+  Strong assault amputates the leg at the knee.
+   It floats in the air a moment before drifting back into place!
+The mist-wreathed banshee starts to favor her wounded left leg!
+[SMR result: 134 (Open d100: 8, Bonus: 10)]
+Taking advantage of the scuffle, you roughly pat the mist-wreathed banshee down for hidden valuables!
+In your hasty search, you don't find anything worth taking.
+Roundtime: 2 sec.
+Roundtime changed to 1 second.
+

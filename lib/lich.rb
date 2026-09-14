@@ -1,5 +1,27 @@
 require 'time'
 module Lich
+  DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
+
+  def Lich.sqlite_busy_timeout_ms
+    DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+  end
+
+  def Lich.configure_sqlite_connection(db)
+    db.busy_timeout(sqlite_busy_timeout_ms) if db.respond_to?(:busy_timeout)
+    db
+  end
+
+  def Lich.open_sqlite_db(path)
+    configure_sqlite_connection(SQLite3::Database.new(path))
+  end
+
+  def Lich.open_sequel_sqlite(path)
+    db = Sequel.sqlite(path)
+    # Sequel does not expose sqlite3's busy_timeout API on its database wrapper.
+    db.run("PRAGMA busy_timeout = #{sqlite_busy_timeout_ms.to_i}")
+    db
+  end
+
   # --- Minimal DB maintenance helpers (simple + safe) ---
   # Stores last maintenance timestamp and summary in lich_settings.
   # Uses an advisory OS file lock so only one Lich instance attempts VACUUM.
@@ -120,13 +142,17 @@ module Lich
   @@display_uid          = nil # boolean
   @@display_exits        = nil # boolean
   @@display_stringprocs  = nil # boolean
+  @@display_room_links   = nil # boolean
+  @@display_room_mono    = nil # boolean
   @@display_expgains     = nil # boolean (DragonRealms only)
+  @@display_roomid_location = nil # string (DragonRealms only): "title" | "line" | "both"
   @@hide_uid_flag        = nil # boolean
   @@track_autosort_state = nil # boolean
   @@track_dark_mode      = nil # boolean
   @@track_layout_state   = nil # boolean
   @@track_persistent_launcher_mode = nil # boolean
   @@debug_messaging = nil # boolean
+  @@max_debug_logs  = nil # integer
 
   def self.db_mutex
     @@db_mutex
@@ -159,16 +185,18 @@ module Lich
   end
 
   def Lich.seek(fe)
-    if fe =~ /wizard/
-      return $wiz_fe_loc
-    elsif fe =~ /stormfront/
-      return $sf_fe_loc
+    if defined?(Lich::Common::FrontendLocator)
+      return Lich::Common::FrontendLocator.compatibility_location(fe)
     end
-    pp "Landed in get_simu_launcher method"
+
+    return $wiz_fe_loc if fe =~ /wizard/
+    return $sf_fe_loc if fe =~ /stormfront/
+
+    nil
   end
 
   def Lich.db
-    @@lich_db ||= SQLite3::Database.new("#{DATA_DIR}/lich.db3")
+    @@lich_db ||= open_sqlite_db("#{DATA_DIR}/lich.db3")
   end
 
   def Lich.init_db
@@ -177,6 +205,30 @@ module Lich
       Lich.db.execute("CREATE TABLE IF NOT EXISTS script_auto_settings (script TEXT NOT NULL, scope TEXT, hash BLOB, PRIMARY KEY(script, scope));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS lich_settings (name TEXT NOT NULL, value TEXT, PRIMARY KEY(name));")
       Lich.db.execute("CREATE TABLE IF NOT EXISTS uservars (scope TEXT NOT NULL, hash BLOB, PRIMARY KEY(scope));")
+      # Session summary reporting table for process-level heartbeat metadata.
+      # This schema is initialized with the rest of core DB setup to avoid
+      # runtime DDL lock contention on first adapter access.
+      Lich.db.execute("CREATE TABLE IF NOT EXISTS session_summary_state (pid INTEGER PRIMARY KEY, session_name TEXT, role TEXT, state TEXT, frontend TEXT, game_code TEXT, hidden INTEGER DEFAULT 0, started_at INTEGER, last_heartbeat_at INTEGER, os_seen_at INTEGER, os_seen INTEGER, os_name INTEGER, last_utilization_at INTEGER, metadata_json TEXT);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_session_name ON session_summary_state(session_name);")
+      Lich.db.execute("CREATE INDEX IF NOT EXISTS idx_session_summary_state_heartbeat ON session_summary_state(last_heartbeat_at);")
+      # Backward-compatible migration guards:
+      # In dev/test transitions, older local tables may be missing newer columns.
+      # We keep these ALTER blocks idempotent by tolerating duplicate-column errors.
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_seen_at INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_seen INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
+      begin
+        Lich.db.execute("ALTER TABLE session_summary_state ADD COLUMN os_name INTEGER;")
+      rescue SQLite3::SQLException => e
+        raise unless e.message.include?('duplicate column name')
+      end
       if (RUBY_VERSION =~ /^2\.[012]\./)
         Lich.db.execute("CREATE TABLE IF NOT EXISTS trusted_scripts (name TEXT NOT NULL);")
       end
@@ -245,36 +297,37 @@ module Lich
       end
     elsif defined?(Gtk)
       if args[:buttons] == :ok_cancel
-        buttons = Gtk::MessageDialog::BUTTONS_OK_CANCEL
+        buttons = :ok_cancel
       elsif args[:buttons] == :yes_no
-        buttons = Gtk::MessageDialog::BUTTONS_YES_NO
+        buttons = :yes_no
       else
-        buttons = Gtk::MessageDialog::BUTTONS_OK
+        buttons = :ok
       end
       if args[:icon] == :error
-        type = Gtk::MessageDialog::ERROR
+        type = :error
       elsif args[:icon] == :question
-        type = Gtk::MessageDialog::QUESTION
+        type = :question
       elsif args[:icon] == :warning
-        type = Gtk::MessageDialog::WARNING
+        type = :warning
       else
-        type = Gtk::MessageDialog::INFO
+        type = :info
       end
-      dialog = Gtk::MessageDialog.new(nil, Gtk::Dialog::MODAL, type, buttons, args[:message])
+      dialog = Gtk::MessageDialog.new(parent: nil, flags: :modal, type: type, buttons: buttons, message: args[:message])
       args[:title] ||= "Lich v#{LICH_VERSION}"
       dialog.title = args[:title]
-      response = nil
-      dialog.run { |d_r|
-        response = d_r
+      begin
+        # GTK3 returns the response; it does not yield to a block passed to run.
+        response = dialog.run
+      ensure
         dialog.destroy
-      }
-      if response == Gtk::Dialog::RESPONSE_OK
+      end
+      if response == Gtk::ResponseType::OK
         return :ok
-      elsif response == Gtk::Dialog::RESPONSE_CANCEL
+      elsif response == Gtk::ResponseType::CANCEL
         return :cancel
-      elsif response == Gtk::Dialog::RESPONSE_YES
+      elsif response == Gtk::ResponseType::YES
         return :yes
-      elsif response == Gtk::Dialog::RESPONSE_NO
+      elsif response == Gtk::ResponseType::NO
         return :no
       else
         return nil
@@ -832,6 +885,49 @@ module Lich
     end
   end
 
+  # The valid values for Lich.display_roomid_location.
+  ROOMID_LOCATIONS = %w[title line both].freeze
+
+  # Where DragonRealms renders the optional room id / UID chosen via ;display lichid and
+  # ;display uid: "title" injects into the room-name line (visible on every front-end),
+  # "line" is the historical "Room Number:" line below the room, and "both" does both.
+  # GemStone ignores this setting (it always injects into the title line). The value is
+  # read fresh from the lich_settings table on first access and then memoized.
+  # @return [String, nil] one of ROOMID_LOCATIONS, or nil before a game has been identified
+  def Lich.display_roomid_location
+    if @@display_roomid_location.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_roomid_location';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      # Default to the historical below-room line once a game is known; leave unresolved
+      # (nil) until then, matching the other display_* getters.
+      val = "line" if val.nil? && XMLData.game != ""
+      @@display_roomid_location = (ROOMID_LOCATIONS.include?(val) ? val : "line") unless val.nil?
+    end
+    return @@display_roomid_location
+  end
+
+  # Sets the DragonRealms room-id display placement and persists it. An unrecognized value is
+  # ignored (the current setting is retained) so a typo can never blank the display or feed the
+  # renderer an invalid placement.
+  # @param val [String, Symbol] one of ROOMID_LOCATIONS ("title", "line", or "both"); case-insensitive
+  # @return [void]
+  def Lich.display_roomid_location=(val)
+    normalized = val.to_s.downcase
+    return unless ROOMID_LOCATIONS.include?(normalized)
+
+    @@display_roomid_location = normalized
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_roomid_location',?);", [normalized.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
   def Lich.display_exits
     if @@display_exits.nil?
       begin
@@ -874,6 +970,81 @@ module Lich
     @@display_stringprocs = (val.to_s =~ /on|true|yes/ ? true : false)
     begin
       Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_stringprocs',?);", [@@display_stringprocs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether room exits are rendered as clickable command links (a <d> tag) or as
+  # plain text in room-display output. Persisted in the lich_settings table and
+  # shared across characters. When no value has been saved yet, the default is
+  # game-aware: DragonRealms defaults to off (plain text, matching the retired
+  # roomnumbers.lic look) while GemStone and any other game default to on
+  # (clickable links, the pre-existing core behavior).
+  # @return [Boolean, nil] true when exits should be clickable links; nil until
+  #   the game is identified (XMLData.game still blank), matching the pre-existing
+  #   display_* getters. Callers treat nil as falsy.
+  def Lich.display_room_links
+    if @@display_room_links.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_links';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = (XMLData.game =~ /^DR/ ? false : true) if val.nil? and XMLData.game != ""; # default: DR off, others on
+      @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_room_links
+  end
+
+  # Sets and persists the room-exit link toggle.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
+  def Lich.display_room_links=(val)
+    @@display_room_links = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_links',?);", [@@display_room_links.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Whether the Lich-injected room lines (Room Number, Room Exits, StringProcs)
+  # are wrapped in the fixed-width mono style. Persisted in the lich_settings
+  # table and shared across characters. When no value has been saved yet, the
+  # default is game-aware: DragonRealms defaults to on (mono, matching the
+  # retired roomnumbers.lic look) while GemStone and any other game default to
+  # off (the proportional game font, the pre-existing core behavior). The mono
+  # wrapper is only emitted on mono-capable frontends (see Frontend.supports_mono?).
+  # @return [Boolean, nil] true when the lines should render in the mono style;
+  #   nil until the game is identified (XMLData.game still blank), matching the
+  #   pre-existing display_* getters. Callers treat nil as falsy.
+  def Lich.display_room_mono
+    if @@display_room_mono.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='display_room_mono';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      val = (XMLData.game =~ /^DR/ ? true : false) if val.nil? and XMLData.game != ""; # default: DR on, others off
+      @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false) if !val.nil?;
+    end
+    return @@display_room_mono
+  end
+
+  # Sets and persists the room-line mono-font toggle.
+  # @param val [Boolean, String] truthy values are any of on/true/yes
+  # @return [Boolean, String] the value passed in - Ruby assignment methods
+  #   always return their argument, not the method body's result
+  def Lich.display_room_mono=(val)
+    @@display_room_mono = (val.to_s =~ /on|true|yes/ ? true : false)
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('display_room_mono',?);", [@@display_room_mono.to_s.encode('UTF-8')])
     rescue SQLite3::BusyException
       sleep 0.1
       retry
@@ -1004,6 +1175,91 @@ module Lich
     rescue SQLite3::BusyException
       sleep 0.1
       retry
+    end
+  end
+
+  # Default number of debug log files to retain when no user preference is set.
+  #
+  # @return [Integer] the built-in retention limit
+  MAX_DEBUG_LOGS_DEFAULT = 20
+
+  # Minimum allowed value for max_debug_logs to prevent accidental deletion
+  # of all log files.
+  #
+  # @return [Integer] the floor value enforced by the setter
+  MAX_DEBUG_LOGS_MINIMUM = 1
+
+  # Returns the maximum number of debug log files to retain in the temp
+  # directory. The value is lazily loaded from the +lich_settings+ database
+  # table on first access, then cached in a class variable for subsequent
+  # calls. When no persisted value exists, falls back to
+  # {MAX_DEBUG_LOGS_DEFAULT}.
+  #
+  # @return [Integer] the configured retention limit (>= {MAX_DEBUG_LOGS_MINIMUM})
+  #
+  # @example Query the current setting in-game
+  #   ;e respond Lich.max_debug_logs
+  #
+  # @see Lich.max_debug_logs=
+  # @see Lich.cleanup_debug_logs
+  def Lich.max_debug_logs
+    if @@max_debug_logs.nil?
+      begin
+        val = Lich.db.get_first_value("SELECT value FROM lich_settings WHERE name='max_debug_logs';")
+      rescue SQLite3::BusyException
+        sleep 0.1
+        retry
+      end
+      @@max_debug_logs = val.nil? ? MAX_DEBUG_LOGS_DEFAULT : [val.to_i, MAX_DEBUG_LOGS_MINIMUM].max
+    end
+    @@max_debug_logs
+  end
+
+  # Persists the maximum number of debug log files to retain. Values below
+  # {MAX_DEBUG_LOGS_MINIMUM} are clamped to prevent accidental deletion of
+  # all logs.
+  #
+  # @param val [#to_i] the desired retention limit
+  # @return [void]
+  #
+  # @example Set retention to 50 files in-game
+  #   ;e Lich.max_debug_logs = 50
+  #
+  # @see Lich.max_debug_logs
+  # @see Lich.cleanup_debug_logs
+  def Lich.max_debug_logs=(val)
+    @@max_debug_logs = [val.to_i, MAX_DEBUG_LOGS_MINIMUM].max
+    begin
+      Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values('max_debug_logs',?);", [@@max_debug_logs.to_s.encode('UTF-8')])
+    rescue SQLite3::BusyException
+      sleep 0.1
+      retry
+    end
+  end
+
+  # Removes old debug log files from +temp_dir+, keeping at most
+  # {Lich.max_debug_logs} files. Files are sorted lexicographically by name
+  # (which encodes a timestamp), so the most recent files are retained.
+  #
+  # This method is called once during Lich startup (in +init.rb+) after the
+  # database has been initialized.
+  #
+  # @param temp_dir [String] the directory containing debug log files
+  # @return [void]
+  #
+  # @see Lich.max_debug_logs
+  def Lich.cleanup_debug_logs(temp_dir)
+    pattern = /^debug(?:-\d+)+\.log$/
+    candidates = Dir.entries(temp_dir).select { |fn| fn.match?(pattern) }
+    limit = Lich.max_debug_logs
+    return if candidates.length <= limit
+
+    candidates.sort.reverse[limit..-1].each do |old_file|
+      begin
+        File.delete(File.join(temp_dir, old_file))
+      rescue
+        Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
+      end
     end
   end
 end

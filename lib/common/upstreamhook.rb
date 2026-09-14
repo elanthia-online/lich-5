@@ -1,19 +1,34 @@
 # Carve out from lich.rbw
 # UpstreamHook class 2024-06-13
 
+require_relative 'hook_registry'
+require_relative 'script_death'
+
 module Lich
   module Common
     class UpstreamHook
+      extend HookRegistry
+
       @@upstream_hooks ||= Hash.new
       @@upstream_hook_sources ||= Hash.new
+      @@upstream_hook_owners ||= Hash.new
+      @@upstream_hook_persist ||= Hash.new
 
-      def UpstreamHook.add(name, action)
-        unless action.is_a?(Proc)
-          echo "UpstreamHook: not a Proc (#{action})"
-          return false
-        end
-        @@upstream_hook_sources[name] = (Script.current.name || "Unknown")
-        @@upstream_hooks[name] = action
+      # Per-class storage for the shared HookRegistry methods.
+      def self._hooks
+        @@upstream_hooks
+      end
+
+      def self._hook_sources
+        @@upstream_hook_sources
+      end
+
+      def self._hook_owners
+        @@upstream_hook_owners
+      end
+
+      def self._hook_persist
+        @@upstream_hook_persist
       end
 
       def UpstreamHook.run(client_string)
@@ -30,25 +45,10 @@ module Lich
         return client_string
       end
 
-      def UpstreamHook.remove(name)
-        @@upstream_hook_sources.delete(name)
-        @@upstream_hooks.delete(name)
-      end
-
-      def UpstreamHook.list
-        @@upstream_hooks.keys.dup
-      end
-
-      def UpstreamHook.sources
-        info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
-                                         :rows     => @@upstream_hook_sources.to_a,
-                                         :style    => { :all_separators => true }
-        Lich::Messaging.mono(info_table.to_s)
-      end
-
-      def UpstreamHook.hook_sources
-        @@upstream_hook_sources
-      end
+      # Apply this registry's per-script-death policy (remove script-scoped
+      # hooks, keep persistent ones, warn on undeclared) so the kill path does
+      # not need to know about UpstreamHook by name.
+      ScriptDeath.on_death { |script| cleanup_on_death(script.object_id) }
     end
   end
 end

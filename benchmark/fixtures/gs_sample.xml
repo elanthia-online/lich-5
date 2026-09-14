@@ -1,0 +1,99 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.26" major="1391" crc='132812241' instance='GS4'/>
+Welcome to GemStone IV (R) v5.10
+Copyright 2025 Simutronics Corp.
+All Rights Reserved
+<app char="Tannar" game="Prime" title="GemStone IV: Tannar [Prime]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<streamWindow id='inv' title='My Inventory' target='wear' ifClosed='' resident='true'/>
+<streamWindow id="familiar" title="Familiar" location="center" resident="true" styleIfClosed="watching"/>
+<streamWindow id="thoughts" title="Thoughts" location="center" resident="true" styleIfClosed="thought" timestamp="on"/>
+<streamWindow id="logons" title="Arrivals" location="left" resident="true" nameFilterOption="true" timestamp="on"/>
+<openDialog type='dynamic' id='minivitals' title='Stats' location='statBar'><dialogData id='minivitals'></dialogData></openDialog>
+<endSetup/>
+### benchmark:body-repeats-below ###
+<a exist="-11171239" noun="Sugi">Sugi</a> chants a short but reverent orison, asking for the power of a squall to manifest in him.
+<prompt time="1763306658">&gt;</prompt>
+<component id='room objs'>  You also see<b> <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/></b> that appears to be frozen in place,<b> <pushBold/>a <a exist="254392761" noun="spirit">comical alpine spirit</a><popBold/></b> that is flying around,<b> <pushBold/>a <a exist="254391766" noun="spirit">touchy snow spirit</a><popBold/></b> that is flying around and<b> <pushBold/>a <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/></b> that appears to be frozen in place.</component>
+<a exist="-11171239" noun="Sugi">Sugi</a> chants a reverent litany and clasps <a exist="-11171239" noun="Sugi">his</a> hands while tightly focusing <a exist="-11171239" noun="Sugi">his</a> thoughts...
+<a exist="-11171239" noun="Sugi">Sugi</a> gestures at <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>.
+A briny gust of sea breeze swirls around <a exist="-11171239" noun="Sugi">Sugi</a>, infusing the air with the scent of the sea and droplets of saltwater.
+A deafening thunderclap splits the air!  Rather than fading away, the sound's echoes grow, and they gather into a rhythmic, crashing pulse like the sound of storm-tossed waves breaking on a desolate shore.
+White sparks flickering around <a exist="-11171239" noun="Sugi">Sugi</a> suddenly condense into a massive bolt of lightning, which spears toward <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>.
+  CS: +523 - TD: +395 + CvA: +25 + d100: +84 == +237
+  Warding failed!
+   ... and hits for 47 points of damage!
+   ... 8 points of damage!
+   Heavy spark to left arm.  Gonna hurt tomorrow.
+White sparks flickering around <a exist="-11171239" noun="Sugi">Sugi</a> suddenly condense into a massive bolt of lightning, which spears toward <pushBold/>a <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/>.
+  CS: +523 - TD: +447 + CvA: +25 + d100: +79 == +180
+  Warding failed!
+   ... and hits for 36 points of damage!
+   ... 48 points of damage!
+<prompt time="1763306658">&gt;</prompt>
+<dialogData id='CreatureWindow' clear='t' ><label id='bounty_type' value='Moonsedge near Icemule Trace during the hunt - Culling Bounty' justify='left' left='0' top='0' wrap='true' /><label id='bounty_status' value='Kill 24 - cadaverous tatterdemalion ghast' justify='left' left='0' top='20' wrap='true' /><label id='total' value='Creatures: 2' justify='left' left='0' top='40' /><link id='target_creature' value='**Dreadsteed (frozen)**' cmd='target #254427867' echo='Targeting smouldering skeletal dreadsteed' justify='left' left='0' top='60' /><link id='creature_0_0' value='Banshee (frozen)' cmd='target #254427750' echo='Targeting flickering mist-wreathed banshee' justify='left' left='0' top='80' /><label id='deadcount' value='Dead Creatures: 0' left='0' top='120' /></dialogData>
+<component id='room objs'>  You also see<b> <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/></b> that appears to be frozen in place,<b> <pushBold/>a <a exist="254392761" noun="spirit">comical alpine spirit</a><popBold/></b> that is flying around,<b> <pushBold/>a <a exist="254391766" noun="spirit">touchy snow spirit</a><popBold/></b> that is flying around and<b> <pushBold/>a <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/></b> that appears to be frozen in place.</component>
+<a exist="-11156491" noun="Thioniobre">Thioniobre</a> appears to be focusing <a exist="-11156491" noun="Thioniobre">his</a> thoughts while chanting softly...
+<a exist="-11156491" noun="Thioniobre">Thioniobre</a> gestures at <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>.
+<a exist="-11156491" noun="Thioniobre">Thioniobre</a> concentrates intently on <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>, and a pulse of pearlescent energy ripples toward it!
+  CS: +513 - TD: +395 + CvA: +25 + d100: +41 == +184
+  Warding failed!
+The <pushBold/><a exist="254427867" noun="dreadsteed">skeletal dreadsteed</a><popBold/> shudders with sporadic convulsions as pearlescent ripples envelop its body.
+The <pushBold/><a exist="254427867" noun="dreadsteed">skeletal dreadsteed</a><popBold/> is crushed for 50 points of damage!
+   ... 5 points of damage!
+   Blow grazes left leg.
+   ... 3 points of damage!
+   Blow to back connects lightly.
+<prompt time="1763306658">&gt;</prompt>
+<dialogData id='CreatureWindow' clear='t' ><label id='bounty_type' value='Moonsedge near Icemule Trace during the hunt - Culling Bounty' justify='left' left='0' top='0' wrap='true' /><label id='bounty_status' value='Kill 24 - cadaverous tatterdemalion ghast' justify='left' left='0' top='20' wrap='true' /><label id='total' value='Creatures: 2' justify='left' left='0' top='40' /><link id='target_creature' value='**Dreadsteed (frozen)**' cmd='target #254427867' echo='Targeting smouldering skeletal dreadsteed' justify='left' left='0' top='60' /><link id='creature_0_0' value='Banshee (frozen)' cmd='target #254427750' echo='Targeting flickering mist-wreathed banshee' justify='left' left='0' top='80' /><label id='deadcount' value='Dead Creatures: 0' left='0' top='120' /></dialogData>
+<dialogData id='TreasureWindow' clear='t'><label id='kt_left_0' value='Weekly Gem' justify='left' left='0' top='0' /><label id='kt_right_0' value='Monthly Gems' justify='left' left='180' top='0' /><label id='kt_left_1' value='Found: 0' justify='left' left='0' top='20' /><label id='kt_right_1' value='Found: 3' justify='left' left='180' top='20' /><label id='kt_left_2' value='Searches: 0' justify='left' left='0' top='40' /><label id='kt_right_2' value='Remaining: 0' justify='left' left='180' top='40' /><label id='kt_left_3' value='Reset: 6d 13h 35m' justify='left' left='0' top='60' /><label id='kt_right_3' value='Reset: 14d 16h 35m' justify='left' left='180' top='60' /><label id='treasuretotal' value='Treasures: ' left='0' top='80' /></dialogData>
+<output class="mono"/>
+[bigshot]&gt;chant symbol
+<output class=""/>
+You chant a reverent orison, asking Sheru for terror to grip all those touched by the night.
+<prompt time="1763306659">&gt;</prompt>
+<dialogData id='expr'><label id='yourLvl' value='Level 100' top='0' left='0' align='n' width='160' height='15'/><progressBar id='mindState' value='100' text='saturated' top='45' left='3' align='n' width='160' height='15'/><progressBar id='nextLvlPB' value='100' text='16648855 experience' top='20' left='3' align='n' width='160' height='15'/></dialogData><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='50%' top='0%' width='25%' height='100%'/><progressBar id='stamina' value='100' text='stamina 117/117' left='50%' customText='t' top='0%' width='25%' height='100%'/></dialogData>You feel fully energetic again.
+<prompt time="1763306660">&gt;</prompt>
+<output class="mono"/>
+[bigshot]&gt;incant 335
+<output class=""/>
+<dialogData id='CreatureWindow' clear='t' ><label id='bounty_type' value='Moonsedge near Icemule Trace during the hunt - Culling Bounty' justify='left' left='0' top='0' wrap='true' /><label id='bounty_status' value='Kill 24 - cadaverous tatterdemalion ghast' justify='left' left='0' top='20' wrap='true' /><label id='total' value='Creatures: 2' justify='left' left='0' top='40' /><link id='target_creature' value='**Dreadsteed (frozen)**' cmd='target #254427867' echo='Targeting smouldering skeletal dreadsteed' justify='left' left='0' top='60' /><link id='creature_0_0' value='Banshee (frozen)' cmd='target #254427750' echo='Targeting flickering mist-wreathed banshee' justify='left' left='0' top='80' /><label id='deadcount' value='Dead Creatures: 0' left='0' top='120' /></dialogData>
+<dialogData id='Buffs' clear='t'></dialogData><dialogData id='Buffs'><progressBar id='115' value='22' text="115" left='22%' top='0' width='76%' height='15' time='00:56:09'/><label id='l115' value='0:56 ' top='0' left='0' justify='2' anchor_right='incant'/><progressBar id='240' value='100' text="240" left='22%' top='16' width='76%' height='15' time='00:00:48'/><label id='l240' value='48s ' top='16' left='0' justify='2' anchor_right='incant'/><progressBar id='5006' value='34' text="Sign of Warding" left='22%' top='32' width='76%' height='15' time='00:06:05'/><label id='l5006' value='0:06 ' top='32' left='0' justify='2' anchor_right='incant'/><progressBar id='5008' value='100' text="Sign of Staunching" left='22%' top='48' width='76%' height='15' time='00:23:40'/><label id='l5008' value='0:23 ' top='48' left='0' justify='2' anchor_right='incant'/><progressBar id='5010' value='37' text="Sign of Defending" left='22%' top='64' width='76%' height='15' time='00:06:32'/><label id='l5010' value='0:06 ' top='64' left='0' justify='2' anchor_right='incant'/><progressBar id='5013' value='35' text="Sign of Deflection" left='22%' top='80' width='76%' height='15' time='00:06:07'/><label id='l5013' value='0:06 ' top='80' left='0' justify='2' anchor_right='incant'/><progressBar id='5016' value='33' text="Sign of Shields" left='22%' top='96' width='76%' height='15' time='00:05:50'/><label id='l5016' value='0:05 ' top='96' left='0' justify='2' anchor_right='incant'/><progressBar id='5017' value='34' text="Sign of Dissipation" left='22%' top='112' width='76%' height='15' time='00:05:57'/><label id='l5017' value='0:05 ' top='112' left='0' justify='2' anchor_right='incant'/><progressBar id='183707310' value='100' text="Empowered (+20)" left='22%' top='128' width='76%' height='15' time='00:02:33'/><label id='l183707310' value='0:02 ' top='128' left='0' justify='2' anchor_right='incant'/><progressBar id='1263298210' value='26' text="Crooked Intent" left='22%' top='144' width='76%' height='15' time='00:03:57'/><label id='l1263298210' value='0:03 ' top='144' left='0' justify='2' anchor_right='incant'/></dialogData>
+<dialogData id='Buffs' clear='t'></dialogData><dialogData id='Buffs'><progressBar id='115' value='22' text="115" left='22%' top='0' width='76%' height='15' time='00:56:09'/><label id='l115' value='0:56 ' top='0' left='0' justify='2' anchor_right='incant'/><progressBar id='240' value='100' text="240" left='22%' top='16' width='76%' height='15' time='00:00:48'/><label id='l240' value='48s ' top='16' left='0' justify='2' anchor_right='incant'/><progressBar id='5006' value='34' text="Sign of Warding" left='22%' top='32' width='76%' height='15' time='00:06:05'/><label id='l5006' value='0:06 ' top='32' left='0' justify='2' anchor_right='incant'/><progressBar id='5008' value='100' text="Sign of Staunching" left='22%' top='48' width='76%' height='15' time='00:23:40'/><label id='l5008' value='0:23 ' top='48' left='0' justify='2' anchor_right='incant'/><progressBar id='5010' value='37' text="Sign of Defending" left='22%' top='64' width='76%' height='15' time='00:06:32'/><label id='l5010' value='0:06 ' top='64' left='0' justify='2' anchor_right='incant'/><progressBar id='5013' value='35' text="Sign of Deflection" left='22%' top='80' width='76%' height='15' time='00:06:07'/><label id='l5013' value='0:06 ' top='80' left='0' justify='2' anchor_right='incant'/><progressBar id='5016' value='33' text="Sign of Shields" left='22%' top='96' width='76%' height='15' time='00:05:50'/><label id='l5016' value='0:05 ' top='96' left='0' justify='2' anchor_right='incant'/><progressBar id='5017' value='34' text="Sign of Dissipation" left='22%' top='112' width='76%' height='15' time='00:05:57'/><label id='l5017' value='0:05 ' top='112' left='0' justify='2' anchor_right='incant'/><progressBar id='183707310' value='100' text="Empowered (+20)" left='22%' top='128' width='76%' height='15' time='00:02:33'/><label id='l183707310' value='0:02 ' top='128' left='0' justify='2' anchor_right='incant'/><progressBar id='1263298210' value='26' text="Crooked Intent" left='22%' top='144' width='76%' height='15' time='00:03:57'/><label id='l1263298210' value='0:03 ' top='144' left='0' justify='2' anchor_right='incant'/></dialogData>
+<dialogData id='Buffs' clear='t'></dialogData><dialogData id='Buffs'><progressBar id='115' value='22' text="115" left='22%' top='0' width='76%' height='15' time='00:56:09'/><label id='l115' value='0:56 ' top='0' left='0' justify='2' anchor_right='incant'/><progressBar id='240' value='100' text="240" left='22%' top='16' width='76%' height='15' time='00:00:48'/><label id='l240' value='48s ' top='16' left='0' justify='2' anchor_right='incant'/><progressBar id='5006' value='34' text="Sign of Warding" left='22%' top='32' width='76%' height='15' time='00:06:05'/><label id='l5006' value='0:06 ' top='32' left='0' justify='2' anchor_right='incant'/><progressBar id='5008' value='100' text="Sign of Staunching" left='22%' top='48' width='76%' height='15' time='00:23:40'/><label id='l5008' value='0:23 ' top='48' left='0' justify='2' anchor_right='incant'/><progressBar id='5010' value='37' text="Sign of Defending" left='22%' top='64' width='76%' height='15' time='00:06:32'/><label id='l5010' value='0:06 ' top='64' left='0' justify='2' anchor_right='incant'/><progressBar id='5013' value='35' text="Sign of Deflection" left='22%' top='80' width='76%' height='15' time='00:06:07'/><label id='l5013' value='0:06 ' top='80' left='0' justify='2' anchor_right='incant'/><progressBar id='5016' value='33' text="Sign of Shields" left='22%' top='96' width='76%' height='15' time='00:05:50'/><label id='l5016' value='0:05 ' top='96' left='0' justify='2' anchor_right='incant'/><progressBar id='5017' value='34' text="Sign of Dissipation" left='22%' top='112' width='76%' height='15' time='00:05:57'/><label id='l5017' value='0:05 ' top='112' left='0' justify='2' anchor_right='incant'/><progressBar id='183707310' value='100' text="Empowered (+20)" left='22%' top='128' width='76%' height='15' time='00:02:33'/><label id='l183707310' value='0:02 ' top='128' left='0' justify='2' anchor_right='incant'/><progressBar id='1263298210' value='26' text="Crooked Intent" left='22%' top='144' width='76%' height='15' time='00:03:57'/><label id='l1263298210' value='0:03 ' top='144' left='0' justify='2' anchor_right='incant'/></dialogData>
+<component id='room objs'>  You also see<b> <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/></b> that appears dead,<b> <pushBold/>a <a exist="254392761" noun="spirit">comical alpine spirit</a><popBold/></b> that is flying around,<b> <pushBold/>a <a exist="254391766" noun="spirit">touchy snow spirit</a><popBold/></b> that is flying around and<b> <pushBold/>a <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/></b> that appears to be frozen in place.</component>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='25%' top='0%' width='25%' height='100%'/><progressBar id='mana' value='74' text='mana 317/426' left='25%' customText='t' top='0%' width='25%' height='100%'/></dialogData><castTime value='1763306663'/>You chant a reverent litany, clasping your hands while focusing upon the Divine Wrath spell...
+<a exist="spell" noun="spell">Your spell is ready.</a>
+You gesture at <pushBold/>a <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/>.
+As you pour your soul into an appeal to Sheru, you know that you are heard.  The world darkens around you, casting everything into a murky shadow.
+Visible only at the corner of your vision, you glimpse a pair of dark amber eyes watching from the shadows, and a low, deliberate growl seethes slowly through the air from no discernable source.  The power of Sheru has answered you.
+<pushBold/>A <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed</a><popBold/> looks distinctly nervous, shifting <pushBold/><a exist="254427867" noun="dreadsteed">its</a><popBold/> weight and peering around.
+You hear the soft tinkle of rolling dice, followed by the sound of coins dropping!
+  CS: +555 - TD: +395 + CvA: +25 + d125: +40 + Bonus: +8 == +233
+  Warding failed!
+  Suddenly, <pushBold/>the <a exist="254427867" noun="dreadsteed">skeletal dreadsteed</a><popBold/> tries to bolt away, but instead smashes into a wall of spectral force hidden within the shadows!
+   ... and hits for 46 points of damage!
+   ... 33 points of damage!
+   Tremendous blow crushes skull like a ripe melon.
+<pushBold/>A <a exist="254427867" noun="dreadsteed">smouldering skeletal dreadsteed's</a><popBold/> head tosses and <pushBold/><a exist="254427867" noun="dreadsteed">it</a><popBold/> lets out a terrible death whinny that slices coldly through the air.  <pushBold/><a exist="254427867" noun="dreadsteed">It</a><popBold/> sags, lifeless, the blue flames of <pushBold/><a exist="254427867" noun="dreadsteed">its</a><popBold/> mane winking out one by one.
+<pushBold/>A <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/> looks distinctly nervous, shifting <pushBold/><a exist="254427750" noun="banshee">her</a><popBold/> weight and peering around.
+  CS: +555 - TD: +447 + CvA: +25 + d125: +66 + Bonus: +8 == +207
+  Warding failed!
+  Suddenly, <pushBold/>the <a exist="254427750" noun="banshee">mist-wreathed banshee</a><popBold/> tries to bolt away, but instead smashes into a wall of spectral force hidden within the shadows!
+   ... and hits for 41 points of damage!
+   ... 38 points of damage!
+   Massive blow obliterates the right knee.
+   <pushBold/>The <a exist="254427750" noun="banshee">mist-wreathed banshee</a><popBold/> falters as a sickly light flows freely down its leg.
+Cast Roundtime 3 Seconds.
+<prompt time="1763306660">&gt;</prompt>
+<component id='room players'>Also here: <a exist="-11181956" noun="Kleterae">Kleterae</a>, <a exist="-11156491" noun="Thioniobre">Thioniobre</a>, <a exist="-11171239" noun="Sugi">Sugi</a></component>
+<a exist="-11181956" noun="Kleterae">Kleterae</a> swings a curved vultite handaxe at <pushBold/>a <a exist="254427750" noun="banshee">flickering mist-wreathed banshee</a><popBold/>!
+  AS: +649 vs DS: +371 with AvD: +30 + d100 roll: +42 = +350
+   ... and hits for 118 points of damage!
+   Good hit!
+   Left shoulder is ripped from its socket then wriggles back into place.
+ ** <a exist="-11181956" noun="Kleterae">Kleterae's</a> <a exist="254390591" noun="handaxe">vultite handaxe</a> releases a blast of vibrating energy! **
+   ... 3 points of damage!
+   Weak blow to neck wouldn't have scared <pushBold/>the <a exist="254427750" noun="banshee">mist-wreathed banshee</a><popBold/> even if it were still alive.
+<prompt time="1763306660">&gt;</prompt>

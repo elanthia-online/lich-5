@@ -1,0 +1,576 @@
+# frozen_string_literal: true
+
+require 'fileutils'
+require 'json'
+require 'securerandom'
+require 'tmpdir'
+
+require_relative 'active_sessions/registry'
+require_relative 'active_sessions/server'
+require_relative 'active_sessions/client'
+require_relative 'active_sessions/lifecycle'
+
+module Lich
+  module InternalAPI
+    # Cross-process local service that tracks currently active Lich sessions.
+    #
+    # This module owns the process-local server instance for the active
+    # sessions API and exposes the smallest set of operations needed by the
+    # lifecycle hooks:
+    # - feature-gated availability checks
+    # - best-effort service bootstrap
+    # - session registration and removal
+    # - read-only snapshot retrieval
+    #
+    # Ownership is coordinated with a cross-process advisory file lock
+    # (see {acquire_ownership_lock}) rather than a fixed, well-known TCP port.
+    # The single process that holds the lock binds an ephemeral port and
+    # publishes it in the discovery file; peers read that port to reach the
+    # owner. Because the kernel releases an advisory lock the instant its owning
+    # process dies, a crashed owner never blocks a successor, and there is no
+    # fixed port for a stuck process to squat.
+    #
+    # The service is intentionally dormant unless its feature flag is enabled.
+    # When disabled, all public entry points return inert values rather than
+    # raising, so feature consumers can safely probe for availability.
+    module ActiveSessions
+      # Feature flag name that enables the active sessions API.
+      #
+      # @return [Symbol]
+      FEATURE_FLAG = :active_sessions_api
+
+      # Loopback host used by the local TCP service.
+      #
+      # @return [String]
+      DEFAULT_HOST = '127.0.0.1'
+
+      # Port passed to the transport to request an OS-assigned ephemeral port.
+      # The actual bound port is read back after {Server#start} and published in
+      # the discovery file.
+      #
+      # @return [Integer]
+      EPHEMERAL_PORT = 0
+
+      # Filename used to publish the current owner metadata for local clients.
+      #
+      # @return [String]
+      DISCOVERY_FILENAME = 'lich-active-sessions.json'
+
+      # Filename of the advisory lock used to elect a single service owner
+      # across processes.
+      #
+      # @return [String]
+      LOCK_FILENAME = 'lich-active-sessions.lock'
+
+      @registry = nil
+      @server = nil
+      @lock_file = nil
+      @service_client = nil
+      @service_client_token = nil
+      @service_client_port = nil
+      @mutex = Mutex.new
+      @service_client_mutex = Mutex.new
+
+      # Indicates whether the active sessions API is enabled.
+      #
+      # An explicit --active-session-dir=PATH CLI flag implies opt-in for this
+      # process only -- passing a coordination directory is a clear enough
+      # signal of intent that requiring the persisted feature_flag:
+      # active_sessions_api row too would just be friction. This never writes
+      # to lich_settings; removing the flag on a later launch reverts to
+      # whatever the persisted flag says (false by default).
+      #
+      # Until feature-flag plumbing is present in core, this API otherwise
+      # remains safely dormant and returns empty snapshots.
+      #
+      # @return [Boolean]
+      def self.enabled?
+        return true if defined?(ACTIVE_SESSION_DIR) && !ACTIVE_SESSION_DIR.to_s.empty?
+        return false unless defined?(Lich::Common::FeatureFlags)
+
+        Lich::Common::FeatureFlags.enabled?(FEATURE_FLAG)
+      rescue StandardError => e
+        Lich.log("warning: ActiveSessions feature flag check failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        false
+      end
+
+      # Starts the local service if no healthy service is already responding.
+      #
+      # The first process to win the ownership lock becomes the in-process
+      # server owner. All later callers reuse the same endpoint through the
+      # client adapter.
+      #
+      # @return [Boolean] true when a healthy service is available
+      def self.ensure_service!
+        return false unless enabled?
+
+        ensure_service_internal!(allow_bootstrap: true)
+      end
+
+      # Returns whether an already-admitted call path can reach a healthy
+      # service without re-reading the feature flag on every hot-path call.
+      #
+      # This helper preserves the operational kill switch by requiring the
+      # real feature flag before bootstrapping a *new* owner while still
+      # allowing healthy existing owners to be reused by admitted callers.
+      #
+      # @param allow_bootstrap [Boolean] when false, never start a new server
+      # @return [Boolean]
+      def self.ensure_service_internal!(allow_bootstrap:)
+        # Fast path 1: this process already owns a healthy server -- reuse it
+        # without touching discovery or the lock.
+        return true if owns_running_server?
+
+        # Fast path 2: a peer owner is reachable at the discovered port.
+        return true if service_available?
+        return false unless allow_bootstrap
+
+        # Re-check the live kill switch on the bootstrap path so admitted
+        # callers can reuse an existing owner without re-reading the flag,
+        # while still preventing creation of a brand-new owner after disable.
+        return false unless enabled?
+
+        @mutex.synchronize do
+          # Another thread or process may have won ownership while we waited
+          # for the lock.
+          return true if owns_running_server?
+          return true if service_available?
+
+          release_in_process_zombie!
+          claim_ownership_and_start!
+        end
+      rescue StandardError => e
+        Lich.log("warning: ActiveSessions service unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        false
+      end
+      private_class_method :ensure_service_internal!
+
+      # Registers or updates a session record in the local service.
+      #
+      # @param payload [Hash] normalized session metadata
+      # @return [Boolean] true when the service accepted the update
+      def self.register_session(payload)
+        return false unless enabled?
+        return false unless ensure_service!
+
+        service_client&.upsert(payload)&.fetch(:ok, false) || false
+      end
+
+      # Registers or updates a session record from a lifecycle path that
+      # already admitted the feature gate at startup.
+      #
+      # When the current service owner has exited, this allows a surviving
+      # session to bootstrap a replacement owner so session visibility is
+      # maintained. The kill-switch is still enforced: ensure_service_internal!
+      # re-checks enabled? before creating a new owner.
+      #
+      # @param payload [Hash] normalized session metadata
+      # @return [Boolean] true when the service accepted the update
+      def self.register_session_admitted(payload)
+        return false unless ensure_service_internal!(allow_bootstrap: true)
+
+        service_client&.upsert(payload)&.fetch(:ok, false) || false
+      end
+      private_class_method :register_session_admitted
+
+      # Removes a session record by pid.
+      #
+      # @param pid [Integer]
+      # @return [Boolean] true when the service accepted the removal request
+      def self.unregister_session(pid:)
+        return false unless enabled?
+        return false unless ensure_service!
+
+        service_client&.remove(pid)&.fetch(:ok, false) || false
+      end
+
+      # Removes a session record from a lifecycle path that already admitted
+      # the feature gate at startup.
+      #
+      # @param pid [Integer]
+      # @return [Boolean] true when the service accepted the removal request
+      def self.unregister_session_admitted(pid:)
+        return false unless ensure_service_internal!(allow_bootstrap: false)
+
+        service_client&.remove(pid)&.fetch(:ok, false) || false
+      end
+      private_class_method :unregister_session_admitted
+
+      # Returns the current active sessions snapshot.
+      #
+      # @return [Hash] a normalized snapshot or an inert fallback payload
+      def self.snapshot
+        return fallback_snapshot unless enabled?
+        return fallback_snapshot unless ensure_service!
+
+        response = service_client&.snapshot || fallback_snapshot(error: 'active sessions service unavailable')
+        return fallback_snapshot(error: response[:error]) unless response[:ok]
+
+        response[:payload]
+      rescue StandardError => e
+        fallback_snapshot(error: e.message)
+      end
+
+      # Queries the currently discovered active-sessions service without
+      # consulting the local feature flag state or attempting to bootstrap a
+      # new owner.
+      #
+      # This is intended for read-only operator tools and CLI queries that may
+      # run outside a normal Lich session process. If no service is already
+      # available, the result is a normalized fallback payload.
+      #
+      # @return [Hash] a normalized snapshot or an inert fallback payload
+      def self.query_snapshot
+        response = service_client&.snapshot
+        return fallback_snapshot(error: 'active sessions service unavailable') unless response
+        return fallback_snapshot(error: response[:error]) unless response[:ok]
+
+        response[:payload]
+      rescue StandardError => e
+        fallback_snapshot(error: e.message)
+      end
+
+      # Returns sanitized metadata about the current active-sessions service.
+      #
+      # The public shape intentionally omits the shared auth token while still
+      # exposing enough information for diagnostics and operator visibility.
+      #
+      # @return [Hash]
+      def self.service_info
+        discovery = load_discovery
+        {
+          source: 'ActiveSessionsAPI',
+          owner_pid: discovery[:owner_pid],
+          port: discovery[:port],
+          updated_at: discovery[:updated_at],
+          service_available: service_available?
+        }.compact
+      end
+
+      # Stops the in-process server if this process owns one, releasing the
+      # ownership lock and clearing the published discovery record.
+      #
+      # This is intended for explicit service shutdown paths, not ordinary
+      # lifecycle teardown for every session consumer.
+      #
+      # @return [void]
+      def self.stop_service!
+        @mutex.synchronize do
+          @server&.stop
+          @server = nil
+          @registry = nil
+          release_ownership_lock
+        end
+        @service_client_mutex.synchronize do
+          @service_client = nil
+          @service_client_token = nil
+          @service_client_port = nil
+        end
+        delete_discovery_if_owned
+      end
+
+      # Returns a client configured from the current discovery record.
+      #
+      # Returns nil unless discovery advertises both an auth token and the
+      # owner's ephemeral port.
+      #
+      # @return [Lich::InternalAPI::ActiveSessions::Client, nil]
+      def self.service_client
+        discovery = load_discovery
+        return nil unless discovery[:auth_token] && discovery[:port]
+
+        @service_client_mutex.synchronize do
+          if @service_client.nil? || @service_client_token != discovery[:auth_token] || @service_client_port != discovery[:port]
+            @service_client = Client.new(host: DEFAULT_HOST, port: discovery[:port], auth_token: discovery[:auth_token])
+            @service_client_token = discovery[:auth_token]
+            @service_client_port = discovery[:port]
+          end
+          @service_client
+        end
+      end
+      private_class_method :service_client
+
+      # Builds the inert fallback payload returned when the feature is disabled
+      # or the local service cannot be contacted.
+      #
+      # @param error [String, nil] optional transport or runtime error detail
+      # @return [Hash]
+      def self.fallback_snapshot(error: nil)
+        {
+          source: 'ActiveSessionsAPI',
+          total: 0,
+          connected: 0,
+          detachable: 0,
+          sessions: [],
+          error: error
+        }.compact
+      end
+      private_class_method :fallback_snapshot
+
+      # Returns whether the current discovery record points to a responding
+      # service.
+      #
+      # @return [Boolean]
+      def self.service_available?
+        service_client&.ping || false
+      end
+      private_class_method :service_available?
+
+      # Returns whether this process holds a server with a live accept loop.
+      #
+      # Because ownership is gated by an exclusive advisory lock, a running
+      # in-process server is proof that this process is the sole owner.
+      #
+      # @return [Boolean]
+      def self.owns_running_server?
+        !@server.nil? && @server.running?
+      end
+      private_class_method :owns_running_server?
+
+      # Stops and clears an in-process server whose accept loop has died so a
+      # fresh ephemeral listener can be bound. The ownership lock is retained,
+      # so this process simply re-publishes on the next bind.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [void]
+      def self.release_in_process_zombie!
+        return unless @server && !@server.running?
+
+        Lich.log("warning: ActiveSessions in-process zombie detected pid=#{Process.pid} -- rebinding") if Lich.respond_to?(:log)
+        # Clear the reference in an ensure so a raising stop still drops the dead
+        # server. Otherwise a failed stop would leave @server pointing at the
+        # corpse, and every later retry would re-enter this method, call the same
+        # raising stop, and never rebind. The failure still propagates so the
+        # current attempt reports unavailable; the next attempt starts clean.
+        begin
+          @server.stop
+        ensure
+          @server = nil
+        end
+      end
+      private_class_method :release_in_process_zombie!
+
+      # Attempts to become the service owner and start the listener.
+      #
+      # Acquires the exclusive ownership lock (unless already held by this
+      # process from a prior bind), binds an ephemeral port, and publishes the
+      # owner metadata. If the lock is held by a live peer, no server is
+      # started and the peer is reused instead.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [Boolean] true when a healthy service is available afterwards
+      def self.claim_ownership_and_start!
+        return service_available? unless own_lock? || acquire_ownership_lock
+
+        @registry ||= Registry.new
+        @server ||= Server.new(
+          host: DEFAULT_HOST,
+          port: EPHEMERAL_PORT,
+          registry: @registry,
+          auth_token: SecureRandom.hex(32)
+        )
+
+        # Once the lock is held, any failure before discovery is published must
+        # roll the lock (and a started server) back. Otherwise this process
+        # holds the ownership lock without a reachable, discoverable service --
+        # locking every peer out while being unable to serve itself.
+        unless @server.start
+          @server = nil
+          release_ownership_lock
+          return false
+        end
+
+        begin
+          write_discovery(owner_pid: Process.pid, auth_token: @server.auth_token, port: @server.port)
+        rescue StandardError => e
+          Lich.log("warning: ActiveSessions discovery publish failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+          @server.stop
+          @server = nil
+          release_ownership_lock
+          return false
+        end
+
+        true
+      end
+      private_class_method :claim_ownership_and_start!
+
+      # Returns whether this process currently holds the ownership lock.
+      #
+      # @return [Boolean]
+      def self.own_lock?
+        !@lock_file.nil?
+      end
+      private_class_method :own_lock?
+
+      # Attempts to acquire the cross-process ownership lock without blocking.
+      #
+      # On success the lock file handle is retained for the process lifetime so
+      # the advisory lock is held until this process releases it or exits (the
+      # kernel releases it automatically on process death).
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [Boolean] true when the lock was acquired by this process
+      def self.acquire_ownership_lock
+        # coordination_dir has no boot-time mkdir the way TEMP_DIR does (see
+        # lib/init.rb) -- ACTIVE_SESSION_DIR in particular may point at a path
+        # that has never been created. Without this, File.open below raises
+        # Errno::ENOENT, which the rescue clause quietly turns into "service
+        # unavailable" with no actionable trace for the caller.
+        FileUtils.mkdir_p(coordination_dir)
+        file = File.open(lock_path, File::RDWR | File::CREAT, 0o600)
+        if file.flock(File::LOCK_EX | File::LOCK_NB)
+          @lock_file = file
+          true
+        else
+          file.close
+          false
+        end
+      rescue StandardError => e
+        Lich.log("warning: ActiveSessions ownership lock unavailable: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        # If File.open succeeded but flock raised, the handle is open and was
+        # never recorded as the owning lock. Close it here so repeated failures
+        # (e.g. Errno::ENOLCK on a filesystem without locking) cannot leak file
+        # descriptors. Skip when ownership was recorded (flock returned true).
+        file.close if file && !file.closed? && !@lock_file.equal?(file)
+        false
+      end
+      private_class_method :acquire_ownership_lock
+
+      # Releases the ownership lock held by this process, if any.
+      #
+      # @note The caller must hold {@mutex}.
+      # @return [void]
+      def self.release_ownership_lock
+        return unless @lock_file
+
+        @lock_file.flock(File::LOCK_UN)
+        @lock_file.close
+      rescue StandardError
+        nil
+      ensure
+        @lock_file = nil
+      end
+      private_class_method :release_ownership_lock
+
+      # Returns the base directory shared by local coordination files
+      # (the discovery record and the ownership lock).
+      #
+      # Prefers an explicit ACTIVE_SESSION_DIR override (set via the
+      # --active-session-dir=PATH CLI flag) so coordination can be pointed at a
+      # directory shared across characters independently of TEMP_DIR, which is
+      # often overridden per-character to separate debug logs. Falls back to
+      # today's behavior -- TEMP_DIR, or Dir.tmpdir -- when unset.
+      #
+      # @return [String]
+      def self.coordination_dir
+        return ACTIVE_SESSION_DIR if defined?(ACTIVE_SESSION_DIR) && !ACTIVE_SESSION_DIR.to_s.empty?
+
+        defined?(TEMP_DIR) ? TEMP_DIR : Dir.tmpdir
+      end
+      private_class_method :coordination_dir
+
+      # Returns the on-disk ownership lock path shared by local sessions.
+      #
+      # @return [String]
+      def self.lock_path
+        File.join(coordination_dir, LOCK_FILENAME)
+      end
+      private_class_method :lock_path
+
+      # Returns the on-disk discovery file path shared by local sessions.
+      #
+      # @return [String]
+      def self.discovery_path
+        File.join(coordination_dir, DISCOVERY_FILENAME)
+      end
+      private_class_method :discovery_path
+
+      # Loads the current discovery payload, if present.
+      #
+      # @return [Hash]
+      def self.load_discovery
+        return {} unless File.exist?(discovery_path)
+
+        JSON.parse(File.read(discovery_path), symbolize_names: true)
+      rescue StandardError
+        {}
+      end
+      private_class_method :load_discovery
+
+      # Persists the current service owner metadata so peer sessions can reach
+      # the active service at its ephemeral port instead of starting a competing
+      # owner.
+      #
+      # @param owner_pid [Integer]
+      # @param auth_token [String]
+      # @param port [Integer] the owner's bound ephemeral port
+      # @return [void]
+      def self.write_discovery(owner_pid:, auth_token:, port:)
+        payload = {
+          owner_pid: owner_pid,
+          auth_token: auth_token,
+          port: port,
+          updated_at: Time.now.to_i
+        }
+        temp_path = "#{discovery_path}.#{Process.pid}.tmp"
+        File.open(temp_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+          file.write(JSON.dump(payload))
+        end
+        File.rename(temp_path, discovery_path)
+      ensure
+        File.delete(temp_path) if defined?(temp_path) && File.exist?(temp_path)
+      end
+      private_class_method :write_discovery
+
+      # Deletes the discovery file only when the current process still owns it.
+      #
+      # @return [void]
+      def self.delete_discovery_if_owned
+        delete_discovery_if_owner(Process.pid)
+      end
+      private_class_method :delete_discovery_if_owned
+
+      # Deletes the discovery file only when it still belongs to the given owner.
+      #
+      # Re-reads the file before deletion to avoid a race where another process
+      # has written a fresh discovery between the caller's initial read and this
+      # deletion attempt.
+      #
+      # @param expected_owner_pid [Integer]
+      # @return [void]
+      def self.delete_discovery_if_owner(expected_owner_pid)
+        current = load_discovery
+        return unless current[:owner_pid].to_i == expected_owner_pid.to_i
+
+        File.delete(discovery_path) if File.exist?(discovery_path)
+      rescue StandardError
+        nil
+      end
+      private_class_method :delete_discovery_if_owner
+
+      # Removes the discovery file and stops the service when the current
+      # process still owns the service and the shared registry is now empty.
+      #
+      # @return [void]
+      def self.cleanup_discovery_if_last_session!
+        discovery = load_discovery
+        return unless discovery[:owner_pid].to_i == Process.pid
+
+        current_snapshot = query_snapshot
+        return if current_snapshot[:error]
+        return unless current_snapshot[:source] == 'ActiveSessionsAPI'
+        return unless current_snapshot[:total].to_i.zero?
+
+        stop_service!
+      rescue StandardError
+        nil
+      end
+
+      # Best-effort teardown registered so a normally-exiting owner promptly
+      # releases its listener, ownership lock, and discovery pointer -- letting
+      # a surviving peer take over without waiting for OS-level cleanup. Safe
+      # and inert for non-owner processes.
+      at_exit { stop_service! rescue nil }
+    end
+  end
+end

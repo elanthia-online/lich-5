@@ -1,0 +1,21 @@
+##### spikethorn 787c03884a75e1d0
+# expect: attacks=spikethorn | res=smr | flares=none | outcomes=none | dmg=4 | statuses=prone/add
+Dozens of long thorns suddenly grow out from the ground underneath <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>!
+[SMR result: 201 (Open d100: 54, Bonus: 12)]
+Several of the thorns jab into the kelpie!
+   ... hits for 15 points of damage!
+   ... 40 points of damage!
+   Strike punctures thigh and shatters femur!
+   <pushBold/>A <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/> falls to the ground grasping her mangled right leg!
+   ... hits for 15 points of damage!
+   ... 40 points of damage!
+   Strike to abdomen skewers the fog-cloaked kelpie quite nicely!
+You hear a sound like a child weeping as a white glow separates itself from the fog-cloaked kelpie's body and rises into the heavens.
+<pushBold/>A <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/> opens her mouth as if to gasp for breath, but the light fades from her pale eyes and her features begin to run like hot candle wax.
+<pushBold/>A <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>'s dreamy gaze goes lifeless.
+The white light leaves <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>.
+The very powerful look leaves <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>.
+The wall of force disappears from around <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/>.
+The air about <pushBold/>a <a exist="90672057" noun="kelpie">pallid fog-cloaked kelpie</a><popBold/> stops shimmering.
+Cast Roundtime 1 Second.
+

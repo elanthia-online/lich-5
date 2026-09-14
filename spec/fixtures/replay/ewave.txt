@@ -1,0 +1,5 @@
+##### ewave d0faeac522709b0f
+# expect: attacks=ewave | res=none | flares=none | outcomes=none | dmg=0 | statuses=
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> is buffeted by the dark ethereal waves and is knocked to the ground.
+Cast Roundtime 3 Seconds.
+

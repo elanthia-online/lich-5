@@ -1,0 +1,7 @@
+##### tremors 4c0f677082d089b1
+# expect: attacks=tremors | res=none | flares=none | outcomes=none | dmg=0 | statuses=prone/add,weakened/add
+As <a exist="-16306919" noun="Treeze">Treeze</a> stomps his foot sharply, the ground shakes wildly!
+The ground begins to shake violently, making it hard to stand.
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> loses her balance and falls over.
+<pushBold/>A <a exist="67597902" noun="radical">triton radical</a><popBold/> appears weak and feeble, her movements sluggish.
+

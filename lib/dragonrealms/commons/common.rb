@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../custom_substitutions'
+
 module Lich
   module DragonRealms
     module DRC
@@ -8,7 +10,7 @@ module Lich
 
       module_function
 
-      # ── Constants ────────────────────────────────────────────────────────
+      # -- Constants --------------------------------------------------------
 
       # Pattern for XML tags
       XML_TAG_PATTERN = /<[^>]+>/.freeze
@@ -73,7 +75,14 @@ module Lich
       # https://regex101.com/r/4lGY6u/13
       FLAVOR_TEXT_PATTERN = /\s?\b(?:(?:colorfully and )?(?:artfully|artistically|attractively|beautifully|bl?ack-|cleverly|clumsily|crudely|deeply|delicately|edged|elaborately|faintly|flamboyantly|front-|fully|gracefully|heavily|held|intricately|lavishly|masterfully|plentifully|prominantly|roughly|securely|sewn|shabbily|shadow-|simply|somberly|skillfully|sloppily|starkly|stitched|tied and|tightly|well-)\s?)?(?:accented|accentuated|acid-etched|adorned|affixed|appliqued|assembled|attached|augmented|awash|backed|back-laced|balanced|banded|batiked|beaded|bearded|bearing|bedazzled|bedecked|bejeweled|beset|bestrewn|blazoned|bordered|bound|braided|branded|brocaded|bristling|brushed|buckled|burned|buttoned|caked|camouflaged|capped|carved|caught|centered|chased|chiseled|cinched|circled|clasped|cloaked|closed|coated|cobbled together|coiled|colored|composed|concealed|connected|constructed|countoured|covered|crafted|crested|crisscrossed|crowded|crowned|cuffed|cut|dangling|dappled|decked|decorated|deformed|depicting|designed|detailed|discolored|displaying|divided|done|dotted|draped|drawn|dressed|drizzled|dusted|edged|elaborately|embedded|embell?ished|emblazed|emblazoned|embossed|embroidered(?: all over| painstakingly)?|enameled(?: across)?|encircled|encrusted|engraved|engulfed|enhanced|entwined|equipped|etched|fashioned(?: so)?|fastened|feathered|featuring|festooned|fettered|filed|filled|firestained|fit|fitted|fixed|flecked|fletched|forged|formed|framed|fringed|frosted|full|gathered|gleaming|glimmering|glittering|goldworked|growing|gypsy-set|hafted|hand-tooled|hanging|heavily(?:-beaded| covered)?|held fast|hemmed|hewn|hideously|highlighted|hilted|honed|hung|impressed|incised|ingeniously repurposed|inscribed|inlaid|inset|interlaced|interspersed|interwoven|jeweled|joined|laced(?: up)?|lacquered|laden|layered|limned|lined|linked|looped|knotted|made|marbled|marked|marred|meshed|mosaicked|mottled|mounted|oiled|oozing|outlined|ornamented|overlai(?:d|n)|padded|painted|paired|patched|pattern-welded|patterned|pinned|plumed|polished|printed|reinforced|reminiscent|rendered|revealing|riddled|ridged|rimed|ringed|riveted|sashed|scarred|scattered|scorched|sculpted|sealed|seamed|secured|securely|set|sewn|shaped|shimmering|shod|shot|shrouded|side-laced|slashed|slung|smeared|smudged|spangled|speckled|spiraled|splatter-dyed|splattered|spotted|sprinkled|stacked|surmounted|surrounded|suspended|stained|stamped|starred|stenciled|stippled|stitched(?: together)?|strapped|streaked|strengthened|strewn|striated|striped|strung|studded|swathed|swirled|tailored|tangled|tapered|tethered|textured|threaded|tied|tightly|tinged|tinted|tipped|tooled|topped|traced|trimmed|twined|veined|vivified|washed|webbed|weighted|whorled|worked|worn|woven|wrapped|wreathed|wrought)?\b ["]?\b(?:a hand-tooled|across|along|an|around|atop|bearing|belted|bright streaks|dangling|designed|detailing|down (?:each leg|one side)|dyed (?:a|and|deep|of|in|night|rust|shimmering|the|to|with)|engravings|entitled|errant pieces|featuring|flaunting|frescoed|from|Gnomish Pride|(?:encased |quartered )?in(?: the)?|into|labeled|leading|like|lining|matching|(?<!stick|slice|chunk|flask|hunk|series|set|pair|piece) of|on|out|overlayed gleaming silver|resembling|shades of color|sporting|surrounding|that|the|through|tinged somber black|titled|to|upon|WAR MONGER|with|within|\b(?:at|bearing|(?:accented |held |secured )?by|carrying|clutching|colored|cradling|dangling|depicting|(?:prominently )?displaying|embossed|etched|featuring|for(?:ming)?|holding|(?<!slice |chunk |flask |hunk |series |set |pair |piece )of|over|patterned|striped|suspending|textured|that)\b \b(?:a (?:band|beaded|brass|cascade|cluster|coral|crown|dead|.+ (?:ingot|boulder|stone|rock|nugget)|fierce|fanged|fringe|glowing|golden|grinning|howling|large|lotus|mosaic|pair|poorly|rainbow|roaring|row|silver(?:y|weave)?|small|snarling|spray|tailored|thick|tiny|trio|turquoise|yellowed)|(?:squared )?agonite (?:links|decorated)|alternating|an|(?:purple |blue )?and|ash|beaded fringe|blackened (?:steel(?: accents| bearing| with|$)|ironwood)|blue (?:gold|steel)|burnished golden|cascading layers|carved ivory|chain-lined|chitinous|(?:deep red|dull black|pale blue) cloth|cloudberry blossoms|colorful tightly|cotton candy|crimson steel|crisscrossed|curious design|curved|crystaline charm|dark (?:blue|green|grey|metals|windsteel) (?:and|exuding|glaes|hues|khor'vela|muracite|pennon|with)|dark supple|deepest|deeply blending|delicate|dusky (?:dreamweave|green-grey)|ebonwood$|emblazoned|enamel?led (?:steel|bronze)|etched|fine(?:-grained| black| crushed)|finely wrought|flame-kissed|forest|fused-together|fuzzy grey|gauze atop|gilded steel|glass eyeballs|glistening green|golden oak|grey fur|hammered|haralun|has|heavy (?:grey|pearl|silver)|horn|Ilithi cedar|inky black|interlocking silver|interwoven|iridescent|jagged interlocking plates|(?:soft dark|supple|thick|woven) (?:bolts|leather)|lightweight|long swaths|lustrous|kertig ravens|made|metal cogs|mirror-finished|mottled|multiple woods|naphtha|oak|oblong sanguine|one|onyx buttons|opposing images|overlapping|pale cerulean|pallid links|pastel-hued|pins|pitted (?:black iron|steel)|plush velvet|polished (?:bronze|hemlock|steel)|raccoon tails|ram's horns|rat pelts|raw|red and blue|rich (?:purple|golden)|riveted bindings|roughened|rowan|sanguine thornweave|scattered star|scorch marks|sculpted|shadows|shark cartilage|shifting (?:celadon|shades)|shipboard|(?:braided |cobalt |deep black |desert-tan |dusky red Taisidon |ebony |exquisite spider|fine leaf-green |flowing night|glimmering ebony |heavy |marigold |pale gold marquisette and virid |rich copper |spiral-braided |steel|unadorned black Musparan )?silk(?:cress)?|(?:coiled |shimmering )?silver(?:steel| and |y)?|sirese blue spun glitter|six crossed|slender|small bones|smoothly interlocking|snow leopard|soft brushed|somber black|sprawled|sun-bleached|steel links|stones|strips of|sunny yellow|teardrop plates|telothian|the|tiny (?:golden|indurium|scales|skull)|tightly braided|tomiek|torn|twists|two|undyed|vibrant multicolored|viscous|waves of|weighted|well-cured|white ironwood|windstorm gossamer|wintry faeweave|woven diamondwood))\b.*/.freeze
 
-      # ── Shared Utility Methods ──────────────────────────────────────────
+      # Game responses to STAND that mean standing cannot currently succeed,
+      # so fix_standing must stop instead of looping forever (issue #3668).
+      # These are already in the STAND match list, but matching one does not
+      # change posture, so without this guard the loop spams STAND endlessly
+      # (e.g. while unconscious, plummeting, held, or overburdened).
+      CANNOT_STAND_PATTERN = /unconscious|plummeting to your death|prevents you from standing|don't seem to be able to move|overburdened and cannot|weight of all your possessions|no room to do much of anything/.freeze
+
+      # -- Shared Utility Methods ------------------------------------------
 
       # Strips XML tags and decodes common HTML entities from game output lines.
       # @param lines [Array<String>] Array of raw game output lines
@@ -123,7 +132,7 @@ module Lich
 
           case response
           when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
-            # Zadraes — 13:32 It's a "You're in an area actively being updated" message
+            # Zadraes - 13:32 It's a "You're in an area actively being updated" message
             pause 1
             put message
             timer = Time.now
@@ -310,41 +319,113 @@ module Lich
         list.strip.split(/(?:,|(?:, |\s)?and\s?)(?:\s?<pushBold\/>\s?)?(?=\s\ba\b|\s\ban\b|\s\bsome\b|\s\bthe\b)/i).reject(&:empty?)
       end
 
-      # Take a game formated list of boxes "a reinforced wooden strongbox and a plain ironwood crate"
-      # And return an array ["wooden strongbox", "ironwood crate"]
+      # Post-match box name rewrites (applied via gsub after a box is matched).
+      # "ironwood" -> "iron" because the game parser wants the shortened noun.
+      # Players extend this via the +custom_box_substitutions+ setting; see
+      # {box_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_BOX_SUBSTITUTIONS = [%w[ironwood iron]].freeze
+
+      # Take a game formatted list of boxes "a reinforced wooden strongbox and a
+      # plain ironwood crate" and return ["wooden strongbox", "iron crate"].
+      #
+      # The recognized wood and container words are {BOX_WOODS} and
+      # {BOX_CONTAINERS} merged with the player's +custom_box_woods+ /
+      # +custom_box_containers+ settings, so a player can teach Lich about a box
+      # material or container it does not yet know without a Lich release. The
+      # global +$box_regex+ (built from the same defaults) is left untouched for
+      # third-party scripts. Post-match rewrites come from
+      # {DEFAULT_BOX_SUBSTITUTIONS} merged with +custom_box_substitutions+.
+      #
+      # @param list [String] game-formatted box list (e.g. from rummage /B)
+      # @return [Array<String>] gettable box adjective+noun names
+      # @example
+      #   box_list_to_adj_and_noun('an ironwood crate') #=> ['iron crate']
+      # @see CustomSubstitutions.resolve
+      # @see #scroll_list_to_adj_and_noun
       def box_list_to_adj_and_noun(list)
+        woods = CustomSubstitutions.resolve(:custom_box_woods, BOX_WOODS, type: :names)
+        containers = CustomSubstitutions.resolve(:custom_box_containers, BOX_CONTAINERS, type: :names)
+        substitutions = CustomSubstitutions.resolve(:custom_box_substitutions, DEFAULT_BOX_SUBSTITUTIONS, type: :pairs)
+        box_regex = /((?:#{woods.map { |wood| Regexp.escape(wood) }.join('|')}) (?:#{containers.map { |container| Regexp.escape(container) }.join('|')}))/
         list.strip
-            .split($box_regex)
+            .split(box_regex)
             .reject(&:empty?)
-            .select { |item| item =~ $box_regex }
-            .map { |box| box.gsub('ironwood', 'iron') } # make all ironwood into iron because "the parser"
+            .select { |item| item =~ box_regex }
+            .map { |box| substitutions.reduce(box) { |current, (from, to)| current.gsub(from, to) } }
       end
 
+      # Item-specific scroll rewrites applied *before* {SCROLL_KEYWORD_COLLAPSE}.
+      # These full game descriptions contain keywords the collapse would
+      # otherwise mangle (e.g. "icy blue vellum scroll" -> "icy scroll", not
+      # "icy blue vellum"), or must be caught before the collapse can run.
+      # Order matters and is preserved. Players extend this list via the
+      # +custom_scroll_substitutions+ setting; see
+      # {scroll_list_to_adj_and_noun}.
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_PRE = [
+        ['large midnight-blue scale torn with symbols', 'midnight-blue scale'],
+        ['icy blue vellum scroll', 'icy scroll'],
+        ['green vellum scroll', 'green scroll'],
+        ['fetid antelope vellum', 'antelope vellum'],
+        ['papyrus roll', 'papyrus.roll'],
+        ['pallid red scroll', 'pallid scroll']
+      ].freeze
+
+      # Adjective-pair scroll rewrites applied *after* {SCROLL_KEYWORD_COLLAPSE},
+      # reducing already-collapsed forms (e.g. "stormy grey" -> "stormy"). Order
+      # matters and is preserved. Not player-extensible (these operate on the
+      # collapsed noun, not the raw description).
+      #
+      # @return [Array<Array(String, String)>] ordered [from, to] literal pairs
+      DEFAULT_SCROLL_SUBSTITUTIONS_POST = [
+        ['crumpled paper', 'crumpled'],
+        ['pale ricepaper', 'pale'],
+        ['stormy grey', 'stormy'],
+        ['mossy green', 'mossy'],
+        ['dark purple', 'dark'],
+        ['vibrant red', 'vibrant'],
+        ['bright green', 'bright'],
+        ['icy blue', 'blue'],
+        ['pearl-white silk', 'silk'],
+        ['ghostly white', 'white'],
+        ['crinkled violet', 'crinkled'],
+        ['drawing paper', 'drawing']
+      ].freeze
+
+      # Structural collapse: reduce "<adj> <keyword> <flavor...>" to "<adj>
+      # <keyword>" by keeping the noun keyword and dropping trailing flavor.
+      # Sandwiched between the pre and post substitution passes.
+      #
+      # @return [Regexp]
+      SCROLL_KEYWORD_COLLAPSE = /\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/.freeze
+
+      # Converts a game rummage scroll list into gettable adjective+noun forms.
+      #
+      # Pipeline per entry: strip the leading article, strip "labeled with...",
+      # apply the pre-collapse literal substitutions ({DEFAULT_SCROLL_SUBSTITUTIONS_PRE}
+      # merged with the player's +custom_scroll_substitutions+), apply the
+      # {SCROLL_KEYWORD_COLLAPSE}, then apply the post-collapse substitutions
+      # ({DEFAULT_SCROLL_SUBSTITUTIONS_POST}).
+      #
+      # @param list [String] game-formatted scroll list (e.g. from rummage /SC)
+      # @return [Array<String>] gettable scroll names
+      # @example
+      #   scroll_list_to_adj_and_noun(' an icy blue parchment') #=> ['blue parchment']
+      # @see CustomSubstitutions.resolve
+      # @see #box_list_to_adj_and_noun
       def scroll_list_to_adj_and_noun(list)
-        list_to_array(list).map { |entry|
-          entry
-            .sub(/(an|some|a(?: piece of)?)\s/, '')
-            .sub(/\slabeled with.*/, '')
-            .sub(/icy blue vellum scroll/, 'icy scroll')
-            .sub(/green vellum scroll/, 'green scroll')
-            .sub(/fetid antelope vellum/, 'antelope vellum')
-            .sub(/papyrus roll/, 'papyrus.roll')
-            .sub(/pallid red scroll/, 'pallid scroll')
-            .sub(/\s(bark|leaf|ostracon|papyrus|parchment|roll|scroll|tablet|vellum|manuscript)\s.*/, ' \1')
-            .sub(/crumpled paper/, 'crumpled')
-            .sub(/pale ricepaper/, 'pale')
-            .sub(/stormy grey/, 'stormy')
-            .sub(/mossy green/, 'mossy')
-            .sub(/dark purple/, 'dark')
-            .sub(/vibrant red/, 'vibrant')
-            .sub(/bright green/, 'bright')
-            .sub(/icy blue/, 'blue')
-            .sub(/pearl-white silk/, 'silk')
-            .sub(/ghostly white/, 'white')
-            .sub(/crinkled violet/, 'crinkled')
-            .sub(/drawing paper/, 'drawing')
-            .strip
-        }
+        pre_substitutions = CustomSubstitutions.resolve(:custom_scroll_substitutions, DEFAULT_SCROLL_SUBSTITUTIONS_PRE, type: :pairs)
+        list_to_array(list).map do |entry|
+          without_article = entry
+                            .sub(/(an|some|a(?: piece of)?)\s/, '')
+                            .sub(/\slabeled with.*/, '')
+          with_pre = pre_substitutions.reduce(without_article) { |text, (from, to)| text.sub(from, to) }
+          collapsed = with_pre.sub(SCROLL_KEYWORD_COLLAPSE, ' \1')
+          DEFAULT_SCROLL_SUBSTITUTIONS_POST.reduce(collapsed) { |text, (from, to)| text.sub(from, to) }.strip
+        end
       end
 
       # Take a game formatted list "an arrow, silver coins and a deobar strongbox"
@@ -360,8 +441,25 @@ module Lich
         remove_flavor_text(long_name).strip.scan(/[a-z\-']+$/i).first
       end
 
+      # Strips descriptive flavor text ("... adorned with ...") from an item
+      # name, leaving the gettable noun phrase.
+      #
+      # Applies the built-in {FLAVOR_TEXT_PATTERN} first, then any player-defined
+      # +custom_flavor_text_patterns+ (regular expressions) for flavor the
+      # built-in pattern misses -- letting a player strip a new flavor phrasing
+      # without a Lich release. User patterns are compiled with a per-pattern
+      # timeout and validated/guarded by {CustomSubstitutions}; an invalid or
+      # runaway pattern is reported and skipped, never raising here.
+      #
+      # @param item [String] the item long name
+      # @return [String] the item name with flavor text removed
+      # @example
+      #   remove_flavor_text('a sword adorned with rubies of deep crimson') #=> 'a sword'
+      # @see CustomSubstitutions.resolve
+      # @see CustomSubstitutions.apply_regexes
       def remove_flavor_text(item)
-        item.sub(FLAVOR_TEXT_PATTERN, '')
+        custom_patterns = CustomSubstitutions.resolve(:custom_flavor_text_patterns, [], type: :regexes)
+        CustomSubstitutions.apply_regexes(item.sub(FLAVOR_TEXT_PATTERN, ''), custom_patterns)
       end
 
       # Items class. Name is the noun of the object. Leather/metal boolean. Is the item worn (defaults to true). Does it hinder lockpicking? (false)
@@ -445,11 +543,18 @@ module Lich
         echo("\a")
       end
 
+      # Issues STAND until the character is standing, giving up when the game
+      # reports a state from which standing cannot currently succeed. Without
+      # the CANNOT_STAND_PATTERN guard these states loop forever spamming
+      # STAND, because matching the message never makes standing? true
+      # (issue #3668: safe-room spamming STAND while unconscious).
+      # @return [void]
       def fix_standing
         loop do
           break if standing?
 
-          bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
+          result = bput('stand', 'You stand', 'You are so unbalanced', 'As you stand', 'You are already', 'weight of all your possessions', 'You are overburdened and cannot', 'You\'re unconscious', 'You swim back up into a vertical position', "You don't seem to be able to move to do that", 'prevents you from standing', 'You\'re plummeting to your death', 'There\'s no room to do much of anything here')
+          break if result =~ CANNOT_STAND_PATTERN
         end
       end
 
@@ -599,6 +704,8 @@ module Lich
           x = $NUM_MAP.fetch(word, nil)
           if word.eql?('hundred') && (g != 0)
             g *= 100
+          elsif word.eql?('thousand') && (g != 0)
+            g *= 1000
           elsif x.nil?
             Lich::Messaging.msg("bold", "DRC: Unknown number word '#{word}' in '#{text_num}'")
             return nil
@@ -864,24 +971,53 @@ module Lich
       def safe_pause_list
         return false unless $safe_pause_lock.try_lock
 
-        paused_script_list = []
+        # Pausing is cooperative: a paused script is a live thread that keeps
+        # every mutex it holds (Ruby frees a mutex on thread death, not on
+        # pause). So a script that gets pause_script'd while holding
+        # $safe_pause_lock never releases it, and every peer spins forever on
+        # try_lock -> false. Make the lock-holder immune to pause for as long as
+        # it owns the lock, so this deadlock cannot form. Save the prior value
+        # (and the holder itself) so we restore exactly what was there for a
+        # caller that was already ignoring pauses, e.g. mid-travel.
+        @safe_pause_holder = Script.self
+        @safe_pause_prev_ignore_pause = @safe_pause_holder&.ignore_pause
+        @safe_pause_holder&.ignore_pause = true
+
+        # Capture the exact Script objects we pause -- not their names. The
+        # matching safe_unpause_list restores from this list directly instead of
+        # re-scanning Script.running by name. A name + live-rescan restore
+        # silently drops any script that has left Script.running between pause
+        # and unpause (gone hidden, or mid start/teardown) or whose pause flags
+        # changed, stranding it paused forever while the log still claims it was
+        # unpaused. Holding the objects makes the restore undo exactly what the
+        # pause did.
+        paused_scripts = []
         Script.running.find_all { |s| !s.paused? && !s.no_pause_all && s.name != Script.self.name }.each do |s|
           s.pause
-          paused_script_list << s.name
+          paused_scripts << s
         end
-        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_script_list} to run #{Script.self.name}")
-        return paused_script_list
+        Lich::Messaging.msg("plain", "DRC: Pausing #{paused_scripts.map(&:name)} to run #{Script.self.name}")
+        return paused_scripts
       end
 
-      def safe_unpause_list(scripts_to_unpause)
+      def safe_unpause_list(paused_scripts)
         return false unless $safe_pause_lock.owned?
 
-        if scripts_to_unpause.empty?
+        if paused_scripts.empty?
           Lich::Messaging.msg("plain", "DRC: #{Script.self.name} has finished.")
         else
-          Lich::Messaging.msg("plain", "DRC: Unpausing #{scripts_to_unpause}, #{Script.self.name} has finished.")
-          Script.running.find_all { |s| s.paused? && !s.no_pause_all && scripts_to_unpause.include?(s.name) }.each(&:unpause)
+          Lich::Messaging.msg("plain", "DRC: Unpausing #{paused_scripts.map(&:name)}, #{Script.self.name} has finished.")
+          # Unpause exactly the objects we paused, regardless of their current
+          # Script.running visibility or flags. Skip any a peer already unpaused
+          # so we neither emit spurious "is not paused" noise nor fight another
+          # coordinator that has since taken ownership of the pause.
+          paused_scripts.each { |s| s.unpause if s.paused? }
         end
+        # Restore the holder's pre-lock pause immunity before releasing the lock,
+        # so we never leave a script permanently unpausable.
+        @safe_pause_holder&.ignore_pause = @safe_pause_prev_ignore_pause
+        @safe_pause_holder = nil
+        @safe_pause_prev_ignore_pause = nil
         $safe_pause_lock.unlock
       end
 
@@ -899,10 +1035,12 @@ module Lich
         tertiary = points > 100 ? points - 100 : 0
 
         stance = case skill.downcase
-                 when 'parry'
+                 when 'evasion'
                    "100 #{secondary} #{tertiary}"
+                 when 'parry'
+                   "#{secondary} 100 #{tertiary}"
                  when 'shield'
-                   "100 #{tertiary} #{secondary}"
+                   "#{secondary} #{tertiary} 100"
                  else
                    "100 #{secondary} #{tertiary}"
                  end

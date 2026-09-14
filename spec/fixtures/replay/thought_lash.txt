@@ -1,0 +1,7 @@
+##### thought_lash 89f4fbd37dbece39
+# expect: attacks=thought_lash | res=cs_td | flares=none | outcomes=warded | dmg=0 | statuses=
+A crackling whip of energy lashes out at you!
+  CS: +448 - TD: +361 + CvA: 0 + d100: +11 == +98
+  Warded off!
+The residual psychic energy from the attack disperses.
+

@@ -225,6 +225,37 @@ RSpec.describe Lich::Common::GUI::AccountManager do
         yaml_data = YAML.load_file(yaml_file)
         expect(yaml_data['accounts'][username.upcase]['characters'].size).to eq(0)
       end
+
+      it "removes only the entry with the matching custom launch command" do
+        yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
+        yaml_data = YAML.load_file(yaml_file)
+        yaml_data['accounts'][username.upcase]['characters'] = [
+          {
+            'char_name'     => char_name.capitalize,
+            'game_code'     => game_code,
+            'game_name'     => 'GemStone',
+            'frontend'      => 'stormfront',
+            'custom_launch' => nil
+          },
+          {
+            'char_name'     => char_name.capitalize,
+            'game_code'     => game_code,
+            'game_name'     => 'GemStone',
+            'frontend'      => 'stormfront',
+            'custom_launch' => '/opt/warlock'
+          }
+        ]
+        File.write(yaml_file, YAML.dump(yaml_data))
+
+        expect(
+          described_class.remove_character(
+            data_dir, username, char_name, game_code, 'stormfront', '/opt/warlock'
+          )
+        ).to be true
+
+        remaining = YAML.load_file(yaml_file)['accounts'][username.upcase]['characters']
+        expect(remaining.map { |character| character['custom_launch'] }).to eq([nil])
+      end
     end
 
     context "when character doesn't exist" do

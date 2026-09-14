@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'favorites_manager'
+require_relative 'frontend_selector'
 require_relative 'parameter_objects'
 require_relative 'login_tab_utils'
 require_relative 'theme_utils'
@@ -79,6 +80,14 @@ module Lich
 
           # Show brief refresh notification
           show_refresh_notification
+        end
+
+        # Reloads the frontend catalog used by the add-character selector.
+        #
+        # @return [void]
+        def refresh_frontends
+          @add_character_frontend_selector&.reload!
+          nil
         end
 
         # Returns the tab widget for adding to a notebook
@@ -399,7 +408,7 @@ module Lich
 
           # Get all favorite characters with frontend precision
           favorite_entries = @entry_data.select do |login_info|
-            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+            FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
           end
 
           # Sort favorites by favorite_order if available, then by character name
@@ -417,7 +426,9 @@ module Lich
           # Add favorites to the tab
           if favorite_entries.empty?
             # Show message when no favorites exist
+            # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
             no_favorites_label = Gtk::Label.new("No favorite characters yet.\n\nMark characters as favorites using the ★ button\nin the account tabs or saved entries list.")
+            # rubocop:enable Custom/AsciiOnlySource
             no_favorites_label.set_justify(:center)
             no_favorites_label.set_margin_top(50)
             no_favorites_label.set_margin_bottom(50)
@@ -434,7 +445,9 @@ module Lich
           scrolled_window.set_policy(:never, :automatic)
           scrolled_window.add(favorites_box)
 
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           @account_book.prepend_page(scrolled_window, Gtk::Label.new("★ FAVORITES"))
+          # rubocop:enable Custom/AsciiOnlySource
         end
 
         # Creates a list layout for accounts (non-tabbed)
@@ -460,7 +473,7 @@ module Lich
             if login_params.custom_launch && !login_params.custom_launch.empty?
               frontend_display = 'Custom'
             else
-              frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+              frontend_display = Frontend.display_name(login_params.frontend)
             end
 
             label = Gtk::Label.new("#{login_params.char_name} (#{login_params.game_name}, #{frontend_display})")
@@ -514,7 +527,7 @@ module Lich
 
           # Check if this character is a favorite with frontend precision
           is_favorite = @favorites_enabled &&
-                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend])
+                        FavoritesManager.is_favorite?(@data_dir, login_info[:user_id], login_info[:char_name], login_info[:game_code], login_info[:frontend], login_info[:custom_launch])
 
           # Get realm name from game code
           realm = Utilities.game_code_to_realm(login_params.game_code)
@@ -526,14 +539,16 @@ module Lich
           @play_button = Gtk::Button.new()
 
           # Add favorite indicator to character name if it's a favorite
+          # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
           char_name_text = is_favorite ? "★ #{login_params.char_name}" : login_params.char_name
+          # rubocop:enable Custom/AsciiOnlySource
           char_label = Gtk::Label.new(char_name_text)
           char_label.set_width_chars(15)
 
           if login_params.custom_launch && !login_params.custom_launch.empty?
             frontend_display = 'Custom'
           else
-            frontend_display = login_params.frontend.capitalize == 'Stormfront' ? 'Wrayth' : login_params.frontend.capitalize
+            frontend_display = Frontend.display_name(login_params.frontend)
           end
 
           fe_label = Gtk::Label.new("#{frontend_display}")
@@ -569,7 +584,9 @@ module Lich
           @favorite_button = nil
           if @favorites_enabled
             @favorite_button = Gtk::Button.new()
+            # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
             favorite_text = is_favorite ? '★' : '☆'
+            # rubocop:enable Custom/AsciiOnlySource
             favorite_label = Gtk::Label.new(favorite_text)
             favorite_label.set_width_chars(3)
             @favorite_button.add(favorite_label)
@@ -616,15 +633,26 @@ module Lich
           favorite_button.signal_connect('clicked') do
             begin
               # Toggle favorite status with frontend precision
-              new_status = FavoritesManager.toggle_favorite(@data_dir, login_params.user_id, login_params.char_name, login_params.game_code, login_params.frontend)
+              new_status = FavoritesManager.toggle_favorite(
+                @data_dir,
+                login_params.user_id,
+                login_params.char_name,
+                login_params.game_code,
+                login_params.frontend,
+                login_params.custom_launch
+              )
 
               # Update button appearance
+              # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               favorite_text = new_status ? '★' : '☆'
+              # rubocop:enable Custom/AsciiOnlySource
               favorite_label.text = favorite_text
               favorite_button.tooltip_text = new_status ? 'Remove from favorites' : 'Add to favorites'
 
               # Update character name display
+              # rubocop:disable Custom/AsciiOnlySource -- GTK displays Unicode favorite markers correctly.
               char_name_text = new_status ? "★ #{login_params.char_name}" : login_params.char_name
+              # rubocop:enable Custom/AsciiOnlySource
               char_label.text = char_name_text
 
               # Update play button styling
@@ -692,21 +720,14 @@ module Lich
           add_instance_pane.add2(add_inst_select)
 
           # Frontend options
-          q_stormfront_option = Gtk::RadioButton.new(label: 'Stormfront')
-          q_wizard_option = Gtk::RadioButton.new(label: 'Wizard', member: q_stormfront_option)
-          q_avalon_option = Gtk::RadioButton.new(label: 'Avalon', member: q_stormfront_option)
+          frontend_selector = FrontendSelector.new(refresh: false)
+          @add_character_frontend_selector = frontend_selector
 
           # Add character button
           add_char_button = Gtk::Button.new(label: "Add to this account")
 
           # Frontend selection box
-          q_frontend_box = Gtk::Box.new(:horizontal, 10)
-          if RUBY_PLATFORM =~ /darwin/i
-            q_frontend_box.pack_end(q_avalon_option, expand: false, fill: false, padding: 0)
-          else
-            q_frontend_box.pack_end(q_wizard_option, expand: false, fill: false, padding: 0)
-            q_frontend_box.pack_end(q_stormfront_option, expand: false, fill: false, padding: 0)
-          end
+          q_frontend_box = frontend_selector.widget
 
           # Character and instance panes
           @bonded_pair_char = Gtk::Paned.new(:horizontal)
@@ -720,7 +741,7 @@ module Lich
           @bonded_pair_inst.add2(add_char_button)
 
           # Set up add character button handler
-          setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
+          setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, frontend_selector)
         end
 
         # Sets up the add character button handler
@@ -729,23 +750,17 @@ module Lich
         # @param add_char_button [Gtk::Button] Add character button
         # @param add_char_entry [Gtk::Entry] Character name entry
         # @param add_inst_select [Gtk::ComboBoxText] Instance selection
-        # @param q_stormfront_option [Gtk::RadioButton] Stormfront radio button
-        # @param q_wizard_option [Gtk::RadioButton] Wizard radio button
-        # @param q_avalon_option [Gtk::RadioButton] Avalon radio button
+        # @param frontend_selector [FrontendSelector] shared frontend selector
         # @return [void]
-        def setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, q_stormfront_option, q_wizard_option, q_avalon_option)
+        def setup_add_character_handler(add_char_button, add_char_entry, add_inst_select, frontend_selector)
           add_char_button.signal_connect('clicked') {
             # Handle adding a character
             if @callbacks.on_add_character
-              frontend = if q_wizard_option.active?
-                           'wizard'
-                         elsif q_avalon_option.active?
-                           'avalon'
-                         elsif q_stormfront_option.active?
-                           'stormfront'
-                         else # default to
-                           'stormfront'
-                         end
+              frontend = frontend_selector.selected_id
+              unless frontend
+                @callbacks.on_error&.call('No supported frontend is available.')
+                next
+              end
 
               @callbacks.on_add_character.call(
                 character: add_char_entry.text,

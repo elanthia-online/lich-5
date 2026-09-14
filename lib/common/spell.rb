@@ -3,6 +3,7 @@ spell.rb: Core lich file for spell management and for spell related scripts.
 =end
 
 require 'open-uri'
+require 'ox'
 
 module Lich
   module Common
@@ -14,7 +15,7 @@ module Lich
       @@cost_list ||= Array.new
       @@load_mutex = Mutex.new
       @@after_stance = nil
-      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast
+      attr_reader :num, :name, :timestamp, :msgup, :msgdn, :circle, :active, :type, :cast_proc, :real_time, :persist_on_death, :availability, :no_incant, :last_cast, :group_cooldown, :target_cooldown, :target_msgup
       attr_accessor :stance, :channel
 
       @@prepare_regex = Regexp.union(
@@ -61,48 +62,51 @@ module Lich
       )
 
       def initialize(xml_spell)
-        @num = xml_spell.attributes['number'].to_i
-        @name = xml_spell.attributes['name']
-        @type = xml_spell.attributes['type']
-        @no_incant = ((xml_spell.attributes['incant'] == 'no') ? true : false)
-        if xml_spell.attributes['availability'] == 'all'
+        @num = xml_spell['number'].to_i
+        @name = xml_spell['name']
+        @type = xml_spell['type']
+        @no_incant = ((xml_spell['incant'] == 'no') ? true : false)
+        if xml_spell['availability'] == 'all'
           @availability = 'all'
-        elsif xml_spell.attributes['availability'] == 'group'
+        elsif xml_spell['availability'] == 'group'
           @availability = 'group'
         else
           @availability = 'self-cast'
         end
         @bonus = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'bonus' }.each { |e|
-          @bonus[e.attributes['type']] = e.text
+        xml_spell.locate('bonus').each { |e|
+          bonus_type = e['type']
+          next unless bonus_type # skip malformed bonus elements
+
+          @bonus[bonus_type] = e.text
         }
-        @msgup = xml_spell.elements.find_all { |e| (e.name == 'message') and (e.attributes['type'].downcase == 'start') }.collect { |e| e.text }.join('$|^')
+        @msgup = xml_spell.locate('message').select { |e| e['type'].downcase == 'start' }.collect { |e| e.text }.join('$|^')
         @msgup = nil if @msgup.empty?
-        @msgdn = xml_spell.elements.find_all { |e| (e.name == 'message') and (e.attributes['type'].downcase == 'end') }.collect { |e| e.text }.join('$|^')
+        @msgdn = xml_spell.locate('message').select { |e| e['type'].downcase == 'end' }.collect { |e| e.text }.join('$|^')
         @msgdn = nil if @msgdn.empty?
-        @stance = ((xml_spell.attributes['stance'] =~ /^(yes|true)$/i) ? true : false)
-        @channel = ((xml_spell.attributes['channel'] =~ /^(yes|true)$/i) ? true : false)
+        @stance = ((xml_spell['stance'] =~ /^(yes|true)$/i) ? true : false)
+        @channel = ((xml_spell['channel'] =~ /^(yes|true)$/i) ? true : false)
         @cost = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'cost' }.each { |xml_cost|
-          cost_type = xml_cost.attributes['type']&.downcase
+        xml_spell.locate('cost').each { |xml_cost|
+          cost_type = xml_cost['type']&.downcase
           next unless cost_type # skip malformed cost elements
 
           @cost[cost_type] ||= Hash.new
           # cast-type defaults to 'self' if not specified (most cost elements omit it)
-          if xml_cost.attributes['cast-type']&.downcase == 'target'
+          if xml_cost['cast-type']&.downcase == 'target'
             @cost[cost_type]['target'] = xml_cost.text
           else
             @cost[cost_type]['self'] = xml_cost.text
           end
         }
         @duration = Hash.new
-        xml_spell.elements.find_all { |e| e.name == 'duration' }.each { |xml_duration|
+        xml_spell.locate('duration').each { |xml_duration|
           # cast-type defaults to 'self' if not specified
-          if xml_duration.attributes['cast-type']&.downcase == 'target'
+          if xml_duration['cast-type']&.downcase == 'target'
             cast_type = 'target'
           else
             cast_type = 'self'
-            if xml_duration.attributes['real-time'] =~ /^(yes|true)$/i
+            if xml_duration['real-time'] =~ /^(yes|true)$/i
               @real_time = true
             else
               @real_time = false
@@ -110,26 +114,44 @@ module Lich
           end
           @duration[cast_type] = Hash.new
           @duration[cast_type][:duration] = xml_duration.text
-          span = xml_duration.attributes['span']&.downcase
+          span = xml_duration['span']&.downcase
           @duration[cast_type][:stackable] = (span == 'stackable')
           @duration[cast_type][:refreshable] = (span == 'refreshable')
-          if xml_duration.attributes['multicastable'] =~ /^(yes|true)$/i
+          if xml_duration['multicastable'] =~ /^(yes|true)$/i
             @duration[cast_type][:multicastable] = true
           else
             @duration[cast_type][:multicastable] = false
           end
-          if xml_duration.attributes['persist-on-death'] =~ /^(yes|true)$/i
+          if xml_duration['persist-on-death'] =~ /^(yes|true)$/i
             @persist_on_death = true
           else
             @persist_on_death = false
           end
-          if xml_duration.attributes['max']
-            @duration[cast_type][:max_duration] = xml_duration.attributes['max'].to_f
+          if xml_duration['max']
+            @duration[cast_type][:max_duration] = xml_duration['max'].to_f
           else
             @duration[cast_type][:max_duration] = 250.0
           end
         }
-        @cast_proc = xml_spell.elements['cast-proc']&.text
+        @cast_proc = xml_spell.locate('cast-proc').first&.text
+        # Seconds a character is locked out of this spell, by kind. A 'group'
+        # cooldown covers another group (EVOKE) casting of it; a 'target'
+        # cooldown covers the spell landing on them from any caster, paired
+        # with the third-person message that names them. Both are nil when the
+        # spell declares no cooldown of that kind. See Group.spell_cooldown and
+        # Group.spell_cooldown_ready?.
+        xml_spell.locate('cooldown').each { |xml_cooldown|
+          case xml_cooldown['type'].to_s.downcase
+          when 'group'
+            @group_cooldown = xml_cooldown.text.to_i
+          when 'target'
+            @target_cooldown = xml_cooldown.text.to_i
+          end
+        }
+        @target_msgup = xml_spell.locate('message')
+                                 .select { |e| e['type'].to_s.downcase == 'target-start' }
+                                 .collect { |e| e.text }.join('$|^')
+        @target_msgup = nil if @target_msgup.empty?
         @last_cast = Time.at(0)
         @timestamp = Time.now
         @timeleft = 0
@@ -137,6 +159,17 @@ module Lich
         @circle = (num.to_s.length == 3 ? num.to_s[0..0] : num.to_s[0..1])
         @@list.push(self) unless @@list.find { |spell| spell.num == @num }
         # self # rubocop Lint/Void: self used in void context
+      end
+
+      # Every line that answers a cast: the regex {#cast} waits on, exposed
+      # so a caller that sends and confirms on its own terms can wait on
+      # the same lines instead of copying them.
+      #
+      # @param results_of_interest [Regexp, nil] extra lines to match, as {#cast} takes
+      # @return [Regexp]
+      def Spell.results_regex(results_of_interest: nil)
+        return @@results_regex unless results_of_interest.is_a?(Regexp)
+        Regexp.union(@@results_regex, results_of_interest)
       end
 
       def Spell.after_stance=(val)
@@ -174,11 +207,15 @@ module Lich
               @@list.each { |spell| spell_times[spell.num] = spell.timeleft if spell.active? }
               @@list.clear
             end
-            File.open(filename) { |file|
-              xml_doc = REXML::Document.new(file)
-              xml_root = xml_doc.root
-              xml_root.elements.each { |xml_spell| Spell.new(xml_spell) }
-            }
+            # skip: :skip_none preserves whitespace verbatim -- spell up/down
+            # messages are stored as regexes, and Ox's default whitespace
+            # collapsing would turn the double spaces after periods into single
+            # spaces and stop those patterns matching the real game lines.
+            # Ox.load returns an Ox::Document when the file has an XML prolog
+            # (effect-list.xml does) and the bare root Ox::Element otherwise.
+            parsed = Ox.load(File.read(filename), mode: :generic, skip: :skip_none)
+            xml_root = parsed.is_a?(Ox::Document) ? parsed.root : parsed
+            xml_root.locate('spell').each { |xml_spell| Spell.new(xml_spell) }
             @@list.each { |spell|
               if spell_times[spell.num]
                 spell.timeleft = spell_times[spell.num]
@@ -232,6 +269,13 @@ module Lich
       def Spell.upmsgs
         Spell.load unless @@loaded
         @@list.collect { |spell| spell.msgup }.compact
+      end
+
+      # Third-person start messages, for spells that name the character they
+      # land on. Empty until the effect list carries target-start messages.
+      def Spell.target_upmsgs
+        Spell.load unless @@loaded
+        @@list.collect { |spell| spell.target_msgup }.compact
       end
 
       def Spell.dnmsgs
@@ -337,6 +381,14 @@ module Lich
         (self.timeleft > 0) and @active
       end
 
+      # The cast-type predicates below (stackable?, refreshable?, multicastable?)
+      # and the duration formulas resolve against the 'self' cast-type unless a
+      # :caster or :target naming someone else is supplied. A bare call therefore
+      # answers for a self-cast only, which is not the same answer for spells
+      # whose target cast-type differs: in the current effect list 14 group buffs
+      # (Bravery 211 and Heroism 215 among them) are stackable when self-cast but
+      # refreshable when cast on someone else. Pass :caster/:target whenever the
+      # spell may have come from another character.
       def stackable?(options = {})
         if options[:caster] and (options[:caster] !~ /^(?:self|#{XMLData.name})$/i)
           if options[:target] and (options[:target].downcase == options[:caster].downcase)
@@ -732,19 +784,7 @@ module Lich
                 cast_result = dothistimeout cast_cmd, 5, merged_results_regex
               end
               if ((@stance && force_stance != false) || force_stance == true)
-                if @@after_stance
-                  if Char.stance !~ /#{@@after_stance}/
-                    waitrt?
-                    dothistimeout "stance #{@@after_stance}", 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  end
-                elsif Char.stance !~ /^guarded$|^defensive$/
-                  waitrt?
-                  if checkcastrt > 0
-                    dothistimeout 'stance guarded', 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  else
-                    dothistimeout 'stance defensive', 3, /^You (?:are now in|move into) an? \w+ stance|^You are unable to change your stance\.$/
-                  end
-                end
+                restore_stance_after_cast
               end
               if cast_result =~ /^Cast at what\?$|^Be at peace my child, there is no need for spells of war in here\.$|^Provoking a GameMaster is not such a good idea\.$/
                 dothistimeout 'release', 5, /^You feel the magic of your spell rush away from you\.$|^You don't have a prepared spell to release!$/
@@ -765,6 +805,27 @@ module Lich
           @@cast_lock.delete(script)
         end
       end
+
+      # After a stance spell is cast, put the character back into the stance
+      # they asked for (Spell.after_stance), or the safest one the game allows.
+      # Stance.change no-ops when already there and waits out roundtime itself.
+      #
+      # @return [void]
+      def restore_stance_after_cast
+        # after_stance can be a blank string when a script captured Char.stance
+        # before the first pbarStance update arrived. Treat that as "no
+        # preference" rather than letting it raise, which is what the old
+        # inline regex check did.
+        after = @@after_stance.to_s.strip
+        if !after.empty?
+          Lich::Gemstone::Stance.change(after)
+        elsif Char.stance !~ /^guarded$|^defensive$/
+          Lich::Gemstone::Stance.change(Lich::Gemstone::Stance.safest)
+        end
+      rescue ArgumentError => e
+        echo "cast: #{e.message}"
+      end
+      private :restore_stance_after_cast
 
       def force_cast(target = nil, arg_options = nil, results_of_interest = nil, force_stance: nil)
         unless arg_options.nil? || arg_options.empty?

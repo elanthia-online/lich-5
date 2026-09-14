@@ -120,6 +120,8 @@ module Lich
           lodged: health_data.lodged,
           poisoned: health_data.poisoned,
           diseased: health_data.diseased,
+          vitality: perceived.vitality,
+          dead: perceived.dead,
           score: perceived.score
         )
       end
@@ -178,11 +180,13 @@ module Lich
                                         /^[\w]+ (?:body|skin) is covered (?:in|with) open oozing sores/
                                       ])
         dead_regex = /^(?:He|She) is dead/
+        vitality_regex = /has (\d+)% vitality remaining/
 
         perceived_wounds = Hash.new { |h, k| h[k] = [] }
         perceived_parasites = Hash.new { |h, k| h[k] = [] }
         perceived_poison = false
         perceived_disease = false
+        perceived_vitality = 100
         wound_body_part = nil
         dead = false
 
@@ -190,6 +194,8 @@ module Lich
           case line
           when dead_regex
             dead = true
+          when vitality_regex
+            perceived_vitality = Regexp.last_match(1).to_i
           when diseases_regex
             perceived_disease = true
           when poisons_regex
@@ -229,6 +235,7 @@ module Lich
           poisoned: perceived_poison,
           diseased: perceived_disease,
           dead: dead,
+          vitality: perceived_vitality,
           score: calculate_score(wounds)
         )
       end
@@ -352,7 +359,15 @@ module Lich
         case result
         when *TEND_DISLODGE_PATTERNS
           dislodge_match = result.match(/^You \w+ remove (?:a|the|some) (?<item>.+) from/)
-          DRCI.dispose_trash(dislodge_match[:item], get_settings.worn_trashcan, get_settings.worn_trashcan_verb) if dislodge_match
+          # Only dispose the item the tend just removed, and only while it is in
+          # hand. A freshly dislodged item (e.g. a crossbow bolt) lands in a free
+          # hand; disposing it there is safe. But if the item is gone (the maze
+          # can yank you out and clear your hands the instant it drops), a blind
+          # dispose_trash would GET a same-named item from a worn container --
+          # trashing the character's own ammunition -- so skip it in that case.
+          if dislodge_match && DRCI.in_hands?(dislodge_match[:item])
+            DRCI.dispose_trash(dislodge_match[:item], get_settings.worn_trashcan, get_settings.worn_trashcan_verb)
+          end
           bind_wound(body_part, person)
         when *TEND_FAILURE_PATTERNS
           false
@@ -367,7 +382,7 @@ module Lich
       end
 
       # Skill check to tend a bleeding wound.
-      # Returns false if unskilled — tending when unskilled may worsen the wound.
+      # Returns false if unskilled - tending when unskilled may worsen the wound.
       def skilled_to_tend_wound?(bleed_rate, internal = false)
         bleed_info = BLEED_RATE_TO_SEVERITY[bleed_rate]
         return false unless bleed_info
@@ -389,10 +404,11 @@ module Lich
       # Supports backward-compatible string-key access via [] for dr-scripts callers.
       class HealthResult
         attr_reader :wounds, :bleeders, :parasites, :lodged,
-                    :poisoned, :diseased, :score, :dead
+                    :poisoned, :diseased, :score, :dead, :vitality
 
         def initialize(wounds: {}, bleeders: {}, parasites: {}, lodged: {},
-                       poisoned: false, diseased: false, score: 0, dead: false)
+                       poisoned: false, diseased: false, score: 0, dead: false,
+                       vitality: 100)
           @wounds = wounds
           @bleeders = bleeders
           @parasites = parasites
@@ -401,6 +417,7 @@ module Lich
           @diseased = diseased
           @score = score
           @dead = dead
+          @vitality = vitality
         end
 
         # Backward compatibility for dr-scripts callers using health_data['wounds'] etc.

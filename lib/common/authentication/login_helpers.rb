@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../front-end'
+
 # login_helpers.rb: Core lich file for collection of utilities to extend Lich capabilities.
 # Entries added here should always be accessible from Lich::Common::Authentication::LoginHelpers.method namespace.
 
@@ -10,13 +12,28 @@ module Lich
         # Load up / require gem 'os' for operating system detection work
         Lich::Util.install_gem_requirements({ 'os' => true })
 
-        # Valid game codes
-        VALID_GAME_CODES = %w[GS3 GS4 GSX GSF GST DR DRX DRF DRT].freeze
+        # Game codes accepted for login and character creation.
+        VALID_GAME_CODES = %w[GS3 GST GSF DR DRX DRT DRF].freeze
+
+        # Returns whether a game code is accepted for login and character creation.
+        # Callers remain responsible for any input normalization they require.
+        #
+        # @param game_code [String, nil] game instance code
+        # @return [Boolean]
+        def self.valid_game_code?(game_code)
+          VALID_GAME_CODES.include?(game_code)
+        end
+
+        # CLI login name that requests the character generator instead of
+        # selecting an existing character (e.g. `--login NEW`). This is a
+        # user-facing CLI convention; the generator decision is carried to the
+        # lower layers as explicit intent, not as a magic character name.
+        NEW_CHARACTER_LOGIN = /\Anew\z/i
 
         # Valid frontend flags accepted by CLI login argument parsing.
-        # Note: only wizard/stormfront/avalon affect protocol path selection;
+        # Note: wizard/stormfront/avalon/saga affect protocol path selection;
         # other values are treated as frontend launch selectors/modifiers.
-        VALID_FRONTENDS = %w[avalon stormfront wizard genie frostbite wrayth].freeze
+        VALID_FRONTENDS = %w[avalon stormfront wizard genie frostbite wrayth saga].freeze
 
         # Valid realms for elogin support
         VALID_REALMS = %w[prime platinum shattered test].freeze
@@ -28,7 +45,8 @@ module Lich
         DRAGONREALMS_FLAGS = %w[--dragonrealms --dr].freeze
 
         # Frontend pattern for regex matching
-        FRONTEND_PATTERN = /^--(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth)$/i.freeze
+        FRONTEND_PATTERN = /^--(?:frontend=)?(?<fe>avalon|stormfront|wizard|genie|frostbite|wrayth|saga)$/i.freeze
+        REGISTERED_FRONTEND_PATTERN = /^--frontend=(?<fe>[a-z0-9][a-z0-9_-]{0,63})$/i.freeze
         INSTANCE_PATTERN = /^--(?<inst>GS.?$|DR.?$)/i.freeze
 
         # Custom launch pattern for regex matching
@@ -36,19 +54,21 @@ module Lich
 
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
-          login gui no-gui without-frontend reconnect reconnected save
-          genie frostbite wrayth
+          login gui no-gui without-frontend headless reconnect reconnected save
+          genie frostbite wrayth saga suks
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
         NON_INSTANCE_OPTION_KEYS = %w[
-          start-scripts custom-launch dark-mode
+          start-scripts custom-launch dark-mode headless
           home data scripts temp maps logs backup lib
           script-dir data-dir temp-dir
           hosts-dir hosts-file account password character frontend frontend-command
           detachable-client reconnect-delay game wine wine-prefix
         ].freeze
 
+        # Legacy realm and name mappings intentionally retain retired codes for
+        # persisted-entry normalization. VALID_GAME_CODES governs login validity.
         # Game code to realm mappings
         GAME_CODE_TO_REALM = {
           'GSX' => 'platinum',
@@ -96,6 +116,19 @@ module Lich
           return false unless defined?(LICH_VERSION)
 
           Gem::Version.new(LICH_VERSION) >= Gem::Version.new([major, minor, patch].join('.'))
+        end
+
+        # Emits a Lich::Messaging message only when the messaging surface is
+        # available in the current runtime or isolated spec context.
+        #
+        # @param level [String] message level passed to `Lich::Messaging.msg`
+        # @param text [String] message body
+        # @return [void]
+        def self.messaging_msg(level, text)
+          return unless defined?(Lich::Messaging)
+          return unless Lich::Messaging.respond_to?(:msg)
+
+          Lich::Messaging.msg(level, text)
         end
 
         # Recursively converts string keys to symbols in nested hash and array structures.
@@ -193,15 +226,15 @@ module Lich
             elsif frontend != :__unset && !frontend.nil?
               # For standard entries, ensure custom_launch is nil to avoid matching custom entries
               next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
-              next unless character[:frontend].to_s.casecmp?(frontend.to_s)
+              next unless Frontend.canonical_name(character[:frontend]) == Frontend.canonical_name(frontend)
             end
 
             build_character_result(account_name, account_data, character)
           end
 
-          Lich::Messaging.msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
-          Lich::Messaging.msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
-          Lich.log("info: Returning exact match count of #{exact_matches.count}")
+          messaging_msg('debug', "RETURNING EXACT MATCH COUNT OF #{exact_matches.count} RECORD(S).")
+          messaging_msg('debug', "Exact match character = #{exact_matches[0][:char_name]} for instance #{exact_matches[0][:game_code]}.") unless exact_matches.empty?
+          Lich.log("info: Returning exact match count of #{exact_matches.count}") if Lich.respond_to?(:log)
           return exact_matches unless exact_matches.empty?
 
           # Step 2: Fallback match (if needed)
@@ -233,7 +266,7 @@ module Lich
             elsif frontend != :__unset && !frontend.nil?
               # For standard entries, ensure custom_launch is nil to avoid matching custom entries
               next unless character[:custom_launch].nil? || character[:custom_launch].to_s.empty?
-              next unless character[:frontend].to_s == frontend.to_s
+              next unless Frontend.canonical_name(character[:frontend]) == Frontend.canonical_name(frontend)
             end
 
             build_character_result(account_name, account_data, character)
@@ -348,9 +381,9 @@ module Lich
 
           # Filter by game instance if explicitly provided and valid, includes fallback GST -> GS3
           if requested_instance != :__unset
-            if requested_instance.nil? || !VALID_GAME_CODES.include?(requested_instance)
-              Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}"
-              Lich::Messaging.msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
+            if requested_instance.nil? || !valid_game_code?(requested_instance)
+              Lich.log "error: Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}" if Lich.respond_to?(:log)
+              messaging_msg('error', "Probable invalid instance detected. Valid instances: #{VALID_GAME_CODES.join(', ')}")
 
               return nil
             end
@@ -368,7 +401,10 @@ module Lich
 
           matching_chars.each do |char|
             score = 0
-            score += 1 if requested_fe != :__unset && char[:frontend] == requested_fe
+            if requested_fe != :__unset &&
+               Frontend.canonical_name(char[:frontend]) == Frontend.canonical_name(requested_fe)
+              score += 1
+            end
 
             if score > highest_score
               best_match = char
@@ -385,8 +421,8 @@ module Lich
         #   selector is present, or nil for probable invalid instance intent.
         #
         # Supports shorthand aliases:
-        #   --gs  → equivalent to --gemstone
-        #   --dr  → equivalent to --dragonrealms
+        #   --gs  -> equivalent to --gemstone
+        #   --dr  -> equivalent to --dragonrealms
         def self.resolve_instance(argv)
           instance_flags_seen = false
           resolved_instance = nil
@@ -419,14 +455,14 @@ module Lich
             resolved_instance ||= 'DRF'
           end
 
-          # Check for direct instance codes (GS3, GS4, GST, GSX, etc.).
+          # Check for direct instance codes (GS3, GST, GSF, DR, etc.).
           # Non-instance flags are ignored so CLI modifiers do not force invalid-instance
           # handling when the user did not request an explicit instance.
           if resolved_instance.nil?
             argv.each do |arg|
               next unless arg.start_with?('--')
               flag = arg.sub('--', '').downcase
-              if VALID_GAME_CODES.include?(flag.upcase)
+              if valid_game_code?(flag.upcase)
                 instance_flags_seen = true
                 resolved_instance = flag.upcase
                 break
@@ -438,7 +474,7 @@ module Lich
             end
           end
 
-          return resolved_instance unless resolved_instance.nil?
+          return resolved_instance if valid_game_code?(resolved_instance)
           return :__unset unless instance_flags_seen
           nil
         end
@@ -474,37 +510,94 @@ module Lich
         # Parses Lich CLI args to determine game instance, frontend, and custom launch filter.
         #
         # Returns [instance, frontend, custom_launch] (all may be nil or :__unset).
-        # Invalid game codes are not rejected here; call site can choose to validate
-        # against VALID_GAME_CODES.
+        # Invalid game codes resolve to nil through the canonical game-code validator.
         #
         # Examples:
-        #   --gemstone --platinum        → ['GSX', :__unset, :__unset]
-        #   --dragonrealms --fallen      → ['DRF', :__unset, :__unset]
-        #   --GS4 --wizard               → ['GS3', 'wizard', :__unset]
-        #   --GS3 --custom-launch=warlock → ['GS3', :__unset, 'warlock']
+        #   --gemstone --shattered       -> ['GSF', :__unset, :__unset]
+        #   --dragonrealms --fallen      -> ['DRF', :__unset, :__unset]
+        #   --GST --wizard               -> ['GST', 'wizard', :__unset]
+        #   --GS3 --custom-launch=warlock -> ['GS3', :__unset, 'warlock']
         #
         # @param argv [Array<String>] e.g. ARGV
         # @return [Array(String, String, String)] [game_code, frontend, custom_launch]
         def self.resolve_login_args(argv)
-          frontend = :__unset
+          frontend = resolve_frontend_arg(argv)
           custom_launch = :__unset
           instance = resolve_instance(argv)
 
           argv.each do |arg|
-            case arg
-            when FRONTEND_PATTERN
-              frontend = Regexp.last_match[:fe].downcase
-            when CUSTOM_LAUNCH_PATTERN
-              custom_launch = Regexp.last_match[:cl]
+            if (match = arg.match(CUSTOM_LAUNCH_PATTERN))
+              custom_launch = match[:cl]
             end
           end
 
-          Lich::Messaging.msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
-          Lich::Messaging.msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
-          Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}"
-          Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}"
+          messaging_msg('debug', "Login arguments from CLI login -> #{argv.inspect}")
+          Lich.log "debug: Login arguments from CLI login -> #{argv.inspect}" if Lich.respond_to?(:log)
+          unless instance.nil?
+            messaging_msg('debug', "Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}")
+            Lich.log "debug: Resolved instance: #{instance.inspect}, frontend: #{frontend.inspect}, custom_launch: #{custom_launch.inspect}" if Lich.respond_to?(:log)
+          end
 
           [instance, frontend, custom_launch]
+        end
+
+        # Resolves the final recognized frontend selector from CLI arguments.
+        # Legacy shorthand flags and registry-backed long-form identifiers share
+        # this path so login matching and detachable runtime identity agree.
+        #
+        # @param argv [Array<String>] command line arguments
+        # @return [String, Symbol] canonical frontend id, or :__unset
+        def self.resolve_frontend_arg(argv)
+          frontend = :__unset
+          argv.each do |arg|
+            if (match = arg.match(FRONTEND_PATTERN))
+              frontend = Frontend.canonical_name(match[:fe])
+            elsif (match = arg.match(REGISTERED_FRONTEND_PATTERN))
+              candidate = Frontend.canonical_name(match[:fe])
+              frontend = candidate if Frontend.registered_frontends.include?(candidate)
+            end
+          end
+          frontend
+        end
+
+        # Resolves which frontend should be used when matching a saved entry for
+        # CLI login.
+        #
+        # Headless CLI launches still carry an intended frontend for downstream
+        # runtime behavior, but saved-entry matching should not reject an entry
+        # solely because `--without-frontend` was passed.
+        #
+        # @param requested_frontend [String, Symbol] frontend parsed from CLI args
+        # @param argv [Array<String>] command line arguments
+        # @return [String, Symbol] frontend for saved-entry lookup, or :__unset
+        #   when headless mode should ignore frontend during matching
+        def self.resolve_lookup_frontend(requested_frontend, argv)
+          return :__unset if argv.include?('--without-frontend')
+
+          requested_frontend
+        end
+
+        # Resolves the frontend identity for a headless (`--without-frontend`)
+        # launch.
+        #
+        # Lich spawns no frontend here, but a detachable client still attaches
+        # and renders the stream, so the identity has to name whatever is
+        # reading it: `respond` uses the frontend's registered capabilities to
+        # decide whether to XML-escape script output and wrap it in mono
+        # brackets. A Genie client left as 'unknown' receives unescaped output,
+        # so any script text containing angle brackets is swallowed by Genie's
+        # XML parser as if it were a tag.
+        #
+        # @param argv [Array<String>] command line arguments
+        # @param detachable_client [Boolean] whether a detachable client port is configured
+        # @return [String] frontend identity for Frontend.client
+        def self.resolve_headless_frontend(argv, detachable_client: false)
+          requested_frontend = resolve_frontend_arg(argv)
+          return 'saga' if requested_frontend == 'saga'
+          return 'unknown' unless detachable_client
+          return requested_frontend unless requested_frontend == :__unset
+
+          'profanity'
         end
 
         # Formats the game instance launch flag for Lich based on version.
@@ -527,52 +620,6 @@ module Lich
             when 'DRT' then '--drt'
             else nil
             end
-          end
-        end
-
-        # Spawns a Lich login session using a saved entry.
-        #
-        # This constructs and launches a Ruby + Lich command line with proper login arguments.
-        # It is aware of the Lich version and formats launch flags (e.g., `--gst`, `--GSX`) accordingly.
-        # Only the character name and game instance are passed — all sensitive data is handled by Lich internally.
-        #
-        # @param entry [Hash] the login entry (must include :char_name and :game_code)
-        # @param lich_path [String, nil] optional path to lich.rbw; defaults to LICH_DIR/lich.rbw
-        # @param startup_scripts [Array<String>] optional scripts to autostart post-login
-        # @param instance_override [String, Symbol, nil] optional instance override (e.g., 'GST', 'GSX')
-        # @param frontend_override [String, nil] optional frontend (e.g., 'avalon', 'wizard')
-        # @param custom_launch_filter [String, nil] optional custom launch filter for entry selection
-        # @return [Process::Waiter, nil] detached process handle if successful, nil otherwise
-        def self.spawn_login(entry, lich_path: nil, startup_scripts: [], instance_override: nil, frontend_override: nil, custom_launch_filter: nil)
-          ruby_path = OS.windows? ? RbConfig.ruby.sub('ruby', 'rubyw') : RbConfig.ruby
-          lich_path ||= File.join(LICH_DIR, 'lich.rbw')
-
-          spawn_cmd = [
-            "#{ruby_path}",
-            "#{lich_path}",
-            '--login', entry[:char_name]
-          ]
-          if instance_override
-            flag = format_launch_flag(instance_override)
-            spawn_cmd << flag if flag
-          end
-          spawn_cmd << "--#{frontend_override}" unless frontend_override.nil?
-          spawn_cmd << "--custom-launch=#{custom_launch_filter}" if custom_launch_filter
-          spawn_cmd << "--start-scripts=#{startup_scripts.join(',')}" if startup_scripts.any?
-
-          Lich::Messaging.msg('info', "Spawning login: #{spawn_cmd}")
-
-          begin
-            pid = Process.spawn(*spawn_cmd)
-            Process.detach(pid)
-          rescue Errno::ENOENT => e
-            Lich::Messaging.msg('error', "Executable not found: #{e.message}")
-            Lich.log "error: Executable not found: #{e.message}"
-            nil
-          rescue StandardError => e
-            Lich::Messaging.msg('error', "Failed to launch login session: #{e.class} - #{e.message}")
-            Lich.log "error: Failed to launch login session: #{e.class} - #{e.message}"
-            nil
           end
         end
       end

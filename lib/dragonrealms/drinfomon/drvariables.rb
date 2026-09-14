@@ -58,6 +58,35 @@ module Lich
       'incredibly'
     ].freeze
 
+    # Combat positioning relative to your opponent, captured from the balance
+    # status line (e.g. "[You're solidly balanced and in good position.]").
+    # Stored as a signed magnitude: positive means you hold the advantage,
+    # negative means your opponent does, and 0 is an even contest. The scale is
+    # symmetric, and the two "overwhelming opponent" phrasings map to the same
+    # value.
+    DR_POSITION_VALUES = {
+      'opponent overwhelming you'        => -9,
+      'opponent dominating'              => -8,
+      'opponent in excellent position'   => -7,
+      'opponent in superior position'    => -6,
+      'opponent in very strong position' => -5,
+      'opponent in strong position'      => -4,
+      'opponent in good position'        => -3,
+      'opponent in better position'      => -2,
+      'opponent has slight advantage'    => -1,
+      'no advantage'                     => 0,
+      'have slight advantage'            => 1,
+      'in better position'               => 2,
+      'in good position'                 => 3,
+      'in strong position'               => 4,
+      'in very strong position'          => 5,
+      'in superior position'             => 6,
+      'in excellent position'            => 7,
+      'in dominating position'           => 8,
+      'overwhelming opponent'            => 9,
+      'overwhelming your opponent'       => 9
+    }.freeze
+
     DR_SKILLS_DATA = {
       skillsets: {
         'Armor'    => [
@@ -290,7 +319,17 @@ module Lich
       'ninety'    => 90
     }.freeze
 
-    BOX_REGEX = /((?:brass|copper|deobar|driftwood|iron|ironwood|mahogany|oaken|pine|steel|wooden) (?:box|caddy|casket|chest|coffer|crate|skippet|strongbox|trunk))/.freeze
+    # Box wood/material adjectives recognized in rummaged box lists. Players
+    # extend this via the +custom_box_woods+ setting; see
+    # {Lich::DragonRealms::DRC.box_list_to_adj_and_noun}.
+    BOX_WOODS = %w[brass copper deobar driftwood iron ironwood mahogany oaken pine steel wooden].freeze
+    # Box container nouns recognized in rummaged box lists. Players extend this
+    # via the +custom_box_containers+ setting.
+    BOX_CONTAINERS = %w[box caddy casket chest coffer crate skippet strongbox trunk].freeze
+    # Recognizes "<wood> <container>" box descriptions. Built from {BOX_WOODS}
+    # and {BOX_CONTAINERS} so both remain a single source of truth; kept as a
+    # global ($box_regex) for third-party scripts.
+    BOX_REGEX = /((?:#{BOX_WOODS.join('|')}) (?:#{BOX_CONTAINERS.join('|')}))/.freeze
 
     MANA_MAP = {
       'weak'       => %w[dim glowing bright].freeze,
@@ -303,6 +342,9 @@ module Lich
     SECONDARY_SIGILS_PATTERN = /\b(?:antipode|ascension|clarification|decay|evolution|integration|metamorphosis|nurture|paradox|unity) sigil\b/.freeze
 
     VOL_MAP = {
+      'colossal' => 200,
+      'gigantic' => 100,
+      'immense'  => 50,
       'enormous' => 20,
       'massive'  => 10,
       'huge'     => 5,

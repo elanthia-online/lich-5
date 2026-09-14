@@ -1,0 +1,163 @@
+# -----------------------------------------------------------------------------
+# PURPOSE
+#   Manually rebuild core release assets and attach the latest Ruby4Lich5
+#   installer to an existing GitHub release tag. This is a recovery workflow for
+#   situations where a draft release was deleted/recreated and its assets need
+#   to be restored without minting a new tag.
+#
+# NOTES
+# - Targets an existing release by tag (for example: v5.16.1).
+# - Rebuilds the core archives and attaches the same installer asset used by the stable workflow:
+#     * lich-5.tar.gz
+#     * lich-5.zip
+#     * Ruby4Lich5.exe
+# - Uploads with --clobber so the workflow is safely rerunnable.
+# -----------------------------------------------------------------------------
+name: Rebuild Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to rebuild assets for (e.g. v5.16.1)"
+        required: true
+        type: string
+      build_installer:
+        description: "Also attach the latest Ruby4Lich5 Windows installer"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release_guard:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.verify.outputs.tag }}
+    steps:
+      - name: Verify draft release exists for tag
+        id: verify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [ "$draft" != "true" ]; then
+            echo "::error::Release '$TAG' exists but is not a draft. Refusing to clobber assets on a published release."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build_archives:
+    needs: release_guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.release_guard.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Create core Lich-5 package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p Lich5 Lich5/data Lich5/scripts
+
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/alias.lic         > Lich5/scripts/alias.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/autostart.lic     > Lich5/scripts/autostart.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/ewaggle.lic       > Lich5/scripts/ewaggle.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/go2.lic           > Lich5/scripts/go2.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/jinx.lic          > Lich5/scripts/jinx.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/lich5-update.lic  > Lich5/scripts/lich5-update.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/log.lic           > Lich5/scripts/log.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/map.lic           > Lich5/scripts/map.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/repository.lic    > Lich5/scripts/repository.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/vars.lic          > Lich5/scripts/vars.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/version.lic       > Lich5/scripts/version.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/dr-scripts/master/dependency.lic         > Lich5/scripts/dependency.lic
+          curl -fsSL https://raw.githubusercontent.com/elanthia-online/scripts/master/scripts/effect-list.xml   > Lich5/data/effect-list.xml
+
+          cp lich.rbw Lich5/
+          cp Gemfile Lich5/
+          cp LICENSE Lich5/
+          cp -r lib Lich5/
+
+          tar -czvf lich-5.tar.gz Lich5/
+          zip -r lich-5.zip Lich5/
+
+      - name: Upload archive artifacts for installer job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rebuilt-release-archives
+          path: |
+            lich-5.tar.gz
+            lich-5.zip
+
+      - name: Upload archives to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release_guard.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" lich-5.tar.gz lich-5.zip --clobber --repo "$GITHUB_REPOSITORY"
+
+  build_installer:
+    needs: [release_guard, build_archives]
+    if: ${{ inputs.build_installer }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download latest Ruby4Lich5 installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-all-errors \
+            --output Ruby4Lich5.exe \
+            https://github.com/Lich5/Ruby4Lich5/releases/latest/download/Ruby4Lich5.exe
+          test -s Ruby4Lich5.exe
+
+      - name: Upload installer to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release_guard.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" Ruby4Lich5.exe --clobber --repo "$GITHUB_REPOSITORY"
+  summary:
+    needs: [release_guard, build_archives, build_installer]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run summary
+        env:
+          TAG: ${{ needs.release_guard.outputs.tag }}
+          ARCHIVE_RESULT: ${{ needs.build_archives.result }}
+          INSTALLER_RESULT: ${{ needs.build_installer.result }}
+          WANT_INSTALLER: ${{ inputs.build_installer }}
+        shell: bash
+        run: |
+          {
+            echo "## Rebuild Release Assets — Run Summary"
+            echo ""
+            echo "- Target tag: \`$TAG\`"
+            echo "- Archive rebuild/upload: **$ARCHIVE_RESULT**"
+            if [ "$WANT_INSTALLER" = "true" ]; then
+              echo "- Installer attachment: **$INSTALLER_RESULT**"
+            else
+              echo "- Installer attachment: **skipped by input**"
+            fi
+            echo ""
+            echo "Expected assets:"
+            echo "- \`lich-5.tar.gz\`"
+            echo "- \`lich-5.zip\`"
+            if [ "$WANT_INSTALLER" = "true" ]; then
+              echo "- \`Ruby4Lich5.exe\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

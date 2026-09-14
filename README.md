@@ -4,6 +4,9 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rspec_tests.yaml?branch=main&label=rspec)](https://github.com/elanthia-online/lich-5/actions)
 [![CI](https://img.shields.io/github/actions/workflow/status/elanthia-online/lich-5/rubocop.yaml?branch=main&label=rubocop)](https://github.com/elanthia-online/lich-5/actions)
 
+[![Lich-5-Docs](https://img.shields.io/badge/Lich--5--Docs-blue)](https://lich-5-docs.elanthia.online/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/elanthia-online/lich-5)
+
 ## About
 
 Lich 5 is a GTK3 variant of Lich that is meant to replace the existing versions of Lich. Lich is an open source scripting engine for Simutronic's text-based games DragonRealms and Gemstone IV. It is not a complete front-end in and of itself: it operates much like a proxy server and communicates with the user through their chosen front-end (effectively giving the appearance of expanding the front-end's features with its own). It allows you to write and run scripts in the Ruby language.

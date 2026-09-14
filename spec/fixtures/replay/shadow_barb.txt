@@ -1,0 +1,11 @@
+##### shadow_barb b96e3804b1cf7ec1
+# expect: attacks=shadow_barb | res=smr | flares=none | outcomes=none | dmg=1 | statuses=
+Your umbrous wings twitch sharply, launching a barbed shard of shadow that hisses through the air toward <pushBold/>a <a exist="56007219" noun="inciter">supple Ivasian inciter</a><popBold/>!
+[SMR result: 201 (Open d100: 48, Bonus: 51)]
+The shadowy barb hardens as it pierces <pushBold/>a <a exist="56007219" noun="inciter">supple Ivasian inciter</a><popBold/>!
+   ... 70 points of damage!
+   The Ivasian inciter's midsection swells painfully then bursts, sending the Ivasian inciter everywhere.
+<pushBold/>A <a exist="56007219" noun="inciter">supple Ivasian inciter</a><popBold/> begins to mouth a desperate prayer, but death stifles him.
+<pushBold/>A <a exist="56007219" noun="inciter">supple Ivasian inciter</a><popBold/> loses its focused look.
+Cast Roundtime 3 Seconds.
+

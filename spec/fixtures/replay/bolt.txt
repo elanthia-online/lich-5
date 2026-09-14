@@ -1,0 +1,19 @@
+##### bolt e4a82b1634833633
+# expect: attacks=bolt | res=as_ds | flares=none | outcomes=none | dmg=1 | statuses=
+<a exist="-16306919" noun="Treeze">Treeze</a> hurls a seething blast of steam at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>!
+  AS: +541 vs DS: +246 with AvD: +22 + d100 roll: +15 = +332
+   ... and hits for 74 points of damage!
+   Strong hit rips arm from wrist to elbow.
+   The wound vanishes as the ethereal flesh swirls around in chaotic patterns.
+You discover the hiding place of a triton executioner!
+
+##### bolt c5ee5e6701d0988c
+# expect: attacks=bolt | res=as_ds | flares=ensorcell | outcomes=none | dmg=1 | statuses=
+You hurl a seething blast of steam at <pushBold/>a <a exist="92683529" noun="defender">spectral triton defender</a><popBold/>!
+  AS: +549 vs DS: +302 with AvD: +22 + d100 roll: +2 = +271
+   ... and hit for 68 points of damage!
+   Hard shot to the triton defender's back sends it drifting forward!
+ ** Necrotic energy from your smooth glowbark staff overflows into you! **
+   You feel energized!
+Cast Roundtime 1 Second.
+

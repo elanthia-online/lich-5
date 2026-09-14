@@ -10,13 +10,13 @@ RSpec.describe Lich::Util::MemoryReleaser do
   before do
     described_class.instance_variable_set(:@instance, nil)
 
-    # InstanceSettings is a simple key/value store — stub it as a hash-like
+    # InstanceSettings is a simple key/value store - stub it as a hash-like
     # module so tests do not touch real persistent storage.
     stub_const('Lich::Common::InstanceSettings', Module.new)
     allow(Lich::Common::InstanceSettings).to receive(:[]).and_return(nil)
     allow(Lich::Common::InstanceSettings).to receive(:[]=)
 
-    # GameObj.prune_index! is called during release — stub it out so tests
+    # GameObj.prune_index! is called during release - stub it out so tests
     # do not depend on the GameObj index being in a known state.
     stub_const('Lich::Common::GameObj', Module.new)
     allow(Lich::Common::GameObj).to receive(:prune_index!)
@@ -186,17 +186,19 @@ RSpec.describe Lich::Util::MemoryReleaser do
       expect(manager).not_to have_received(:print_memory_stats)
     end
 
-    it 'run_gc calls full mark + immediate sweep and compacts when supported' do
+    it 'run_gc calls full mark + immediate sweep and delegates compaction to GtkCompaction' do
+      # Whether GC.compact actually runs is now Lich::Util::GtkCompaction's
+      # own conditional logic (gtk_loaded?, native_gem_patched?, etc, see
+      # lib/util/gtk_compaction.rb and its own spec) -- run_gc's job is
+      # just to delegate to it, not to decide when compaction is safe.
       manager = manager_class.new
       allow(GC).to receive(:start)
-      allow(GC).to receive(:compact)
-      allow(GC).to receive(:respond_to?).and_call_original
-      allow(GC).to receive(:respond_to?).with(:compact).and_return(true)
+      allow(Lich::Util::GtkCompaction).to receive(:safe_compact!)
 
       manager.send(:run_gc)
 
       expect(GC).to have_received(:start).with(full_mark: true, immediate_sweep: true)
-      expect(GC).to have_received(:compact)
+      expect(Lich::Util::GtkCompaction).to have_received(:safe_compact!)
     end
 
     it 'release_to_os dispatches linux path' do
@@ -386,17 +388,51 @@ RSpec.describe Lich::Util::MemoryReleaser do
 
     it 'windows helper falls back psapi -> wmi -> powershell -> nil' do
       manager = manager_class.new
-      allow(manager).to receive(:get_memory_via_psapi).and_raise(StandardError, 'no psapi')
-      allow(manager).to receive(:get_memory_via_wmi).and_raise(StandardError, 'no wmi')
+      allow(manager).to receive(:get_memory_via_psapi).and_return(nil)
+      allow(manager).to receive(:get_memory_via_wmi).and_return(nil)
       allow(manager).to receive(:get_memory_via_powershell).and_return(77.7)
 
       expect(manager.send(:get_process_memory_windows)).to eq(77.7)
 
       allow(manager).to receive(:get_memory_via_psapi).and_raise(StandardError, 'no psapi')
-      allow(manager).to receive(:get_memory_via_wmi).and_raise(StandardError, 'no wmi')
+      allow(manager).to receive(:get_memory_via_wmi).and_raise(LoadError, 'no win32ole')
       allow(manager).to receive(:get_memory_via_powershell).and_raise(StandardError, 'no ps')
 
       expect(manager.send(:get_process_memory_windows)).to be_nil
+    end
+
+    it 'runs the PowerShell fallback directly without a cmd.exe shell' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: true)
+      allow(Open3).to receive(:capture3).and_return(["1048576\n", '', status])
+
+      expect(manager.send(:get_memory_via_powershell)).to eq(1.0)
+      expect(Open3).to have_received(:capture3).with(
+        'powershell.exe',
+        '-WindowStyle', 'Hidden',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command', "(Get-Process -Id #{Process.pid}).WorkingSet64"
+      )
+    end
+
+    it 'rejects blank or malformed PowerShell output' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: true)
+
+      ['   ', 'not-a-byte-count'].each do |output|
+        allow(Open3).to receive(:capture3).and_return([output, '', status])
+
+        expect(manager.send(:get_memory_via_powershell)).to be_nil
+      end
+    end
+
+    it 'rejects PowerShell output from a failed process' do
+      manager = manager_class.new
+      status = instance_double(Process::Status, success?: false)
+      allow(Open3).to receive(:capture3).and_return(["1048576\n", 'failure', status])
+
+      expect(manager.send(:get_memory_via_powershell)).to be_nil
     end
   end
 

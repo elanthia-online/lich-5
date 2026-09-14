@@ -1,0 +1,5 @@
+##### blood_burst 789b6927ba005f6b
+# expect: attacks=blood_burst | res=none | flares=none | outcomes=none | dmg=0 | statuses=
+Blood sprays from <a exist="-33097756" noun="Puffpuff">Puffpuff</a>'s neck in a crimson arc!
+Trog's bleeding slows to a trickle and finally stops.
+
