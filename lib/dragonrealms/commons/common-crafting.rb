@@ -346,7 +346,7 @@ module Lich
           return nil if skip_exit
 
           Lich::Messaging.msg('bold', 'DRCC: Cannot continue crafting without required item. Stopping script.')
-          return nil
+          exit
         when GET_CRAFTING_HEAVY
           get_crafting_item(name, bag, bag_items, belt)
         when GET_CRAFTING_TIED
