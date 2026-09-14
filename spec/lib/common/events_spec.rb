@@ -4,8 +4,8 @@ require_relative '../../spec_helper'
 require_relative '../../../lib/common/events'
 
 RSpec.describe Lich::Common::Events do
-  # Handlers registered by Combat::Observers (if loaded elsewhere in the run)
-  # must survive this spec, so only clear subscriptions, never on_change.
+  # on_change callbacks registered by Combat::Messages (if loaded elsewhere in
+  # the run) must survive this spec, so only clear subscriptions, never on_change.
   after { described_class.clear! }
 
   def as_script(name)

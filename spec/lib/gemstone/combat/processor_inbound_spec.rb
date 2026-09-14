@@ -27,9 +27,9 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       track_damage: true, track_wounds: false
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
-    stub_const('Lich::Gemstone::Combat::Observers', Module.new)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:any_for?).with(:attack).and_return(false)
+    stub_const('Lich::Common::Events', Module.new)
+    allow(Lich::Common::Events).to receive(:emit)
+    allow(Lich::Common::Events).to receive(:any_for?).with('combat.attack').and_return(false)
     # cross-chunk state lives in module ivars; never let one example's
     # death watch or held cast leak into another
     %i[@death_watch @death_announced @held_cast @held_pre_flares @deferred_emits].each do |iv|
@@ -396,7 +396,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
               outcomes: [], resolutions: [] }
 
     described_class.persist_event(event)
-    expect(Lich::Gemstone::Combat::Observers).to have_received(:emit).with(:attack, event)
+    expect(Lich::Common::Events).to have_received(:emit).with('combat.attack', event)
   end
 
   # A nearby player's attack on a creature we can see (foreign_caster).
@@ -432,7 +432,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
 
       described_class.persist_event(event)
       # emitted for observers, but Creature[] never consulted for application
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit).with(:attack, event)
+      expect(Lich::Common::Events).to have_received(:emit).with('combat.attack', event)
     end
 
     # The Holy Weapon (1625) release line is a pre-FLARE on our swing, not
@@ -495,8 +495,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
 
       described_class.apply_crit_statuses(creature, event)
 
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:stun, hash_including(flare: :ensorcell, rounds: 2))
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.stun', hash_including(flare: :ensorcell, rounds: 2))
     end
 
     it 'still emits a direct-hit crit stun (no regression)' do
@@ -506,8 +506,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
         flares: []
       }
       described_class.apply_crit_statuses(creature, event)
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:stun, hash_including(flare: nil, rounds: 3))
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.stun', hash_including(flare: nil, rounds: 3))
     end
   end
 
@@ -555,8 +555,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # the spike's 5 damage landed on the attacker creature (not dropped)
       expect(attacker_creature).to have_received(:add_damage).with(5)
       # and its crit stun emitted
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:stun, hash_including(flare: :spike, rounds: 2))
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.stun', hash_including(flare: :spike, rounds: 2))
     end
   end
 
@@ -785,10 +785,10 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
         allow(registry).to receive(:[]).with(cid).and_return(dbl)
       end
       emitted = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, payload| emitted << [type, payload] }
       described_class.instance_variable_set(:@deferred_emits, nil)
       described_class.parse_events(chunk)
-      blinds = emitted.select { |t, p| t == :status && p[:status] == :blind }
+      blinds = emitted.select { |t, p| t == 'combat.status' && p[:status] == :blind }
       expect(blinds.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[121654846, 1], [121678494, 3]])
     end
 
@@ -799,7 +799,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       allow(dbl).to receive(:add_status)
       allow(registry).to receive(:[]).with(129649881).and_return(dbl)
       emitted = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, payload| emitted << [type, payload] }
       described_class.instance_variable_set(:@deferred_emits, nil)
       disc = bolded(129649881, 'disciple', 'a flayed gigas disciple')
       events = described_class.parse_events([
@@ -814,10 +814,10 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                               'Vital energy infuses you, hastening your arcane reflexes!'
                                             ])
       expect(events.first[:flares].map { |f| f[:name] }).to eq(%i[dispel breeze natures_decay arcane_reflex])
-      decay = emitted.select { |t, p| t == :status && p[:status].to_s == 'natures_decay' }
+      decay = emitted.select { |t, p| t == 'combat.status' && p[:status].to_s == 'natures_decay' }
       expect(decay.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[129649881, 3]])
       # the swing's own crit stun is not the dispel pre-flare's doing
-      stun = emitted.select { |t, p| t == :status && p[:status].to_s == 'stunned' }
+      stun = emitted.select { |t, p| t == 'combat.status' && p[:status].to_s == 'stunned' }
       expect(stun.map { |_, p| [p[:id], p[:flare_seq]] }).to eq([[129649881, nil]])
     end
   end
@@ -1155,12 +1155,12 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       dbl = double('Creature', id: 129623615, name: 'a flayed gigas disciple').as_null_object
       allow(registry).to receive(:[]).with(129623615).and_return(dbl)
       emitted = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, payload| emitted << [type, payload] }
       lines = File.readlines(File.join(__dir__, '../../../fixtures/cloak_of_shadows_interrupt.txt'), chomp: true)
       described_class.process(lines)
-      attacks = emitted.select { |t, _| t == :attack }.map { |_, e| [e[:name], e[:_uid]] }
+      attacks = emitted.select { |t, _| t == 'combat.attack' }.map { |_, e| [e[:name], e[:_uid]] }
       expect(attacks).to eq([[:fire, 0], [:cast, 1]])
-      blind = emitted.find { |t, p| t == :status && p[:status] == :blind }.last
+      blind = emitted.find { |t, p| t == 'combat.status' && p[:status] == :blind }.last
       expect(blind).to include(attack_uid: 0, flare_seq: 3)
       expect(blind).not_to have_key(:_event)
     end
@@ -1175,7 +1175,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       allow(registry).to receive(:[]).with(700001).and_return(double('Creature', id: 700001, name: 'a grizzled orc', **live))
       allow(registry).to receive(:[]).with(700002).and_return(double('Creature', id: 700002, name: 'a hulking troll', **live))
       emitted = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, payload| emitted << [type, payload] }
       orc = bolded(700001, 'orc', 'a grizzled orc')
       troll = bolded(700002, 'troll', 'a hulking troll')
       described_class.process([
@@ -1186,7 +1186,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                 "   The #{orc} is stunned!",
                                 "#{troll} shakes off the stun!"
                               ])
-      statuses = emitted.select { |t, _| t == :status }.map(&:last)
+      statuses = emitted.select { |t, _| t == 'combat.status' }.map(&:last)
       orc_stun = statuses.find { |s| s[:id] == 700001 }
       troll_rec = statuses.find { |s| s[:id] == 700002 }
       # the orc's stun is the fire's; the troll's recovery names no event
@@ -1237,7 +1237,7 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       registry = Class.new { def self.[](_id); end }
       stub_const('Lich::Gemstone::Combat::Creature', registry)
       emitted = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, payload| emitted << [type, payload] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, payload| emitted << [type, payload] }
       described_class.instance_variable_set(:@deferred_emits, nil)
       skald = bolded(160902365, 'skald', 'a grim gigas skald')
       described_class.parse_events([
@@ -1248,9 +1248,9 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
                                      "#{skald} raises a hand as if to grasp for support as he collapses, life going out of his form.",
                                      "A white glow rushes away from #{skald}."
                                    ])
-      loss = emitted.find { |t, _| t == :spell_loss }&.last
+      loss = emitted.find { |t, _| t == 'combat.spell_loss' }&.last
       expect(loss).to include(id: 160902365, spell: 303, spell_name: 'Prayer of Protection', cause: :death)
-      expect(emitted.none? { |t, p| t == :status && p[:status].to_s == 'dispelled' }).to be(true)
+      expect(emitted.none? { |t, p| t == 'combat.status' && p[:status].to_s == 'dispelled' }).to be(true)
     end
 
     it "keeps nearby players' gigas-village spells foreign: spellsong (and its sonic kill), fear cry, golden waves, 3p moonbeam" do
@@ -1456,15 +1456,15 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     it 'emits the :attack before the blind :status parsed from the same chunk' do
       zerk = bolded(121654846, 'berserker', 'a tattooed gigas berserker')
       order = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, data| order << [type, data[:status]] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, data| order << [type, data[:status]] }
       described_class.process([
                                 "You fire a faewood arrow at #{zerk}!",
                                 '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
                                 '   ... and hit for 188 points of damage!',
                                 "You blinded #{zerk}!"
                               ], at: Time.at(1))
-      attack_i = order.index { |t, _| t == :attack }
-      blind_i = order.index { |t, s| t == :status && s == :blind }
+      attack_i = order.index { |t, _| t == 'combat.attack' }
+      blind_i = order.index { |t, s| t == 'combat.status' && s == :blind }
       expect(attack_i).not_to be_nil
       expect(blind_i).not_to be_nil
       expect(attack_i).to be < blind_i
@@ -1473,8 +1473,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
     it 'still emits immediately when parse_events is called on its own' do
       zerk = bolded(121654846, 'berserker', 'a tattooed gigas berserker')
       described_class.parse_events(["You blinded #{zerk}!"])
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:status, hash_including(status: :blind))
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.status', hash_including(status: :blind))
     end
   end
 
@@ -1522,14 +1522,14 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       dead_flag[:value] = true
       described_class.persist_event(hp_kill_event) # watches the creature
       described_class.process([]) # the sweep runs at chunk level
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.status', hash_including(id: 900, status: 'dead', action: :add)).once
     end
 
     it 'emits nothing for a creature that is still alive' do
       described_class.persist_event(hp_kill_event)
-      expect(Lich::Gemstone::Combat::Observers).not_to have_received(:emit)
-        .with(:status, hash_including(status: 'dead'))
+      expect(Lich::Common::Events).not_to have_received(:emit)
+        .with('combat.status', hash_including(status: 'dead'))
     end
 
     it 'emits the dead status AFTER the chunk\'s :attack, even when the registry already shows the death' do
@@ -1537,11 +1537,11 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       # the room feed has already flagged the creature this chunk killed
       dead_flag[:value] = true
       order = []
-      allow(Lich::Gemstone::Combat::Observers).to receive(:emit) { |type, data| order << [type, data[:status]] }
+      allow(Lich::Common::Events).to receive(:emit) { |type, data| order << [type, data[:status]] }
       described_class.process(["You fire a faewood arrow at #{bolded(900, 'mastodon', 'a heavily armored battle mastodon')}!",
                                '  AS: +663 vs DS: +271 with AvD: +27 + d100 roll: +80 = +499',
                                '   ... and hit for 188 points of damage!'], at: Time.at(1))
-      expect(order.index { |t, _| t == :attack }).to be < order.index { |t, s| t == :status && s == 'dead' }
+      expect(order.index { |t, _| t == 'combat.attack' }).to be < order.index { |t, s| t == 'combat.status' && s == 'dead' }
     end
 
     it 'catches a death whose room flag arrives on a later, event-less chunk, and only once' do
@@ -1549,8 +1549,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       dead_flag[:value] = true
       described_class.process([]) # quiet chunk: the sweep still runs
       described_class.process([])
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.status', hash_including(id: 900, status: 'dead', action: :add)).once
     end
 
     it 'keeps watching a survivor until it dies (someone else finishing it minutes later still counts)' do
@@ -1558,8 +1558,8 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       8.times { described_class.process([]) }
       dead_flag[:value] = true
       described_class.process([])
-      expect(Lich::Gemstone::Combat::Observers).to have_received(:emit)
-        .with(:status, hash_including(id: 900, status: 'dead', action: :add)).once
+      expect(Lich::Common::Events).to have_received(:emit)
+        .with('combat.status', hash_including(id: 900, status: 'dead', action: :add)).once
     end
 
     it 'stops watching a creature that left the registry' do

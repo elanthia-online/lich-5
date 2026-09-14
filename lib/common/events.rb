@@ -17,8 +17,8 @@ module Lich
     #     @need_heal = true if status.phase == :blocked
     #   }
     #
-    # Design (extracted from Combat::Observers and HookRegistry, which are the
-    # two places this was previously re-solved):
+    # Design (extracted from the former Combat::Observers and from HookRegistry,
+    # the two places this was previously re-solved):
     #
     #   * Topics are dotted strings ('combat.damage', 'go2.status'). A
     #     subscription may name a topic exactly, a family with a trailing

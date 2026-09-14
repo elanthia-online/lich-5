@@ -68,7 +68,10 @@ design decision with a real cost.
 
 ## Existing families
 
-- `combat.<type>`: every `Combat::Observers` event (`combat.damage`,
-  `combat.status`, `combat.wound`, ...). `Combat::Tracker.on(:damage)` is a
-  facade over `Events.on('combat.damage')` and keeps its `(type, data)`
-  callback shape.
+- `combat.<type>`: every parsed combat fact and message event
+  (`combat.damage`, `combat.status`, `combat.wound`, `combat.bolted`, ...).
+  The catalogue of types and payloads is documented on `Combat::Tracker.on`,
+  which is only a spelling convenience: `Tracker.on(:damage)` is
+  `Events.on('combat.damage')`, and the block receives the topic string.
+  `Events.any_for?('combat.attack')` is what makes the processor emit
+  attacks when nobody asked for them in settings.

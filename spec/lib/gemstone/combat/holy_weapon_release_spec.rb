@@ -22,10 +22,10 @@ RSpec.describe 'Holy Weapon release' do
       emit_attacks: true, track_statuses: true, track_ucs: true, track_wounds: true
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
-    stub_const('Lich::Gemstone::Combat::Observers', Module.new)
+    stub_const('Lich::Common::Events', Module.new)
     allow(processor).to receive(:apply_status_to_target)
     allow(processor).to receive(:apply_ucs_to_target)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
+    allow(Lich::Common::Events).to receive(:emit)
     processor.instance_variable_set(:@active_assault, nil)
   end
 

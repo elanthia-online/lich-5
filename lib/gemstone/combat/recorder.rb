@@ -88,6 +88,7 @@
 
 require 'sqlite3'
 require 'securerandom'
+require_relative '../../common/events'
 
 module Lich
   module Gemstone
@@ -401,16 +402,17 @@ module Lich
         end
 
         # Hook the live observer feed. Idempotent via the named-handler
-        # contract; per the Observers contract the callback stays cheap
+        # contract; per the Events subscriber contract the callback stays cheap
         # (single WAL transaction) and never sends game commands.
         def subscribe!
-          obs = Lich::Gemstone::Combat::Observers
-          obs.on(:attack, :status, :stun, :roundtime, :spell_loss, :ucs,
-                 name: HANDLER_NAME) { |type, data| record(type, data) }
+          topics = %w[attack status stun roundtime spell_loss ucs].map { |t| "combat.#{t}" }
+          Lich::Common::Events.on(*topics, name: HANDLER_NAME) do |topic, data|
+            record(topic.delete_prefix('combat.').to_sym, data)
+          end
         end
 
         def unsubscribe!
-          Lich::Gemstone::Combat::Observers.off(HANDLER_NAME)
+          Lich::Common::Events.off(HANDLER_NAME)
         end
 
         # Close the current session if the idle gap has elapsed - ended_at is
@@ -455,7 +457,7 @@ module Lich
           # recorder lock so consumers may inspect the database without deadlock.
           # This is evidence only, not command ownership or a combat-complete flag.
           if type == :attack && result.is_a?(Hash) && result[:protocol] == RECEIPT_PROTOCOL
-            Lich::Gemstone::Combat::Observers.emit(:recorded_attack, result)
+            Lich::Common::Events.emit('combat.recorded_attack', result)
           end
           result
         end

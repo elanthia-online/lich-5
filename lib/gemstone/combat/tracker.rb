@@ -9,6 +9,7 @@ require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
 require_relative 'messages'
+require_relative '../../common/events'
 require_relative '../../common/db_store'
 
 module Lich
@@ -77,25 +78,76 @@ module Lich
         class << self
           attr_reader :settings, :buffer
 
-          # Subscribe to parsed combat events (see Combat::Observers for
-          # event types, payloads, and the subscriber contract - callbacks
-          # may run on worker threads; never send game commands from one).
+          # Subscribe to parsed combat events. Every event is the topic
+          # combat.<type> on Lich::Common::Events; this is the same as
+          # Events.on('combat.damage') with the Symbol types spelled for you.
           # Message events (:disarm_seen, :ambusher, :bolted ... see
           # Combat::Messages) subscribe the same way and need the tracker
           # neither enabled nor scanning creatures: their hook goes up with
           # the first subscription.
           #
+          # Contract for subscribers:
+          #   - Callbacks may run on AsyncProcessor worker threads. They must be
+          #     cheap and non-blocking, and must NEVER send game commands (fput /
+          #     Spell#cast / PSMS.use) - queue work for your own script thread.
+          #   - A raising subscriber is isolated and logged; it never breaks other
+          #     subscribers or the processor.
+          #
+          # Event types (topic combat.<type>) and payloads (all include :id, :name of the creature):
+          #   :damage     { id:, name:, attack:, amount: }
+          #   :wound      { id:, name:, attack:, location:, body_part:, rank: }
+          #   :fatal_crit { id:, name:, attack:, location: }
+          #   :status     { id:, name:, status:, action: :add | :remove }
+          #   :ucs        { id:, name:, kind: :position|:position_inbound|:tierup|:smite_on|:smite_off, value:, tier: }
+          #                 (:position_inbound = the creature's tier against US,
+          #                 per-swing metadata printed inside its UCS attack block.
+          #                 tier: 1..3 for decent/good/excellent on the two position
+          #                 kinds, nil otherwise - the numeric form the recorder keeps)
+          #   :spell_loss { id:, name:, spell:, spell_name:, cause: } - a spell
+          #                 wearing off the subject (creature OR player in view;
+          #                 player ids are negative, id is nil in plain-text logs).
+          #                 cause: :dispel (a dispel-family flare struck this
+          #                 chunk), :death (subject already known dead - stack
+          #                 cleanup, not meaningful expiry), or nil (natural
+          #                 expiry, or cause not visible in this chunk)
+          #   :recorded_attack { protocol:, recorder_id:, database:, file_identity:,
+          #                      session_id:, attack_id:, source: } - emitted by
+          #                 Combat::Recorder only after the complete attack transaction
+          #                 commits. Local observers can use the opaque IDs and trusted
+          #                 local database identity to read that exact row. source is
+          #                 validated ingestion provenance when available, otherwise nil.
+          #
+          # Message events (defs/messages.rb, delivered by Combat::Messages; every
+          # payload also carries :raw, the line). Scanned only while subscribed:
+          #   :disarm_seen  { kind: :recover|:telekinetic_recover|:recover_weapon_webbing, noun: }
+          #   :sanctum_transform { noun: }
+          #   :itchy_curse, :infected_wound, :entangled   {}
+          #   :hive_trap    { kind: :apparatus|:ground }
+          #   :ambusher     { noun: }  (nil for the shadowy figure)
+          #   :bolted       {}
+          #   :rooted / :unrooted  { id: } (the snake's), :item_limit {}
+          #   :bless_shrugged / :bless_expired  { id:, noun: }
+          #   :arrow_stuck  { id:, where: }, :aiming { where: } (nil when cleared),
+          #   :bond_return  { what: }
+          #   :haze_703 / :rebuke_1614  { id:, on: }, :swift_justice { charges: },
+          #   :arcane_reflex { active: }, :weapon_reaction { reaction: }
+          #
+          #
           # @example
-          #   Combat::Tracker.on(:damage) { |type, data| queue << data }
+          #   Combat::Tracker.on(:damage) { |topic, data| queue << data }
           #   Combat::Tracker.on(:damage, name: 'mybar') { ... } # idempotent
-          # @return [Proc] handler; pass to {off} to unsubscribe
-          def on(*types, name: nil, &block)
-            Observers.on(*types, name: name, &block)
+          # @param persist [Boolean] keep the subscription after the calling
+          #   script dies (default: removed with the script)
+          # @return [String] subscription name; pass to {off} to unsubscribe
+          def on(*types, name: nil, persist: false, &block)
+            types = [:any] if types.empty?
+            topics = types.map { |t| t.to_sym == :any ? 'combat.*' : "combat.#{t}" }
+            Lich::Common::Events.on(*topics, name: name, persist: persist, &block)
           end
 
-          # Unsubscribe a handler returned by {on}, or by its name:.
-          def off(handler_or_name)
-            Observers.off(handler_or_name)
+          # Unsubscribe by the name returned from {on} (or the block given to it).
+          def off(name_or_block)
+            Lich::Common::Events.off(name_or_block)
           end
 
           # Binding-only observation. Never initializes/enables the tracker or
