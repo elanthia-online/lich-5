@@ -28,7 +28,9 @@ module Lich
           @host = host
           @port = port
           @auth_token = auth_token
-          @socket_factory = socket_factory || ->(connect_host, connect_port) { TCPSocket.new(connect_host, connect_port) }
+          @socket_factory = socket_factory || lambda do |connect_host, connect_port|
+            Socket.tcp(connect_host, connect_port, connect_timeout: READ_TIMEOUT)
+          end
         end
 
         # Sends a raw command payload to the active sessions service.

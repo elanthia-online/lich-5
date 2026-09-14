@@ -35,4 +35,4 @@ jobs:
         with:
           bundler-cache: true
       - name: Run ActiveSessions ownership and handoff specs
-        run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb
+        run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb spec/lib/internal_api/active_sessions/server_client_spec.rb
