@@ -112,13 +112,25 @@
       "Mantle of Faith (1601)",
       "Higher Vision (1610)",
       "Patron's Blessing (1611)",
-      "Faith Shield (1619)"
+      "Faith Shield (1619)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :pious_trial,
+      name: "Pious Trial (1602)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 8,
+      effects: { slowed: true },
+      dispellable: nil,
+      notes: "Warding, CS 433-448. Debuffs bar id 1602 seen 5x in Cogruel logs 2026-08-30; longest first-read countdown 8s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -197,6 +209,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      pious_trial: [
+        "A triton fanatic brings a hand forward, pointing at you!",
+        "Your movements slow to a crawl!"
+      ]
+    }
   }
 }

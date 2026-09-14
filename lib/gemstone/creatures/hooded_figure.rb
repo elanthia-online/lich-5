@@ -185,7 +185,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :elemental_saturation,
+      name: "Elemental Saturation (413)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { bolt_ds_penalty: true },
+      dispellable: nil,
+      notes: "Warding, CS 188. Debuffs bar id 413 seen 4x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -279,6 +290,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      elemental_saturation: [
+        "A dark shadow passes over you."
+      ]
+    }
   }
 }

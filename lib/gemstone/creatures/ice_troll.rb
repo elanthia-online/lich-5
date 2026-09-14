@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: true,
-  limbs: nil,
+  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 3x in session logs
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -87,7 +87,9 @@
     mjs_td: 122,
     mns_td: 122,
     mnm_td: (87..90),
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Defense (103)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

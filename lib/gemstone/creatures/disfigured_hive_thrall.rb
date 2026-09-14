@@ -114,13 +114,35 @@
     defensive_spells: [
       "Iron Skin (1202)",
       "Foresight (1204)",
-      "Focus Barrier (1216)"
+      "Focus Barrier (1216)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :powersink,
+      name: "Powersink (1203)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 62,
+      effects: { mana_drain: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 1203 seen 12x in Nerten logs 2026-08/09; longest first-read countdown 62s. Mechanical effect not measured here."
+    },
+    {
+      id: :web,
+      name: "Web (118)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 11,
+      effects: { rooted: true, webbed: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 118 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 11s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -181,6 +203,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      web: [
+        "A disfigured hive thrall desperately thrusts a hand at you!",
+        "The webbing falls around you in gooey, clinging ribbons as the strandweaver skitters around you, enmeshing you in a cocoon of sticky silk!"
+      ],
+      powersink: [
+        "A disfigured hive thrall desperately thrusts a hand at you!",
+        "Numerous thin streams of rainbow light begin slowly seeping out from you as you feel your control of the mana weave weaken."
+      ]
+    }
   }
 }

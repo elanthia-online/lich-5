@@ -63,9 +63,7 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [
-      "-->"
-    ],
+    defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
       "-->"

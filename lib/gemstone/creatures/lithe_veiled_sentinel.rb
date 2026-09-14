@@ -126,20 +126,42 @@
     mns_td: (440..450),
     mnm_td: (333..340),
     defensive_spells: [
-      "Iron Skin",
-      "Spirit Warding I",
-      "Spirit Warding II",
-      "Bravery",
-      "Strength",
-      "Foresight",
-      "Mindward",
-      "Focus Barrier"
+      "Iron Skin (1202)",
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)",
+      "Bravery (211)",
+      "Strength (509)",
+      "Foresight (1204)",
+      "Mindward (1208)",
+      "Focus Barrier (1216)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :powersink,
+      name: "Powersink (1203)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 62,
+      effects: { mana_drain: true },
+      dispellable: nil,
+      notes: "Warding, CS 431. Debuffs bar id 1203 seen 4x in Nerten logs 2026-08/09; longest first-read countdown 62s. Mechanical effect not measured here."
+    },
+    {
+      id: :confusion,
+      name: "Confusion (1211)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 15,
+      effects: { confused: true },
+      dispellable: nil,
+      notes: "Warding, CS 453. Debuffs bar id 1211 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 15s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -217,6 +239,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      confusion: [
+        "A lithe veiled sentinel spins into a deadly martial form, thrusting out a hand at you!",
+        "You are confused!"
+      ],
+      powersink: [
+        "A lithe veiled sentinel spins into a deadly martial form, thrusting out a hand at you!",
+        "Numerous thin streams of rainbow light begin slowly seeping out from you as you feel your control of the mana weave weaken."
+      ]
+    }
   }
 }

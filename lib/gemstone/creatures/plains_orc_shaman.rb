@@ -86,12 +86,12 @@
     mns_td: (73..81),
     mnm_td: (61..71),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Thurfel's Ward",
-      "Prismatic Guard",
-      "Mass Blur"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Thurfel's Ward (503)",
+      "Prismatic Guard (905)",
+      "Mass Blur (911)"
     ],
     defensive_abilities: [],
     special_defenses: []

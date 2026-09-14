@@ -84,7 +84,18 @@
     ]
   },
   special_other: "Foraging",
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 607 seen 8x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -147,6 +158,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

@@ -103,7 +103,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :expose_weakness,
+      name: "Expose Weakness",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 20,
+      effects: { vulnerable: true },
+      dispellable: nil,
+      notes: "Maneuver, not a spell (bar id 188106402). Follows the pin-and-jump-up line with 'You are struck by an acute sense of vulnerability.' 3 sightings in Cogruel logs 2026-08-23..28, 8 bars total across batches, 20s countdown. Penalty not measured."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -174,6 +185,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      expose_weakness: [
+        "A cadaverous tatterdemalion ghast pins you to the ground and quickly jumps to {pronoun} feet!",
+        "You are struck by an acute sense of vulnerability."
+      ]
+    }
   }
 }

@@ -121,7 +121,48 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :confusion,
+      name: "Confusion (1211)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 15,
+      effects: { confused: true },
+      dispellable: nil,
+      notes: "Warding, CS 433-448. Debuffs bar id 1211 seen 2x in Nerten logs 2026-08-24..26; longest first-read countdown 15s. Mechanical effect not measured here."
+    },
+    {
+      id: :vertigo,
+      name: "Vertigo (1219)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 101,
+      effects: { dizziness: true },
+      dispellable: nil,
+      notes: "Warding, CS 448-457. Debuffs bar id 1219 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 101s. Mechanical effect not measured here."
+    },
+    {
+      id: :mindwipe,
+      name: "Mindwipe (1225)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: nil,
+      effects: { level_loss: true },
+      dispellable: nil,
+      notes: "Warding (wiki: CS 448, '[You lose 6 levels!]'). Tell is the clawed-finger point shared with Confusion and Thought Lash. Mindwipe Debuffs bar id 1225 seen 74x in Nisugi Atoll logs 2025-09..2026-01 with the psionicist present; the bar renders before any onset text, so countdowns of 9-18s were read. Duration not measured."
+    },
+    {
+      id: :thought_lash,
+      name: "Thought Lash (1210)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 10,
+      effects: { crit_padding_penalty: true },
+      dispellable: nil,
+      notes: "Warding (CS 448 seen). 'A crackling whip of energy lashes out at you!' then damage, then 'The residual psychic energy from the attack surrounds you.' with a Debuffs bar id 1210 of 8-10s. 25 bars in Nisugi Atoll logs 2025-10 alone; wiki page lists the same messaging."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -194,6 +235,23 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      mindwipe: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "You suddenly feel very drained and confused as your memories slip away."
+      ],
+      thought_lash: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "A crackling whip of energy lashes out at you!",
+        "The residual psychic energy from the attack surrounds you."
+      ],
+      vertigo: [
+        "An ethereal triton psionicist points a clawed finger toward you!"
+      ],
+      confusion: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "You are confused!"
+      ]
+    }
   }
 }

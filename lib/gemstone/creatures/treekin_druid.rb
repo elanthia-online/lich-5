@@ -119,7 +119,7 @@
     mns_td: (346..355),
     mnm_td: 261,
     defensive_spells: [
-      "Barkskin",
+      "Barkskin (605)",
       "Natural Colors (601)",
       "Resist Elements (602)"
     ],

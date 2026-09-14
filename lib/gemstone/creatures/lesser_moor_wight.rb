@@ -93,7 +93,9 @@
     mns_td: (120..129),
     mnm_td: (108..116),
     defensive_spells: [
-      "Thurfel's Ward (503)"
+      "Thurfel's Ward (503)",
+      "Spirit Warding I (101)",
+      "Spirit Defense (103)"
     ],
     defensive_abilities: [],
     special_defenses: []

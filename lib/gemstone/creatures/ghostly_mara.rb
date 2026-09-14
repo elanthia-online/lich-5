@@ -73,7 +73,7 @@
     mns_td: (104..117),
     mnm_td: (99..109),
     defensive_spells: [
-      "Elemental Defense III"
+      "Elemental Defense III (414)"
     ],
     defensive_abilities: [],
     special_defenses: []

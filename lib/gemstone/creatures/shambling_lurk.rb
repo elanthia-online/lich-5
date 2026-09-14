@@ -105,7 +105,18 @@
     special_defenses: []
   },
   special_other: "Animate dead characters",
-  abilities: [],
+  abilities: [
+    {
+      id: :web,
+      name: "Web (118)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { rooted: true, webbed: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 118 seen 3x in Nerten logs 2026-08-22..24; longest first-read countdown 23s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -168,6 +179,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      web: [
+        "A shambling lurk manages a fumbling gesture toward you!",
+        "The webbing falls around you in gooey, clinging ribbons as the strandweaver skitters around you, enmeshing you in a cocoon of sticky silk!"
+      ]
+    }
   }
 }

@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 2x in session logs
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -88,7 +88,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 607 seen 2x in Tedore logs 2026-08-22..27; longest first-read countdown 23s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -159,6 +170,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

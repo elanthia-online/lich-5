@@ -95,9 +95,10 @@
     mns_td: (353..359),
     mnm_td: (305..311),
     defensive_spells: [
-      "Lesser Shroud",
-      "Spirit Shield",
-      "Spirit Warding II"
+      "Lesser Shroud (120)",
+      "Spirit Shield (202)",
+      "Spirit Warding II (107)",
+      "Spirit Defense (103)"
     ],
     defensive_abilities: [],
     special_defenses: []

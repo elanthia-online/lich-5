@@ -82,9 +82,9 @@
     mns_td: nil,
     mnm_td: nil,
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
       "Mass Blur (911)",
       "Prismatic Guard (905)",
       "Thurfel's Ward (503)"

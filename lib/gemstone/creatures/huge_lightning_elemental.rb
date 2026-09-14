@@ -102,12 +102,12 @@
     mns_td: 431,
     mnm_td: nil,
     defensive_spells: [
-      "Elemental Barrier",
-      "Elemental Bias",
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Elemental Targeting"
+      "Elemental Barrier (430)",
+      "Elemental Bias (508)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Targeting (425)"
     ],
     defensive_abilities: [],
     special_defenses: []

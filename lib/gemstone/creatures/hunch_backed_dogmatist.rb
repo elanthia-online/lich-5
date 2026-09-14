@@ -99,13 +99,26 @@
     mns_td: (277..293),
     mnm_td: (271..280),
     defensive_spells: [
-      "Wall of Force (140)"
+      "Wall of Force (140)",
+      "Spell Shield (219)",
+      "Spirit Warding I (101)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: "Resurrect",
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 212 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -170,6 +183,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

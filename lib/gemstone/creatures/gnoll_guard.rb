@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: true,
-  limbs: nil,
+  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 4x in session logs
   witherable: nil,
   sympathy: nil,
   muggable: true,

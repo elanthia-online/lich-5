@@ -96,7 +96,12 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Thurfel's Ward (503)",
+      "Elemental Defense I (401)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

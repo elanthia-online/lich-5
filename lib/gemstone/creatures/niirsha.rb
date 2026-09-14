@@ -74,9 +74,9 @@
     mns_td: (92..100),
     mnm_td: (78..87),
     defensive_spells: [
-      "Prayer of Protection",
-      "Spirit Warding I",
-      "Spirit Warding II"
+      "Prayer of Protection (303)",
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)"
     ],
     defensive_abilities: [],
     special_defenses: []

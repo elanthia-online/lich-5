@@ -90,7 +90,8 @@
       "Elemental Bias (508)",
       "Elemental Deflection (507)",
       "Stone Skin (520)",
-      "Strength (509)"
+      "Strength (509)",
+      "Mage Armor (520)"
     ],
     defensive_abilities: [],
     special_defenses: []
@@ -166,7 +167,10 @@
       },
       miscellany: []
     },
-    triggers: {},
-    frenzy: "A moulis slides side to side in an agitated frenzy."
+    triggers: {
+      frenzy: [
+        "A moulis slides side to side in an agitated frenzy."
+      ]
+    }
   }
 }

@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: false,
-  limbs: nil,
+  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 3x in session logs
   witherable: false,
   sympathy: true,
   muggable: true,
@@ -98,8 +98,8 @@
     mns_td: (163..172),
     mnm_td: (122..132),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)"
     ],
     defensive_abilities: [],
     special_defenses: []

@@ -86,11 +86,11 @@
     mns_td: (161..168),
     mnm_td: (143..152),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Thurfel's Ward",
-      "Elemental Bias"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Thurfel's Ward (503)",
+      "Elemental Bias (508)"
     ],
     defensive_abilities: [],
     special_defenses: []

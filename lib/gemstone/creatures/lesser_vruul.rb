@@ -114,7 +114,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "Warding, CS 224. Debuffs bar id 212 seen 13x in Nerten logs 2026-08-24..26; longest first-read countdown 23s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -171,6 +182,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

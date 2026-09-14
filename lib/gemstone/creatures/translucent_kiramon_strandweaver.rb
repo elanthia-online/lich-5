@@ -86,7 +86,58 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :web,
+      name: "Web (118)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { rooted: true, webbed: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 118 seen 15x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+    },
+    {
+      id: :mystic_impedance,
+      name: "Mystic Impedance (1708)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { blocks_high_level_spells: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 1708 seen 14x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+    },
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 483. Debuffs bar id 607 seen 13x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    },
+    {
+      id: :bind,
+      name: "Bind (214)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { immobilized: true },
+      dispellable: nil,
+      notes: "Warding, CS 465-492. Debuffs bar id 214 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    },
+    {
+      id: :empathic_link,
+      name: "Empathic Link (1117)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 60,
+      effects: { damage_shared_to_caster: true },
+      dispellable: nil,
+      notes: "Warding, CS 465-492. Debuffs bar id 1117 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 60s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -144,6 +195,27 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      empathic_link: [
+        "A faint thread of energy forms between you and a translucent kiramon strandweaver."
+      ],
+      bind: [
+        "A translucent kiramon strandweaver twitches {pronoun} antennae as {pronoun} focuses upon you!",
+        "An unseen force entangles you, restricting your movement!"
+      ],
+      sounds: [
+        "A translucent kiramon strandweaver twitches {pronoun} antennae as {pronoun} focuses upon you!",
+        "A translucent kiramon strandweaver concentrates intently on you, and a pulse of pearlescent energy ripples toward you!",
+        "You hear strange noises come from behind and to either side of you."
+      ],
+      mystic_impedance: [
+        "A translucent kiramon strandweaver twitches {pronoun} antennae as {pronoun} focuses upon you!",
+        "A dizzying array of golden runes surround and suffuse you before being absorbed into your body."
+      ],
+      web: [
+        "A translucent kiramon strandweaver sprays an intricate mesh of clinging gossamer at you!",
+        "The webbing falls around you in gooey, clinging ribbons as the strandweaver skitters around you, enmeshing you in a cocoon of sticky silk!"
+      ]
+    }
   }
 }

@@ -8,7 +8,7 @@
   type: "quadruped",
   undead: false,
   blood: true,
-  bones: nil,
+  bones: true, # Bone Shatter (1106) worked 1x in session logs
   limbs: nil,
   witherable: true,
   sympathy: true,

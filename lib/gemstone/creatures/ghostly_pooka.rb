@@ -65,7 +65,9 @@
     mjs_td: 148,
     mns_td: 148,
     mnm_td: (99..105),
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Warding I (101)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

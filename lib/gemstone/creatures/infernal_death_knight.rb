@@ -103,12 +103,35 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Strike (117)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :corrupt_essence,
+      name: "Corrupt Essence (703)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 9,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 437. Debuffs bar id 703 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 9s. Mechanical effect not measured here."
+    },
+    {
+      id: :silencing_strike,
+      name: "Silencing strike",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { silenced: true },
+      dispellable: nil,
+      notes: "Correlation, not a cast: a Silenced Debuffs bar (id 210) follows the knight's quick strike to the lower back with its black ora sword, 4 sightings in Cogruel and Nisugi test-server logs 2026-08. Same shape as the triton brawler's fist version. Mechanism unconfirmed."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -183,6 +206,14 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      silencing_strike: [
+        "An infernal death knight manages a quick strike at your lower back with a massive black ora sword adorned with a trio of blue-black diamonds!"
+      ],
+      corrupt_essence: [
+        "An infernal death knight ignites with spectral cerulean flames as {pronoun} splays a bony hand at you!",
+        "You feel weakened as a blood red haze forms around you."
+      ]
+    }
   }
 }

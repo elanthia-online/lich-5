@@ -85,20 +85,31 @@
     mns_td: nil,
     mnm_td: nil,
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Natural Colors",
-      "Resist Elements",
-      "Self Control",
-      "Sneaking",
-      "Spirit Defense"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Natural Colors (601)",
+      "Resist Elements (602)",
+      "Self Control (613)",
+      "Sneaking (617)",
+      "Spirit Defense (103)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 409. Debuffs bar id 607 seen 7x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -165,6 +176,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "A triton magus places one hand on top of the other, crossing {pronoun} palms toward you!",
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

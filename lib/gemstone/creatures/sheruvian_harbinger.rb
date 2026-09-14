@@ -106,7 +106,9 @@
       "Lesser Shroud (120)",
       "Spirit Shield (202)",
       "Spirit Warding I (101)",
-      "Spirit Warding II (107)"
+      "Spirit Warding II (107)",
+      "Heroism (215)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []

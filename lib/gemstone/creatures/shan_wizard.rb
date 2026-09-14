@@ -87,8 +87,10 @@
     mns_td: (164..173),
     mnm_td: (128..134),
     defensive_spells: [
-      "Elemental Defense II",
-      "Elemental Defense III"
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Defense I (401)",
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: []

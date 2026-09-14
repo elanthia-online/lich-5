@@ -114,7 +114,18 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :frenzy,
+      name: "Frenzy (216)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 11,
+      effects: { anger: true, forced_attack: true },
+      dispellable: nil,
+      notes: "Warding, CS 438-444. Debuffs bar id 216 seen 4x in Tedore logs 2026-08-27..30; longest first-read countdown 11s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   equipment: [
     "a firewheel arrow fletched with plain white feathers",
@@ -202,9 +213,18 @@
     stun_break: [
       "A savage fork-tongued wendigo throws {pronoun} head back and lets out a bone-shaking roar, ripping free of the magics restraining {pronoun} in a wash of bloody light."
     ],
-    frenzy: "A savage fork-tongued wendigo crooks an oddly elongated finger at you!",
-    enrage: "A savage fork-tongued wendigo's eyes blaze a murderous crimson!",
-    mstrike: "In an awe-inspiring display of combat mastery, a savage fork-tongued wendigo engages you in a furious dance macabre, spiraling into a blur of strikes and ripostes!",
+    triggers: {
+      frenzy: [
+        "A savage fork-tongued wendigo crooks an oddly elongated finger at you!",
+        "Anger beyond all reason boils up within you!"
+      ],
+      enrage: [
+        "A savage fork-tongued wendigo's eyes blaze a murderous crimson!"
+      ],
+      mstrike: [
+        "In an awe-inspiring display of combat mastery, a savage fork-tongued wendigo engages you in a furious dance macabre, spiraling into a blur of strikes and ripostes!"
+      ]
+    }
   }
 }
 

@@ -113,13 +113,35 @@
       "Elemental Defense I (401)",
       "Elemental Defense II (406)",
       "Elemental Defense III (414)",
-      "Spirit Shield (202)"
+      "Spirit Shield (202)",
+      "Heroism (215)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :bind,
+      name: "Bind (214)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 16,
+      effects: { immobilized: true },
+      dispellable: nil,
+      notes: "Warding, CS 424-430. Debuffs bar id 214 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 16s. Mechanical effect not measured here."
+    },
+    {
+      id: :frenzy,
+      name: "Frenzy (216)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 17,
+      effects: { anger: true, forced_attack: true },
+      dispellable: nil,
+      notes: "Warding, CS 424. Debuffs bar id 216 seen 2x in Nisugi test-server logs 2026-08/09; longest first-read countdown 17s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -189,6 +211,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      frenzy: [
+        "A glistening cerebralite focuses {pronoun} eye-stalks on you!",
+        "Anger beyond all reason boils up within you!"
+      ],
+      bind: [
+        "A glistening cerebralite focuses {pronoun} eye-stalks on you!",
+        "An unseen force entangles you, restricting your movement!"
+      ]
+    }
   }
 }

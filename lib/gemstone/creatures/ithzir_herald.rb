@@ -112,7 +112,28 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :elemental_saturation,
+      name: "Elemental Saturation (413)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { bolt_ds_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 413 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+    },
+    {
+      id: :weapon_deflection,
+      name: "Weapon Deflection (412)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { as_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 412 seen 4x in Nerten logs 2026-08-22..24; longest first-read countdown 23s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -184,6 +205,14 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      weapon_deflection: [
+        "An Ithzir herald directs {pronoun} alien song at you!",
+        "Your eyesight becomes blurred slightly."
+      ],
+      elemental_saturation: [
+        "A dark shadow passes over you."
+      ]
+    }
   }
 }

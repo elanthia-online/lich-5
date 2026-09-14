@@ -10,11 +10,11 @@
   undead: false,
   blood: false,
   bones: false,
-  limbs: nil,
+  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 2x in session logs
   witherable: false,
   sympathy: true,
   muggable: true,
-  sleepable: nil,
+  sleepable: false, # Sleep (501) refused 5x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [],

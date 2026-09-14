@@ -89,7 +89,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :earthen_fury,
+      name: "Earthen Fury (917)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 12,
+      effects: { repeated_crit_cycles: true, knockdown: true },
+      dispellable: nil,
+      notes: "No warding roll seen. Debuffs bar id 917 seen 2x in Nerten logs 2026-08-21..22; longest first-read countdown 12s. Mechanical effect not measured here."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -156,6 +167,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      earthen_fury: [
+        "An athletic dark-eyed incubus directs {pronoun} otherworldly spellsong at you!",
+        "The ground beneath your feet begins to boil violently!"
+      ]
+    }
   }
 }

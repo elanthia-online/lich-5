@@ -96,7 +96,8 @@
     defensive_spells: [
       "Elemental Bias (508)",
       "Strength (509)",
-      "Mass Blur (911)"
+      "Mass Blur (911)",
+      "Thurfel's Ward (503)"
     ],
     defensive_abilities: [],
     special_defenses: []

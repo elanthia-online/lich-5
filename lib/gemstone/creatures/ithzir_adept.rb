@@ -127,7 +127,8 @@
       "Elemental Focus (513)",
       "Prismatic Guard (905)",
       "Mass Blur (911)",
-      "Wizard Shield (919)"
+      "Wizard Shield (919)",
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: []

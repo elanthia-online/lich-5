@@ -86,7 +86,9 @@
     mjs_td: (252..306),
     mns_td: (252..306),
     mnm_td: (216..226),
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Barrier (430)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

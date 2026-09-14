@@ -121,7 +121,9 @@
     mjs_td: nil,
     mns_td: 368,
     mnm_td: (270..279),
-    defensive_spells: [],
+    defensive_spells: [
+      "Mage Armor (520)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
