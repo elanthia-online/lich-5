@@ -33,7 +33,7 @@ module Lich
           BASIC_ATTACKS = [
             AttackDef.new(:attack, [
               /You(?<aimed> take aim and)? swing .+? at (?<target>[^!]+)!/,
-              /You(?<aimed> take aim and)? (?:punch|jab|kick|grapple) with (?<weapon>.+?) at (?<target>[^!]+)!/
+              /You(?<aimed> take aim and)? (?:thrust|punch|jab|kick|grapple) with (?<weapon>.+?) at (?<target>[^!]+)!/
             ].freeze),
             AttackDef.new(:fire, [/You(?<aimed> take aim and)? fire .+? at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:hurl, [/You(?<aimed> take aim and)? throw (?<weapon>.+?) at (?<target>[^!]+)!/].freeze),
