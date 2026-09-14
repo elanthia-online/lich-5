@@ -91,7 +91,7 @@
       typical_duration_s: 14,
       effects: { immobilized: true },
       dispellable: nil,
-      notes: "Warding, CS 458. Debuffs bar id 214 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 14s. Mechanical effect not measured here."
+      notes: "Warding, CS 458."
     }
   ],
   alchemy: [],

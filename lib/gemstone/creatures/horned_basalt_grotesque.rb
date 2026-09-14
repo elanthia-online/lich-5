@@ -117,7 +117,7 @@
       typical_duration_s: 42,
       effects: { rooted: true },
       dispellable: nil,
-      notes: "Warding, CS 452-467. Debuffs bar id 514 seen 6x in Tedore logs 2026-08-27..30; longest first-read countdown 42s. Mechanical effect not measured here."
+      notes: "Warding, CS 452-467."
     }
   ],
   alchemy: [],

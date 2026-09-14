@@ -133,7 +133,7 @@
       typical_duration_s: 17,
       effects: { anger: true, forced_attack: true },
       dispellable: nil,
-      notes: "Warding, CS 406-421. Debuffs bar id 216 seen 3x in Nerten logs 2026-08-22..24; longest first-read countdown 17s. Mechanical effect not measured here."
+      notes: "Warding, CS 406-421."
     }
   ],
   alchemy: [],

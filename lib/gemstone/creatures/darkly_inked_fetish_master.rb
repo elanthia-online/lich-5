@@ -94,7 +94,7 @@
       typical_duration_s: 22,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 607 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :silence,
@@ -104,7 +104,7 @@
       typical_duration_s: 21,
       effects: { silenced: true },
       dispellable: nil,
-      notes: "Warding, CS 440-458. Debuffs bar id 210 seen 15x in Cogruel logs 2026-08-30; longest first-read countdown 21s. Mechanical effect not measured here."
+      notes: "Warding, CS 440-458."
     },
     {
       id: :sleep,
@@ -114,7 +114,7 @@
       typical_duration_s: 19,
       effects: { asleep: true },
       dispellable: nil,
-      notes: "Warding, CS 429. Debuffs bar id 501 seen 3x in Nisugi test-server logs 2026-08/09; longest first-read countdown 19s. Mechanical effect not measured here."
+      notes: "Warding, CS 429."
     }
   ],
   alchemy: [],

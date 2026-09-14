@@ -98,7 +98,7 @@
       typical_duration_s: 12,
       effects: { repeated_crit_cycles: true, knockdown: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 917 seen 2x in Nerten logs 2026-08-21..22; longest first-read countdown 12s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

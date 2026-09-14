@@ -104,7 +104,7 @@
       typical_duration_s: 22,
       effects: { immobilized: true },
       dispellable: nil,
-      notes: "Warding, CS 460. Debuffs bar id 214 seen 7x in Cogruel logs 2026-08-30; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "Warding, CS 460."
     },
     {
       id: :vertigo,
@@ -114,7 +114,7 @@
       typical_duration_s: 78,
       effects: { dizziness: true },
       dispellable: nil,
-      notes: "Warding, CS 389. Debuffs bar id 1219 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 78s. Mechanical effect not measured here."
+      notes: "Warding, CS 389."
     }
   ],
   alchemy: [],

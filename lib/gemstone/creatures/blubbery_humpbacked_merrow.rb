@@ -81,7 +81,7 @@
       typical_duration_s: 25,
       effects: { cold_damage_cycles: true, rooted: true },
       dispellable: nil,
-      notes: "Warding, CS 498. Debuffs bar id 512 seen 2x in Nisugi test-server logs 2026-08/09; longest first-read countdown 25s. Mechanical effect not measured here."
+      notes: "Warding, CS 498."
     }
   ],
   alchemy: [],

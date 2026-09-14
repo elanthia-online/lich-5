@@ -109,7 +109,7 @@
       typical_duration_s: 30,
       effects: { blocks_high_level_spells: true },
       dispellable: nil,
-      notes: "Warding, CS 389. Debuffs bar id 1708 seen 10x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+      notes: "Warding, CS 389."
     },
     {
       id: :sympathy,
@@ -119,7 +119,7 @@
       typical_duration_s: 19,
       effects: { charmed: true, cannot_attack_caster: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 1120 seen 7x in Cogruel logs 2026-08-30; longest first-read countdown 19s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

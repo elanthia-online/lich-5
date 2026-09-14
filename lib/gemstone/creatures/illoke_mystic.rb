@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 2x in session logs
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -97,7 +97,7 @@
       typical_duration_s: 23,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 607 seen 2x in Tedore logs 2026-08-22..27; longest first-read countdown 23s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

@@ -143,7 +143,7 @@
       typical_duration_s: 17,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "Warding, CS 461-464. Debuffs bar id 703 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 17s. Mechanical effect not measured here."
+      notes: "Warding, CS 461-464."
     }
   ],
   alchemy: [],

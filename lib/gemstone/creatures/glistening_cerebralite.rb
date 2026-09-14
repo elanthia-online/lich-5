@@ -129,7 +129,7 @@
       typical_duration_s: 16,
       effects: { immobilized: true },
       dispellable: nil,
-      notes: "Warding, CS 424-430. Debuffs bar id 214 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 16s. Mechanical effect not measured here."
+      notes: "Warding, CS 424-430."
     },
     {
       id: :frenzy,
@@ -139,7 +139,7 @@
       typical_duration_s: 17,
       effects: { anger: true, forced_attack: true },
       dispellable: nil,
-      notes: "Warding, CS 424. Debuffs bar id 216 seen 2x in Nisugi test-server logs 2026-08/09; longest first-read countdown 17s. Mechanical effect not measured here."
+      notes: "Warding, CS 424."
     }
   ],
   alchemy: [],

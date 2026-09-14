@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: true, # Limb Disruption (708) stripped it to 'has no limbs left' 2x in session logs
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -124,7 +124,7 @@
       typical_duration_s: 22,
       effects: { as_ds_td_penalty: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 212 seen 3x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

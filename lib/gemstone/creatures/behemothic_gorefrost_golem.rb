@@ -138,7 +138,7 @@
       typical_duration_s: 9,
       effects: { cold_damage_cycles: true, rooted: true },
       dispellable: nil,
-      notes: "Warding, CS 444-450. Debuffs bar id 512 seen 5x in Tedore logs 2026-08-27..30; longest first-read countdown 9s. Mechanical effect not measured here."
+      notes: "Warding, CS 444-450."
     }
   ],
   alchemy: [],

@@ -121,7 +121,7 @@
       typical_duration_s: 22,
       effects: { bolt_ds_penalty: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 413 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :weapon_deflection,
@@ -131,7 +131,7 @@
       typical_duration_s: 23,
       effects: { as_penalty: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 412 seen 4x in Nerten logs 2026-08-22..24; longest first-read countdown 23s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

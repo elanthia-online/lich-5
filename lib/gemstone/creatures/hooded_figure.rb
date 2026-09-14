@@ -194,7 +194,7 @@
       typical_duration_s: 22,
       effects: { bolt_ds_penalty: true },
       dispellable: nil,
-      notes: "Warding, CS 188. Debuffs bar id 413 seen 4x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "Warding, CS 188."
     }
   ],
   alchemy: [],

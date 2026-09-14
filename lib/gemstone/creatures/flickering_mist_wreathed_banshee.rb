@@ -99,7 +99,7 @@
       typical_duration_s: 30,
       effects: { ds_penalty: true },
       dispellable: nil,
-      notes: "Tell: points unerringly at you, then a thread of swirling gray (or brackish blue) magic issues from the banshee. Debuffs bar id 715 seen 3x in Cogruel logs 2026-08-30 and 2x in Nerten logs 2026-08; one Nerten sighting had the onset 'You shake slightly and feel much less protected!' instead. Penalty size not measured."
+      notes: "Tell: points unerringly at you, then a thread of swirling gray (or brackish blue) magic issues from the banshee. One sighting had the onset \"You shake slightly and feel much less protected!\" instead. Penalty size not measured."
     }
   ],
   alchemy: [],

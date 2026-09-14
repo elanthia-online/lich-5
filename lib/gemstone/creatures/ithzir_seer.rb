@@ -157,7 +157,7 @@
       typical_duration_s: 18,
       effects: { anger: true, forced_attack: true },
       dispellable: nil,
-      notes: "Warding, CS 411-417. Debuffs bar id 216 seen 11x in Nerten logs 2026-08-22..24; longest first-read countdown 18s. Mechanical effect not measured here."
+      notes: "Warding, CS 411-417."
     },
     {
       id: :interference,
@@ -167,7 +167,7 @@
       typical_duration_s: 23,
       effects: { as_ds_td_penalty: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 212 seen 10x in Nerten logs 2026-08-22..24; longest first-read countdown 23s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :silence,
@@ -177,7 +177,7 @@
       typical_duration_s: 13,
       effects: { silenced: true },
       dispellable: nil,
-      notes: "Warding, CS 431-437. Debuffs bar id 210 seen 3x in Nerten logs 2026-08-22..24; longest first-read countdown 13s. Mechanical effect not measured here."
+      notes: "Warding, CS 431-437."
     }
   ],
   alchemy: [],

@@ -95,7 +95,7 @@
       typical_duration_s: 30,
       effects: { rooted: true, webbed: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 118 seen 15x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :mystic_impedance,
@@ -105,7 +105,7 @@
       typical_duration_s: 30,
       effects: { blocks_high_level_spells: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 1708 seen 14x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :sounds,
@@ -115,7 +115,7 @@
       typical_duration_s: 22,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "Warding, CS 483. Debuffs bar id 607 seen 13x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "Warding, CS 483."
     },
     {
       id: :bind,
@@ -125,7 +125,7 @@
       typical_duration_s: 22,
       effects: { immobilized: true },
       dispellable: nil,
-      notes: "Warding, CS 465-492. Debuffs bar id 214 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "Warding, CS 465-492."
     },
     {
       id: :empathic_link,
@@ -135,7 +135,7 @@
       typical_duration_s: 60,
       effects: { damage_shared_to_caster: true },
       dispellable: nil,
-      notes: "Warding, CS 465-492. Debuffs bar id 1117 seen 6x in Nerten logs 2026-08/09; longest first-read countdown 60s. Mechanical effect not measured here."
+      notes: "Warding, CS 465-492."
     }
   ],
   alchemy: [],

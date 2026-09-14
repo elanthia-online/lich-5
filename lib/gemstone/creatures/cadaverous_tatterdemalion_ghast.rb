@@ -112,7 +112,7 @@
       typical_duration_s: 20,
       effects: { vulnerable: true },
       dispellable: nil,
-      notes: "Maneuver, not a spell (bar id 188106402). Follows the pin-and-jump-up line with 'You are struck by an acute sense of vulnerability.' 3 sightings in Cogruel logs 2026-08-23..28, 8 bars total across batches, 20s countdown. Penalty not measured."
+      notes: "Maneuver, not a spell. Follows the pin-and-jump-up line with \"You are struck by an acute sense of vulnerability.\" 20s countdown. Penalty not measured."
     }
   ],
   alchemy: [],

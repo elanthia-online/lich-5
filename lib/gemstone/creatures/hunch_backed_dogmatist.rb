@@ -116,7 +116,7 @@
       typical_duration_s: 22,
       effects: { as_ds_td_penalty: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 212 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 22s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

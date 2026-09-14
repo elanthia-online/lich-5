@@ -118,7 +118,7 @@
       typical_duration_s: 15,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "Warding, CS 382-413. Debuffs bar id 703 seen 7x in Nerten logs 2026-08/09; longest first-read countdown 15s. Mechanical effect not measured here."
+      notes: "Warding, CS 382-413."
     },
     {
       id: :calm,
@@ -128,7 +128,7 @@
       typical_duration_s: 14,
       effects: { calmed: true },
       dispellable: nil,
-      notes: "Warding, CS 419. Debuffs bar id 201 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 14s. Mechanical effect not measured here."
+      notes: "Warding, CS 419."
     }
   ],
   alchemy: [],

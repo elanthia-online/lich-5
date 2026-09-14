@@ -126,7 +126,7 @@
       typical_duration_s: 20,
       effects: { feeble: true },
       dispellable: nil,
-      notes: "Foot slam, no roll line. Everyone in the room can be knocked down ('loses her balance and falls over', Dicate 2026-02-01) and gets the Feeble Debuffs bar (20s) with 'You feel weak and feeble, your movements sluggish.' Ends with 'shakes off his weakness.' Seen 3 times in Zoleta logs 2026-02-01. Stat penalty not measured."
+      notes: "Foot slam, no roll line. Everyone in the room can be knocked down (\"loses her balance and falls over\") and gets the Feeble bar (20s) with \"You feel weak and feeble, your movements sluggish.\" Ends with \"shakes off his weakness.\" Stat penalty not measured."
     }
   ],
   alchemy: [],

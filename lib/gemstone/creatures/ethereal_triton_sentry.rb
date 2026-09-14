@@ -108,7 +108,7 @@
       typical_duration_s: 30,
       effects: { as_ds_penalty: true },
       dispellable: nil,
-      notes: "Warding, CS 491. Debuffs bar id 1015 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 30s. Mechanical effect not measured here."
+      notes: "Warding, CS 491."
     }
   ],
   alchemy: [],

@@ -123,7 +123,7 @@
       typical_duration_s: 11,
       effects: { anger: true, forced_attack: true },
       dispellable: nil,
-      notes: "Warding, CS 438-444. Debuffs bar id 216 seen 4x in Tedore logs 2026-08-27..30; longest first-read countdown 11s. Mechanical effect not measured here."
+      notes: "Warding, CS 438-444."
     }
   ],
   alchemy: [],

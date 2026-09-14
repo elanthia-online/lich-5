@@ -123,7 +123,7 @@
       typical_duration_s: 23,
       effects: { as_ds_td_penalty: true },
       dispellable: nil,
-      notes: "Warding, CS 224. Debuffs bar id 212 seen 13x in Nerten logs 2026-08-24..26; longest first-read countdown 23s. Mechanical effect not measured here."
+      notes: "Warding, CS 224."
     }
   ],
   alchemy: [],

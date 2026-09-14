@@ -99,7 +99,7 @@
       typical_duration_s: 30,
       effects: { as_ds_td_penalty: true },
       dispellable: nil,
-      notes: "Tell: snaps fingers, then draws a large sign in the air. Autosuccess. Debuffs bar id 212 first read at 21s remaining 2026-09-13; wiki gives 30s on players. Penalty size not measured."
+      notes: "Tell: snaps fingers, then draws a large sign in the air. Autosuccess. Wiki gives 30s on players. Penalty size not measured."
     },
     {
       id: :bombing_run,
@@ -109,7 +109,7 @@
       typical_duration_s: 100,
       effects: { burning_dot: "Immolation (519) Debuffs bar" },
       dispellable: nil,
-      notes: "Tell: two fingers on the white stone amulet, airship payload. SMR. On a hit the flames keep burning each cycle and a Debuffs bar id 519 Immolation shows 1:40, seen once 2026-09-13."
+      notes: "Tell: two fingers on the white stone amulet, airship payload. SMR. On a hit the flames keep burning each cycle; Immolation bar shows 1:40."
     }
   ],
   alchemy: [],

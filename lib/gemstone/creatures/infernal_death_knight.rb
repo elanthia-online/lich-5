@@ -119,7 +119,7 @@
       typical_duration_s: 9,
       effects: { spell_failure_chance: true },
       dispellable: nil,
-      notes: "Warding, CS 437. Debuffs bar id 703 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 9s. Mechanical effect not measured here."
+      notes: "Warding, CS 437."
     },
     {
       id: :silencing_strike,
@@ -129,7 +129,7 @@
       typical_duration_s: 30,
       effects: { silenced: true },
       dispellable: nil,
-      notes: "Correlation, not a cast: a Silenced Debuffs bar (id 210) follows the knight's quick strike to the lower back with its black ora sword, 4 sightings in Cogruel and Nisugi test-server logs 2026-08. Same shape as the triton brawler's fist version. Mechanism unconfirmed."
+      notes: "Correlation, not a cast: a Silenced Debuffs bar follows the knight's quick strike to the lower back with its black ora sword. Same shape as the triton brawler's fist version. Mechanism unconfirmed."
     }
   ],
   alchemy: [],

@@ -130,7 +130,7 @@
       typical_duration_s: 62,
       effects: { mana_drain: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 1203 seen 12x in Nerten logs 2026-08/09; longest first-read countdown 62s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     },
     {
       id: :web,
@@ -140,7 +140,7 @@
       typical_duration_s: 11,
       effects: { rooted: true, webbed: true },
       dispellable: nil,
-      notes: "No warding roll seen. Debuffs bar id 118 seen 2x in Cogruel logs 2026-08-30; longest first-read countdown 11s. Mechanical effect not measured here."
+      notes: "No warding roll seen."
     }
   ],
   alchemy: [],

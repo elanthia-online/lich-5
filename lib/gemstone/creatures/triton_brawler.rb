@@ -124,7 +124,7 @@
       typical_duration_s: 30,
       effects: { silenced: true },
       dispellable: nil,
-      notes: "Correlation, not a cast: a Silenced Debuffs bar (id 210, 30s) follows the brawler's quick fist strike to the lower back in 12 sightings across Sugiin (2026-02), Nerten (2026-08) and Cogruel (2026-08) logs, with no spell tell or onset text. Mechanism unconfirmed."
+      notes: "Correlation, not a cast: a Silenced Debuffs bar (30s) follows the brawler's quick fist strike to the lower back, with no spell tell or onset text. Mechanism unconfirmed."
     }
   ],
   alchemy: [],

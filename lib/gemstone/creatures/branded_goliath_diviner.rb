@@ -100,7 +100,7 @@
       typical_duration_s: 30,
       effects: { blocks_spells_at_or_above: 15 },
       dispellable: nil,
-      notes: "Follows the finger-flick spell_prep line; no warding roll (autosuccess). Golden runes onset. Blocks PREPARE of spells at or above the threshold; lower spells still work. Threshold is an upper bound: 515 observed blocked 2026-09-13, exact floor unconfirmed. Debuffs bar id 1708, 30s, seen 3 times 2026-09-13."
+      notes: "Follows the finger-flick spell_prep line; no warding roll (autosuccess). Golden runes onset. Blocks PREPARE of spells at or above the threshold; lower spells still work. Threshold is an upper bound: 515 observed blocked, exact floor unconfirmed."
     },
     {
       id: :doom_sign,
@@ -110,7 +110,7 @@
       typical_duration_s: nil,
       effects: nil,
       dispellable: nil,
-      notes: "MDR maneuver. On success a Debuffs bar named Doom Sign appears with a 2-4s countdown; one 2026-09-13 log shows a death at its expiry. Mechanism at expiry not confirmed."
+      notes: "MDR maneuver. On success a Debuffs bar named Doom Sign appears with a 2-4s countdown, and a death was seen at its expiry. Mechanism at expiry not confirmed."
     }
   ],
   alchemy: [],

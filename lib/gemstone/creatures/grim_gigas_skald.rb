@@ -121,7 +121,7 @@
       typical_duration_s: nil,
       effects: { dizziness: true, stagger: true },
       dispellable: nil,
-      notes: "Warding. On a failed ward the Debuffs bar Dizziness appears with a stack count (5, 2, 1 seen) and 5-15s countdowns, 2026-09-13. Duration per level not measured."
+      notes: "Warding. On a failed ward the Debuffs bar Dizziness appears with a stack count (5, 2, 1 seen) and 5-15s countdowns. Duration per level not measured."
     },
     {
       id: :mindwipe,
@@ -131,7 +131,7 @@
       typical_duration_s: nil,
       effects: { level_loss: true },
       dispellable: nil,
-      notes: "Mass warding, one CS roll per person in the room (CS 423 seen). A failed ward costs levels ([You lose 4 levels!] on Dicate 2026-02-01, 1 on Nisugi 2026-09-13) and shows a Mindwipe Debuffs bar id 1225; 7s and 16s countdowns seen at first read. Mass duration not measured."
+      notes: "Mass warding, one CS roll per person in the room (CS 423 seen). A failed ward costs levels (\"[You lose 4 levels!]\" seen) and shows a Mindwipe bar; 7s and 16s countdowns seen at first read. Mass duration not measured."
     },
     {
       id: :confusion,
@@ -141,7 +141,7 @@
       typical_duration_s: 15,
       effects: { confused: true },
       dispellable: nil,
-      notes: "Warding, CS 384-396. Debuffs bar id 1211 seen 13x in Cogruel logs 2026-08-30; longest first-read countdown 15s. Mechanical effect not measured here."
+      notes: "Warding, CS 384-396."
     }
   ],
   alchemy: [],

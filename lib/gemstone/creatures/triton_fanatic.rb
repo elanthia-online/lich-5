@@ -128,7 +128,7 @@
       typical_duration_s: 8,
       effects: { slowed: true },
       dispellable: nil,
-      notes: "Warding, CS 433-448. Debuffs bar id 1602 seen 5x in Cogruel logs 2026-08-30; longest first-read countdown 8s. Mechanical effect not measured here."
+      notes: "Warding, CS 433-448."
     }
   ],
   alchemy: [],

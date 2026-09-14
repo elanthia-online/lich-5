@@ -149,7 +149,7 @@
       typical_duration_s: 62,
       effects: { mana_drain: true },
       dispellable: nil,
-      notes: "Warding, CS 431. Debuffs bar id 1203 seen 4x in Nerten logs 2026-08/09; longest first-read countdown 62s. Mechanical effect not measured here."
+      notes: "Warding, CS 431."
     },
     {
       id: :confusion,
@@ -159,7 +159,7 @@
       typical_duration_s: 15,
       effects: { confused: true },
       dispellable: nil,
-      notes: "Warding, CS 453. Debuffs bar id 1211 seen 2x in Nerten logs 2026-08/09; longest first-read countdown 15s. Mechanical effect not measured here."
+      notes: "Warding, CS 453."
     }
   ],
   alchemy: [],
