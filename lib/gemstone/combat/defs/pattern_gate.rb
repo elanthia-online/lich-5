@@ -92,7 +92,9 @@ module Lich
           def case_folded?(regex)
             return true if (regex.options & Regexp::IGNORECASE) != 0
 
-            regex.source.match?(/\(\?[a-z]*i[a-z]*\)/)
+            # Flags may be followed by a `-` group turning others off, as in
+            # (?i-m); `i` before the dash still folds the whole pattern.
+            regex.source.match?(/\(\?[a-z]*i[a-z]*(?:-[a-z]*)?\)/)
           end
 
           def build(patterns)

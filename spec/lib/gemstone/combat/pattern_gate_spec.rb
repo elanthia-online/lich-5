@@ -63,6 +63,15 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::PatternGate do
       expect(described_class.case_folded?(/(?i:x)y/)).to be(false)
       expect(described_class.case_folded?(/(?<name>x)y/)).to be(false)
     end
+
+    it 'sees the fold when other flags are switched off in the same group' do
+      # (?i-m) folds case and unsets multiline; the dash must not hide the i.
+      expect(described_class.case_folded?(/(?i-m)ZEPHYR chills/)).to be(true)
+      expect(described_class.case_folded?(/(?x-i)ZEPHYR chills/)).to be(false)
+      gate, always = described_class.build([/(?i-m)ZEPHYR chills (?<t>.+)/])
+      expect(always).to be_empty
+      expect(described_class.rejects?(gate, always, 'zephyr chills a kobold')).to be(false)
+    end
   end
 
   describe '.build / .rejects?' do

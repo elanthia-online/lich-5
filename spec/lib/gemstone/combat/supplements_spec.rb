@@ -329,6 +329,30 @@ RSpec.describe Lich::Gemstone::Combat::Definitions::Supplements do
     end
   end
 
+  # assembled! must record the mtime the document was PARSED at, not a fresh
+  # stat: a def module reads the supplements, then marks itself assembled a
+  # few lines later, and an edit landing in that gap was being stamped as
+  # assembled while the table was built from the previous document -- so
+  # stale? answered false and the login-time reload skipped it.
+  describe '.assembled! against an edit landing mid-assembly' do
+    it 'still reports stale when the file changed after the reader parsed it' do
+      write("attacks:\n  - name: old_def\n    patterns: ['You zap (?<target>.+?)!']\n")
+      expect(described_class.attacks.map(&:name)).to eq([:old_def]) # the reader parses here
+
+      write("attacks:\n  - name: new_def\n    patterns: ['You bop (?<target>.+?)!']\n") # edit lands
+      described_class.assembled!(:attacks) # the module stamps here
+
+      expect(described_class.stale?).to be(true)
+    end
+
+    it 'reports current when nothing changed between the read and the stamp' do
+      write("attacks:\n  - name: only_def\n    patterns: ['You zap (?<target>.+?)!']\n")
+      described_class.attacks
+      described_class.assembled!(:attacks)
+      expect(described_class.stale?).to be(false)
+    end
+  end
+
   describe '.loaded' do
     it 'names what each kind defined, attacks grouped by the slot they splice into' do
       write(<<~YAML)

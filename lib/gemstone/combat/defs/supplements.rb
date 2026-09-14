@@ -159,7 +159,12 @@ module Lich
             # @param kind [Symbol] the caller's own kind, e.g. :statuses
             # @return [void]
             def assembled!(kind)
-              @assembled_mtimes[kind.to_sym] = present? ? File.mtime(path) : nil
+              # The stamp is the mtime the DOCUMENT was parsed at, not a fresh
+              # stat: the caller's table was built from that document, and an
+              # edit landing between its reader call and this line would
+              # otherwise be recorded as assembled while the table is still
+              # behind the file, and the login check would skip the reload.
+              @assembled_mtimes[kind.to_sym] = @loaded_mtime
             end
 
             # Reports a pattern that exceeded its evaluation budget while
