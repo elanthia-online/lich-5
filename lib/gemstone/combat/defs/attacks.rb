@@ -817,6 +817,12 @@ module Lich
           # The table now reflects this file; stale? answers for it, not for
           # the document cache (see Supplements.assembled!).
           Supplements.assembled!(:attacks)
+          # The table just rebound, so any detector built from the previous
+          # one is stale. The memo is a module ivar and survives this file
+          # re-executing, so drop it here rather than leaving a reload
+          # serving the old union (or a cached nil).
+          remove_instance_variable(:@detector) if instance_variable_defined?(:@detector)
+
 
           # @return [Table] the current attack table; read once per call
           def self.table = TABLE

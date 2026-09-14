@@ -221,6 +221,55 @@ RSpec.describe 'combat definition supplements wiring' do
     end
   end
 
+  # The compatibility detectors are built lazily, and the memo is a module
+  # ivar that survives the def file re-executing. Without invalidation a
+  # reload left the detector answering for the previous table -- including
+  # a cached nil, which would have looked like "these patterns can never
+  # be combined" forever.
+  describe 'the compatibility detectors across a reload' do
+    it 'rebuilds the attack detector so it sees a newly added pattern' do
+      supplements.reload_defs!
+      line = 'You zorch a kobold!'
+      before = defs::Attacks::ATTACK_DETECTOR
+      expect(before&.match?(line)).to be_falsey
+
+      write("attacks:\n  - name: zorch\n    patterns: ['You zorch (?<target>.+?)!']\n")
+      supplements.reload_defs!
+
+      after = defs::Attacks::ATTACK_DETECTOR
+      expect(after).not_to equal(before)
+      expect(after.match?(line)).to be(true)
+      # and it agrees with the table the parser actually reads
+      expect(defs::Attacks::TABLE.lookup.any? { |(rx, _n)| rx.match?(line) }).to be(true)
+    end
+
+    it 'rebuilds the status detector too' do
+      supplements.reload_defs!
+      line = 'a kobold shivers uncontrollably.'
+      before = defs::Statuses::STATUS_DETECTOR
+      expect(before&.match?(line)).to be_falsey
+
+      write("statuses:\n  - name: chilled\n    add: ['(?<target>.+?) shivers uncontrollably\\.']\n")
+      supplements.reload_defs!
+
+      after = defs::Statuses::STATUS_DETECTOR
+      expect(after).not_to equal(before)
+      expect(after.match?(line)).to be(true)
+    end
+
+    it 'does not keep serving a cached nil once the offending pattern is gone' do
+      # A numbered backreference cannot be unioned with a named capture, so
+      # the detector is nil while that def is present -- but only while.
+      write("statuses:\n  - name: echoing\n    add: ['^(\\w+) echoes \\1$']\n")
+      supplements.reload_defs!
+      expect(defs::Statuses::STATUS_DETECTOR).to be_nil
+
+      File.delete(@file)
+      supplements.reload_defs!
+      expect(defs::Statuses::STATUS_DETECTOR).to be_a(Regexp)
+    end
+  end
+
   describe 'reload_defs! when a def file fails to load' do
     it 'reports the file, keeps its previous table, and still reloads the rest' do
       before = defs::Flares::TABLE
