@@ -111,7 +111,7 @@ RSpec.describe 'ActiveSessions server/client' do
 
     expect(default_client.ping).to be(true)
     expect(Socket).to have_received(:tcp)
-      .with('127.0.0.1', 41_234, connect_timeout: Lich::InternalAPI::ActiveSessions::Client::READ_TIMEOUT)
+      .with('127.0.0.1', 41_234, connect_timeout: Lich::InternalAPI::ActiveSessions::Client::CONNECT_TIMEOUT)
   end
 
   it 'handles a single client request through the server protocol processor' do

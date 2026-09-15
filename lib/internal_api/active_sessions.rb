@@ -529,25 +529,56 @@ module Lich
         end
         retry_discovery_filesystem_operation { File.rename(temp_path, discovery_path) }
       ensure
-        File.delete(temp_path) if defined?(temp_path) && File.exist?(temp_path)
+        cleanup_discovery_temp_file(temp_path) if defined?(temp_path)
       end
       private_class_method :write_discovery
 
+      # Best-effort removal for a publication temp file. Cleanup is retried for
+      # Windows sharing violations, but can never replace the publication error
+      # that caused the ensure path to run.
+      #
+      # @param temp_path [String]
+      # @return [void]
+      def self.cleanup_discovery_temp_file(temp_path)
+        return unless File.exist?(temp_path)
+
+        retry_windows_sharing_violation do
+          File.delete(temp_path) if File.exist?(temp_path)
+        end
+      rescue StandardError => e
+        Lich.log("warning: ActiveSessions discovery temp cleanup failed: #{e.class}: #{e.message}") if Lich.respond_to?(:log)
+        nil
+      end
+      private_class_method :cleanup_discovery_temp_file
+
       # Runs a discovery-file mutation with bounded retries for Windows sharing
-      # violations. Ownership is revalidated before every attempt; losing the
-      # flock aborts instead of allowing an obsolete owner to publish or remove
-      # a successor's discovery generation.
+      # violations. The local ownership handle is checked before every attempt;
+      # callers retain the actual flock under the lifecycle mutex throughout.
       #
       # @yield the filesystem mutation to attempt
       # @return [Object] the mutation result
-      # @raise [IOError] when native discovery ownership is no longer held
+      # @raise [IOError] when the local discovery ownership handle is absent
       # @raise [Errno::EACCES] when every bounded retry is exhausted
       def self.retry_discovery_filesystem_operation
+        retry_windows_sharing_violation do
+          raise IOError, 'ActiveSessions discovery ownership handle absent during filesystem operation' unless own_lock?
+
+          yield
+        end
+      end
+      private_class_method :retry_discovery_filesystem_operation
+
+      # Runs a filesystem mutation with bounded retries for Windows sharing
+      # violations. Unlike discovery publication/removal, cleanup of this
+      # process's private temp file does not require the service ownership lock.
+      #
+      # @yield the filesystem mutation to attempt
+      # @return [Object] the mutation result
+      # @raise [Errno::EACCES] when every bounded retry is exhausted
+      def self.retry_windows_sharing_violation
         retry_index = 0
 
         begin
-          raise IOError, 'ActiveSessions discovery ownership lost during filesystem operation' unless own_lock?
-
           yield
         rescue Errno::EACCES
           raise if retry_index >= DISCOVERY_FILESYSTEM_RETRY_DELAYS.length
@@ -557,7 +588,7 @@ module Lich
           retry
         end
       end
-      private_class_method :retry_discovery_filesystem_operation
+      private_class_method :retry_windows_sharing_violation
 
       # Deletes the discovery file only when the current process still owns it.
       #

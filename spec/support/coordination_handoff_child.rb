@@ -11,7 +11,7 @@ module CoordinationHandoffChild
   DISCOVERY = File.join(ACTIVE_SESSION_DIR, SERVICE::DISCOVERY_FILENAME)
 
   class << self
-    attr_accessor :publication_barrier, :cleanup_barrier, :sharing_violation_barrier
+    attr_accessor :publication_barrier, :cleanup_barrier, :sharing_violation_barrier, :read_sharing_violation
 
     def emit(event, fields = {})
       STDOUT.puts(JSON.dump(fields.merge(event: event)))
@@ -31,6 +31,8 @@ module CoordinationHandoffChild
       { record: record, malformed: !valid }
     rescue Errno::ENOENT
       { missing: true }
+    rescue Errno::EACCES
+      { inaccessible: true }
     rescue JSON::ParserError
       { malformed: true }
     end
@@ -48,6 +50,15 @@ module CoordinationHandoffChild
   # real cleanup after its ownership check. Election, locks, TCP and JSON are
   # otherwise the production implementations in independent Ruby processes.
   module FileBarriers
+    def read(path, *args, **kwargs)
+      if path == CoordinationHandoffChild::DISCOVERY && CoordinationHandoffChild.read_sharing_violation
+        CoordinationHandoffChild.read_sharing_violation = false
+        raise Errno::EACCES, 'synthetic read sharing violation'
+      end
+
+      super
+    end
+
     def rename(source, destination)
       if destination == CoordinationHandoffChild::DISCOVERY && CoordinationHandoffChild.publication_barrier
         CoordinationHandoffChild.publication_barrier = false
@@ -83,7 +94,7 @@ STDOUT.sync = true
 worker = CoordinationHandoffChild
 watcher = nil
 watch_mutex = Mutex.new
-observations = { reads: 0, malformed: 0, missing: 0, owners: [] }
+observations = { reads: 0, valid: 0, malformed: 0, missing: 0, inaccessible: 0, owners: [], errors: [] }
 worker.emit('ready', pid: Process.pid)
 
 begin
@@ -97,6 +108,9 @@ begin
       worker.emit('armed')
     when 'arm_sharing_violation'
       worker.sharing_violation_barrier = true
+      worker.emit('armed')
+    when 'arm_read_sharing_violation'
+      worker.read_sharing_violation = true
       worker.emit('armed')
     when 'hold_discovery'
       File.open(worker::DISCOVERY, 'rb') do
@@ -122,16 +136,22 @@ begin
       raise 'watch already started' if watcher
 
       watcher = Thread.new do
-        loop do
-          observation = worker.observe
-          watch_mutex.synchronize do
-            observations[:reads] += 1
-            observations[:malformed] += 1 if observation[:malformed]
-            observations[:missing] += 1 if observation[:missing]
-            owner = observation.dig(:record, 'owner_pid')
-            observations[:owners] |= [owner] if owner
+        begin
+          loop do
+            observation = worker.observe
+            watch_mutex.synchronize do
+              observations[:reads] += 1
+              observations[:valid] += 1 if observation[:record] && !observation[:malformed]
+              observations[:malformed] += 1 if observation[:malformed]
+              observations[:missing] += 1 if observation[:missing]
+              observations[:inaccessible] += 1 if observation[:inaccessible]
+              owner = observation.dig(:record, 'owner_pid')
+              observations[:owners] |= [owner] if owner
+            end
+            sleep 0.001
           end
-          sleep 0.001
+        rescue StandardError => e
+          watch_mutex.synchronize { observations[:errors] << "#{e.class}: #{e.message}" }
         end
       end
       worker.emit('watching')

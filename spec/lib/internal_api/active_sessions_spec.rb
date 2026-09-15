@@ -211,7 +211,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.instance_variable_get(:@lock_file)).not_to be_nil
     end
 
-    it 'does not retry discovery publication after native ownership is lost' do
+    it 'does not retry discovery publication after its local ownership handle is released' do
       dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
       doomed = server_double(auth_token: 'obsolete-token', port: 55_555)
@@ -230,6 +230,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.ensure_service!).to be(false)
       expect(rename_attempts).to eq(1)
       expect(read_discovery).to include(owner_pid: 4242, auth_token: 'successor-token', port: 56_000)
+      expect(File.exist?("#{discovery_file}.#{Process.pid}.tmp")).to be(false)
       expect(doomed).to have_received(:stop)
     end
 
@@ -291,6 +292,41 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.instance_variable_get(:@server)).to be_nil
       expect(described_class.instance_variable_get(:@lock_file)).to be_nil
       expect(described_class.send(:acquire_ownership_lock)).to be(true)
+    end
+
+    it 'preserves publication failure when temp cleanup also exhausts its retries' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      doomed = server_double(auth_token: 'started-token', port: 45_000, start: true)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
+      allow(described_class).to receive(:sleep)
+      logs = []
+      allow(Lich).to receive(:log) { |message| logs << message }
+
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'rename failed'
+      end
+
+      temp_path = "#{discovery_file}.#{Process.pid}.tmp"
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == temp_path
+          delete_attempts += 1
+          raise Errno::EACCES, 'temp remains open'
+        end
+
+        original.call(path)
+      end
+
+      expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(delete_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(logs).to include(match(/discovery temp cleanup failed: Errno::EACCES: .*temp remains open/))
+      expect(logs).to include(match(/discovery publish failed: Errno::EACCES: .*rename failed/))
+      expect(doomed).to have_received(:stop)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
     end
   end
 

@@ -148,8 +148,19 @@ RSpec.describe 'Native ActiveSessions process handoff' do
     expect_available(reader, winner)
     observation = command(reader, 'observations')
     expect(observation['reads']).to be_positive
+    expect(observation['valid']).to be_positive
     expect(observation['malformed']).to eq(0)
+    expect(observation['errors']).to eq([])
     expect(observation['owners'] - [owner[:pid], winner[:pid]]).to eq([])
+  end
+
+  it 'classifies a transient discovery read sharing violation without exiting' do
+    owner, reader = Array.new(2) { start_child }
+    expect(command(owner, 'ensure', 'ensured')['available']).to be(true)
+    command(reader, 'arm_read_sharing_violation', 'armed')
+
+    expect(command(reader, 'state').dig('observation', 'inaccessible')).to be(true)
+    expect(command(reader, 'state').dig('observation', 'record', 'owner_pid')).to eq(owner[:pid])
   end
 
   [false, true].each do |stale_record|
@@ -176,7 +187,9 @@ RSpec.describe 'Native ActiveSessions process handoff' do
       expect_unavailable(reader)
       expect(command(successor, 'ensure', 'ensured')['available']).to be(true)
       expect_available(reader, successor)
-      expect(command(reader, 'observations')['malformed']).to eq(0)
+      observations = command(reader, 'observations')
+      expect(observations['malformed']).to eq(0)
+      expect(observations['errors']).to eq([])
       # SIGKILL cannot run the publisher's ensure; the orphan is ignored.
       expect(File.exist?(temp_path)).to be(true)
     end

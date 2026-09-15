@@ -8,6 +8,7 @@ on:
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
+      - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
       - ".github/workflows/windows_active_sessions.yaml"
   pull_request:
@@ -15,6 +16,7 @@ on:
       - "lib/internal_api/active_sessions.rb"
       - "lib/internal_api/active_sessions/**"
       - "spec/lib/internal_api/active_sessions*_spec.rb"
+      - "spec/lib/internal_api/active_sessions/**"
       - "spec/support/coordination_handoff_child.rb"
       - ".github/workflows/windows_active_sessions.yaml"
   workflow_dispatch:
