@@ -267,6 +267,31 @@ describe DRCC do
     end
   end
 
+  describe '.find_recipe' do
+    context 'when the character is too distracted to turn the book (in combat)' do
+      it 'halts the script instead of falling through to read the book' do
+        allow(DRC).to receive(:bput).with(/^turn my book to chapter/, any_args)
+                                    .and_return('You are too distracted to be doing that right now')
+        # The read should never be reached once we halt.
+        expect(DRC).not_to receive(:bput).with(/^read my/, any_args)
+
+        expect { DRCC.find_recipe(1, 'a shield') }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe '.find_recipe2' do
+    context 'when the character is too distracted to turn the book (in combat)' do
+      it 'halts the script instead of falling through to read the book' do
+        allow(DRC).to receive(:bput).with(/^turn my book to chapter/, any_args)
+                                    .and_return('You are too distracted to be doing that right now')
+        expect(DRC).not_to receive(:bput).with(/^read my/, any_args)
+
+        expect { DRCC.find_recipe2(1, 'a shield') }.to raise_error(SystemExit)
+      end
+    end
+  end
+
   describe '.get_crafting_item' do
     before(:each) do
       allow(DRC).to receive(:beep)

@@ -297,7 +297,7 @@ module Lich
         when BOOK_CHAPTER_DISTRACTED
           Lich::Messaging.msg('bold', 'DRCC: Cannot turn book, assuming engaged in combat.')
           fput('look')
-          fput('exit')
+          exit
         end
 
         recipe = DRC.bput("read my #{book}", "Page \\d+:\\s(?:some|a|an)?\\s*#{match_string}").split('Page').find { |x| x =~ /#{match_string}/i }
@@ -311,7 +311,7 @@ module Lich
         when BOOK_CHAPTER_DISTRACTED
           Lich::Messaging.msg('bold', 'DRCC: Cannot turn book, assuming engaged in combat.')
           fput('look')
-          fput('exit')
+          exit
         end
 
         recipe = DRC.bput("read my #{book}", "Page \\d+:\\s(?:some|a|an)?\\s*#{match_string}").split('Page').find { |x| x =~ /#{match_string}/i }
