@@ -208,8 +208,9 @@ module Lich
         #   up into, e.g. one just created by the active update flow's
         #   SnapshotManager#snapshot call. When nil (a standalone call not part
         #   of a full update, such as the login autostart path), a fresh
-        #   directory is created so this never reuses a snapshot from an
-        #   earlier, unrelated update run.
+        #   data-only backup directory is created (SnapshotManager#new_data_backup_dir)
+        #   -- never SnapshotManager#new_snapshot_dir -- so it can't be mistaken by
+        #   SnapshotManager#revert for a real, restorable ecosystem snapshot.
         # @return [void]
         def update_core_data_and_scripts(version = LICH_VERSION, snapshot_dir = nil)
           if XMLData.game !~ /^GS|^DR/
@@ -220,7 +221,7 @@ module Lich
           if XMLData.game =~ /^GS/
             ["effect-list.xml"].each do |file|
               if File.exist?(File.join(DATA_DIR, file))
-                data_backup_dir = File.join(snapshot_dir || @snapshot_manager.new_snapshot_dir, "data")
+                data_backup_dir = File.join(snapshot_dir || @snapshot_manager.new_data_backup_dir, "data")
                 FileUtils.mkdir_p(data_backup_dir)
                 newfilename = File.join(data_backup_dir, file)
                 File.open(File.join(DATA_DIR, file), 'rb') { |r| File.open(newfilename, 'wb') { |w| w.write(r.read) } }

@@ -100,4 +100,45 @@ RSpec.describe Lich::Util::Update::FileUpdater do
       expect { updater.update_file_from_repo('script', 'fake-repo', 'foo.lic') }.not_to raise_error
     end
   end
+
+  describe '#update_core_data_and_scripts' do
+    let(:effect_list_path) { File.join(DATA_DIR, 'effect-list.xml') }
+
+    before do
+      XMLData.game = 'GS'
+      FileUtils.mkdir_p(DATA_DIR)
+      File.write(effect_list_path, '<xml>old effect data</xml>')
+      allow(updater).to receive(:update_file)
+      allow(Lich).to receive(:core_updated_with_lich_version=)
+    end
+
+    after do
+      XMLData.game = 'DR'
+      File.delete(effect_list_path) if File.exist?(effect_list_path)
+    end
+
+    context 'given an explicit snapshot_dir from an active full update' do
+      it "backs the prior effect-list.xml up under that snapshot's data directory" do
+        snapshot_dir = Dir.mktmpdir('snap-test')
+
+        updater.update_core_data_and_scripts('5.16.0', snapshot_dir)
+
+        expect(File.read(File.join(snapshot_dir, 'data', 'effect-list.xml'))).to eq('<xml>old effect data</xml>')
+        FileUtils.remove_entry(snapshot_dir)
+      end
+    end
+
+    context 'given no snapshot_dir (a standalone call, e.g. login autostart)' do
+      it 'asks SnapshotManager for a data-only backup directory rather than a real snapshot directory' do
+        data_backup_dir = Dir.mktmpdir('databackup-test')
+        allow(snapshot_manager).to receive(:new_data_backup_dir).and_return(data_backup_dir)
+
+        updater.update_core_data_and_scripts('5.16.0')
+
+        expect(snapshot_manager).to have_received(:new_data_backup_dir)
+        expect(File.read(File.join(data_backup_dir, 'data', 'effect-list.xml'))).to eq('<xml>old effect data</xml>')
+        FileUtils.remove_entry(data_backup_dir)
+      end
+    end
+  end
 end

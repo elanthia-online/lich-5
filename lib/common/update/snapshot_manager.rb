@@ -27,6 +27,20 @@ module Lich
           dir
         end
 
+        # Creates a fresh timestamped directory under BACKUP_DIR for a
+        # data-only backup (e.g. effect-list.xml with no preceding full
+        # update). Deliberately uses a different prefix than #new_snapshot_dir
+        # so #revert's "L5-snapshot-*" glob can never mistake a directory
+        # containing only backed-up data files -- no lib/, lich.rbw, or
+        # scripts/ -- for a real, restorable ecosystem snapshot.
+        #
+        # @return [String] path to the newly created directory
+        def new_data_backup_dir
+          dir = File.join(BACKUP_DIR, "L5-databackup-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}")
+          FileUtils.mkdir_p(dir)
+          dir
+        end
+
         # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.
         #
         # @return [String] path to the created snapshot directory
