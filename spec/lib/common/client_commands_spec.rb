@@ -2,6 +2,7 @@
 
 require 'open3'
 require 'rbconfig'
+require 'timeout'
 require_relative '../../spec_helper'
 # The registry module alone is safe to load in-process: unlike
 # global_defs.rb it defines no top-level methods. Loading the built-ins
@@ -122,6 +123,93 @@ RSpec.describe Lich::Common::ClientCommands do
         end
       RUBY
       expect(out).to include('RAISED=ClientCommands.command must be called inside ClientCommands.define')
+    end
+  end
+
+  # main.rb runs a thread per attached detachable client, each reading
+  # straight into do_client, so two frontends running ";hmr client_commands"
+  # at once put two threads in define concurrently. Before the lock, the
+  # second define's `@staging = []` redirected BOTH threads' command calls
+  # onto its array and the later publish dropped the other's registrations
+  # -- silently, no exception. One interleaving published an EMPTY table,
+  # which routes every ";" command to Script.start as a script name.
+  #
+  # These run in-process: the module alone is safe to load here, and the
+  # race needs real threads in one VM.
+  describe 'concurrent registration' do
+    # Each example republishes the table; put back what was there so they
+    # cannot leak into an example that runs after them.
+    around do |example|
+      published = described_class.commands
+      example.run
+      described_class.instance_variable_set(:@commands, published)
+    end
+
+    # Deliberately NOT a queue handshake forcing one thread to sit inside
+    # define while another enters: the lock makes that interleaving
+    # impossible, so such a test deadlocks against the fix rather than
+    # passing. Instead run many threads that each register a table only they
+    # could have produced, with yields inside the block to make the unlocked
+    # version interleave, and assert every published table is one thread's
+    # work entire. Confirmed to fail against the pre-lock code.
+    def register_own_table(tag, size: 4)
+      described_class.define do
+        size.times do |n|
+          described_class.command(/^t#{tag}_#{n}$/) { nil }
+          Thread.pass
+        end
+      end
+    end
+
+    it 'publishes one thread\'s whole table, never a mix of two' do
+      20.times do
+        threads = 4.times.map { |tag| Thread.new { register_own_table(tag) } }
+        threads.each(&:join)
+
+        patterns = described_class.commands.map { |c| c.pattern.source }
+        owners = patterns.map { |p| p[/\At(\d+)_/, 1] }.uniq
+
+        # One owner, and all four of that owner's entries: no thread's
+        # registrations were dropped onto another's array.
+        expect(owners.length).to eq(1)
+        expect(patterns.length).to eq(4)
+      end
+    end
+
+    # A weaker guard than the one above: the interleaving that actually
+    # published an empty table (an inner ensure restoring @staging to nil
+    # just before an outer thread reads it) needs a queue handshake to hit
+    # reliably, and that shape deadlocks against the lock. Verified by hand
+    # against the pre-lock code; kept here as a cheap invariant so the
+    # consequence is written down and any future regression to an empty
+    # table has something watching for it.
+    it 'never publishes an empty table' do
+      described_class.define { described_class.command(/^seed$/) { nil } }
+
+      20.times do
+        threads = 4.times.map { |tag| Thread.new { register_own_table(tag) } }
+        threads.each(&:join)
+
+        # An empty table routes every ";" command to Script.start as a
+        # script name until the next reload.
+        expect(described_class.commands).not_to be_empty
+      end
+    end
+
+    it 'allows define to nest without deadlocking' do
+      # `previous`/ensure exist to support nesting, and Ruby's Mutex is not
+      # reentrant -- a plain synchronize here would hang.
+      expect do
+        Timeout.timeout(5) do
+          described_class.define do
+            described_class.command(/^outer$/) { nil }
+            described_class.define { described_class.command(/^inner$/) { nil } }
+            described_class.command(/^outer2$/) { nil }
+          end
+        end
+      end.not_to raise_error
+
+      expect(described_class.commands.map { |c| c.pattern.source }).to eq(['^outer$', '^outer2$'])
     end
   end
 

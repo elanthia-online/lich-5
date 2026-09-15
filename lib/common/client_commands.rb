@@ -50,6 +50,11 @@ module Lich
       #   @return [Proc] called with the MatchData
       Command = Struct.new(:pattern, :game, :handler)
 
+      # Serializes {ClientCommands.define}. Registration mutates one shared
+      # staging slot; dispatch only reads the frozen published array and so
+      # needs no lock.
+      LOCK = Mutex.new
+
       # The uniform display toggles: read the current value, negate it, let an
       # explicit true/false argument override, report, write back. Six
       # branches that differed only in accessor and message, so they are a
@@ -95,15 +100,36 @@ module Lich
         # part-way through leaves the previous table in place rather than a
         # truncated one.
         #
+        # Serialized, because @staging is one class-level slot and command
+        # re-reads it on every call. Two threads registering at once -- two
+        # frontends each running ";hmr client_commands", since main.rb runs
+        # a thread per attached detachable client -- would otherwise have
+        # the second define's @staging = [] redirect BOTH threads' command
+        # calls onto its array, and the later publish would drop the other
+        # thread's registrations with no exception raised. Worse, one
+        # interleaving publishes an EMPTY table: the inner ensure restores
+        # @staging before the outer thread reads it, so every ";" command
+        # then falls through to Script.start as a script name until the next
+        # reload. Both reproduced; DetachableClientRegistry next door guards
+        # the same threading model the same way.
+        #
+        # Reentrant by hand rather than with a plain Mutex: define nests
+        # (that is what +previous+ is for), and Ruby's Mutex is not
+        # reentrant, so a nested define on one thread would deadlock.
+        #
         # @yield registers commands with +command+
         # @return [void]
-        def define
-          previous = @staging
-          @staging = []
-          yield
-          @commands = @staging.freeze
-        ensure
-          @staging = previous
+        def define(&block)
+          return define_unlocked(&block) if @define_owner == Thread.current
+
+          LOCK.synchronize do
+            @define_owner = Thread.current
+            begin
+              define_unlocked(&block)
+            ensure
+              @define_owner = nil
+            end
+          end
         end
 
         # Registers one command. Order of registration is order of matching.
@@ -117,6 +143,10 @@ module Lich
         #   only "force foo" and the arguments are not in the MatchData.
         # @return [void]
         # @raise [RuntimeError] when called outside a {define} block
+        #
+        # Callable only from the thread inside {define}: {command} appends to
+        # the staging array that define set up, and define holds {LOCK} for
+        # the duration, so no other thread is staging at the same time.
         def command(pattern, game: nil, &handler)
           raise 'ClientCommands.command must be called inside ClientCommands.define' if @staging.nil?
 
@@ -139,6 +169,20 @@ module Lich
           end
           false
         end
+
+        # The staging/publish half of {define}, with the lock already held.
+        #
+        # @yield registers commands with +command+
+        # @return [void]
+        def define_unlocked
+          previous = @staging
+          @staging = []
+          yield
+          @commands = @staging.freeze
+        ensure
+          @staging = previous
+        end
+        private :define_unlocked
 
         # @param gate [Symbol, nil]
         # @return [Boolean]
