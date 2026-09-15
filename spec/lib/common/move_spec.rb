@@ -90,6 +90,7 @@ RSpec.describe Lich::Common::Move do
     XMLData.define_singleton_method(:encumbrance_text) { g.encumbrance_text }
     stub_const('Script', Class.new)
     Script.define_singleton_method(:current) { Struct.new(:downstream_buffer).new(g.buffer) }
+    Script.define_singleton_method(:execution_sleep) { |_seconds| }
     # Spell resolves lexically to Lich::Common::Spell when lib/common/spell.rb
     # is loaded (the full suite) and to ::Spell when it is not (standalone).
     no_spell = Class.new { def self.[](_n) = nil }

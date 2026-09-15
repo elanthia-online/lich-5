@@ -632,6 +632,10 @@ class Script
   class << self
     attr_accessor :current
 
+    def current_without_pause
+      current
+    end
+
     # NOTE: Production uses Script.self (not Script.current) to get the running script
     def self
       @current || OpenStruct.new(name: 'test')
