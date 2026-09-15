@@ -70,9 +70,40 @@ module Lich
 
       class << self
         # Every registered command, in match order.
+        #
+        # This is the PUBLISHED table. define replaces it wholesale; nothing
+        # else mutates it, so a dispatch never sees a half-built table and a
+        # reload never leaves stale handlers in front of new ones.
+        #
         # @return [Array<Command>]
         def commands
-          @commands ||= []
+          @commands ||= [].freeze
+        end
+
+        # Registers a table of commands, replacing whatever was published
+        # before.
+        #
+        # Built-ins are registered inside one of these blocks so that
+        # re-running the file -- which is exactly what +;hmr client_commands+
+        # does, since HMR calls load() and load() re-executes the body --
+        # rebuilds the table instead of appending a second copy behind the
+        # first. Appending was the original behavior and it silently kept the
+        # OLD handlers live: they matched first, so an edited built-in was
+        # loaded, doubled the table, and never ran.
+        #
+        # The new table is published only once the block finishes. A raise
+        # part-way through leaves the previous table in place rather than a
+        # truncated one.
+        #
+        # @yield registers commands with +command+
+        # @return [void]
+        def define
+          previous = @staging
+          @staging = []
+          yield
+          @commands = @staging.freeze
+        ensure
+          @staging = previous
         end
 
         # Registers one command. Order of registration is order of matching.
@@ -85,8 +116,11 @@ module Lich
         #   match[0] is the matched span alone, so "force foo bar" matches
         #   only "force foo" and the arguments are not in the MatchData.
         # @return [void]
+        # @raise [RuntimeError] when called outside a {define} block
         def command(pattern, game: nil, &handler)
-          commands << Command.new(pattern, game, handler).freeze
+          raise 'ClientCommands.command must be called inside ClientCommands.define' if @staging.nil?
+
+          @staging << Command.new(pattern, game, handler).freeze
         end
 
         # Runs the first command whose pattern matches and whose game gate
