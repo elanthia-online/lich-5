@@ -13,6 +13,7 @@ module Lich
       @@downstream_hook_sources ||= Hash.new
       @@downstream_hook_owners ||= Hash.new
       @@downstream_hook_persist ||= Hash.new
+      @@downstream_hook_priorities ||= Hash.new
 
       # Per-class storage for the shared HookRegistry methods.
       def self._hooks
@@ -31,13 +32,20 @@ module Lich
         @@downstream_hook_persist
       end
 
+      def self._hook_priorities
+        @@downstream_hook_priorities
+      end
+
       def DownstreamHook.run(server_string)
-        for key in @@downstream_hooks.keys
+        for key in ordered_hook_names
           return nil if server_string.nil?
           begin
-            server_string = @@downstream_hooks[key].call(server_string.dup) if server_string.is_a?(String)
+            action = hook_action(key)
+            next unless action
+
+            server_string = action.call(server_string.dup) if server_string.is_a?(String)
           rescue
-            @@downstream_hooks.delete(key)
+            remove(key)
             respond "--- Lich: DownstreamHook: #{$!}"
             respond $!.backtrace.first
           end
