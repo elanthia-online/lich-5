@@ -312,11 +312,9 @@ module Lich
             def notify_reloaded(reloaded)
               combat = Lich::Gemstone::Combat
               combat::Messages.refresh! if combat.const_defined?(:Messages, false)
-              return unless combat.const_defined?(:Observers, false)
-
-              combat::Observers.emit(:definitions_reloaded,
-                                     { files: reloaded.map { |f| File.basename(f) }.freeze,
-                                       supplements: summary.freeze })
+              Lich::Common::Events.emit('combat.definitions_reloaded',
+                                        { files: reloaded.map { |f| File.basename(f) }.freeze,
+                                          supplements: summary.freeze })
             end
 
             private

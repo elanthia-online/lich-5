@@ -14,7 +14,7 @@ RSpec.describe 'combat message supplements' do
   let(:defs) { Lich::Gemstone::Combat::Definitions }
   let(:supplements) { defs::Supplements }
   let(:messages) { Lich::Gemstone::Combat::Messages }
-  let(:observers) { Lich::Gemstone::Combat::Observers }
+  let(:events) { Lich::Common::Events }
 
   def write(yaml)
     File.write(@file, yaml)
@@ -39,7 +39,7 @@ RSpec.describe 'combat message supplements' do
     Dir.mktmpdir('combat-msg-supp') do |dir|
       @file = File.join(dir, 'defs.yaml')
       supplements.path = @file
-      observers.clear!
+      events.clear!('combat.')
       Lich::Messaging.clear_messages!
       example.run
     end
@@ -48,7 +48,7 @@ RSpec.describe 'combat message supplements' do
   # Runs while the DownstreamHook stub is still in place (after hooks run
   # before mock teardown), so the uninstall on the way out has a target.
   after(:each) do
-    observers.clear!
+    events.clear!('combat.')
     messages.shutdown
     supplements.path = nil
     supplements.reload_defs!
@@ -336,7 +336,7 @@ RSpec.describe 'combat message supplements' do
     # and nothing emits, which is exactly what the documented command did.
     it 'activates the family when the def file is merely re-loaded, as ;hmr does' do
       seen = []
-      observers.on(:user_feed_result, name: 'spec-hmr') { |type, data| seen << [type, data] }
+      events.on('combat.user_feed_result', name: 'spec-hmr') { |topic, data| seen << [topic, data] }
       messages.refresh!
       expect(messages.active_families).to eq([])
 
@@ -358,9 +358,9 @@ RSpec.describe 'combat message supplements' do
 
     it 'activates a subscription made before the event existed, and emits definitions_reloaded' do
       seen = []
-      observers.on(:user_feed_result, name: 'spec-feed') { |type, data| seen << [type, data] }
+      events.on('combat.user_feed_result', name: 'spec-feed') { |topic, data| seen << [topic, data] }
       reloads = []
-      observers.on(:definitions_reloaded, name: 'spec-reload') { |_t, data| reloads << data }
+      events.on('combat.definitions_reloaded', name: 'spec-reload') { |_t, data| reloads << data }
       messages.refresh!
       expect(messages.active_families).to eq([]) # nothing owns the event yet
 
@@ -378,7 +378,7 @@ RSpec.describe 'combat message supplements' do
     end
 
     it 'drops the family and deactivates it when the file is removed' do
-      observers.on(:user_feed_result, name: 'spec-feed') { |*| }
+      events.on('combat.user_feed_result', name: 'spec-feed') { |*| }
       write(yaml)
       supplements.reload_defs!
       expect(messages.active_families.map(&:name)).to eq([:user_item_prep])
