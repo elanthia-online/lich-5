@@ -2,6 +2,11 @@
 
 require 'yaml'
 require 'fileutils'
+# Required unconditionally (not just as a side effect of the install_gem_requirements
+# stub below) so gui_login.rb's FFI-dependent requires work regardless of which
+# competing install_gem_requirements stub a spec file defines first (#1542).
+require 'os'
+require 'ffi'
 
 # login_spec_helper.rb - GUI and authentication test support
 #
@@ -34,8 +39,6 @@ module Lich
 
   module Util
     def self.install_gem_requirements(*)
-      require 'os'
-      require 'ffi'
       true
     end unless respond_to?(:install_gem_requirements)
   end
