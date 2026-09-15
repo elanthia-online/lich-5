@@ -67,7 +67,15 @@ RSpec.describe Lich::Common::ClientCommands do
     end
 
     it 'dispatches to the reloaded handler, not the original' do
+      # The edited copy goes to a Tempfile, never over the tracked
+      # builtins.rb: writing the real file and restoring it in an ensure
+      # leaves it corrupted if the process is killed between the two writes,
+      # and races any parallel runner sharing the checkout. load() cares
+      # about the body, not the path -- builtins.rb's only require resolves
+      # through LIB_DIR -- so a temp copy exercises the same reload path.
       out = probe(<<~RUBY)
+        require 'tempfile'
+
         original = File.read(BUILTINS)
         edited = original.sub(
           "        command(/^k$|^kill$|^stop$/) do\\n",
@@ -75,12 +83,11 @@ RSpec.describe Lich::Common::ClientCommands do
         )
         raise 'fixture edit did not apply' if edited == original
 
-        begin
-          File.write(BUILTINS, edited)
-          load BUILTINS
+        Tempfile.create(['builtins', '.rb']) do |f|
+          f.write(edited)
+          f.flush
+          load f.path
           do_client(';k')
-        ensure
-          File.write(BUILTINS, original)
         end
       RUBY
       expect(out).to include('R:EDITED HANDLER')
@@ -177,9 +184,16 @@ RSpec.describe Lich::Common::ClientCommands do
       expect(described_class.toggle_value(true, 'off')).to be(false)
     end
 
+    # Each case passes `current` EQUAL to the value being asked for, so a
+    # case-sensitive implementation -- which falls through to !current --
+    # returns the opposite and fails. Picking current == !expected instead
+    # would pass either way: the negation would coincide with the expected
+    # answer and the assertion would prove nothing.
     it 'is case-insensitive' do
-      expect(described_class.toggle_value(false, 'TRUE')).to be(true)
-      expect(described_class.toggle_value(true, 'Off')).to be(false)
+      expect(described_class.toggle_value(true, 'TRUE')).to be(true)
+      expect(described_class.toggle_value(true, 'On')).to be(true)
+      expect(described_class.toggle_value(false, 'FALSE')).to be(false)
+      expect(described_class.toggle_value(false, 'Off')).to be(false)
     end
   end
 end
