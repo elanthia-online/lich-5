@@ -1871,6 +1871,16 @@ end unless defined?(StringProc)
 # -----------------------------------------------------------------------------
 # Lich::Util - Utility functions
 # -----------------------------------------------------------------------------
+# Several individual spec files define their own guarded (`unless respond_to?`)
+# install_gem_requirements stand-in for whatever production file they load, and
+# which one wins depended on file load order - the root cause of #1542. Since
+# spec_helper.rb is required first by nearly every spec file, defining a safe,
+# working version here means those per-file stand-ins normally never even get a
+# chance to win the race. Every gem any of them request (ffi, os, kramdown) is
+# already in the Gemfile, so a plain require satisfies the real intent without
+# the live-install path of lib/util/util.rb's implementation.
+require 'os'
+
 module Lich
   module Util
     class << self
@@ -1880,6 +1890,11 @@ module Lich
 
       def quiet_command_xml(*_args, **_kwargs)
         []
+      end
+
+      def install_gem_requirements(gems_to_install, **_kwargs)
+        gems_to_install.each_key { |gem_name| require gem_name }
+        true
       end
     end
   end

@@ -80,32 +80,34 @@ RSpec.describe Lich::Common::GUI::WindowsCredentialManager do
     # branch's call sequence - installer, DLL names, function bindings - without
     # needing real Windows, instead of skipping this branch on CI entirely.
     it 'installs ffi, loads the Windows DLLs, and binds the expected Credential Manager functions' do
-      # The fake attach_function below defines singleton methods (CredReadW, etc.) on
-      # whatever module it's called on. Reload into a disposable module instead of the
-      # real WindowsCredentialManager constant so those fakes don't leak into it and
-      # get exercised by later examples in this file instead of the real bindings.
-      stub_const('Lich::Common::GUI::WindowsCredentialManager', Module.new)
+      # Reload into a disposable module instead of the real WindowsCredentialManager
+      # constant, and pre-define ffi_lib/attach_function directly as its own singleton
+      # methods before the reload. A module's own singleton methods take priority over
+      # ones gained via `extend`, so these doubles shadow FFI::Library's real ffi_lib/
+      # attach_function for this module only, without touching FFI::Library itself -
+      # no global monkeypatch, and nothing to restore afterward.
+      dummy = Module.new
+      stub_const('Lich::Common::GUI::WindowsCredentialManager', dummy)
 
       ffi_lib_calls = []
       attach_function_calls = []
-      original_ffi_lib = FFI::Library.instance_method(:ffi_lib)
-      original_attach_function = FFI::Library.instance_method(:attach_function)
-      FFI::Library.define_method(:ffi_lib) { |*libs| ffi_lib_calls << libs }
-      FFI::Library.define_method(:attach_function) do |name, *_args|
+      dummy.define_singleton_method(:ffi_lib) { |*libs| ffi_lib_calls << libs }
+      dummy.define_singleton_method(:attach_function) do |name, *_args|
         attach_function_calls << name
-        define_singleton_method(name) { |*_a| nil }
+        dummy.define_singleton_method(name) { |*_a| nil }
       end
 
       allow(OS).to receive(:windows?).and_return(true)
-      expect(Lich::Util).to receive(:install_gem_requirements).with({ 'ffi' => true }).and_call_original
+      # No .and_call_original: the real implementation would only be reached if some
+      # other spec file's install_gem_requirements definition lost the #1542 stub race,
+      # and this file already requires 'ffi' unconditionally above regardless of what
+      # this call does, so a bare mock is enough to verify the call happens.
+      expect(Lich::Util).to receive(:install_gem_requirements).with({ 'ffi' => true })
 
       load File.join(LIB_DIR, 'common', 'gui', 'windows_credential_manager.rb')
 
       expect(ffi_lib_calls).to eq([%w[advapi32 kernel32]])
       expect(attach_function_calls).to eq(%i[CredReadW CredWriteW CredDeleteW CredFree GetLastError])
-    ensure
-      FFI::Library.define_method(:ffi_lib, original_ffi_lib)
-      FFI::Library.define_method(:attach_function, original_attach_function)
     end
   end
 
