@@ -39,6 +39,9 @@ module Lich
         @enabled = false
         @settings = {}
         @async_processor = nil
+        # Serialises reading-and-enqueueing a chunk against replacing the
+        # async worker, so a reload never strands a chunk on the old queue.
+        @reload_lock = Mutex.new
         @buffer = []
         @initialized = false
         @source_sequence = 0
@@ -137,7 +140,7 @@ module Lich
             @enabled = true
             @settings[:enabled] = true # Force enabled in settings
             save_settings # Persist enabled state
-            initialize_processor
+            @reload_lock.synchronize { initialize_processor }
             add_downstream_hook
 
             respond "[Combat] Combat tracking enabled" if debug?
@@ -156,7 +159,9 @@ module Lich
             @settings[:enabled] = false
             save_settings # Persist disabled state
             remove_downstream_hook
-            shutdown_processor
+            # Same race as reload_defs!: a chunk that read the worker before
+            # this drains it must not land behind the shutdown sentinel.
+            @reload_lock.synchronize { shutdown_processor }
 
             respond "[Combat] Combat tracking disabled" if debug?
           end
@@ -251,11 +256,25 @@ module Lich
             # Quick filter - only process if combat-related content present
             return unless chunk.any? { |line| combat_relevant?(line) }
 
-            if @async_processor
-              @async_processor.process_async(chunk, source: source)
-            else
-              Processor.process(chunk, source: source)
+            # Read the worker and enqueue as one step, under the lock
+            # reload_defs! takes around the swap: without it a chunk read
+            # @async_processor, then the reload drained and replaced that
+            # worker, and the push landed behind the shutdown sentinel of a
+            # queue nothing would drain again. The lock spans the push, not
+            # the parse -- that stays on the worker thread.
+            handled = @reload_lock.synchronize do
+              # Re-checked under the lock: a chunk that passed the check
+              # above and then parked here through a disable! must not
+              # come out the other side and parse.
+              next :disabled unless enabled?
+
+              @async_processor&.tap { |w| w.process_async(chunk, source: source) }
             end
+            return if handled
+
+            # No async worker configured (max_threads <= 0): parse inline,
+            # outside the lock, so a reload never waits on a parse.
+            Processor.process(chunk, source: source)
           end
 
           # Single compiled filter for combat-relevant content. One regex scan
@@ -310,8 +329,12 @@ module Lich
 
             # Reinitialize processor if thread count changed
             if new_settings.key?(:max_threads)
-              shutdown_processor
-              initialize_processor
+              # Under the ingestion lock so a chunk arriving mid-swap goes to
+              # the new worker rather than behind the old one's sentinel.
+              @reload_lock.synchronize do
+                shutdown_processor
+                initialize_processor
+              end
             end
 
             respond "[Combat] Settings updated: #{@settings}" if debug?
@@ -334,6 +357,29 @@ module Lich
             else
               base_stats.merge(active: 0, total: 0)
             end
+          end
+
+          # Hot-reloads the combat definitions with the player's supplement
+          # file (DATA_DIR/combat/defs.yaml) re-read: the in-session path
+          # after editing that file, equivalent to `;hmr combat/defs/` but
+          # quiet. The async worker is drained first so no chunk is mid-parse
+          # while the tables rebind, then restarted if tracking is on.
+          #
+          # @return [Array<String>] the def files that reloaded cleanly
+          def reload_defs!
+            reloaded = nil
+            # Ingestion parks on this lock for the drain and the swap, so a
+            # chunk arriving mid-reload is enqueued on the NEW worker rather
+            # than stranded behind the old one's shutdown sentinel. The
+            # drain is bounded by the queue it is already draining.
+            @reload_lock.synchronize do
+              was_running = !@async_processor.nil?
+              shutdown_processor
+              reloaded = Definitions::Supplements.reload_defs!
+              initialize_processor if was_running && enabled?
+            end
+            respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
+            reloaded
           end
 
           private
@@ -486,6 +532,10 @@ module Lich
 
             @initialized = true
             load_settings
+            # A relog always reflects the current supplement file: the def
+            # tables were assembled at require time, so if the file changed
+            # since, rebuild them now (no-op when it has not).
+            Definitions::Supplements.reload_defs! if Definitions::Supplements.stale?
 
             # Auto-enable if settings indicate it was previously enabled
             if @settings[:enabled]
