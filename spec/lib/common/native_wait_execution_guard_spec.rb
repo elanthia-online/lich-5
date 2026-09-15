@@ -13,7 +13,7 @@ module NativeWaitExecutionGuardSpec
   class Harness; end
   path = File.expand_path('../../../lib/global_defs.rb', __dir__)
   lines = File.readlines(path)
-  %w[fput dothistimeout get? clear pause waitrt? waitcastrt? wait_until wait_while].each do |name|
+  %w[fput dothis dothistimeout get get? clear pause waitrt? waitcastrt? wait_until wait_while].each do |name|
     first = lines.index { |line| line.match?(/^def #{Regexp.escape(name)}(?:\(|\s*$)/) }
     raise "native #{name} missing" unless first
 
@@ -100,6 +100,11 @@ RSpec.describe 'Native command and roundtime execution guard checkpoints' do
     expect(writes).to eq(['prepare 101'])
   end
 
+  it 'unwinds dothis during a wait-30 response without retrying the action' do
+    cancel_during_native_sleep { harness.dothis('prepare 101', /ready/) }
+    expect(writes).to eq(['prepare 101'])
+  end
+
   it 'unwinds native waitrt? during a long roundtime' do
     allow(harness).to receive(:checkrt).and_return(30.0)
     cancel_during_native_sleep { harness.waitrt? }
@@ -147,6 +152,12 @@ RSpec.describe 'Native command and roundtime execution guard checkpoints' do
 
     it 'keeps native dothistimeout success matching behavior' do
       expect(harness.dothistimeout('prepare 101', 5, /ready/)).to eq(response)
+      expect(writes).to eq(['prepare 101'])
+      expect(buffer).to be_empty
+    end
+
+    it 'keeps native dothis success matching behavior' do
+      expect(harness.dothis('prepare 101', /ready/)).to eq(response)
       expect(writes).to eq(['prepare 101'])
       expect(buffer).to be_empty
     end

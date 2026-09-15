@@ -1897,13 +1897,13 @@ def dothis(action, success_line)
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         break
       elsif line == 'You are still stunned.'
         wait_while { stunned? }
@@ -1911,7 +1911,7 @@ def dothis(action, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -1920,7 +1920,7 @@ def dothis(action, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -1932,7 +1932,7 @@ def dothis(action, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
