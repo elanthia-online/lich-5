@@ -508,8 +508,12 @@ module Lich
           # @example "<a exist="-10154507" noun="Zoleta">Zoleta</a> joins <a exist="-10966483" noun="Nisugi">Nisugi's</a> group."
           OTHER_JOINED_GROUP = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> joins <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> group.\r?\n?$}
 
-          # Matches when not in any group
+          # Authoritative GROUP response confirming empty membership.
           NO_GROUP = /^You are not currently in a group/
+
+          # DISBAND can produce this for a follower who remains in the leader's
+          # group, so it invalidates cached state but cannot clear membership.
+          NO_GROUP_TO_DISBAND = /^You have no group to disband\./
 
           # Matches group member listing from GROUP command
           # @example "You are leading PlayerName, PlayerName2."
@@ -539,6 +543,7 @@ module Lich
             NOOP,
             STATUS,
             NO_GROUP,
+            NO_GROUP_TO_DISBAND,
             MEMBER,
             HAS_LEADER,
             SWAP_LEADER,
@@ -612,6 +617,8 @@ module Lich
           when Term::NO_GROUP, Term::DISBAND
             Group.leader = :self
             return Group._members.clear
+          when Term::NO_GROUP_TO_DISBAND
+            return Group.checked = false
           when Term::STATUS
             Group.status = match_data[:status].to_sym
             return Group.checked = true
