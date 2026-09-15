@@ -148,7 +148,8 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(discovery[:owner_pid]).to eq(Process.pid)
       expect(discovery[:auth_token]).to eq('generated-token')
       expect(discovery[:port]).to eq(54_321)
-      expect(File.stat(discovery_file).mode & 0o777).to eq(0o600)
+      # Windows does not preserve POSIX permission bits supplied to File.open.
+      expect(File.stat(discovery_file).mode & 0o777).to eq(0o600) unless Gem.win_platform?
       expect(File.exist?(File.join(temp_dir, 'lich-active-sessions.lock'))).to be(true)
     end
 
@@ -187,6 +188,50 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(discovery[:owner_pid]).to eq(Process.pid)
       expect(discovery[:auth_token]).to eq('takeover-token')
       expect(discovery[:port]).to eq(55_555)
+    end
+
+    it 'retries a transient Windows sharing violation while publishing discovery' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new)
+        .and_return(server_double(auth_token: 'takeover-token', port: 55_555))
+      allow(described_class).to receive(:sleep)
+
+      rename_attempts = 0
+      allow(File).to receive(:rename).and_wrap_original do |original, source, destination|
+        rename_attempts += 1
+        raise Errno::EACCES, 'destination temporarily open' if rename_attempts == 1
+
+        original.call(source, destination)
+      end
+
+      expect(described_class.ensure_service!).to be(true)
+      expect(rename_attempts).to eq(2)
+      expect(read_discovery[:port]).to eq(55_555)
+      expect(described_class.instance_variable_get(:@lock_file)).not_to be_nil
+    end
+
+    it 'does not retry discovery publication after its local ownership handle is released' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      doomed = server_double(auth_token: 'obsolete-token', port: 55_555)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
+      write_discovery_file(owner_pid: 4242, auth_token: 'successor-token', port: 56_000)
+
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'destination temporarily open'
+      end
+      allow(described_class).to receive(:sleep) do
+        described_class.send(:release_ownership_lock)
+      end
+
+      expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(1)
+      expect(read_discovery).to include(owner_pid: 4242, auth_token: 'successor-token', port: 56_000)
+      expect(File.exist?("#{discovery_file}.#{Process.pid}.tmp")).to be(false)
+      expect(doomed).to have_received(:stop)
     end
 
     it 'degrades to unavailable (no bind, no split-brain) when the lock cannot be opened' do
@@ -234,15 +279,54 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
       doomed = server_double(auth_token: 'started-token', port: 45_000, start: true)
       allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
-      # Simulate a discovery write failure (e.g. File.rename over an existing
-      # file failing on Windows) after the server has already started.
-      allow(described_class).to receive(:write_discovery).and_raise(Errno::EACCES, 'rename failed')
+      allow(described_class).to receive(:sleep)
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'rename failed'
+      end
 
       expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
       expect(doomed).to have_received(:stop)
       expect(described_class.instance_variable_get(:@server)).to be_nil
       expect(described_class.instance_variable_get(:@lock_file)).to be_nil
       expect(described_class.send(:acquire_ownership_lock)).to be(true)
+    end
+
+    it 'preserves publication failure when temp cleanup also exhausts its retries' do
+      dead_client = instance_double(Lich::InternalAPI::ActiveSessions::Client, ping: false)
+      allow(Lich::InternalAPI::ActiveSessions::Client).to receive(:new).and_return(dead_client)
+      doomed = server_double(auth_token: 'started-token', port: 45_000, start: true)
+      allow(Lich::InternalAPI::ActiveSessions::Server).to receive(:new).and_return(doomed)
+      allow(described_class).to receive(:sleep)
+      logs = []
+      allow(Lich).to receive(:log) { |message| logs << message }
+
+      rename_attempts = 0
+      allow(File).to receive(:rename) do
+        rename_attempts += 1
+        raise Errno::EACCES, 'rename failed'
+      end
+
+      temp_path = "#{discovery_file}.#{Process.pid}.tmp"
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == temp_path
+          delete_attempts += 1
+          raise Errno::EACCES, 'temp remains open'
+        end
+
+        original.call(path)
+      end
+
+      expect(described_class.ensure_service!).to be(false)
+      expect(rename_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(delete_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(logs).to include(match(/discovery temp cleanup failed: Errno::EACCES: .*temp remains open/))
+      expect(logs).to include(match(/discovery publish failed: Errno::EACCES: .*rename failed/))
+      expect(doomed).to have_received(:stop)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
     end
   end
 
@@ -334,6 +418,7 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
 
   describe '.stop_service! and discovery cleanup' do
     it 'removes the discovery file when the owner is also the last remaining session' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
       write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
       allow(described_class).to receive(:query_snapshot).and_return(
         source: 'ActiveSessionsAPI', total: 0, connected: 0, detachable: 0, sessions: []
@@ -342,6 +427,58 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       described_class.cleanup_discovery_if_last_session!
 
       expect(File.exist?(discovery_file)).to be(false)
+    end
+
+    it 'retries a transient Windows sharing violation while removing owned discovery' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+      allow(described_class).to receive(:sleep)
+
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == discovery_file
+          delete_attempts += 1
+          raise Errno::EACCES, 'destination temporarily open' if delete_attempts == 1
+        end
+
+        original.call(path)
+      end
+
+      described_class.stop_service!
+
+      expect(delete_attempts).to eq(2)
+      expect(File.exist?(discovery_file)).to be(false)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
+    end
+
+    it 'leaves stale discovery and releases ownership when every delete retry is exhausted' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+      allow(described_class).to receive(:sleep)
+
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == discovery_file
+          delete_attempts += 1
+          raise Errno::EACCES, 'destination remains open'
+        end
+
+        original.call(path)
+      end
+
+      described_class.stop_service!
+
+      expect(delete_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(File.exist?(discovery_file)).to be(true)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
+    end
+
+    it 'does not treat matching pid metadata as ownership without the native lock' do
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+
+      described_class.stop_service!
+
+      expect(File.exist?(discovery_file)).to be(true)
     end
 
     it 'keeps the discovery file when the snapshot is a fallback error' do

@@ -1,0 +1,40 @@
+name: Windows ActiveSessions Handoff
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lib/internal_api/active_sessions.rb"
+      - "lib/internal_api/active_sessions/**"
+      - "spec/lib/internal_api/active_sessions*_spec.rb"
+      - "spec/lib/internal_api/active_sessions/**"
+      - "spec/support/coordination_handoff_child.rb"
+      - ".github/workflows/windows_active_sessions.yaml"
+  pull_request:
+    paths:
+      - "lib/internal_api/active_sessions.rb"
+      - "lib/internal_api/active_sessions/**"
+      - "spec/lib/internal_api/active_sessions*_spec.rb"
+      - "spec/lib/internal_api/active_sessions/**"
+      - "spec/support/coordination_handoff_child.rb"
+      - ".github/workflows/windows_active_sessions.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  active_sessions_handoff:
+    name: Exercise native Windows file handoff
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: ruby/setup-ruby@0dafeac902942906541bc140009cdbf32665b601 # v1.315.0
+        with:
+          bundler-cache: true
+      - name: Run ActiveSessions ownership and handoff specs
+        run: bundle exec rspec spec/lib/internal_api/active_sessions_spec.rb spec/lib/internal_api/active_sessions_handoff_spec.rb spec/lib/internal_api/active_sessions/server_client_spec.rb

@@ -13,6 +13,11 @@ module Lich
       # and normalizing failures into a predictable `{ ok: false, error: ... }`
       # shape for higher-level callers.
       class Client
+        # Maximum number of seconds to wait while opening the loopback socket.
+        #
+        # @return [Numeric]
+        CONNECT_TIMEOUT = 1
+
         # Maximum number of seconds to wait for a server response before
         # treating the request as failed.
         #
@@ -28,7 +33,9 @@ module Lich
           @host = host
           @port = port
           @auth_token = auth_token
-          @socket_factory = socket_factory || ->(connect_host, connect_port) { TCPSocket.new(connect_host, connect_port) }
+          @socket_factory = socket_factory || lambda do |connect_host, connect_port|
+            Socket.tcp(connect_host, connect_port, connect_timeout: CONNECT_TIMEOUT)
+          end
         end
 
         # Sends a raw command payload to the active sessions service.
