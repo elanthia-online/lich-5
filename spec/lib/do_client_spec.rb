@@ -321,7 +321,19 @@ RSpec.describe 'do_client command dispatch' do
       @toggle_output = probe(setup)
     end
 
+    # The same six, but reading true, so the read-negate path is pinned in
+    # both directions rather than only false -> true.
+    before(:context) do
+      setup = uniform.map { |word, (accessor, _)| <<~RUBY }.join("\n")
+        Lich.define_singleton_method(:#{accessor}) { true }
+        Lich.define_singleton_method(:#{accessor}=) { |v| puts "SET #{accessor}=\#{v}" }
+        do_client(';display #{word}')
+      RUBY
+      @toggle_from_true = probe(setup)
+    end
+
     def toggle_output = @toggle_output
+    def toggle_from_true = @toggle_from_true
 
     uniform.each do |word, (accessor, message)|
       it "toggles #{word} from its current value and honors an explicit argument" do
@@ -330,6 +342,11 @@ RSpec.describe 'do_client command dispatch' do
         # bare toggle (from false) + explicit true, then explicit false
         expect(toggle_output.scan(/SET #{accessor}=true/).length).to eq(2)
         expect(toggle_output.scan(/SET #{accessor}=false/).length).to eq(1)
+      end
+
+      it "toggles #{word} back off when it is currently on" do
+        expect(toggle_from_true).to include("R:#{message} false")
+        expect(toggle_from_true).to include("SET #{accessor}=false")
       end
     end
 
@@ -447,6 +464,180 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
+  # Trust only ever worked under the Ruby 2.0-2.2 $SAFE model. On every
+  # supported Ruby all three branches answer with the unavailable message --
+  # which IS the current behavior, so that is what gets pinned. These also
+  # stand in for the ordering claim that ;lt must precede ;list: it need not
+  # (the list pattern cannot match "lt"), so ;lt is pinned by its output.
+  describe 'trust' do
+    it 'reports trust as unavailable on a modern Ruby' do
+      out = probe(<<~RUBY)
+        do_client(';trust foo')
+        do_client(';distrust foo')
+        do_client(';untrust foo')
+      RUBY
+      expect(out.scan(/R:--- Lich: this feature isn't available in this version of Ruby/).length).to eq(3)
+    end
+
+    it 'routes ;lt and ;list trusted to the trusted listing, not the script list' do
+      out = probe(<<~RUBY)
+        Script.define_singleton_method(:running) { [] }
+        Script.define_singleton_method(:hidden) { [] }
+        do_client(';lt')
+        do_client(';list trusted')
+      RUBY
+      expect(out.scan(/R:--- Lich: this feature isn't available in this version of Ruby/).length).to eq(2)
+      expect(out).not_to include('no active scripts')
+    end
+  end
+
+  describe 'settings' do
+    it 'writes a ;set toggle to the settings table' do
+      out = probe(<<~RUBY)
+        db = Object.new
+        db.define_singleton_method(:execute) { |sql, args| puts "DB \#{args.inspect}" }
+        Lich.define_singleton_method(:db) { db }
+        do_client(';set foo on')
+      RUBY
+      expect(out).to include('DB ["foo", "on"]')
+      expect(out).to include('R:--- Lich: toggle foo set on')
+    end
+
+    it 'passes a ;hmr pattern to HMR.reload as a regex' do
+      out = probe(<<~RUBY)
+        Object.const_set(:HMR, Module.new) unless Object.const_defined?(:HMR)
+        HMR.define_singleton_method(:reload) { |rx| puts "RELOAD \#{rx.inspect}" }
+        do_client(';hmr foo.*bar')
+      RUBY
+      expect(out).to include('RELOAD /foo.*bar/')
+    end
+  end
+
+  # GemStone-only branches. ;infomon show full is pinned as BROKEN: the
+  # capture is " full" (leading space) but the source compares it against
+  # 'full', so the full listing never prints. Pinned deliberately -- a
+  # refactor must not silently fix it.
+  describe 'infomon and sk (GemStone)' do
+    it 'routes the infomon subcommands' do
+      out = probe(<<~RUBY, game: 'GSIV')
+        ExecScript.define_singleton_method(:start) { |code, _| puts "EXEC \#{code}" }
+        Object.const_set(:Infomon, Module.new) unless Object.const_defined?(:Infomon)
+        Infomon.define_singleton_method(:show) { |full| puts "SHOW full=\#{full}" }
+        Infomon.define_singleton_method(:get_bool) { |_| false }
+        Infomon.define_singleton_method(:set) { |k, v| puts "SET \#{k}=\#{v}" }
+        do_client(';infomon sync')
+        do_client(';infomon reset')
+        do_client(';infomon show')
+        do_client(';infomon show full')
+        do_client(';infomon effects')
+      RUBY
+      expect(out).to include('EXEC Infomon.sync')
+      expect(out).to include('EXEC Infomon.redo!')
+      expect(out).to include('SET infomon.show_durations=true')
+      # Both forms print the short listing -- see the note above.
+      expect(out.scan(/SHOW full=false/).length).to eq(2)
+      expect(out).not_to include('SHOW full=true')
+    end
+
+    it 'passes ;sk arguments through to SK.main' do
+      out = probe(<<~RUBY, game: 'GSIV')
+        Object.const_set(:SK, Module.new) unless Object.const_defined?(:SK)
+        SK.define_singleton_method(:main) { |a, b| puts "SK \#{a.inspect} \#{b.inspect}" }
+        do_client(';sk add 1 2')
+        do_client(';sk help')
+        do_client(';sk')
+      RUBY
+      expect(out).to include('SK "add" "1 2"')
+      expect(out).to include('SK "help" nil')
+      expect(out).to include('SK nil nil')
+    end
+  end
+
+  # DragonRealms-only branches, none of which run under a GS session.
+  describe 'DragonRealms-only commands' do
+    it 'toggles display flaguid' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:hide_uid_flag) { false }
+        Lich.define_singleton_method(:hide_uid_flag=) { |v| puts "SET \#{v}" }
+        do_client(';display flaguid')
+      RUBY
+      expect(out).to include('SET true')
+      expect(out).to include('R:Changing Lich to NOT display Room Title RealIDs')
+    end
+
+    it 'shows and sets display roomid placement' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:display_roomid_location) { 'title' }
+        Lich.define_singleton_method(:display_roomid_location=) { |v| puts "SET \#{v}" }
+        do_client(';display roomid')
+        do_client(';display roomid both')
+      RUBY
+      expect(out).to include('R:DragonRealms room id / RealID display placement is currently: title')
+      expect(out).to include('SET both')
+    end
+
+    it 'routes the banks variants' do
+      out = probe(<<~RUBY, game: 'DR')
+        module Lich; module DragonRealms; module DRBanking
+          %i[display_banks display_banks_all reset_character! reset_all!].each do |m|
+            define_singleton_method(m) { puts "BANK \#{m}" }
+          end
+        end; end; end
+        do_client(';banks')
+        do_client(';banks all')
+        do_client(';banks reset')
+        do_client(';banks reset all')
+      RUBY
+      expect(out).to include('BANK display_banks')
+      expect(out).to include('BANK display_banks_all')
+      expect(out).to include('BANK reset_character!')
+      expect(out).to include('BANK reset_all!')
+    end
+
+    it 'refuses display expgains while exp-monitor is running' do
+      out = probe(<<~RUBY, game: 'DR')
+        Object.send(:define_method, :running?) { |_| true }
+        do_client(';display expgains')
+      RUBY
+      expect(out).to include('R:Error: exp-monitor.lic script is currently running')
+    end
+
+    it 'toggles display expgains and inlineexp when free to' do
+      out = probe(<<~RUBY, game: 'DR')
+        Object.send(:define_method, :running?) { |_| false }
+        Lich.define_singleton_method(:display_expgains) { false }
+        Lich.define_singleton_method(:display_expgains=) { |v| puts "EXPGAINS=\#{v}" }
+        Object.const_set(:DRExpMonitor, Module.new) unless Object.const_defined?(:DRExpMonitor)
+        DRExpMonitor.define_singleton_method(:start) { puts 'MON START' }
+        DRExpMonitor.define_singleton_method(:stop) { puts 'MON STOP' }
+        DRExpMonitor.define_singleton_method(:inline_display?) { false }
+        DRExpMonitor.define_singleton_method(:inline_display=) { |v| puts "INLINE=\#{v}" }
+        do_client(';display expgains on')
+        do_client(';display expgains off')
+        do_client(';display inlineexp')
+      RUBY
+      expect(out).to include('EXPGAINS=true')
+      expect(out).to include('MON START')
+      expect(out).to include('EXPGAINS=false')
+      expect(out).to include('MON STOP')
+      expect(out).to include('INLINE=true')
+    end
+
+    it 'shows the experience monitor status' do
+      out = probe(<<~RUBY, game: 'DR')
+        Lich.define_singleton_method(:display_expgains) { true }
+        Object.const_set(:DRExpMonitor, Module.new) unless Object.const_defined?(:DRExpMonitor)
+        DRExpMonitor.define_singleton_method(:inline_display?) { false }
+        DRExpMonitor.define_singleton_method(:active?) { true }
+        do_client(';display exp-status')
+      RUBY
+      expect(out).to include('R:DragonRealms Experience Monitor Status:')
+      expect(out).to include('expgains:   ON')
+      expect(out).to include('inlineexp:  OFF')
+      expect(out).to include('reporter:   RUNNING')
+    end
+  end
+
   describe 'help' do
     it 'lists the built-in commands' do
       out = probe("do_client(';help')")
@@ -456,9 +647,19 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
-  # The chain is first-match-wins, so these overlaps are the constraints any
-  # reordering would break. Each pins a pair where the earlier branch must
-  # stay ahead of the later one.
+  # The chain is first-match-wins. These are the pairs where the patterns
+  # GENUINELY overlap -- both match the same input -- so the earlier branch
+  # must stay ahead of the later one or the behavior changes. Each was
+  # confirmed by checking that both regexes match the test's input.
+  #
+  # Deliberately NOT here: ;execname vs ;exec and ;lt vs ;list. Those look
+  # like ordering constraints and are not. /^(?:exec|e)(q)? (.+)$/ requires a
+  # space (or "q" then a space) straight after e/exec, so it cannot match
+  # "en job ..." or "execname job ..."; and /^list\s?(?:all)?$|^l(?:a)?$/
+  # cannot match "lt" or "list trusted". Those two commands route correctly
+  # at any position, so a test asserting the order would be green whatever
+  # the order -- false confidence. They are pinned by output instead, in
+  # 'starting scripts' and 'trust' below.
   describe 'branch ordering' do
     it 'prefers exact ;debuglogs over the invalid-argument catch' do
       out = probe(<<~RUBY)
@@ -486,24 +687,6 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';force foo bar')
       RUBY
       expect(out).to include('"foo", "bar"')
-    end
-
-    it 'prefers ;execname over ;exec for the en/execname prefixes' do
-      out = probe(<<~RUBY)
-        ExecScript.define_singleton_method(:start) { |data, opts| puts "EXEC \#{data.inspect} \#{opts.inspect}" }
-        do_client(';en job puts 1')
-      RUBY
-      expect(out).to include('name')
-      expect(out).not_to include('quiet')
-    end
-
-    it 'prefers ;lt over ;list for the trusted listing' do
-      out = probe(<<~RUBY)
-        Script.define_singleton_method(:running) { [] }
-        Script.define_singleton_method(:trusted) { [] }
-        do_client(';lt')
-      RUBY
-      expect(out).not_to include('no active scripts')
     end
 
     it 'keeps every built-in ahead of the script-name catch-all' do
