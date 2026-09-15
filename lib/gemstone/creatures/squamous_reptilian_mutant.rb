@@ -201,7 +201,8 @@
     },
     triggers: {
       vertigo: [
-        "A squamous reptilian mutant flicks {pronoun} bulging eyes toward you!"
+        "A squamous reptilian mutant flicks {pronoun} bulging eyes toward you!",
+        "A black ball full of pinpoints of light forms before the mutant.  It quickly grows in size until {pronoun} unleashes the dark cloud before {pronoun} and the dark cloud instantaneously spreads throughout the entire area!"
       ],
       bind: [
         "A squamous reptilian mutant flicks {pronoun} bulging eyes toward you!",

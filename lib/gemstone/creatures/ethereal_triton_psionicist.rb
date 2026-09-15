@@ -246,7 +246,8 @@
         "The residual psychic energy from the attack surrounds you."
       ],
       vertigo: [
-        "An ethereal triton psionicist points a clawed finger toward you!"
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "A black ball full of pinpoints of light forms before the psionicist.  It quickly grows in size until {pronoun} unleashes the dark cloud before {pronoun} and the dark cloud instantaneously spreads throughout the entire area!"
       ],
       confusion: [
         "An ethereal triton psionicist points a clawed finger toward you!",
