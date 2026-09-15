@@ -307,6 +307,29 @@ RSpec.describe 'do_client command dispatch' do
   describe 'display toggles' do
     uniform = UNIFORM_DISPLAY_TOGGLES
 
+    # UNIFORM_DISPLAY_TOGGLES is hand-typed on purpose: it characterizes what
+    # the original if/elsif chain did, so it has to be written down
+    # independently of the table the refactor introduced. Deriving it from
+    # DISPLAY_TOGGLES would make this spec agree with the production table by
+    # construction and stop testing anything.
+    #
+    # The cost of that independence is drift -- edit an accessor or message in
+    # DISPLAY_TOGGLES, or add a seventh toggle, and this fixture would quietly
+    # stop covering it while still passing. So assert the two agree: the
+    # characterization stays independent, and a change on either side that
+    # isn't mirrored fails loudly here instead of silently narrowing coverage.
+    it 'covers exactly the production toggle table' do
+      require 'common/client_commands'
+
+      production = Lich::Common::ClientCommands::DISPLAY_TOGGLES.to_h do |word, accessor, description|
+        # Patterns carry a trailing "?" for the optional plural ("exits?");
+        # the command word the fixture keys on is the pattern without it.
+        [word.delete_suffix('?'), [accessor.to_s, "Changing Lich to display #{description} to"]]
+      end
+
+      expect(uniform).to eq(production)
+    end
+
     # Driven in one probe rather than one per toggle: each subprocess costs
     # about a second, and six near-identical branches do not need six of them.
     # The per-toggle expectations below still fail individually.
@@ -513,10 +536,6 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
-  # GemStone-only branches. ;infomon show full is pinned as BROKEN: the
-  # capture is " full" (leading space) but the source compares it against
-  # 'full', so the full listing never prints. Pinned deliberately -- a
-  # refactor must not silently fix it.
   describe 'infomon and sk (GemStone)' do
     it 'routes the infomon subcommands' do
       out = probe(<<~RUBY, game: 'GSIV')
@@ -529,14 +548,17 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';infomon reset')
         do_client(';infomon show')
         do_client(';infomon show full')
+        do_client(';infomon show FULL')
         do_client(';infomon effects')
       RUBY
       expect(out).to include('EXEC Infomon.sync')
       expect(out).to include('EXEC Infomon.redo!')
       expect(out).to include('SET infomon.show_durations=true')
-      # Both forms print the short listing -- see the note above.
-      expect(out.scan(/SHOW full=false/).length).to eq(2)
-      expect(out).not_to include('SHOW full=true')
+      expect(out).to include('SHOW full=false') # bare ;infomon show
+      # Both spellings of the argument ask for the complete listing. Before
+      # this branch neither did: the capture included the leading space, so
+      # " full" never equalled 'full'.
+      expect(out.scan(/SHOW full=true/).length).to eq(2)
     end
 
     it 'passes ;sk arguments through to SK.main' do
