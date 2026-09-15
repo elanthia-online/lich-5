@@ -298,33 +298,14 @@ module Lich
       def Weapon.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Weapon.available?(name, forcert_count: forcert_count)
 
-        name_normalized = PSMS.name_normal(name)
-        technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
-        usage = technique.key?(:usage) ? technique[:usage] : name_normalized
-        return if usage.nil?
-
+        technique = @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])
         in_cooldown_regex = /^#{name} is still in cooldown\./i
 
-        results_regex = Regexp.union(
-          PSMS::FAILURES_REGEXES,
-          /^#{name} what\?$/i,
-          in_cooldown_regex
-        )
-
-        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest
-
-        usage_cmd = "weapon #{usage}"
-        if target.is_a?(GameObj)
-          usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
-          usage_cmd += " ##{target}"
-        elsif target != ""
-          usage_cmd += " #{target}"
-        end
-
         usage_result = nil
-        if (technique.key?(:assault_rx))
-          results_regex = Regexp.union(results_regex, technique[:assault_rx])
+        if technique.key?(:assault_rx)
+          # assault-style techniques take no FORCERT and settle their own roundtime
+          usage_cmd = Weapon.command(name, target)
+          results_regex = Weapon.results_regex(name, results_of_interest: results_of_interest)
           break_out = Time.now() + 12
           loop {
             usage_result = dothistimeout(usage_cmd, 10, results_regex)
@@ -340,11 +321,11 @@ module Lich
             sleep 0.25
           }
         else
-          results_regex = Regexp.union(results_regex, technique[:regex], /^Roundtime: [0-9]+ sec\.$/)
+          usage_cmd = Weapon.command(name, target, forcert_count: forcert_count)
+          results_regex = Weapon.results_regex(name, results_of_interest: results_of_interest)
 
-          if forcert_count > 0
-            usage_cmd += " forcert"
-          else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+          # with forcert we don't want to wait for rt, but we need to otherwise
+          unless forcert_count > 0
             waitrt?
             waitcastrt?
           end
@@ -357,6 +338,38 @@ module Lich
         end
 
         usage_result
+      end
+
+      # The command {Weapon.use} sends for a technique, without sending it. A
+      # technique without a usage word is sent by its normalized name, and an
+      # assault-style technique never takes FORCERT.
+      #
+      # @param name [String] The name of the Weapon technique
+      # @param target [String, Integer, GameObj] The target (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0); ignored for assaults
+      # @return [String] e.g. "weapon twinhammer #12345"
+      def Weapon.command(name, target = "", forcert_count: 0)
+        name_normalized = PSMS.name_normal(name)
+        technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
+        usage = technique.key?(:usage) ? technique[:usage] : name_normalized
+        forcert_count = 0 if technique.key?(:assault_rx)
+        PSMS.command("weapon", usage, target, forcert_count: forcert_count)
+      end
+
+      # Every line that answers the technique's command: the regex {Weapon.use}
+      # waits on. Assault-style techniques answer with their assault line
+      # instead of a result line and roundtime.
+      #
+      # @param name [String] The name of the Weapon technique
+      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
+      # @return [Regexp]
+      def Weapon.results_regex(name, results_of_interest: nil)
+        technique = @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])
+        if technique.key?(:assault_rx)
+          PSMS.results_regex(name, technique[:assault_rx], results_of_interest: results_of_interest)
+        else
+          PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
+        end
       end
 
       # Returns the "success" regex associated with a given Weapon technique name.

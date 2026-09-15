@@ -1,0 +1,19 @@
+You fire a faewood arrow at <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple</a><popBold/>!
+  AS: +612 vs DS: +582 with AvD: +32 + d100 roll: +94 = +156
+   ... and hit for 21 points of damage!
+   Minor puncture to the right arm.
+A dark shadowy tendril rises up from <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple</a><popBold/>, writhes its way up a <a exist="129604585" noun="bow">scorched glowbark long bow</a> towards you and lashes out malevolently...
+The force of <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple's</a><popBold/> power warps the air as it surges toward you!
+  CS: +497 - TD: +501 + CvA: +13 + d100: +57 - -5 == +71
+  Warded off!
+A few nebulous wisps coalesce about you before dissipating in a confused spiral.
+Soot brown specks of leaf mold trail in the wake of <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple's</a><popBold/> movements, distorted by a murky haze.
+Vital energy infuses you, hastening your arcane reflexes!
+
+** Countless points of pale phosphorescence awaken across your <a exist="129604585" noun="bow">glowbark long bow</a>, rapidly brightening before bursting into brilliant light around <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple</a><popBold/>! **
+   ... 25 points of damage!
+   Muscle and blood explode from <pushBold/>the <a exist="129623615" noun="disciple">gigas disciple</a><popBold/>'s abdomen in a steaming spray!
+You blinded <pushBold/>a <a exist="129623615" noun="disciple">flayed gigas disciple</a><popBold/>!
+The arrow breaks into tiny fragments.
+Roundtime: 3 sec.
+Roundtime changed to 1 second.

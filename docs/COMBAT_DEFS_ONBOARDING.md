@@ -164,7 +164,7 @@ action, BCS tiers shift the timer −2..+2 (+4 grizzled, −4 AG-dangerous).
 | Thing | Path |
 |---|---|
 | Def families | `lib/gemstone/combat/defs/*.rb` |
-| Parser / processor / observers | `lib/gemstone/combat/{parser,processor,observers}.rb` |
+| Parser / processor | `lib/gemstone/combat/{parser,processor}.rb` (events go out on `Events` as `combat.<type>`) |
 | Ledger (coverage channel source) | `scripts/custom/forge/tools/speed_ledger.rb` → `data/speed_ledger/ledger.jsonl` |
 | Noise filter | `scripts/custom/forge/tools/spell_noise.rb` |
 | Status/defs candidate lists | `data/forge_reports/PROPOSAL11.md` (status candidates, 5,083 templates) + `data/forge_reports/PROPOSAL12.md` (tracker candidates, 283 templates) |

@@ -272,6 +272,7 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       output = <<~WEALTH
         You have 5,585 silver with you.
         You are carrying 6,112 silver stored within your coin pouch.
+        You are carrying a total of 11,697 silver.
 
         You are carrying 16 gigas artifact fragments.
       WEALTH
@@ -283,6 +284,20 @@ RSpec.describe Lich::Gemstone::Infomon::Parser, ".parse" do
       expect(Lich::Gemstone::Currency.silver).to eq(5585)
       expect(Lich::Gemstone::Currency.silver_container).to eq(6112)
       expect(Lich::Gemstone::Currency.gigas_artifact_fragments).to eq(16)
+      expect(Lich::Gemstone::Currency.silver_total).to eq(11697)
+    end
+
+    it "handles wealth notes" do
+      output = <<~NOTES
+        Listing accessible bank notes in your inventory...
+
+        Total note value: 100,000
+      NOTES
+      output.split("
+").map { |line| Lich::Gemstone::Infomon::Parser.parse(line) }
+
+      expect(Lich::Gemstone::Infomon.get("currency.notes")).to eq(100000)
+      expect(Lich::Gemstone::Currency.notes).to eq(100000)
     end
 
     it "handles ticket balance info" do

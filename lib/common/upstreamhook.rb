@@ -13,6 +13,7 @@ module Lich
       @@upstream_hook_sources ||= Hash.new
       @@upstream_hook_owners ||= Hash.new
       @@upstream_hook_persist ||= Hash.new
+      @@upstream_hook_priorities ||= Hash.new
 
       # Per-class storage for the shared HookRegistry methods.
       def self._hooks
@@ -31,16 +32,23 @@ module Lich
         @@upstream_hook_persist
       end
 
+      def self._hook_priorities
+        @@upstream_hook_priorities
+      end
+
       def UpstreamHook.run(client_string)
-        for key in @@upstream_hooks.keys
+        for key in ordered_hook_names
+          return nil if client_string.nil?
           begin
-            client_string = @@upstream_hooks[key].call(client_string)
+            action = hook_action(key)
+            next unless action
+
+            client_string = action.call(client_string)
           rescue
-            @@upstream_hooks.delete(key)
+            remove(key)
             respond "--- Lich: UpstreamHook: #{$!}"
             respond $!.backtrace.first
           end
-          return nil if client_string.nil?
         end
         return client_string
       end

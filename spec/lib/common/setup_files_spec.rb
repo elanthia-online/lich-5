@@ -122,6 +122,48 @@ RSpec.describe Lich::Common::SetupFiles do
     end
   end
 
+  # Regression coverage for issue #1596: the cache must key freshness on file
+  # content, not mtime. These specs pin File.mtime to a single frozen value so
+  # every write shares an mtime -- the exact same-tick collision that occurs on
+  # coarse-granularity filesystems (Windows, some CI mounts). They fail against
+  # the old mtime-only cache and pass with content-hash freshness, and they do
+  # not depend on the host filesystem's timestamp resolution or on sleeps.
+  describe 'cache freshness (filesystem-timing-independent)' do
+    before { allow(File).to receive(:mtime).and_return(Time.now) }
+
+    it 'reloads a rewritten data file whose mtime did not change' do
+      data_file = File.join(data_dir, 'base-spells.yaml')
+      File.write(data_file, { spell_data: { 'Shield' => { 'mana' => 3 } } }.to_yaml)
+      expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+
+      File.write(data_file, { spell_data: { 'Shield' => { 'mana' => 7 } } }.to_yaml)
+      setup_files.reload
+      expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 7 } })
+    end
+
+    it 'falls back to scripts/data after a same-mtime custom override is removed' do
+      FileUtils.mkdir_p(custom_data_dir)
+      File.write(File.join(data_dir, 'base-spells.yaml'), { spell_data: { 'Shield' => { 'mana' => 3 } } }.to_yaml)
+      custom_file = File.join(custom_data_dir, 'base-spells.yaml')
+      File.write(custom_file, { spell_data: { 'Shield' => { 'mana' => 99 } } }.to_yaml)
+      expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 99 } })
+
+      File.delete(custom_file)
+      setup_files.reload
+      expect(setup_files.get_data('spells').spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+    end
+
+    it 'picks up a settings change when the profile mtime did not change' do
+      File.write(File.join(profiles_dir, 'base.yaml'), { version: 1 }.to_yaml)
+      File.write(File.join(profiles_dir, 'TestChar-setup.yaml'), {}.to_yaml)
+      expect(setup_files.get_settings.version).to eq(1)
+
+      File.write(File.join(profiles_dir, 'base.yaml'), { version: 2 }.to_yaml)
+      setup_files.reload
+      expect(setup_files.get_settings.version).to eq(2)
+    end
+  end
+
   describe '#reload' do
     before do
       File.write(File.join(profiles_dir, 'base.yaml'), { version: 1 }.to_yaml)
@@ -131,8 +173,6 @@ RSpec.describe Lich::Common::SetupFiles do
     it 'reloads changed files' do
       setup_files.get_settings
       File.write(File.join(profiles_dir, 'base.yaml'), { version: 2 }.to_yaml)
-      # Touch file to ensure mtime changes
-      FileUtils.touch(File.join(profiles_dir, 'base.yaml'), mtime: Time.now + 1)
       setup_files.reload
       result = setup_files.get_settings
       expect(result.version).to eq(2)

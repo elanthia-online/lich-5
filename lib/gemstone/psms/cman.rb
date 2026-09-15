@@ -771,35 +771,13 @@ module Lich
       def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
         return unless CMan.available?(name, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
 
-        name_normalized = PSMS.name_normal(name)
-        technique = @@combat_mans.fetch(PSMS.find_name(name_normalized, "CMan")[:long_name])
-        usage = technique[:usage]
-        return if usage.nil?
+        usage_cmd = CMan.command(name, target, forcert_count: forcert_count)
+        return if usage_cmd.nil?
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./i
+        results_regex = CMan.results_regex(name, results_of_interest: results_of_interest)
 
-        results_regex = Regexp.union(
-          PSMS::FAILURES_REGEXES,
-          /^#{name} what\?$/i,
-          in_cooldown_regex,
-          technique[:regex],
-          /^Roundtime: [0-9]+ sec\.$/,
-        )
-
-        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
-
-        usage_cmd = "cman #{usage}"
-        if target.is_a?(GameObj)
-          usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
-          usage_cmd += " ##{target}"
-        elsif target != ""
-          usage_cmd += " #{target}"
-        end
-
-        if forcert_count > 0
-          usage_cmd += " forcert"
-        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+        # with forcert we don't want to wait for rt, but we need to otherwise
+        unless forcert_count > 0
           waitrt?
           waitcastrt?
         end
@@ -811,6 +789,31 @@ module Lich
         end
 
         usage_result
+      end
+
+      # The command {CMan.use} sends for a maneuver, without sending it.
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param target [String, Integer, GameObj] The target (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] e.g. "cman bullrush #12345", nil when the maneuver has no usage
+      # @example
+      #   CMan.command("bullrush", GameObj.targets.first) => "cman bullrush #12345"
+      def CMan.command(name, target = "", forcert_count: 0)
+        technique = @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])
+        return nil if technique[:usage].nil?
+
+        PSMS.command("cman", technique[:usage], target, forcert_count: forcert_count)
+      end
+
+      # Every line that answers the maneuver's command: the regex {CMan.use} waits on.
+      #
+      # @param name [String] The name of the combat maneuver
+      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
+      # @return [Regexp]
+      def CMan.results_regex(name, results_of_interest: nil)
+        technique = @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])
+        PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
       end
 
       # Returns the "success" regex associated with a given combat maneuver name.

@@ -1024,6 +1024,21 @@ RSpec.describe Lich::DragonRealms::DRCH do
       expect(described_class.bind_wound('right arm')).to be false
     end
 
+    it 'returns true when parasite slips free' do
+      allow(DRC).to receive(:bput).and_return('The blood mite slips free and quickly slithers away, vanishing from sight within moments.')
+      expect(described_class.bind_wound('right eye')).to be true
+    end
+
+    it 'returns false on careless attempt' do
+      allow(DRC).to receive(:bput).and_return('You carelessly attempt to remove the blood mite from your neck leaving the wound more severe than before.')
+      expect(described_class.bind_wound('neck')).to be false
+    end
+
+    it 'returns false on foolish attempt' do
+      allow(DRC).to receive(:bput).and_return('You foolishly attempt to remove the blood mite from your right eye tearing the flesh and horribly aggravating the wound!')
+      expect(described_class.bind_wound('right eye')).to be false
+    end
+
     it 'passes person parameter to bput' do
       expect(DRC).to receive(:bput).with('tend Muleoak right arm', any_args).and_return('You work carefully at tending')
       described_class.bind_wound('right arm', 'Muleoak')

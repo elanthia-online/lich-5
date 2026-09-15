@@ -17,6 +17,22 @@ RSpec.describe Lich::Common::Spell do
     end
   end
 
+  describe '.results_regex' do
+    it 'is the union of lines cast waits on, plus any extra lines' do
+      regex = Lich::Common::Spell.results_regex
+      expect(regex).to match('Cast Roundtime 3 Seconds.')
+      expect(regex).to match('Cast at what?')
+      expect(regex).to match("But you don't have any mana!")
+      expect(regex).to match('Your magic fizzles ineffectually.')
+      expect(regex).to match('You do not currently have a target.')
+      expect(regex).not_to match('You swing a broadsword at an orc!')
+
+      extra = Lich::Common::Spell.results_regex(results_of_interest: /^Roundtime: \d+ sec\.$/)
+      expect(extra).to match('Roundtime: 3 sec.')
+      expect(extra).to match('Cast at what?')
+    end
+  end
+
   describe '.[]' do
     context 'when looking up by number' do
       it 'finds Spirit Warding I by number 101' do

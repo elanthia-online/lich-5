@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -42,7 +43,8 @@ module Lich
               /An arrow falls to the (?:ground|floor), narrowly missing (?<target>[^!]+)./,
               /(?<target>.+?) moves at the last moment to avoid an incoming arrow./,
               /The spray of arrows leaves (?<target>.+?) unscathed and undeterred./,
-              /The .+? vine#{MK_POST} (?:lashes out at|grabs at) (?<target>.+?),? (?:but is unable to grasp|unable to find a purchase)/,
+              # 610 tangleweed: "vine" (tangle) or "briar" (Ojandhaart form)
+              /The .+? (?:vine|briar)#{MK_POST} (?:lashes out at|grabs at) (?<target>.+?),? (?:but is unable to grasp|unable to find a purchase)/,
               /Your strike misses its mark./,
               /(?<attacker>.+?) whacks your legs to no effect./,
               /You whack (?<target>.+?'s)#{MK_POST} legs futilely./,
@@ -52,10 +54,18 @@ module Lich
               /Your (?<weapon>.+?) flies wide, narrowly missing (?<target>[^!]+)./,
               /The net flies past you and collapses into a useless heap./,
               /(?<attacker>.+?) stumbles behind you like a top out of control./,
-              /The enormous hand attempts to grab you, but you manage to avoid it at the last moment./
+              /The enormous hand attempts to grab you, but you manage to avoid it at the last moment./,
+              # shield push whiff (hunt log 2026-09-07)
+              /(?<attacker>.+?) completely misses you, stumbles, and flails around!/,
+              # sanguine ooze pseudopod whiff, same line as its initiation
+              /The goopy appendage flies wide before retracting back into the central mass of/
             ].freeze),
             OutcomeDef.new(:hit, [
               /(?:A|Good) hit!/,
+              # creature fear maneuvers that got us (SSR precedes; the save
+              # forms are :resisted)
+              /(?<attacker>.+?)'s#{MK_POST} angry trumpeting startles you!/,
+              /Your heart quavers in your chest and you find yourself unable to focus on defending yourself!/,
               # Nature's Fury per-target hit lines (round-13 sweep: 52/52
               # follow the natures_fury initiation + Warding failed! in
               # the same chunk, damage always follows). The adjective is
@@ -129,6 +139,16 @@ module Lich
               /You outmaneuver the attack and completely avoid it!/,
               /(?<target>.+?) dodges an incoming arrow!/,
               /Sensing your attack coming, (?<target>.+?) leaps to safety as you move to attack (?:him|her|it), leaving you out of position!/,
+              # pre-emptive evade (warg, hunt log 2026-09-07): prints INSTEAD
+              # of the attack line, so this is the only record of the swing
+              /With preternatural speed, (?<target>.+?) bounds to safety as you move to attack #{MK_PRE}(?:him|her|it)#{MK_POST}, leaving you off-balance!/,
+              /You avoid the push!/,
+              # sanguine ooze shrapnel burst dodged
+              /Bobbing and weaving, you dodge the spray of shrapnel!/,
+              # gigas disciple leech fling dodged (same line as the fling)
+              /You duck to narrowly avoid the flying vermiforms!/,
+              # 3p feint we saw through (also the :feint initiation line)
+              /(?<attacker>.+?) feints (?:high|low|to the (?:left|right)), but you aren't fooled for a second\./,
               /Unable to focus clearly, you blindly evade the attack!/,
               /You barely dodge the attack!/,
               /Unfortunately, your aim is off and your attack goes wide!/,
@@ -192,7 +212,7 @@ module Lich
               /(?<target>.+?) harmlessly deflects the charge!/,
               /You gauge the attack and expertly deflect it with your .+?!/,
               /At the last moment, you block the missile with your .+?!/,
-              /In the nick of time, you interpose your .+? between yourself and the (?:missile|blow)!/,
+              /In the nick of time, you interpose your .+? between yourself and the (?:missile|blow|attack)!/,
               /Though dazed, you easily deflect the .+? with your .+?!/,
               /Although completely oblivious, you instinctively block the .+? with your .+?!/,
               /You skillfully block the missile with your .+?!/,
@@ -231,7 +251,11 @@ module Lich
               /(?<target>.+?) aura absorbs some of the damage!/,
               /(?<target>.+?) manages to block some of the (?:elemental )?damage with #{MK_PRE}(?:his|her|its)#{MK_POST} .+?!/,
               /(?<armor>.+?) partially deflects the onslaught of the \w+ attack\./,
-              /Your body resists the \w+ damage and lessens the severity of the attack!/
+              /Your body resists the \w+ damage and lessens the severity of the attack!/,
+              # creature fear maneuvers we saved against (SSR precedes these;
+              # hunt log 2026-09-07: warg howl, mastodon trumpet)
+              /Fear still claws at your heart, but you stand fast against .+? unnerving howl!/,
+              /You keep your wits amidst .+? angry trumpeting!/
             ].freeze),
             # Immunity: the spell simply has no effect - no CS/TD roll is
             # printed at all (e.g. 501 Sleep vs a troll wraith, forge
@@ -297,11 +321,21 @@ module Lich
           # first-match-wins scanning.
           #
           # @return [Array<Array(Regexp, Symbol)>]
-          OUTCOME_LOOKUP = OUTCOME_DEFS.flat_map { |d| d.patterns.map { |rx| [rx, d.type] } }.freeze
+          # Shipped defs first, then player supplements (defs/supplements.rb),
+          # whose types are restricted to the ones defined above.
+          OUTCOME_LOOKUP = (OUTCOME_DEFS + Supplements.outcomes).flat_map { |d| d.patterns.map { |rx| [rx, d.type] } }.freeze
 
           # Cheap literal pre-filter over all outcome patterns; ALWAYS_SCAN
           # holds the few patterns the gate cannot cover.
           GATE, ALWAYS_SCAN = PatternGate.build(OUTCOME_LOOKUP.map(&:first))
+
+          # Lookup and gate as one frozen table, bound last in a single
+          # assignment; parse reads it once per call (see Definitions::Table).
+          TABLE = Table.new(OUTCOME_LOOKUP, GATE, ALWAYS_SCAN).freeze
+
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!(:outcomes)
 
           # Classifies a single game line as an attack outcome.
           #
@@ -309,10 +343,29 @@ module Lich
           # @return [Symbol, nil] outcome type (:miss, :hit, :evade, ...),
           #   or nil when the line is not an outcome line
           def self.parse(line)
-            return nil unless GATE.match?(line) || ALWAYS_SCAN.any? { |rx| rx.match?(line) }
+            table = TABLE
+            return nil if table.rejects?(line)
 
-            OUTCOME_LOOKUP.each { |rx, type| return type if rx.match?(line) }
+            table.lookup.each { |rx, type| return type if PatternGate.safe_match?(rx, line) }
             nil
+          end
+
+          # True when the outcome line names who attacked US ("The thorny
+          # barrier surrounding you blocks the attack from <X>!"): the def
+          # carries an (?<attacker>) capture. A fully-intercepted inbound
+          # swing prints no initiation line, so this is the only record of
+          # it - the processor opens it inbound, not as an attack ON X
+          # (hunt log 2026-09-07: barrier blocks filed as unknown vs warg).
+          def self.inbound_line?(line)
+            table = TABLE
+            return false if table.rejects?(line)
+
+            table.lookup.each do |rx, _type|
+              next unless PatternGate.safe_match?(rx, line)
+
+              return rx.names.include?('attacker')
+            end
+            false
           end
         end
 
@@ -381,6 +434,23 @@ module Lich
           # Cheap literal pre-filter over all resolution patterns; ALWAYS_SCAN
           # holds the few patterns the gate cannot cover.
           GATE, ALWAYS_SCAN = PatternGate.build(RESOLUTION_LOOKUP.map(&:first))
+
+          # Crit RIDER maneuvers: a leg/knockdown crit rolls an SMR of its
+          # own AFTER the damage settles, then prints the fall. That roll
+          # belongs to the hit that caused it, not to the next attack -
+          # without this it was orphaned into a synthetic :unknown attack
+          # against whatever creature was current (2026-09-07 hunt log,
+          # spectral_bloom leg crit on a skald -> "unknown" on the mastodon).
+          CRIT_RIDER_PATTERNS = [
+            # (the pronoun is a link in the live feed - hunt log 2026-09-07 21:03)
+            /Despite desperate windmilling to catch #{MK_PRE}(?:his|her|its|their)#{MK_POST} balance, .+? topples/
+          ].freeze
+
+          # @param line [String] the line right after a roll
+          # @return [Boolean] true when it narrates a crit-knockdown rider
+          def self.crit_rider_line?(line)
+            CRIT_RIDER_PATTERNS.any? { |rx| rx.match?(line) }
+          end
 
           # Parses a single roll line into its numeric components.
           #

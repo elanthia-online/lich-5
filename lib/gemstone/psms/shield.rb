@@ -350,35 +350,13 @@ module Lich
       def Shield.use(name, target = "", results_of_interest: nil, forcert_count: 0)
         return unless Shield.available?(name, forcert_count: forcert_count)
 
-        name_normalized = PSMS.name_normal(name)
-        technique = @@shield_techniques.fetch(PSMS.find_name(name_normalized, "Shield")[:long_name])
-        usage = technique[:usage]
-        return if usage.nil?
+        usage_cmd = Shield.command(name, target, forcert_count: forcert_count)
+        return if usage_cmd.nil?
 
-        in_cooldown_regex = /^#{name} is still in cooldown\./i
+        results_regex = Shield.results_regex(name, results_of_interest: results_of_interest)
 
-        results_regex = Regexp.union(
-          PSMS::FAILURES_REGEXES,
-          /^#{name} what\?$/i,
-          in_cooldown_regex,
-          technique[:regex],
-          /^Roundtime: [0-9]+ sec\.$/,
-        )
-
-        results_regex = Regexp.union(results_regex, results_of_interest) if results_of_interest.is_a?(Regexp)
-
-        usage_cmd = "shield #{usage}"
-        if target.is_a?(GameObj)
-          usage_cmd += " ##{target.id}"
-        elsif target.is_a?(Integer)
-          usage_cmd += " ##{target}"
-        elsif target != ""
-          usage_cmd += " #{target}"
-        end
-
-        if forcert_count > 0
-          usage_cmd += " forcert"
-        else # if we're using forcert, we don't want to wait for rt, but we need to otherwise
+        # with forcert we don't want to wait for rt, but we need to otherwise
+        unless forcert_count > 0
           waitrt?
           waitcastrt?
         end
@@ -390,6 +368,29 @@ module Lich
         end
 
         usage_result
+      end
+
+      # The command {Shield.use} sends for a technique, without sending it.
+      #
+      # @param name [String] The name of the Shield technique
+      # @param target [String, Integer, GameObj] The target (optional)
+      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
+      # @return [String, nil] e.g. "shield bash #12345", nil when the technique has no usage
+      def Shield.command(name, target = "", forcert_count: 0)
+        technique = @@shield_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Shield")[:long_name])
+        return nil if technique[:usage].nil?
+
+        PSMS.command("shield", technique[:usage], target, forcert_count: forcert_count)
+      end
+
+      # Every line that answers the technique's command: the regex {Shield.use} waits on.
+      #
+      # @param name [String] The name of the Shield technique
+      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
+      # @return [Regexp]
+      def Shield.results_regex(name, results_of_interest: nil)
+        technique = @@shield_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Shield")[:long_name])
+        PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
       end
 
       # Returns the "success" regex associated with a given Shield technique name.

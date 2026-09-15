@@ -1,5 +1,5 @@
 ##### natures_fury 2601f4ed53411b53
-# expect: attacks=natures_fury | res=cs_td | flares=none | outcomes=ward_failed,hit | dmg=2 | statuses=dispelled/add
+# expect: attacks=natures_fury | res=cs_td | flares=none | outcomes=ward_failed,hit | dmg=2 | statuses=none
 The surroundings advance upon <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> with relentless fury!
 The dull golden nimbus surrounding <pushBold/>a <a exist="67597902" noun="radical">triton radical</a><popBold/> suddenly begins to glow brightly.
   CS: +484 - TD: +293 + CvA: +25 + d100: +93 == +309

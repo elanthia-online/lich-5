@@ -323,13 +323,26 @@ module Lich
           end
 
           if available?(sign_name)
-            command = sign[:usage] || "sign of #{sign[:short_name]}"
             waitrt?
             waitcastrt?
-            fput "#{command} #{target}".strip
+            fput Society.command(sign, "sign of", target)
           else
             Lich::Messaging.msg("warn", "You cannot use the #{sign_name} sign right now.")
           end
+        end
+
+        ##
+        # The command {use} sends for a sign, without sending it.
+        #
+        # @param sign_name [String] The short or long name of the sign
+        # @param target [String, Integer, GameObj, nil] Optional target (a GameObj or id as `#id`)
+        # @return [String, nil] e.g. "sign of striking", nil when the sign is unknown
+        #
+        def self.command(sign_name, target = nil)
+          sign = self[sign_name]
+          return nil unless sign
+
+          Society.command(sign, "sign of", target)
         end
 
         ##

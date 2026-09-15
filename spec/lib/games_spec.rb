@@ -200,6 +200,30 @@ RSpec.describe Lich::GameBase do
         expect(socket).to have_received(:close)
         expect(Lich::Common::ShutdownCoordinator.reason).to eq(:unrecoverable_game_thread_error)
         expect(Lich::Common::ShutdownCoordinator.current.source).to eq('game_parser')
+        expect(described_class.thread.thread_variable_get(:lich_game_ingress_time)).to be_nil
+      end
+
+      it 'exposes the original queued timestamp only inside its exact parser dispatch' do
+        entered, release, seen = Queue.new, Queue.new, []
+        allow(described_class).to receive(:process_server_string) do |line|
+          seen << [line, described_class.current_ingress_time, Thread.current]
+          entered << true
+          release.pop if line == 'old queued attack'
+        end
+        described_class.start_server_processor_thread
+        described_class.enqueue_server_string('old queued attack', 9.0, ingress_monotonic_at: 1.0)
+        entered.pop
+        expect(described_class.current_ingress_time).to be_nil
+        release << true
+        described_class.server_queue << 'legacy unstamped input'
+        entered.pop
+        described_class.server_queue << nil
+        expect(described_class.thread.join(1)).to eq(described_class.thread)
+        expect(seen.map { |row| row.first(2) }).to eq([['old queued attack', 1.0], ['legacy unstamped input', nil]])
+        expect(seen.map(&:last).uniq).to eq([described_class.thread])
+        expect(described_class.thread.thread_variable_get(:lich_game_ingress_time)).to be_nil
+      ensure
+        release << true if release && release.empty?
       end
     end
   end

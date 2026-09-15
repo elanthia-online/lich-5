@@ -106,6 +106,7 @@ module Bench
       req.call('common', 'front-end')
       req.call('common', 'upstreamhook')
       req.call('common', 'downstreamhook')
+      req.call('common', 'events')
       req.call('common', 'settings')
       req.call('common', 'feature_flags')
       req.call('common', 'settings', 'gamesettings')
