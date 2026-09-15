@@ -138,14 +138,17 @@ module Lich
 
       # ---- exec -------------------------------------------------------
 
-      # execname/en MUST stay ahead of exec/e: "en job code" matches the
-      # exec pattern too, and would be run as code named by nothing.
-      command(/^(?:execname|en) ([\w\d-]+) (.+)$/) do |m|
-        ExecScript.start(m[2], { :name => m[1] })
-      end
-
+      # Registered in the original chain's order. These two do NOT overlap:
+      # the exec pattern needs a space (or "q" then a space) right after
+      # e/exec, so "en job code" and "execname job code" miss it entirely.
+      # Either order works; keeping the original avoids implying a
+      # constraint that is not there.
       command(/^(?:exec|e)(q)? (.+)$/) do |m|
         ExecScript.start(m[2], { :quiet => m[1] })
+      end
+
+      command(/^(?:execname|en) ([\w\d-]+) (.+)$/) do |m|
+        ExecScript.start(m[2], { :name => m[1] })
       end
 
       # ---- trust ------------------------------------------------------
@@ -182,8 +185,9 @@ module Lich
         end
       end
 
-      # ;lt MUST stay ahead of ;list: "lt" does not match the list pattern,
-      # but "list trusted" does, and would print the running scripts.
+      # Position matches the original chain. Not an ordering constraint:
+      # /^list\s?(?:all)?$|^l(?:a)?$/ matches neither "lt" nor "list
+      # trusted", so this is reachable wherever it sits.
       command(/^list\s?(?:un)?trust(?:ed)?$|^lt$/i) do
         if RUBY_VERSION =~ /^2\.[012]\./
           list = Script.list_trusted

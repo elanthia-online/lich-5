@@ -18,8 +18,13 @@ module Lich
     #   ;debuglogs          exact, before the \b invalid-argument catch
     #   ;l5u <args>         before the bare ;l5u that answers --help
     #   ;force <name> <a>   before ;force <name>, which would drop the args
-    #   ;execname / ;en     before ;exec / ;e, which would match them first
-    #   ;lt                 before ;list
+    #
+    # Those three are the whole list. ;execname/;en and ;lt look like they
+    # belong here and do not: the ;exec pattern requires a space (or "q" then
+    # a space) straight after e/exec so it cannot match "en job ..." at all,
+    # and the ;list pattern cannot match "lt". Both route correctly wherever
+    # they sit. Noted so the real constraints are not diluted by imagined
+    # ones.
     #
     # and every entry here comes before do_client's fallback, which treats an
     # unmatched command as a script name. Adding an entry to the end is safe;
