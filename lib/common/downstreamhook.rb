@@ -40,7 +40,7 @@ module Lich
         for key in ordered_hook_names
           return nil if server_string.nil?
           begin
-            action = @@downstream_hooks[key]
+            action = hook_action(key)
             next unless action
 
             server_string = action.call(server_string.dup) if server_string.is_a?(String)

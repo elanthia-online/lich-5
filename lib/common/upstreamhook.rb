@@ -38,8 +38,9 @@ module Lich
 
       def UpstreamHook.run(client_string)
         for key in ordered_hook_names
+          return nil if client_string.nil?
           begin
-            action = @@upstream_hooks[key]
+            action = hook_action(key)
             next unless action
 
             client_string = action.call(client_string)
@@ -48,7 +49,6 @@ module Lich
             respond "--- Lich: UpstreamHook: #{$!}"
             respond $!.backtrace.first
           end
-          return nil if client_string.nil?
         end
         return client_string
       end
