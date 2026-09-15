@@ -2929,14 +2929,17 @@ module Lich
       # @return [void]
       # @api private
       def __close_startup_execution_guard
-        execution_guard_mutex.synchronize do
+        interruption = execution_guard_mutex.synchronize do
           guard = @startup_execution_guard
           return unless guard
 
+          existing_interruption = guard.interruption
           guard.close!
           @execution_guard = nil if @execution_guard.equal?(guard)
           @startup_execution_guard = nil
+          existing_interruption
         end
+        __record_exit_error(interruption) if interruption
       end
       private :__close_startup_execution_guard
 
@@ -3085,7 +3088,10 @@ module Lich
                 check_execution_guard!
                 return line
               end
-              return nil if deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+              if deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+                check_execution_guard!
+                return nil
+              end
             end
           else
             @downstream_buffer.wait_shift(timeout)

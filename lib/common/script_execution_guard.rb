@@ -116,6 +116,14 @@ module Lich
         @mutex.synchronize { !@reason.nil? }
       end
 
+      # Return the sanitized interruption already latched by this guard.
+      # This observes state only: it never invokes the policy callback and
+      # returns nil while the guard still permits execution.
+      # @return [Interrupted, nil] the existing cancellation, if any
+      def interruption
+        @mutex.synchronize { @reason && Interrupted.new(@reason) }
+      end
+
       # Identify callback reentry without treating it as a new policy check.
       # @return [Boolean] true only while this thread is evaluating the policy
       def checking?

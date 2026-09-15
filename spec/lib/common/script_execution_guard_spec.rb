@@ -133,4 +133,13 @@ RSpec.describe Lich::Common::ScriptExecutionGuard do
     other.cancel!('cast #123 private command')
     expect(interruption(other).reason).to eq(:cancelled)
   end
+
+  it 'reports a latched interruption without evaluating policy code' do
+    calls = 0
+    guard = described_class.new(->(_) { calls += 1; true })
+    expect(guard.interruption).to be_nil
+    guard.cancel!(:manual_stop)
+    expect(guard.interruption.reason).to eq(:manual_stop)
+    expect(calls).to eq(0)
+  end
 end

@@ -229,6 +229,18 @@ RSpec.describe 'Lich::Common::Script execution guard scope' do
     expect(buffer.try_shift).to eq('preserved')
   end
 
+  it 'rechecks cancellation when an empty timed read reaches its deadline' do
+    expect do
+      script.with_execution_guard(->(_) { true }) do |guard|
+        allow(buffer).to receive(:wait_shift) do |_timeout|
+          guard.cancel!(:manual_hold)
+          nil
+        end
+        script.gets(0)
+      end
+    end.to raise_error(interrupted) { |error| expect(error.reason).to eq(:manual_hold) }
+  end
+
   it 'interrupts pause while policy reads the current script without recursion or deadlock' do
     entered = Queue.new
     observed = Queue.new

@@ -137,6 +137,23 @@ RSpec.describe 'Lich::Common::Script lifecycle extensions' do
       end
     end
 
+    it 'does not report success when cleanup rescues its first guard denial' do
+      guarded_fixture(<<~RUBY) do
+        script.at_exit_procs << proc {
+          begin
+            script.check_execution_guard!(command: 'cleanup')
+          rescue Lich::Common::ScriptExecutionGuard::Interrupted
+          end
+        }
+      RUBY
+        child = script_class.start_child('guarded', execution_guard: ->(command) { command.nil? })
+        expect(child.join(2)).to equal(child)
+        expect(child).not_to be_completed_successfully
+        expect(child.exit_error.reason).to eq(:command_rejected)
+        expect(child).not_to be_execution_guard_active
+      end
+    end
+
     it 'keeps the policy installed in before-dying callbacks after an external kill' do
       guarded_fixture(<<~RUBY) do
         script.at_exit_procs << proc {
