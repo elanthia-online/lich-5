@@ -249,18 +249,18 @@ module Lich
         # Reads a toggle's next value: the negation of its current value,
         # unless an explicit true/false argument overrides it.
         #
-        # The comparison is case-SENSITIVE, transcribing the original
-        # branches exactly. Their patterns carry /i, so an uppercase
-        # argument is captured and then matches none of these literals,
-        # falling through to the negation -- ";display lichid FALSE" toggles
-        # rather than clearing. That is a bug, but it is the behavior this
-        # commit is required to preserve; it is fixed separately.
+        # The comparison is case-INSENSITIVE, which the original branches
+        # were not. Their patterns carry /i, so an uppercase argument was
+        # captured and then matched none of the lowercase literals, falling
+        # through to the negation: ";display lichid TRUE" turned the flag
+        # OFF when it was already on. An explicit argument now means what it
+        # says whatever its case.
         #
         # @param current [Boolean] the toggle's present value
         # @param argument [String, nil] "true", "false", "on", "off" or nil
         # @return [Boolean]
         def toggle_value(current, argument)
-          case argument
+          case argument&.downcase
           when 'true', 'on' then true
           when 'false', 'off' then false
           else !current
