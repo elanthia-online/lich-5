@@ -241,13 +241,18 @@ module Lich
         ExecScript.start('Infomon.redo!', { :quiet => true })
       end
 
-      # NOTE: ;infomon show full does not work, and this preserves that.
-      # The capture includes the leading space (" full"), but the original
-      # compared it against 'full', so the full form never matched and the
-      # short listing is always what prints. Kept verbatim so this refactor
-      # changes no behavior; fixing it is a separate change with its own test.
-      command(/^infomon show( full)?/i, game: :gs) do |m|
-        Infomon.show(m[1] == 'full')
+      # The capture is moved inside the group so it no longer includes the
+      # leading space. The old pattern captured " full" and compared it
+      # against 'full', so ";infomon show full" always printed the filtered
+      # listing instead of the complete one (Infomon.show(full) keeps the
+      # zero-valued rows). Fixed here rather than carried over: a one-token
+      # typo, and preserving it would have meant preserving a command that
+      # silently ignored its only argument.
+      # Downcased because the pattern is case-insensitive: without it
+      # ";infomon show FULL" would match and then fail the comparison,
+      # which is the same shape of bug one level down.
+      command(/^infomon show(?: (full))?/i, game: :gs) do |m|
+        Infomon.show(m[1]&.downcase == 'full')
       end
 
       command(/^infomon effects?(?: (true|false))?/i, game: :gs) do |m|

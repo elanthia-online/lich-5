@@ -513,10 +513,6 @@ RSpec.describe 'do_client command dispatch' do
     end
   end
 
-  # GemStone-only branches. ;infomon show full is pinned as BROKEN: the
-  # capture is " full" (leading space) but the source compares it against
-  # 'full', so the full listing never prints. Pinned deliberately -- a
-  # refactor must not silently fix it.
   describe 'infomon and sk (GemStone)' do
     it 'routes the infomon subcommands' do
       out = probe(<<~RUBY, game: 'GSIV')
@@ -529,14 +525,17 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';infomon reset')
         do_client(';infomon show')
         do_client(';infomon show full')
+        do_client(';infomon show FULL')
         do_client(';infomon effects')
       RUBY
       expect(out).to include('EXEC Infomon.sync')
       expect(out).to include('EXEC Infomon.redo!')
       expect(out).to include('SET infomon.show_durations=true')
-      # Both forms print the short listing -- see the note above.
-      expect(out.scan(/SHOW full=false/).length).to eq(2)
-      expect(out).not_to include('SHOW full=true')
+      expect(out).to include('SHOW full=false') # bare ;infomon show
+      # Both spellings of the argument ask for the complete listing. Before
+      # this branch neither did: the capture included the leading space, so
+      # " full" never equalled 'full'.
+      expect(out.scan(/SHOW full=true/).length).to eq(2)
     end
 
     it 'passes ;sk arguments through to SK.main' do

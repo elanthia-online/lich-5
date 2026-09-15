@@ -179,7 +179,8 @@ module Lich
             respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
             respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
             respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
-            respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
+            respond "   #{$clean_lich_char}infomon show              shows current Infomon values for character"
+            respond "   #{$clean_lich_char}infomon show full         same, including values that are zero"
             respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
           elsif XMLData.game =~ /^DR/
             respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
