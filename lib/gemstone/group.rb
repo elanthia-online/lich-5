@@ -508,8 +508,10 @@ module Lich
           # @example "<a exist="-10154507" noun="Zoleta">Zoleta</a> joins <a exist="-10966483" noun="Nisugi">Nisugi's</a> group."
           OTHER_JOINED_GROUP = %r{^<a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>\w+?)</a> joins <a exist="(?<id>[\d-]+)" noun="(?<noun>[A-Za-z]+)">(?<name>[\w']+?)</a> group.\r?\n?$}
 
-          # Matches when not in any group
-          NO_GROUP = /^You are not currently in a group/
+          # Both GROUP and a redundant DISBAND can confirm empty membership.
+          # The latter need not repeat the joined-indicator transition, so its
+          # text must also clear cached members and a stale leader.
+          NO_GROUP = /^(?:You are not currently in a group|You have no group to disband\.)/
 
           # Matches group member listing from GROUP command
           # @example "You are leading PlayerName, PlayerName2."
