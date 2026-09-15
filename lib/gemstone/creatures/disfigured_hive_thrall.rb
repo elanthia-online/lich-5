@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -27,10 +27,6 @@
     {
       name: "The Hive",
       uids: [13041101..13041132, 13041201..13041230, 13041301..13041329]
-    },
-    {
-      name: "unmapped",
-      uids: [13041330..13041330]
     }
   ],
   attack_attributes: {
@@ -114,13 +110,35 @@
     defensive_spells: [
       "Iron Skin (1202)",
       "Foresight (1204)",
-      "Focus Barrier (1216)"
+      "Focus Barrier (1216)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :powersink,
+      name: "Powersink (1203)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 62,
+      effects: { mana_drain: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    },
+    {
+      id: :web,
+      name: "Web (118)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 11,
+      effects: { rooted: true, webbed: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -181,6 +199,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      web: [
+        "A disfigured hive thrall desperately thrusts a hand at you!",
+        "The webbing falls around you in gooey, clinging ribbons as the strandweaver skitters around you, enmeshing you in a cocoon of sticky silk!"
+      ],
+      powersink: [
+        "A disfigured hive thrall desperately thrusts a hand at you!",
+        "Numerous thin streams of rainbow light begin slowly seeping out from you as you feel your control of the mana weave weaken."
+      ]
+    }
   }
 }

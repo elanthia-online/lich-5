@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -99,17 +99,38 @@
     mns_td: (391..400),
     mnm_td: (302..310),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Song of Mirrors",
-      "Song of Tonis"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Song of Mirrors (1019)",
+      "Song of Tonis (1035)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :corrupt_essence,
+      name: "Corrupt Essence (703)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 15,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 382-413."
+    },
+    {
+      id: :calm,
+      name: "Calm (201)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 14,
+      effects: { calmed: true },
+      dispellable: nil,
+      notes: "Warding, CS 419."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -200,6 +221,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      calm: [
+        "A siren focuses a soothing melody towards you!",
+        "A calm washes over you."
+      ],
+      corrupt_essence: [
+        "A siren gazes upon you lovingly and blows a soft kiss toward you.",
+        "You feel weakened as a blood red haze forms around you."
+      ]
+    }
   }
 }

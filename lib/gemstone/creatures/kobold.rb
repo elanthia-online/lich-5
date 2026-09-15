@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -37,10 +37,6 @@
     {
       name: "Old Mine Road",
       uids: [20002..20018, 401002..401009, 401011..401015, 401101..401102, 401201..401207, 401209..401209]
-    },
-    {
-      name: "unmapped",
-      uids: [401010..401010, 401208..401208]
     },
     {
       name: "Southern Snowfields",

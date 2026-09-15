@@ -9,7 +9,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -95,7 +95,28 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :bind,
+      name: "Bind (214)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { immobilized: true },
+      dispellable: nil,
+      notes: "Warding, CS 460."
+    },
+    {
+      id: :vertigo,
+      name: "Vertigo (1219)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 78,
+      effects: { dizziness: true },
+      dispellable: nil,
+      notes: "Warding, CS 389."
+    }
+  ],
   alchemy: [],
   equipment: [
     "a yellowed brittle bone cudgel",
@@ -176,7 +197,17 @@
       },
       miscellany: [
         "* Symbol of Transcendence can sometimes salvage a bad situation, either preemptively or used with its emergency cooldown. High CS aside, mutants are still mostly casting disablers or attacking with one of the weaker weapon bases, the cudgel, so it's possible to survive even ten rounds of stun with enough luck.\n* Symbol of Restoration can be used while Immobilized by Bind."
-      ]
+      ],
     },
+    triggers: {
+      vertigo: [
+        "A squamous reptilian mutant flicks {pronoun} bulging eyes toward you!",
+        "A black ball full of pinpoints of light forms before the mutant.  It quickly grows in size until {pronoun} unleashes the dark cloud before {pronoun} and the dark cloud instantaneously spreads throughout the entire area!"
+      ],
+      bind: [
+        "A squamous reptilian mutant flicks {pronoun} bulging eyes toward you!",
+        "An unseen force entangles you, restricting your movement!"
+      ]
+    }
   }
 }

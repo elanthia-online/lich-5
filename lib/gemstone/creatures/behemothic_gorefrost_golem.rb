@@ -4,12 +4,12 @@
   url: "https://gswiki.play.net/Behemothic_gorefrost_golem",
   picture: "",
   level: 104,
-  family: "golem",
+  family: "Golem",
   type: "biped",
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -129,7 +129,18 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :cold_snap,
+      name: "Cold Snap (512)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 9,
+      effects: { cold_damage_cycles: true, rooted: true },
+      dispellable: nil,
+      notes: "Warding, CS 444-450."
+    }
+  ],
   alchemy: [],
   equipment: [
     "a firewheel arrow fletched with plain white feathers"
@@ -276,7 +287,13 @@
         warrior: [],
         sorcerer: []
       },
-      miscellany: []
+      miscellany: [],
     },
+    triggers: {
+      cold_snap: [
+        "A behemothic gorefrost golem thrusts a blocky fist toward you!",
+        "An airy mist rolls into the area, carrying a harsh chill with it."
+      ]
+    }
   }
 }

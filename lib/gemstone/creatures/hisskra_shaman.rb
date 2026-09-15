@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -82,17 +82,28 @@
     mns_td: (129..139),
     mnm_td: (106..115),
     defensive_spells: [
-      "Natural Colors",
-      "Resist Elements",
-      "Spirit Defense",
-      "Spirit Warding I",
-      "Spirit Warding II"
+      "Natural Colors (601)",
+      "Resist Elements (602)",
+      "Spirit Defense (103)",
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -165,6 +176,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

@@ -121,7 +121,48 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :confusion,
+      name: "Confusion (1211)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 15,
+      effects: { confused: true },
+      dispellable: nil,
+      notes: "Warding, CS 433-448."
+    },
+    {
+      id: :vertigo,
+      name: "Vertigo (1219)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 101,
+      effects: { dizziness: true },
+      dispellable: nil,
+      notes: "Warding, CS 448-457."
+    },
+    {
+      id: :mindwipe,
+      name: "Mindwipe (1225)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: nil,
+      effects: { level_loss: true },
+      dispellable: nil,
+      notes: "Warding (wiki: CS 448, \"[You lose 6 levels!]\"). Tell is the clawed-finger point shared with Confusion and Thought Lash. The bar renders before any onset text. Duration not measured."
+    },
+    {
+      id: :thought_lash,
+      name: "Thought Lash (1210)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 10,
+      effects: { crit_padding_penalty: true },
+      dispellable: nil,
+      notes: "Warding (CS 448 seen). \"A crackling whip of energy lashes out at you!\" then damage, then \"The residual psychic energy from the attack surrounds you.\" with an 8-10s bar."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -194,6 +235,24 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      mindwipe: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "You suddenly feel very drained and confused as your memories slip away."
+      ],
+      thought_lash: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "A crackling whip of energy lashes out at you!",
+        "The residual psychic energy from the attack surrounds you."
+      ],
+      vertigo: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "A black ball full of pinpoints of light forms before the psionicist.  It quickly grows in size until {pronoun} unleashes the dark cloud before {pronoun} and the dark cloud instantaneously spreads throughout the entire area!"
+      ],
+      confusion: [
+        "An ethereal triton psionicist points a clawed finger toward you!",
+        "You are confused!"
+      ]
+    }
   }
 }

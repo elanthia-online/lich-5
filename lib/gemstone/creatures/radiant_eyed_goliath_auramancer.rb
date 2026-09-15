@@ -10,11 +10,11 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
-  witherable: nil,
+  limbs: true,
+  witherable: true, # Wither (1115) worked 22x in session logs
   sympathy: nil,
   muggable: nil,
-  sleepable: nil,
+  sleepable: true, # Sleep (501) worked 3x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [
@@ -76,7 +76,9 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Prayer of Protection (303)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

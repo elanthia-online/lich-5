@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: false,
@@ -33,10 +33,6 @@
     {
       name: "Greymist Woods",
       uids: [3021001..3021016, 3022001..3022034]
-    },
-    {
-      name: "unmapped",
-      uids: [5006010..5006039]
     }
   ],
   attack_attributes: {

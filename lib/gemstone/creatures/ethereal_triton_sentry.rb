@@ -87,12 +87,30 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Fasthr's Reward (115)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Spirit Warding II (107)",
+      "Elemental Defense I (401)",
+      "Spirit Warding I (101)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :song_of_depression,
+      name: "Song of Depression (1015)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { as_ds_penalty: true },
+      dispellable: nil,
+      notes: "Warding, CS 491."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -152,6 +170,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      song_of_depression: [
+        "An ethereal triton sentry's hollow eye sockets become clouded with a pale grey iridescence.  Memories of tragedy and loss bubble to the front of your mind, impinging upon your will.",
+        "You struggle with the debilitating force!"
+      ]
+    }
   }
 }

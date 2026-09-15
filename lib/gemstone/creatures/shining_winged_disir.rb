@@ -6,10 +6,10 @@
   level: 114,
   family: "",
   type: "",
-  undead: false,
+  undead: true, # triggers sheer fear (66 "waves of evil emanating from the winged disir" lines, Cogruel 2026-08-30), so undead
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: nil,
@@ -188,7 +188,9 @@
       ]
     },
     info: {
-      general: [],
+      general: [
+        "* Undead for Voln purposes (sheer fear names the disir as the source). GM lore: the disir in the Pits are hyper-aggressive because of a lingering dark influence down there that predates Zeban; they are valkyries attending the unquiet dead, and Voln gives credit because it only cares that undead be put down."
+      ],
       class_tips: {
         cleric: [
           "* Disirs behave somewhat unpredictably under the effects of Prayer of Holding (301), as sometimes it'll keep them bound while other times they'll shake it off immediately and counterattack in a single combat round. The fact that it even sometimes holds them makes it viable as a setup leading into Condemn (309), though, as it just means binding them repeatedly until it sticks."

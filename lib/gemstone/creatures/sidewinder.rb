@@ -29,10 +29,6 @@
     {
       name: "Shadow of the Sanctum",
       uids: [4216141..4216141, 4216148..4216148]
-    },
-    {
-      name: "unmapped",
-      uids: [4216142..4216147]
     }
   ],
   attack_attributes: {

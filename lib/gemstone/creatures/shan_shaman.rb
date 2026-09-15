@@ -59,7 +59,14 @@
     mjs_td: (311..320),
     mns_td: (311..320),
     mnm_td: (219..228),
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Warding II (107)",
+      "Prayer of Protection (303)",
+      "Spirit Defense (103)",
+      "Spirit Strike (117)",
+      "Spirit Warding I (101)",
+      "Wall of Force (140)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

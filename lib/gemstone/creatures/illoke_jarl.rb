@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -124,9 +124,9 @@
     mns_td: (351..366),
     mnm_td: (280..289),
     defensive_spells: [
-      "Divine Shield",
-      "Fasthr's Reward",
-      "Lesser Shroud",
+      "Divine Shield (1609)",
+      "Fasthr's Reward (115)",
+      "Lesser Shroud (120)",
       "Song of Unravelling (1013)"
     ],
     defensive_abilities: [],

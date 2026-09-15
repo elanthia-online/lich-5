@@ -27,10 +27,6 @@
   size: "small",
   areas: [
     {
-      name: "unmapped",
-      uids: [14010001..14010032]
-    },
-    {
       name: "Barefoot Hill",
       uids: [14010101..14010118]
     }

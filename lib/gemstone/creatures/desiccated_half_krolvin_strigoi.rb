@@ -10,7 +10,7 @@
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Crawling Shore",
       uids: [4576101..4576126, 4576151..4576160]
-    },
-    {
-      name: "unmapped",
-      uids: [4576127..4576150]
     }
   ],
   attack_attributes: {

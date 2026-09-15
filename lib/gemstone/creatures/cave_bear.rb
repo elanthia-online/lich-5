@@ -29,10 +29,6 @@
     {
       name: "Hidden Vale",
       uids: [40001..40013, 40020..40020]
-    },
-    {
-      name: "unmapped",
-      uids: [40014..40019]
     }
   ],
   attack_attributes: {

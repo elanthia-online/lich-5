@@ -30,10 +30,6 @@
     {
       name: "Elemental Confluence",
       uids: [580001..580025, 581001..581025, 582001..582025, 583001..583025, 584001..584025, 585001..585025, 586001..586025, 587001..587025, 588001..588025]
-    },
-    {
-      name: "unmapped",
-      uids: [4070501..4070519]
     }
   ],
   attack_attributes: {
@@ -83,12 +79,12 @@
     mns_td: 400,
     mnm_td: nil,
     defensive_spells: [
-      "Elemental Barrier",
-      "Elemental Bias",
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Elemental Targeting"
+      "Elemental Barrier (430)",
+      "Elemental Bias (508)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Targeting (425)"
     ],
     defensive_abilities: [],
     special_defenses: []

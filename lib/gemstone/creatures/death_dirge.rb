@@ -37,10 +37,6 @@
     {
       name: "The Graveyard",
       uids: [18042..18044, 18048..18052, 2162001..2162015]
-    },
-    {
-      name: "unmapped",
-      uids: [18045..18047]
     }
   ],
   attack_attributes: {

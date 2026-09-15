@@ -4,12 +4,12 @@
   url: "https://gswiki.play.net/Stunted_halfling_bloodspeaker",
   picture: "",
   level: 103,
-  family: "humanoid",
+  family: "Humanoid",
   type: "biped",
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -134,7 +134,18 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :corrupt_essence,
+      name: "Corrupt Essence (703)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 17,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 461-464."
+    }
+  ],
   alchemy: [],
   equipment: [
     "a gnarled dark wooden crook adorned with sinuous patterns",
@@ -200,6 +211,10 @@
       ]
     },
     triggers: {
+      corrupt_essence: [
+        "A stunted halfling bloodspeaker points a blunt, swollen finger at you!",
+        "You feel weakened as a blood red haze forms around you."
+      ],
       health_regen: [
         "A stunted halfling bloodspeaker raises {pronoun} malformed fingers overhead, contorting them into jarring patterns as globules of carmine radiance pirouette through the air around {pronoun}. The spinning beads of radiance gather into a dripping sanguine orb that hovers in the air nearby, pulsing with otherworldly light.",
         "Eldritch radiance from a swirling sanguine orb bathes a stunted halfling bloodspeaker, causing {pronoun} wounds to sluggishly tug themselves closed in the sanguine light."

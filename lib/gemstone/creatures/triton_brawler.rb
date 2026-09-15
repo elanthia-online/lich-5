@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -77,7 +77,11 @@
         name: "Punch"
       }
     ],
-    special_abilities: [],
+    special_abilities: [
+      {
+        name: "silencing strike"
+      }
+    ],
     special_notes: []
   },
   defense_attributes: {
@@ -111,7 +115,18 @@
     ]
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :silencing_strike,
+      name: "Silencing strike",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { silenced: true },
+      dispellable: nil,
+      notes: "Correlation, not a cast: a Silenced Debuffs bar (30s) follows the brawler's quick fist strike to the lower back, with no spell tell or onset text. Mechanism unconfirmed."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -195,6 +210,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      silencing_strike: [
+        "A triton brawler manages a quick strike at your lower back with a fist!",
+        "The triton brawler has excellent positioning against you."
+      ]
+    }
   }
 }

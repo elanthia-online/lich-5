@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: false,
@@ -29,10 +29,6 @@
     {
       name: "The Broken Lands",
       uids: [306016..306048, 487002..487007, 487010..487014, 487016..487016, 487018..487018, 487044..487048]
-    },
-    {
-      name: "unmapped",
-      uids: [487015..487015, 487017..487017]
     }
   ],
   attack_attributes: {
@@ -185,7 +181,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :elemental_saturation,
+      name: "Elemental Saturation (413)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { bolt_ds_penalty: true },
+      dispellable: nil,
+      notes: "Warding, CS 188."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -279,6 +286,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      elemental_saturation: [
+        "A dark shadow passes over you."
+      ]
+    }
   }
 }

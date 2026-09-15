@@ -12,7 +12,7 @@
   undead: "",                   # boolean
   blood: nil,               # true/false/nil if unknown - corporeal, flesh & blood
   bones: nil,               # true/false/nil if unknown - has a skeletal structure
-  limbs: nil,               # true/false/nil - has limbs Limb Disruption (708) can target ("has no limbs left!" on a fresh target = false)
+  limbs: nil,               # true/false/nil - has limbs Limb Disruption (708) can target ("has no limbs left!" after repeated casts = true; a refusal on the very first cast = false)
   witherable: nil,           # true/false/nil - has a body Wither (1115) can attack
   sympathy: nil,             # true/false/nil - can be affected by Sympathy (1120)
   muggable: nil, # true/false/nil if unknown - typically humanoid + carries coin

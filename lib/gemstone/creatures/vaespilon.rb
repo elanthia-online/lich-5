@@ -87,7 +87,8 @@
       "Elemental Defense I (401)",
       "Elemental Defense II (406)",
       "Elemental Defense III (414)",
-      "Elemental Barrier (430)"
+      "Elemental Barrier (430)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []

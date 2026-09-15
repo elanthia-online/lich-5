@@ -64,7 +64,12 @@
     mjs_td: 295,
     mns_td: 295,
     mnm_td: 361,
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Defense II (406)",
+      "Spirit Warding II (107)",
+      "Spirit Defense (103)",
+      "Spirit Warding I (101)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

@@ -10,11 +10,11 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
-  witherable: nil,
+  limbs: true,
+  witherable: true, # Wither (1115) worked 3x in session logs
   sympathy: nil,
   muggable: nil,
-  sleepable: nil,
+  sleepable: true, # Sleep (501) worked 6x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [
@@ -35,7 +35,11 @@
     physical_attacks: [],
     bolt_spells: [],
     warding_spells: [],
-    offensive_spells: [],
+    offensive_spells: [
+      {
+        name: "Interference (212)"
+      }
+    ],
     maneuvers: [
       {
         name: "Bearhug"
@@ -79,12 +83,35 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Mage Armor (520)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "Tell: snaps fingers, then draws a large sign in the air. Autosuccess. Wiki gives 30s on players. Penalty size not measured."
+    },
+    {
+      id: :bombing_run,
+      name: "Bombing Run",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 100,
+      effects: { burning_dot: "Immolation (519) Debuffs bar" },
+      dispellable: nil,
+      notes: "Tell: two fingers on the white stone amulet, airship payload. SMR. On a hit the flames keep burning each cycle; Immolation bar shows 1:40."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -146,6 +173,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "A burly goliath engineer draws a large sign in the air before him...",
+        "The spirits swirl around you, distracting your every action."
+      ],
+      bombing_run: [
+        "The hungry tongues of flame engulf you in a searing embrace!",
+        "The flames around you continue to burn!"
+      ]
+    }
   }
 }

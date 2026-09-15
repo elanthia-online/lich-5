@@ -105,7 +105,8 @@
       "Fasthr's Reward (115)",
       "Lesser Shroud (120)",
       "Mantle of Faith (1601)",
-      "Divine Shield (1609)"
+      "Divine Shield (1609)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []

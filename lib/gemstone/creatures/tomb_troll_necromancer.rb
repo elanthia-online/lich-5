@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -90,7 +90,9 @@
     defensive_spells: [
       "Elemental Defense II (406)",
       "Fasthr's Reward (115)",
-      "Mass Elemental Defense (419)"
+      "Mass Elemental Defense (419)",
+      "Spirit Warding II (107)",
+      "Elemental Defense III (414)"
     ],
     defensive_abilities: [],
     special_defenses: []

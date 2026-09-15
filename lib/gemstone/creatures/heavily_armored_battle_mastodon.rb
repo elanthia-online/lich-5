@@ -4,12 +4,12 @@
   url: "https://gswiki.play.net/Heavily_armored_battle_mastodon",
   picture: "",
   level: 102,
-  family: "elephantid",
+  family: "Elephantid",
   type: "quadruped",
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: false,
   muggable: true,
@@ -86,7 +86,11 @@
         name: "Charge"
       }
     ],
-    special_abilities: [],
+    special_abilities: [
+      {
+        name: "tremors"
+      }
+    ],
     special_notes: []
   },
   defense_attributes: {
@@ -113,7 +117,18 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :tremors,
+      name: "Tremors",
+      type: :debuff,
+      target: :area,
+      typical_duration_s: 20,
+      effects: { feeble: true },
+      dispellable: nil,
+      notes: "Foot slam, no roll line. Everyone in the room can be knocked down (\"loses her balance and falls over\") and gets the Feeble bar (20s) with \"You feel weak and feeble, your movements sluggish.\" Ends with \"shakes off his weakness.\" Stat penalty not measured."
+    }
+  ],
   alchemy: [],
   equipment: [
     "some studded leather barding"
@@ -179,6 +194,12 @@
         "A heavily armored battle mastodon slams a gigantic foot down, sending tremors rippling outward from the point of impact!"
       ]
     },
+    triggers: {
+      tremors: [
+        "The ground begins to shake violently, making it hard to stand.",
+        "You feel weak and feeble, your movements sluggish."
+      ]
+    }
   }
 }
 

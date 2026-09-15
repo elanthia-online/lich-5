@@ -29,10 +29,6 @@
     {
       name: "Abbey",
       uids: [4132201..4132240, 4132243..4132248]
-    },
-    {
-      name: "unmapped",
-      uids: [4132241..4132242]
     }
   ],
   attack_attributes: {
@@ -86,7 +82,9 @@
     mjs_td: (252..306),
     mns_td: (252..306),
     mnm_td: (216..226),
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Barrier (430)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

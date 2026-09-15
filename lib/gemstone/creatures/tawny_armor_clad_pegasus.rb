@@ -10,11 +10,11 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: nil,
   sympathy: nil,
   muggable: nil,
-  sleepable: nil,
+  sleepable: true, # Sleep (501) worked 6x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [

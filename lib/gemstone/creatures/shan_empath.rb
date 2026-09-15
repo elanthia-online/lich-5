@@ -69,13 +69,27 @@
     mns_td: 295,
     mnm_td: (206..215),
     defensive_spells: [
-      "Troll's Blood"
+      "Troll's Blood (1125)",
+      "Spirit Warding II (107)",
+      "Spirit Strike (117)",
+      "Heroism (215)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -150,6 +164,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

@@ -27,10 +27,6 @@
     {
       name: "Sailor's Grief",
       uids: [7150101..7150105, 7150115..7150116, 7150201..7150229, 7150701..7150733]
-    },
-    {
-      name: "unmapped",
-      uids: [7150117..7150117]
     }
   ],
   attack_attributes: {
@@ -63,9 +59,7 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [
-      "-->"
-    ],
+    defensive_spells: [],
     defensive_abilities: [],
     special_defenses: [
       "-->"

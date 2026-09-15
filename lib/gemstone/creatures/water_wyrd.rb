@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: false,
-  limbs: nil,
+  limbs: true,
   witherable: false,
   sympathy: true,
   muggable: true,
@@ -30,10 +30,6 @@
     {
       name: "The Ruined Tower",
       uids: [305023..305030, 305032..305038]
-    },
-    {
-      name: "unmapped",
-      uids: [305031..305031]
     }
   ],
   attack_attributes: {
@@ -98,8 +94,8 @@
     mns_td: (163..172),
     mnm_td: (122..132),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)"
     ],
     defensive_abilities: [],
     special_defenses: []

@@ -29,10 +29,6 @@
     {
       name: "Gossamer Valley",
       uids: [13023013..13023054, 13023076..13023076]
-    },
-    {
-      name: "unmapped",
-      uids: [13023055..13023075]
     }
   ],
   attack_attributes: {
