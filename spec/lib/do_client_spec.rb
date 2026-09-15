@@ -230,7 +230,7 @@ RSpec.describe 'do_client command dispatch' do
         do_client(';force foo bar baz')
       RUBY
       expect(out).to include('START ["foo", {force: true}]').or include('START ["foo", {:force=>true}]')
-      expect(out).to include('"foo", "bar baz"')
+      expect(out).to include('START ["foo", "bar baz", {force: true}]').or include('START ["foo", "bar baz", {:force=>true}]')
     end
 
     it 'treats an unmatched command as a script name, with and without args' do
