@@ -2224,169 +2224,34 @@ $link_highlight_end = ''
 $speech_highlight_start = ''
 $speech_highlight_end = ''
 
+require File.join(LIB_DIR, 'common', 'markup.rb')
+
+# Frontend markup translation lives in Lich::Common::Markup. These six names
+# stay global because scripts in the wild call them unqualified.
+
 def fb_to_sf(line)
-  begin
-    return line if line == "\r\n"
-
-    line = line.gsub(/<c>/, "")
-    return nil if line.gsub("\r\n", '').length < 1
-
-    return line
-  rescue
-    $_CLIENT_.puts "--- Error: fb_to_sf: #{$!}"
-    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
-    Lich.log("--- Error: fb_to_sf: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
-    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
-    Lich.log("Line: #{line}")
-  end
+  Lich::Common::Markup.fb_to_sf(line)
 end
 
 def sf_to_wiz(line, bypass_multiline: false)
-  begin
-    return line if line == "\r\n"
-
-    unless bypass_multiline
-      if $sftowiz_multiline
-        $sftowiz_multiline = $sftowiz_multiline + line
-        line = $sftowiz_multiline
-      end
-      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-        $sftowiz_multiline = line
-        return nil
-      end
-      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-        $sftowiz_multiline = line
-        return nil
-      end
-      $sftowiz_multiline = nil
-    end
-    if line =~ /<LaunchURL src="(.*?)" \/>/
-      $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
-    end
-    if line =~ /<preset id='speech'>(.*?)<\/preset>/m
-      line = line.sub(/<preset id='speech'>.*?<\/preset>/m, "#{$speech_highlight_start}#{$1}#{$speech_highlight_end}")
-    end
-    if line =~ /<pushStream id="thoughts"[^>]*>\[([^\\]+?)\]\s*(.*?)<popStream\/>/m
-      thought_channel = $1
-      msg = $2
-      thought_channel.gsub!(' ', '-')
-      msg.gsub!('<pushBold/>', '')
-      msg.gsub!('<popBold/>', '')
-      line = line.sub(/<pushStream id="thoughts".*<popStream\/>/m, "You hear the faint thoughts of [#{thought_channel}]-ESP echo in your mind:\r\n#{msg}")
-    end
-    if line =~ /<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m
-      line = line.sub(/<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m, "The Symbol of Thought begins to burn in your mind and you hear #{$1} thinking, #{$2}\r\n")
-    end
-    if line =~ /<stream id="thoughts"[^>]*>([^:]+): (.*?)<\/stream>/m
-      line = line.sub(/<stream id="thoughts"[^>]*>.*?<\/stream>/m, "You hear the faint thoughts of #{$1} echo in your mind:\r\n#{$2}")
-    end
-    if line =~ /<pushStream id="familiar"[^>]*>(.*)<popStream\/>/m
-      line = line.sub(/<pushStream id="familiar"[^>]*>.*<popStream\/>/m, "\034GSe\r\n#{$1}\034GSf\r\n")
-    end
-    if line =~ /<pushStream id="death"\/>(.*?)<popStream\/>/m
-      line = line.sub(/<pushStream id="death"\/>.*?<popStream\/>/m, "\034GSw00003\r\n#{$1}\034GSw00004\r\n")
-    end
-    if line =~ /<style id="roomName" \/>(.*?)<style id=""\/>/m
-      line = line.sub(/<style id="roomName" \/>.*?<style id=""\/>/m, "\034GSo\r\n#{$1}\034GSp\r\n")
-    end
-    line.gsub!(/<style id="roomDesc"\/><style id=""\/>\r?\n/, '')
-    if line =~ /<style id="roomDesc"\/>(.*?)<style id=""\/>/m
-      desc = $1.gsub(/<a[^>]*>/, $link_highlight_start).gsub("</a>", $link_highlight_end)
-      line = line.sub(/<style id="roomDesc"\/>.*?<style id=""\/>/m, "\034GSH\r\n#{desc}\034GSI\r\n")
-    end
-    line = line.gsub("</prompt>\r\n", "</prompt>")
-    line = line.gsub("<pushBold/>", "\034GSL\r\n")
-    line = line.gsub("<popBold/>", "\034GSM\r\n")
-    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-    line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-    line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-    line = line.gsub(/<[^>]+>/, '')
-    line = line.gsub('&gt;', '>')
-    line = line.gsub('&lt;', '<')
-    line = line.gsub('&amp;', '&')
-    return nil if line.gsub("\r\n", '').length < 1
-
-    return line
-  rescue
-    $_CLIENT_.puts "--- Error: sf_to_wiz: #{$!}"
-    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
-    Lich.log("--- Error: sf_to_wiz: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
-    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
-    Lich.log("Line: #{line}")
-  end
+  Lich::Common::Markup.sf_to_wiz(line, bypass_multiline: bypass_multiline)
 end
 
-# Strip game markup from a server-stream fragment.
+# See Lich::Common::Markup.strip_xml for the multiline contract.
 #
-# @param line [String] one server-stream fragment
-# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
-#   default) the fragment is stripped statelessly. When given, unfinished
-#   pushStream content is accumulated in a process-global, type-keyed buffer
-#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
-#   split across reads is reassembled before stripping. Pass it as a keyword
-#   (type: "main"); the keyword form is the supported call shape.
-# @return [String, nil]
-#   - the stripped text when printable content remains
-#   - nil when the line is entirely whitespace, when stripping leaves no
-#     printable text, or while a typed multiline fragment is still being
-#     accumulated
-# @note nil is a normal return, not an error. Callers commonly feed the result
-#   straight to String#split; that is safe because NilClass#split is patched to
-#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+# @note nil is a normal return, not an error. Callers commonly feed the
+#   result straight to String#split; that is safe because NilClass#split is
+#   patched to return [] (see lib/common/class_exts/nilclass.rb).
 def strip_xml(line, type: nil)
-  if type.nil?
-    strip_xml_simple(line)
-  else
-    strip_xml_multiline(line, type)
-  end
+  Lich::Common::Markup.strip_xml(line, type: type)
 end
-
-def strip_xml_simple(line)
-  return nil if line == "\r\n" # short-circuit empty links
-
-  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-  line = line.gsub(/<[^>]+>/, '')
-  line = Lich::Common::XmlEntities.decode(line)
-
-  return nil if line.match?(/\A\s*\z/)
-
-  line
-end
-
-def strip_xml_multiline(line, type)
-  $strip_xml_multiline ||= {}
-  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
-  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
-    $strip_xml_multiline[type] = line
-    return nil
-  end
-  $strip_xml_multiline[type] = nil
-  strip_xml_simple(line)
-end
-
-# Internal helpers for strip_xml; not part of the script-facing API.
-private :strip_xml_simple, :strip_xml_multiline
 
 def monsterbold_start
-  if Frontend.supports_gsl?
-    "\034GSL\r\n"
-  elsif Frontend.supports_xml?
-    '<pushBold/>'
-  else
-    ''
-  end
+  Lich::Common::Markup.monsterbold_start
 end
 
 def monsterbold_end
-  if Frontend.supports_gsl?
-    "\034GSM\r\n"
-  elsif Frontend.supports_xml?
-    '<popBold/>'
-  else
-    ''
-  end
+  Lich::Common::Markup.monsterbold_end
 end
 
 # Multiple frontends may attach to one persistent detachable listener. The
