@@ -415,6 +415,28 @@ RSpec.describe Lich::InternalAPI::ActiveSessions do
       expect(described_class.instance_variable_get(:@lock_file)).to be_nil
     end
 
+    it 'leaves stale discovery and releases ownership when every delete retry is exhausted' do
+      expect(described_class.send(:acquire_ownership_lock)).to be(true)
+      write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
+      allow(described_class).to receive(:sleep)
+
+      delete_attempts = 0
+      allow(File).to receive(:delete).and_wrap_original do |original, path|
+        if path == discovery_file
+          delete_attempts += 1
+          raise Errno::EACCES, 'destination remains open'
+        end
+
+        original.call(path)
+      end
+
+      described_class.stop_service!
+
+      expect(delete_attempts).to eq(described_class::DISCOVERY_FILESYSTEM_RETRY_DELAYS.length + 1)
+      expect(File.exist?(discovery_file)).to be(true)
+      expect(described_class.instance_variable_get(:@lock_file)).to be_nil
+    end
+
     it 'does not treat matching pid metadata as ownership without the native lock' do
       write_discovery_file(owner_pid: Process.pid, auth_token: 'shared-token', port: 46_000)
 
