@@ -4,7 +4,7 @@ require_relative '../../../spec_helper'
 require 'tmpdir'
 require 'gemstone/combat/recorder'
 require 'gemstone/combat/processor'
-require 'gemstone/combat/observers'
+require 'common/events'
 
 # End-to-end coverage for the SQLite Combat::Recorder: the wiring the PR
 # shipped with zero first-party callers. These drive a real on-disk database
@@ -19,14 +19,14 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
   # Make a unique dir, run, then best-effort remove (ignoring locks that the
   # GC hasn't released yet; the OS reclaims the temp dir regardless).
   before do
-    Lich::Gemstone::Combat::Observers.clear!
+    Lich::Common::Events.clear!('combat.')
 
     @tmpdir = Dir.mktmpdir('combat-recorder')
     @db_path = File.join(@tmpdir, 'test.db')
   end
 
   after do
-    Lich::Gemstone::Combat::Observers.clear!
+    Lich::Common::Events.clear!('combat.')
     GC.start
     FileUtils.remove_entry(@tmpdir)
   rescue StandardError
@@ -68,12 +68,12 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.start_session(character: 'Tester')
       received = []
       allow(Lich).to receive(:log)
-      Lich::Gemstone::Combat::Observers.on(:recorded_attack) { raise 'observer failed' }
-      Lich::Gemstone::Combat::Observers.on(:recorded_attack) { |_, receipt| received << receipt }
+      Lich::Common::Events.on('combat.recorded_attack') { raise 'observer failed' }
+      Lich::Common::Events.on('combat.recorded_attack') { |_, receipt| received << receipt }
       expect { rec.record(:attack, attack_event) }.not_to raise_error
       expect(count('attacks')).to eq(1)
       expect(received.size).to eq(1)
-      expect(Lich).to have_received(:log).with(/Combat::Observers subscriber \(recorded_attack\): observer failed/)
+      expect(Lich).to have_received(:log).with(/Events subscriber .*\(combat\.recorded_attack\): observer failed/)
       rec.close
     end
 
@@ -82,7 +82,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec.start_session(character: 'Tester')
       allow(Lich).to receive(:log)
       allow(Lich::Gemstone::Combat::Processor).to receive(:observation_source).and_raise('provenance failed')
-      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+      expect(Lich::Common::Events).not_to receive(:emit)
 
       expect(rec.record(:attack, attack_event)).to be_nil
       rec.record(:status, { id: 101, name: 'a cave lizard', status: :prone, action: :add })
@@ -109,7 +109,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec = new_recorder
       sid = rec.start_session(character: 'Tester')
       received = []
-      Lich::Gemstone::Combat::Observers.on(:recorded_attack) do |_, receipt|
+      Lich::Common::Events.on('combat.recorded_attack') do |_, receipt|
         expect(receipt[:session_id]).to eq(sid)
         expect(receipt[:database]).to eq(File.realpath(@db_path))
         expect(receipt[:file_identity]).to eq([File.stat(@db_path).dev, File.stat(@db_path).ino])
@@ -130,7 +130,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       rec = new_recorder
       rec.start_session(character: 'Tester')
       allow(rec).to receive(:insert_hit).and_raise(SQLite3::Exception, 'fixture failure')
-      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+      expect(Lich::Common::Events).not_to receive(:emit)
       rec.record(:attack, attack_event)
       expect(count('attacks')).to eq(0)
       rec.close
@@ -146,7 +146,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
           raise SQLite3::Exception, 'failure before commit'
         end
       end
-      expect(Lich::Gemstone::Combat::Observers).not_to receive(:emit)
+      expect(Lich::Common::Events).not_to receive(:emit)
 
       rec.record(:attack, attack_event)
       expect(count('attacks')).to eq(0)

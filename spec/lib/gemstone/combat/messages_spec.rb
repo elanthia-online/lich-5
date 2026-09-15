@@ -19,11 +19,40 @@ require_relative '../../../../lib/gemstone/combat/messages'
 # The subscription gate: nothing scans, and no hook exists, until a
 # message event has a subscriber; only the subscribed families scan.
 RSpec.describe Lich::Gemstone::Combat::Messages do
-  let(:observers) { Lich::Gemstone::Combat::Observers }
+  let(:events) { Lich::Common::Events }
 
   after do
-    observers.clear!
+    events.clear!('combat.')
     described_class.shutdown
+  end
+
+  it 'takes the hook down when a named subscription is re-registered on another family' do
+    hooks = {}
+    stub_const('DownstreamHook', Class.new do
+      define_singleton_method(:add) { |name, action, persist: nil| hooks[name] = [action, persist] }
+      define_singleton_method(:remove) { |name| hooks.delete(name) }
+    end)
+    events.on('combat.bolted', name: 'supervisor') { nil }
+    expect(described_class.installed?).to be(true)
+    events.on('go2.status', name: 'supervisor') { nil }
+    expect(described_class.active_families).to eq([])
+    expect(described_class.installed?).to be(false)
+    expect(hooks).to be_empty
+    events.off('supervisor')
+  end
+
+  it 'leaves active_families and installed? consistent when the hook call raises' do
+    stub_const('DownstreamHook', Class.new do
+      define_singleton_method(:add) { |_name, _action, **| raise 'hook registry down' }
+      define_singleton_method(:remove) { |_name| nil }
+    end)
+    allow(Lich).to receive(:log)
+    events.on('combat.bolted', name: 'probe') { nil }
+    # Events swallowed the raise; @active must not have been committed ahead of it.
+    expect(described_class.installed?).to be(false)
+    expect(described_class.active_families).to eq([])
+    expect(Lich).to have_received(:log).with(/Events on_change: hook registry down/)
+    events.off('probe')
   end
 
   it 'has no active family and no hook with nobody subscribed' do
@@ -33,36 +62,36 @@ RSpec.describe Lich::Gemstone::Combat::Messages do
   end
 
   it 'activates only the subscribed family, and drops it on unsubscribe' do
-    handler = observers.on(:bolted) { nil }
+    handler = events.on('combat.bolted') { nil }
     expect(described_class.active_families.map(&:name)).to eq([:ambush])
     expect(described_class.scan('You bolt!').map(&:first)).to eq([:bolted])
     expect(described_class.scan('You shiver slightly as an invisible rash covers your body.')).to eq([]) # hazard not subscribed
-    observers.off(handler)
+    events.off(handler)
     expect(described_class.active_families).to eq([])
   end
 
   it 'a combat subscription activates nothing' do
-    observers.on(:damage) { nil }
+    events.on('combat.damage') { nil }
     expect(described_class.active_families).to eq([])
   end
 
   it ':any activates every family' do
-    observers.on { nil }
+    events.on('combat.*') { nil }
     expect(described_class.active_families.size).to eq(described_class.families.size)
   end
 
   it 'process emits the events with the raw line' do
     seen = []
-    observers.on(:ambusher, :bolted) { |type, data| seen << [type, data] }
+    events.on('combat.ambusher', 'combat.bolted') { |topic, data| seen << [topic, data] }
     described_class.process('You bolt!')
-    expect(seen).to eq([[:bolted, { raw: 'You bolt!' }]])
+    expect(seen).to eq([['combat.bolted', { raw: 'You bolt!' }]])
   end
 
   it 'delivers enqueued lines through the worker' do
     seen = Queue.new
-    observers.on(:itchy_curse) { |type, _| seen << type }
+    events.on('combat.itchy_curse') { |topic, _| seen << topic }
     described_class.enqueue('You shiver slightly as an invisible rash covers your body.')
-    expect(seen.pop).to eq(:itchy_curse)
+    expect(seen.pop).to eq('combat.itchy_curse')
     expect(described_class.stats[:matched]).to be >= 1
   end
 
@@ -77,12 +106,12 @@ RSpec.describe Lich::Gemstone::Combat::Messages do
       define_singleton_method(:add) { |name, action, persist: nil| hooks[name] = [action, persist] }
       define_singleton_method(:remove) { |name| hooks.delete(name) }
     end)
-    handler = observers.on(:rooted) { nil }
+    handler = events.on('combat.rooted') { nil }
     expect(described_class.installed?).to be(true)
     expect(hooks.keys).to eq([described_class::HOOK_ID])
     expect(hooks.values.first.last).to be(true)
     expect(hooks.values.first.first.call('a line')).to eq('a line')
-    observers.off(handler)
+    events.off(handler)
     expect(described_class.installed?).to be(false)
     expect(hooks).to be_empty
   end
@@ -125,7 +154,7 @@ RSpec.describe Lich::Gemstone::Combat::Messages do
       stale = Thread.new { described_class.refresh! }
       paused.pop # stale has published its empty @active, not yet uninstalled
 
-      observers.on(:rooted) { nil } # subscribes, refreshes, installs
+      events.on('combat.rooted') { nil } # subscribes, refreshes, installs
 
       resume << :go
       stale.join(2)

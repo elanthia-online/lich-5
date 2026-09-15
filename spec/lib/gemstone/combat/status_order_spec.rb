@@ -42,9 +42,9 @@ RSpec.describe Lich::Gemstone::Combat::Processor do
       track_damage: true, track_wounds: true
     )
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
-    stub_const('Lich::Gemstone::Combat::Observers', Module.new)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:emit)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:any_for?).and_return(false)
+    stub_const('Lich::Common::Events', Module.new)
+    allow(Lich::Common::Events).to receive(:emit)
+    allow(Lich::Common::Events).to receive(:any_for?).and_return(false)
     subject_creature = creature
     registry = Class.new do
       define_singleton_method(:[]) { |_id| subject_creature }

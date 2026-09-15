@@ -7,7 +7,7 @@
 
 require_relative '../creature'
 require_relative '../critranks'
-require_relative 'observers'
+require_relative '../../common/events'
 
 module Lich
   module Gemstone
@@ -74,7 +74,7 @@ module Lich
         # Include attack details for persistent recording or transient observers.
         # @return [Boolean] whether attack events are currently requested
         def attack_events_requested?
-          Tracker.settings[:emit_attacks] || Observers.any_for?(:attack)
+          Tracker.settings[:emit_attacks] || Lich::Common::Events.any_for?('combat.attack')
         end
 
         # Scalar allowlist copied before any event retains it. Metadata is not
@@ -187,7 +187,7 @@ module Lich
             @deferred_emits << [type, payload]
           else
             payload.delete(:_event)
-            Observers.emit(type, payload)
+            Lich::Common::Events.emit("combat.#{type}", payload)
           end
         end
 
@@ -196,7 +196,7 @@ module Lich
           @deferred_emits = nil
           pending&.each do |type, payload|
             payload.delete(:_event) # unresolved (no events emitted this chunk)
-            Observers.emit(type, payload)
+            Lich::Common::Events.emit("combat.#{type}", payload)
           end
         end
 
@@ -1838,7 +1838,7 @@ module Lich
           #     complete regardless of settings - and therefore BEFORE the
           #     creature is mutated (an :attack subscriber reading
           #     Creature[id] sees pre-swing state; per-fact emits see post).
-          Observers.emit(:attack, event) if include_attack_events
+          Lich::Common::Events.emit('combat.attack', event) if include_attack_events
 
           # A nearby player's attack (foreign_caster) DOES resolve onto a
           # creature we can see, so unlike inbound/foreign_target it passes
@@ -1891,7 +1891,7 @@ module Lich
               damage = hit[:damage]
               creature.add_damage(damage)
               total_damage += damage
-              Observers.emit(:damage, id: creature.id, name: creature.name,
+              Lich::Common::Events.emit('combat.damage', id: creature.id, name: creature.name,
                                       attack: event[:name], amount: damage)
               record_delta(creature) { |d| d[:damage] += damage }
               respond "  +#{damage} damage" if Tracker.debug?(:verbose)
@@ -1918,7 +1918,7 @@ module Lich
                 damage = hit[:damage]
                 f_creature.add_damage(damage)
                 total_damage += damage
-                Observers.emit(:damage, id: f_creature.id, name: f_creature.name,
+                Lich::Common::Events.emit('combat.damage', id: f_creature.id, name: f_creature.name,
                                         attack: event[:name], flare: flare[:name], amount: damage)
                 record_delta(f_creature) { |d| d[:damage] += damage }
                 respond "  +#{damage} damage (flare: #{flare[:name]})" if Tracker.debug?(:verbose)
@@ -1942,7 +1942,7 @@ module Lich
             if creature
               event[:statuses].each do |status|
                 creature.add_status(status)
-                Observers.emit(:status, id: creature.id, name: creature.name,
+                Lich::Common::Events.emit('combat.status', id: creature.id, name: creature.name,
                                         status: status, action: :add)
                 record_delta(creature) { |d| d[:statuses] << status }
                 respond "  +status: #{status}" if Tracker.debug?(:verbose)
@@ -2061,7 +2061,7 @@ module Lich
 
               @death_announced[id] = true
               @death_announced.shift if @death_announced.size > 1_000 # bound the memory
-              Observers.emit(:status, id: creature.id, name: creature.name,
+              Lich::Common::Events.emit('combat.status', id: creature.id, name: creature.name,
                                       status: 'dead', action: :add)
               respond "[Combat] #{creature.name} (#{id}) confirmed dead" if Tracker.debug?(:verbose)
             end
@@ -2119,7 +2119,7 @@ module Lich
             body_part = map_critranks_to_body_part(crit[:location])
             if body_part
               creature.add_injury(body_part, crit[:wound_rank])
-              Observers.emit(:wound, id: creature.id, name: creature.name,
+              Lich::Common::Events.emit('combat.wound', id: creature.id, name: creature.name,
                                      attack: event[:name], flare: flare, location: crit[:location],
                                      body_part: body_part, rank: crit[:wound_rank])
               record_delta(creature) { |d| d[:wounds] << "#{body_part}:#{crit[:wound_rank]}" }
@@ -2141,7 +2141,7 @@ module Lich
           # Amputation is a distinct terminal state, not accumulated rank.
           if crit[:amputated] && (part = map_critranks_to_body_part(crit[:location]))
             creature.amputate!(part)
-            Observers.emit(:amputation, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.amputation', id: creature.id, name: creature.name,
                                         attack: event[:name], flare: flare, location: crit[:location],
                                         body_part: part)
             record_delta(creature) { |d| d[:wounds] << "#{part}:AMPUTATED" }
@@ -2151,7 +2151,7 @@ module Lich
           # Check for fatal critical hit
           if crit[:fatal]
             creature.mark_fatal_crit!
-            Observers.emit(:fatal_crit, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.fatal_crit', id: creature.id, name: creature.name,
                                         attack: event[:name], flare: flare, location: crit[:location])
             record_delta(creature) { |d| d[:statuses] << 'FATAL' }
             respond "  +FATAL CRIT: #{crit[:location]} - creature died from crit, not HP loss" if Tracker.debug?(:verbose)
@@ -2194,7 +2194,7 @@ module Lich
 
           parts.each do |part|
             creature.add_injury(part, rank)
-            Observers.emit(:wound, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.wound', id: creature.id, name: creature.name,
                                    attack: event[:name], location: location,
                                    body_part: part, rank: rank, secondary: true)
             record_delta(creature) { |d| d[:wounds] << "#{part}:#{rank}*" }
@@ -2255,7 +2255,7 @@ module Lich
             # the table-derived duration estimate beside it.
             creature.add_status('stunned')
             creature.add_stun_estimate(crit[:stunned], at: at)
-            Observers.emit(:stun, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.stun', id: creature.id, name: creature.name,
                                   attack: event[:name], flare: flare, rounds: crit[:stunned],
                                   seconds: crit[:stunned].to_i * CreatureInstance::STUN_ROUND_SECONDS)
             record_delta(creature) { |d| d[:statuses] << "stunned(#{crit[:stunned]}r)" }
@@ -2264,7 +2264,7 @@ module Lich
           # roundtime is in seconds already - do not scale it.
           if crit[:roundtime].to_i > 0
             creature.add_status('roundtime', crit[:roundtime].to_i)
-            Observers.emit(:roundtime, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.roundtime', id: creature.id, name: creature.name,
                                        attack: event[:name], flare: flare, seconds: crit[:roundtime].to_i)
             record_delta(creature) { |d| d[:statuses] << "roundtime(#{crit[:roundtime].to_i}s)" }
           end
@@ -2284,7 +2284,7 @@ module Lich
             status = pos.to_s.downcase
             (POSITION_STATUSES - [status]).each { |s| creature.remove_status(s) }
             creature.add_status(status)
-            Observers.emit(:status, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.status', id: creature.id, name: creature.name,
                                     status: status, action: :add)
             record_delta(creature) { |d| d[:statuses] << status }
           end
@@ -2293,7 +2293,7 @@ module Lich
             next unless crit[flag]
 
             creature.add_status(flag.to_s)
-            Observers.emit(:status, id: creature.id, name: creature.name,
+            Lich::Common::Events.emit('combat.status', id: creature.id, name: creature.name,
                                     status: flag.to_s, action: :add)
             record_delta(creature) { |d| d[:statuses] << flag.to_s }
             respond "  +status: #{flag} (from crit#{flare ? ", flare: #{flare}" : ''})" if Tracker.debug?(:verbose)

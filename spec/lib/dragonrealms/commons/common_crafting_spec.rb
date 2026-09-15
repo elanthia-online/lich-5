@@ -266,4 +266,63 @@ describe DRCC do
       expect(DRCC.go_to_private_forge('Shard', settings)).to be true
     end
   end
+
+  describe '.find_recipe' do
+    context 'when the character is too distracted to turn the book (in combat)' do
+      it 'halts the script instead of falling through to read the book' do
+        allow(DRC).to receive(:bput).with(/^turn my book to chapter/, any_args)
+                                    .and_return('You are too distracted to be doing that right now')
+        # The read should never be reached once we halt.
+        expect(DRC).not_to receive(:bput).with(/^read my/, any_args)
+
+        expect { DRCC.find_recipe(1, 'a shield') }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe '.find_recipe2' do
+    context 'when the character is too distracted to turn the book (in combat)' do
+      it 'halts the script instead of falling through to read the book' do
+        allow(DRC).to receive(:bput).with(/^turn my book to chapter/, any_args)
+                                    .and_return('You are too distracted to be doing that right now')
+        expect(DRC).not_to receive(:bput).with(/^read my/, any_args)
+
+        expect { DRCC.find_recipe2(1, 'a shield') }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe '.get_crafting_item' do
+    before(:each) do
+      allow(DRC).to receive(:beep)
+      # No belt path, no bag lookup: 'get my <name>' resolves to the not-found branch.
+      allow(DRC).to receive(:bput).and_return('What do you')
+    end
+
+    context 'when the item cannot be found and skip_exit is false (default)' do
+      it 'halts the script instead of continuing' do
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+
+        expect { DRCC.get_crafting_item('mallet', 'backpack', nil, nil) }.to raise_error(SystemExit)
+      end
+    end
+
+    context 'when the item cannot be found and skip_exit is true' do
+      it 'returns nil without halting the script' do
+        allow(DRCI).to receive(:in_hands?).and_return(false)
+
+        result = nil
+        expect { result = DRCC.get_crafting_item('mallet', 'backpack', nil, nil, true) }.not_to raise_error
+        expect(result).to be_nil
+      end
+    end
+
+    context 'when the item is already in hand after the retry pause' do
+      it 'returns early without halting, even when skip_exit is false' do
+        allow(DRCI).to receive(:in_hands?).and_return(true)
+
+        expect { DRCC.get_crafting_item('mallet', 'backpack', nil, nil) }.not_to raise_error
+      end
+    end
+  end
 end

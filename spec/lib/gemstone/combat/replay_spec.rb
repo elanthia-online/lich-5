@@ -33,16 +33,16 @@ RSpec.describe 'Combat replay fidelity' do
     allow(Lich::Gemstone::Combat::Tracker).to receive(:debug?).and_return(false)
 
     # Headless: capture status/UCS application instead of touching the (absent)
-    # Creature registry, and capture self-statuses that arrive via Observers.
-    stub_const('Lich::Gemstone::Combat::Observers', Module.new)
+    # Creature registry, and capture self-statuses that arrive on the Events board.
+    stub_const('Lich::Common::Events', Module.new)
     @statuses = []
     statuses = @statuses
     allow(processor).to receive(:apply_status_to_target) do |status, _name, _id = nil, action = :add|
       statuses << "#{status}/#{action}"
     end
     allow(processor).to receive(:apply_ucs_to_target)
-    allow(Lich::Gemstone::Combat::Observers).to receive(:emit) do |type, data|
-      statuses << "#{data[:status]}/#{data[:action]}" if type == :status && data[:name] == 'self'
+    allow(Lich::Common::Events).to receive(:emit) do |type, data|
+      statuses << "#{data[:status]}/#{data[:action]}" if type == 'combat.status' && data[:name] == 'self'
     end
   end
 

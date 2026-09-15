@@ -9,6 +9,7 @@ require_relative 'parser'
 require_relative 'processor'
 require_relative 'async_processor'
 require_relative 'messages'
+require_relative '../../common/events'
 require_relative '../../common/db_store'
 
 module Lich
@@ -39,6 +40,9 @@ module Lich
         @enabled = false
         @settings = {}
         @async_processor = nil
+        # Serialises reading-and-enqueueing a chunk against replacing the
+        # async worker, so a reload never strands a chunk on the old queue.
+        @reload_lock = Mutex.new
         @buffer = []
         @initialized = false
         @source_sequence = 0
@@ -74,25 +78,76 @@ module Lich
         class << self
           attr_reader :settings, :buffer
 
-          # Subscribe to parsed combat events (see Combat::Observers for
-          # event types, payloads, and the subscriber contract - callbacks
-          # may run on worker threads; never send game commands from one).
+          # Subscribe to parsed combat events. Every event is the topic
+          # combat.<type> on Lich::Common::Events; this is the same as
+          # Events.on('combat.damage') with the Symbol types spelled for you.
           # Message events (:disarm_seen, :ambusher, :bolted ... see
           # Combat::Messages) subscribe the same way and need the tracker
           # neither enabled nor scanning creatures: their hook goes up with
           # the first subscription.
           #
+          # Contract for subscribers:
+          #   - Callbacks may run on AsyncProcessor worker threads. They must be
+          #     cheap and non-blocking, and must NEVER send game commands (fput /
+          #     Spell#cast / PSMS.use) - queue work for your own script thread.
+          #   - A raising subscriber is isolated and logged; it never breaks other
+          #     subscribers or the processor.
+          #
+          # Event types (topic combat.<type>) and payloads (all include :id, :name of the creature):
+          #   :damage     { id:, name:, attack:, amount: }
+          #   :wound      { id:, name:, attack:, location:, body_part:, rank: }
+          #   :fatal_crit { id:, name:, attack:, location: }
+          #   :status     { id:, name:, status:, action: :add | :remove }
+          #   :ucs        { id:, name:, kind: :position|:position_inbound|:tierup|:smite_on|:smite_off, value:, tier: }
+          #                 (:position_inbound = the creature's tier against US,
+          #                 per-swing metadata printed inside its UCS attack block.
+          #                 tier: 1..3 for decent/good/excellent on the two position
+          #                 kinds, nil otherwise - the numeric form the recorder keeps)
+          #   :spell_loss { id:, name:, spell:, spell_name:, cause: } - a spell
+          #                 wearing off the subject (creature OR player in view;
+          #                 player ids are negative, id is nil in plain-text logs).
+          #                 cause: :dispel (a dispel-family flare struck this
+          #                 chunk), :death (subject already known dead - stack
+          #                 cleanup, not meaningful expiry), or nil (natural
+          #                 expiry, or cause not visible in this chunk)
+          #   :recorded_attack { protocol:, recorder_id:, database:, file_identity:,
+          #                      session_id:, attack_id:, source: } - emitted by
+          #                 Combat::Recorder only after the complete attack transaction
+          #                 commits. Local observers can use the opaque IDs and trusted
+          #                 local database identity to read that exact row. source is
+          #                 validated ingestion provenance when available, otherwise nil.
+          #
+          # Message events (defs/messages.rb, delivered by Combat::Messages; every
+          # payload also carries :raw, the line). Scanned only while subscribed:
+          #   :disarm_seen  { kind: :recover|:telekinetic_recover|:recover_weapon_webbing, noun: }
+          #   :sanctum_transform { noun: }
+          #   :itchy_curse, :infected_wound, :entangled   {}
+          #   :hive_trap    { kind: :apparatus|:ground }
+          #   :ambusher     { noun: }  (nil for the shadowy figure)
+          #   :bolted       {}
+          #   :rooted / :unrooted  { id: } (the snake's), :item_limit {}
+          #   :bless_shrugged / :bless_expired  { id:, noun: }
+          #   :arrow_stuck  { id:, where: }, :aiming { where: } (nil when cleared),
+          #   :bond_return  { what: }
+          #   :haze_703 / :rebuke_1614  { id:, on: }, :swift_justice { charges: },
+          #   :arcane_reflex { active: }, :weapon_reaction { reaction: }
+          #
+          #
           # @example
-          #   Combat::Tracker.on(:damage) { |type, data| queue << data }
+          #   Combat::Tracker.on(:damage) { |topic, data| queue << data }
           #   Combat::Tracker.on(:damage, name: 'mybar') { ... } # idempotent
-          # @return [Proc] handler; pass to {off} to unsubscribe
-          def on(*types, name: nil, &block)
-            Observers.on(*types, name: name, &block)
+          # @param persist [Boolean] keep the subscription after the calling
+          #   script dies (default: removed with the script)
+          # @return [String] subscription name; pass to {off} to unsubscribe
+          def on(*types, name: nil, persist: false, &block)
+            types = [:any] if types.empty?
+            topics = types.map { |t| t.to_sym == :any ? 'combat.*' : "combat.#{t}" }
+            Lich::Common::Events.on(*topics, name: name, persist: persist, &block)
           end
 
-          # Unsubscribe a handler returned by {on}, or by its name:.
-          def off(handler_or_name)
-            Observers.off(handler_or_name)
+          # Unsubscribe by the name returned from {on} (or the block given to it).
+          def off(name_or_block)
+            Lich::Common::Events.off(name_or_block)
           end
 
           # Binding-only observation. Never initializes/enables the tracker or
@@ -137,7 +192,7 @@ module Lich
             @enabled = true
             @settings[:enabled] = true # Force enabled in settings
             save_settings # Persist enabled state
-            initialize_processor
+            @reload_lock.synchronize { initialize_processor }
             add_downstream_hook
 
             respond "[Combat] Combat tracking enabled" if debug?
@@ -156,7 +211,9 @@ module Lich
             @settings[:enabled] = false
             save_settings # Persist disabled state
             remove_downstream_hook
-            shutdown_processor
+            # Same race as reload_defs!: a chunk that read the worker before
+            # this drains it must not land behind the shutdown sentinel.
+            @reload_lock.synchronize { shutdown_processor }
 
             respond "[Combat] Combat tracking disabled" if debug?
           end
@@ -251,11 +308,25 @@ module Lich
             # Quick filter - only process if combat-related content present
             return unless chunk.any? { |line| combat_relevant?(line) }
 
-            if @async_processor
-              @async_processor.process_async(chunk, source: source)
-            else
-              Processor.process(chunk, source: source)
+            # Read the worker and enqueue as one step, under the lock
+            # reload_defs! takes around the swap: without it a chunk read
+            # @async_processor, then the reload drained and replaced that
+            # worker, and the push landed behind the shutdown sentinel of a
+            # queue nothing would drain again. The lock spans the push, not
+            # the parse -- that stays on the worker thread.
+            handled = @reload_lock.synchronize do
+              # Re-checked under the lock: a chunk that passed the check
+              # above and then parked here through a disable! must not
+              # come out the other side and parse.
+              next :disabled unless enabled?
+
+              @async_processor&.tap { |w| w.process_async(chunk, source: source) }
             end
+            return if handled
+
+            # No async worker configured (max_threads <= 0): parse inline,
+            # outside the lock, so a reload never waits on a parse.
+            Processor.process(chunk, source: source)
           end
 
           # Single compiled filter for combat-relevant content. One regex scan
@@ -310,8 +381,12 @@ module Lich
 
             # Reinitialize processor if thread count changed
             if new_settings.key?(:max_threads)
-              shutdown_processor
-              initialize_processor
+              # Under the ingestion lock so a chunk arriving mid-swap goes to
+              # the new worker rather than behind the old one's sentinel.
+              @reload_lock.synchronize do
+                shutdown_processor
+                initialize_processor
+              end
             end
 
             respond "[Combat] Settings updated: #{@settings}" if debug?
@@ -334,6 +409,34 @@ module Lich
             else
               base_stats.merge(active: 0, total: 0)
             end
+          end
+
+          # Hot-reloads the combat definitions with the player's supplement
+          # file (DATA_DIR/combat/defs.yaml) re-read: the in-session path
+          # after editing that file, equivalent to `;hmr combat/defs/` but
+          # quiet. The async worker is drained first so no chunk is mid-parse
+          # while the tables rebind, then restarted if tracking is on.
+          #
+          # @return [Array<String>] the def files that reloaded cleanly
+          def reload_defs!
+            reloaded = nil
+            # Ingestion parks on this lock for the drain and the swap, so a
+            # chunk arriving mid-reload is enqueued on the NEW worker rather
+            # than stranded behind the old one's shutdown sentinel. The
+            # drain is bounded by the queue it is already draining.
+            @reload_lock.synchronize do
+              was_running = !@async_processor.nil?
+              shutdown_processor
+              reloaded = Definitions::Supplements.reload_defs!(notify: false)
+              initialize_processor if was_running && enabled?
+            end
+            # Subscribers to :definitions_reloaded run here, after the lock is
+            # released: under it, a slow handler would stall the game-stream
+            # hook thread for its duration, and one that called back into
+            # reload_defs! would hit recursive locking.
+            Definitions::Supplements.notify_reloaded(reloaded)
+            respond "[Combat] Reloaded #{reloaded.size} def files; supplements: #{Definitions::Supplements.summary}" if debug?
+            reloaded
           end
 
           private
@@ -486,6 +589,10 @@ module Lich
 
             @initialized = true
             load_settings
+            # A relog always reflects the current supplement file: the def
+            # tables were assembled at require time, so if the file changed
+            # since, rebuild them now (no-op when it has not).
+            Definitions::Supplements.reload_defs! if Definitions::Supplements.stale?
 
             # Auto-enable if settings indicate it was previously enabled
             if @settings[:enabled]

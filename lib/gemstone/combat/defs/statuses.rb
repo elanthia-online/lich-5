@@ -6,6 +6,7 @@
 #
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -432,12 +433,15 @@ module Lich
                           ].freeze)
           ].freeze
 
+          # Shipped defs first, then player supplements (defs/supplements.rb).
+          ALL_STATUSES = (STATUS_EFFECTS + Supplements.statuses).freeze
+
           # Create lookup tables for fast pattern matching
-          ADD_LOOKUP = STATUS_EFFECTS.flat_map do |status_def|
+          ADD_LOOKUP = ALL_STATUSES.flat_map do |status_def|
             status_def.add_patterns.compact.map { |pattern| [pattern, status_def.name, :add] }
           end.freeze
 
-          REMOVE_LOOKUP = STATUS_EFFECTS.flat_map do |status_def|
+          REMOVE_LOOKUP = ALL_STATUSES.flat_map do |status_def|
             status_def.remove_patterns.compact.map { |pattern| [pattern, status_def.name, :remove] }
           end.freeze
 
@@ -446,19 +450,54 @@ module Lich
           # Compiled regex for fast detection. NOTE: costs ~1ms per
           # non-matching line (unanchored `.+?` alternatives); kept for
           # compatibility but the literal gate below is what parse uses.
-          STATUS_DETECTOR = Regexp.union(ALL_LOOKUP.map(&:first)).freeze
+          #
+          # Built on first use rather than at load: a supplemental pattern
+          # that is perfectly valid alone can still be illegal inside a
+          # union (a numbered backreference beside a shipped named capture
+          # raises RegexpError), and a union built here would take the whole
+          # def file down with it before TABLE ever existed. Nothing in Lich
+          # reads this; PatternGate.build handles each pattern separately.
+          #
+          # @return [Regexp, nil] nil when the patterns cannot be combined
+          # Back-compat: the old constant name resolves to {detector},
+          # so a script still reading STATUS_DETECTOR keeps working.
+          def self.const_missing(name)
+            return detector if name == :STATUS_DETECTOR
+
+            super
+          end
+
+          def self.detector
+            return @detector if defined?(@detector)
+
+            @detector = PatternGate.union_or_nil(ALL_LOOKUP.map(&:first), 'statuses')
+          end
 
           # Literal-substring gate (~7us/line, measured on session logs)
           STATUS_GATE, STATUS_ALWAYS_SCAN = PatternGate.build(ALL_LOOKUP.map(&:first))
 
+          # Lookup and gate as one frozen table, bound last in a single
+          # assignment; parse reads it once per call (see Definitions::Table).
+          TABLE = Table.new(ALL_LOOKUP, STATUS_GATE, STATUS_ALWAYS_SCAN).freeze
+
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!(:statuses)
+          # The table just rebound, so any detector built from the previous
+          # one is stale. The memo is a module ivar and survives this file
+          # re-executing, so drop it here rather than leaving a reload
+          # serving the old union (or a cached nil).
+          remove_instance_variable(:@detector) if instance_variable_defined?(:@detector)
+
           # Parse status effect from line
           def self.parse(line)
+            table = TABLE
             # Fast rejection: a line can only match a status pattern if it
             # contains that pattern's literal fragment.
-            return nil if PatternGate.rejects?(STATUS_GATE, STATUS_ALWAYS_SCAN, line)
+            return nil if table.rejects?(line)
 
-            ALL_LOOKUP.each do |pattern, name, action|
-              if (match = pattern.match(line))
+            table.lookup.each do |pattern, name, action|
+              if (match = PatternGate.safe_match(pattern, line))
                 result = {
                   status: name,
                   action: action # :add or :remove
