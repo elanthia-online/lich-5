@@ -140,5 +140,28 @@ RSpec.describe Lich::Util::Update::FileUpdater do
         FileUtils.remove_entry(data_backup_dir)
       end
     end
+
+    context 'called twice with no snapshot_dir within the same second (e.g. two multiboxed logins)' do
+      it 'never resolves both standalone calls to the same data-only backup directory' do
+        # update_core_data_and_scripts is a public entry point with no guard
+        # of its own against concurrent callers -- the @@autostarted check
+        # lives in games.rb, not here. Use a real SnapshotManager (rather
+        # than the instance_double above) so this exercises the actual
+        # directory-naming collision risk instead of a stubbed return value.
+        real_snapshot_manager = Lich::Util::Update::SnapshotManager.new
+        concurrent_updater = described_class.new(client, resolver, real_snapshot_manager)
+        allow(concurrent_updater).to receive(:update_file)
+
+        before_dirs = Dir.glob(File.join(BACKUP_DIR, 'L5-databackup-*'))
+        concurrent_updater.update_core_data_and_scripts('5.16.0')
+        concurrent_updater.update_core_data_and_scripts('5.16.0')
+        created_dirs = Dir.glob(File.join(BACKUP_DIR, 'L5-databackup-*')).sort - before_dirs
+
+        expect(created_dirs.length).to eq(2)
+        expect(created_dirs[0]).not_to eq(created_dirs[1])
+
+        created_dirs.each { |dir| FileUtils.remove_entry(dir) }
+      end
+    end
   end
 end

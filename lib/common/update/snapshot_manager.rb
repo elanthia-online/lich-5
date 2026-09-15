@@ -7,6 +7,8 @@
   updates. Supports rollback to most recent snapshot.
 =end
 
+require 'tmpdir'
+
 module Lich
   module Util
     module Update
@@ -34,11 +36,17 @@ module Lich
         # containing only backed-up data files -- no lib/, lich.rbw, or
         # scripts/ -- for a real, restorable ecosystem snapshot.
         #
+        # Update.update_core_data_and_scripts is a public entry point with no
+        # guard of its own against concurrent callers (e.g. multiboxed Lich
+        # processes autostarting within the same second after an update), so
+        # this uses Dir.mktmpdir rather than a bare mkdir_p on a
+        # second-resolution timestamp -- two calls in the same second must
+        # not resolve to the same directory and silently clobber each other's
+        # backup.
+        #
         # @return [String] path to the newly created directory
         def new_data_backup_dir
-          dir = File.join(BACKUP_DIR, "L5-databackup-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}")
-          FileUtils.mkdir_p(dir)
-          dir
+          Dir.mktmpdir("L5-databackup-#{Time.now.strftime('%Y-%m-%d-%H-%M-%S')}-", BACKUP_DIR)
         end
 
         # Creates timestamped snapshot of lib/, lich.rbw, and core scripts.

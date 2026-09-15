@@ -25,4 +25,20 @@ RSpec.describe Lich::Util::Update::SnapshotManager do
       FileUtils.remove_entry(data_backup_dir)
     end
   end
+
+  describe '#new_data_backup_dir' do
+    it 'never returns the same directory for two calls in the same second' do
+      # Regression guard: a bare mkdir_p on a second-resolution timestamp
+      # would let two calls within the same wall-clock second (e.g. two
+      # multiboxed Lich processes autostarting after an update) collide on
+      # the same directory and silently clobber each other's backup.
+      first_dir = manager.new_data_backup_dir
+      second_dir = manager.new_data_backup_dir
+
+      expect(first_dir).not_to eq(second_dir)
+
+      FileUtils.remove_entry(first_dir)
+      FileUtils.remove_entry(second_dir)
+    end
+  end
 end
