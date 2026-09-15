@@ -2,7 +2,7 @@
 
 #
 # Combat Messages - the non-combat message families (defs/messages.rb)
-# delivered through Combat::Observers, scanned only while subscribed.
+# delivered on the Events board as combat.<event>, scanned only while subscribed.
 #
 # The Tracker's hook chunks on the prompt and only hands a chunk to the
 # Processor when it names a creature; most of these lines arrive in
@@ -15,8 +15,8 @@
 # hook is not even installed.
 #
 # Matching runs on a single worker thread fed by a queue, never on the
-# game stream. Subscribers therefore run on that worker: the
-# Combat::Observers contract applies - cheap, non-blocking, no game
+# game stream. Subscribers therefore run on that worker.
+# The Events subscriber contract applies - cheap, non-blocking, no game
 # commands from the callback.
 #
 # @example
@@ -26,7 +26,7 @@
 # Combat::Messages.scan(line) matches one line synchronously and returns
 # what it would emit - for tools and specs.
 #
-require_relative 'observers'
+require_relative '../../common/events'
 require_relative 'defs/messages'
 
 module Lich
@@ -60,19 +60,25 @@ module Lich
           def active_families = table.by_name.values_at(*@active).compact
 
           # Recompute the active families from the subscriptions and put the
-          # hook up or take it down to match. Observers calls this on every
-          # change, and Supplements.reload_defs! after a reload (a script may
-          # subscribe to an event before the player's file defines it);
-          # harmless to call again.
+          # hook up or take it down to match. Events calls this on every
+          # combat.* subscription change, and Supplements.reload_defs! after
+          # a reload (a script may subscribe to an event before the player's
+          # file defines it); harmless to call again.
           #
           # The whole read-decide-act sequence is held under @mutex: two
           # scripts subscribing at once would otherwise interleave so that
           # the last @active write is non-empty while the last hook call is
           # uninstall!, silently leaving a live subscriber with no hook.
+          #
+          # @active is committed only after the hook call succeeds: if
+          # DownstreamHook.add/remove raises (Events swallows and logs it),
+          # the previous consistent @active/@hook pair stays in place rather
+          # than reporting a family active with no hook up, or the reverse.
           def refresh!
             @mutex.synchronize do
-              @active = families.select { |f| f.events.any? { |e| Observers.any_for?(e) } }.map(&:name).freeze
-              @active.empty? ? uninstall! : install!
+              active = families.select { |f| f.events.any? { |e| Lich::Common::Events.any_for?("combat.#{e}") } }.map(&:name).freeze
+              active.empty? ? uninstall! : install!
+              @active = active
               active_families
             end
           end
@@ -91,7 +97,7 @@ module Lich
             found = scan(line)
             @scanned += 1
             @matched += found.size
-            found.each { |event, data| Observers.emit(event, data) }
+            found.each { |event, data| Lich::Common::Events.emit("combat.#{event}", data) }
             found
           end
 
@@ -167,7 +173,7 @@ module Lich
           end
         end
 
-        Observers.on_change { refresh! }
+        Lich::Common::Events.on_change(prefix: 'combat.') { refresh! }
       end
     end
   end
