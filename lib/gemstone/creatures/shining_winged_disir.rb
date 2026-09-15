@@ -9,7 +9,7 @@
   undead: true, # triggers sheer fear (66 "waves of evil emanating from the winged disir" lines, Cogruel 2026-08-30), so undead
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: nil,

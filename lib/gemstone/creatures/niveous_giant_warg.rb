@@ -9,7 +9,7 @@
   undead: false,
   blood: true,
   bones: true, # Bone Shatter (1106) worked 1x in session logs
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,

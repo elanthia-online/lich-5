@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: nil,
   sympathy: nil,
   muggable: nil,

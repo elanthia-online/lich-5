@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true, # Wither (1115) worked 3x in session logs
   sympathy: nil,
   muggable: nil,
