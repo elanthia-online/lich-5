@@ -20,15 +20,17 @@ RSpec.describe Lich::Gemstone::Group::Observer do
     described_class.consume(line, match) if match
   end
 
-  it 'clears stale membership on the recorded no-group disband response' do
-    group.refresh(Object.new)
+  it 'invalidates cached membership on the ambiguous no-group disband response' do
+    member = Object.new
+    group.refresh(member)
     group.leader = :self
     group.checked = true
 
     observe('You have no group to disband.')
 
-    expect(group._members).to be_empty
+    expect(group._members).to eq([member])
     expect(group.leader).to eq(:self)
+    expect(group.checked?).to be(false)
   end
 
   it 'also clears a stale follower leader on an authoritative empty-group reply' do
@@ -37,10 +39,24 @@ RSpec.describe Lich::Gemstone::Group::Observer do
     group.leader = old_leader
     group.checked = true
 
-    observe('You have no group to disband.')
+    observe('You are not currently in a group.')
 
     expect(group._members).to be_empty
     expect(group.leader).to eq(:self)
+  end
+
+  it 'does not clear follower membership from the ambiguous no-group-to-disband reply' do
+    leader = Object.new
+    member = Object.new
+    group.refresh(leader, member)
+    group.leader = leader
+    group.checked = true
+
+    observe('You have no group to disband.')
+
+    expect(group._members).to eq([leader, member])
+    expect(group.leader).to equal(leader)
+    expect(group.checked?).to be(false)
   end
 
   it 'retains the existing successful-disband and GROUP-query behavior' do
