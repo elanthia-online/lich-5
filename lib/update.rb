@@ -334,7 +334,7 @@ module Lich
       end
 
       def self.file_updater
-        @file_updater ||= FileUpdater.new(client, resolver)
+        @file_updater ||= FileUpdater.new(client, resolver, snapshot_manager)
       end
 
       private_class_method :client, :resolver, :snapshot_manager,
