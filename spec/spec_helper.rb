@@ -1893,8 +1893,21 @@ module Lich
       end
 
       def install_gem_requirements(gems_to_install, **_kwargs)
-        gems_to_install.each_key { |gem_name| require gem_name }
+        # Mirrors the real impl's should_require semantics (lib/util/util.rb) rather
+        # than requiring unconditionally: textstripper.rb passes 'kramdown' => false
+        # and does its own require + rescue right after, so requiring it here too
+        # would just be redundant, not wrong - but a future false-valued call for a
+        # gem nothing requires afterward should stay a no-op, not force a require.
+        # Rescue LoadError (this only satisfies gems already in the Gemfile; it isn't
+        # a stand-in for the real gem-install path) so a spec-load-time failure here
+        # reads as "gem not requirable in this stub" instead of a raw LoadError.
+        gems_to_install.each do |gem_name, should_require|
+          require gem_name if should_require
+        end
         true
+      rescue LoadError => e
+        raise LoadError, "#{e.message} (spec_helper.rb's install_gem_requirements stub only " \
+                          'requires already-bundled gems - add a real stub for anything else)'
       end
     end
   end
