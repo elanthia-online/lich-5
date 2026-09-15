@@ -106,12 +106,12 @@ module Lich
           type.nil? ? strip_simple(line) : strip_multiline(line, type)
         end
 
-        # ::Frontend, not Frontend: this code was top-level in global_defs.rb,
-        # where the bare name meant the top-level constant. Nested here in
-        # Lich::Common it would resolve to Lich::Common::Frontend instead --
-        # normally the same object (frontend.rb aliases one to the other at
-        # load), but not guaranteed, and the two diverging is invisible at the
-        # call site. The explicit qualifier preserves the original meaning.
+        # ::Frontend is explicit for readability, not to fix a resolution
+        # hazard: Lich::Common owns Frontend directly (frontend.rb:18), so a
+        # bare name here would find Lich::Common::Frontend by lexical scope,
+        # and frontend.rb:928 aliases the top-level constant to that same
+        # object. All three spellings resolve identically. The qualifier just
+        # names which one at the call site.
 
         # @return [String] frontend-appropriate emphasis open
         def monsterbold_start

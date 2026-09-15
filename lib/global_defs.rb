@@ -2246,12 +2246,16 @@ def strip_xml(line, type: nil)
   Lich::Common::Markup.strip_xml(line, type: type)
 end
 
+# .dup because markup.rb is frozen_string_literal and global_defs.rb never
+# was: these returned mutable strings before the extraction, and a wild
+# script appending to the result in place would now raise FrozenError. The
+# copy keeps the global contract byte-identical *and* mutable.
 def monsterbold_start
-  Lich::Common::Markup.monsterbold_start
+  Lich::Common::Markup.monsterbold_start.dup
 end
 
 def monsterbold_end
-  Lich::Common::Markup.monsterbold_end
+  Lich::Common::Markup.monsterbold_end.dup
 end
 
 # Multiple frontends may attach to one persistent detachable listener. The

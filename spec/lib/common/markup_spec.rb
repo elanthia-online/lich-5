@@ -173,6 +173,60 @@ RSpec.describe Lich::Common::Markup do
     end
   end
 
+  # Pre-existing behavior relocated by the extraction, previously unpinned.
+  # The rescue exists so a malformed line can never take down the read loop:
+  # it reports and drops the line rather than raising into the caller. The
+  # return must be nil specifically -- callers feed it to String#split, which
+  # NilClass#split makes safe (lib/common/class_exts/nilclass.rb).
+  describe 'the rescue path' do
+    # The shared $_CLIENT_ from spec_helper has no public #puts and
+    # report_error calls one, so swap in a collector for the duration rather
+    # than adding a singleton to the global object other specs rely on. A
+    # plain object, not an rspec double: the swap happens in an around hook,
+    # which runs outside the per-test mock lifecycle.
+    let(:client) do
+      Object.new.tap do |obj|
+        obj.instance_variable_set(:@lines, [])
+        def obj.puts(line) = @lines << line
+        def obj.lines = @lines
+      end
+    end
+
+    around do |example|
+      previous = $_CLIENT_
+      $_CLIENT_ = client
+      example.run
+    ensure
+      $_CLIENT_ = previous
+    end
+
+    before { allow(Lich).to receive(:log) }
+
+    # The failure is forced rather than provoked by a crafted input: these are
+    # pure string ops with no naturally-reachable failure, so the honest way
+    # to pin the handler is to make a call inside the body raise. Unary + is
+    # required because this file is frozen_string_literal and a frozen string
+    # cannot take the singleton that stubbing #gsub defines.
+    let(:line) { +"text\r\n" }
+
+    it 'reports and returns nil when fb_to_sf raises' do
+      allow(line).to receive(:gsub).and_raise(StandardError, 'boom')
+      expect(described_class.fb_to_sf(line)).to be_nil
+      expect(client.lines).to include(a_string_matching(/Error: fb_to_sf/))
+    end
+
+    it 'reports and returns nil when sf_to_wiz raises' do
+      allow(line).to receive(:gsub).and_raise(StandardError, 'boom')
+      expect(described_class.sf_to_wiz(line)).to be_nil
+      expect(client.lines).to include(a_string_matching(/Error: sf_to_wiz/))
+    end
+
+    it 'does not let the error escape to the caller' do
+      allow(line).to receive(:gsub).and_raise(StandardError, 'boom')
+      expect { described_class.fb_to_sf(line) }.not_to raise_error
+    end
+  end
+
   describe '.monsterbold_start / .monsterbold_end' do
     # Markup calls ::Frontend explicitly, so stub the methods on that exact
     # object. Replacing the constant with stub_const is not enough: whether
