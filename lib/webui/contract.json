@@ -1,0 +1,7364 @@
+{
+  "envelope_version": 1,
+  "contract_version": "2.15.3",
+  "contract_major": 2,
+  "types": [
+    "page",
+    "group",
+    "stack",
+    "columns",
+    "grid",
+    "tabs",
+    "expander",
+    "split",
+    "overlay",
+    "scroll",
+    "divider",
+    "text",
+    "markdown",
+    "log",
+    "progress",
+    "image",
+    "button",
+    "toggle",
+    "checkbox",
+    "radio",
+    "text_input",
+    "password_input",
+    "textarea",
+    "number_input",
+    "slider",
+    "select",
+    "table",
+    "dialog",
+    "composite",
+    "menu",
+    "menu_item"
+  ],
+  "tones": [
+    "neutral",
+    "positive",
+    "caution",
+    "danger"
+  ],
+  "emphases": [
+    "normal",
+    "strong",
+    "subtle"
+  ],
+  "aligns": [
+    "start",
+    "center",
+    "end",
+    "stretch"
+  ],
+  "bounds": {
+    "identifier": 128,
+    "short_text": 512,
+    "body_text": 8192,
+    "rich_text": 65536,
+    "input_text": 8192,
+    "multiline_text": 65536,
+    "log_line": 4096,
+    "log_lines": 10000,
+    "collection": 512,
+    "table_rows": 10000,
+    "table_columns": 64,
+    "children": 1024,
+    "components": 20000,
+    "tree_depth": 64,
+    "geometry": {
+      "min": -65536,
+      "max": 65536
+    },
+    "timeout": {
+      "min": 1,
+      "max": 86400
+    },
+    "event_payload_bytes": 65536
+  },
+  "schemas": {
+    "page": {
+      "properties": {
+        "title": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "bare": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "size": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "integer",
+              "min": -65536,
+              "max": 65536
+            },
+            "min": 2,
+            "max": 2
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "position": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "integer",
+              "min": -65536,
+              "max": 65536
+            },
+            "min": 2,
+            "max": 2
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key_events": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "close": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "reason": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "user",
+                    "owner",
+                    "timeout"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": true,
+          "lifecycle": true,
+          "structural": false
+        },
+        "attach": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": true,
+          "structural": false
+        },
+        "detach": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": true,
+          "structural": false
+        },
+        "key": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "keyval": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": true,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "group": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "collapsible": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "press": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "release": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "stack": {
+      "properties": {
+        "gap": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 64
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 8
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "child_properties": {
+        "grow": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 64
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "pad": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 512
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "events": {
+        "press": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "release": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "columns": {
+      "properties": {
+        "count": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 12
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "weights": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "integer",
+              "min": 0
+            },
+            "min": 0,
+            "max": 12
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "compact": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "gap": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 64
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 8
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": {
+        "kind": "named_dynamic",
+        "count_property": "count"
+      },
+      "child_properties": {
+        "pad": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 512
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "events": {},
+      "value": null
+    },
+    "grid": {
+      "properties": {
+        "cols": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 24
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "cells": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 1024
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "gap": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 64
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 8
+        },
+        "weights": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "integer",
+              "min": 0
+            },
+            "min": 0,
+            "max": 24
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "child_properties": {
+        "span": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max_property": "cols"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "row_span": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 24
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "events": {},
+      "value": null
+    },
+    "tabs": {
+      "properties": {
+        "names": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "string",
+              "bound": "short_text"
+            },
+            "min": 1,
+            "max": 512
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "vertical": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "integer",
+            "min": 0
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": {
+        "kind": "named_from_property",
+        "property": "names"
+      },
+      "events": {
+        "select": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "index": {
+                "shape": {
+                  "kind": "integer",
+                  "min": 0
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": true
+        }
+      },
+      "value": null
+    },
+    "expander": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "open": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "viewer",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "toggle": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "open": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": true
+        }
+      },
+      "value": null
+    },
+    "split": {
+      "properties": {
+        "orientation": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "horizontal",
+              "vertical"
+            ]
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "position": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 100
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": {
+        "kind": "named",
+        "slots": [
+          "first",
+          "second"
+        ]
+      },
+      "events": {
+        "move": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "position": {
+                "shape": {
+                  "kind": "integer",
+                  "min": 0,
+                  "max": 100
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "overlay": {
+      "properties": {
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "child_properties": {
+        "z": {
+          "shape": {
+            "kind": "integer",
+            "min": 0,
+            "max": 99
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "events": {},
+      "value": null
+    },
+    "scroll": {
+      "properties": {
+        "max_height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "scroll_to": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "scroll_position": {
+          "shape": {
+            "kind": "record",
+            "fields": {
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "bottom": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": false,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "scrolled": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "position": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "upper": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "page_size": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "position_x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "upper_x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "page_size_x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "divider": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {},
+      "value": null
+    },
+    "text": {
+      "properties": {
+        "content": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "wrap": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": true
+        },
+        "markup": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "emphasis": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "normal",
+              "strong",
+              "subtle"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "press": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "release": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "markdown": {
+      "properties": {
+        "content": {
+          "shape": {
+            "kind": "string",
+            "bound": "rich_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {},
+      "value": null
+    },
+    "log": {
+      "properties": {
+        "lines": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "string",
+              "bound": "log_line"
+            },
+            "min": 0,
+            "max": 10000
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "max_lines": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 10000
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "follow": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": true
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {},
+      "value": null
+    },
+    "progress": {
+      "properties": {
+        "value": {
+          "shape": {
+            "kind": "number",
+            "finite": true,
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "indeterminate": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {},
+      "value": null
+    },
+    "image": {
+      "properties": {
+        "src": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "alt": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "scale": {
+          "shape": {
+            "kind": "number",
+            "finite": true,
+            "min": 0.1,
+            "max": 8.0
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 1.0
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "press": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "release": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "middle",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "button": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "variant": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "default",
+              "primary",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared",
+          "default": "default"
+        },
+        "confirm": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "emphasis": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "normal",
+              "strong",
+              "subtle"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "activate": {
+          "payload": null,
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "toggle": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "checked": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "boolean"
+      }
+    },
+    "checkbox": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "checked": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "boolean"
+      }
+    },
+    "radio": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "group": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "options": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "value": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "input_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "label": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 0,
+            "max": 512
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "selected": {
+          "shape": {
+            "kind": "string",
+            "bound": "input_text"
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "input_text"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "string",
+        "bound": "input_text"
+      },
+      "value_scope": "viewer"
+    },
+    "text_input": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "value": {
+          "shape": {
+            "kind": "string",
+            "bound": "input_text"
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "placeholder": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "max_length": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 8192
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "search": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "sensitive": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "input_text"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "submit": {
+          "payload": null,
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        },
+        "focus": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "blur": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "string",
+        "bound": "input_text"
+      },
+      "value_scope": "viewer"
+    },
+    "password_input": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "placeholder": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "max_length": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 8192
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "revealable": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "ephemeral_client",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "sensitive": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "forced": true,
+          "default": true
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "submit": {
+          "payload": null,
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "string",
+        "bound": "input_text"
+      },
+      "value_scope": "sensitive_write_only",
+      "sensitive": true
+    },
+    "textarea": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "value": {
+          "shape": {
+            "kind": "string",
+            "bound": "multiline_text"
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "rows": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 64
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 5
+        },
+        "max_length": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "sensitive": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "multiline_text"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "focus": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "blur": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "string",
+        "bound": "multiline_text"
+      },
+      "value_scope": "viewer"
+    },
+    "number_input": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "value": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "min": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "max": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "step": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 1
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "sensitive": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "number",
+                  "finite": true
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "number",
+        "finite": true
+      },
+      "value_scope": "viewer"
+    },
+    "slider": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "value": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "viewer"
+        },
+        "min": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "max": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "step": {
+          "shape": {
+            "kind": "number",
+            "finite": true
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 1
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "number",
+                  "finite": true
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "number",
+        "finite": true
+      },
+      "value_scope": "viewer"
+    },
+    "select": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "options": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "value": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "input_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "label": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 0,
+            "max": 512
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "value": {
+          "shape": {
+            "kind": "string",
+            "bound": "input_text"
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "sensitive": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "input_text"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "string",
+        "bound": "input_text"
+      },
+      "value_scope": "viewer"
+    },
+    "table": {
+      "properties": {
+        "columns": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "key": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "identifier",
+                    "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "label": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "align": {
+                  "shape": {
+                    "kind": "enum",
+                    "values": [
+                      "start",
+                      "center",
+                      "end"
+                    ]
+                  },
+                  "required": false,
+                  "scope": "shared",
+                  "default": "start"
+                },
+                "width": {
+                  "shape": {
+                    "kind": "integer",
+                    "min": -65536,
+                    "max": 65536
+                  },
+                  "required": false,
+                  "scope": "shared"
+                },
+                "sortable": {
+                  "shape": {
+                    "kind": "boolean"
+                  },
+                  "required": false,
+                  "scope": "shared",
+                  "default": false
+                },
+                "editor": {
+                  "shape": {
+                    "kind": "editor"
+                  },
+                  "required": false,
+                  "scope": "shared",
+                  "default": null
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 1,
+            "max": 64
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "rows": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "key": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "identifier",
+                    "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "parent": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "identifier",
+                    "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                  },
+                  "required": false,
+                  "scope": "shared"
+                },
+                "expanded": {
+                  "shape": {
+                    "kind": "boolean"
+                  },
+                  "required": false,
+                  "scope": "viewer",
+                  "default": false
+                },
+                "cells": {
+                  "shape": {
+                    "kind": "cell_map"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 0,
+            "max": 10000
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "selection": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "none",
+              "single",
+              "multi"
+            ]
+          },
+          "required": false,
+          "scope": "shared",
+          "default": "none"
+        },
+        "selected": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "string",
+              "bound": "identifier",
+              "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+            },
+            "min": 0,
+            "max": 10000
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "headers": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": true
+        },
+        "sortable": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "sort": {
+          "shape": {
+            "kind": "record",
+            "fields": {
+              "column": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "direction": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "asc",
+                    "desc"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "max_height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "row_activate": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "row": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        },
+        "selection_change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "rows": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "string",
+                    "bound": "identifier",
+                    "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                  },
+                  "min": 0,
+                  "max": 10000
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": true
+        },
+        "cell_edit": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "row": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "column": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "value": {
+                "shape": {
+                  "kind": "editor_value"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
+        "row_toggle": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "row": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "expanded": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": true
+        },
+        "sort_change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "column": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "direction": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "asc",
+                    "desc"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null,
+      "special": "table"
+    },
+    "dialog": {
+      "properties": {
+        "title": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "body": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "buttons": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "id": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "identifier",
+                    "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "label": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "variant": {
+                  "shape": {
+                    "kind": "enum",
+                    "values": [
+                      "default",
+                      "primary",
+                      "danger"
+                    ]
+                  },
+                  "required": false,
+                  "scope": "shared",
+                  "default": "default"
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 1,
+            "max": 512
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "no_viewer": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "wait",
+              "default",
+              "abort"
+            ]
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "default_button": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "timeout": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 86400
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "response": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "button": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "composite": {
+      "properties": {
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "height": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "context_menu": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "scale": {
+          "shape": {
+            "kind": "number",
+            "finite": true,
+            "min": 0.1,
+            "max": 8.0
+          },
+          "required": false,
+          "scope": "shared",
+          "default": 1.0
+        },
+        "scroll_to": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "viewer"
+        },
+        "popup": {
+          "shape": {
+            "kind": "record",
+            "fields": {
+              "page": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "size": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "integer",
+                    "min": -65536,
+                    "max": 65536
+                  },
+                  "min": 2,
+                  "max": 2
+                },
+                "required": false,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "surface_events": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "layers": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "union",
+              "variants": [
+                {
+                  "kind": "record",
+                  "fields": {
+                    "kind": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "image"
+                        ]
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "src": {
+                      "shape": {
+                        "kind": "string",
+                        "bound": "body_text"
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "x": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "y": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "w": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": false,
+                      "scope": "shared"
+                    },
+                    "h": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": false,
+                      "scope": "shared"
+                    },
+                    "opacity": {
+                      "shape": {
+                        "kind": "number",
+                        "finite": true,
+                        "min": 0.0,
+                        "max": 1.0
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": 1.0
+                    },
+                    "tint": {
+                      "shape": {
+                        "kind": "union",
+                        "variants": [
+                          {
+                            "kind": "record",
+                            "fields": {
+                              "tone": {
+                                "shape": {
+                                  "kind": "enum",
+                                  "values": [
+                                    "neutral",
+                                    "positive",
+                                    "caution",
+                                    "danger"
+                                  ]
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              }
+                            },
+                            "allow_extra": false
+                          },
+                          {
+                            "kind": "record",
+                            "fields": {
+                              "r": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "g": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "b": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "a": {
+                                "shape": {
+                                  "kind": "number",
+                                  "finite": true,
+                                  "min": 0.0,
+                                  "max": 1.0
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              }
+                            },
+                            "allow_extra": false
+                          }
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared"
+                    },
+                    "mask": {
+                      "shape": {
+                        "kind": "string",
+                        "bound": "body_text"
+                      },
+                      "required": false,
+                      "scope": "shared"
+                    }
+                  },
+                  "allow_extra": false
+                },
+                {
+                  "kind": "record",
+                  "fields": {
+                    "kind": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "bar"
+                        ]
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "x": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "y": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "w": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "h": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "value": {
+                      "shape": {
+                        "kind": "number",
+                        "finite": true,
+                        "min": 0.0,
+                        "max": 1.0
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "tone": {
+                      "shape": {
+                        "kind": "union",
+                        "variants": [
+                          {
+                            "kind": "enum",
+                            "values": [
+                              "neutral",
+                              "positive",
+                              "caution",
+                              "danger"
+                            ]
+                          },
+                          {
+                            "kind": "record",
+                            "fields": {
+                              "r": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "g": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "b": {
+                                "shape": {
+                                  "kind": "integer",
+                                  "min": 0,
+                                  "max": 255
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              },
+                              "a": {
+                                "shape": {
+                                  "kind": "number",
+                                  "finite": true,
+                                  "min": 0.0,
+                                  "max": 1.0
+                                },
+                                "required": true,
+                                "scope": "shared"
+                              }
+                            },
+                            "allow_extra": false
+                          }
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": "neutral"
+                    },
+                    "orientation": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "horizontal",
+                          "vertical"
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": "horizontal"
+                    }
+                  },
+                  "allow_extra": false
+                },
+                {
+                  "kind": "record",
+                  "fields": {
+                    "kind": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "label"
+                        ]
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "x": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "y": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "text": {
+                      "shape": {
+                        "kind": "string",
+                        "bound": "short_text"
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "emphasis": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "normal",
+                          "strong",
+                          "subtle"
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": "normal"
+                    },
+                    "tone": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "neutral",
+                          "positive",
+                          "caution",
+                          "danger"
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": "neutral"
+                    },
+                    "align": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "start",
+                          "center",
+                          "end"
+                        ]
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": "start"
+                    }
+                  },
+                  "allow_extra": false
+                },
+                {
+                  "kind": "record",
+                  "fields": {
+                    "kind": {
+                      "shape": {
+                        "kind": "enum",
+                        "values": [
+                          "region"
+                        ]
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "key": {
+                      "shape": {
+                        "kind": "string",
+                        "bound": "identifier",
+                        "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "x1": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "y1": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "x2": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "y2": {
+                      "shape": {
+                        "kind": "integer",
+                        "min": -65536,
+                        "max": 65536
+                      },
+                      "required": true,
+                      "scope": "shared"
+                    },
+                    "label": {
+                      "shape": {
+                        "kind": "string",
+                        "bound": "short_text"
+                      },
+                      "required": false,
+                      "scope": "shared"
+                    },
+                    "activates": {
+                      "shape": {
+                        "kind": "boolean"
+                      },
+                      "required": false,
+                      "scope": "shared",
+                      "default": false
+                    }
+                  },
+                  "allow_extra": false
+                }
+              ]
+            },
+            "min": 0,
+            "max": 512
+          },
+          "required": true,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "region_activate": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "region": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        },
+        "surface_activate": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "button": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "primary",
+                    "secondary"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "region": {
+                "shape": {
+                  "kind": "string",
+                  "bound": "identifier",
+                  "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "scroll_x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "scroll_y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null,
+      "special": "composite"
+    },
+    "menu": {
+      "properties": {
+        "bar": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "open": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "viewer",
+          "default": false
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "close": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    },
+    "menu_item": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "normal",
+              "check",
+              "radio",
+              "separator"
+            ]
+          },
+          "required": false,
+          "scope": "shared",
+          "default": "normal"
+        },
+        "active": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "viewer",
+          "default": false
+        },
+        "group": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "many",
+      "events": {
+        "activate": {
+          "payload": null,
+          "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        },
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "value": {
+                "shape": {
+                  "kind": "boolean"
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": null
+    }
+  }
+}
