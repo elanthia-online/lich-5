@@ -305,3 +305,44 @@ name its columns -- the model needs them -- but never shows those names.
 eloot has twelve such lists, and every one rendered a bare "Exclusion"
 or "Spell Number" heading inside the box, which reads as content rather
 than the internal label it is.
+
+---
+
+# Addendum: contract 2.13.0 — the horizontal scroll axis
+
+Additive. The `scrolled` event on `scroll` gained `position_x`, `upper_x`
+and `page_size_x`, mirroring the three fields it already had for the
+vertical axis. All three are optional, so a client that reports only the
+vertical axis stays valid.
+
+| Field | Shape | Meaning |
+| --- | --- | --- |
+| `position_x` | integer | `scrollLeft` |
+| `upper_x` | integer | `scrollWidth` |
+| `page_size_x` | integer | `clientWidth` |
+
+## Why
+
+GTK's `Adjustment` is per-axis, and a `ScrolledWindow` has two of them.
+The event carried one scalar `position` with no axis, so the shim could
+only ever feed `@vadjustment`; `@hadjustment` kept its constructor
+defaults for the life of the window.
+
+That is not a rounding error. map.lic turns a click into a room with
+
+    click_x = (@scroller.hadjustment.value.to_i + pointer[0] - @map_offset_x) / scale
+
+so the horizontal term was always zero however far the viewer had
+scrolled. The same value is read by `center_viewport_on` when it clamps a
+target to the scroll range.
+
+`scroll_position`, the write path, already named both axes -- only the
+read-back was one-sided.
+
+## Not a new event
+
+`surface_activate` and the `surface_events` property were already in the
+schema from 2.7 and needed no change; they simply had no implementation on
+either side. A composite now asks for surface events when a script has
+connected a pointer signal to it, and the client emits the event with
+coordinates in the composite's own pixels.

@@ -1434,6 +1434,13 @@ module Lich
               value: fetch.call(:position), upper: fetch.call(:upper),
               page_size: fetch.call(:page_size)
             )
+            # 2.13: the horizontal axis. GTK's Adjustment is per-axis, and a
+            # script reading hadjustment.value to translate a click was
+            # reading a constructor default until the viewer reported one.
+            @hadjustment.note_viewport(
+              value: fetch.call(:position_x), upper: fetch.call(:upper_x),
+              page_size: fetch.call(:page_size_x)
+            )
             super
           end
 
@@ -2548,6 +2555,28 @@ module Lich
 
       # Sibling namespaces scripts touch alongside Gtk.
       module Gdk
+        # Gdk had no fallback, while Gtk has had one since slice one. A name
+        # it does not implement raised NameError instead of degrading, and
+        # because map.lic reaches for Gdk::WindowTypeHint::UTILITY in the
+        # first call of its constructor, on Linux the whole map window failed
+        # to build rather than losing one window-manager hint.
+        #
+        # Enum members become the symbol they were named, as Gtk's do;
+        # scripts only pass them back into methods the shim ignores. A name
+        # that looks like a class becomes a module so `A::B` still resolves.
+        def self.const_missing(name)
+          value = if name.to_s.match?(/\A[A-Z][a-z]/)
+                    Module.new do
+                      def self.const_missing(member)
+                        member.to_s.downcase.to_sym
+                      end
+                    end
+                  else
+                    name.to_s.downcase.to_sym
+                  end
+          Gtk.log_unsupported('Gdk', name, note: 'constant is not implemented')
+          const_set(name, value)
+        end
         # There is no X display behind the browser, so the shim reports one
         # monitor the size of the default screen. Real geometry arrives with
         # the viewer's `geometry` facility once a window is attached; until

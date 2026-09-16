@@ -18,6 +18,24 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('focusRoot?.matches("input, select, button, textarea")')
   end
 
+  # A composite is the only surface a script can click on, and the contract
+  # gates the event behind surface_events so a page opts in.
+  it 'emits surface_activate from a composite that asked for it' do
+    expect(javascript).to include('if (component.props.surface_events) {');
+    expect(javascript).to include('emit(page, component, "surface_activate", surfacePayload(event, surface, "primary"))')
+    expect(javascript).to include('emit(page, component, "surface_activate", surfacePayload(event, surface, "secondary"))')
+    # The browser's own menu must not appear over a script's popup.
+    expect(javascript).to include('event.preventDefault()')
+    # A region is its own event; a click on one is not also a surface click.
+    expect(javascript).to include('if (event.target.closest(".composite-region")) return;')
+  end
+
+  it 'reports both scroll axes, since a GTK adjustment is per-axis' do
+    %w[position_x upper_x page_size_x].each do |field|
+      expect(javascript.scan(/#{field}:/).size).to eq(2)
+    end
+  end
+
   # Until something reported an extent, a script centring its viewport
   # computed against a constructor default rather than the real pane.
   it 'reports a scroller extent after layout, not only when the viewer scrolls' do

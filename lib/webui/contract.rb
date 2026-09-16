@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.12.0'
+      VERSION = '2.13.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -289,9 +289,16 @@ module Lich
           # height. Only the viewer knows them, and scripts read them back to
           # work out where the bottom is.
           events: {
+            # 2.13: the horizontal axis, as `position_x`/`upper_x`/
+            # `page_size_x`. GTK's Adjustment is per-axis and a script that
+            # pans or centres a wide canvas reads both; without these the
+            # horizontal half was a constructor default. Optional, so a
+            # client that reports only the vertical axis stays valid.
             scrolled: event(record(
                               position: property(GEOMETRY, required: true),
-                              upper: property(GEOMETRY), page_size: property(GEOMETRY)
+                              upper: property(GEOMETRY), page_size: property(GEOMETRY),
+                              position_x: property(GEOMETRY), upper_x: property(GEOMETRY),
+                              page_size_x: property(GEOMETRY)
                             )),
           }, value: nil,
         },

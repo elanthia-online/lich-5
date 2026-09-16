@@ -54,6 +54,45 @@ module Lich
             def forget_all
               @mutex.synchronize { @sources.clear }
             end
+
+            # A `body_text` prop is bounded, and base64 costs a third on top
+            # of the PNG. A marker is small -- map's fixed one is 58px, about
+            # 2.5KB encoded -- but a dynamic one grows with the zoom, so a
+            # pixbuf that would not fit is reported rather than sent as a
+            # truncated src the browser would refuse.
+            MAX_DATA_URI = 8192
+
+            def data_uri(pixbuf)
+              return nil unless pixbuf.respond_to?(:save)
+
+              png = encode_png(pixbuf)
+              return nil unless png
+
+              encoded = "data:image/png;base64,#{[png].pack('m0')}"
+              if encoded.bytesize > MAX_DATA_URI
+                Gtk.log_unsupported('GdkPixbuf', 'inline image',
+                                    note: "#{pixbuf.width}x#{pixbuf.height} exceeds #{MAX_DATA_URI} bytes encoded")
+                return nil
+              end
+              encoded
+            rescue StandardError => error
+              Gtk.log_unsupported('GdkPixbuf', 'inline image', note: error.message)
+              nil
+            end
+
+            private
+
+            # save(nil, type) returns the bytes; older bindings only have
+            # save_to_buffer, which is deprecated but still present.
+            def encode_png(pixbuf)
+              pixbuf.save(nil, 'png')
+            rescue StandardError, ArgumentError
+              begin
+                pixbuf.send(:save_to_buffer, 'png')
+              rescue StandardError
+                nil
+              end
+            end
           end
         end
 
@@ -77,6 +116,18 @@ module Lich
 
             def webui_shim_installed?
               true
+            end
+          end)
+
+          # A pixbuf built in memory has no file to serve. map draws its room
+          # marker, tag markers and note pins with Cairo and converts them
+          # with Pixbuf.new(data:), so every one of them was dropped for want
+          # of a source. Encoded to PNG on demand instead and sent as a
+          # data: URI, which the page's CSP already allows (img-src 'self'
+          # data:).
+          ::GdkPixbuf::Pixbuf.prepend(Module.new do
+            def webui_data_uri
+              @webui_data_uri ||= PixbufSources.data_uri(self)
             end
           end)
 
@@ -182,9 +233,11 @@ module Lich
           end
 
           def served_src
-            return nil unless @file && File.file?(@file)
+            return @session.serve_file(@file) if @file && File.file?(@file)
+            # No file behind it: a Cairo-drawn marker, which travels inline.
+            return @pixbuf.webui_data_uri if @pixbuf.respond_to?(:webui_data_uri)
 
-            @session.serve_file(@file)
+            nil
           rescue StandardError => error
             Gtk.log_unsupported('Gtk::Image', 'serving file', note: error.message)
             nil
@@ -243,6 +296,78 @@ module Lich
             :composite
           end
 
+          # map.lic wires four pointer signals to its Layout. The contract's
+          # answer for a composite is `surface_activate`, which reports one
+          # completed gesture with its position, button and modifiers -- not
+          # a press/release pair, because the browser pans the scroller
+          # itself and a drag never needs to reach the script.
+          #
+          # So the shim synthesizes the pair a GTK script expects: press
+          # then release, both carrying the same Gdk-shaped event. A script
+          # that starts a drag on press and decides click-versus-drag on
+          # release sees a press followed immediately by a release with no
+          # motion between, which is exactly a click.
+          #
+          # Motion and scroll have no contract event; scroll-to-pan is the
+          # browser's own and ctrl+scroll zoom is reported separately.
+          SURFACE_SIGNALS = {
+            button_press_event: :press,
+            button_release_event: :release,
+          }.freeze
+
+          def event_for(signal)
+            SURFACE_SIGNALS[signal] || super
+          end
+
+          # Declared so the node carries the binding even though the script
+          # connects to signals the contract does not name one-for-one.
+          def always_bound_events
+            return [] unless surface_wanted?
+
+            [:surface_activate]
+          end
+
+          def receive_event(event, context)
+            return super unless event == :surface_activate
+
+            payload = context.payload || {}
+            @session.note_pointer(window_root)
+            remember_pointer(payload)
+            %i[button_press button_release].each do |kind|
+              gdk = Event.pointer(kind, payload)
+              wanted = kind == :button_press ? :press : :release
+              @handlers.each_key do |signal|
+                emit(signal, gdk) if SURFACE_SIGNALS[signal] == wanted
+              end
+            end
+            nil
+          end
+
+          # A script reads the pointer back through `window.pointer` rather
+          # than from the event it was handed, so the last position has to
+          # be recorded where that can find it.
+          def remember_pointer(payload)
+            x = (payload[:x] || payload['x']).to_i
+            y = (payload[:y] || payload['y']).to_i
+            @pointer = [x, y]
+          end
+
+          def window
+            PointerWindow.new(@pointer || [0, 0])
+          end
+
+          # Gdk::Window, only as far as a script needs it: `window.pointer`
+          # returns [window, x, y] in GTK, and callers index [1] and [2].
+          PointerWindow = Struct.new(:position) do
+            def pointer
+              [self, position[0], position[1]]
+            end
+          end
+
+          def surface_wanted?
+            @handlers.keys.any? { |signal| SURFACE_SIGNALS.key?(signal) }
+          end
+
           # `composite` takes no children: its content is the `layers` prop,
           # not a subtree. The children a script puts here are still real
           # widgets -- it holds them, shows and hides them, destroys them --
@@ -262,7 +387,11 @@ module Lich
           # worked. Fall back to the widget's own request, then its window,
           # so the node is always valid.
           def node_props
-            { layers: layers, width: composite_width, height: composite_height }
+            props = { layers: layers, width: composite_width, height: composite_height }
+            # The validator refuses surface_activate unless the node asks
+            # for it, so the property and the binding go together.
+            props[:surface_events] = true if surface_wanted?
+            props
           end
 
           def composite_width

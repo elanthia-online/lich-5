@@ -23,6 +23,21 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
   let(:root) { @root }
   let(:map_file) { File.join(root, 'Flotilla.png') }
 
+  # The shape map draws its room marker as: a Cairo surface converted with
+  # Pixbuf.new(data:), which has no file behind it.
+  def cairo_marker(size)
+    surface = Cairo::ImageSurface.new(Cairo::FORMAT_ARGB32, size, size)
+    context = Cairo::Context.new(surface)
+    context.set_source_rgba(0.0, 0.0, 1.0, 0.8)
+    context.set_line_width(size * 0.1)
+    context.arc(size / 2.0, size / 2.0, (size / 2.0) - 2, 0, 2 * Math::PI)
+    context.stroke
+    ::GdkPixbuf::Pixbuf.new(
+      data: surface.data, colorspace: ::GdkPixbuf::Colorspace::RGB, has_alpha: true,
+      bits_per_sample: 8, width: size, height: size, rowstride: surface.stride
+    )
+  end
+
   def png_bytes(width, height)
     chunk = lambda do |type, data|
       [data.bytesize].pack('N') + type + data + [Zlib.crc32(type + data)].pack('N')
@@ -288,6 +303,119 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
       end
 
       expect([scroller.allocation.width, scroller.allocation.height]).to eq([800, 250])
+    end
+  end
+
+  # map wires button_press/release to its Layout. The contract's answer for
+  # a composite is surface_activate -- one completed gesture, not a pair --
+  # so the shim synthesizes the press/release a GTK script expects. Without
+  # this, 49 of map's controls were unreachable and failed silently.
+  describe 'pointer gestures on a layout' do
+    let(:layout) do
+      session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(800, 600)
+        l = gtk::Layout.new
+        window.add(l)
+        l
+      end
+    end
+
+    def fire(payload)
+      session.sync { layout.send(:receive_event, :surface_activate, Struct.new(:payload).new(payload)) }
+    end
+
+    it 'asks for surface events only once a script has connected one' do
+      expect(session.sync { gtk::Layout.new.send(:node_props) }).not_to include(:surface_events)
+
+      layout.signal_connect('button_press_event') { |_w, _e| nil }
+
+      expect(layout.send(:node_props)[:surface_events]).to be(true)
+      expect(layout.send(:always_bound_events)).to eq([:surface_activate])
+    end
+
+    it 'delivers a press and then a release, which is a click with no drag' do
+      seen = []
+      layout.signal_connect('button_press_event') { |_w, event| seen << [:press, event.button] }
+      layout.signal_connect('button-release-event') { |_w, event| seen << [:release, event.button] }
+
+      fire(x: 150, y: 260, button: 'secondary', modifiers: ['ctrl'])
+
+      expect(seen).to eq([[:press, 3], [:release, 3]])
+    end
+
+    it 'hands the script a Gdk-shaped event it can read' do
+      captured = nil
+      layout.signal_connect('button_press_event') { |_w, event| captured = event }
+
+      fire(x: 150, y: 260, button: 'primary', modifiers: %w[ctrl shift])
+
+      expect([captured.button, captured.x, captured.y]).to eq([1, 150.0, 260.0])
+      expect([captured.state.control_mask?, captured.state.shift_mask?]).to eq([true, true])
+    end
+
+    # get_pointer_position reads @layout.window.pointer rather than the
+    # event, and window returned nil, so every click resolved to 0,0.
+    it 'remembers the pointer where a script looks for it' do
+      layout.signal_connect('button_press_event') { |_w, _e| nil }
+      fire(x: 150, y: 260, button: 'primary', modifiers: [])
+
+      _window, x, y = layout.window.pointer
+
+      expect([x, y]).to eq([150, 260])
+    end
+
+    it 'validates as a composite with surface events enabled' do
+      layout.signal_connect('button_press_event') { |_w, _e| nil }
+      props = layout.send(:node_props)
+
+      expect { validator.validate_component!(:composite, props, owner: 'map', page_id: 'p', cid: 'c') }
+        .not_to raise_error
+    end
+  end
+
+  # map draws its room marker, tag markers and note pins with Cairo and
+  # converts them with Pixbuf.new(data:). Those have no file to serve, so
+  # every one of them was dropped -- including the circle that marks the
+  # room you are standing in.
+  describe 'a pixbuf with no file behind it' do
+    it 'travels inline as a data URI' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      props = session.sync { gtk::Image.new(pixbuf: cairo_marker(58)).send(:node_props) }
+
+      expect(props[:src]).to start_with('data:image/png;base64,')
+      expect { validator.validate_component!(:image, props, owner: 'map', page_id: 'p', cid: 'c') }
+        .not_to raise_error
+    end
+
+    it 'appears as a composite layer at its coordinates' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      props = session.sync do
+        l = gtk::Layout.new
+        l.set_size(3200, 3200)
+        l.put(gtk::Image.new(pixbuf: cairo_marker(58)), 1200, 1400)
+        l.send(:node_props)
+      end
+
+      expect(props[:layers].first).to include(kind: 'image', x: 1200, y: 1400)
+      expect(props[:layers].first[:src]).to start_with('data:image/png;base64,')
+    end
+
+    it 'refuses one too large to inline rather than sending a broken src' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      noted = []
+      allow(gtk).to receive(:log_unsupported) { |_k, _m, **options| noted << options[:note] }
+
+      props = session.sync { gtk::Image.new(pixbuf: cairo_marker(300)).send(:node_props) }
+
+      expect(props[:src]).to eq('')
+      expect(noted.join).to match(/exceeds \d+ bytes encoded/)
     end
   end
 
