@@ -599,6 +599,28 @@ bump on its own. Fold them into the next contract change.
 
 ## 6. Rough edges carried from slice one
 
+- **Script-defined constants change their fully-qualified name under
+  `--webui-dev`, and `Marshal` records that name.** A class a script defines
+  at its top level is `Lich::Common::ScriptScope::Foo` under the shim and
+  `Lich::Common::Foo` without it. `Vars` persists with `Marshal.dump`, and
+  its load path rescues and continues rather than failing, so a blob written
+  in one mode raises `ArgumentError: undefined class/module ...` in the
+  other and that key is silently dropped.
+
+  **Checked against the corpus (2026-09-16), and not currently reachable.**
+  Of the 230 scripts, every `Vars`/`Settings`/`CharSettings` assignment whose
+  right-hand side is a `.new` constructs a core type -- `Hash.new`,
+  `Array.new` -- and the stored values are otherwise booleans, nil, strings,
+  hashes and arrays. No script stores an instance of a class it defined
+  itself. A Prism parse of all 49 GTK scripts plus a grep of all 230 agrees.
+
+  It stays a known limitation rather than a fix because it becomes real the
+  moment someone writes that script. If one appears, the fix is to marshal
+  through a name that does not move -- or to have `Vars` refuse to overwrite
+  a blob it could not fully load, which is the more defensible behaviour
+  regardless.
+
+
 - ~~Every browser window renders every page~~ (fixed, pulled forward).
 - ~~Horizontal `Box` -> `columns` with equal weights; `expand`/`fill`
   ignored~~ (fixed, `4c09a59e`).

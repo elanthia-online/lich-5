@@ -311,4 +311,34 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
       expect(gtk::Label.new('y').vexpand?).to be(false)
     end
   end
+
+  # Deriving the next handler id from the hash's size reused a live id after
+  # any disconnect, so disconnecting the handler a script meant to drop
+  # silently killed a later one instead.
+  describe 'signal handler ids' do
+    let(:gtk) { Lich::Common::ScriptScope::Gtk }
+
+    it 'never reuses an id after a disconnect' do
+      button = gtk::Button.new('x')
+      first = button.signal_connect('clicked') { :first }
+      second = button.signal_connect('clicked') { :second }
+      button.signal_handler_disconnect(second)
+      third = button.signal_connect('clicked') { :third }
+
+      expect([first, second, third].uniq.length).to eq(3)
+      expect(third).to be > second
+    end
+
+    it 'disconnects the handler it was asked to, and only that one' do
+      button = gtk::Button.new('x')
+      fired = []
+      button.signal_connect('clicked') { fired << :first }
+      second = button.signal_connect('clicked') { fired << :second }
+      button.signal_handler_disconnect(second)
+      button.signal_connect('clicked') { fired << :third }
+      button.send(:emit, :clicked)
+
+      expect(fired).to contain_exactly(:first, :third)
+    end
+  end
 end

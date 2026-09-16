@@ -489,6 +489,10 @@ module Lich
             @session = Session.current
             @handlers = Hash.new { |hash, signal| hash[signal] = [] }
             @handler_ids = {}
+            # Monotonic: deriving the next id from the hash's size reused a
+            # live id after any disconnect, so disconnecting the handler you
+            # meant killed a later one instead.
+            @handler_id_seq = 0
             @handle = nil
             @synced_props = nil
             @synced_placement = nil
@@ -538,7 +542,7 @@ module Lich
 
             name = Gtk.normalize_signal(signal)
             @handlers[name] << block
-            id = @handler_ids.length + 1
+            id = (@handler_id_seq += 1)
             @handler_ids[id] = [name, block]
             id
           end
@@ -3276,16 +3280,32 @@ module Lich
         end
 
         module Idle
-          # Runs once on the session thread; re-queues itself while +block+
-          # returns true. There is no thread to kill, so the source id maps
-          # to nil and Source.remove is a no-op for it.
+          # Runs on the session thread, repeating while +block+ returns true.
+          #
+          # It used to re-enqueue itself directly and register a fresh source
+          # each pass: a block that kept returning true queued the next run
+          # with no delay at all, so the session thread spun on it, and every
+          # pass leaked another entry in @sources. The id it handed back
+          # mapped to nil, so Source.remove could never stop it either.
+          #
+          # Built on the same shape as Timeout.add, with the shortest wait
+          # that still yields the thread: one source, cancellable, no spin.
+          IDLE_INTERVAL = 0.01
+
           def self.add(&block)
             session = Gtk::Session.current
-            session.enqueue do
-              keep = block.call
-              GLib::Idle.add(&block) if keep
+            id = nil
+            thread = Thread.new do
+              loop do
+                sleep(IDLE_INTERVAL)
+                break unless session.sync { block.call }
+              end
+            rescue StandardError
+              nil
+            ensure
+              GLib.remove_source(id) if id
             end
-            GLib.register_source(nil)
+            id = GLib.register_source(thread)
           end
         end
 
