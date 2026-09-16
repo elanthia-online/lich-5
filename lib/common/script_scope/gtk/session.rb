@@ -502,6 +502,15 @@ module Lich
 
             @closed = true
             windows = @mutex.synchronize { @windows.dup }
+            # Session teardown is a cancellation, not just a cleanup. A
+            # Dialog#run parked on its queue is not waiting for the browser --
+            # it is waiting for an answer that is never coming now, and
+            # close_window only removes adapter and browser state. Without
+            # this an off-thread run stayed blocked for the life of the
+            # process and the dialog never reported itself destroyed.
+            windows.each do |window|
+              window.session_terminated if window.respond_to?(:session_terminated)
+            end
             windows.each { |window| close_window(window) }
             begin
               service.terminate_owner(@owner)

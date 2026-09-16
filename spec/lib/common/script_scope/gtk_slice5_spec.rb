@@ -305,6 +305,23 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
       expect(second).to eq(:never_returned)
     end
 
+    # Session teardown is a cancellation, not just a cleanup. close_window
+    # removed adapter and browser state but never released a parked run, so an
+    # off-thread caller stayed blocked for the life of the process and the
+    # dialog never reported itself destroyed. Distinct from tab-close and
+    # browser-exit, which are the viewer's doing.
+    it 'releases a waiting run when the session shuts down' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q10', buttons: [['OK', :ok]]) }
+      result = nil
+      waiter = Thread.new { result = dialog.run }
+      sleep 0.2
+      session.shutdown
+
+      expect(waiter.join(3)).not_to be_nil
+      expect(result).to eq(gtk::ResponseType::DELETE_EVENT)
+      expect(dialog.destroyed?).to be(true)
+    end
+
     it 'still delivers a real response rather than releasing waiters early' do
       dialog = ok = nil
       session.sync do

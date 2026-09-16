@@ -2593,6 +2593,13 @@ module Lich
             super
           end
 
+          # The session is going away, so nobody will ever answer. Distinct
+          # from a tab close or the browser dying: those are the viewer's
+          # doing and arrive through their own paths.
+          def session_terminated
+            release_waiters
+          end
+
           private
 
           # Unblocks every thread parked in #run. A single push only wakes
