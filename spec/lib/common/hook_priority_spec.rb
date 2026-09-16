@@ -19,6 +19,14 @@ RSpec.describe 'hook execution priority' do
       allow(klass).to receive(:respond)
     end
 
+    after do
+      klass._hooks.clear
+      klass._hook_sources.clear
+      klass._hook_owners.clear
+      klass._hook_persist.clear
+      klass._hook_priorities.clear
+    end
+
     it 'runs higher priorities first and preserves registration order for ties' do
       calls = []
       klass.add('ordinary-first', proc { |line| calls << :ordinary_first; line }, priority: 0)

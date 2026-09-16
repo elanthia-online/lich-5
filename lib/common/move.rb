@@ -263,7 +263,7 @@ module Lich
               last_line = line
             end
             if line.nil?
-              sleep 0.1
+              Script.execution_sleep 0.1
             elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
               # DragonRealms
               remedy.call(:retreat, MAX_REMEDIES, :engaged) {
@@ -295,12 +295,12 @@ module Lich
               # swim, drag and guard lines share this branch with climb lines;
               # name the cause from the line rather than assuming a climb
               remedy.call(:roll, MAX_ROLLS, roll_cause(line)) {
-                sleep 1
+                Script.execution_sleep 1
                 waitrt?
               }
             elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
               remedy.call(:roll, MAX_ROLLS, :climb) {
-                sleep 1
+                Script.execution_sleep 1
                 waitrt?
                 command.call('stand') unless standing?
                 waitrt?
@@ -310,7 +310,7 @@ module Lich
               finish.call(true)
             elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
               remedy.call(:roll, MAX_ROLLS, :climb) {
-                sleep 0.5
+                Script.execution_sleep 0.5
                 waitrt?
                 command.call('stand') unless standing?
                 waitrt?
@@ -363,9 +363,9 @@ module Lich
             elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
               # Waiting is not a remedy that can fail; roundtime always ends.
               if $2.to_i > 1
-                sleep($2.to_i - "0.2".to_f)
+                Script.execution_sleep($2.to_i - "0.2".to_f)
               else
-                sleep 0.3
+                Script.execution_sleep 0.3
               end
               put_dir.call
             elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
@@ -378,20 +378,20 @@ module Lich
                 waitrt?
               }
             elsif line =~ /^You're still recovering from your recent/
-              remedy.call(:recover, MAX_ROLLS, :roundtime) { sleep 2 }
+              remedy.call(:recover, MAX_ROLLS, :roundtime) { Script.execution_sleep 2 }
             elsif line =~ /^The ground approaches you at an alarming rate/
               remedy.call(:fell, MAX_ROLLS, :climb) {
-                sleep 1
+                Script.execution_sleep 1
                 command.call('stand') unless standing?
               }
             elsif line =~ /You go flying down several feet, landing with a/
               remedy.call(:fell, MAX_ROLLS, :climb) {
-                sleep 1
+                Script.execution_sleep 1
                 command.call('stand') unless standing?
               }
             elsif line =~ /^Sorry, you may only type ahead/
               # clears on its own once the queue drains, but bounded all the same
-              remedy.call(:typeahead, MAX_ROLLS, :roundtime) { sleep 1 }
+              remedy.call(:typeahead, MAX_ROLLS, :roundtime) { Script.execution_sleep 1 }
             elsif line == 'You are still stunned.'
               wait_while { stunned? }
               put_dir.call
@@ -408,13 +408,13 @@ module Lich
             elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
               remedy.call(:feet, MAX_REMEDIES, :unknown) {
                 command.call('stow feet')
-                sleep 1
+                Script.execution_sleep 1
               }
             elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
               # the boltstone shatters as it fires, so this should not recur;
               # bounded anyway rather than trusting that
               remedy.call(:trap, MAX_REMEDIES, :unknown) {
-                sleep(0.5)
+                Script.execution_sleep(0.5)
                 wait_while { stunned? }
                 waitrt?
                 command.call('stand', :trap) unless standing?
@@ -425,7 +425,7 @@ module Lich
                 30.times {
                   break if clear.include?('You regain control of your senses!')
 
-                  sleep 0.1
+                  Script.execution_sleep 0.1
                 }
               }
             elsif line =~ /^It's pitch dark and you can't see a thing!/

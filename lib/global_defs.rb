@@ -281,12 +281,12 @@ end
 
 def waitrt
   wait_until { (XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkrt
+  Script.execution_sleep checkrt
 end
 
 def waitcastrt
   wait_until { (XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkcastrt
+  Script.execution_sleep checkcastrt
 end
 
 def checkrt
@@ -311,7 +311,7 @@ end
 #   legacy (no options): whether roundtime remains after the sleep
 def waitrt?(interrupt: nil, cap: nil)
   if interrupt.nil? && cap.nil?
-    sleep checkrt
+    Script.execution_sleep checkrt
     return checkrt > 0.0
   end
 
@@ -321,7 +321,7 @@ def waitrt?(interrupt: nil, cap: nil)
     return had_rt if interrupt && interrupt.call
     return had_rt if stop_at && Time.now >= stop_at
 
-    sleep([checkrt, 0.1].min)
+    Script.execution_sleep([checkrt, 0.1].min)
   end
   had_rt
 end
@@ -336,7 +336,7 @@ def waitcastrt?(interrupt: nil, cap: nil)
   if interrupt.nil? && cap.nil?
     current_castrt = checkcastrt
     if current_castrt.to_f > 0.0
-      sleep(current_castrt)
+      Script.execution_sleep(current_castrt)
       return true
     else
       return false
@@ -349,7 +349,7 @@ def waitcastrt?(interrupt: nil, cap: nil)
     return had_rt if interrupt && interrupt.call
     return had_rt if stop_at && Time.now >= stop_at
 
-    sleep([checkcastrt.to_f, 0.1].min)
+    Script.execution_sleep([checkcastrt.to_f, 0.1].min)
   end
   had_rt
 end
@@ -663,6 +663,7 @@ def wait_until(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -693,6 +694,7 @@ def wait_while(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -1270,13 +1272,13 @@ end
 
 def pause(num = 1)
   if num.to_s =~ /m/
-    sleep((num.sub(/m/, '').to_f * 60))
+    Script.execution_sleep((num.sub(/m/, '').to_f * 60))
   elsif num.to_s =~ /h/
-    sleep((num.sub(/h/, '').to_f * 3600))
+    Script.execution_sleep((num.sub(/h/, '').to_f * 3600))
   elsif num.to_s =~ /d/
-    sleep((num.sub(/d/, '').to_f * 86400))
+    Script.execution_sleep((num.sub(/d/, '').to_f * 86400))
   else
-    sleep(num.to_f)
+    Script.execution_sleep(num.to_f)
   end
 end
 
@@ -1510,14 +1512,14 @@ def fput(message, *waitingfor)
   # second; without one, the plain sleep of before. True when interrupted.
   wait = lambda do |seconds|
     if interrupt.nil?
-      sleep(seconds)
+      Script.execution_sleep(seconds)
       return false
     end
     slices = (seconds / 0.1).ceil
     slices.times do
       return true if interrupted.call
 
-      sleep(0.1)
+      Script.execution_sleep(0.1)
     end
     false
   end
@@ -1576,27 +1578,27 @@ def fput(message, *waitingfor)
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
         echo "You're dead...! You can't do that!"
-        sleep 1
+        Script.execution_sleep 1
         script.downstream_buffer.unshift(string)
         return fail_with.call(:dead)
       elsif checkstunned
         while checkstunned
           return fail_with.call(:interrupted) if interrupted.call
 
-          sleep("0.25".to_f)
+          Script.execution_sleep("0.25".to_f)
         end
       elsif checkwebbed
         while checkwebbed
           return fail_with.call(:interrupted) if interrupted.call
 
-          sleep("0.25".to_f)
+          Script.execution_sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
         return fail_with.call(:interrupted) if wait.call(1)
       elsif resend_transient
         return fail_with.call(:interrupted) if wait.call(0.25)
       else
-        sleep 0.1
+        Script.execution_sleep 0.1
         script.downstream_buffer.unshift(string)
         return fail_with.call(:refused)
       end
@@ -1895,13 +1897,13 @@ def dothis(action, success_line)
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         break
       elsif line == 'You are still stunned.'
         wait_while { stunned? }
@@ -1909,7 +1911,7 @@ def dothis(action, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -1918,7 +1920,7 @@ def dothis(action, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -1930,7 +1932,7 @@ def dothis(action, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
@@ -1955,19 +1957,19 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
 
       line = get?
       if line.nil?
-        sleep 0.1
+        Script.execution_sleep 0.1
       elsif line =~ success_line
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'You are still stunned.'
@@ -1977,7 +1979,7 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -1986,7 +1988,7 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -1998,7 +2000,7 @@ def dothistimeout(action, timeout, success_line, interrupt: nil)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
