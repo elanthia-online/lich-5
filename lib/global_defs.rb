@@ -2341,40 +2341,32 @@ def detachable_clients_close
 end
 
 # Send one newly attached frontend the game state it missed before attaching.
+#
+# Waiting for the login feed and sending are shared here; what goes into the
+# push is owned by each game (Lich::Gemstone::DetachableClientInit and
+# Lich::DragonRealms::DetachableClientInit, loaded by GameLoader). The unqualified
+# DetachableClientInit resolves to the running game's module, since main.rb
+# includes Lich::Gemstone or Lich::DragonRealms before the listener starts.
 def detachable_client_send_init(client)
-  init_str = "<progressBar id='mana' value='0' text='mana #{XMLData.mana}/#{XMLData.max_mana}'/>"
-  init_str.concat "<progressBar id='health' value='0' text='health #{XMLData.health}/#{XMLData.max_health}'/>"
-  init_str.concat "<progressBar id='spirit' value='0' text='spirit #{XMLData.spirit}/#{XMLData.max_spirit}'/>"
-  init_str.concat "<progressBar id='stamina' value='0' text='stamina #{XMLData.stamina}/#{XMLData.max_stamina}'/>"
-  init_str.concat "<spell>#{Lich::Common::XmlEntities.encode(XMLData.prepared_spell)}</spell>"
-  %w[IconBLEEDING IconPOISONED IconDISEASED IconSTANDING IconKNEELING IconSITTING IconPRONE].each do |indicator|
-    init_str.concat "<indicator id='#{indicator}' visible='#{XMLData.indicator[indicator]}'/>"
+  # The wait confirms login and that enough of the initial feed has been parsed
+  # to build the push. What counts as enough depends on the game's feed, so each
+  # game module answers it with ready?. The module itself only exists once
+  # GameLoader has loaded it, so keep waiting until then. Checked before
+  # sleeping so an already logged-in session is not delayed.
+  100.times do
+    break if defined?(DetachableClientInit) && DetachableClientInit.ready?
+
+    sleep 0.1
   end
-  if XMLData.game.to_s.match?(/GS/)
-    init_str.concat "<progressBar id='pbarStance' value='#{XMLData.stance_value}'/>"
-    init_str.concat "<progressBar id='mindState' value='#{XMLData.mind_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.mind_text)}'/>"
-    init_str.concat "<progressBar id='encumlevel' value='#{XMLData.encumbrance_value}' text='#{Lich::Common::XmlEntities.encode(XMLData.encumbrance_text)}'/>"
-    init_str.concat "<right>#{Lich::Common::XmlEntities.encode(GameObj.right_hand.name)}</right>"
-    init_str.concat "<left>#{Lich::Common::XmlEntities.encode(GameObj.left_hand.name)}</left>"
-    %w[back leftHand rightHand head rightArm abdomen leftEye leftArm chest rightLeg neck leftLeg nsys rightEye].each do |area|
-      if Wounds.send(area) > 0
-        init_str.concat "<image id=\"#{area}\" name=\"Injury#{Wounds.send(area)}\"/>"
-      elsif Scars.send(area) > 0
-        init_str.concat "<image id=\"#{area}\" name=\"Scar#{Scars.send(area)}\"/>"
-      end
-    end
+
+  # GameLoader only loads the game modules once the server has identified the
+  # game, so without them there is no feed to describe.
+  unless defined?(DetachableClientInit)
+    Lich.log 'warning: detachable_client_send_init: game modules not loaded, init push skipped'
+    return
   end
-  init_str.concat '<compass>'
-  short_dirs = {
-    'north' => 'n', 'northeast' => 'ne', 'east' => 'e', 'southeast' => 'se',
-    'south' => 's', 'southwest' => 'sw', 'west' => 'w', 'northwest' => 'nw',
-    'up' => 'up', 'down' => 'down', 'out' => 'out'
-  }
-  XMLData.room_exits.each do |direction|
-    init_str.concat "<dir value='#{short_dirs[direction]}'/>" if short_dirs.key?(direction)
-  end
-  init_str.concat '</compass>'
-  client.puts_main_stream(init_str)
+
+  client.puts_main_stream(DetachableClientInit.init_string)
 rescue StandardError => e
   Lich.log "error: detachable_client_send_init: #{e}\n\t#{e.backtrace.first}"
 end
