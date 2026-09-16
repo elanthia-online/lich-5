@@ -368,6 +368,7 @@ module Lich
                     else []
                     end
           sources.each do |source|
+            next if inline_image_source?(source)
             next if @file_service&.resolve_url(source)
 
             raise Error.new(
@@ -380,6 +381,18 @@ module Lich
           @registry.fetch(page.owner, component.props[:popup][:page])
         end
         render
+      end
+
+      # A base64 data: image is self-contained -- it references no server
+      # resource to register -- and the page's CSP already allows it
+      # (img-src 'self' data:). The shim builds these from Cairo surfaces
+      # that have no file: map's room marker, tag markers and note pins.
+      # Matched strictly so nothing but an inline PNG/JPEG/GIF/WebP passes:
+      # a base64 image media type, then only base64 characters.
+      INLINE_IMAGE = %r{\Adata:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}\z}
+
+      def inline_image_source?(source)
+        source.is_a?(String) && INLINE_IMAGE.match?(source)
       end
 
       def record_presentation_degradations(page, render)

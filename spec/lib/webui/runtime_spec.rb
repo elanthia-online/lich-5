@@ -339,4 +339,34 @@ RSpec.describe Lich::WebUI::Runtime do
     })).to eq(:refused)
     expect(first_connection.sent.last['reason']).to eq('contract')
   end
+
+  # A Cairo-drawn marker has no file to serve, so the shim inlines it as a
+  # base64 data: URI. The CSP already allows those; the render validator did
+  # not, and refused the whole map the moment its room marker appeared.
+  it 'accepts a base64 data image, which references no served resource' do
+    pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'marker', title: 'Marker') do
+      image(src: pixel)
+    end)
+
+    expect(runtime.handle(first_connection, {
+      type: 'attach', page: registry.address_for(page), version: '2.5.0',
+    })).to eq(:attached)
+  end
+
+  it 'still refuses a data URI that is not a base64 image' do
+    [
+      'data:text/html;base64,PHNjcmlwdD4=',
+      'data:image/svg+xml;base64,PHN2Zy8+',
+      'data:image/png;base64,not valid base64!'
+    ].each do |hostile|
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: "bad-#{hostile.hash.abs}", title: 'Bad') do
+        image(src: hostile)
+      end)
+
+      expect(runtime.handle(first_connection, {
+        type: 'attach', page: registry.address_for(page), version: '2.5.0',
+      })).to eq(:refused), "expected #{hostile.inspect} to be refused"
+    end
+  end
 end
