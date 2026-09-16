@@ -304,7 +304,7 @@ module Lich
             shadow-type yalign sizing search-column headers-visible
             fixed-height-mode column-homogeneous row-homogeneous max-width-chars
             wrap-mode accepts-tab modal tab-fill numeric digits angle
-            use-markup activates-default has-frame can-default
+            activates-default has-frame can-default
             has-default focus-on-click relief image-position use-underline
             invisible-char primary-icon-activatable secondary-icon-activatable
             primary-icon-sensitive secondary-icon-sensitive resize-mode

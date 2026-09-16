@@ -628,4 +628,30 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(props[:weights]).to eq([0, 0])
     end
   end
+
+  # Glade sets use-markup on a label whose text is Pango markup. The shim
+  # ignored the property, so bigshot's wiki blurb rendered its raw
+  # <a href=...> as literal text.
+  describe 'use-markup from a Glade file' do
+    let(:wiki) do
+      'Additional details: <a href="https://gswiki.play.net/x" title="x">'         'https://gswiki.play.net/x</a>'
+    end
+
+    it 'parses the markup rather than printing the tags' do
+      content = session.sync do
+        label = gtk::Label.new(wiki)
+        label.apply_builder_property('use-markup', 'True')
+        label.send(:node_props)[:content]
+      end
+
+      expect(content).not_to include('<a href')
+      expect(content).to include('https://gswiki.play.net/x')
+    end
+
+    it 'leaves a label alone when the property is not set' do
+      content = session.sync { gtk::Label.new(wiki).send(:node_props)[:content] }
+
+      expect(content).to include('<a href')
+    end
+  end
 end

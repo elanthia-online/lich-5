@@ -217,12 +217,14 @@ module Lich
         if state[:tab_layout]
           ui.tabs(key: 'saved-account-tabs', names: names, selected: 0,
                   on: { select: ->(_event) {} }) do
-            stack(slot: 'FAVORITES', key: 'favorites-panel') do
+            # 4, to match the gap inside each row; the default 8 left the
+            # list looking twice as loose as the buttons within a row.
+            stack(slot: 'FAVORITES', key: 'favorites-panel', gap: 4) do
               launcher.__send__(:render_entry_rows, self, state[:entries].select(&:favorite), state,
                                 empty: 'No favorite characters yet.')
             end
             account_names.each do |account|
-              stack(slot: account, key: "saved-account-#{account}") do
+              stack(slot: account, key: "saved-account-#{account}", gap: 4) do
                 launcher.__send__(:render_entry_rows, self,
                                   state[:entries].select { |entry| entry.user_id == account }, state,
                                   empty: 'No saved characters for this account.')
