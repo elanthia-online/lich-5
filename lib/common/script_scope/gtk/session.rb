@@ -203,6 +203,7 @@ module Lich
             @windows = []
             @viewers = Hash.new { |hash, key| hash[key] = {} } # page => { viewer_id => true }
             @browsers = {} # window => pid
+            @pointer_window = nil
             @mutex = Mutex.new
             @closed = false
           end
@@ -315,6 +316,16 @@ module Lich
             rescue Lich::WebUI::Error
               forget_viewer(page, viewer_id)
             end
+          end
+
+          # The window that last saw a pointer gesture: where a popup menu
+          # opened from a button-press handler belongs.
+          def note_pointer(window)
+            @mutex.synchronize { @pointer_window = window } if window
+          end
+
+          def popup_window
+            @mutex.synchronize { @pointer_window || @windows.find(&:handle) || @windows.first }
           end
 
           # Wraps a script-facing callback for the WebUI dispatcher: note the

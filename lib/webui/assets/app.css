@@ -29,6 +29,27 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 #pages:has(> .webui-page.bare) { width: 100%; }
 .webui-page.bare { font-size: 13px; }
 .webui-page.bare .webui-text { white-space: pre-wrap; }
+.webui-text.nowrap { white-space: pre; }
+.webui-text code { font-family: ui-monospace, Consolas, monospace; }
+
+.webui-menubar { display: flex; gap: 2px; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.webui-menubar-item { min-height: 26px; padding: 2px 10px; border: 1px solid transparent; border-radius: 3px; background: transparent; }
+.webui-menubar-item:hover, .webui-menubar-item:focus-visible { background: color-mix(in srgb, CanvasText 10%, transparent); }
+.webui-menu-popup {
+  position: fixed; z-index: 1000; min-width: 160px; max-height: 80vh; overflow: auto;
+  padding: 4px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--surface-raised); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+.webui-menu-list { display: flex; flex-direction: column; }
+.webui-menu-item {
+  display: grid; grid-template-columns: 1.2em 1fr auto; align-items: center; gap: 6px;
+  min-height: 26px; padding: 2px 10px 2px 6px; border: 0; border-radius: 3px;
+  background: transparent; color: inherit; text-align: left; white-space: nowrap;
+}
+.webui-menu-item:hover:not([disabled]), .webui-menu-item:focus-visible { background: var(--accent); color: white; }
+.webui-menu-item[disabled] { opacity: .5; }
+.webui-menu-item .menu-mark { text-align: center; }
+.webui-menu-separator { margin: 4px 2px; border: 0; border-top: 1px solid var(--border); }
 /* Auto grid tracks shrink a 100%-wide input to nothing; keep an entry's natural width. */
 .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
 .webui-grid > button { white-space: nowrap; }

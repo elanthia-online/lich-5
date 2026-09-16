@@ -1,8 +1,22 @@
 # GTK-to-WebUI shim: plan and handoff
 
-Status: slices one and two are on branch `feat/webui-port` (2026-09-16).
-Slices three through seven are unstarted. This document is the handoff:
-everything a new session needs to continue without re-deriving it.
+Status: slices one, two, and three are on branch `feat/webui-port`
+(2026-09-16). Slices four through seven are unstarted. This document is
+the handoff: everything a new session needs to continue without
+re-deriving it.
+
+Slice three landed contract 2.7.0 (`menu`, `menu_item`, `context_menu`,
+`press`/`release`, `text.markup`; written up in
+`docs/webui-contract-2.7-menus-markup.md`), the shim's menu family in
+`lib/common/script_scope/gtk/menus.rb`, `PointerSurface` on `EventBox`
+and `Label`, and markup passthrough on `Label`. Between slices two and
+three, live testing of eloot/bigshot fixed: `--webui-dev` propagation to
+Multi-Launch children, the WebUI server dying with the first script that
+started it (`Session.start_service` starts it from `ThreadGroup::Default`),
+`?page=` so each window shows one page (pulled forward from slice four),
+size requests no longer forwarded as fixed sizes except on inputs/views,
+`xalign`, `wrap`, and a bare-page stylesheet. Slice-three live check still
+owed: `;xnarost` or `;map` right-click menu, `;creaturebar` labels.
 
 Slice two landed `Gtk::Builder` and the data widgets (Notebook, SpinButton,
 ComboBox, TreeView family, TextView, Expander, Separator, RadioButton); all
@@ -319,7 +333,19 @@ Doug's launcher never used them. Check `viewer_state_event?` in
 ~2,000 lines in a heredoc; parse time matters, cache by string hash.
 `TreeViewColumn#set_cell_data_func` appears 0 times - skip it.
 
-### Slice 3 - menus and markup (contract 2.7)
+### Slice 3 - menus and markup (contract 2.7) - DONE
+
+Landed as described below with these deviations: the popup is driven by a
+viewer-scoped `menu.open` property (the shim sets it from `Gtk::Menu#popup`,
+the client emits `close` on dismissal) rather than only by `context_menu`,
+because scripts open menus imperatively from a `button-press-event`
+handler; `context_menu` exists too for declarative use. Pointer events
+landed on `stack` as well as `group`/`text`/`image` because `EventBox`
+maps to `stack`. Tooltip markup was not done (stripped). A popup menu
+attaches to the window that last saw a pointer event
+(`Session#popup_window`) and is kept as a hidden page child via
+`Window#attach_popup`. Specs: `gtk_menus_spec.rb`, validator markup
+examples, page_spec menu-children example.
 
 **Unlocks:** the 28 scripts with `Gtk::Menu` context menus and every
 script whose labels use `set_markup` for bold/big/colored text

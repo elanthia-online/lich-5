@@ -78,7 +78,61 @@ module Lich
         end
 
         # The only fields GTK event structs expose that these scripts read.
-        Event = Struct.new(:type, :button, :state, :keyval, :x, :y, :direction, :time)
+        # Modifier keys held during a pointer event, with the Gdk predicates
+        # scripts test.
+        ModifierState = Struct.new(:ctrl, :shift, :alt) do
+          def control_mask?
+            ctrl
+          end
+
+          def shift_mask?
+            shift
+          end
+
+          def mod1_mask?
+            alt
+          end
+        end
+
+        POINTER_BUTTONS = { 'primary' => 1, 'middle' => 2, 'secondary' => 3 }.freeze
+
+        Event = Struct.new(:type, :button, :state, :keyval, :x, :y, :direction, :time) do
+          # Builds a button event from a contract pointer payload.
+          def self.pointer(kind, payload)
+            modifiers = Array(payload[:modifiers] || payload['modifiers']).map(&:to_s)
+            state = ModifierState.new(modifiers.include?('ctrl'), modifiers.include?('shift'), modifiers.include?('alt'))
+            new(kind, POINTER_BUTTONS.fetch((payload[:button] || payload['button']).to_s, 1), state, nil,
+                (payload[:x] || payload['x']).to_f, (payload[:y] || payload['y']).to_f, nil,
+                Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond))
+          end
+
+          def event_type
+            type
+          end
+        end
+
+        # Widgets that receive pointer gestures: button-press-event and
+        # button-release-event with a Gdk-shaped event argument.
+        module PointerSurface
+          def event_for(signal)
+            case signal
+            when :button_press_event then :press
+            when :button_release_event then :release
+            else super
+            end
+          end
+
+          def receive_event(event, context)
+            return super unless %i[press release].include?(event)
+
+            payload = context.payload || {}
+            gdk = Event.pointer(event == :press ? :button_press : :button_release, payload)
+            @session.note_pointer(window_root)
+            @handlers.each_key do |signal|
+              emit(signal, gdk) if event_for(signal) == event
+            end
+          end
+        end
 
         ALIGN_TO_CONTRACT = {
           start: 'start', center: 'center', end: 'end', fill: 'stretch', baseline: 'start',
@@ -158,7 +212,7 @@ module Lich
             can-focus receives-default draw-indicator border-width label-xalign
             shadow-type yalign sizing search-column headers-visible
             fixed-height-mode column-homogeneous row-homogeneous max-width-chars
-            wrap-mode accepts-tab modal tab-fill numeric digits angle wrap
+            wrap-mode accepts-tab modal tab-fill numeric digits angle
             use-markup activates-default has-frame can-default
             has-default focus-on-click relief image-position use-underline
             invisible-char primary-icon-activatable secondary-icon-activatable
@@ -383,6 +437,13 @@ module Lich
 
           def xalign=(_value); end
           alias set_xalign xalign=
+
+          # Event masks are implicit here: a widget with a handler is bound.
+          def add_events(*_masks)
+            self
+          end
+          alias set_events add_events
+          alias events= add_events
 
           def set_border_width(_width)
             self
@@ -1090,6 +1151,8 @@ module Lich
         end
 
         class EventBox < Container
+          prepend PointerSurface
+
           def node_type
             :stack
           end
@@ -1287,6 +1350,29 @@ module Lich
             viewer_closed
           end
 
+          # Popup menus shown over this window. They render as hidden page
+          # children; the client raises them when `open` is set.
+          def attach_popup(menu)
+            @popups ||= []
+            return self if @popups.include?(menu)
+
+            menu.detach_from_parent if menu.parent
+            menu.attach_to(self)
+            @popups << menu
+            changed!
+            self
+          end
+
+          def render_children
+            super + Array(@popups).select(&:visible?)
+          end
+
+          # Popups are not ordered children but must survive child syncing
+          # (Container#materialize! keeps `ordered_children + filler_children`).
+          def filler_children
+            Array(@popups)
+          end
+
           def lifecycle_bound?
             @lifecycle_bound
           end
@@ -1341,10 +1427,40 @@ module Lich
         # Simple leaf widgets
         # ------------------------------------------------------------------
         class Label < Widget
+          prepend PointerSurface
+
+          LINK = %r{<a\s[^>]*href="([^"]*)"[^>]*>(.*?)</a>}m
+          @markup_cache = {}
+          @markup_cache_mutex = Mutex.new
+
+          class << self
+            # Validates a Pango markup string once and remembers the verdict;
+            # labels re-render often and the validator parses XML.
+            def markup_allowed?(markup)
+              @markup_cache_mutex.synchronize do
+                return @markup_cache[markup] if @markup_cache.key?(markup)
+
+                @markup_cache.clear if @markup_cache.length > 2048
+                @markup_cache[markup] = begin
+                  Lich::WebUI::Validator.new.validate_component!(
+                    :text, { content: ' ', markup: markup }, owner: 'gtk-shim', page_id: 'label', cid: 'markup'
+                  )
+                  true
+                rescue Lich::WebUI::Error => error
+                  Gtk.log_unsupported('Label', 'markup', note: error.message)
+                  false
+                end
+              end
+            end
+          end
+
           def initialize(text = nil, _mnemonic = false)
             super()
             @text = text.to_s
+            @raw = @text
             @markup = false
+            @markup_source = nil
+            @wrap = false
           end
 
           def text
@@ -1353,7 +1469,9 @@ module Lich
 
           def text=(value)
             @text = value.to_s
+            @raw = @text
             @markup = false
+            @markup_source = nil
             changed!
           end
           alias set_text text=
@@ -1361,20 +1479,31 @@ module Lich
           alias set_label text=
           alias label text
 
+          # Pango markup: the contract carries the subset the validator
+          # allows; links become their target until the contract has them.
           def set_markup(markup)
-            text = markup.to_s.gsub(%r{<a\s[^>]*href="([^"]*)"[^>]*>(.*?)</a>}m) do
+            @raw = markup.to_s
+            source = @raw.gsub(LINK) do
               href = Regexp.last_match(1)
               inner = Regexp.last_match(2).gsub(/<[^>]+>/, '')
               inner == href ? href : "#{inner} (#{href})"
             end
-            @text = text.gsub(/<[^>]+>/, '').gsub('&amp;', '&').gsub('&lt;', '<').gsub('&gt;', '>')
+            @text = source.gsub(/<[^>]+>/, '').gsub('&amp;', '&').gsub('&lt;', '<').gsub('&gt;', '>').gsub('&quot;', '"')
             @markup = true
+            @markup_source = source == @text ? nil : source
             changed!
             self
           end
           alias markup= set_markup
 
-          def use_markup=(_value); end
+          def use_markup=(value)
+            set_markup(@raw) if value && !@markup
+          end
+          alias set_use_markup use_markup=
+
+          def use_markup?
+            @markup
+          end
 
           # GTK's xalign places the text inside the cell the label was given.
           def xalign=(value)
@@ -1398,11 +1527,18 @@ module Lich
             props
           end
 
-          def set_wrap(_value)
+          def set_wrap(value)
+            @wrap = value ? true : false
+            changed!
             self
           end
           alias wrap= set_wrap
           alias set_line_wrap set_wrap
+          alias line_wrap= set_wrap
+
+          def wrap?
+            @wrap
+          end
 
           # A label's width-chars is a wrap hint; text wraps naturally here.
           def width_chars=(_chars); end
@@ -1426,7 +1562,8 @@ module Lich
           end
 
           def node_props
-            props = { content: @text.empty? ? ' ' : @text }
+            props = { content: @text.empty? ? ' ' : @text, wrap: @wrap }
+            props[:markup] = @markup_source if @markup_source && self.class.markup_allowed?(@markup_source)
             props[:emphasis] = 'subtle' unless @sensitive
             props
           end

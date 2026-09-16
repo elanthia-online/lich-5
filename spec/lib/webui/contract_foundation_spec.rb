@@ -8,14 +8,15 @@ require_relative '../../../lib/webui/sensitive_value'
 RSpec.describe 'WebUI contract foundation' do
   let(:contract) { Lich::WebUI::Contract }
 
-  it 'publishes exactly the locked 2.6.0 vocabulary' do
-    expect(contract::VERSION).to eq('2.6.0')
+  it 'publishes exactly the locked 2.7.0 vocabulary' do
+    expect(contract::VERSION).to eq('2.7.0')
     expect(contract::TYPES).to contain_exactly(
       :page, :group, :stack, :columns, :grid, :tabs, :expander, :split, :overlay, :scroll, :divider,
       :text, :markdown, :log, :progress, :image, :button, :toggle, :checkbox, :radio, :text_input,
-      :password_input, :textarea, :number_input, :slider, :select, :table, :dialog, :composite
+      :password_input, :textarea, :number_input, :slider, :select, :table, :dialog, :composite,
+      :menu, :menu_item
     )
-    expect(contract.schemas.size).to eq(29)
+    expect(contract.schemas.size).to eq(31)
   end
 
   it 'refuses unknown types and unsupported major versions' do

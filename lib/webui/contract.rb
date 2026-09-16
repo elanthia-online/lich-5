@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.6.0'
+      VERSION = '2.7.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -14,6 +14,7 @@ module Lich
         text markdown log progress image
         button toggle checkbox radio text_input password_input textarea number_input slider select
         table dialog composite
+        menu menu_item
       ].freeze
 
       STRUCTURE_TYPES = TYPES.first(11).freeze
@@ -114,22 +115,22 @@ module Lich
 
       ATTRIBUTE_APPLICABILITY = {
         page: %i[key width height],
-        group: %i[key tooltip hidden align margin width height tone],
-        stack: %i[key hidden align margin width height],
-        columns: %i[key hidden align margin width height],
-        grid: %i[key hidden align margin width height],
+        group: %i[key tooltip hidden align margin width height tone context_menu],
+        stack: %i[key hidden align margin width height context_menu],
+        columns: %i[key hidden align margin width height context_menu],
+        grid: %i[key hidden align margin width height context_menu],
         tabs: %i[key disabled hidden align margin width height],
-        expander: %i[key tooltip disabled hidden align margin width height],
+        expander: %i[key tooltip disabled hidden align margin width height context_menu],
         split: %i[key hidden align margin width height],
-        overlay: %i[key hidden align margin width height],
-        scroll: %i[key hidden align margin width height],
+        overlay: %i[key hidden align margin width height context_menu],
+        scroll: %i[key hidden align margin width height context_menu],
         divider: %i[key hidden margin width tone],
-        text: %i[key tooltip hidden align margin width emphasis tone],
+        text: %i[key tooltip hidden align margin width emphasis tone context_menu],
         markdown: %i[key hidden align margin width],
-        log: %i[key hidden align margin width height],
+        log: %i[key hidden align margin width height context_menu],
         progress: %i[key tooltip hidden align margin width tone],
-        image: %i[key tooltip hidden align margin width height],
-        button: %i[key tooltip disabled hidden align margin width emphasis tone],
+        image: %i[key tooltip hidden align margin width height context_menu],
+        button: %i[key tooltip disabled hidden align margin width emphasis tone context_menu],
         toggle: %i[key tooltip disabled hidden align margin width tone],
         checkbox: %i[key tooltip disabled hidden align margin width tone],
         radio: %i[key tooltip disabled hidden align margin width tone],
@@ -139,9 +140,11 @@ module Lich
         number_input: %i[key tooltip disabled hidden align margin width tone sensitive],
         slider: %i[key tooltip disabled hidden align margin width tone],
         select: %i[key tooltip disabled hidden align margin width tone sensitive],
-        table: %i[key disabled hidden align margin width height],
+        table: %i[key disabled hidden align margin width height context_menu],
         dialog: %i[key width height tone],
-        composite: %i[key tooltip hidden align margin width height],
+        composite: %i[key tooltip hidden align margin width height context_menu],
+        menu: %i[key hidden align margin width],
+        menu_item: %i[key tooltip disabled hidden],
       }.freeze
 
       ATTRIBUTE_SCHEMAS = {
@@ -156,7 +159,33 @@ module Lich
         emphasis: property(enum(*EMPHASES)),
         tone: property(enum(*TONES)),
         sensitive: property(BOOL),
+        # 2.7: key of a `menu` node on the same page, opened by the viewer's
+        # secondary-button gesture on this component.
+        context_menu: property(IDENT),
       }.freeze
+
+      # 2.7: pointer gestures on the surfaces scripts hang popup menus on.
+      POINTER_PAYLOAD = record(
+        button: property(enum(:primary, :middle, :secondary), required: true),
+        x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
+        modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
+      ).freeze
+      POINTER_EVENTS = {
+        press: event(POINTER_PAYLOAD), release: event(POINTER_PAYLOAD),
+      }.freeze
+      POINTER_TYPES = %i[group stack text image].freeze
+
+      # 2.7: the Pango subset a `text` may carry in `markup`. The validator
+      # parses it; the client builds nodes from the parse, never from HTML.
+      MARKUP_TAGS = %w[b i u s tt big small span].freeze
+      MARKUP_SPAN_ATTRIBUTES = %w[
+        foreground color fgcolor background bgcolor size weight style underline font_desc font
+      ].freeze
+      MARKUP_SIZES = %w[xx-small x-small small medium large x-large xx-large smaller larger].freeze
+      MARKUP_WEIGHTS = %w[ultralight light normal bold ultrabold heavy].freeze
+      MARKUP_STYLES = %w[normal oblique italic].freeze
+      MARKUP_UNDERLINES = %w[none single double low error].freeze
+      MARKUP_COLOR = /\A(?:#\h{3}|#\h{6}|[a-z]{3,20})\z/i
 
       ACCESSIBILITY_SCHEMAS = {
         a11y_label: property(SHORT),
@@ -225,7 +254,10 @@ module Lich
         },
         divider: { properties: { label: property(SHORT) }, children: :none, events: {}, value: nil },
         text: {
-          properties: { content: property(BODY, required: true), wrap: property(BOOL, default: true) },
+          properties: {
+            content: property(BODY, required: true), wrap: property(BOOL, default: true),
+            markup: property(BODY),
+          },
           children: :none, events: {}, value: nil,
         },
         markdown: {
@@ -343,6 +375,24 @@ module Lich
           events: { response: event(record(button: property(IDENT, required: true)), terminal: true) }, value: nil,
         },
         composite: { properties: {}, children: :none, events: {}, value: nil, special: :composite },
+        menu: {
+          properties: {
+            bar: property(BOOL, default: false),
+            open: property(BOOL, default: false, scope: :viewer),
+          }, children: :many, events: { close: event(nil) }, value: nil,
+        },
+        menu_item: {
+          properties: {
+            label: property(SHORT),
+            kind: property(enum(:normal, :check, :radio, :separator), default: 'normal'),
+            active: property(BOOL, default: false, scope: :viewer),
+            group: property(IDENT),
+          }, children: :many,
+          events: {
+            activate: event(nil, terminal: true),
+            change: event(record(value: property(BOOL, required: true))),
+          }, value: nil,
+        },
       }.freeze
 
       TABLE_COLUMN = record(
@@ -496,6 +546,7 @@ module Lich
             end
             base[:properties].merge!(COMPOSITE_PROPERTIES) if type == :composite
             base[:events].merge!(COMPOSITE_EVENTS) if type == :composite
+            base[:events].merge!(deep_dup(POINTER_EVENTS)) if POINTER_TYPES.include?(type)
             base[:properties].merge!(deep_dup(ACCESSIBILITY_SCHEMAS))
             if type == :password_input
               base[:properties][:sensitive][:forced] = true
