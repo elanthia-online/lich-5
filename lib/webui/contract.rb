@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.8.0'
+      VERSION = '2.9.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -259,8 +259,27 @@ module Lich
           child_properties: { z: property(integer(min: 0, max: 99)) }, events: {}, value: nil,
         },
         scroll: {
-          properties: { max_height: property(GEOMETRY), scroll_to: property(IDENT, scope: :viewer) },
-          children: :many, events: { scrolled: event(record(position: property(GEOMETRY, required: true))) }, value: nil,
+          properties: {
+            max_height: property(GEOMETRY), scroll_to: property(IDENT, scope: :viewer),
+            # Where the viewer is scrolled, in pixels. `scroll_to` names a cid
+            # to bring into view; this is the raw offset GTK's Adjustment
+            # speaks, and `bottom` is the scroll-to-bottom scripts actually
+            # write (they compute `upper - page_size`, which only the viewer
+            # knows).
+            scroll_position: property(record(
+              x: property(GEOMETRY), y: property(GEOMETRY), bottom: property(BOOL)
+            ), scope: :viewer),
+          },
+          children: :many,
+          # `upper` and `page_size` are the content extent and the visible
+          # height. Only the viewer knows them, and scripts read them back to
+          # work out where the bottom is.
+          events: {
+            scrolled: event(record(
+              position: property(GEOMETRY, required: true),
+              upper: property(GEOMETRY), page_size: property(GEOMETRY)
+            )),
+          }, value: nil,
         },
         divider: { properties: { label: property(SHORT) }, children: :none, events: {}, value: nil },
         text: {

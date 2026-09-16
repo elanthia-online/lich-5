@@ -172,3 +172,52 @@ flex or grid track the child already fills its cell, so the two coincide
 for every layout in the corpus. If a script ever needs `expand: true,
 fill: false` (a child given space but not stretched into it), that becomes
 an alignment on the child rather than a new placement.
+
+---
+
+# Addendum: contract 2.9.0 — scroll position
+
+Additive, same rules. Needed because a GTK script scrolls by writing
+pixels to an `Adjustment`, and the shim had nowhere to put them: four
+scripts (vars, alias, localchat, map) scroll, and none of it reached the
+browser.
+
+## `scroll_position` on `scroll`
+
+| Property | Shape | Scope | Meaning |
+| --- | --- | --- | --- |
+| `scroll_position` | record `{x, y, bottom}` | viewer | Where the viewer is scrolled. `x`/`y` are pixel offsets (0..65535); `bottom: true` means the end of the content. |
+
+`scroll_to` already existed and names a cid to bring into view. This is
+the raw offset instead, because that is what `Adjustment` speaks.
+
+### Why `bottom` is a flag and not a number
+
+The scripts all spell "scroll to the end" as `value = upper - page_size`,
+computed from an extent only the viewer knows. The shim cannot evaluate
+that — its `upper` is a constructor default — so sending the resulting
+pixel value would scroll to the wrong place, and would keep being wrong
+as content grew. The flag carries the intent, and the client resolves it
+against the real `scrollHeight` after layout.
+
+A write at the extent becomes `bottom: true` whether or not the viewer
+has reported yet; any other value passes through as pixels.
+
+## `upper` and `page_size` on the `scrolled` event
+
+| Field | Shape | Meaning |
+| --- | --- | --- |
+| `upper` | integer 0..65535 | Content extent, i.e. `scrollHeight`. |
+| `page_size` | integer 0..65535 | Visible height, i.e. `clientHeight`. |
+
+The event already carried `position`. Scripts read `upper` and
+`page_size` back to compute their target, so without them the arithmetic
+runs against defaults. A reported position also clears any pending
+scroll request, so the shim does not yank a viewer who scrolled by hand.
+
+## Not in this slice
+
+`map.lic` reads and writes both axes as pixels, and this covers the
+write path, but its scroller wraps a `Gtk::Layout` that does not render
+until `composite` lands in slice five. Left untested against a real
+window for that reason.

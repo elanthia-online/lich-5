@@ -400,11 +400,11 @@ menu (map.lic's is the most demanding; xnarost simpler).
 behave right. Do this before showing translated scripts to users.
 
 Done so far: box packing (`4c09a59e`), per-window page selection (pulled
-forward between slices two and three), and the two dropped setters in
-`82128165` - `set_width_request` (288 sites, never aliased to
+forward between slices two and three), scroll adjustments (contract
+2.9.0), and the two dropped setters in `82128165` - `set_width_request` (288 sites, never aliased to
 `width_request=`) and `Gtk::Misc#set_padding(xpad, ypad)` (9 scripts,
-not implemented). Still open below: scroll adjustments, window props,
-grid columns, theme, close veto.
+not implemented). Still open below: window props, grid
+columns, theme, close veto.
 
 Two gaps deliberately left, both needing a contract change rather than
 shim work: `Alignment`'s `yalign` has nowhere to go (the contract has
@@ -429,12 +429,18 @@ bump on its own. Fold them into the next contract change.
   opened for a page attaches only that page (and any `dialog` page from
   the same owner, so modals still appear in it). Windows opened without a
   page keep today's behavior.
-- **Scroll adjustments.** `Adjustment#value=` on a `ScrolledWindow`'s
-  adjustment -> contract `scroll_to` is a cid, not pixels; add
-  `scroll_position: {x, y}` viewer-scoped prop and honor the existing
-  `scrolled` event to keep `value`/`upper`/`page_size` roughly true
-  (vars.lic animates to the bottom after adding a row; map.lic reads and
-  writes pixel positions).
+- **Scroll adjustments.** DONE (contract 2.9.0, written up in the
+  addendum to `docs/webui-contract-2.7-menus-markup.md`).
+  `scroll_position: {x, y, bottom}` viewer-scoped on `scroll`, and the
+  `scrolled` event gained `upper`/`page_size` so the scripts' own
+  arithmetic has real numbers. `bottom` is a flag, not a pixel value:
+  every script spells scroll-to-bottom as `value = upper - page_size`,
+  which the shim cannot evaluate, so the intent travels instead and the
+  client resolves it against `scrollHeight` after layout. A reported
+  position clears a pending request, so a hand-scrolling viewer is not
+  yanked. map.lic's two-axis pixel path is written but untestable until
+  `Gtk::Layout` -> `composite` lands in slice 5. Note SpinButton's
+  `.adjustment.value=` (12 sites) was never a scroll and already worked.
 - **Window props.** `keep_above`, `opacity`, `decorated`, `resizable`
   -> the `presentation` facility. `Runtime::PRESENTATION_SUPPORT` says
   `always_on_top: false`; a Chromium `--app` window cannot do it. Leave
@@ -538,7 +544,7 @@ bump on its own. Fold them into the next contract change.
 - ~~Every browser window renders every page~~ (fixed, pulled forward).
 - ~~Horizontal `Box` -> `columns` with equal weights; `expand`/`fill`
   ignored~~ (fixed, `4c09a59e`).
-- `Adjustment#value=` accepted, does not scroll (slice 4).
+- ~~`Adjustment#value=` accepted, does not scroll~~ (fixed, contract 2.9.0).
 - `Label#set_markup` strips tags (slice 3).
 - `Alignment#yalign` is dropped; the contract has no `valign`, and
   asymmetric padding collapses to the larger side (slice 4 note).

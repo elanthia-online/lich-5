@@ -163,4 +163,82 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(props[:margin]).to eq(50)
     end
   end
+
+  # Scripts scroll by writing pixels to an Adjustment, but they derive the
+  # number from an extent only the viewer knows -- `upper - page_size` is
+  # scroll-to-bottom in vars, alias and localchat. The shim reported the
+  # constructor defaults, so the arithmetic was nonsense and nothing reached
+  # the browser either way.
+  describe 'scroll adjustments' do
+    def scroll_props(scrolled)
+      scrolled.send(:node_props)
+    end
+
+    it 'says nothing about a scroll the script never touched' do
+      props = session.sync { scroll_props(gtk::ScrolledWindow.new) }
+
+      expect(props).not_to have_key(:scroll_position)
+    end
+
+    it 'reads a write at the extent as the bottom, not as a pixel offset' do
+      props = session.sync do
+        scrolled = gtk::ScrolledWindow.new
+        adjustment = scrolled.vadjustment
+        adjustment.value = adjustment.upper - adjustment.page_size
+        scroll_props(scrolled)
+      end
+
+      expect(props[:scroll_position]).to eq(bottom: true)
+    end
+
+    it 'passes a mid-range offset through as pixels' do
+      props = session.sync do
+        scrolled = gtk::ScrolledWindow.new
+        scrolled.vadjustment.note_viewport(upper: 2400.0, page_size: 400.0)
+        scrolled.vadjustment.value = 300
+        scroll_props(scrolled)
+      end
+
+      expect(props[:scroll_position]).to eq(y: 300)
+    end
+
+    it 'clamps a negative offset rather than emitting one the contract refuses' do
+      props = session.sync do
+        scrolled = gtk::ScrolledWindow.new
+        scrolled.hadjustment.value = -40
+        scroll_props(scrolled)
+      end
+
+      expect(props[:scroll_position]).to include(x: 0)
+    end
+
+    it 'takes the extent from the scrolled event so the scripts can do their arithmetic' do
+      adjustment = session.sync do
+        scrolled = gtk::ScrolledWindow.new
+        context = Struct.new(:payload).new({ position: 1800, upper: 2400, page_size: 400 })
+        scrolled.receive_event(:scrolled, context)
+        scrolled.vadjustment
+      end
+
+      expect([adjustment.value, adjustment.upper, adjustment.page_size]).to eq([1800.0, 2400.0, 400.0])
+    end
+
+    it 'stops requesting a scroll once the viewer reports its own' do
+      props = session.sync do
+        scrolled = gtk::ScrolledWindow.new
+        scrolled.vadjustment.value = 900
+        context = Struct.new(:payload).new({ position: 120, upper: 2400, page_size: 400 })
+        scrolled.receive_event(:scrolled, context)
+        scroll_props(scrolled)
+      end
+
+      expect(props).not_to have_key(:scroll_position)
+    end
+
+    it 'binds scrolled whether or not the script connected a handler' do
+      events = session.sync { gtk::ScrolledWindow.new.always_bound_events }
+
+      expect(events).to include(:scrolled)
+    end
+  end
 end

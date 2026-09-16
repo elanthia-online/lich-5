@@ -1174,9 +1174,32 @@ module Lich
             super()
             @vadjustment = Adjustment.new
             @hadjustment = Adjustment.new
+            @vadjustment.watch(self)
+            @hadjustment.watch(self)
           end
 
           attr_reader :vadjustment, :hadjustment
+
+          # The viewer is the only side that knows the scroll extent, so the
+          # `scrolled` event feeds `upper` and `page_size` back into the
+          # adjustment. Scripts read those to compute a target (`upper -
+          # page_size` is the scroll-to-bottom idiom in vars, alias and
+          # localchat) and the arithmetic is nonsense against the defaults.
+          def always_bound_events
+            [:scrolled]
+          end
+
+          def receive_event(event, context)
+            return super unless event == :scrolled
+
+            payload = context.payload || {}
+            fetch = ->(name) { payload[name] || payload[name.to_s] }
+            @vadjustment.note_viewport(
+              value: fetch.call(:position), upper: fetch.call(:upper),
+              page_size: fetch.call(:page_size)
+            )
+            super
+          end
 
           def set_policy(_horizontal, _vertical)
             self
@@ -1210,7 +1233,31 @@ module Lich
             height = window&.default_height
             props = {}
             props[:max_height] = [height - 48, 120].max if height && parent.is_a?(Window)
+            position = scroll_position
+            props[:scroll_position] = position if position
             props
+          end
+
+          private
+
+          # A script writing `value = upper - page_size` means "the bottom",
+          # not a pixel offset -- it derived the number from an extent only
+          # the viewer knows. Pass the intent instead, so the browser scrolls
+          # to the real bottom however tall the content turned out to be.
+          def scroll_position
+            vertical = @vadjustment.requested_value
+            horizontal = @hadjustment.requested_value
+            return nil unless vertical || horizontal
+
+            position = {}
+            position[:bottom] = true if @vadjustment.at_extent?
+            position[:y] = clamp_offset(vertical) if vertical && !position[:bottom]
+            position[:x] = clamp_offset(horizontal) if horizontal
+            position.empty? ? nil : position
+          end
+
+          def clamp_offset(value)
+            [[value.to_i, 0].max, 65_535].min
           end
         end
 
@@ -1344,6 +1391,8 @@ module Lich
         # that read or animate them see sane numbers. Owners re-render when
         # the range changes.
         class Adjustment
+          EXTENT_EPSILON = 0.5
+
           attr_reader :value, :lower, :upper, :page_size, :step_increment, :page_increment
           attr_accessor :builder_name
 
@@ -1356,13 +1405,43 @@ module Lich
             @page_size = page_size.to_f
             @owners = []
             @handlers = []
+            @requested_value = nil
           end
 
           def watch(owner)
             @owners << owner unless @owners.include?(owner)
           end
 
-          %i[value lower upper page_size step_increment page_increment].each do |attribute|
+          # Whether the script has written a value we have not yet rendered.
+          # nil means it never did, so the scroll node stays silent rather
+          # than pinning the viewer to the top on every commit.
+          attr_reader :requested_value
+
+          # True when the last written value sat at the bottom of the range,
+          # which is how a script spells "scroll to the end". This holds
+          # against the constructor defaults too: a script that computes
+          # `upper - page_size` before the viewer has reported an extent still
+          # means the bottom, and the default-derived pixel value (100) would
+          # be a worse answer than the intent.
+          def at_extent?
+            return false unless @requested_value
+
+            @requested_value >= (@upper - @page_size) - EXTENT_EPSILON
+          end
+
+          # The viewer reporting where it actually is, and how big the content
+          # turned out to be. This is the only source of a true extent.
+          def note_viewport(value: nil, upper: nil, page_size: nil)
+            @upper = upper.to_f if upper
+            @page_size = page_size.to_f if page_size
+            if value
+              @value = value.to_f
+              @requested_value = nil
+            end
+            self
+          end
+
+          %i[lower upper page_size step_increment page_increment].each do |attribute|
             define_method(:"#{attribute}=") do |number|
               instance_variable_set(:"@#{attribute}", number.to_f)
               notify_owners
@@ -1370,8 +1449,18 @@ module Lich
             alias_method :"set_#{attribute}", :"#{attribute}="
           end
 
+          # Recorded as a request, not just shadow state: a ScrolledWindow
+          # turns it into a scroll_position prop on the next commit.
+          def value=(number)
+            @value = number.to_f
+            @requested_value = @value
+            notify_owners
+          end
+          alias set_value value=
+
           def configure(value, lower, upper, step, page_inc, page_size)
             @value = value.to_f
+            @requested_value = @value
             @lower = lower.to_f
             @upper = upper.to_f
             @step_increment = step.to_f
