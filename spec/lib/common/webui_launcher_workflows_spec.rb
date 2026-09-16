@@ -282,6 +282,54 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     )
   end
 
+  # SerialExecutor#stop(wait: false) does not interrupt work already running,
+  # and authentication can take seconds. Closing the launcher mid-authentication
+  # used to launch anyway: the persistent path called SessionLauncher before
+  # consulting complete, and the terminal paths ignored whether the completion
+  # was accepted. An immediate executor cannot show this -- the launch has to be
+  # in flight while close runs.
+  it 'does not launch a session for a launcher closed during authentication' do
+    reached = Queue.new
+    release = Queue.new
+    blocking_authenticator = Class.new do
+      define_method(:authenticate) do |**_keywords|
+        reached << :authenticating
+        release.pop
+        { ok: true, sal: 'SAL' }
+      end
+    end.new
+    session_launcher = class_double(Lich::Common::SessionLauncher, launch: { ok: true })
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: blocking_authenticator, executor: ImmediateExecutor.new,
+      session_launcher: session_launcher, persistent: true,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = closing.send(:begin_operation, :saved_entry, event)
+    worker = Thread.new { closing.send(:perform_saved_launch, operation, 'entry-0') }
+
+    reached.pop
+    closing.close(reason: :user)
+    release << :go
+
+    expect(worker.join(5)).not_to be_nil
+    expect(session_launcher).not_to have_received(:launch)
+  end
+
+  it 'still launches when the launcher stays open' do
+    session_launcher = class_double(Lich::Common::SessionLauncher, launch: { ok: true })
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      session_launcher: session_launcher, persistent: true,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = open_launcher.send(:begin_operation, :saved_entry, event)
+    open_launcher.send(:perform_saved_launch, operation, 'entry-0')
+
+    expect(session_launcher).to have_received(:launch).once
+  end
+
   it 'switches tab/list layout and exercises saved versus automatic sort order under GUI Settings' do
     second = entry.with(key: 'entry-1', char_name: 'Bera')
     first = entry.with(key: 'entry-0', char_name: 'Aldor')

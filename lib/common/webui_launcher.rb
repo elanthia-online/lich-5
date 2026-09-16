@@ -1001,7 +1001,8 @@ module Lich
             @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
           end
         end
-        complete(operation) { @manual_credentials.delete(viewer_id)&.discard! }
+        return unless complete(operation) { @manual_credentials.delete(viewer_id)&.discard! }
+
         terminal_launch(launch, :manual)
       rescue StandardError => error
         fail_operation(operation, error, manual: 'Launch failed. Retry from Manual Entry.')
@@ -1018,13 +1019,16 @@ module Lich
                                              character: entry.char_name, game_code: entry.game_code)
           launch = @launch_data.prepare(auth, entry.frontend, entry.custom_launch, entry.custom_launch_dir)
         end
+        # Checked here rather than after: launching is the irreversible step,
+        # and the launcher may have been closed while authentication ran.
+        return unless operation_live?(operation)
+
         if @persistent
           result = @session_launcher.launch(launch, launch_context: launch_context(entry))
           raise 'session launch failed' unless result[:ok]
           complete(operation) { @modal = nil }
           set_notice('Session launched.', :info)
-        else
-          complete(operation) { @modal = nil }
+        elsif complete(operation) { @modal = nil }
           terminal_launch(launch, :saved_entry)
         end
       rescue Catalog::MasterPasswordRequired
@@ -1052,6 +1056,17 @@ module Lich
           @active[kind] = operation
         end
         operation
+      end
+
+      # Whether this operation is still the one the launcher is waiting on.
+      # Authentication can take seconds and the player may close the launcher
+      # while it runs; SerialExecutor#stop(wait: false) does not interrupt work
+      # already in flight, so a path that commits a side effect has to ask
+      # before committing it rather than after.
+      def operation_live?(operation)
+        @mutex.synchronize do
+          @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
+        end
       end
 
       def complete(operation)
