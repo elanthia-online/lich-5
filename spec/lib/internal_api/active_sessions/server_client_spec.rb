@@ -96,6 +96,24 @@ RSpec.describe 'ActiveSessions server/client' do
     expect(client.remove(444)[:ok]).to be(true)
   end
 
+  it 'bounds the default socket connection attempt' do
+    default_socket = instance_double(TCPSocket)
+    allow(default_socket).to receive(:write)
+    allow(default_socket).to receive(:read_nonblock).and_return("{\"ok\":true}\n")
+    allow(default_socket).to receive(:close)
+    allow(IO).to receive(:select).with([default_socket], nil, nil, kind_of(Numeric)).and_return([default_socket])
+    allow(Socket).to receive(:tcp).and_return(default_socket)
+    default_client = Lich::InternalAPI::ActiveSessions::Client.new(
+      host: '127.0.0.1',
+      port: 41_234,
+      auth_token: 'shared-token'
+    )
+
+    expect(default_client.ping).to be(true)
+    expect(Socket).to have_received(:tcp)
+      .with('127.0.0.1', 41_234, connect_timeout: Lich::InternalAPI::ActiveSessions::Client::CONNECT_TIMEOUT)
+  end
+
   it 'handles a single client request through the server protocol processor' do
     expect(registry).to receive(:snapshot).and_return(source: 'ActiveSessionsAPI', total: 0, connected: 0, detachable: 0, sessions: [])
 
