@@ -778,9 +778,16 @@ module Lich
           # Creates or updates this widget's adapter node. Returns the handle.
           def materialize!(adapter)
             props = filter_props(common_props.merge(node_props))
+            # A node's type is fixed once created, but a script can change
+            # what a widget IS after the fact -- an Entry becomes a password
+            # field the moment visibility is turned off, which the login GUI
+            # does after building the entry. Rebuild rather than leave a
+            # password showing in a text box.
+            retype!(adapter) if @handle && @synced_type && @synced_type != node_type
             if @handle.nil?
               @handle = adapter.create(node_type, props)
               @synced_props = props
+              @synced_type = node_type
             elsif props != @synced_props
               changes = (props.keys | @synced_props.keys).each_with_object({}) do |name, result|
                 result[name] = props[name] unless props[name] == @synced_props[name]
@@ -797,10 +804,25 @@ module Lich
             @handle = nil
             @synced_props = nil
             @synced_placement = nil
+            @synced_type = nil
             @bound_events = {}
             # A new handle needs its presentation reader registered again.
             @presentation_registered = false
             @synced_presentation = nil
+          end
+
+          # Drops this widget's node so the next commit builds it again with
+          # the type it now reports. The parent re-attaches it in place,
+          # because it is still in the parent's child list.
+          def retype!(adapter)
+            handle = @handle
+            release_handle!
+            @parent.forget_child_handle(self) if @parent.respond_to?(:forget_child_handle)
+            begin
+              adapter.destroy(handle)
+            rescue Lich::WebUI::Error
+              nil
+            end
           end
 
           def sync_placement!(adapter)
@@ -867,6 +889,9 @@ module Lich
             super
             @children = []
             @synced_children = []
+            # Handle last attached per child, so a child that rebuilds its
+            # node is re-attached rather than silently orphaned.
+            @synced_handles = {}.compare_by_identity
           end
 
           def children
@@ -948,7 +973,13 @@ module Lich
                 Gtk.log_render_failure(child, error)
                 next
               end
-              adapter.attach(handle, child_handle, attached.length) unless @synced_children.include?(child)
+              # Compared after materializing, not before: a child that
+              # rebuilt its node -- an Entry becoming a password field --
+              # is in @synced_children but its handle is new, and skipping
+              # the attach would leave the replacement parentless.
+              already = @synced_children.include?(child) && @synced_handles[child].equal?(child_handle)
+              adapter.attach(handle, child_handle, attached.length) unless already
+              @synced_handles[child] = child_handle
               child.sync_placement!(adapter)
               attached << child
             end
@@ -960,6 +991,13 @@ module Lich
 
           def filler_children
             []
+          end
+
+          # A child that rebuilt its node is no longer attached to ours, so
+          # forget it and let the next commit attach the replacement.
+          def forget_child_handle(child)
+            @synced_handles.delete(child)
+            changed!
           end
 
           def release_handle!
@@ -2273,32 +2311,66 @@ module Lich
           end
           alias set_max_length max_length=
 
-          def visibility=(_value); end
+          # GTK has no password widget: an Entry with visibility off is one.
+          # This was a no-op, so Lich's own login GUI -- which sets it on
+          # eight entries, including the master password -- rendered every
+          # one of them as a plain text box that shows what is typed, keeps
+          # it in the page's value, and offers it to the browser's form
+          # autofill. The contract has password_input, whose `sensitive`
+          # flag is forced true, so the value is never echoed back to a
+          # viewer or written to a golden.
+          def visibility=(value)
+            visible = value ? true : false
+            return if @visibility == visible
+
+            @visibility = visible
+            changed!
+          end
           alias set_visibility visibility=
+
+          def visibility?
+            @visibility != false
+          end
 
           def set_alignment(_value)
             self
           end
 
           def event_for(signal)
-            case signal
-            when :changed then :change
-            when :activate then :submit
-            when :focus_in_event then :focus
-            when :focus_out_event then :blur
-            end
+            mapped = case signal
+                     when :changed then :change
+                     when :activate then :submit
+                     when :focus_in_event then :focus
+                     when :focus_out_event then :blur
+                     end
+            # A script's `changed` handler cannot fire on a password field:
+            # the contract gives password_input no `change` event, because a
+            # value that is never echoed back has nothing to report on every
+            # keystroke. Dropping the mapping keeps the binding out of the
+            # node rather than having the adapter refuse the whole widget.
+            return nil if mapped == :change && !visibility?
+
+            mapped
           end
 
+          # A password_input has only `submit`: the contract gives it no
+          # `change` event, because a value that is never echoed back has
+          # nothing to report on every keystroke.
           def always_bound_events
-            [:change]
+            visibility? ? [:change] : []
           end
 
           def node_type
-            :text_input
+            visibility? ? :text_input : :password_input
           end
 
           def node_props
-            props = { value: @text.dup }
+            props = {}
+            # A password_input carries no `value` property at all: the
+            # contract makes its value sensitive and write-only, so what the
+            # viewer types is never echoed back. Sending one is refused, and
+            # sending one would be the leak this type exists to prevent.
+            props[:value] = @text.dup if visibility?
             props[:disabled] = true unless @sensitive && @editable
             props[:placeholder] = @placeholder if @placeholder && !@placeholder.empty?
             props[:max_length] = @max_length if @max_length
@@ -2307,8 +2379,13 @@ module Lich
 
           protected
 
+          # `submit` carries the value too, and for a password field it is
+          # the only event that does -- password_input has no `change`, so
+          # without this the script's activate handler read an empty string
+          # and the typed password was lost on the way in as well as kept
+          # off the way out.
           def apply_event(event, context)
-            return unless event == :change
+            return unless %i[change submit].include?(event)
 
             value = payload_value(context)
             @text = value.to_s.dup unless value.nil?
