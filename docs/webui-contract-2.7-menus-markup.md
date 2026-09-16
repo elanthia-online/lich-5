@@ -289,3 +289,19 @@ because the spread was in the tree.
 
 The shim still sends a plain integer when every side agrees, which is
 the common case, so most nodes are unchanged.
+
+---
+
+# Addendum: contract 2.12.0 — table headers
+
+Additive. `table` gained `headers`, a boolean defaulting to true.
+
+| Property | Shape | Meaning |
+| --- | --- | --- |
+| `headers` | boolean, default true | Whether the header row is shown. |
+
+GTK's `headers-visible`. A tree view used as a plain list still has to
+name its columns -- the model needs them -- but never shows those names.
+eloot has twelve such lists, and every one rendered a bare "Exclusion"
+or "Spell Number" heading inside the box, which reads as content rather
+than the internal label it is.

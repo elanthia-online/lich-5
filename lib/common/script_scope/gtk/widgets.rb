@@ -301,7 +301,7 @@ module Lich
           # for. Silently ignored so Glade files do not spam the log.
           IGNORED_BUILDER_PROPERTIES = %w[
             can-focus receives-default draw-indicator border-width label-xalign
-            shadow-type yalign sizing search-column headers-visible
+            shadow-type yalign sizing search-column
             fixed-height-mode column-homogeneous row-homogeneous max-width-chars
             wrap-mode accepts-tab modal tab-fill numeric digits angle
             activates-default has-frame can-default
@@ -1884,10 +1884,14 @@ module Lich
             @lifecycle_bound = true
           end
 
+          # The browser window, which opens at the size GTK would have used:
+          # the default, or the size request when that is larger.
           def browser_geometry
-            return nil unless @default_width && @default_height
+            width = [@default_width, @width_request].compact.max
+            height = [@default_height, @height_request].compact.max
+            return nil unless width && height
 
-            { width: @default_width, height: @default_height }
+            { width: width, height: height }
           end
 
           # Window signals are lifecycle, not component events; the session
@@ -1902,7 +1906,12 @@ module Lich
 
           def node_props
             props = { title: @title.empty? ? 'Lich' : @title, bare: true }
-            props[:size] = [@default_width, @default_height] if @default_width && @default_height
+            # GTK opens a window at its default size but never smaller than
+            # its size request, and the two disagree: eloot asks for a
+            # default of 800 and a minimum of 900, so it opened clipped.
+            width = [@default_width, @width_request].compact.max
+            height = [@default_height, @height_request].compact.max
+            props[:size] = [width, height] if width && height
             props
           end
 

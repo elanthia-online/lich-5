@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.11.0'
+      VERSION = '2.12.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -454,6 +454,10 @@ module Lich
         rows: property(array(TABLE_ROW, max: BOUNDS[:table_rows]), required: true),
         selection: property(enum(:none, :single, :multi), default: 'none'),
         selected: property(array(IDENT, max: BOUNDS[:table_rows]), scope: :viewer),
+        # 2.12: GTK's headers-visible. A tree view used as a plain list --
+        # eloot has twelve -- names its columns for the model's sake and
+        # never shows them, so the label is internal, not a heading.
+        headers: property(BOOL, default: true),
         sortable: property(BOOL, default: false),
         sort: property(record(
                          column: property(IDENT, required: true), direction: property(enum(:asc, :desc), required: true)

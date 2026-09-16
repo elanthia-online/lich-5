@@ -1332,6 +1332,9 @@ module Lich
                    else 'single'
                    end
             props = { columns: columns, rows: rows, selection: mode }
+            # A tree view used as a plain list names its columns for the
+            # model and hides the header row; the label is internal.
+            props[:headers] = false unless @headers_visible
             props[:selected] = @selected_keys.dup unless mode == 'none' || @selected_keys.empty?
             props[:disabled] = true unless @sensitive
             props

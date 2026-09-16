@@ -654,4 +654,54 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(content).to include('<a href')
     end
   end
+
+  # A tree view used as a plain list names its columns for the model and
+  # hides the header row. eloot has twelve, and every one of them showed a
+  # bare "Exclusion" heading inside the box.
+  describe 'headers-visible on a tree view' do
+    def tree_with(headers:)
+      session.sync do
+        view = gtk::TreeView.new
+        view.apply_builder_property('headers-visible', headers) unless headers.nil?
+        view.append_column(gtk::TreeViewColumn.new('Exclusion', gtk::CellRendererText.new, text: 0))
+        view.send(:node_props)
+      end
+    end
+
+    it 'hides the header row when the Glade file asked it to' do
+      expect(tree_with(headers: 'False')[:headers]).to be(false)
+    end
+
+    it 'says nothing when the file left headers alone' do
+      expect(tree_with(headers: nil)).not_to have_key(:headers)
+    end
+  end
+
+  # GTK opens a window at its default size but never smaller than its size
+  # request. eloot asks for a default of 800 and a minimum of 900, so it
+  # opened clipped and its boxes did not fit.
+  describe 'a window whose size request is larger than its default' do
+    let(:window) do
+      session.sync do
+        win = gtk::Window.new('ELoot')
+        win.set_default_size(800, 830)
+        win.set_size_request(900, 640)
+        win
+      end
+    end
+
+    it 'sizes the page to the larger of the two on each axis' do
+      expect(window.send(:node_props)[:size]).to eq([900, 830])
+    end
+
+    it 'opens the browser window at that same size' do
+      expect(window.browser_geometry).to eq(width: 900, height: 830)
+    end
+
+    it 'leaves a window that only set a default size alone' do
+      plain = session.sync { win = gtk::Window.new('t'); win.set_default_size(640, 480); win }
+
+      expect(plain.send(:node_props)[:size]).to eq([640, 480])
+    end
+  end
 end
