@@ -2549,6 +2549,11 @@ module Lich
           def run
             show unless @shown
             @response = nil
+            # A run answered more than once -- a double click, or a respond
+            # racing a close -- left the extra answers queued, and the NEXT
+            # run popped one of them and returned before the viewer had seen
+            # the dialog at all. Each run waits for its own answer.
+            @responses.clear
             if @session.on_session_thread?
               @session.commit
               @session.pump(0.05) until @response || destroyed?

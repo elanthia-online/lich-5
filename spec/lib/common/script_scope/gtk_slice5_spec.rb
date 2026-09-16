@@ -251,6 +251,32 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
       expect([results.pop, results.pop]).to all(eq(gtk::ResponseType::DELETE_EVENT))
     end
 
+    # A run answered more than once -- a double click, or a respond racing a
+    # close -- left the extra answers on the queue, and the next run popped
+    # one and returned before the viewer had seen the dialog at all.
+    it 'does not answer a second run with a leftover from the first' do
+      dialog = ok = nil
+      session.sync do
+        dialog = gtk::Dialog.new(title: 'Q9')
+        ok = dialog.add_button('OK', :ok)
+      end
+      first = nil
+      opener = Thread.new { first = dialog.run }
+      sleep 0.2
+      session.sync { 2.times { ok.send(:receive_event, :activate, Struct.new(:payload).new({})) } }
+      opener.join(3)
+
+      expect(first).to eq(:ok)
+
+      second = :never_returned
+      waiter = Thread.new { second = dialog.run }
+      finished = waiter.join(1)
+      waiter.kill unless finished
+
+      expect(finished).to be_nil
+      expect(second).to eq(:never_returned)
+    end
+
     it 'still delivers a real response rather than releasing waiters early' do
       dialog = ok = nil
       session.sync do
