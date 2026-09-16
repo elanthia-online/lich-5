@@ -10,6 +10,13 @@ module Lich
     # Server-routed page attachment, viewer state, submission, and callback runtime.
     class Runtime
       EventContext = Data.define(:viewer_id, :page, :component, :event, :payload, :submission)
+      # What a browser page can do on its own. always_on_top and borderless
+      # belong to the window manager, not the page, and a CSS fade cannot make
+      # a window translucent -- what shows through is the browser's own
+      # background. On a host that can reach the real window (native Windows,
+      # through WindowPresentation) the first and third become true; the key
+      # set never changes, only the values, because the degradation walk reads
+      # every requested property out of this table.
       PRESENTATION_SUPPORT = {
         always_on_top: false, borderless: false, opacity: true, scrollbars: true,
       }.freeze
@@ -31,7 +38,10 @@ module Lich
       end
 
       def presentation_support(_page = nil)
-        PRESENTATION_SUPPORT
+        host = WindowPresentation.support
+        return PRESENTATION_SUPPORT if host.empty?
+
+        PRESENTATION_SUPPORT.merge(host).freeze
       end
 
       def degradations(page)
@@ -426,8 +436,13 @@ module Lich
 
       def record_presentation_degradations(page, render)
         requested = render.facilities[:presentation] || {}
+        supported = presentation_support(page)
         refusals = requested.each_key.filter_map do |property|
-          next if PRESENTATION_SUPPORT.fetch(property)
+          # A property this table has never heard of is not a refusal: a bare
+          # fetch here would raise out of validated_render, which runs on both
+          # attach and refresh, and take down every page carrying a
+          # presentation facility on every platform.
+          next if supported.fetch(property, true)
 
           {
             facility: :presentation, property: property,

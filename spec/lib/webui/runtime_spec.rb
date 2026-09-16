@@ -73,13 +73,34 @@ RSpec.describe Lich::WebUI::Runtime do
 
     attach(first_connection, page)
 
+    # always_on_top and opacity depend on the host: a page cannot raise its
+    # own window or make the frame translucent, but on a host that can reach
+    # the real window the shim does it there instead. borderless is refused
+    # everywhere -- a frameless Chromium app window cannot be moved or closed.
+    host = Lich::WebUI::WindowPresentation.support
     expect(page.presentation_support).to eq(
-      always_on_top: false, borderless: false, opacity: true, scrollbars: true
+      { always_on_top: false, borderless: false, opacity: true, scrollbars: true }.merge(host)
     )
-    expect(page.degradations).to contain_exactly(
-      { facility: :presentation, property: :always_on_top, reason: :unsupported_by_browser_host },
+    expect(page.presentation_support.keys).to contain_exactly(
+      :always_on_top, :borderless, :opacity, :scrollbars
+    )
+    expect(page.degradations).to include(
       { facility: :presentation, property: :borderless, reason: :unsupported_by_browser_host }
     )
+    expect(page.degradations.map { |refusal| refusal[:property] }).not_to include(:opacity, :scrollbars)
+  end
+
+  # An unknown property must not be fetched out of the support table without a
+  # default: that raised out of validated_render, which runs on both attach and
+  # refresh, and took down every page carrying a presentation facility.
+  it 'treats a presentation property it has no opinion about as honoured' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'unknown-presentation', title: 'P2') do
+      presentation(opacity: 0.5)
+    end)
+    forged = double(facilities: { presentation: { opacity: 0.5, invented_property: true } })
+
+    expect { runtime.send(:record_presentation_degradations, page, forged) }.not_to raise_error
+    expect(runtime.degradations(page).map { |refusal| refusal[:property] }).not_to include(:invented_property)
   end
 
   it 'refuses stale and fabricated component events without invoking callbacks', security_id: 'sec-component-id' do

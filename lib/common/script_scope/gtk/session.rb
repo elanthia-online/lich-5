@@ -242,6 +242,7 @@ module Lich
             @windows = []
             @viewers = Hash.new { |hash, key| hash[key] = {} } # page => { viewer_id => true }
             @browsers = {} # window => pid
+            @window_handles = {} # window => OS window handle, once found
             @pointer_window = nil
             @mutex = Mutex.new
             @closed = false
@@ -392,6 +393,7 @@ module Lich
             handle = window.handle
             pid = @mutex.synchronize do
               @windows.delete(window)
+              @window_handles.delete(window)
               @browsers.delete(window)
             end
             if handle
@@ -591,6 +593,52 @@ module Lich
 
           def remember_browser(window, pid)
             @mutex.synchronize { @browsers[window] = pid }
+            watch_window_presentation(window, pid)
+          end
+
+          # A script's keep-above and opacity belong to the real OS window, not
+          # to the page, so once the browser has one we find it and apply them.
+          # The search runs on its own thread: it takes about a quarter of a
+          # second, and the session thread is the one every script handler and
+          # timer runs on.
+          def watch_window_presentation(window, pid)
+            return unless Lich::WebUI::WindowPresentation.available?
+
+            session = self
+            Lich::WebUI::WindowPresentation.discover(pid) do |hwnd|
+              next unless hwnd
+
+              session.enqueue { session.send(:adopt_window_handle, window, pid, hwnd) }
+            end
+          end
+
+          def adopt_window_handle(window, pid, hwnd)
+            # The window may have been closed while we were looking, and its
+            # pid killed; applying to a stale or recycled handle would dress
+            # up somebody else's window.
+            return unless @mutex.synchronize { @browsers[window] } == pid
+
+            @mutex.synchronize { @window_handles[window] = hwnd }
+            apply_window_presentation(window)
+          end
+
+          # Applies the window's presentation, resolving what the facility
+          # leaves unsaid. Window#presentation omits a property that is false
+          # and returns nil once nothing is set, so a script turning keep-above
+          # off never arrives as a value -- only as an absence. The defaults
+          # here are what absence means, which is what makes a toggle revert.
+          # Public: a Window calls this when its presentation changes, which
+          # can happen long after the window opened (map's opacity menu).
+          public def apply_window_presentation(window)
+            hwnd = @mutex.synchronize { @window_handles[window] }
+            return unless hwnd
+
+            requested = window.presentation || {}
+            Lich::WebUI::WindowPresentation.apply(
+              hwnd,
+              always_on_top: requested[:always_on_top] ? true : false,
+              opacity: requested[:opacity] || 1.0
+            )
           end
 
           def kill_browser(pid)

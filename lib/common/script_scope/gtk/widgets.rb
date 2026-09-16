@@ -2150,6 +2150,9 @@ module Lich
             if handle && @synced_presentation != presentation
               @synced_presentation = presentation
               adapter.refresh_facilities(handle) if adapter.respond_to?(:refresh_facilities)
+              # keep_above and opacity belong to the OS window, which the page
+              # cannot reach; the session carries them there if this host can.
+              @session.apply_window_presentation(self)
             end
             handle
           end

@@ -284,14 +284,46 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
         .to eq(always_on_top: true, borderless: true, opacity: 0.6)
     end
 
+    # Window#presentation omits a property that is false and returns nil once
+    # nothing is set, so a script turning keep-above off never arrives as a
+    # value -- only as an absence. Applying what the facility contains would
+    # therefore leave the window stuck topmost forever, which is exactly what
+    # map's "Keep window on top" menu item does.
+    it 'carries a toggled-off property to the window as an explicit default' do
+      applied = []
+      allow(Lich::WebUI::WindowPresentation).to receive(:available?).and_return(true)
+      allow(Lich::WebUI::WindowPresentation).to receive(:apply) do |_hwnd, always_on_top:, opacity:|
+        applied << [always_on_top, opacity]
+        true
+      end
+
+      window = shown_window { |win| win.set_keep_above(true); win.set_opacity(0.5) }
+      session.instance_variable_get(:@window_handles)[window] = Fiddle::Pointer.new(1234)
+
+      session.sync { window.set_keep_above(false) }
+      session.sync { window.set_opacity(1.0) }
+
+      expect(applied.last).to eq([false, 1.0])
+    end
+
     it 'records the properties a browser host cannot honor as degradations' do
-      window = shown_window { |win| win.set_keep_above(true) }
+      window = shown_window { |win| win.set_keep_above(true); win.set_decorated(false) }
       page = session.adapter.page_for(window.handle)
 
+      # borderless is refused on every host: a frameless Chromium app window
+      # leaves the player nothing to drag or close.
       expect(page.degradations).to include(
-        hash_including(facility: :presentation, property: :always_on_top,
+        hash_including(facility: :presentation, property: :borderless,
                        reason: :unsupported_by_browser_host)
       )
+      # always_on_top is only a degradation where the host cannot reach the
+      # real window; where it can, the shim raises the window itself.
+      refused = page.degradations.map { |refusal| refusal[:property] }
+      if Lich::WebUI::WindowPresentation.support[:always_on_top]
+        expect(refused).not_to include(:always_on_top)
+      else
+        expect(refused).to include(:always_on_top)
+      end
     end
 
     # creaturebar spells "hide the window" as set_opacity(0.0). The contract

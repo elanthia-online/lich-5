@@ -622,16 +622,21 @@ bump on its own. Fold them into the next contract change.
 Three things `;map` still gets wrong once it works. Noted here rather than
 fixed because two of them are not the shim's to fix.
 
-- **Window opacity does not make the window translucent.** The client
-  applies the `presentation` facility's `opacity` to the document, so the
-  whole page fades, but what shows through is the browser's own background
-  rather than whatever is behind the window. Real window translucency is a
-  compositor property; a page cannot reach it. Belongs with the Chromium
-  `--app` window itself -> **slice 7**, beside `always_on_top`.
-- **`keep_above` does not raise the window.** Same class: the runtime
-  already records it as a `presentation` degradation, and only the host
-  window can honour it -> **slice 7** ("this is where `always_on_top` and
-  multi-window layouts become real").
+- ~~**Window opacity does not make the window translucent.**~~ **Done.**
+  Applied to the real OS window on native Windows through
+  `lib/webui/window_presentation.rb` (`WS_EX_LAYERED` +
+  `SetLayeredWindowAttributes`). The whole window including its chrome goes
+  translucent, which a page cannot do -- what shows through a CSS fade is
+  the browser's own background.
+- ~~**`keep_above` does not raise the window.**~~ **Done**, same file
+  (`SetWindowPos` + `HWND_TOPMOST`). Nine scripts asked for it.
+
+  Both stay degraded everywhere else, deliberately: `xdotool windowstate
+  --add ABOVE` is a no-op under Wayland and `_NET_WM_WINDOW_OPACITY` does
+  nothing without a compositor, so those would report success while
+  changing nothing -- worse than degrading honestly. `borderless` stays
+  refused on every host, including Windows: a Chromium `--app` frame
+  stripped of its caption leaves a window the player cannot move or close.
 - **Changing Scale misplaces the room marker.** This one IS a shim bug.
   map redraws its Cairo marker at the new zoom and moves it with
   `Layout#move`; the marker's position and the image's scale stop agreeing,
