@@ -1,7 +1,9 @@
 # GTK-to-WebUI shim: plan and handoff
 
 Status: slices one, two, and three are on branch `feat/webui-port`
-(2026-09-16). Slices four through seven are unstarted. This document is
+(2026-09-16), and slice four is in progress - box packing, per-window
+pages, and the dropped setters are done; see slice four for what is
+left. Slices five through seven are unstarted. This document is
 the handoff: everything a new session needs to continue without
 re-deriving it.
 
@@ -397,16 +399,32 @@ menu (map.lic's is the most demanding; xnarost simpler).
 **Unlocks:** nothing new; makes everything already running look and
 behave right. Do this before showing translated scripts to users.
 
-- **Box packing.** Honor `expand`/`fill`/`padding` and `pack_end`
+Done so far: box packing (`4c09a59e`), per-window page selection (pulled
+forward between slices two and three), and the two dropped setters in
+`82128165` - `set_width_request` (288 sites, never aliased to
+`width_request=`) and `Gtk::Misc#set_padding(xpad, ypad)` (9 scripts,
+not implemented). Still open below: scroll adjustments, window props,
+grid columns, theme, close veto.
+
+Two gaps deliberately left, both needing a contract change rather than
+shim work: `Alignment`'s `yalign` has nowhere to go (the contract has
+`align` but no `valign`), and asymmetric padding still collapses to the
+larger side (`margin` is one integer). Only 8 call sites pad
+asymmetrically and 307 of ~340 `Alignment.new` uses are `xscale: 1`,
+which the existing fill guard already handles - so neither is worth a
+bump on its own. Fold them into the next contract change.
+
+- **Box packing.** DONE (`4c09a59e`). Honor `expand`/`fill`/`padding` and `pack_end`
   ordering. Contract: add optional child placement `expand: bool`, `fill:
   bool` on `stack`/`columns` children, and `homogeneous`; `Adapter
   #render_children` must start passing `placement:` (it does not today -
   a one-line change plus storing placement on the adapter `Node`).
-  `Alignment` -> `halign`/`valign` on the child (`xalign` 0/0.5/1 ->
+  `Alignment` -> `halign` on the child (`xalign` 0/0.5/1 ->
   start/center/end; `xscale` 1 -> fill) plus `margin` from
-  `set_padding`. The contract has one integer `margin`; propose
-  `margin: {top, right, bottom, left}` or four attributes.
-- **Per-window page selection.** app.js attaches every page. Honor the
+  `set_padding`: done. `valign` and per-side margin still want
+  `margin: {top, right, bottom, left}` or four attributes, plus a
+  `valign` prop; see the note above.
+- **Per-window page selection.** DONE (pulled forward). app.js attaches every page. Honor the
   `?page=<address>` query the launcher already puts in the URL: a window
   opened for a page attaches only that page (and any `dialog` page from
   the same owner, so modals still appear in it). Windows opened without a
@@ -517,11 +535,13 @@ behave right. Do this before showing translated scripts to users.
 
 ## 6. Rough edges carried from slice one
 
-- Every browser window renders every page (slice 4).
-- Horizontal `Box` -> `columns` with equal weights; `expand`/`fill`
-  ignored (slice 4).
+- ~~Every browser window renders every page~~ (fixed, pulled forward).
+- ~~Horizontal `Box` -> `columns` with equal weights; `expand`/`fill`
+  ignored~~ (fixed, `4c09a59e`).
 - `Adjustment#value=` accepted, does not scroll (slice 4).
 - `Label#set_markup` strips tags (slice 3).
+- `Alignment#yalign` is dropped; the contract has no `valign`, and
+  asymmetric padding collapses to the larger side (slice 4 note).
 - `Frame` label widgets are flattened to text; empty labels render `' '`
   because the contract's `short_text` bound refuses empty (verify).
 - `Widget#respond_to_missing?` returns `true` for everything so
