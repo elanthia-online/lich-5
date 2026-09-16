@@ -228,6 +228,22 @@ module Lich
             changed!
           end
 
+          # The size this image should occupy: the pixbuf's own dimensions,
+          # which is what the script scaled it to. Nil when there is no pixbuf
+          # to ask -- an image set from a file is shown at its natural size,
+          # which is what the browser does anyway.
+          def rendered_size
+            return nil unless @pixbuf.respond_to?(:width) && @pixbuf.respond_to?(:height)
+
+            width = @pixbuf.width
+            height = @pixbuf.height
+            return nil unless width.to_i.positive? && height.to_i.positive?
+
+            [width.to_i, height.to_i]
+          rescue StandardError
+            nil
+          end
+
           private
 
           # The natural size of the file on disk, which is what the served
@@ -456,7 +472,18 @@ module Lich
               src = child.send(:served_src)
               next unless src
 
-              { kind: 'image', src: src, x: x, y: y }
+              layer = { kind: 'image', src: src, x: x, y: y }
+              # The size the script drew at, not the size of the file behind
+              # it. A script that zooms scales the pixbuf itself and places
+              # everything else in those scaled pixels, but the image is served
+              # from the original file -- so without this the map rendered at
+              # its natural size while the room marker sat at scaled
+              # coordinates, and the circle drifted further off the room the
+              # further the zoom was from 100%.
+              width, height = child.send(:rendered_size)
+              layer[:w] = width if width
+              layer[:h] = height if height
+              layer
             end
           end
 

@@ -87,7 +87,7 @@ RSpec.describe Lich::WebUI::WindowPresentation do
     end
 
     it 'offers exactly the properties a page cannot do itself' do
-      expect(described_class.support).to eq(always_on_top: true, opacity: true, borderless: true)
+      expect(described_class.support).to eq(always_on_top: true, opacity: true)
     end
   end
 
@@ -158,28 +158,15 @@ RSpec.describe Lich::WebUI::WindowPresentation do
       expect(win32.calls.none? { |entry| entry.first == :set_window_long && entry[2] & 0x8 != 0 }).to be(true)
     end
 
-    # Only the title bar goes: WS_THICKFRAME stays so the window can still be
-    # resized by its edges, and the script that took the caption away keeps
-    # its own way to put it back (map's toggle is in the window's own menu).
-    # A window with no caption is also still closeable with ";kill <script>".
-    it 'takes only the caption when the script asks for a borderless window' do
-      win32.style = 0x16CF_0000 # caption + thickframe, as Chromium opens
+    # Chromium draws its own title bar inside the client area, so clearing
+    # WS_CAPTION removes a frame that was never there: measured on a real
+    # window, the whole non-client region is 8px of resize border. The
+    # property is accepted and ignored rather than faked.
+    it 'does not pretend to undecorate a window whose frame it cannot touch' do
       described_class.apply(Fiddle::Pointer.new(500), always_on_top: false, opacity: 1.0, borderless: true)
 
-      written = win32.calls.select { |entry| entry.first == :set_window_long }.last
-      expect(written[2] & 0x00C0_0000).to eq(0)       # caption cleared
-      expect(written[2] & 0x0004_0000).to eq(0x40000) # thickframe kept
-      # The frame is not recomputed without this, so nothing shows until the
-      # window is resized by something else.
-      expect(win32.calls.any? { |entry| entry.first == :set_window_pos && (entry[3] & 0x0020) != 0 }).to be(true)
-    end
-
-    it 'puts the caption back when the script turns borderless off' do
-      win32.style = 0x160F_0000 # already stripped
-      described_class.apply(Fiddle::Pointer.new(500), always_on_top: false, opacity: 1.0, borderless: false)
-
-      written = win32.calls.select { |entry| entry.first == :set_window_long }.last
-      expect(written[2] & 0x00C0_0000).to eq(0x00C0_0000)
+      # Only the layered bit is ever written; the window style is untouched.
+      expect(win32.style).to eq(0x16CF0000)
     end
 
     it 'does nothing at all when the host cannot reach the window' do

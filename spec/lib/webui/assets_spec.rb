@@ -194,7 +194,11 @@ RSpec.describe 'WebUI browser assets' do
   # pointer crosses the parent on its way into the child.
   it 'closes a submenu on a longer dwell once the pointer leaves it' do
     expect(javascript).to include('const SUBMENU_CLOSE_MS = 450;')
-    expect(javascript).to include('dwell = window.setTimeout(() => { dwell = null; closeMenuLayers(level + 1); }, SUBMENU_CLOSE_MS);')
+    expect(javascript).to include('}, SUBMENU_CLOSE_MS);')
+    # Leaving an item is also how you reach its submenu, and its submenu's
+    # submenu; closing then would take the layer just walked into with it.
+    expect(javascript).to include('if (pointerInMenuBelow(level)) return;')
+    expect(javascript).to include('layer.addEventListener("mouseenter", () => { layer.dataset.pointerInside = "true"; });')
     expect(javascript).to include('button.addEventListener("mouseleave", scheduleClose);')
     # Arriving in the submenu itself calls the closing off.
     expect(javascript).to include('layer.addEventListener("mouseenter", () => owner.__cancelSubmenuClose());')

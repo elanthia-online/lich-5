@@ -631,11 +631,16 @@ fixed because two of them are not the shim's to fix.
 - ~~**`keep_above` does not raise the window.**~~ **Done**, same file
   (`SetWindowPos` + `HWND_TOPMOST`). Nine scripts asked for it.
 
-- ~~**Borderless windows.**~~ **Done**, same file. Only `WS_CAPTION` is
-  taken: `WS_THICKFRAME` stays, so a borderless window is still resizable
-  by its edges, and `;kill <script>` closes any window whose title bar has
-  gone. An earlier note here refused it outright on the theory that a
-  frameless window strands the player; that was too cautious.
+- **Borderless windows: refused, and now known to be unfixable this way.**
+  A Chromium `--app` window reports `WS_CAPTION` in its style but draws its
+  title bar *itself, inside the client area*: measured on a live window, the
+  entire non-client region is 8px of resize border and none of it is
+  caption. Clearing the bit removes a frame that was never there, so the
+  title bar stays exactly where it was. That was shipped briefly and
+  reverted -- a no-op that reports success is the one outcome worse than
+  degrading honestly. Removing the frame for real needs the window created
+  frameless, which is a launch-time decision (a frameless switch at spawn,
+  or an embedding host), so it belongs with the FE-docked work.
 - ~~**Hide Scrollbars.**~~ **Done.** The contract already had a
   `scrollbars` facility marked supported, but the client read it nowhere
   and `ScrolledWindow#set_policy` threw the policy away, so the menu item
@@ -648,13 +653,13 @@ fixed because two of them are not the shim's to fix.
   and `_NET_WM_WINDOW_OPACITY` does nothing without a compositor, so those
   would report success while changing nothing -- worse than degrading
   honestly.
-- **Changing Scale misplaces the room marker.** This one IS a shim bug.
-  map redraws its Cairo marker at the new zoom and moves it with
-  `Layout#move`; the marker's position and the image's scale stop agreeing,
-  so the circle drifts off the room. Suspect the composite `scale` prop is
-  applied to the surface as a CSS transform while layer coordinates stay in
-  unscaled pixels -- check `Layout#node_props`/`composite` against
-  `calculate_scale` before slice 6's canvas work lands on top of it.
+- ~~**Changing Scale misplaces the room marker.**~~ **Fixed.** The cause was
+  not a CSS transform, as guessed here: `Layout#layers` sent each image
+  layer's `src`, `x` and `y` but no `w`/`h`, so the browser drew the map at
+  the natural size of the file on disk while every coordinate around it was
+  in the scaled pixels the script had resized the pixbuf to. The two agreed
+  only at 100%. The layer now carries the pixbuf's own dimensions; the
+  contract already allowed them.
 
 ## 7. Open questions for Doug
 

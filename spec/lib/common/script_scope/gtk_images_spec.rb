@@ -7,6 +7,18 @@ require 'common/script_scope/gtk/boot'
 require 'tmpdir'
 require 'fileutils'
 require 'zlib'
+# Pixbuf work is the whole point of these examples, and the gem is a separate
+# require from gtk3 -- without this they all skipped on a machine that has it.
+begin
+  require 'gdk_pixbuf2'
+rescue LoadError
+  nil
+end
+begin
+  require 'cairo'
+rescue LoadError
+  nil
+end
 
 # Gtk::Image and Gtk::Layout were the two constants standing between ";map"
 # and drawing anything: both fell through Gtk.const_missing and became empty
@@ -405,6 +417,32 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
 
       expect(props[:layers].first).to include(kind: 'image', x: 1200, y: 1400)
       expect(props[:layers].first[:src]).to start_with('data:image/png;base64,')
+      # A marker is drawn at the size it is placed at.
+      expect(props[:layers].first).to include(w: 58, h: 58)
+    end
+
+    # A script that zooms scales the pixbuf itself and then places everything
+    # else in those scaled pixels. The image is still served from the original
+    # file, so without a size the browser drew the map at its natural size
+    # while the room marker sat at scaled coordinates -- and the circle drifted
+    # further off the room the further the zoom was from 100%.
+    it 'carries the size the script scaled a layer to, not the size of its file' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      props = session.sync do
+        original = ::GdkPixbuf::Pixbuf.new(file: map_file)
+        doubled = original.scale_simple(original.width * 2, original.height * 2,
+                                        ::GdkPixbuf::InterpType::BILINEAR)
+        layout = gtk::Layout.new
+        layout.set_size(original.width * 4, original.height * 4)
+        layout.put(gtk::Image.new(pixbuf: doubled), 0, 0)
+        layout.send(:node_props)
+      end
+
+      layer = props[:layers].first
+      expect(layer[:w]).to eq(607 * 2)
+      expect(layer[:h]).to eq(774 * 2)
     end
 
     it 'refuses one too large to inline rather than sending a broken src' do
