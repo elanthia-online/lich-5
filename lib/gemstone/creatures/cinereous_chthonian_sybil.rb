@@ -11,7 +11,7 @@
   blood: nil,
   bones: nil,
   limbs: nil,
-  witherable: nil,
+  witherable: true, # Wither (1115) worked 7x in session logs
   sympathy: nil,
   muggable: nil,
   sleepable: nil,

@@ -29,10 +29,6 @@
     {
       name: "Temple Wyneb",
       uids: [13300001..13300076, 13300080..13300080]
-    },
-    {
-      name: "unmapped",
-      uids: [13300077..13300079]
     }
   ],
   attack_attributes: {
@@ -87,13 +83,14 @@
     mns_td: (262..272),
     mnm_td: 250,
     defensive_spells: [
-      "Spirit Defense",
-      "Spirit Warding II",
-      "Fasthr's Reward",
-      "Lesser Shroud",
-      "Natural Colors",
-      "Resist Elements",
-      "Mobility"
+      "Spirit Defense (103)",
+      "Spirit Warding II (107)",
+      "Fasthr's Reward (115)",
+      "Lesser Shroud (120)",
+      "Natural Colors (601)",
+      "Resist Elements (602)",
+      "Mobility (618)",
+      "Spirit Warding I (101)"
     ],
     defensive_abilities: [],
     special_defenses: []

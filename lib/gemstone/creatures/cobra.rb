@@ -33,10 +33,6 @@
     {
       name: "Vornavian Coast",
       uids: [4202101..4202111]
-    },
-    {
-      name: "unmapped",
-      uids: [18045..18047]
     }
   ],
   attack_attributes: {

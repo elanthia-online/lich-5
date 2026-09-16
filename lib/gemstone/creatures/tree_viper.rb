@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -33,10 +33,6 @@
     {
       name: "Vipershroud",
       uids: [2190001..2190035]
-    },
-    {
-      name: "unmapped",
-      uids: [5006010..5006039]
     }
   ],
   attack_attributes: {

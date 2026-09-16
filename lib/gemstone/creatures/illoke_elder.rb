@@ -122,7 +122,12 @@
     mjs_td: (355..366),
     mns_td: (355..366),
     mnm_td: (277..307),
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Defense III (414)",
+      "Elemental Defense II (406)",
+      "Thurfel's Ward (503)",
+      "Elemental Defense I (401)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

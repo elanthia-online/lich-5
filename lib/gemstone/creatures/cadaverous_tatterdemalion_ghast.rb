@@ -10,7 +10,7 @@
   undead: true,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -103,7 +103,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :expose_weakness,
+      name: "Expose Weakness",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 20,
+      effects: { vulnerable: true },
+      dispellable: nil,
+      notes: "Maneuver, not a spell. Follows the pin-and-jump-up line with \"You are struck by an acute sense of vulnerability.\" 20s countdown. Penalty not measured."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -174,6 +185,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      expose_weakness: [
+        "A cadaverous tatterdemalion ghast pins you to the ground and quickly jumps to {pronoun} feet!",
+        "You are struck by an acute sense of vulnerability."
+      ]
+    }
   }
 }

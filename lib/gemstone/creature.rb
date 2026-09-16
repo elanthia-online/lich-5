@@ -844,7 +844,7 @@ module Lich
                     :decay, :search, :spell_prep, :frenzy,
                     :sympathy, :bite, :claw, :attack,
                     :attacks, :enrage, :mstrike, :stand,
-                    :stun_break, :ambient
+                    :stun_break, :ambient, :triggers, :info
 
       # Every form a placeholder can take in a real game line. The lists
       # are alternatives in the generated regex, so a form that is missing
@@ -866,7 +866,13 @@ module Lich
       end
 
       def normalize(value)
-        if value.is_a?(Array)
+        if value.is_a?(Hash)
+          # attacks: and triggers: are keyed hashes of message lists. Without
+          # this branch their strings stayed raw, so a {pronoun} in an attack
+          # or trigger line never became a matchable PlaceholderTemplate the
+          # way the flat fields' did.
+          value.transform_values { |v| normalize(v) }
+        elsif value.is_a?(Array)
           value.map { |v| normalize(v) }
         elsif value.is_a?(String) && value.match?(/\{[a-zA-Z_]+\}/)
           phs = value.scan(/\{([a-zA-Z_]+)\}/).flatten.map(&:to_sym)

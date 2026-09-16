@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: false,
-  limbs: nil,
+  limbs: true,
   witherable: false,
   sympathy: true,
   muggable: true,
@@ -90,7 +90,8 @@
       "Thurfel's Ward (503)",
       "Elemental Bias (508)",
       "Strength (509)",
-      "Mass Blur (911)"
+      "Mass Blur (911)",
+      "Mage Armor (520)"
     ],
     defensive_abilities: [],
     special_defenses: [

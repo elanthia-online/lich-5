@@ -49,7 +49,11 @@
         cs: 448
       }
     ],
-    offensive_spells: [],
+    offensive_spells: [
+      {
+        name: "Curse (715)"
+      }
+    ],
     maneuvers: [
       {
         name: "Point"
@@ -86,7 +90,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :curse,
+      name: "Curse (715)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { ds_penalty: true },
+      dispellable: nil,
+      notes: "Tell: points unerringly at you, then a thread of swirling gray (or brackish blue) magic issues from the banshee. One sighting had the onset \"You shake slightly and feel much less protected!\" instead. Penalty size not measured."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -164,6 +179,13 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      curse: [
+        "A flickering mist-wreathed banshee lifts a slender hand and points unerringly at you!",
+        "A thread of swirling gray magic issues forth from the mist-wreathed banshee toward you.",
+        "A thread of brackish blue magic issues forth from the mist-wreathed banshee toward you.",
+        "You shiver slightly as an invisible rash covers your body!  A feeling of defenselessness washes over you!"
+      ]
+    }
   }
 }

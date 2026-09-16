@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: false,
@@ -31,10 +31,6 @@
     {
       name: "The Broken Lands",
       uids: [487019..487041, 487043..487052, 487054..487054, 487056..487075]
-    },
-    {
-      name: "unmapped",
-      uids: [487042..487042, 487053..487053, 487055..487055]
     }
   ],
   attack_attributes: {
@@ -106,7 +102,9 @@
       "Lesser Shroud (120)",
       "Spirit Shield (202)",
       "Spirit Warding I (101)",
-      "Spirit Warding II (107)"
+      "Spirit Warding II (107)",
+      "Heroism (215)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []

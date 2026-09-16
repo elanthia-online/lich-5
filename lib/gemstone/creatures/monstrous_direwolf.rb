@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -85,9 +85,7 @@
     mjs_td: nil,
     mns_td: 267,
     mnm_td: 266,
-    defensive_spells: [
-      "TD boost"
-    ],
+    defensive_spells: [],
     defensive_abilities: [],
     special_defenses: []
   },

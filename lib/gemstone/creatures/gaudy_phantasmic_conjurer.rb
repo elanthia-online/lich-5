@@ -82,7 +82,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :bind,
+      name: "Bind (214)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 14,
+      effects: { immobilized: true },
+      dispellable: nil,
+      notes: "Warding, CS 458."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -152,6 +163,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      bind: [
+        "A gaudy phantasmic conjurer shouts out a single mystical syllable, thrusting {pronoun} ghostly hands at you!",
+        "An unseen force entangles you, restricting your movement!"
+      ]
+    }
   }
 }

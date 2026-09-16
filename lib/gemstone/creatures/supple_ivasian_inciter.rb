@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -27,10 +27,6 @@
     {
       name: "Abbey",
       uids: [4132201..4132240, 4132243..4132248]
-    },
-    {
-      name: "unmapped",
-      uids: [4132241..4132242]
     }
   ],
   attack_attributes: {

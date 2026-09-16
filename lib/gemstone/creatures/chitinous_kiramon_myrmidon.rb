@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -27,10 +27,6 @@
     {
       name: "The Hive",
       uids: [13041101..13041132, 13041201..13041230, 13041301..13041329]
-    },
-    {
-      name: "unmapped",
-      uids: [13041330..13041330]
     }
   ],
   attack_attributes: {

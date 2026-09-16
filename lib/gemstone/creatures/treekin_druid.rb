@@ -30,10 +30,6 @@
     {
       name: "Red Forest",
       uids: [480246..480248, 480250..480260, 17006246..17006248, 17006250..17006260]
-    },
-    {
-      name: "unmapped",
-      uids: [480249..480249, 17006249..17006249]
     }
   ],
   attack_attributes: {
@@ -119,7 +115,7 @@
     mns_td: (346..355),
     mnm_td: 261,
     defensive_spells: [
-      "Barkskin",
+      "Barkskin (605)",
       "Natural Colors (601)",
       "Resist Elements (602)"
     ],

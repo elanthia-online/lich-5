@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -129,13 +129,36 @@
       "Spirit Shield (202)",
       "Spirit Warding I (101)",
       "Spirit Warding II (107)",
-      "Wall of Force (140)"
+      "Wall of Force (140)",
+      "Heroism (215)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    },
+    {
+      id: :bind,
+      name: "Bind (214)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 10,
+      effects: { immobilized: true },
+      dispellable: nil,
+      notes: "Warding, CS 386."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -200,6 +223,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      bind: [
+        "An Ithzir initiate places one palm on {pronoun} chest, and raises the other toward you!",
+        "An unseen force entangles you, restricting your movement!"
+      ],
+      interference: [
+        "An Ithzir initiate places one palm on {pronoun} chest, and raises the other toward you!",
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

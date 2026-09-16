@@ -33,10 +33,6 @@
     {
       name: "Vipershroud",
       uids: [2190001..2190025, 2190027..2190034]
-    },
-    {
-      name: "unmapped",
-      uids: [5006010..5006039]
     }
   ],
   attack_attributes: {

@@ -10,11 +10,11 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
-  witherable: nil,
+  limbs: true,
+  witherable: true, # Wither (1115) worked 26x in session logs
   sympathy: nil,
   muggable: nil,
-  sleepable: nil,
+  sleepable: true, # Sleep (501) worked 9x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [],
@@ -32,8 +32,21 @@
   attack_attributes: {
     physical_attacks: [],
     bolt_spells: [],
-    warding_spells: [],
-    offensive_spells: [],
+    warding_spells: [
+      {
+        name: "Mana Burst (1414)",
+        cs: (369..396)
+      },
+      {
+        name: "Thought Lash (1210)",
+        cs: (384..390)
+      }
+    ],
+    offensive_spells: [
+      {
+        name: "Mystic Impedance (1708)"
+      }
+    ],
     maneuvers: [],
     special_abilities: [
       {
@@ -78,7 +91,28 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :mystic_impedance,
+      name: "Mystic Impedance (1708)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { blocks_spells_at_or_above: 15 },
+      dispellable: nil,
+      notes: "Follows the finger-flick spell_prep line; no warding roll (autosuccess). Golden runes onset. Blocks PREPARE of spells at or above the threshold; lower spells still work. Threshold is an upper bound: 515 observed blocked, exact floor unconfirmed."
+    },
+    {
+      id: :doom_sign,
+      name: "Doom Sign",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: nil,
+      effects: nil,
+      dispellable: nil,
+      notes: "MDR maneuver. On success a Debuffs bar named Doom Sign appears with a 2-4s countdown, and a death was seen at its expiry. Mechanism at expiry not confirmed."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -136,6 +170,20 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      mystic_impedance: [
+        "A dizzying array of golden runes surround and suffuse you before being absorbed into your body."
+      ],
+      mana_burst: [
+        "The very fabric of reality surrounding you fluctuates wildly!",
+        "The very fabric of reality surrounding {target} fluctuates wildly!"
+      ],
+      thought_lash: [
+        "A crackling whip of energy lashes out at you!"
+      ],
+      doom_sign: [
+        "The ominous sigil flares brightly as it streaks toward you, melding with your flesh.  A shiver of anticipation goes up your spine and your heart begins to quiver."
+      ]
+    }
   }
 }

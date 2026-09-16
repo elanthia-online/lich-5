@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: false,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: nil,
   muggable: true,
@@ -89,9 +89,10 @@
     mns_td: (261..268),
     mnm_td: (177..187),
     defensive_spells: [
-      "Natural Colors",
-      "Resist Elements",
-      "Self Control"
+      "Natural Colors (601)",
+      "Resist Elements (602)",
+      "Self Control (613)",
+      "Spirit Defense (103)"
     ],
     defensive_abilities: [],
     special_defenses: []

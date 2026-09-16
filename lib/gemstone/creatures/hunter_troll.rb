@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/hunter_troll",
   picture: "",
   level: 30,
-  family: "troll",
+  family: "Troll",
   type: "Biped",
   undead: false,
   blood: true,
@@ -77,8 +77,8 @@
     mns_td: 90,
     mnm_td: (90..100),
     defensive_spells: [
-      "Natural Colors",
-      "Self Control"
+      "Natural Colors (601)",
+      "Self Control (613)"
     ],
     defensive_abilities: [],
     special_defenses: []

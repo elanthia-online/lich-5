@@ -72,7 +72,9 @@
       "Elemental Defense III (414)",
       "Spirit Defense (103)",
       "Spirit Warding I (101)",
-      "Spirit Warding II (107)"
+      "Spirit Warding II (107)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)"
     ],
     defensive_abilities: [],
     special_defenses: []

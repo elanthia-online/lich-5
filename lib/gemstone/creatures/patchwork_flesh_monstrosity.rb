@@ -10,7 +10,7 @@
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -107,7 +107,9 @@
     mjs_td: 453,
     mns_td: 453,
     mnm_td: (300..309),
-    defensive_spells: [],
+    defensive_spells: [
+      "Focus Barrier (1216)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

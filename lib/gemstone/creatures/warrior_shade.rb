@@ -124,7 +124,10 @@
       },
       miscellany: []
     },
-    triggers: {},
-    frenzy: "A warrior shade whales away, consumed with bloodlust!"
+    triggers: {
+      frenzy: [
+        "A warrior shade whales away, consumed with bloodlust!"
+      ]
+    }
   }
 }

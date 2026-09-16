@@ -68,7 +68,11 @@
     mjs_td: 183,
     mns_td: 183,
     mnm_td: (131..141),
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Defense III (414)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

@@ -35,10 +35,6 @@
       uids: [14015..14023, 14025..14025, 16051..16057]
     },
     {
-      name: "unmapped",
-      uids: [14024..14024]
-    },
-    {
       name: "Liath Bheinn and Aillidh Brae",
       uids: [4250005..4250021]
     }

@@ -108,7 +108,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :stone_fist,
+      name: "Stone Fist (514)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 42,
+      effects: { rooted: true },
+      dispellable: nil,
+      notes: "Warding, CS 452-467."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -205,6 +216,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      stone_fist: [
+        "A horned basalt grotesque twists a stony claw toward you!",
+        "The ground beneath a horned basalt grotesque rumbles, then erupts in a shower of rubble that coalesces in to an enormous hand in mid-air."
+      ]
+    }
   }
 }

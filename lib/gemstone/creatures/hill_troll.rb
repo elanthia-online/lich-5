@@ -5,7 +5,7 @@
   url: "https://gswiki.play.net/hill_troll",
   picture: "",
   level: 16,
-  family: "troll",
+  family: "Troll",
   type: "biped",
   undead: false,
   blood: true,
@@ -34,10 +34,6 @@
     {
       name: "Upper Trollfang",
       uids: [17001..17010, 374001..374012]
-    },
-    {
-      name: "unmapped",
-      uids: [21001..21006]
     },
     {
       name: "Slope",

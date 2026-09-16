@@ -221,6 +221,101 @@ RSpec.describe 'lib/gemstone/creatures data integrity' do
     expect(collisions).to be_empty
   end
 
+  # The abilities/triggers shape this data carries is only enforced here.
+  # Nothing in the loader rejects a bad enum or a bare string in a trigger
+  # list, so a typo (type: :buf) would otherwise reach consumers silently.
+  def ability_keys
+    %i[id name type target typical_duration_s effects dispellable notes]
+  end
+
+  def ability_types
+    %i[buff debuff aura proc]
+  end
+
+  def ability_targets
+    %i[self opponent area]
+  end
+
+  def each_ability
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      Array(data[:abilities]).each { |a| yield File.basename(path), a }
+    end
+  end
+
+  it 'every abilities entry is a Hash using only documented keys, with an id and a name' do
+    offenders = []
+    each_ability do |base, a|
+      next offenders << "#{base}: #{a.inspect[0, 60]}" unless a.is_a?(Hash)
+
+      extra = a.keys - ability_keys
+      offenders << "#{base}: unknown keys #{extra.inspect}" unless extra.empty?
+      %i[id name].each do |k|
+        offenders << "#{base}: missing #{k}" if a[k].to_s.strip.empty?
+      end
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'every abilities entry uses a known type and target, and a numeric duration' do
+    offenders = []
+    each_ability do |base, a|
+      next unless a.is_a?(Hash)
+
+      t = a[:type]
+      offenders << "#{base}: #{a[:id]} type=#{t.inspect}" unless t.nil? || ability_types.include?(t)
+      tg = a[:target]
+      offenders << "#{base}: #{a[:id]} target=#{tg.inspect}" unless tg.nil? || ability_targets.include?(tg)
+      d = a[:typical_duration_s]
+      offenders << "#{base}: #{a[:id]} duration=#{d.inspect}" unless d.nil? || d.is_a?(Numeric)
+      dp = a[:dispellable]
+      offenders << "#{base}: #{a[:id]} dispellable=#{dp.inspect}" unless [nil, true, false].include?(dp)
+      e = a[:effects]
+      offenders << "#{base}: #{a[:id]} effects=#{e.inspect[0, 40]}" unless e.nil? || e.is_a?(Hash)
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'no file declares the same ability id twice' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      ids = Array(data[:abilities]).map { |a| a[:id] if a.is_a?(Hash) }.compact
+      dups = ids.tally.select { |_id, n| n > 1 }.keys
+      offenders << "#{File.basename(path)}: #{dups.inspect}" unless dups.empty?
+    end
+
+    expect(offenders).to be_empty
+  end
+
+  it 'messaging.triggers is a Hash of Arrays of Strings' do
+    offenders = []
+    creature_files.each do |path|
+      data = load_data(path)
+      next unless data.is_a?(Hash)
+
+      triggers = data.dig(:messaging, :triggers)
+      next if triggers.nil?
+
+      base = File.basename(path)
+      next offenders << "#{base}: triggers is #{triggers.class}" unless triggers.is_a?(Hash)
+
+      triggers.each do |key, lines|
+        unless lines.is_a?(Array) && lines.all?(String)
+          offenders << "#{base}: triggers[#{key.inspect}] = #{lines.inspect[0, 60]}"
+        end
+      end
+    end
+
+    expect(offenders).to be_empty
+  end
+
   it 'CreatureTemplate.load_all can load the entire real directory without raising' do
     Lich::Gemstone::CreatureTemplate.class_variable_set(:@@templates, {})
     Lich::Gemstone::CreatureTemplate.class_variable_set(:@@loaded, false)

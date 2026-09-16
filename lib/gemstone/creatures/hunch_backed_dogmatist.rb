@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Temple Wyneb",
       uids: [13300001..13300076, 13300080..13300080]
-    },
-    {
-      name: "unmapped",
-      uids: [13300077..13300079]
     }
   ],
   attack_attributes: {
@@ -99,13 +95,26 @@
     mns_td: (277..293),
     mnm_td: (271..280),
     defensive_spells: [
-      "Wall of Force (140)"
+      "Wall of Force (140)",
+      "Spell Shield (219)",
+      "Spirit Warding I (101)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: "Resurrect",
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -170,6 +179,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

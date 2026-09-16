@@ -99,12 +99,29 @@
     mjs_td: (203..213),
     mns_td: (203..213),
     mnm_td: (180..190),
-    defensive_spells: [],
+    defensive_spells: [
+      "Elemental Defense III (414)",
+      "Spirit Warding II (107)",
+      "Lesser Shroud (120)",
+      "Fasthr's Reward (115)",
+      "Spirit Warding I (101)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :elemental_saturation,
+      name: "Elemental Saturation (413)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { bolt_ds_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -169,6 +186,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      elemental_saturation: [
+        "A dark shadow passes over you."
+      ]
+    }
   }
 }

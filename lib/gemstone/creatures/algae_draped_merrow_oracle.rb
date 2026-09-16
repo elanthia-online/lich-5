@@ -62,7 +62,7 @@
     mns_td: nil,
     mnm_td: nil,
     defensive_spells: [
-      "-->"
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: [

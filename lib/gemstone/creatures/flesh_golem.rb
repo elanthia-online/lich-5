@@ -5,12 +5,12 @@
   url: "https://gswiki.play.net/flesh_golem",
   picture: "",
   level: 50,
-  family: "golem",
+  family: "Golem",
   type: "Biped",
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: false,
   sympathy: false,
   muggable: true,
@@ -31,10 +31,6 @@
     {
       name: "Marsh Keep",
       uids: [376051..376054, 376057..376088]
-    },
-    {
-      name: "unmapped",
-      uids: [376055..376056]
     }
   ],
   attack_attributes: {

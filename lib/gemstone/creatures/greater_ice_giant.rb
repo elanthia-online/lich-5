@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -74,7 +74,11 @@
     mjs_td: (164..174),
     mns_td: (164..174),
     mnm_td: (147..156),
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Warding II (107)",
+      "Spirit Defense (103)",
+      "Spirit Warding I (101)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

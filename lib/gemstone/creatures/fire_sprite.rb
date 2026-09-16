@@ -74,10 +74,10 @@
     mns_td: (256..287),
     mnm_td: (214..215),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Thurfel's Ward"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Thurfel's Ward (503)"
     ],
     defensive_abilities: [],
     special_defenses: [
@@ -85,7 +85,18 @@
     ]
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :weapon_deflection,
+      name: "Weapon Deflection (412)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { as_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -142,6 +153,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      weapon_deflection: [
+        "Your eyesight becomes blurred slightly."
+      ]
+    }
   }
 }

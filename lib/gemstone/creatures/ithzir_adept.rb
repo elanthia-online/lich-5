@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -127,13 +127,24 @@
       "Elemental Focus (513)",
       "Prismatic Guard (905)",
       "Mass Blur (911)",
-      "Wizard Shield (919)"
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :weapon_fire,
+      name: "Weapon Fire (915)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: nil,
+      effects: { weapon_flares: true, may_drop_weapon: true },
+      dispellable: nil,
+      notes: "Warding (CS 408 seen). Tell: thrusts both palms toward you. On a failed ward the target's held weapon is struck and flares with the caster's element on later swings; the wiki says the target may drop it. Number of flares not measured."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -222,6 +233,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      weapon_fire: [
+        "An Ithzir adept thrusts both palms toward you!",
+        "Your {weapon} is struck with an Ithzir adept's cast."
+      ]
+    }
   }
 }
