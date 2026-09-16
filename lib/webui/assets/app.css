@@ -180,6 +180,17 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
   .row-actions, .workflow-actions { flex-wrap: wrap; }
 }
 
+/* A grid that asked for no weights is a GTK table nothing packed to
+   expand: it hugs its content instead of spreading across the window.
+   `justify-content: start` keeps the auto tracks at their natural width
+   rather than letting them absorb the container's slack. */
+.webui-page.bare .webui-grid:not([data-weighted]) { justify-content: start; }
+/* A filler holds a hole GTK left empty in the table. Its content is a
+   single space, which `white-space: pre` would give real width. */
+.webui-page.bare .webui-text:empty,
+.webui-page.bare .webui-text.filler { min-width: 0; }
+.webui-page.bare .webui-columns:not([data-weighted]) { justify-content: start; }
+
 /* ---- GTK proportions for a script's own window ---------------------------
    These come last so they win over the launcher's roomier defaults, which
    are more specific (.field input:not(...)) than a bare-page prefix alone.
