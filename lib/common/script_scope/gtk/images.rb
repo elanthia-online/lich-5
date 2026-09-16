@@ -315,12 +315,17 @@ module Lich
             button_release_event: :release,
           }.freeze
 
+          # Every signal a script connects here becomes the one contract
+          # event a composite has. Returning :press/:release instead -- as
+          # this did at first -- makes sync_bindings! bind them, and the
+          # adapter refuses the widget outright: composite has no such
+          # events, so the whole Layout was dropped and the map went blank.
           def event_for(signal)
-            SURFACE_SIGNALS[signal] || super
+            return :surface_activate if SURFACE_SIGNALS.key?(signal)
+
+            super
           end
 
-          # Declared so the node carries the binding even though the script
-          # connects to signals the contract does not name one-for-one.
           def always_bound_events
             return [] unless surface_wanted?
 

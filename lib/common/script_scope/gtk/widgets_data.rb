@@ -789,13 +789,28 @@ module Lich
             TreePath.new(@model.path_indices(self))
           end
 
+          # GTK advances the iter to the next row and leaves the model
+          # alone. This used to copy the next row's key AND its values into
+          # self -- and the model handed out its own row objects, so self WAS
+          # a row: the copy overwrote that row's data with its successor's.
+          # Walking ["alpha","beta","gamma"] left ["beta","beta","gamma"].
+          #
+          # It also never terminated: @rows.index(self) compares by key, so
+          # once the key had been rewritten the iter matched the row it had
+          # just advanced to and iter_after returned that same successor
+          # forever. jinx.lic walks a store exactly this way, twice.
+          #
+          # The model now hands out copies (see #dup_row), so moving this
+          # iter moves only this iter; and @values is the successor's own
+          # array, so writing through the advanced iter still reaches the
+          # model, as writing through any other iter does.
           def next!
             following = @model.iter_after(self)
             return false unless following
 
             @key = following.key
-            @values = following.values
             @parent_key = following.parent_key
+            @values = following.values
             true
           end
 
@@ -873,8 +888,11 @@ module Lich
             @rows.dup.each { |iter| yield self, iter.path, iter }
           end
 
+          # A copy, like every iter the model hands out: #next! advances by
+          # rewriting the iter's key, so handing back the row itself let a
+          # walk rewrite the model.
           def iter_first
-            @rows.first
+            dup_row(@rows.first)
           end
 
           def get_iter(path)
@@ -886,12 +904,26 @@ module Lich
 
               iter = @rows.select { |row| row.parent_key == iter.key }[index]
             end
-            iter
+            dup_row(iter)
           end
 
           def iter_after(iter)
-            index = @rows.index(iter)
-            index && @rows[index + 1]
+            index = @rows.index { |row| row.key == iter.key }
+            return nil unless index
+
+            dup_row(@rows[index + 1])
+          end
+
+          # A copy that names the same row. #next! advances an iter by
+          # rewriting its key, and the model hands out its own row objects,
+          # so without a copy the caller's iter IS a row and advancing it
+          # rewrote that row. Lookups are all by key, which the copy keeps,
+          # and @values is the row's own array, so writing through the copy
+          # still reaches the model.
+          def dup_row(row)
+            return nil unless row
+
+            TreeIter.new(self, row.key, row.values, row.parent_key)
           end
 
           def path_indices(iter)
