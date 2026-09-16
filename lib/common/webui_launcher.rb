@@ -9,6 +9,7 @@ require_relative 'authentication/launch_data'
 require_relative 'front-end'
 require_relative 'frontend_locator'
 require_relative 'frontend_choices'
+require_relative 'frontend_editor'
 require_relative 'session_launcher'
 require_relative 'webui_launcher/catalog'
 require_relative 'webui_launcher/serial_executor'
@@ -19,7 +20,7 @@ module Lich
     # Native launcher built directly on the WebUI author API. GTK remains the default
     # entry path until the R2 human gate is accepted.
     class WebUILauncher
-      TABS = ['Saved Entry', 'Manual Entry', 'Account Management'].freeze
+      TABS = ['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'].freeze
       ACCOUNT_TABS = ['Accounts', 'Add Character', 'Add Account', 'Encryption Management'].freeze
       GAMES = %w[GS3 GSF GSX GST DR DRF DRT].map { |code| { value: code, label: code } }.freeze
       GAME_NAMES = {
@@ -56,6 +57,12 @@ module Lich
         @logger = logger || proc { |level, message| Lich.log("#{level}: #{message}") if Lich.respond_to?(:log) }
         @frontend_locator = frontend_locator
         @frontend_options = discover_frontends(refresh: true)
+        # The Frontends tab: which row is selected, whether the editor is
+        # holding a new custom frontend that has no id yet, and the field
+        # values as the player has typed them.
+        @frontend_draft = nil
+        @frontend_creating = false
+        @frontend_error = nil
         @geometry_store = geometry_store || WindowGeometryStore.new(data_dir: data_dir)
         @window_geometry = @geometry_store.load
         @browser_pid = nil
@@ -178,6 +185,7 @@ module Lich
               manual_controls = launcher.__send__(:render_manual, self, state)
             end
             stack(slot: TABS[2], key: 'accounts-panel') { launcher.__send__(:render_accounts, self, state) }
+            stack(slot: TABS[3], key: 'frontends-panel') { launcher.__send__(:render_frontends, self, state) }
           end
           manual_default = state[:manual][:phase] == :editing ? manual_controls[:connect] : manual_controls[:play]
           accelerators([{ keys: 'enter', target: manual_default.cid, event: 'activate' }])
@@ -207,6 +215,8 @@ module Lich
             manual: @manual.merge(characters: @manual[:characters].dup), active: @active.keys,
             draft_entry_key: @draft_entry_key, window_geometry: @window_geometry.dup,
             frontend_options: @frontend_options.map(&:dup),
+            frontends: frontend_catalog_rows, frontend_draft: @frontend_draft&.dup,
+            frontend_creating: @frontend_creating, frontend_error: @frontend_error,
           }
         end
       end
@@ -479,6 +489,96 @@ module Lich
           button(key: 'master-change', label: 'Change Encryption Password', variant: :primary,
                  submit: [current, replacement, confirmation],
                  on: { activate: ->(event) { launcher.change_master_password(event) } })
+        end
+      end
+
+      # The Frontends tab: the catalog on top, an editor for the selected row
+      # below. Mirrors GUI::FrontendManagerTab, which #1558 added to the GTK
+      # launcher -- detection is shown as status only, and nothing here ever
+      # launches a frontend or touches account associations.
+      def render_frontends(ui, state)
+        launcher = self
+        draft = state[:frontend_draft]
+        ui.stack(key: 'frontends-body', gap: 8) do
+          launcher.__send__(:render_frontend_catalog, self, state)
+          launcher.__send__(:render_frontend_editor, self, state, draft)
+        end
+      end
+
+      def render_frontend_catalog(ui, state)
+        launcher = self
+        rows = state[:frontends].map do |row|
+          { key: row[:id], cells: { 'label' => row[:label], 'type' => row[:type],
+                                    'status' => row[:status], 'launch' => row[:launch].to_s,
+                                    'arguments' => row[:arguments].to_s } }
+        end
+        selected = state[:frontend_creating] ? [] : Array(state[:frontend_draft]&.fetch(:id, nil))
+        ui.group(label: 'Frontends', key: 'frontends-table-section') do
+          table(key: 'frontends-table', columns: [
+                  { key: 'label', label: 'Frontend' }, { key: 'type', label: 'Type' },
+                  { key: 'status', label: 'Status' }, { key: 'launch', label: 'Launch' },
+                  { key: 'arguments', label: 'Arguments' },
+                ], rows: rows, selection: :single, selected: selected,
+                on: { selection_change: ->(event) { launcher.select_frontend(event) } })
+          columns(count: 3, weights: [1, 1, 1]) do
+            button(slot: '0', key: 'frontends-add', label: 'Add Custom',
+                   on: { activate: ->(_event) { launcher.begin_new_frontend } })
+            button(slot: '1', key: 'frontends-reload', label: 'Reload',
+                   on: { activate: ->(_event) { launcher.reload_frontends } })
+            button(slot: '2', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
+                   disabled: !launcher.__send__(:frontend_deletable?, state),
+                   on: { activate: ->(_event) { launcher.delete_frontend } })
+          end
+        end
+      end
+
+      def render_frontend_editor(ui, state, draft)
+        launcher = self
+        unless draft
+          ui.group(label: 'Frontend Settings', key: 'frontend-editor-section') do
+            text(content: 'Select a frontend to edit, or choose Add Custom.')
+          end
+          return
+        end
+
+        built_in = draft[:built_in]
+        ui.group(label: built_in ? "#{draft[:label]} (built-in)" : 'Frontend Settings',
+                 key: 'frontend-editor-section') do
+          text(content: state[:frontend_error], tone: :danger) if state[:frontend_error]
+          fields = {}
+          # A built-in keeps its identity: Lich owns the id and the label, and
+          # only the launch override is the player's to set.
+          fields[:id] = text_input(key: 'frontend-id', label: 'Stable ID', value: draft[:id].to_s,
+                                   disabled: !state[:frontend_creating], max_length: 64)
+          fields[:label] = text_input(key: 'frontend-label', label: 'Label', value: draft[:label].to_s,
+                                      disabled: built_in, max_length: 128)
+          fields[:command] = text_input(
+            key: 'frontend-command', label: built_in ? 'Executable override' : 'Command',
+            value: draft[:command].to_s, max_length: 512
+          )
+          if built_in && !draft[:detected_command].to_s.empty?
+            text(content: "Detected: #{draft[:detected_command]}", tone: :neutral)
+          end
+          fields[:directory] = text_input(key: 'frontend-directory', label: 'Working directory',
+                                          value: draft[:directory].to_s, disabled: built_in, max_length: 512)
+          fields[:arguments] = text_input(
+            key: 'frontend-arguments', label: 'Additional arguments', value: draft[:arguments].to_s,
+            placeholder: 'Shell quoting, for example: --flag "two words"', max_length: 512
+          )
+          capability_boxes = launcher.__send__(:render_frontend_capabilities, self, draft, built_in)
+          button(key: 'frontend-save', label: 'Save', variant: :primary,
+                 submit: fields.values + capability_boxes,
+                 on: { activate: ->(event) { launcher.save_frontend(event) } })
+        end
+      end
+
+      # A built-in declares its own protocol capabilities; only a custom
+      # frontend may choose them.
+      def render_frontend_capabilities(ui, draft, built_in)
+        selected = Array(draft[:capabilities]).map(&:to_s)
+        Frontend.capability_vocabulary.map do |capability|
+          ui.checkbox(key: "frontend-capability-#{capability}", label: capability.to_s,
+                      checked: selected.include?(capability.to_s), disabled: built_in)
         end
       end
 
@@ -801,6 +901,86 @@ module Lich
         close(reason: :browser_window_closed)
       end
 
+      # ---- Frontends tab ------------------------------------------------
+
+      def select_frontend(event)
+        id = event.payload.fetch(:rows).first
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = id ? frontend_editor_fields(id) : nil
+        end
+        refresh
+      end
+
+      def begin_new_frontend
+        @mutex.synchronize do
+          @frontend_creating = true
+          @frontend_error = nil
+          @frontend_draft = {
+            id: '', label: '', built_in: false, command: '', detected_command: '',
+            directory: '', arguments: '', capabilities: []
+          }
+        end
+        refresh
+      end
+
+      # Re-reads frontends.yml and re-runs detection, keeping the selection.
+      def reload_frontends
+        previous = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
+        FrontendSettings.load!(data_dir: @data_dir)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = previous && !previous.empty? ? frontend_editor_fields(previous) : nil
+          @frontend_options = nil
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice('Reloaded frontend settings.', :info)
+      rescue StandardError => error
+        report_frontend_error(error)
+      end
+
+      def save_frontend(event)
+        fields = frontend_fields_from(event)
+        creating = @mutex.synchronize { @frontend_creating }
+        # Re-read before writing: the GTK launcher and another Lich share this
+        # file, and a stale document would drop whatever they added.
+        FrontendSettings.load!(data_dir: @data_dir)
+        builtins, custom, id = FrontendEditor.apply(FrontendSettings.current, fields, creating: creating)
+        FrontendSettings.replace!(data_dir: @data_dir, builtins: builtins, custom: custom)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = frontend_editor_fields(id)
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice("Saved #{Frontend.display_name(id)}.", :info)
+      rescue StandardError => error
+        report_frontend_error(error)
+      end
+
+      def delete_frontend
+        id = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
+        raise ArgumentError, 'Select a custom frontend to delete.' if id.nil? || id.empty?
+
+        FrontendSettings.load!(data_dir: @data_dir)
+        builtins, custom = FrontendEditor.remove(FrontendSettings.current, id)
+        FrontendSettings.replace!(data_dir: @data_dir, builtins: builtins, custom: custom)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = nil
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice("Deleted custom frontend #{id}.", :info)
+      rescue StandardError => error
+        report_frontend_error(error)
+      end
+
       private
 
       def perform_manual_launch(operation, viewer_id, account, character, credential, values)
@@ -942,6 +1122,57 @@ module Lich
       def set_notice(message, level)
         @mutex.synchronize { @notice = { text: message, level: level.to_s } }
         refresh
+      end
+
+      # Catalog rows for the tab. Called from inside render_state, which
+      # already holds @mutex, so this must not lock.
+      def frontend_catalog_rows
+        FrontendEditor.rows(locator: @frontend_locator)
+      rescue StandardError => error
+        @logger&.call(:warning, "frontend catalog failed error=#{error.class}")
+        []
+      end
+
+      def frontend_editor_fields(frontend_id)
+        FrontendEditor.editor_fields(frontend_id, locator: @frontend_locator)
+      rescue StandardError => error
+        @logger&.call(:warning, "frontend editor load failed error=#{error.class}")
+        nil
+      end
+
+      # Delete is offered only for a custom frontend that exists: a built-in
+      # cannot be removed, and a draft being created has nothing to delete yet.
+      def frontend_deletable?(state)
+        draft = state[:frontend_draft]
+        return false if draft.nil? || state[:frontend_creating]
+        return false if draft[:built_in]
+
+        !draft[:id].to_s.empty?
+      end
+
+      # The editor's submitted values, in the order render_frontend_editor
+      # declared them: five text fields, then one checkbox per capability.
+      def frontend_fields_from(event)
+        values = Array(event.submission).map(&:to_s)
+        capabilities = Frontend.capability_vocabulary.each_with_index.filter_map do |capability, index|
+          capability.to_s if truthy_submission(values[5 + index])
+        end
+        {
+          id: values[0].to_s, label: values[1].to_s, command: values[2].to_s,
+          directory: values[3].to_s, arguments: values[4].to_s, capabilities: capabilities
+        }
+      end
+
+      def truthy_submission(value)
+        %w[true 1 on yes].include?(value.to_s.strip.downcase)
+      end
+
+      def report_frontend_error(error)
+        raise error unless error.is_a?(ArgumentError) || error.is_a?(IOError) || error.is_a?(StandardError)
+
+        @mutex.synchronize { @frontend_error = error.message }
+        refresh
+        false
       end
 
       def normalize_characters(characters)
