@@ -1,0 +1,219 @@
+# frozen_string_literal: true
+
+require_relative '../../../spec_helper'
+require 'webui'
+require 'common/script_scope'
+require 'common/script_scope/gtk/boot'
+
+# Fixes from the 2026-09-16 review. A viewer-scoped property (checked,
+# value, open, selected) has a per-viewer copy that shadows the shared prop,
+# so re-rendering alone changes nothing the browser shows. The write has to
+# be pushed to every viewer as well; that pairing was hand-copied at ten
+# sites and forgotten at five, each a separate user-visible bug.
+RSpec.describe 'GTK compatibility shim: review fixes' do
+  let(:gtk) { Lich::Common::ScriptScope::Gtk }
+  let(:owner) { Struct.new(:name) { def at_exit(&_block) = true }.new('review') }
+  let(:service) { Lich::WebUI::Service.new }
+  let(:session) { gtk::Session.new(owner, service: service) }
+  let(:pushes) { [] }
+
+  before do
+    gtk::Session.browser_open = proc { |_url, geometry:, on_start:, on_exit:| [geometry, on_exit]; on_start.call(1); true }
+    gtk::Session.browser_kill = proc { |_pid| nil }
+    allow(gtk::Session).to receive(:for).with(anything).and_return(session)
+    recorder = pushes
+    session.define_singleton_method(:viewer_write) do |_window, widget, name, value|
+      recorder << [widget.class.name.split('::').last, name, value]
+    end
+  end
+
+  after do
+    gtk::Session.browser_open = nil
+    gtk::Session.browser_kill = nil
+    session.shutdown
+    service.stop
+  end
+
+  # Builds a window around the widgets the block returns, so they have handles.
+  def in_window
+    result = nil
+    session.sync do
+      window = gtk::Window.new('Review')
+      window.set_default_size(400, 300)
+      box = gtk::VBox.new
+      window.add(box)
+      result = yield(box)
+      window.show_all
+    end
+    session.commit
+    pushes.clear
+    result
+  end
+
+  describe 'the viewer push that five sites forgot' do
+    it 'deselects the other radio button on the viewer, not only in the shim' do
+      a, b = in_window { |box| [gtk::RadioButton.new('A'), nil].tap { |pair| pair[1] = gtk::RadioButton.new(pair[0], 'B'); box.add(pair[0]); box.add(pair[1]) } }
+
+      session.sync { a.active = true; b.active = true }
+
+      expect(pushes).to include(['RadioButton', :checked, false])
+      expect(a.active?).to be(false)
+    end
+
+    it 'deselects the other radio menu item on the viewer' do
+      x, y = in_window do |box|
+        bar = gtk::MenuBar.new
+        top = gtk::MenuItem.new(label: 'Top')
+        bar.append(top)
+        sub = gtk::Menu.new
+        top.submenu = sub
+        first = gtk::RadioMenuItem.new(nil, 'X')
+        second = gtk::RadioMenuItem.new(first, 'Y')
+        sub.append(first)
+        sub.append(second)
+        box.add(bar)
+        [first, second]
+      end
+
+      session.sync { x.active = true; y.active = true }
+
+      expect(pushes).to include(['RadioMenuItem', :active, false])
+    end
+
+    it 'takes a menu down on the viewer when the script pops it down' do
+      bar = in_window { |box| gtk::MenuBar.new.tap { |b| b.append(gtk::MenuItem.new(label: 'Top')); box.add(b) } }
+
+      session.sync { bar.instance_variable_set(:@open, true); bar.popdown }
+
+      expect(pushes).to include(['MenuBar', :open, false])
+    end
+
+    it 'pushes a spin button value written through its adjustment' do
+      spin = in_window { |box| gtk::SpinButton.new(0, 100, 1).tap { |s| box.add(s) } }
+
+      session.sync { spin.adjustment.value = 42 }
+
+      expect(pushes).to include(['SpinButton', :value, 42])
+    end
+
+    it 'pushes a combo selection that names a real option' do
+      combo = in_window { |box| gtk::ComboBoxText.new.tap { |c| c.append_text('one'); c.append_text('two'); box.add(c) } }
+
+      session.sync { combo.active = 1 }
+
+      expect(pushes).to eq([['ComboBoxText', :value, '2']])
+    end
+
+    # The validator refuses any select value not among the options, and a
+    # refusal makes viewer_write forget the viewer. Neither "" nor nil is a
+    # legal value, so a clear is not pushed at all -- pushing it would have
+    # dropped the viewer, which is worse than the stale choice it leaves.
+    it 'never pushes a cleared combo selection, which no legal value expresses' do
+      combo = in_window { |box| gtk::ComboBoxText.new.tap { |c| c.append_text('one'); box.add(c) } }
+      session.sync { combo.active = 0 }
+      pushes.clear
+
+      session.sync { combo.active = -1 }
+
+      expect(pushes).to be_empty
+      expect(combo.send(:node_props)).not_to include(:value)
+    end
+  end
+
+  describe 'a widget that is destroyed' do
+    it 'says so, for every widget and not only a window' do
+      label = session.sync { gtk::Label.new('x') }
+
+      session.sync { label.destroy }
+
+      expect(label.destroyed?).to be(true)
+    end
+  end
+
+  describe 'the session thread' do
+    # commit rescued only WebUI errors, so a plain NoMethodError inside a
+    # widget's node_props escaped run_loop and ended the thread.
+    it 'survives a script error raised during commit' do
+      allow(session).to receive(:report)
+      boom = session.sync { gtk::Label.new('boom') }
+      boom.define_singleton_method(:node_props) { raise NoMethodError, 'deliberate' }
+      session.sync do
+        window = gtk::Window.new('Boom')
+        window.set_default_size(100, 100)
+        window.add(boom)
+        window.show_all
+      end
+      sleep 0.2
+
+      expect(session.sync { :alive }).to eq(:alive)
+      expect(session).to have_received(:report).with(an_instance_of(NoMethodError)).at_least(:once)
+    end
+  end
+end
+
+RSpec.describe Lich::WebUI::Adapter, 'review fixes' do
+  let(:service) { Lich::WebUI::Service.new }
+  let(:adapter) { described_class.new(owner: Object.new, service: service, viewer: 'viewer-one') }
+
+  after { service.stop }
+
+  # A later bind for the same event replaces the earlier one; unbinding the
+  # old id must not remove its replacement.
+  it 'keeps a replacement binding when the binding it replaced is unbound' do
+    button = adapter.create(:button, label: 'Go')
+    first = adapter.bind(button, :activate, ->(_event) { :first })
+    second = adapter.bind(button, :activate, ->(_event) { :second })
+
+    adapter.unbind(first)
+
+    expect(adapter.instance_variable_get(:@nodes)[button].bindings[:activate]).to eq(second)
+  end
+
+  # detach reassigns named slots; destroy did not, so a destroyed child left
+  # a gap that shifted every later sibling.
+  it 'reassigns named slots after a child is destroyed, as detach does' do
+    columns = adapter.create(:columns, count: 3)
+    children = 3.times.map { |i| adapter.create(:text, content: "c#{i}").tap { |h| adapter.attach(columns, h, i) } }
+    nodes = adapter.instance_variable_get(:@nodes)
+    slots_before = children.map { |h| nodes[h].slot }
+
+    adapter.destroy(children[0])
+
+    slots_after = children.drop(1).map { |h| nodes[h].slot }
+    expect(slots_before).to eq(%w[0 1 2])
+    expect(slots_after).to eq(%w[0 1])
+  end
+end
+
+RSpec.describe Lich::WebUI::Dispatcher, 'review fixes' do
+  # Two viewers editing the same control are two events; folding them
+  # together dropped one viewer's update.
+  it 'coalesces a repeat from the same viewer but never across viewers' do
+    dispatcher = described_class.new(logger: proc { |*| }, thread_factory: ->(&_block) { Thread.new { sleep } })
+    owner = Object.new
+    enqueue = ->(viewer) { dispatcher.enqueue(owner: owner, page_id: 'p', viewer_id: viewer, cid: 'c', event: 'change', coalescable: true) {} }
+
+    results = [enqueue.call('v1'), enqueue.call('v2'), enqueue.call('v2'), enqueue.call('v1')]
+
+    expect(results).to eq(%i[queued queued coalesced queued])
+  end
+end
+
+RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
+  # A refresh_loop thread and a direct refresh from the script's commit could
+  # deliver renders for one page out of order.
+  it 'serialises refreshes per page with one lock per page' do
+    service = Lich::WebUI::Service.new
+    runtime = service.runtime
+    page_a = Lich::WebUI::Page.new(owner: Object.new, id: 'a', title: 'A') { text(content: 'a') }
+    page_b = Lich::WebUI::Page.new(owner: Object.new, id: 'b', title: 'B') { text(content: 'b') }
+
+    lock_a = runtime.send(:page_refresh_lock, page_a)
+
+    expect(lock_a).to be_a(Mutex)
+    expect(runtime.send(:page_refresh_lock, page_a)).to equal(lock_a)
+    expect(runtime.send(:page_refresh_lock, page_b)).not_to equal(lock_a)
+  ensure
+    service&.stop
+  end
+end

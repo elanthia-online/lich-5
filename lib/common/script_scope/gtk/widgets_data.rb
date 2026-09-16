@@ -89,8 +89,7 @@ module Lich
 
           def page=(index)
             @page = index.to_i.clamp(0, [@children.length - 1, 0].max)
-            changed!
-            @session.viewer_write(window_root, self, :selected, @page) if @handle
+            viewer_push(:selected, @page)
           end
           alias set_page page=
           alias set_current_page page=
@@ -195,8 +194,7 @@ module Lich
 
           def expanded=(value)
             @expanded = value ? true : false
-            changed!
-            @session.viewer_write(window_root, self, :open, @expanded) if @handle
+            viewer_push(:open, @expanded)
           end
           alias set_expanded expanded=
 
@@ -258,10 +256,14 @@ module Lich
 
           def value=(number)
             @adjustment.value = number.to_f.clamp(@adjustment.lower, @adjustment.upper)
-            changed!
-            @session.viewer_write(window_root, self, :value, contract_value) if @handle
           end
           alias set_value value=
+
+          # Called by the adjustment for every write, including a script
+          # writing `spin.adjustment.value = x` directly.
+          def adjustment_moved
+            viewer_push(:value, contract_value)
+          end
 
           def value_as_int
             value.round
@@ -431,8 +433,21 @@ module Lich
             entry = @options[index.to_i] if index.to_i >= 0
             @active_id = entry&.first
             @child&.instance_variable_set(:@text, entry ? entry.last.dup : +'')
+            # Pushed only when the id names a real option -- the same guard
+            # node_props applies -- because the validator refuses any select
+            # value not among the options, and viewer_write answers a refusal
+            # by forgetting the viewer. A stale id would have dropped them.
+            #
+            # A cleared selection (active = -1) therefore cannot be pushed:
+            # neither "" nor nil is a legal select value, and the runtime has
+            # no way to remove a viewer's override. The shared props already
+            # omit value on clear; only a viewer who had picked something
+            # keeps seeing it. Lifting that needs a contract change (a "no
+            # selection" value on select), not a shim line.
             changed!
-            @session.viewer_write(window_root, self, :value, @active_id) if @handle && @active_id
+            if @active_id && @options.any? { |(candidate, _label)| candidate == @active_id }
+              viewer_push(:value, @active_id)
+            end
           end
           alias set_active active=
 
@@ -700,8 +715,7 @@ module Lich
           end
 
           def buffer_changed!
-            changed!
-            @session.viewer_write(window_root, self, :value, @buffer.text) if @handle
+            viewer_push(:value, @buffer.text)
           end
 
           def event_for(signal)
@@ -1318,8 +1332,7 @@ module Lich
 
           def select_keys(keys)
             @selected_keys = keys.uniq
-            changed!
-            @session.viewer_write(window_root, self, :selected, @selected_keys.dup) if @handle
+            viewer_push(:selected, @selected_keys.dup)
             @selection.changed!
           end
 

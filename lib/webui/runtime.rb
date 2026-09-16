@@ -117,17 +117,28 @@ module Lich
         )
       end
 
+      # Serialised per page. A refresh_loop thread and a direct refresh from
+      # the script's commit could both run for the same page; renders are
+      # ordered by Page#render's own lock, but delivery was not, so an older
+      # render could go out after a newer one and the viewer kept the stale
+      # tree.
       def refresh(page)
-        page.bind_runtime(self)
-        render = validated_render(page)
-        @viewers.attachments_for(page).each do |attachment|
-          connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
-          next unless connection&.alive?
+        page_refresh_lock(page).synchronize do
+          page.bind_runtime(self)
+          render = validated_render(page)
+          @viewers.attachments_for(page).each do |attachment|
+            connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
+            next unless connection&.alive?
 
-          @viewers.deliver(attachment, render)
-          send_render(connection, attachment)
+            @viewers.deliver(attachment, render)
+            send_render(connection, attachment)
+          end
+          render.generation
         end
-        render.generation
+      end
+
+      def page_refresh_lock(page)
+        @refresh_mutex.synchronize { (@page_locks ||= {}.compare_by_identity)[page] ||= Mutex.new }
       end
 
       def terminate_owner(owner)

@@ -653,6 +653,9 @@ module Lich
           end
 
           def destroy
+            # Only Window set this; every other widget answered destroyed?
+            # false forever, and scripts guard cleanup on it at ~50 sites.
+            @destroyed = true
             @parent&.remove(self)
             emit(:destroy)
             @session.enqueue { @session.commit } unless @session.on_session_thread?
@@ -742,6 +745,20 @@ module Lich
 
             # Off-thread mutation (a script thread poking a widget): render soon.
             @session.enqueue { @session.commit }
+          end
+
+          # A viewer-scoped property (checked, value, open, selected) has a
+          # per-viewer copy that shadows the shared prop, so re-rendering
+          # alone changes nothing the browser shows: the viewer's own copy
+          # wins. The write has to be pushed to every attached viewer as
+          # well. That pairing was hand-copied at ten sites and forgotten at
+          # five -- radio buttons, radio menu items, Menu#popdown, Adjustment
+          # and ComboBox -- each a separate user-visible bug with one cause.
+          # One method, so it cannot be half-copied again.
+          def viewer_push(name, value)
+            changed!
+            @session.viewer_write(window_root, self, name, value) if @handle
+            value
           end
 
           def common_props
@@ -1790,8 +1807,17 @@ module Lich
 
           private
 
+          # An owner whose value is viewer-scoped (SpinButton) has to push it,
+          # not just re-render: `spin.adjustment.value = x` bypassed the
+          # owner's own setter and the viewer kept the old number.
           def notify_owners
-            @owners.each { |owner| owner.changed! if owner.respond_to?(:changed!) }
+            @owners.each do |owner|
+              if owner.respond_to?(:adjustment_moved)
+                owner.adjustment_moved
+              elsif owner.respond_to?(:changed!)
+                owner.changed!
+              end
+            end
           end
         end
 
@@ -2274,8 +2300,7 @@ module Lich
 
           def text=(value)
             @text = value.to_s.dup
-            changed!
-            @session.viewer_write(window_root, self, :value, @text) if @handle
+            viewer_push(:value, @text)
           end
           alias set_text text=
 
@@ -2460,8 +2485,7 @@ module Lich
 
           def active=(value)
             @active = value ? true : false
-            changed!
-            @session.viewer_write(window_root, self, :checked, @active) if @handle
+            viewer_push(:checked, @active)
           end
           alias set_active active=
 
@@ -2538,9 +2562,11 @@ module Lich
 
           protected
 
+          # The deselected sibling's `checked` is viewer-scoped, so a plain
+          # changed! left the viewer's copy checked: two radios lit at once.
           def deactivate_quietly
             @active = false
-            changed!
+            viewer_push(:checked, false)
           end
         end
 

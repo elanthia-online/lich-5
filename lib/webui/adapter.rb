@@ -178,7 +178,10 @@ module Lich
             attributed_error('unknown binding', nil, binding_id)
           )
           node = node!(handle)
-          node.bindings.delete(event)
+          # Only if this id is still the one the node holds: a later bind for
+          # the same event replaces it, and unbinding the old id must not
+          # remove its replacement.
+          node.bindings.delete(event) if node.bindings[event] == binding_id.to_s
           dirty!(root_for(node))
         end
         nil
@@ -193,6 +196,9 @@ module Lich
           if node.parent
             parent = node!(node.parent)
             parent.children.delete(handle)
+            # As detach does: named slots are positional, and the gap left by
+            # the destroyed child shifted every later sibling.
+            assign_child_slots!(parent)
             dirty!(root_for(parent))
           end
           destroy_node!(handle)

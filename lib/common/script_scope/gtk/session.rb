@@ -373,7 +373,7 @@ module Lich
             end
             if handle
               page = adapter.page_for(handle)
-              @viewers.delete(page) if page
+              @mutex.synchronize { @viewers.delete(page) } if page
               begin
                 adapter.destroy(handle)
               rescue Lich::WebUI::Error => error
@@ -509,10 +509,13 @@ module Lich
 
               begin
                 job.call
+                commit unless @closed
               rescue StandardError, ScriptError => error
+                # commit rescues only WebUI errors; a NoMethodError inside a
+                # widget's node_props used to escape here and end the
+                # session thread, taking every window with it.
                 report(error)
               end
-              commit unless @closed
             end
           end
 

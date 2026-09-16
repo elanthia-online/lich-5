@@ -115,8 +115,7 @@ module Lich
             return if value == @active
 
             @active = value
-            changed!
-            @session.viewer_write(window_root, self, :active, @active) if @handle
+            viewer_push(:active, @active)
             emit(:toggled)
           end
           alias set_active active=
@@ -226,7 +225,7 @@ module Lich
             return unless @active
 
             @active = false
-            changed!
+            viewer_push(:active, false)
             emit(:toggled)
           end
         end
@@ -293,8 +292,10 @@ module Lich
           def popdown
             return self unless @open
 
+            # `open` is viewer-scoped: with only changed!, the script could
+            # raise a menu but never take it down.
             @open = false
-            changed!
+            viewer_push(:open, false)
             self
           end
 
@@ -345,7 +346,7 @@ module Lich
             end
             @open = true
             changed!
-            @session.viewer_write(window_root, self, :open, true) if @handle
+            viewer_push(:open, true)
             self
           end
         end

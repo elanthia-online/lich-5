@@ -129,7 +129,10 @@ module Lich
       def coalesce_last!(events, queued)
         last = events.last
         return false unless last&.coalescable
-        return false unless last.page_id == queued.page_id && last.cid == queued.cid && last.event == queued.event
+        # Per viewer: two viewers editing the same control are two events,
+        # and folding them together dropped one viewer's update.
+        return false unless last.page_id == queued.page_id && last.cid == queued.cid &&
+                            last.event == queued.event && last.viewer_id == queued.viewer_id
 
         events[-1] = queued
         true
