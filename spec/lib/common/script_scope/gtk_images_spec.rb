@@ -209,6 +209,42 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
     end
   end
 
+  # Tracking has to be installed for a pixbuf to know its own file. It was
+  # written but never called, so every Image had a pixbuf, no source, and an
+  # empty src -- a blank window rather than an error.
+  describe 'pixbuf source tracking' do
+    it 'is installed by boot, not left to the caller' do
+      expect(File.read(File.join(__dir__, '../../../../lib/common/script_scope/gtk/boot.rb')))
+        .to include('install_pixbuf_tracking!')
+    end
+
+    it 'gives an image built from a tracked pixbuf a real src' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      props = session.sync do
+        pixbuf = ::GdkPixbuf::Pixbuf.new(file: map_file)
+        gtk::Image.new(pixbuf: pixbuf).send(:node_props)
+      end
+
+      expect(props[:src]).to include('Flotilla.png')
+    end
+
+    it 'carries the source across a scale, which is a different object' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      props = session.sync do
+        pixbuf = ::GdkPixbuf::Pixbuf.new(file: map_file)
+        scaled = pixbuf.scale_simple(300, 380, ::GdkPixbuf::InterpType::BILINEAR)
+        gtk::Image.new(pixbuf: scaled).send(:node_props)
+      end
+
+      expect(props[:src]).to include('Flotilla.png')
+      expect(props[:scale]).to be_within(0.01).of(300.0 / 607)
+    end
+  end
+
   describe 'reading a size from the file header' do
     it 'reads a PNG without decoding it' do
       expect(gtk::ImageHeader.size(map_file)).to eq([607, 774])

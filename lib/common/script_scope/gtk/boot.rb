@@ -8,3 +8,9 @@ require_relative 'widgets_data'
 require_relative 'builder'
 require_relative 'menus'
 require_relative 'images'
+
+# A pixbuf cannot say which file it was built from, so the shim records that
+# as it is built. Without this every Gtk::Image has a pixbuf and no source,
+# and renders with an empty src -- which is a blank window, not an error.
+# Safe when the gem is absent: it reports and returns false.
+Lich::Common::ScriptScope::Gtk.install_pixbuf_tracking!
