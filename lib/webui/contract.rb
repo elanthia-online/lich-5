@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.7.0'
+      VERSION = '2.8.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -207,14 +207,24 @@ module Lich
         },
         stack: {
           properties: { gap: property(integer(min: 0, max: 64), default: 8) },
-          children: :many, events: {}, value: nil,
+          children: :many, child_properties: {
+            # 2.8: a child that takes a share of the leftover space along the
+            # stack's axis, and extra space around it. Together these are
+            # GTK's box packing, which every legacy script relies on.
+            grow: property(integer(min: 0, max: 64)),
+            pad: property(integer(min: 0, max: 512)),
+          }, events: {}, value: nil,
         },
         columns: {
           properties: {
             count: property(integer(min: 1, max: 12), required: true),
             weights: property(array(integer(min: 0), max: 12)), compact: property(BOOL, default: false),
             gap: property(integer(min: 0, max: 64), default: 8),
-          }, children: { kind: :named_dynamic, count_property: :count }, events: {}, value: nil,
+          }, children: { kind: :named_dynamic, count_property: :count },
+          # 2.8: extra space around a child, the other half of box packing.
+          # A column's share of the width is its weight, not a placement.
+          child_properties: { pad: property(integer(min: 0, max: 512)) },
+          events: {}, value: nil,
         },
         grid: {
           properties: {

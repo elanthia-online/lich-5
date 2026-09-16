@@ -874,24 +874,59 @@ module Lich
             @orientation == :vertical ? :stack : :columns
           end
 
+          # Packing reaches the contract two ways: along a vertical box as
+          # child placement (grow/pad), and along a horizontal one as the
+          # columns weights, which is what that type has instead.
+          def render_children
+            children = super
+            children.each do |child|
+              packing = child.packing
+              placement = {}
+              if packing
+                placement[:grow] = 1 if @orientation == :vertical && packing[:expand]
+                placement[:pad] = [packing[:padding], 512].min if packing[:padding].positive?
+              end
+              child.placement = placement if @orientation == :vertical || placement[:pad]
+            end
+            children
+          end
+
           def node_props
             if @orientation == :vertical
               { gap: [@spacing, 64].min }
             else
-              count = render_children.length
-              { count: count.clamp(1, 12), gap: [@spacing, 64].min }
+              children = render_children
+              props = { count: children.length.clamp(1, 12), gap: [@spacing, 64].min }
+              # GTK shares leftover width among the children packed to
+              # expand; one packed without it keeps its natural width. A
+              # weight of 0 is the contract's way of saying natural.
+              weights = children.first(12).map { |child| child.packing&.fetch(:expand, true) == false ? 0 : 1 }
+              props[:weights] = weights if weights.any?(&:zero?)
+              props
             end
           end
 
           private
 
+          # GTK's pack_start(child, expand = true, fill = true, padding = 0),
+          # in every spelling scripts use. The positional form is the GTK 2 C
+          # API, where the flags are integers: 0 is false there, but truthy in
+          # Ruby, so they are read as numbers when given as numbers.
           def packing_from(positional, options)
             expand, fill, padding = positional
             {
-              expand: options.fetch(:expand, expand) ? true : false,
-              fill: options.fetch(:fill, fill) ? true : false,
+              expand: packing_flag(options.fetch(:expand, expand), default: true),
+              fill: packing_flag(options.fetch(:fill, fill), default: true),
               padding: options.fetch(:padding, padding || 0).to_i,
             }
+          end
+
+          def packing_flag(value, default:)
+            case value
+            when nil then default
+            when Integer then !value.zero?
+            else value ? true : false
+            end
           end
         end
 

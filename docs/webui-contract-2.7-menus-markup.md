@@ -115,3 +115,60 @@ goldens, and a client without markup support read.
 3. `press`/`release` on `button` and inputs. Not included: those have
    `activate`/`change`; scripts only attach pointer handlers to boxes,
    labels, and drawing areas.
+
+---
+
+# Addendum: contract 2.8.0 — box packing
+
+The same additive rules. Needed because GTK's box packing is how every
+legacy script distributes space, and the shim was discarding it: 1,033
+`pack_start`/`pack_end` call sites across 35 scripts, 602 of which say
+`expand: false`.
+
+## Child placement on `stack`
+
+| Placement | Shape | Meaning |
+| --- | --- | --- |
+| `grow` | integer 0..64 | This child takes a share of the leftover space along the stack's axis. |
+| `pad` | integer 0..512 | Extra space around this child. |
+
+## Child placement on `columns`
+
+| Placement | Shape | Meaning |
+| --- | --- | --- |
+| `pad` | integer 0..512 | As above. A column's *share* of the width is its weight, which `columns` already has, so there is no `grow` here. |
+
+## A client fix that came with it
+
+`columns` renders its weights as grid tracks. A weight of 0 means natural
+width, but the client emitted `0fr`, which collapses the track to nothing.
+It now emits `auto` for weight 0. No script hit this before, because
+nothing ever sent a zero weight.
+
+## How the shim maps GTK onto it
+
+A horizontal `Gtk::Box` becomes `columns`: each child packed with
+`expand: false` gets weight 0, the rest weight 1, so the expanding children
+share the slack and the others keep their natural width. The weights are
+omitted entirely when every child expands, which is the contract default.
+
+A vertical `Gtk::Box` becomes `stack`: an expanding child gets `grow: 1`.
+A flex column already gives the others their natural height.
+
+`padding` becomes `pad` on either axis.
+
+## Note for a reviewer
+
+GTK's signature is `pack_start(child, expand = true, fill = true, padding = 0)`,
+and the positional form is the GTK 2 C API where the flags are integers.
+`0` is false there but truthy in Ruby, so `pack_start(w, 0, 0, 1)` — 275
+call sites, the second most common form in the corpus — must be read as
+*not* expanding. A bare `pack_start(w)` must default to expanding. Both
+were wrong in the shim until this slice, and were invisible while the
+packing was being discarded.
+
+`fill` is parsed and carried but not yet distinguished from `expand`: in a
+flex or grid track the child already fills its cell, so the two coincide
+for every layout in the corpus. If a script ever needs `expand: true,
+fill: false` (a child given space but not stretched into it), that becomes
+an alignment on the child rather than a new placement.
