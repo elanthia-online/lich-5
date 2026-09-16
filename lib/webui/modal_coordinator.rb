@@ -44,6 +44,7 @@ module Lich
             instance_exec(self, &content) if content
           end
         end
+        page.modal = true
         @registry.register(page)
         page.bind_runtime(@runtime)
         timer = timeout && Thread.new do

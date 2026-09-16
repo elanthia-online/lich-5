@@ -18,6 +18,16 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('focusRoot?.matches("input, select, button, textarea")')
   end
 
+  # A window opened for one page ignores every other page. A modal is a page
+  # of its own, so a question a script asked was invisible while the script
+  # blocked on the answer.
+  it 'attaches to a modal raised by the same owner, even when scoped to one page' do
+    expect(javascript).to include('const sameOwnerModal = descriptor.modal && scopedOwner && descriptor.owner === scopedOwner;')
+    expect(javascript).to include('if (onlyPage && descriptor.address !== onlyPage && !sameOwnerModal) return;')
+    # A modal borrows the window; it must not rename it.
+    expect(javascript).to include('if (descriptor.title && !descriptor.modal) document.title = descriptor.title;')
+  end
+
   # A composite is the only surface a script can click on, and the contract
   # gates the event behind surface_events so a page opts in.
   it 'emits surface_activate from a composite that asked for it' do

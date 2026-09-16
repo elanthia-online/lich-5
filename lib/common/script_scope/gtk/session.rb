@@ -444,11 +444,30 @@ module Lich
               owner: @owner, id: id, title: title, body: body, buttons: buttons,
               no_viewer: 'wait', default_button: default_button, timeout: MODAL_TIMEOUT
             )
-            if service.server.connection_count.zero?
-              page = service.registry.fetch(@owner, id)
-              open_browser(page, geometry: { width: 460, height: 240 }) { future.cancel(reason: :closed) }
-            end
+            # A connected viewer is not the same as a viewer that will show
+            # this: every script window is opened scoped to its own page, so
+            # a modal used to be raised on a page nobody was watching while
+            # the script sat blocked on the answer. The client now attaches
+            # to a sibling modal from the same owner, so a window of ours is
+            # enough; with none, open one for the dialog itself.
+            open_modal_window(id, future) unless windows_open?
             future
+          end
+
+          # A window of this script's own is open, so a modal raised now
+          # will be shown in it: the client attaches to a sibling modal from
+          # the same owner even when the window is scoped to one page.
+          def windows_open?
+            return false if service.server.connection_count.zero?
+
+            @mutex.synchronize { @browsers.any? }
+          end
+
+          def open_modal_window(id, future)
+            page = service.registry.fetch(@owner, id)
+            open_browser(page, geometry: { width: 460, height: 240 }) { future.cancel(reason: :closed) }
+          rescue Lich::WebUI::Error => error
+            log(:warning, "modal window failed to open: #{error.message}")
           end
 
           # ---- teardown ----------------------------------------------------
