@@ -54,6 +54,12 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
 .webui-grid > button { white-space: nowrap; }
 .webui-scroll { overflow: auto; min-height: 0; }
+/* A scroller filling its window is bounded by the real viewport, not only by
+   the max_height the shim derives from the window's default size -- the
+   window is resizable and that default is a guess made before it opened.
+   The shim sets max-height inline, so this sets the height the pane starts
+   from; the smaller of the two still wins. */
+.webui-page.bare > .webui-scroll { height: calc(100vh - 12px); }
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }
 .align-start { justify-self: start; align-self: start; }

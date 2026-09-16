@@ -18,6 +18,16 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('focusRoot?.matches("input, select, button, textarea")')
   end
 
+  # Until something reported an extent, a script centring its viewport
+  # computed against a constructor default rather than the real pane.
+  it 'reports a scroller extent after layout, not only when the viewer scrolls' do
+    scroll = javascript[/    scroll\(page, component\) \{.*?\n    \},/m]
+
+    expect(scroll).to include('requestAnimationFrame')
+    expect(scroll).to include('if (!scroll.isConnected) return;')
+    expect(scroll.scan(/page_size: Math\.round\(scroll\.clientHeight\)/).size).to eq(2)
+  end
+
   # The shim can now build an image and a composite, but the client had no
   # renderer for either, so a map arrived as "Renderer not implemented".
   it 'renders images and every kind of composite layer' do

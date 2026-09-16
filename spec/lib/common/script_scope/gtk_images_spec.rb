@@ -245,6 +245,52 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
     end
   end
 
+  # A script centring the viewport computes `x - viewport_width / 2`. The
+  # only true viewport size the shim ever sees is the one the viewer reports
+  # through the `scrolled` event; answering with the window's size instead
+  # put map's target off by half the difference, so it opened on a corner of
+  # empty canvas with the room 800px away.
+  describe 'a scroller asked for its allocation' do
+    it 'answers with the viewport the viewer reported' do
+      scroller = session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(800, 600)
+        sw = gtk::ScrolledWindow.new
+        window.add(sw)
+        sw.vadjustment.note_viewport(value: 0, upper: 3200, page_size: 250)
+        sw.hadjustment.note_viewport(value: 0, upper: 3200, page_size: 400)
+        sw
+      end
+
+      expect([scroller.allocation.width, scroller.allocation.height]).to eq([400, 250])
+    end
+
+    it 'falls back to the window until the viewer has reported' do
+      scroller = session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(800, 600)
+        sw = gtk::ScrolledWindow.new
+        window.add(sw)
+        sw
+      end
+
+      expect([scroller.allocation.width, scroller.allocation.height]).to eq([800, 600])
+    end
+
+    it 'keeps the window size on an axis the viewer said nothing about' do
+      scroller = session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(800, 600)
+        sw = gtk::ScrolledWindow.new
+        window.add(sw)
+        sw.vadjustment.note_viewport(value: 0, upper: 3200, page_size: 250)
+        sw
+      end
+
+      expect([scroller.allocation.width, scroller.allocation.height]).to eq([800, 250])
+    end
+  end
+
   describe 'reading a size from the file header' do
     it 'reads a PNG without decoding it' do
       expect(gtk::ImageHeader.size(map_file)).to eq([607, 774])

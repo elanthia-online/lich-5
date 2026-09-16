@@ -1460,6 +1460,27 @@ module Lich
             :scroll
           end
 
+          # The viewer reports its real extent through the `scrolled` event,
+          # and that is the only true viewport size the shim ever sees. A
+          # script centring on a point computes `x - viewport_width / 2`, so
+          # answering with the window's size instead puts the target off by
+          # half the difference -- map opened on a corner of empty canvas
+          # with the room 800px away.
+          #
+          # Falls back to Widget#allocation until the first report.
+          def allocation
+            reported_width = @hadjustment.page_size.to_i
+            reported_height = @vadjustment.page_size.to_i
+            return super unless reported_width.positive? || reported_height.positive?
+
+            base = super
+            Allocation.new(
+              0, 0,
+              reported_width.positive? ? reported_width : base.width,
+              reported_height.positive? ? reported_height : base.height
+            )
+          end
+
           def size_request_axes
             parent.is_a?(Window) ? [] : [:height]
           end
