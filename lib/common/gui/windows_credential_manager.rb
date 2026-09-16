@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-Lich::Util.install_gem_requirements({ 'ffi' => true })
-
 module Lich
   module Common
     module GUI
@@ -13,10 +11,13 @@ module Lich
       # Uses DPAPI (Data Protection API) via Credential Manager for encryption
       # No PowerShell subprocess calls - direct Win32 API access
       module WindowsCredentialManager
-        extend FFI::Library
-
-        # Load advapi32.dll and kernel32.dll for Credential Manager functions (Windows only)
+        # Everything FFI-related is Windows-only, so it's guarded together: this keeps
+        # the module inert (no ffi/os requires, no FFI constant references) on load for
+        # every other platform instead of depending on ffi/os already being loaded by
+        # whatever required this file first.
         if OS.windows?
+          Lich::Util.install_gem_requirements({ 'ffi' => true })
+          extend FFI::Library
           ffi_lib 'advapi32', 'kernel32'
         end
 
@@ -36,26 +37,25 @@ module Lich
         # Max credential size (512KB)
         CRED_MAX_CREDENTIAL_BLOB_SIZE = 512 * 1024
 
-        # Credential structure for Win32 API
-        class CredentialStruct < FFI::Struct
-          layout(
-            :flags, :uint32,
-            :type, :uint32,
-            :target_name, :pointer,
-            :comment, :pointer,
-            :last_written, :uint64,
-            :credential_blob_size, :uint32,
-            :credential_blob, :pointer,
-            :persist, :uint32,
-            :attribute_count, :uint32,
-            :attributes, :pointer,
-            :target_alias, :pointer,
-            :user_name, :pointer
-          )
-        end
-
-        # FFI function definitions (Windows only)
+        # Credential structure and FFI function definitions (Windows only)
         if OS.windows?
+          class CredentialStruct < FFI::Struct
+            layout(
+              :flags, :uint32,
+              :type, :uint32,
+              :target_name, :pointer,
+              :comment, :pointer,
+              :last_written, :uint64,
+              :credential_blob_size, :uint32,
+              :credential_blob, :pointer,
+              :persist, :uint32,
+              :attribute_count, :uint32,
+              :attributes, :pointer,
+              :target_alias, :pointer,
+              :user_name, :pointer
+            )
+          end
+
           attach_function :CredReadW, [:pointer, :uint32, :uint32, :pointer], :bool
           attach_function :CredWriteW, [:pointer, :uint32], :bool
           attach_function :CredDeleteW, [:pointer, :uint32, :uint32], :bool

@@ -1,13 +1,20 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+# Required unconditionally, not left to install_gem_requirements to do, so any other
+# file's FFI-dependent load (e.g. windows_credential_manager.rb, reached transitively
+# through master_password_manager.rb) still works if this stub is the one that wins
+# a competing install_gem_requirements definition race across spec files (#1542).
+require 'os'
+require 'ffi'
 
 # TextStripper's load-time block calls Lich::Util.install_gem_requirements and
 # requires kramdown (already in the bundle). Stub the installer so loading the
-# file in specs does not try to install gems.
+# file in specs does not try to install gems. Guarded so this doesn't clobber a
+# real/working definition that happened to load first.
 module Lich
   module Util
-    def self.install_gem_requirements(*_args, **_kwargs); end
+    def self.install_gem_requirements(*_args, **_kwargs); end unless respond_to?(:install_gem_requirements)
   end
 end
 
