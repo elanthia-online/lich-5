@@ -27,6 +27,8 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-grid > .field { min-width: 0; }
 /* A bare page is a script's own window: it fills the browser window. */
 #pages:has(> .webui-page.bare) { width: 100%; }
+.webui-page.bare { font-size: 13px; }
+.webui-page.bare .webui-text { white-space: pre-wrap; }
 /* Auto grid tracks shrink a 100%-wide input to nothing; keep an entry's natural width. */
 .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
 .webui-grid > button { white-space: nowrap; }

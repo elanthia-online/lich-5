@@ -156,7 +156,7 @@ module Lich
           # for. Silently ignored so Glade files do not spam the log.
           IGNORED_BUILDER_PROPERTIES = %w[
             can-focus receives-default draw-indicator border-width label-xalign
-            shadow-type xalign yalign sizing search-column headers-visible
+            shadow-type yalign sizing search-column headers-visible
             fixed-height-mode column-homogeneous row-homogeneous max-width-chars
             wrap-mode accepts-tab modal tab-fill numeric digits angle wrap
             use-markup activates-default has-frame can-default
@@ -380,6 +380,9 @@ module Lich
           def hexpand?
             @hexpand
           end
+
+          def xalign=(_value); end
+          alias set_xalign xalign=
 
           def set_border_width(_width)
             self
@@ -1359,7 +1362,12 @@ module Lich
           alias label text
 
           def set_markup(markup)
-            @text = markup.to_s.gsub(/<[^>]+>/, '').gsub('&amp;', '&').gsub('&lt;', '<').gsub('&gt;', '>')
+            text = markup.to_s.gsub(%r{<a\s[^>]*href="([^"]*)"[^>]*>(.*?)</a>}m) do
+              href = Regexp.last_match(1)
+              inner = Regexp.last_match(2).gsub(/<[^>]+>/, '')
+              inner == href ? href : "#{inner} (#{href})"
+            end
+            @text = text.gsub(/<[^>]+>/, '').gsub('&amp;', '&').gsub('&lt;', '<').gsub('&gt;', '>')
             @markup = true
             changed!
             self
@@ -1368,8 +1376,26 @@ module Lich
 
           def use_markup=(_value); end
 
-          def set_alignment(*_args)
+          # GTK's xalign places the text inside the cell the label was given.
+          def xalign=(value)
+            value = value.to_f
+            @xalign = if value <= 0.25 then :start
+                      elsif value >= 0.75 then :end
+                      else :center
+                      end
+            changed!
+          end
+          alias set_xalign xalign=
+
+          def set_alignment(xalign, _yalign = nil)
+            self.xalign = xalign
             self
+          end
+
+          def common_props
+            props = super
+            props[:align] = @xalign.to_s if @xalign && !@halign
+            props
           end
 
           def set_wrap(_value)
