@@ -198,6 +198,33 @@ body:has(.webui-page.bare) { overflow: hidden; }
 .webui-table th.sortable[aria-sort="ascending"]::after { content: "91"; }
 .webui-table th.sortable[aria-sort="descending"]::after { content: "93"; }
 
+/* The frontend editor is a labelled form: GTK draws a fixed-width label in a
+   left column with the field filling the rest, and stacking each label above
+   its field roughly doubled the height of the form. `field` is a flex column
+   whose label span and control are siblings, so turning the row sideways is a
+   container-scoped override rather than a contract property. Scoped to this
+   one group so no other tab, and no script window, is affected. */
+[data-cid$="group:frontend-editor-section"] > .field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+[data-cid$="group:frontend-editor-section"] > .field > .field-label {
+  text-align: right;
+  font-weight: 400;
+}
+/* The capability rows are their own grid; their checkboxes keep the inline
+   box-then-label shape rather than inheriting the two-column rule above. */
+[data-cid*="frontend-capability-row-"] { margin-bottom: 4px; }
+[data-cid*="frontend-capability-row-"] .field.inline { gap: 6px; }
+[data-cid$="text:frontend-detected"] {
+  margin: -2px 0 8px 158px;
+  opacity: .75;
+  font-size: .92em;
+}
+
 .webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
 /* A container the contract lets carry `disabled` has no native rendering
    for it; match the muting a real control gets. */

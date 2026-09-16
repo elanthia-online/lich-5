@@ -21,6 +21,8 @@ module Lich
     # entry path until the R2 human gate is accepted.
     class WebUILauncher
       TABS = ['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'].freeze
+      # GTK's frontend editor lays capability checks three to a row.
+      CAPABILITIES_PER_ROW = 3
       ACCOUNT_TABS = ['Accounts', 'Add Character', 'Add Account', 'Encryption Management'].freeze
       GAMES = %w[GS3 GSF GSX GST DR DRF DRT].map { |code| { value: code, label: code } }.freeze
       GAME_NAMES = {
@@ -548,30 +550,38 @@ module Lich
         ui.group(label: built_in ? "#{draft[:label]} (built-in)" : 'Frontend Settings',
                  key: 'frontend-editor-section') do
           text(content: state[:frontend_error], tone: :danger) if state[:frontend_error]
-          fields = {}
-          # A built-in keeps its identity: Lich owns the id and the label, and
-          # only the launch override is the player's to set.
-          fields[:id] = text_input(key: 'frontend-id', label: 'Stable ID', value: draft[:id].to_s,
-                                   disabled: !state[:frontend_creating], max_length: 64)
-          fields[:label] = text_input(key: 'frontend-label', label: 'Label', value: draft[:label].to_s,
-                                      disabled: built_in, max_length: 128)
-          fields[:command] = text_input(
-            key: 'frontend-command', label: built_in ? 'Executable override' : 'Command',
-            value: draft[:command].to_s, max_length: 512
-          )
+          fields = launcher.__send__(:render_frontend_fields, self, state, draft, built_in)
           if built_in && !draft[:detected_command].to_s.empty?
-            text(content: "Detected: #{draft[:detected_command]}", tone: :neutral)
+            text(key: 'frontend-detected', content: "Detected: #{draft[:detected_command]}", tone: :neutral)
           end
-          fields[:directory] = text_input(key: 'frontend-directory', label: 'Working directory',
-                                          value: draft[:directory].to_s, disabled: built_in, max_length: 512)
-          fields[:arguments] = text_input(
-            key: 'frontend-arguments', label: 'Additional arguments', value: draft[:arguments].to_s,
-            placeholder: 'Shell quoting, for example: --flag "two words"', max_length: 512
-          )
           capability_boxes = launcher.__send__(:render_frontend_capabilities, self, draft, built_in)
           button(key: 'frontend-save', label: 'Save', variant: :primary,
-                 submit: fields.values + capability_boxes,
+                 submit: fields + capability_boxes,
                  on: { activate: ->(event) { launcher.save_frontend(event) } })
+        end
+      end
+
+      # GTK lays this editor out as rows: a fixed-width label on the left and
+      # the field filling the rest. Emitting the inputs as a flat sequence put
+      # every label on its own line above its field and roughly doubled the
+      # height of the form, so each row is its own two-column grid. The label
+      # still belongs to the input -- it is the input's own `label` prop, not
+      # a separate text node -- so the control keeps its accessible name.
+      def render_frontend_fields(ui, state, draft, built_in)
+        [
+          [:id, 'Stable ID', draft[:id].to_s, !state[:frontend_creating], 64, nil],
+          [:label, 'Label', draft[:label].to_s, built_in, 128, nil],
+          [:command, built_in ? 'Executable override' : 'Command', draft[:command].to_s, false, 512, nil],
+          [:directory, 'Working directory', draft[:directory].to_s, built_in, 512, nil],
+          [:arguments, 'Additional arguments', draft[:arguments].to_s, false, 512,
+           'Shell quoting, for example: --flag "two words"'],
+        ].map do |name, label, value, disabled, max_length, placeholder|
+          options = { key: "frontend-#{name}", label: label, value: value,
+                      disabled: disabled, max_length: max_length }
+          # An absent placeholder is absent, not nil: the contract types it as
+          # a String and refuses nil rather than treating it as unset.
+          options[:placeholder] = placeholder if placeholder
+          ui.text_input(**options)
         end
       end
 
@@ -579,10 +589,20 @@ module Lich
       # frontend may choose them.
       def render_frontend_capabilities(ui, draft, built_in)
         selected = Array(draft[:capabilities]).map(&:to_s)
-        Frontend.capability_vocabulary.map do |capability|
-          ui.checkbox(key: "frontend-capability-#{capability}", label: capability.to_s,
-                      checked: selected.include?(capability.to_s), disabled: built_in)
+        boxes = []
+        # GTK lays these out three across; one per line turned six checkboxes
+        # into six rows and pushed Save off the bottom of the form.
+        Frontend.capability_vocabulary.each_slice(CAPABILITIES_PER_ROW).with_index do |row, index|
+          ui.columns(key: "frontend-capability-row-#{index}", count: CAPABILITIES_PER_ROW,
+                     weights: Array.new(CAPABILITIES_PER_ROW, 1), gap: 8) do
+            row.each_with_index do |capability, column|
+              boxes << checkbox(slot: column.to_s, key: "frontend-capability-#{capability}",
+                                label: capability.to_s, checked: selected.include?(capability.to_s),
+                                disabled: built_in)
+            end
+          end
         end
+        boxes
       end
 
       def render_modal(ui, modal)
