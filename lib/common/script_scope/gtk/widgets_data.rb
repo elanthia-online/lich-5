@@ -91,8 +91,8 @@ module Lich
             @page = index.to_i.clamp(0, [@children.length - 1, 0].max)
             viewer_push(:selected, @page)
           end
-          alias set_page page=
-          alias set_current_page page=
+          def_setter :set_page, :page=
+          def_setter :set_current_page, :page=
           alias current_page= page=
 
           def next_page
@@ -104,13 +104,13 @@ module Lich
           end
 
           def show_tabs=(_value); end
-          alias set_show_tabs show_tabs=
+          def_setter :set_show_tabs, :show_tabs=
 
           def tab_pos=(_value); end
-          alias set_tab_pos tab_pos=
+          def_setter :set_tab_pos, :tab_pos=
 
           def scrollable=(_value); end
-          alias set_scrollable scrollable=
+          def_setter :set_scrollable, :scrollable=
 
           def event_for(signal)
             :select if signal == :switch_page
@@ -180,7 +180,7 @@ module Lich
             @label = value.to_s
             changed!
           end
-          alias set_label label=
+          def_setter :set_label, :label=
 
           def set_label_widget(widget)
             @label = widget.text.to_s if widget.respond_to?(:text)
@@ -196,7 +196,7 @@ module Lich
             @expanded = value ? true : false
             viewer_push(:open, @expanded)
           end
-          alias set_expanded expanded=
+          def_setter :set_expanded, :expanded=
 
           def event_for(signal)
             :toggle if %i[activate notify_expanded].include?(signal)
@@ -248,7 +248,7 @@ module Lich
             adjustment.watch(self)
             changed!
           end
-          alias set_adjustment adjustment=
+          def_setter :set_adjustment, :adjustment=
 
           def value
             @adjustment.value
@@ -257,7 +257,7 @@ module Lich
           def value=(number)
             @adjustment.value = number.to_f.clamp(@adjustment.lower, @adjustment.upper)
           end
-          alias set_value value=
+          def_setter :set_value, :value=
 
           # Called by the adjustment for every write, including a script
           # writing `spin.adjustment.value = x` directly.
@@ -285,7 +285,7 @@ module Lich
             @digits = value.to_i
             changed!
           end
-          alias set_digits digits=
+          def_setter :set_digits, :digits=
 
           def text
             @digits.zero? ? value.round.to_s : format("%.#{@digits}f", value)
@@ -373,7 +373,7 @@ module Lich
 
             @child = value ? Entry.new.tap { |entry| entry.attach_to(self) } : nil
           end
-          alias set_has_entry has_entry=
+          def_setter :set_has_entry, :has_entry=
 
           def has_entry?
             !@child.nil?
@@ -449,7 +449,7 @@ module Lich
               viewer_push(:value, @active_id)
             end
           end
-          alias set_active active=
+          def_setter :set_active, :active=
 
           def active_id
             @active_id
@@ -458,7 +458,7 @@ module Lich
           def active_id=(id)
             self.active = @options.index { |(candidate, _label)| candidate == id.to_s } || -1
           end
-          alias set_active_id active_id=
+          def_setter :set_active_id, :active_id=
 
           def active_text
             typed = @child&.text
@@ -472,7 +472,7 @@ module Lich
           end
 
           def entry_text_column=(_value); end
-          alias set_entry_text_column entry_text_column=
+          def_setter :set_entry_text_column, :entry_text_column=
 
           def id_column=(_value); end
 
@@ -566,6 +566,7 @@ module Lich
         end
 
         class TextBuffer
+          extend Setters
           attr_reader :text
 
           def initialize(_table = nil)
@@ -582,7 +583,7 @@ module Lich
             @text = value.to_s.dup
             notify
           end
-          alias set_text text=
+          def_setter :set_text, :text=
 
           def insert(iter, string, *_tags)
             offset = iter.respond_to?(:offset) ? iter.offset : @text.length
@@ -686,20 +687,20 @@ module Lich
             buffer.watch(self)
             changed!
           end
-          alias set_buffer buffer=
+          def_setter :set_buffer, :buffer=
 
           def editable=(value)
             @editable = value ? true : false
             changed!
           end
-          alias set_editable editable=
+          def_setter :set_editable, :editable=
 
           def editable?
             @editable
           end
 
           def cursor_visible=(_value); end
-          alias set_cursor_visible cursor_visible=
+          def_setter :set_cursor_visible, :cursor_visible=
 
           def set_size_request(width, height)
             @rows = [(height.to_i / 20), 2].max if height.to_i.positive?
@@ -1045,6 +1046,7 @@ module Lich
         end
 
         class CellRendererText < CellRenderer
+          extend Setters
           attr_reader :editable
 
           def initialize
@@ -1055,7 +1057,7 @@ module Lich
           def editable=(value)
             @editable = value ? true : false
           end
-          alias set_editable editable=
+          def_setter :set_editable, :editable=
 
           def editor
             @editable ? { type: 'text' } : nil
@@ -1081,6 +1083,7 @@ module Lich
         end
 
         class TreeViewColumn
+          extend Setters
           attr_reader :title, :renderer, :attributes
           attr_accessor :builder_name, :sort_column_id
 
@@ -1096,7 +1099,7 @@ module Lich
           def title=(value)
             @title = value.to_s
           end
-          alias set_title title=
+          def_setter :set_title, :title=
 
           def pack_start(renderer, _expand = true)
             @renderer ||= renderer
@@ -1122,10 +1125,10 @@ module Lich
           def expand=(value)
             @expand = value ? true : false
           end
-          alias set_expand expand=
+          def_setter :set_expand, :expand=
 
           def resizable=(_value); end
-          alias set_resizable resizable=
+          def_setter :set_resizable, :resizable=
 
           def visible=(value)
             @visible = value ? true : false
@@ -1136,10 +1139,10 @@ module Lich
           end
 
           def fixed_width=(_value); end
-          alias set_fixed_width fixed_width=
+          def_setter :set_fixed_width, :fixed_width=
 
           def sizing=(_value); end
-          alias set_sizing sizing=
+          def_setter :set_sizing, :sizing=
 
           def set_cell_data_func(*_args)
             Gtk.log_unsupported('Gtk::TreeViewColumn', 'set_cell_data_func', note: 'cell data functions are ignored')
@@ -1159,6 +1162,7 @@ module Lich
         end
 
         class TreeSelection
+          extend Setters
           attr_reader :mode
 
           def initialize(view)
@@ -1171,7 +1175,7 @@ module Lich
             @mode = value.to_s.downcase.to_sym
             @view.changed!
           end
-          alias set_mode mode=
+          def_setter :set_mode, :mode=
 
           def selected
             @view.selected_iters.first
@@ -1247,7 +1251,7 @@ module Lich
             @selected_keys = []
             changed!
           end
-          alias set_model model=
+          def_setter :set_model, :model=
 
           def append_column(column)
             @columns << column
@@ -1279,19 +1283,19 @@ module Lich
             @headers_visible = value ? true : false
             changed!
           end
-          alias set_headers_visible headers_visible=
+          def_setter :set_headers_visible, :headers_visible=
 
           def enable_search=(_value); end
-          alias set_enable_search enable_search=
+          def_setter :set_enable_search, :enable_search=
 
           def search_column=(_value); end
-          alias set_search_column search_column=
+          def_setter :set_search_column, :search_column=
 
           def reorderable=(_value); end
-          alias set_reorderable reorderable=
+          def_setter :set_reorderable, :reorderable=
 
           def rules_hint=(_value); end
-          alias set_rules_hint rules_hint=
+          def_setter :set_rules_hint, :rules_hint=
 
           def set_cursor(path, _column = nil, _start_editing = false)
             iter = @model&.get_iter(path)

@@ -164,31 +164,25 @@ module Lich
 
           attr_reader :pixbuf, :file
 
-          # rubocop:disable Lint/Void -- the trailing value is the return of
-          # the aliased setter below it, not a stray expression: Ruby makes an
-          # assignment method evaluate to its argument, and `alias set_x x=`
-          # inherits that. Removing it would change what set_pixbuf answers.
           def pixbuf=(value)
             @pixbuf = value
             @file = PixbufSources.path_for(value)
             @natural = nil
             changed!
-            value
           end
-          alias set_pixbuf pixbuf=
+          def_setter :set_pixbuf, :pixbuf=
 
           def file=(path)
             @file = path && File.expand_path(path.to_s)
             @pixbuf = nil
             @natural = nil
             changed!
-            path
           end
-          alias set_from_file file=
-          # rubocop:enable Lint/Void
+          def_setter :set_from_file, :file=
 
           def set_from_pixbuf(value)
             self.pixbuf = value
+            self
           end
 
           def clear

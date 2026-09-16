@@ -216,4 +216,67 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
   ensure
     service&.stop
   end
+
+  # `alias set_foo foo=` looks like it defines GTK's set_foo and does
+  # everything except return the right thing: Ruby makes an assignment method
+  # evaluate to its argument whatever the body returns, and an alias of one
+  # keeps that rule. 829 setters answered the value instead of the widget, so
+  # `Gtk::Entry.new.set_text(v)` -- the first line of real work in
+  # perfume.lic -- handed back a String, and `.text` on it raised
+  # NoMethodError. ruby-gnome's own set_* return the widget.
+  describe 'a set_ mutator' do
+    let(:gtk) { Lich::Common::ScriptScope::Gtk }
+
+    it 'returns the widget so the constructor idiom chains' do
+      entry = gtk::Entry.new.set_text('cologne')
+
+      expect(entry).to be_a(gtk::Entry)
+      expect(entry.text).to eq('cologne')
+    end
+
+    it 'chains more than once' do
+      button = gtk::Button.new('go').set_sensitive(false).set_tooltip_text('no')
+
+      expect(button).to be_a(gtk::Button)
+      expect(button.sensitive?).to be(false)
+    end
+
+    it 'still writes the value it was given' do
+      check = gtk::CheckButton.new('Wearable?').set_active(true)
+
+      expect(check.active?).to be(true)
+    end
+
+    # The margin family is declared in a loop, and the loop used alias_method
+    # rather than the writer, so it kept the same trap after the rest was fixed.
+    it 'returns the widget from the margin family too' do
+      label = gtk::Label.new('x')
+
+      expect(label.set_margin_top(4)).to equal(label)
+      expect(label.set_margin_left(2)).to equal(label)
+    end
+
+    it 'leaves no set_ mutator answering something other than the widget' do
+      offenders = []
+      gtk.constants.filter_map { |name| gtk.const_get(name) rescue nil }
+                   .select { |value| value.is_a?(Class) && value <= gtk::Widget }
+                   .each do |klass|
+        instance = (klass.new rescue (klass.new('x') rescue nil))
+        next unless instance
+
+        (klass.instance_methods.grep(/\Aset_[a-z_]+\z/) - Object.instance_methods).each do |method|
+          next unless [1, -1, -2].include?(klass.instance_method(method).arity)
+
+          result = begin
+            instance.public_send(method, nil)
+          rescue StandardError
+            next
+          end
+          offenders << "#{klass}##{method}" unless result.equal?(instance)
+        end
+      end
+
+      expect(offenders).to be_empty
+    end
+  end
 end

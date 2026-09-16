@@ -424,11 +424,40 @@ module Lich
           end
         end
 
+        # `alias set_foo foo=` looks like it defines GTK's set_foo, and it
+        # does everything except return the right thing. Ruby makes every
+        # assignment method evaluate to its argument no matter what the body
+        # returns, and an alias of one keeps that rule -- so set_text("hi")
+        # answered "hi" rather than the widget. ruby-gnome's set_* return the
+        # widget, which is what makes `Gtk::Entry.new.set_text(v)` -- the
+        # first line of real work in perfume.lic -- hand back an Entry
+        # instead of a String. 829 setters across the shim got this wrong.
+        #
+        # Declaring them through this helper keeps the one-line spelling at
+        # the call site and gives back self.
+        module Setters
+          def self.extended(base)
+            base.extend(ClassMethods)
+          end
+
+          module ClassMethods
+            # Defines +name+ as a wrapper around the writer +writer+ that
+            # returns self, the way ruby-gnome's own set_* do.
+            def def_setter(name, writer)
+              define_method(name) do |*args|
+                public_send(writer, *args)
+                self
+              end
+            end
+          end
+        end
+
         # ------------------------------------------------------------------
         # Base widget: identity, visibility, sensitivity, alignment, signals,
         # and the bookkeeping that materializes it into an adapter node.
         # ------------------------------------------------------------------
         class Widget
+          extend Setters
           # Builder properties every widget accepts and the shim has no use
           # for. Silently ignored so Glade files do not spam the log.
           IGNORED_BUILDER_PROPERTIES = %w[
@@ -553,7 +582,7 @@ module Lich
             @sensitive = value ? true : false
             changed!
           end
-          alias set_sensitive sensitive=
+          def_setter :set_sensitive, :sensitive=
 
           def sensitive?
             @sensitive
@@ -563,7 +592,7 @@ module Lich
             @visible = value ? true : false
             changed!
           end
-          alias set_visible visible=
+          def_setter :set_visible, :visible=
 
           def visible?
             @visible
@@ -587,7 +616,7 @@ module Lich
             @tooltip = text&.to_s
             changed!
           end
-          alias set_tooltip_text tooltip_text=
+          def_setter :set_tooltip_text, :tooltip_text=
 
           def tooltip_text
             @tooltip
@@ -610,36 +639,36 @@ module Lich
           def width_request=(width)
             set_size_request(width, @height_request || -1)
           end
-          alias set_width_request width_request=
+          def_setter :set_width_request, :width_request=
 
           def height_request=(height)
             set_size_request(@width_request || -1, height)
           end
-          alias set_height_request height_request=
+          def_setter :set_height_request, :height_request=
 
           def halign=(value)
             @halign = value.to_s.downcase.to_sym
             changed!
           end
-          alias set_halign halign=
+          def_setter :set_halign, :halign=
 
           def valign=(value)
             @valign = value.to_s.downcase.to_sym
             changed!
           end
-          alias set_valign valign=
+          def_setter :set_valign, :valign=
 
           %i[top right bottom left].each do |side|
             define_method(:"margin_#{side}=") do |value|
               @margins[side] = value.to_i
               changed!
             end
-            alias_method :"set_margin_#{side}", :"margin_#{side}="
+            def_setter :"set_margin_#{side}", :"margin_#{side}="
           end
           alias margin_start= margin_left=
-          alias set_margin_start margin_left=
+          def_setter :set_margin_start, :margin_left=
           alias margin_end= margin_right=
-          alias set_margin_end margin_right=
+          def_setter :set_margin_end, :margin_right=
 
           def margin=(value)
             @margins = { top: value.to_i, right: value.to_i, bottom: value.to_i, left: value.to_i }
@@ -660,19 +689,19 @@ module Lich
           def hexpand=(value)
             @hexpand = value ? true : false
           end
-          alias set_hexpand hexpand=
+          def_setter :set_hexpand, :hexpand=
 
           def vexpand=(value)
             @vexpand = value ? true : false
           end
-          alias set_vexpand vexpand=
+          def_setter :set_vexpand, :vexpand=
 
           def hexpand?
             @hexpand
           end
 
           def xalign=(_value); end
-          alias set_xalign xalign=
+          def_setter :set_xalign, :xalign=
 
           # Event masks are implicit here: a widget with a handler is bound.
           def add_events(*_masks)
@@ -721,7 +750,7 @@ module Lich
           def name=(value)
             @name = value.to_s
           end
-          alias set_name name=
+          def_setter :set_name, :name=
 
           def name
             @name
@@ -1139,13 +1168,13 @@ module Lich
           end
 
           def homogeneous=(_value); end
-          alias set_homogeneous homogeneous=
+          def_setter :set_homogeneous, :homogeneous=
 
           def spacing=(value)
             @spacing = value.to_i
             changed!
           end
-          alias set_spacing spacing=
+          def_setter :set_spacing, :spacing=
 
           def orientation=(value)
             @orientation = value.to_s.start_with?('h') ? :horizontal : :vertical
@@ -1508,13 +1537,13 @@ module Lich
             @row_spacing = value.to_i
             changed!
           end
-          alias set_row_spacing row_spacing=
+          def_setter :set_row_spacing, :row_spacing=
 
           def column_spacing=(value)
             @column_spacing = value.to_i
             changed!
           end
-          alias set_column_spacing column_spacing=
+          def_setter :set_column_spacing, :column_spacing=
 
           def column_count
             cols = @children.map { |child| rect = cells.fetch(child, [0, 0, 1, 1]); rect[0] + rect[2] }.max || 1
@@ -1878,7 +1907,7 @@ module Lich
             @label = value.to_s
             changed!
           end
-          alias set_label label=
+          def_setter :set_label, :label=
 
           def set_label_widget(widget)
             @label_widget = widget
@@ -1922,6 +1951,7 @@ module Lich
         # that read or animate them see sane numbers. Owners re-render when
         # the range changes.
         class Adjustment
+          extend Setters
           EXTENT_EPSILON = 0.5
 
           attr_reader :value, :lower, :upper, :page_size, :step_increment, :page_increment
@@ -2003,7 +2033,7 @@ module Lich
             @requested_value = @value
             notify_owners
           end
-          alias set_value value=
+          def_setter :set_value, :value=
 
           def configure(value, lower, upper, step, page_inc, page_size)
             @value = value.to_f
@@ -2067,7 +2097,7 @@ module Lich
             @title = value.to_s
             changed!
           end
-          alias set_title title=
+          def_setter :set_title, :title=
 
           def set_default_size(width, height)
             @default_width = width.to_i.positive? ? width.to_i : nil
@@ -2219,7 +2249,7 @@ module Lich
           private :collect_scrollers
 
           def modal=(_value); end
-          alias set_modal modal=
+          def_setter :set_modal, :modal=
 
           def move(_x, _y)
             self
@@ -2571,9 +2601,9 @@ module Lich
             @markup_source = nil
             changed!
           end
-          alias set_text text=
+          def_setter :set_text, :text=
           alias label= text=
-          alias set_label text=
+          def_setter :set_label, :text=
           alias label text
 
           # Pango markup: the contract carries the subset the validator
@@ -2596,7 +2626,7 @@ module Lich
           def use_markup=(value)
             set_markup(@raw) if value && !@markup
           end
-          alias set_use_markup use_markup=
+          def_setter :set_use_markup, :use_markup=
 
           def use_markup?
             @markup
@@ -2611,7 +2641,7 @@ module Lich
                       end
             changed!
           end
-          alias set_xalign xalign=
+          def_setter :set_xalign, :xalign=
 
           def set_alignment(xalign, _yalign = nil)
             self.xalign = xalign
@@ -2639,9 +2669,9 @@ module Lich
 
           # A label's width-chars is a wrap hint; text wraps naturally here.
           def width_chars=(_chars); end
-          alias set_width_chars width_chars=
+          def_setter :set_width_chars, :width_chars=
           alias max_width_chars= width_chars=
-          alias set_max_width_chars width_chars=
+          def_setter :set_max_width_chars, :width_chars=
 
           def set_selectable(_value)
             self
@@ -2710,13 +2740,13 @@ module Lich
             @text = value.to_s.dup
             viewer_push(:value, @text)
           end
-          alias set_text text=
+          def_setter :set_text, :text=
 
           def editable=(value)
             @editable = value ? true : false
             changed!
           end
-          alias set_editable editable=
+          def_setter :set_editable, :editable=
 
           def size_request_axes
             [:width]
@@ -2726,7 +2756,7 @@ module Lich
           def width_chars=(chars)
             set_size_request((chars.to_i * 8) + 24, @height_request || -1) if chars.to_i.positive?
           end
-          alias set_width_chars width_chars=
+          def_setter :set_width_chars, :width_chars=
 
           def editable?
             @editable
@@ -2736,13 +2766,13 @@ module Lich
             @placeholder = value&.to_s
             changed!
           end
-          alias set_placeholder_text placeholder_text=
+          def_setter :set_placeholder_text, :placeholder_text=
 
           def max_length=(value)
             @max_length = value.to_i.positive? ? value.to_i : nil
             changed!
           end
-          alias set_max_length max_length=
+          def_setter :set_max_length, :max_length=
 
           # GTK has no password widget: an Entry with visibility off is one.
           # This was a no-op, so Lich's own login GUI -- which sets it on
@@ -2759,7 +2789,7 @@ module Lich
             @visibility = visible
             changed!
           end
-          alias set_visibility visibility=
+          def_setter :set_visibility, :visibility=
 
           def visibility?
             @visibility != false
@@ -2848,7 +2878,7 @@ module Lich
             @label = value.to_s
             changed!
           end
-          alias set_label label=
+          def_setter :set_label, :label=
 
           def clicked
             emit(:clicked)
@@ -2895,7 +2925,7 @@ module Lich
             @active = value ? true : false
             viewer_push(:checked, @active)
           end
-          alias set_active active=
+          def_setter :set_active, :active=
 
           def apply_builder_property(name, value)
             return (self.active = Gtk.builder_value(value)) && self if name.to_s == 'active'
@@ -2983,6 +3013,7 @@ module Lich
         # modal and blocks the session thread until the viewer answers.
         # ------------------------------------------------------------------
         class MessageDialog
+          extend Setters
           BUTTON_SETS = {
             none: [],
             ok: [[:ok, 'OK']],
@@ -3022,7 +3053,7 @@ module Lich
           def secondary_text=(value)
             @secondary = value.to_s
           end
-          alias set_secondary_text secondary_text=
+          def_setter :set_secondary_text, :secondary_text=
 
           def set_markup(value)
             @message = value.to_s.gsub(/<[^>]+>/, '')

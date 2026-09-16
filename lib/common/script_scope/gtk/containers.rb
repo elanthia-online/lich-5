@@ -27,19 +27,19 @@ module Lich
             @pulsing = false
             changed!
           end
-          alias set_fraction fraction=
+          def_setter :set_fraction, :fraction=
 
           def text=(value)
             @text = value&.to_s
             changed!
           end
-          alias set_text text=
+          def_setter :set_text, :text=
 
           def show_text=(value)
             @show_text = value ? true : false
             changed!
           end
-          alias set_show_text show_text=
+          def_setter :set_show_text, :show_text=
 
           # GTK's pulse bounces a block with no known fraction; the contract
           # spells that `indeterminate`. The first fraction= ends it.
@@ -75,7 +75,7 @@ module Lich
           def selection_mode=(mode)
             @selection_mode = mode
           end
-          alias set_selection_mode selection_mode=
+          def_setter :set_selection_mode, :selection_mode=
 
           def insert(row, position = -1)
             add(row)
@@ -129,12 +129,12 @@ module Lich
           def activatable=(value)
             @activatable = value ? true : false
           end
-          alias set_activatable activatable=
+          def_setter :set_activatable, :activatable=
 
           def selectable=(value)
             @selectable = value ? true : false
           end
-          alias set_selectable selectable=
+          def_setter :set_selectable, :selectable=
 
           def index
             parent.respond_to?(:children) ? parent.children.index(self).to_i : -1
@@ -208,7 +208,7 @@ module Lich
             changed!
             @session.viewer_write(window_root, self, :position, position_percent) if @handle && position_percent
           end
-          alias set_position position=
+          def_setter :set_position, :position=
 
           def position
             @position || 0

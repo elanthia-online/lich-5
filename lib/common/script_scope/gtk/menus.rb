@@ -28,7 +28,7 @@ module Lich
             @label = mnemonic_free(value)
             changed!
           end
-          alias set_label label=
+          def_setter :set_label, :label=
 
           def submenu=(menu)
             remove(@submenu) if @submenu
@@ -36,7 +36,7 @@ module Lich
             add(menu) if menu
             changed!
           end
-          alias set_submenu submenu=
+          def_setter :set_submenu, :submenu=
 
           # GTK lets a script put a Label (or anything) inside an item; the
           # contract item carries only a label, so that is what is kept.
@@ -118,7 +118,7 @@ module Lich
             viewer_push(:active, @active)
             emit(:toggled)
           end
-          alias set_active active=
+          def_setter :set_active, :active=
 
           def toggled
             self.active = !@active
@@ -199,7 +199,7 @@ module Lich
             end
             super
           end
-          alias set_active active=
+          def_setter :set_active, :active=
 
           def kind
             'radio'
@@ -273,7 +273,7 @@ module Lich
           end
 
           def accel_group=(_group); end
-          alias set_accel_group accel_group=
+          def_setter :set_accel_group, :accel_group=
 
           # The 3.x forms: popup(parent_shell, parent_item, button, time),
           # popup_at_pointer(event), popup_at_widget(widget, ...).
