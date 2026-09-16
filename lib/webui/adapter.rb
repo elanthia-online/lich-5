@@ -28,6 +28,12 @@ module Lich
         @viewer = viewer
         @validator = validator
         @nodes = {}.compare_by_identity
+        # handle_for was Hash#key, which scans values -- and a Node is a
+        # Struct, so each candidate is a memberwise == that recurses into
+        # props and children. flush! calls it twice per dirty root, on every
+        # commit, and the shim commits on every property write. Measured at
+        # 401 nodes: 0.162ms a call against 0.00005ms through this map.
+        @handles_by_node = {}.compare_by_identity
         @destroyed = {}.compare_by_identity
         @bindings = {}
         @viewer_values = {}
@@ -51,6 +57,7 @@ module Lich
         )
         @mutex.synchronize do
           @nodes[handle] = node
+          @handles_by_node[node] = handle
           dirty!(node) if normalized == :page
         end
         handle
@@ -383,6 +390,7 @@ module Lich
 
       def destroy_node!(handle)
         node = @nodes.delete(handle)
+        @handles_by_node.delete(node)
         node.children.each { |child| destroy_node!(child) }
         node.bindings.each_value { |binding_id| @bindings.delete(binding_id) }
         @viewer_values.delete_if { |(_viewer, candidate, _property), _value| candidate.equal?(handle) }
@@ -404,7 +412,7 @@ module Lich
       end
 
       def handle_for(node)
-        @nodes.key(node)
+        @handles_by_node[node]
       end
 
       def adapter_page_id(root = nil)

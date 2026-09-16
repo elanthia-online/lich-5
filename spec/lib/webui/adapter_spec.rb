@@ -137,4 +137,53 @@ RSpec.describe Lich::WebUI::Adapter do
     expect(future).to be_a(Lich::WebUI::Future)
     expect(future.await(timeout: 1)&.button).to eq('yes')
   end
+
+  # handle_for was Hash#key, which scans values -- and a Node is a Struct, so
+  # every candidate is a memberwise == recursing into props and children.
+  # flush! calls it twice per dirty root on every commit, and the shim commits
+  # on every property write. It is a reverse identity map now, which has to
+  # stay in step with @nodes through destruction or handle_for starts lying.
+  describe 'the handle lookup' do
+    def nodes = adapter.instance_variable_get(:@nodes)
+    def reverse = adapter.instance_variable_get(:@handles_by_node)
+
+    it 'round-trips a node back to the handle it was created with' do
+      root = adapter.create(:page, { title: 'T' })
+      child = adapter.create(:text, { content: 'hi', wrap: false })
+      adapter.attach(root, child)
+
+      expect(adapter.send(:handle_for, nodes[child])).to equal(child)
+    end
+
+    it 'stays in step with the node table as nodes come and go' do
+      root = adapter.create(:page, { title: 'T' })
+      children = Array.new(4) do |index|
+        handle = adapter.create(:text, { content: "row #{index}", wrap: false })
+        adapter.attach(root, handle)
+        handle
+      end
+
+      expect(reverse.size).to eq(nodes.size)
+
+      adapter.destroy(children[1])
+
+      expect(reverse.size).to eq(nodes.size)
+
+      # Destroying a root cascades; nothing may be left behind on either side.
+      adapter.destroy(root)
+
+      expect(nodes).to be_empty
+      expect(reverse).to be_empty
+    end
+
+    it 'forgets a destroyed node rather than answering for it' do
+      root = adapter.create(:page, { title: 'T' })
+      child = adapter.create(:text, { content: 'gone', wrap: false })
+      adapter.attach(root, child)
+      node = nodes[child]
+      adapter.destroy(child)
+
+      expect(adapter.send(:handle_for, node)).to be_nil
+    end
+  end
 end
