@@ -15,6 +15,26 @@ module Lich
           def initialize(...)
             super
             @placements = {}.compare_by_identity
+            @presentation_sources = {}.compare_by_identity
+          end
+
+          # Registers the block that reports a page root's presentation
+          # facility. Keyed by the opaque handle, since that is the only
+          # identity the adapter and the widget share.
+          def presentation_source(handle, &block)
+            @mutex.synchronize { @presentation_sources[handle] = block }
+            nil
+          end
+
+          # Facilities live beside the tree rather than on a node, so a
+          # presentation change alters no props and would otherwise never
+          # mark the page dirty.
+          def refresh_facilities(handle)
+            @mutex.synchronize do
+              node = @nodes[handle]
+              dirty!(root_for(node)) if node
+            end
+            nil
           end
 
           def commit
@@ -78,7 +98,25 @@ module Lich
 
           private
 
+          # A window's presentation properties belong to the page, not to any
+          # component, so they are declared once as the page root renders.
+          # The runtime refuses what a browser host cannot do and records the
+          # refusal, which is why these are declared even though a Chromium
+          # --app window honors almost none of them today.
+          #
+          # Handles are opaque by design, so the adapter cannot walk back to
+          # the widget; the window supplies its own presentation through
+          # +presentation_source+, which Session sets when it renders.
+          def declare_presentation(builder, node)
+            return unless node.type == :page
+
+            handle = @mutex.synchronize { handle_for(node) }
+            presentation = @presentation_sources&.[](handle)&.call
+            builder.facility(:presentation, presentation) if presentation
+          end
+
           def render_children(builder, node)
+            declare_presentation(builder, node)
             @mutex.synchronize do
               adapter = self
               node.children.each do |child_handle|

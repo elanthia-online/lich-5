@@ -241,4 +241,94 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(events).to include(:scrolled)
     end
   end
+
+  # Window presentation properties were no-op stubs. They travel as the
+  # `presentation` facility, which the runtime refuses per-property and
+  # records as a degradation, and scripts read them back (creaturebar
+  # persists `decorated?` to its config file).
+  describe 'window presentation' do
+    def shown_window(&setup)
+      window = session.sync do
+        win = gtk::Window.new('bar')
+        setup&.call(win)
+        win.add(gtk::Label.new('x'))
+        win.show_all
+        win
+      end
+      session.show_window(window)
+      session.sync {}
+      window
+    end
+
+    it "reports GTK's own defaults when the script has set nothing" do
+      window = session.sync { gtk::Window.new('bar') }
+
+      expect([window.decorated?, window.resizable?, window.keep_above?, window.opacity])
+        .to eq([true, true, false, 1.0])
+    end
+
+    it 'declares no facility for a window nobody configured' do
+      window = shown_window
+
+      expect(session.adapter.page_for(window.handle).last_render.facilities).to eq({})
+    end
+
+    it 'carries keep_above, undecoration and opacity as the presentation facility' do
+      window = shown_window do |win|
+        win.set_keep_above(true)
+        win.set_decorated(false)
+        win.set_opacity(0.6)
+      end
+
+      expect(session.adapter.page_for(window.handle).last_render.facilities[:presentation])
+        .to eq(always_on_top: true, borderless: true, opacity: 0.6)
+    end
+
+    it 'records the properties a browser host cannot honor as degradations' do
+      window = shown_window { |win| win.set_keep_above(true) }
+      page = session.adapter.page_for(window.handle)
+
+      expect(page.degradations).to include(
+        hash_including(facility: :presentation, property: :always_on_top,
+                       reason: :unsupported_by_browser_host)
+      )
+    end
+
+    # creaturebar spells "hide the window" as set_opacity(0.0). The contract
+    # floor is 0.1, so the facility clamps -- but the script still reads back
+    # what it wrote, and the refusal is the honest answer.
+    it 'clamps a zero opacity to the contract floor while reading back the write' do
+      window = shown_window { |win| win.set_opacity(0.0) }
+
+      expect(window.opacity).to eq(0.0)
+      expect(session.adapter.page_for(window.handle).last_render.facilities[:presentation])
+        .to eq(opacity: 0.1)
+    end
+
+    it 're-renders the page when only the presentation changed' do
+      window = shown_window { |win| win.set_opacity(0.9) }
+      before = session.adapter.page_for(window.handle).last_render.generation
+      session.sync { window.set_opacity(0.3) }
+      session.sync {}
+      after = session.adapter.page_for(window.handle).last_render
+
+      expect(after.generation).to be > before
+      expect(after.facilities[:presentation]).to eq(opacity: 0.3)
+    end
+
+    it 'does not re-render when nothing about the presentation moved' do
+      window = shown_window { |win| win.set_opacity(0.9) }
+      before = session.adapter.page_for(window.handle).last_render.generation
+      session.sync {}
+
+      expect(session.adapter.page_for(window.handle).last_render.generation).to eq(before)
+    end
+
+    it 'keeps resizable readable without inventing a facility for it' do
+      window = shown_window { |win| win.resizable = false }
+
+      expect(window.resizable?).to be(false)
+      expect(session.adapter.page_for(window.handle).last_render.facilities).to eq({})
+    end
+  end
 end

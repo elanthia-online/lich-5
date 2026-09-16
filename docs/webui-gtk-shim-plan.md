@@ -403,8 +403,7 @@ Done so far: box packing (`4c09a59e`), per-window page selection (pulled
 forward between slices two and three), scroll adjustments (contract
 2.9.0), and the two dropped setters in `82128165` - `set_width_request` (288 sites, never aliased to
 `width_request=`) and `Gtk::Misc#set_padding(xpad, ypad)` (9 scripts,
-not implemented). Still open below: window props, grid
-columns, theme, close veto.
+not implemented). Still open below: grid columns, theme, close veto.
 
 Two gaps deliberately left, both needing a contract change rather than
 shim work: `Alignment`'s `yalign` has nowhere to go (the contract has
@@ -441,10 +440,29 @@ bump on its own. Fold them into the next contract change.
   yanked. map.lic's two-axis pixel path is written but untestable until
   `Gtk::Layout` -> `composite` lands in slice 5. Note SpinButton's
   `.adjustment.value=` (12 sites) was never a scroll and already worked.
-- **Window props.** `keep_above`, `opacity`, `decorated`, `resizable`
-  -> the `presentation` facility. `Runtime::PRESENTATION_SUPPORT` says
-  `always_on_top: false`; a Chromium `--app` window cannot do it. Leave
-  it declared and let the FE host (slice 7) honor it.
+- **Window props.** DONE. `keep_above` -> `always_on_top`, `decorated`
+  false -> `borderless`, `opacity` -> `opacity`, all through the
+  `presentation` facility, which the runtime already refuses
+  per-property and records as a degradation; `always_on_top` and
+  `borderless` are declared and refused, waiting on the FE host (slice
+  7). The client honors `opacity`, the one of the three it can.
+  `resizable` is deliberately *not* mapped: the facility's `scrollbars`
+  is about the page's own scrollbars, and a browser tab cannot refuse a
+  resize -- it stays readable shadow state only.
+
+  Two things this needed beyond the mapping. All four are readable, not
+  just writable, because creaturebar persists `decorated?` to its config
+  file. And creaturebar spells "hide the window" as `set_opacity(0.0)`,
+  below the contract's 0.1 floor, so the facility clamps while the script
+  still reads back its own write; the validator rejects 0.0 outright, so
+  without the clamp that script would take the render down.
+
+  Facilities live beside the tree rather than on a node, so a
+  presentation-only change altered no props and never marked the page
+  dirty. `ShimAdapter#refresh_facilities` plus a `@synced_presentation`
+  guard on the window fixes that without a render loop. Handles are
+  opaque by design, so the window registers a reader
+  (`presentation_source`) rather than the adapter walking back to it.
 - **Grid columns.** `repeat(cols, auto)` shares free space equally;
   entries should win. Either a `weights` prop on `grid` (like `columns`)
   or infer from `AttachOptions::EXPAND` per column.

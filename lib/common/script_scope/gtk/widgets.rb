@@ -666,6 +666,9 @@ module Lich
             @synced_props = nil
             @synced_placement = nil
             @bound_events = {}
+            # A new handle needs its presentation reader registered again.
+            @presentation_registered = false
+            @synced_presentation = nil
           end
 
           def sync_placement!(adapter)
@@ -1547,15 +1550,94 @@ module Lich
           end
           alias window_position= set_window_position
 
-          def set_keep_above(_value)
+          # The four presentation properties. Kept as shadow state because
+          # scripts read them back -- creaturebar persists `decorated?` to
+          # its config file -- and declared to the viewer through the
+          # `presentation` facility, which refuses what a browser cannot do
+          # and records the refusal as a degradation.
+          def set_keep_above(value)
+            @keep_above = value ? true : false
+            changed!
             self
           end
           alias keep_above= set_keep_above
 
-          def set_resizable(_value)
+          def keep_above?
+            @keep_above ? true : false
+          end
+
+          def set_resizable(value)
+            @resizable = value ? true : false
+            changed!
             self
           end
           alias resizable= set_resizable
+
+          def resizable?
+            @resizable.nil? ? true : @resizable
+          end
+          alias resizable resizable?
+
+          def set_decorated(value)
+            @decorated = value ? true : false
+            changed!
+            self
+          end
+          alias decorated= set_decorated
+
+          def decorated?
+            @decorated.nil? ? true : @decorated
+          end
+          alias decorated decorated?
+
+          # GTK takes 0.0 to 1.0; the contract's floor is 0.1, because a
+          # browser window at 0 is still there and still takes the clicks.
+          # creaturebar spells "hide" as set_opacity(0.0), so that case
+          # degrades to the floor and is reported rather than silently
+          # rounded -- the honest answer is that the browser cannot vanish
+          # a window this way.
+          def set_opacity(value)
+            @opacity = value.to_f.clamp(0.0, 1.0)
+            changed!
+            self
+          end
+          alias opacity= set_opacity
+
+          def opacity
+            @opacity.nil? ? 1.0 : @opacity
+          end
+
+          # Handles are opaque, so the adapter cannot find this widget from
+          # its node; the window hands over a reader instead, once.
+          def materialize!(adapter)
+            handle = super
+            if handle && !@presentation_registered && adapter.respond_to?(:presentation_source)
+              window = self
+              adapter.presentation_source(handle) { window.presentation }
+              @presentation_registered = true
+            end
+            # Presentation is a facility, not a prop, so the base materialize
+            # sees nothing to update when only opacity moved.
+            if handle && @synced_presentation != presentation
+              @synced_presentation = presentation
+              adapter.refresh_facilities(handle) if adapter.respond_to?(:refresh_facilities)
+            end
+            handle
+          end
+
+          # What the `presentation` facility should say, or nil when the
+          # script never asked for anything.
+          def presentation
+            facility = {}
+            facility[:always_on_top] = true if @keep_above
+            facility[:borderless] = true if @decorated == false
+            facility[:opacity] = @opacity.clamp(0.1, 1.0) if @opacity && @opacity < 1.0
+            # `resizable` has no presentation field: the facility's
+            # `scrollbars` is about the page's own scrollbars, not whether
+            # the window can be dragged bigger, and a browser tab cannot
+            # refuse a resize anyway. Kept as readable shadow state only.
+            facility.empty? ? nil : facility
+          end
 
           def modal=(_value); end
           alias set_modal modal=
