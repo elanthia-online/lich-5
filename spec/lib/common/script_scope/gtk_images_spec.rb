@@ -128,6 +128,36 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
         .not_to raise_error
     end
 
+    # width and height are required on `composite`, and map does not call
+    # set_size until a map loads -- so the Layout was dropped from its
+    # parent, taking every child with it, and the window stayed blank even
+    # once images worked.
+    it 'is valid before the script has given it a size' do
+      props = session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(800, 600)
+        layout = gtk::Layout.new
+        window.add(layout)
+        layout.send(:node_props)
+      end
+
+      expect(props).to include(width: 800, height: 600)
+      expect { validator.validate_component!(:composite, props, owner: 'map', page_id: 'p', cid: 'c') }
+        .not_to raise_error
+    end
+
+    it 'falls back to a default size with no window and no request' do
+      props = session.sync { gtk::Layout.new.send(:node_props) }
+
+      expect(props).to include(width: 640, height: 480)
+      expect { validator.validate_component!(:composite, props, owner: 'map', page_id: 'p', cid: 'c') }
+        .not_to raise_error
+    end
+
+    it 'accepts can_focus, which scripts set directly rather than through Glade' do
+      expect(session.sync { layout = gtk::Layout.new; layout.can_focus = true; layout }).to be_a(gtk::Layout)
+    end
+
     it 'moves a child that is already placed' do
       props = session.sync do
         layout = gtk::Layout.new
@@ -163,7 +193,7 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
     it 'is the real class, not a generated stub' do
       expect(gtk::Layout).not_to respond_to(:webui_stub?)
       expect(gtk::Image).not_to respond_to(:webui_stub?)
-      expect(session.sync { gtk::Layout.new.send(:node_props) }).to eq(layers: [])
+      expect(session.sync { gtk::Layout.new.send(:node_props) }).to include(:layers, :width, :height)
     end
 
     it 'refuses to stub one of its own names rather than shadowing it' do

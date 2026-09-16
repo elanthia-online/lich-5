@@ -243,11 +243,29 @@ module Lich
             :composite
           end
 
+          # width and height are required on `composite`, and a script sets
+          # them with set_size only once it has something to show -- map
+          # calls it from update_map_display, which does not run until a map
+          # loads. Rendering before then dropped the whole Layout, and with
+          # it every child, so the window stayed blank even once the image
+          # worked. Fall back to the widget's own request, then its window,
+          # so the node is always valid.
           def node_props
-            props = { layers: layers }
-            props[:width] = @width if @width&.positive?
-            props[:height] = @height if @height&.positive?
-            props
+            { layers: layers, width: composite_width, height: composite_height }
+          end
+
+          def composite_width
+            return @width if @width&.positive?
+            return @width_request if @width_request&.positive?
+
+            window_root&.default_width || 640
+          end
+
+          def composite_height
+            return @height if @height&.positive?
+            return @height_request if @height_request&.positive?
+
+            window_root&.default_height || 480
           end
 
           # A composite layer names an image and where it sits. Children

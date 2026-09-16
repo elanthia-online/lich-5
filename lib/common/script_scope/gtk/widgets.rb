@@ -607,6 +607,17 @@ module Lich
           end
           alias border_width= set_border_width
 
+          # Focusability is the browser's to decide. Already ignored as a
+          # builder property; scripts set it directly too.
+          def set_can_focus(_value)
+            self
+          end
+          alias can_focus= set_can_focus
+
+          def can_focus?
+            true
+          end
+
           # A widget's on-screen rectangle. Only the browser knows the real
           # one, so this answers with the size the widget asked for, falling
           # back to its window's default -- which is what GTK would report
