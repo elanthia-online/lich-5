@@ -12,12 +12,48 @@ module Lich
         # widget is the single source of truth for a value; per-viewer
         # divergence is pushed to attached viewers by Session#viewer_write.
         class ShimAdapter < Lich::WebUI::Adapter
+          def initialize(...)
+            super
+            @placements = {}.compare_by_identity
+          end
+
           def commit
             flush!
           end
 
           def page_for(handle)
             @mutex.synchronize { @nodes[handle]&.page }
+          end
+
+          # Applies several property changes as one validated update. A nil
+          # value removes the property. Needed because the contract validates
+          # properties against each other (a select's value must be one of
+          # its options), so changing them one at a time can never pass.
+          def update(handle, changes)
+            @mutex.synchronize do
+              node = node!(handle)
+              merged = node.props.dup
+              changes.each { |name, value| value.nil? ? merged.delete(name.to_sym) : merged[name.to_sym] = value }
+              node.props = @validator.validate_component!(
+                node.type, merged, owner: owner_label, page_id: adapter_page_id, cid: handle_label(handle)
+              )
+              assign_child_slots!(node) if named_children?(node)
+              dirty!(root_for(node))
+            end
+            nil
+          rescue Lich::WebUI::SchemaViolationError => error
+            raise attributed(error, handle)
+          end
+
+          # Child placement (grid span/row_span) travels beside the node; the
+          # base adapter has no slot for it.
+          def set_placement(handle, placement)
+            @mutex.synchronize do
+              node = node!(handle)
+              @placements[handle] = placement.to_h.transform_keys(&:to_sym)
+              dirty!(root_for(node))
+            end
+            nil
           end
 
           def set(handle, property, value)
@@ -38,6 +74,30 @@ module Lich
               dirty!(root_for(node))
             end
             nil
+          end
+
+          private
+
+          def render_children(builder, node)
+            @mutex.synchronize do
+              adapter = self
+              node.children.each do |child_handle|
+                child = @nodes.fetch(child_handle)
+                props = effective_props(child, child_handle)
+                bindings = child.bindings.to_h do |event, binding_id|
+                  [event, @bindings.fetch(binding_id).last]
+                end
+                placement = @placements[child_handle] || {}
+                builder.component(child.type, slot: child.slot, on: bindings, placement: placement, **props) do
+                  adapter.send(:render_children, self, child)
+                end
+              end
+            end
+          end
+
+          def destroy_node!(handle)
+            @placements.delete(handle)
+            super
           end
         end
 

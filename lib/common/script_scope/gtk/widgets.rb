@@ -9,10 +9,11 @@ module Lich
       # scripts use, rendered through the WebUI contract. Scripts evaluated in
       # ScriptScope resolve `Gtk` here instead of the real gem.
       #
-      # Slice one covers what vars.lic and alias.lic need: Window, Box,
-      # Table, Label, Entry, Button, CheckButton, ScrolledWindow, Viewport,
-      # MessageDialog, Gtk.queue, the AttachOptions/ResponseType constants,
-      # Gdk::Screen, and GLib timers. Anything else logs once and degrades.
+      # This file holds the base widget, containers, windows, and simple leaf
+      # widgets. Data widgets (Notebook, SpinButton, ComboBox, TreeView,
+      # TextView, Expander) live in widgets_data.rb; Gtk::Builder in
+      # builder.rb. Anything a script calls that is not implemented logs once
+      # and degrades.
       module Gtk
         module Version
           MAJOR = 3
@@ -56,8 +57,32 @@ module Lich
           POPUP = :popup
         end
 
-        # The only field GTK event structs expose that these scripts read.
+        module Align
+          FILL = :fill
+          START = :start
+          CENTER = :center
+          BASELINE = :baseline
+          const_set(:END, :end) # END is a Ruby keyword; scripts still write Gtk::Align::END
+        end
+
+        module SelectionMode
+          NONE = :none
+          SINGLE = :single
+          BROWSE = :browse
+          MULTIPLE = :multiple
+        end
+
+        module Orientation
+          HORIZONTAL = :horizontal
+          VERTICAL = :vertical
+        end
+
+        # The only fields GTK event structs expose that these scripts read.
         Event = Struct.new(:type, :button, :state, :keyval, :x, :y, :direction, :time)
+
+        ALIGN_TO_CONTRACT = {
+          start: 'start', center: 'center', end: 'end', fill: 'stretch', baseline: 'start',
+        }.freeze
 
         @key_counter = 0
         @key_mutex = Mutex.new
@@ -104,19 +129,54 @@ module Lich
             message = "webui-gtk-shim: unsupported #{key}#{" (#{note})" if note}#{" script=#{script}" if script}"
             Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
           end
-        end
 
-        def self.normalize_signal(name)
-          name.to_s.tr('-', '_').to_sym
+          def normalize_signal(name)
+            name.to_s.tr('-', '_').to_sym
+          end
+
+          # Coerces a GtkBuilder property string to the value a setter wants.
+          def builder_value(value)
+            text = value.to_s
+            case text
+            when 'True', 'true', 'yes' then true
+            when 'False', 'false', 'no' then false
+            when /\A-?\d+\z/ then text.to_i
+            when /\A-?\d*\.\d+\z/ then text.to_f
+            else text
+            end
+          end
         end
 
         # ------------------------------------------------------------------
-        # Base widget: identity, visibility, sensitivity, signals, and the
-        # bookkeeping that materializes it into an adapter node.
+        # Base widget: identity, visibility, sensitivity, alignment, signals,
+        # and the bookkeeping that materializes it into an adapter node.
         # ------------------------------------------------------------------
         class Widget
-          attr_reader :key, :parent, :handle, :session
-          attr_accessor :packing
+          # Builder properties every widget accepts and the shim has no use
+          # for. Silently ignored so Glade files do not spam the log.
+          IGNORED_BUILDER_PROPERTIES = %w[
+            can-focus receives-default draw-indicator border-width label-xalign
+            shadow-type xalign yalign sizing search-column headers-visible
+            fixed-height-mode column-homogeneous row-homogeneous max-width-chars
+            wrap-mode accepts-tab modal tab-fill numeric digits angle wrap
+            use-markup width-chars activates-default has-frame can-default
+            has-default focus-on-click relief image-position use-underline
+            invisible-char primary-icon-activatable secondary-icon-activatable
+            primary-icon-sensitive secondary-icon-sensitive resize-mode
+            window-position type-hint destroy-with-parent skip-taskbar-hint
+            hscrollbar-policy vscrollbar-policy min-content-height
+            min-content-width propagate-natural-height propagate-natural-width
+            overlay-scrolling show-tabs scrollable enable-popup justify
+            single-line-mode ellipsize selectable track-visited-links
+            left-padding right-padding top-padding bottom-padding xscale yscale
+            xpad ypad homogeneous baseline-position pack-type padding
+            always-show-image image icon-name stock enable-grid-lines
+            activate-on-single-click primary-icon-name secondary-icon-name
+            enable-search search-column reorderable rules-hint expander-column
+          ].freeze
+
+          attr_reader :key, :parent, :handle, :session, :halign, :valign, :placement
+          attr_accessor :packing, :builder_name
 
           def initialize
             @key = Gtk.next_key
@@ -125,6 +185,7 @@ module Lich
             @handler_ids = {}
             @handle = nil
             @synced_props = nil
+            @synced_placement = nil
             @bound_events = {}
             @parent = nil
             @visible = true
@@ -133,6 +194,13 @@ module Lich
             @width_request = nil
             @height_request = nil
             @packing = nil
+            @placement = nil
+            @halign = nil
+            @valign = nil
+            @margins = { top: 0, right: 0, bottom: 0, left: 0 }
+            @hexpand = false
+            @vexpand = false
+            @builder_name = nil
           end
 
           # --- contract mapping (subclasses override) -----------------------
@@ -148,6 +216,13 @@ module Lich
           # Contract event a GTK signal maps to for this widget, or nil.
           def event_for(_signal)
             nil
+          end
+
+          # Events bound whether or not the script connected a handler, so
+          # the shadow state tracks the viewer (scripts read `entry.text`
+          # later without ever connecting `changed`).
+          def always_bound_events
+            []
           end
 
           # --- GTK surface ---------------------------------------------------
@@ -173,14 +248,24 @@ module Lich
             emit(signal, *args)
           end
 
-          # Runs the handlers for +signal+ with GTK's (widget, event) shape.
+          # Runs the handlers for +signal+ with GTK's (widget, event) shape,
+          # trimming arguments to what each handler accepts.
           def emit(signal, *args)
             name = Gtk.normalize_signal(signal)
             result = nil
             @handlers[name].dup.each do |handler|
-              result = handler.arity.zero? ? handler.call : handler.call(self, *args)
+              result = Gtk::Widget.call_handler(handler, [self, *args])
             end
             result
+          end
+
+          def self.call_handler(handler, args)
+            arity = handler.arity
+            if arity.negative?
+              handler.call(*args)
+            else
+              handler.call(*args.first(arity))
+            end
           end
 
           def handlers?(signal)
@@ -248,6 +333,49 @@ module Lich
             set_size_request(@width_request || -1, height)
           end
 
+          def halign=(value)
+            @halign = value.to_s.downcase.to_sym
+            changed!
+          end
+          alias set_halign halign=
+
+          def valign=(value)
+            @valign = value.to_s.downcase.to_sym
+            changed!
+          end
+          alias set_valign valign=
+
+          %i[top right bottom left].each do |side|
+            define_method(:"margin_#{side}=") do |value|
+              @margins[side] = value.to_i
+              changed!
+            end
+            alias_method :"set_margin_#{side}", :"margin_#{side}="
+          end
+          alias margin_start= margin_left=
+          alias set_margin_start margin_left=
+          alias margin_end= margin_right=
+          alias set_margin_end margin_right=
+
+          def margin=(value)
+            @margins = { top: value.to_i, right: value.to_i, bottom: value.to_i, left: value.to_i }
+            changed!
+          end
+
+          def hexpand=(value)
+            @hexpand = value ? true : false
+          end
+          alias set_hexpand hexpand=
+
+          def vexpand=(value)
+            @vexpand = value ? true : false
+          end
+          alias set_vexpand vexpand=
+
+          def hexpand?
+            @hexpand
+          end
+
           def set_border_width(_width)
             self
           end
@@ -260,6 +388,10 @@ module Lich
 
           def name
             @name
+          end
+
+          def grab_focus
+            self
           end
 
           def destroy
@@ -285,12 +417,27 @@ module Lich
           end
 
           def set_property(name, value)
-            setter = "#{name.to_s.tr('-', '_')}="
-            respond_to?(setter) ? public_send(setter, value) : Gtk.log_unsupported(self.class.name, "set_property(#{name})")
+            apply_builder_property(name, value)
+          end
+
+          # Applies one GtkBuilder <property> to this widget. Subclasses
+          # override for names that mean different things per class (label,
+          # active, text) and fall back here.
+          def apply_builder_property(name, value)
+            property = name.to_s.tr('_', '-')
+            return self if IGNORED_BUILDER_PROPERTIES.include?(property)
+
+            setter = "#{property.tr('-', '_')}="
+            if self.class.method_defined?(setter)
+              public_send(setter, Gtk.builder_value(value))
+            else
+              Gtk.log_unsupported(short_class_name, "builder property #{property}")
+            end
+            self
           end
 
           def method_missing(name, *_args, &_block)
-            Gtk.log_unsupported(self.class.name.split('::').last(2).join('::'), name)
+            Gtk.log_unsupported(short_class_name, name)
             return self if name.end_with?('=') || name.start_with?('set_')
 
             nil
@@ -310,6 +457,11 @@ module Lich
             @parent = nil
           end
 
+          # Placement in the parent's contract node (grid span etc.).
+          def placement=(hash)
+            @placement = hash && !hash.empty? ? hash : nil
+          end
+
           def changed!
             @dirty = true
             window = window_root
@@ -325,21 +477,23 @@ module Lich
             props[:tooltip] = @tooltip if @tooltip && !@tooltip.empty?
             props[:width] = @width_request if @width_request
             props[:height] = @height_request if @height_request
+            props[:align] = ALIGN_TO_CONTRACT[@halign] if @halign && ALIGN_TO_CONTRACT[@halign]
+            margin = @margins.values.max
+            props[:margin] = [margin, 512].min if margin.positive?
             props
           end
 
           # Creates or updates this widget's adapter node. Returns the handle.
           def materialize!(adapter)
-            props = common_props.merge(node_props)
+            props = filter_props(common_props.merge(node_props))
             if @handle.nil?
               @handle = adapter.create(node_type, props)
               @synced_props = props
             elsif props != @synced_props
-              (props.keys | @synced_props.keys).each do |name|
-                next if props[name] == @synced_props[name]
-
-                adapter.set(@handle, name, props.fetch(name, default_for(name)))
+              changes = (props.keys | @synced_props.keys).each_with_object({}) do |name, result|
+                result[name] = props[name] unless props[name] == @synced_props[name]
               end
+              adapter.update(@handle, changes)
               @synced_props = props
             end
             sync_bindings!(adapter)
@@ -350,33 +504,20 @@ module Lich
           def release_handle!
             @handle = nil
             @synced_props = nil
+            @synced_placement = nil
             @bound_events = {}
           end
 
-          private
+          def sync_placement!(adapter)
+            return unless @handle
+            return if @placement == @synced_placement
 
-          def default_for(name)
-            case name
-            when :hidden, :disabled then false
-            when :tooltip then ''
-            else nil
-            end
+            adapter.set_placement(@handle, @placement || {})
+            @synced_placement = @placement
           end
 
-          def sync_bindings!(adapter)
-            window = window_root
-            return unless window
-
-            @handlers.each_key do |signal|
-              event = event_for(signal)
-              next unless event
-              next if @bound_events[event]
-
-              widget = self
-              @bound_events[event] = adapter.bind(@handle, event, @session.dispatch_proc(window) { |context|
-                widget.receive_event(event, context)
-              })
-            end
+          def short_class_name
+            self.class.name.split('::').last(2).join('::')
           end
 
           protected
@@ -391,6 +532,36 @@ module Lich
           end
 
           def apply_event(_event, _context); end
+
+          def payload_value(context, name = :value)
+            payload = context.payload
+            return nil unless payload
+
+            payload.key?(name) ? payload[name] : payload[name.to_s]
+          end
+
+          private
+
+          # Drops any common prop the contract does not allow on this type.
+          def filter_props(props)
+            allowed = Lich::WebUI::Contract.schema(node_type)[:properties]
+            props.select { |name, _value| allowed.key?(name) }
+          end
+
+          def sync_bindings!(adapter)
+            window = window_root
+            return unless window
+
+            events = @handlers.keys.map { |signal| event_for(signal) } + always_bound_events
+            events.compact.uniq.each do |event|
+              next if @bound_events[event]
+
+              widget = self
+              @bound_events[event] = adapter.bind(@handle, event, @session.dispatch_proc(window) { |context|
+                widget.receive_event(event, context)
+              })
+            end
+          end
         end
 
         # ------------------------------------------------------------------
@@ -441,10 +612,15 @@ module Lich
             @children
           end
 
+          # Children the contract node should hold, in order. Grids override
+          # to interleave fillers; hidden children are dropped.
+          def render_children
+            ordered_children.select(&:visible?)
+          end
+
           def materialize!(adapter)
             handle = super
-            desired = ordered_children.select(&:visible?)
-            (@synced_children - ordered_children).each do |gone|
+            (@synced_children - ordered_children - filler_children).each do |gone|
               next unless gone.handle
 
               begin
@@ -454,7 +630,8 @@ module Lich
               end
               gone.release_handle!
             end
-            @synced_children &= ordered_children
+            desired = render_children
+            @synced_children &= (ordered_children + filler_children)
             unless desired == @synced_children
               @synced_children.each do |child|
                 adapter.detach(handle, child.handle) if child.handle
@@ -463,16 +640,26 @@ module Lich
               end
               @synced_children = []
             end
-            desired.each_with_index do |child, index|
-              child_handle = child.materialize!(adapter)
-              next if @synced_children[index].equal?(child)
-
-              adapter.attach(handle, child_handle, index)
+            attached = []
+            desired.each do |child|
+              begin
+                child_handle = child.materialize!(adapter)
+              rescue Lich::WebUI::Error => error
+                Gtk.log_unsupported(child.short_class_name, 'render', note: error.message)
+                next
+              end
+              adapter.attach(handle, child_handle, attached.length) unless @synced_children.include?(child)
+              child.sync_placement!(adapter)
+              attached << child
             end
-            @synced_children = desired
+            @synced_children = attached
             # keep hidden children's own state current without attaching them
             (ordered_children - desired).each { |child| child.materialize!(adapter) if child.handle }
             handle
+          end
+
+          def filler_children
+            []
           end
 
           def release_handle!
@@ -509,13 +696,27 @@ module Lich
             super
           end
 
+          def reorder_child(child, position)
+            return self unless @children.delete(child)
+
+            @children.insert(position.to_i.clamp(0, @children.length), child)
+            changed!
+            self
+          end
+
           def homogeneous=(_value); end
           alias set_homogeneous homogeneous=
+
           def spacing=(value)
             @spacing = value.to_i
             changed!
           end
           alias set_spacing spacing=
+
+          def orientation=(value)
+            @orientation = value.to_s.start_with?('h') ? :horizontal : :vertical
+            changed!
+          end
 
           def ordered_children
             starts = @children.reject { |child| @end_children.include?(child) }
@@ -530,7 +731,7 @@ module Lich
             if @orientation == :vertical
               { gap: [@spacing, 64].min }
             else
-              count = ordered_children.count(&:visible?)
+              count = render_children.length
               { count: count.clamp(1, 12), gap: [@spacing, 64].min }
             end
           end
@@ -559,16 +760,109 @@ module Lich
           end
         end
 
-        # Gtk::Table: children carry an attach rectangle; they render into a
-        # contract grid in row-major order.
+        # Placeholder for an empty grid cell so flow order reproduces an
+        # attach layout that has holes.
+        class Filler < Widget
+          def node_type
+            :text
+          end
+
+          def node_props
+            { content: ' ' }
+          end
+
+          def common_props
+            { key: @key }
+          end
+        end
+
+        # Shared by Gtk::Table and Gtk::Grid: children carry a cell rectangle
+        # and render into a flow-ordered contract grid, row by row, with
+        # fillers for holes and span placement for wide cells.
+        module GridLayout
+          def cells
+            @cells ||= {}.compare_by_identity
+          end
+
+          def fillers
+            @fillers ||= {}
+          end
+
+          def column_count
+            raise NotImplementedError
+          end
+
+          def ordered_children
+            @children.sort_by { |child| cells.fetch(child, [0, 0, 1, 1]).first(2).reverse }
+          end
+
+          def filler_children
+            fillers.values
+          end
+
+          def render_children
+            cols = column_count
+            rects = @children.to_h { |child| [child, normalized_rect(child, cols)] }
+            rows = rects.values.map { |(_left, top, _width, height)| top + height }.max || 0
+            covered = {}
+            output = []
+            (0...rows).each do |row|
+              row_children = rects.select { |child, (_left, top, _w, _h)| top == row && child.visible? }
+              # a row whose children are all hidden collapses, as it does in GTK
+              next if row_children.empty? && !covered.values.any? { |(_c, r)| r == row }
+
+              column = 0
+              while column < cols
+                child, rect = row_children.find { |_c, (left, _t, _w, _h)| left == column }
+                if child
+                  left, top, width, height = rect
+                  output << child
+                  child.placement = span_placement(width, height)
+                  (top...(top + height)).each do |r|
+                    (left...(left + width)).each { |c| covered[[c, r]] = [c, r] unless r == top && c == left }
+                  end
+                  column += width
+                elsif covered.key?([column, row])
+                  column += 1
+                else
+                  output << filler_for(column, row)
+                  column += 1
+                end
+              end
+            end
+            output
+          end
+
+          private
+
+          def normalized_rect(child, cols)
+            left, top, width, height = cells.fetch(child, [0, 0, 1, 1])
+            width = [[width, 1].max, cols - left].min
+            [left.clamp(0, cols - 1), [top, 0].max, [width, 1].max, [height, 1].max]
+          end
+
+          def span_placement(width, height)
+            placement = {}
+            placement[:span] = width if width > 1
+            placement[:row_span] = height if height > 1
+            placement
+          end
+
+          def filler_for(column, row)
+            fillers[[column, row]] ||= Filler.new.tap { |filler| filler.attach_to(self) }
+          end
+        end
+
+        # Gtk::Table (GTK 2 API, still used): attach(child, left, right, top, bottom).
         class Table < Container
+          include GridLayout
+
           attr_reader :n_rows, :n_columns
 
           def initialize(rows = 1, columns = 1, _homogeneous = false)
             super()
             @n_rows = [rows.to_i, 1].max
             @n_columns = [columns.to_i, 1].max
-            @cells = {}.compare_by_identity
           end
 
           def n_rows=(value)
@@ -587,7 +881,7 @@ module Lich
           end
 
           def attach(child, left, right, top, bottom, _xoptions = nil, _yoptions = nil, _xpadding = 0, _ypadding = 0)
-            @cells[child] = [top.to_i, left.to_i, bottom.to_i, right.to_i]
+            cells[child] = [left.to_i, top.to_i, [right.to_i - left.to_i, 1].max, [bottom.to_i - top.to_i, 1].max]
             add(child)
           end
 
@@ -596,12 +890,12 @@ module Lich
           end
 
           def remove(child)
-            @cells.delete(child)
+            cells.delete(child)
             super
           end
 
-          def ordered_children
-            @children.sort_by { |child| @cells.fetch(child, [0, 0]).first(2) }
+          def column_count
+            @n_columns.clamp(1, 24)
           end
 
           def node_type
@@ -609,35 +903,60 @@ module Lich
           end
 
           def node_props
-            { cols: @n_columns.clamp(1, 24), gap: 4 }
+            { cols: column_count, gap: 4 }
           end
         end
 
+        # Gtk::Grid: attach(child, left, top, width, height).
         class Grid < Container
+          include GridLayout
+
           def initialize
             super
-            @cells = {}.compare_by_identity
-            @columns = 1
+            @row_spacing = 4
+            @column_spacing = 4
           end
 
           def attach(child, left, top, width = 1, height = 1)
-            @cells[child] = [top.to_i, left.to_i, width.to_i, height.to_i]
-            @columns = [@columns, left.to_i + width.to_i].max
+            cells[child] = [left.to_i, top.to_i, [width.to_i, 1].max, [height.to_i, 1].max]
             add(child)
           end
 
-          def remove(child)
-            @cells.delete(child)
+          def attach_next_to(child, sibling, side, width = 1, height = 1)
+            left, top, = cells.fetch(sibling, [0, 0, 1, 1])
+            case side.to_s
+            when 'right' then attach(child, left + 1, top, width, height)
+            when 'bottom' then attach(child, left, top + 1, width, height)
+            when 'left' then attach(child, [left - 1, 0].max, top, width, height)
+            else attach(child, left, [top - 1, 0].max, width, height)
+            end
+          end
+
+          def add(child)
+            cells[child] ||= [0, next_free_row, 1, 1]
             super
           end
 
-          def row_spacing=(_value); end
+          def remove(child)
+            cells.delete(child)
+            super
+          end
+
+          def row_spacing=(value)
+            @row_spacing = value.to_i
+            changed!
+          end
           alias set_row_spacing row_spacing=
-          def column_spacing=(_value); end
+
+          def column_spacing=(value)
+            @column_spacing = value.to_i
+            changed!
+          end
           alias set_column_spacing column_spacing=
 
-          def ordered_children
-            @children.sort_by { |child| @cells.fetch(child, [0, 0]).first(2) }
+          def column_count
+            cols = @children.map { |child| rect = cells.fetch(child, [0, 0, 1, 1]); rect[0] + rect[2] }.max || 1
+            cols.clamp(1, 24)
           end
 
           def node_type
@@ -645,7 +964,13 @@ module Lich
           end
 
           def node_props
-            { cols: @columns.clamp(1, 24), gap: 4 }
+            { cols: column_count, gap: [[@row_spacing, @column_spacing].max, 64].min }
+          end
+
+          private
+
+          def next_free_row
+            @children.map { |child| rect = cells.fetch(child, [0, 0, 1, 1]); rect[1] + rect[3] }.max || 0
           end
         end
 
@@ -675,6 +1000,7 @@ module Lich
             @min_height = value.to_i
             self
           end
+          alias min_content_height= set_min_content_height
 
           def node_type
             :scroll
@@ -683,7 +1009,9 @@ module Lich
           def node_props
             window = window_root
             height = window&.default_height
-            height ? { max_height: [height - 48, 120].max } : {}
+            props = {}
+            props[:max_height] = [height - 48, 120].max if height && parent.is_a?(Window)
+            props
           end
         end
 
@@ -705,6 +1033,11 @@ module Lich
           def initialize(label = nil)
             super()
             @label = label.to_s
+            @label_widget = nil
+          end
+
+          def label
+            @label
           end
 
           def label=(value)
@@ -714,8 +1047,18 @@ module Lich
           alias set_label label=
 
           def set_label_widget(widget)
+            @label_widget = widget
             @label = widget.respond_to?(:text) ? widget.text.to_s : @label
             changed!
+            self
+          end
+          alias label_widget= set_label_widget
+
+          def label_widget
+            @label_widget
+          end
+
+          def set_label_align(*_args)
             self
           end
 
@@ -724,29 +1067,77 @@ module Lich
           end
 
           def node_props
-            { label: @label.empty? ? ' ' : @label }
+            text = @label_widget.respond_to?(:text) ? @label_widget.text.to_s : @label
+            { label: text.empty? ? ' ' : text }
           end
         end
 
-        # Scroll adjustments: enough state for scripts that read or animate
-        # them; writes do not move the browser yet.
-        class Adjustment
-          attr_accessor :value, :lower, :upper, :page_size, :step_increment, :page_increment
+        class EventBox < Container
+          def node_type
+            :stack
+          end
 
-          def initialize(value = 0.0, lower = 0.0, upper = 1000.0, step = 10.0, page_inc = 100.0, page_size = 100.0)
+          def node_props
+            { gap: 0 }
+          end
+        end
+
+        # Scroll adjustments and SpinButton ranges: real state, so scripts
+        # that read or animate them see sane numbers. Owners re-render when
+        # the range changes.
+        class Adjustment
+          attr_reader :value, :lower, :upper, :page_size, :step_increment, :page_increment
+          attr_accessor :builder_name
+
+          def initialize(value = 0.0, lower = 0.0, upper = 100.0, step = 1.0, page_inc = 10.0, page_size = 0.0)
             @value = value.to_f
             @lower = lower.to_f
             @upper = upper.to_f
             @step_increment = step.to_f
             @page_increment = page_inc.to_f
             @page_size = page_size.to_f
+            @owners = []
+            @handlers = []
           end
 
-          def signal_connect(*_args, &_block)
-            0
+          def watch(owner)
+            @owners << owner unless @owners.include?(owner)
           end
 
-          def configure(*_args); end
+          %i[value lower upper page_size step_increment page_increment].each do |attribute|
+            define_method(:"#{attribute}=") do |number|
+              instance_variable_set(:"@#{attribute}", number.to_f)
+              notify_owners
+            end
+            alias_method :"set_#{attribute}", :"#{attribute}="
+          end
+
+          def configure(value, lower, upper, step, page_inc, page_size)
+            @value = value.to_f
+            @lower = lower.to_f
+            @upper = upper.to_f
+            @step_increment = step.to_f
+            @page_increment = page_inc.to_f
+            @page_size = page_size.to_f
+            notify_owners
+          end
+
+          def signal_connect(_signal, &block)
+            @handlers << block if block
+            @handlers.length
+          end
+
+          def apply_builder_property(name, value)
+            setter = "#{name.to_s.tr('-', '_')}="
+            public_send(setter, Gtk.builder_value(value)) if respond_to?(setter)
+            self
+          end
+
+          private
+
+          def notify_owners
+            @owners.each { |owner| owner.changed! if owner.respond_to?(:changed!) }
+          end
         end
 
         # ------------------------------------------------------------------
@@ -782,8 +1173,21 @@ module Lich
             self
           end
 
+          def default_width=(width)
+            set_default_size(width, @default_height || -1)
+          end
+
+          def default_height=(height)
+            set_default_size(@default_width || -1, height)
+          end
+
           def resize(width, height)
             set_default_size(width, height)
+          end
+
+          def set_size_request(width, height)
+            set_default_size(width, height) if @default_width.nil? && @default_height.nil?
+            super
           end
 
           def set_icon(_icon)
@@ -805,6 +1209,9 @@ module Lich
             self
           end
           alias resizable= set_resizable
+
+          def modal=(_value); end
+          alias set_modal modal=
 
           def move(_x, _y)
             self
@@ -914,7 +1321,7 @@ module Lich
         end
 
         # ------------------------------------------------------------------
-        # Leaf widgets
+        # Simple leaf widgets
         # ------------------------------------------------------------------
         class Label < Widget
           def initialize(text = nil, _mnemonic = false)
@@ -962,6 +1369,12 @@ module Lich
           end
           alias selectable= set_selectable
 
+          def apply_builder_property(name, value)
+            return (self.text = value) && self if name.to_s == 'label'
+
+            super
+          end
+
           def node_type
             :text
           end
@@ -970,6 +1383,33 @@ module Lich
             props = { content: @text.empty? ? ' ' : @text }
             props[:emphasis] = 'subtle' unless @sensitive
             props
+          end
+        end
+
+        class Separator < Widget
+          def initialize(orientation = :horizontal)
+            super()
+            @orientation = orientation
+          end
+
+          def orientation=(value)
+            @orientation = value.to_s.start_with?('v') ? :vertical : :horizontal
+          end
+
+          def node_type
+            :divider
+          end
+        end
+
+        class HSeparator < Separator
+          def initialize
+            super(:horizontal)
+          end
+        end
+
+        class VSeparator < Separator
+          def initialize
+            super(:vertical)
           end
         end
 
@@ -1017,15 +1457,8 @@ module Lich
 
           def visibility=(_value); end
           alias set_visibility visibility=
-          def width_chars=(_value); end
-          alias set_width_chars width_chars=
-          def activates_default=(_value); end
-          alias set_activates_default activates_default=
-          def set_alignment(_value)
-            self
-          end
 
-          def grab_focus
+          def set_alignment(_value)
             self
           end
 
@@ -1036,6 +1469,10 @@ module Lich
             when :focus_in_event then :focus
             when :focus_out_event then :blur
             end
+          end
+
+          def always_bound_events
+            [:change]
           end
 
           def node_type
@@ -1055,9 +1492,8 @@ module Lich
           def apply_event(event, context)
             return unless event == :change
 
-            value = context.payload && (context.payload[:value] || context.payload['value'])
+            value = payload_value(context)
             @text = value.to_s.dup unless value.nil?
-            @synced_props = @synced_props.merge(value: @text.dup) if @synced_props
           end
         end
 
@@ -1115,22 +1551,13 @@ module Lich
           end
         end
 
-        class CheckButton < Widget
+        # GTK hierarchy: CheckButton < ToggleButton < Button. Scripts test
+        # `is_a?(Gtk::ToggleButton)` to find anything checkable.
+        class ToggleButton < Button
           def initialize(label = nil, **options)
-            super()
-            @label = options.fetch(:label, label.is_a?(String) ? label : '').to_s
+            super
             @active = false
           end
-
-          def label
-            @label
-          end
-
-          def label=(value)
-            @label = value.to_s
-            changed!
-          end
-          alias set_label label=
 
           def active?
             @active
@@ -1143,12 +1570,22 @@ module Lich
           end
           alias set_active active=
 
+          def apply_builder_property(name, value)
+            return (self.active = Gtk.builder_value(value)) && self if name.to_s == 'active'
+
+            super
+          end
+
           def event_for(signal)
             :change if %i[toggled clicked].include?(signal)
           end
 
+          def always_bound_events
+            [:change]
+          end
+
           def node_type
-            :checkbox
+            :toggle
           end
 
           def node_props
@@ -1162,15 +1599,53 @@ module Lich
           def apply_event(event, context)
             return unless event == :change
 
-            value = context.payload && (context.payload.key?(:value) ? context.payload[:value] : context.payload['value'])
+            value = payload_value(context)
             @active = value ? true : false unless value.nil?
-            @synced_props = @synced_props.merge(checked: @active) if @synced_props
           end
         end
 
-        class ToggleButton < CheckButton
+        class CheckButton < ToggleButton
           def node_type
-            :toggle
+            :checkbox
+          end
+        end
+
+        # Radio groups are rendered as independent checkboxes for now; the
+        # group is kept so `group`/`active?` behave, and the shim enforces
+        # exclusivity itself.
+        class RadioButton < CheckButton
+          def initialize(group_or_label = nil, label = nil, **options)
+            text = options[:label] || (label.is_a?(String) ? label : (group_or_label.is_a?(String) ? group_or_label : nil))
+            super(text, **{})
+            @group = []
+            leader = options[:member] || (group_or_label.is_a?(RadioButton) ? group_or_label : nil)
+            leader = group_or_label.first if group_or_label.is_a?(Array) && group_or_label.first.is_a?(RadioButton)
+            join_group(leader) if leader
+            Gtk.log_unsupported('Gtk::RadioButton', 'exclusive rendering', note: 'rendered as checkboxes')
+          end
+
+          def group
+            @group.empty? ? [self] : @group
+          end
+
+          def join_group(leader)
+            @group = leader.group
+            @group << self unless @group.include?(self)
+            @group.each { |member| member.instance_variable_set(:@group, @group) }
+            self
+          end
+          alias set_group join_group
+
+          def active=(value)
+            super
+            group.each { |member| member.send(:deactivate_quietly) if !member.equal?(self) && value }
+          end
+
+          protected
+
+          def deactivate_quietly
+            @active = false
+            changed!
           end
         end
 

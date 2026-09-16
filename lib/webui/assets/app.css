@@ -26,6 +26,13 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-grid { display: grid; align-items: center; }
 .webui-grid > .field { min-width: 0; }
 .webui-scroll { overflow: auto; min-height: 0; }
+.webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
+.webui-expander[open] > summary { margin-bottom: 8px; }
+.align-start { justify-self: start; align-self: start; }
+.align-center { justify-self: center; align-self: center; }
+.align-end { justify-self: end; align-self: end; }
+.align-stretch { justify-self: stretch; align-self: stretch; }
+.field textarea { resize: vertical; }
 .webui-divider { border-top: 1px solid var(--border); margin-block: 8px; }
 
 .webui-tabs > .tab-list { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }

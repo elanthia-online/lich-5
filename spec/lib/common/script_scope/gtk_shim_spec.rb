@@ -130,7 +130,8 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       grid = scroll.children.first.children.first
       expect(grid.type).to eq(:grid)
       expect(grid.props[:cols]).to eq(3)
-      expect(grid.children.map(&:type)).to eq(%i[columns text_input button columns text_input button text_input])
+      # the last row has only a column-0 child; the grid fills the hole so flow order holds
+      expect(grid.children.map(&:type)).to eq(%i[columns text_input button columns text_input button text_input text text])
       expect(grid.children[0].children.first.props[:content]).to eq('alpha')
       expect(grid.children[1].props[:value]).to eq('value-alpha')
       expect(grid.children[2].props[:label]).to eq('Delete Entry')
