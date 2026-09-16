@@ -131,4 +131,49 @@ RSpec.describe 'GTK compatibility shim: walking a list store' do
       expect(seen).to eq(%w[alpha beta gamma delta])
     end
   end
+
+  # append/prepend/insert/each were taught to hand out copies; TreeSelection
+  # still returned the model's own row objects, so a walk from
+  # `selection.selected` -- an ordinary idiom -- rewrote the model exactly as
+  # before. This is a different entry point, not the same bug twice.
+  describe 'the iters a selection hands back' do
+    let(:view) { gtk::TreeView.new(store) }
+    let(:selection) { view.selection }
+
+    before { selection.select_path(gtk::TreePath.new([0])) }
+
+    it 'walks to the end without repeating a row' do
+      cursor = selection.selected
+      seen = []
+      9.times do
+        seen << cursor[0]
+        break unless cursor.next!
+      end
+
+      expect(seen).to eq(%w[alpha beta gamma])
+    end
+
+    it 'leaves the model untouched when the selected iter is advanced' do
+      cursor = selection.selected
+      cursor.next! while cursor.next!
+
+      expect(contents).to eq(%w[alpha beta gamma])
+    end
+
+    it 'does not alias the model through selected_each either' do
+      first = nil
+      selection.selected_each { |_model, _path, iter| first ||= iter }
+      first.next!
+
+      expect(contents).to eq(%w[alpha beta gamma])
+    end
+
+    # The copy shares the row's values array, so a script editing through a
+    # selected iter must still reach the model.
+    it 'still writes through to the model' do
+      selection.selected[0] = 'ALPHA'
+
+      expect(contents).to eq(%w[ALPHA beta gamma])
+    end
+  end
 end

@@ -1328,10 +1328,25 @@ module Lich
             @selected_keys.dup
           end
 
+          # Copies, for the same reason iter_first/get_iter/append do: #next!
+          # advances an iter by rewriting its key, so handing a script the
+          # model's own row object let a walk from `selection.selected` rewrite
+          # the model. Walking [alpha, beta, gamma] from the selected first row
+          # repeated `beta` forever and left the store as [beta, beta, gamma].
+          # dup_row shares the row's values array, so writing through the copy
+          # still reaches the model.
+          # A cursor over the named row, never the model's own object. Writes
+          # through it still land, because the copy shares the values array.
+          def find_row_copy(row_key)
+            row = @model&.rows&.find { |candidate| candidate.key == row_key }
+            row && @model.send(:dup_row, row)
+          end
+
           def selected_iters
             return [] unless @model
 
             @model.rows.select { |iter| @selected_keys.include?(iter.key) }
+                       .map { |iter| @model.send(:dup_row, iter) }
           end
 
           def select_keys(keys)
@@ -1407,7 +1422,7 @@ module Lich
               value = payload_value(context)
               index = column_key.delete_prefix('c').to_i
               column = @columns.select(&:visible?)[index]
-              iter = @model&.rows&.find { |row| row.key == row_key }
+              iter = find_row_copy(row_key)
               if column && iter
                 iter[column.value_column] = value
                 column.renderer&.emit(:edited, iter.path.to_s, value)
@@ -1420,7 +1435,7 @@ module Lich
             apply_event(event, context)
             if event == :row_activate
               row_key = payload_value(context, :row).to_s
-              iter = @model&.rows&.find { |row| row.key == row_key }
+              iter = find_row_copy(row_key)
               emit(:row_activated, iter&.path, @columns.first) if iter
             else
               @handlers.each_key do |signal|
