@@ -165,6 +165,49 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
     end
   end
 
+  describe 'validation at the GTK boundary' do
+    it 'keeps all grid cells and fillers when an entry has a long tooltip' do
+      tooltip = 'é' * 600
+      in_scope do
+        @window = gtk::Window.new
+        grid = gtk::Grid.new
+        @entry = gtk::Entry.new
+        @entry.text = 'hunting commands'
+        @entry.tooltip_text = tooltip
+        grid.attach(gtk::Label.new('(a)'), 0, 0, 1, 1)
+        grid.attach(@entry, 1, 0, 1, 1)
+        grid.attach(gtk::Label.new('Valid Targets:'), 0, 1, 1, 1)
+        @window.add(grid)
+        @window.show_all
+      end
+      grid = tree.each.find { |node| node.type == :grid }
+      expect(grid.children.map(&:type)).to eq(%i[text text_input text text])
+      expect(grid.children[1].props).to include(value: 'hunting commands', tooltip: 'é' * 512)
+      expect(@entry.tooltip_text).to eq(tooltip)
+    end
+
+    [nil, 0].each do |selection|
+      ['Second', 'Custom'].each do |typed|
+        it "renders editable combo text #{typed.inspect} with prior selection #{selection.inspect}" do
+          in_scope do
+            @window = gtk::Window.new
+            @combo = gtk::ComboBoxText.new(has_entry: true)
+            @combo.append('first', 'First')
+            @combo.append('second', 'Second')
+            @combo.active = selection unless selection.nil?
+            @combo.child.text = typed
+            @window.add(@combo)
+            @window.show_all
+          end
+          node = component(@combo.key)
+          selected = node.props[:options].find { |option| option[:value] == node.props[:value] }
+          expect(selected[:label]).to eq(typed)
+          expect(node.props[:value]).to eq(typed == 'Second' ? 'second' : 'typed:Custom')
+        end
+      end
+    end
+  end
+
   describe 'a vars.lic-shaped window' do
     before { build_vars_window }
 

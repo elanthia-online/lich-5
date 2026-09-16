@@ -546,4 +546,55 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
         .to raise_error(Lich::WebUI::Error)
     end
   end
+
+  # A child the contract refuses is skipped, and in a grid every later cell
+  # slides into the hole it left, so the table renders transposed. The drop
+  # used to share the once-per-class dedupe with unsupported methods, so the
+  # second and later drops were silent -- which is what made bigshot's
+  # over-long tooltip so hard to find.
+  describe 'a dropped child' do
+    it 'names every dropped widget, not just the first of its class' do
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message }
+      gtk.instance_variable_set(:@dropped, {})
+
+      window = session.sync do
+        win = gtk::Window.new('t')
+        grid = gtk::Grid.new
+        2.times do |row|
+          label = gtk::Label.new("r#{row}")
+          label.instance_variable_set(:@text, 'x' * 20_000)
+          grid.attach(label, 0, row, 1, 1)
+        end
+        win.add(grid)
+        win.show_all
+        win
+      end
+      session.show_window(window)
+      session.sync {}
+
+      drops = logged.grep(/dropped Gtk::Label/)
+      expect(drops.size).to eq(2)
+      expect(drops.first).to match(/key=w\d+ from its parent: .*8192/)
+    end
+
+    it 'reports a widget once however many times the page commits' do
+      logged = []
+      allow(Lich).to receive(:log) { |message| logged << message }
+      gtk.instance_variable_set(:@dropped, {})
+
+      window = session.sync do
+        win = gtk::Window.new('t')
+        label = gtk::Label.new('x')
+        label.instance_variable_set(:@text, 'x' * 20_000)
+        win.add(label)
+        win.show_all
+        win
+      end
+      session.show_window(window)
+      3.times { session.sync {} }
+
+      expect(logged.grep(/dropped Gtk::Label/).size).to eq(1)
+    end
+  end
 end

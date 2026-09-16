@@ -485,12 +485,16 @@ module Lich
           def node_props
             options = @options.map { |(id, label)| { value: id, label: label.empty? ? ' ' : label } }
             typed = @child&.text.to_s
-            if !typed.empty? && options.none? { |option| option[:label] == typed }
-              options << { value: "typed:#{typed}", label: typed }
-            end
             props = { options: options }
             props[:value] = @active_id if @active_id && options.any? { |option| option[:value] == @active_id }
-            props[:value] = "typed:#{typed}" if props[:value].nil? && !typed.empty?
+            if !typed.empty? && (@active_id.nil? || option_label(@active_id) != typed)
+              match = options.find { |option| option[:label] == typed }
+              unless match
+                match = { value: "typed:#{typed}", label: typed }
+                options << match
+              end
+              props[:value] = match[:value]
+            end
             props[:disabled] = true unless @sensitive
             props
           end

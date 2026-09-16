@@ -167,6 +167,7 @@ module Lich
         @key_counter = 0
         @key_mutex = Mutex.new
         @unsupported = {}
+        @dropped = {}
 
         class << self
           def next_key
@@ -198,6 +199,23 @@ module Lich
 
           def main_iteration_do(*)
             false
+          end
+
+          # A widget the contract refused. Unlike an unsupported method, this
+          # costs a cell, so it is never deduplicated and it names the key so
+          # the widget can be found in the rendered tree.
+          def log_render_failure(child, error)
+            label = child.respond_to?(:key) ? child.key : nil
+            # Deduplicated per widget, not per class: every dropped cell is
+            # reported once, but a commit loop does not flood the log.
+            key = "#{child.short_class_name}##{label}"
+            return if @dropped[key]
+
+            @dropped[key] = true
+            message = "webui-gtk-shim: dropped #{child.short_class_name}"                       "#{" key=#{label}" if label} from its parent: #{error.message}"
+            script = Session.current_script&.name
+            message += " script=#{script}" if script
+            Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
           end
 
           def log_unsupported(klass, method, note: nil)
@@ -644,7 +662,9 @@ module Lich
           def common_props
             props = { key: @key }
             props[:hidden] = true unless @visible
-            props[:tooltip] = @tooltip if @tooltip && !@tooltip.empty?
+            # GTK help text can exceed the contract's short-text bound. Keep
+            # the widget renderable while preserving its full native tooltip.
+            props[:tooltip] = @tooltip[0, Lich::WebUI::Contract::BOUNDS[:short_text]] if @tooltip && !@tooltip.empty?
             # GTK's size request is a minimum that layout grows past; the
             # contract's width/height are fixed. Only widgets whose natural
             # size really is the request (inputs, views) pass it through;
@@ -835,7 +855,12 @@ module Lich
               begin
                 child_handle = child.materialize!(adapter)
               rescue Lich::WebUI::Error => error
-                Gtk.log_unsupported(child.short_class_name, 'render', note: error.message)
+                # A dropped child is not cosmetic in a grid: every later cell
+                # shifts into the hole it left, so the whole table comes out
+                # transposed. Logged every time rather than once per class,
+                # because the second occurrence is the one that explains a
+                # layout nobody can account for.
+                Gtk.log_render_failure(child, error)
                 next
               end
               adapter.attach(handle, child_handle, attached.length) unless @synced_children.include?(child)
