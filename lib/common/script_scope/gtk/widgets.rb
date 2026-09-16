@@ -218,6 +218,24 @@ module Lich
             Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
           end
 
+          # A value the contract cannot carry, reported once per class and
+          # property. The shim's stated principle is to say what it cannot
+          # honour rather than drop it quietly; a horizontal box past twelve
+          # children, a grid past twenty-four columns and a margin past 512px
+          # all silently lost the excess, which turns a script bug into a
+          # rendering mystery. Deduped like the others so a commit loop does
+          # not flood the log.
+          def log_clamped(klass, property, requested, applied)
+            key = "#{klass}.#{property}"
+            return if @unsupported[key]
+
+            @unsupported[key] = true
+            script = Session.current_script&.name
+            message = "webui-gtk-shim: #{klass} #{property} #{requested} exceeds what the contract carries; " + "using #{applied}"
+            message += " script=#{script}" if script
+            Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
+          end
+
           def log_unsupported(klass, method, note: nil)
             key = "#{klass}##{method}"
             return if @unsupported[key]
@@ -911,7 +929,11 @@ module Lich
           # one-sided margins and came out spread across the window. Sends a
           # plain integer when every side agrees, which is most widgets.
           def contract_margin
-            sides = @margins.transform_values { |value| value.to_i.clamp(0, 512) }
+            sides = @margins.transform_values do |value|
+              clamped = value.to_i.clamp(0, 512)
+              Gtk.log_clamped(short_class_name, 'margin', value.to_i, clamped) if value.to_i > 512
+              clamped
+            end
             return nil if sides.values.all?(&:zero?)
             return sides.values.first if sides.values.uniq.size == 1
 
@@ -1242,7 +1264,9 @@ module Lich
               { gap: [@spacing, 64].min }
             else
               children = render_children
-              props = { count: children.length.clamp(1, 12), gap: [@spacing, 64].min }
+              count = children.length.clamp(1, 12)
+              Gtk.log_clamped(short_class_name, 'children', children.length, count) if children.length > 12
+              props = { count: count, gap: [@spacing, 64].min }
               # GTK shares leftover width among the children packed to
               # expand; one packed without it keeps its natural width. A
               # weight of 0 is the contract's way of saying natural.
@@ -1490,7 +1514,9 @@ module Lich
           end
 
           def column_count
-            @n_columns.clamp(1, 24)
+            clamped = @n_columns.clamp(1, 24)
+            Gtk.log_clamped(short_class_name, 'columns', @n_columns, clamped) if @n_columns > 24
+            clamped
           end
 
           def node_type
@@ -1565,7 +1591,9 @@ module Lich
 
           def column_count
             cols = @children.map { |child| rect = cells.fetch(child, [0, 0, 1, 1]); rect[0] + rect[2] }.max || 1
-            cols.clamp(1, 24)
+            clamped = cols.clamp(1, 24)
+            Gtk.log_clamped(short_class_name, 'columns', cols, clamped) if cols > 24
+            clamped
           end
 
           def node_type

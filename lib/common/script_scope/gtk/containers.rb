@@ -259,7 +259,16 @@ module Lich
 
           def place(child, slot)
             existing = @slotted.key(slot)
-            super_remove(existing) if existing && !existing.equal?(child)
+            if existing && !existing.equal?(child)
+              # GTK refuses a second child in an occupied pane; the shim
+              # evicts the first instead, which is survivable but silent --
+              # the script's earlier widget simply vanishes.
+              Gtk.log_unsupported(
+                short_class_name, "add to an occupied #{slot} pane",
+                note: 'the widget already there was replaced'
+              )
+              super_remove(existing)
+            end
             @slotted[child] = slot
             Container.instance_method(:add).bind_call(self, child)
             self

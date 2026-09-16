@@ -341,4 +341,61 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
       expect(fired).to contain_exactly(:first, :third)
     end
   end
+
+  # The shim's stated principle is to report what it cannot honour rather
+  # than drop it quietly, and it is applied well in some places (dropped
+  # cells, stubbed classes, the borderless refusal) and not at all in
+  # others. A horizontal box past twelve children, a grid past twenty-four
+  # columns, a margin past 512px and a second widget in an occupied pane all
+  # lost the excess in silence, which turns a script bug into a rendering
+  # mystery.
+  describe 'a value the contract cannot carry' do
+    let(:gtk) { Lich::Common::ScriptScope::Gtk }
+
+    before { gtk.instance_variable_set(:@unsupported, {}) }
+
+    def warnings
+      gtk.instance_variable_get(:@unsupported).keys
+    end
+
+    it 'reports a horizontal box past what the contract counts' do
+      box = gtk::Box.new(:horizontal, 0)
+      15.times { |index| box.add(gtk::Label.new("c#{index}")) }
+      box.send(:node_props)
+
+      expect(warnings).to include('Gtk::Box.children')
+    end
+
+    it 'says nothing when the box fits' do
+      box = gtk::Box.new(:horizontal, 0)
+      4.times { |index| box.add(gtk::Label.new("c#{index}")) }
+      box.send(:node_props)
+
+      expect(warnings).to be_empty
+    end
+
+    it 'reports a margin past what the contract carries' do
+      label = gtk::Label.new('x')
+      label.margin_top = 900
+      label.send(:common_props)
+
+      expect(warnings).to include('Gtk::Label.margin')
+    end
+
+    it 'reports a grid wider than the contract allows' do
+      grid = gtk::Grid.new
+      grid.attach(gtk::Label.new('x'), 40, 0, 1, 1)
+      grid.column_count
+
+      expect(warnings).to include('Gtk::Grid.columns')
+    end
+
+    it 'reports the widget it evicted from an occupied pane' do
+      paned = gtk::Paned.new(:horizontal)
+      paned.add1(gtk::Label.new('first'))
+      paned.add1(gtk::Label.new('second'))
+
+      expect(warnings.join).to include('occupied first pane')
+    end
+  end
 end
