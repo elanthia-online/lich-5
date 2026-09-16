@@ -110,6 +110,59 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       binding = scope.script_binding
       expect(eval("def __gtk_shim_spec_helper; 42; end\n__gtk_shim_spec_helper", binding)).to eq(42)
     end
+
+    it 'reaches a top-level method from the modules and classes the script defines' do
+      scope.instance_variable_set(:@adopt_nested_constants, true)
+      # An ordinary Lich script's `def` lands on Object, so its own modules
+      # can call it; armor.lic calls a top-level `message` from a module.
+      source = <<~SCRIPT
+        def __shim_spec_message(text) = "MSG:" + text
+
+        module ShimSpecArmorinfo
+          def self.display = __shim_spec_message("info")
+
+          module Nested
+            class Deep
+              def go = __shim_spec_message("deep")
+            end
+          end
+        end
+
+        [ShimSpecArmorinfo.display, ShimSpecArmorinfo::Nested::Deep.new.go]
+      SCRIPT
+
+      expect(eval(source, scope.script_binding)).to eq(%w[MSG:info MSG:deep])
+    ensure
+      scope.instance_variable_set(:@adopt_nested_constants, false)
+      scope.send(:remove_const, :ShimSpecArmorinfo) if scope.const_defined?(:ShimSpecArmorinfo, false)
+    end
+
+    it 'keeps a shim superclass authoritative over a script helper of the same name' do
+      scope.instance_variable_set(:@adopt_nested_constants, true)
+      source = <<~SCRIPT
+        def __shim_spec_helper = "SCRIPT-HELPER"
+        def label = "SCRIPT-SHADOW"
+
+        class ShimSpecToggle < Gtk::CheckButton
+          def helper_reaches = __shim_spec_helper
+          def inherited_wins = label
+          def unknown_degrades = some_unimplemented_gtk_call
+        end
+
+        toggle = ShimSpecToggle.new("Check me")
+        [toggle.helper_reaches, toggle.inherited_wins, toggle.unknown_degrades, toggle.class == ShimSpecToggle]
+      SCRIPT
+
+      result = session.sync { eval(source, scope.script_binding) }
+
+      expect(result[0]).to eq('SCRIPT-HELPER')
+      expect(result[1]).to eq('Check me') # the widget's own #label, not the script's shadow
+      expect(result[2]).to be_nil # Widget#method_missing still degrades
+      expect(result[3]).to be(true)
+    ensure
+      scope.instance_variable_set(:@adopt_nested_constants, false)
+      scope.send(:remove_const, :ShimSpecToggle) if scope.const_defined?(:ShimSpecToggle, false)
+    end
   end
 
   describe 'a vars.lic-shaped window' do
