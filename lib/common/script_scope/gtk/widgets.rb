@@ -403,7 +403,12 @@ module Lich
                      'anything placed in it renders as an empty box'
             detail += " script=#{script}" if script
             Lich.log("warning: #{detail}") if defined?(Lich) && Lich.respond_to?(:log)
-            return unless defined?(::Lich::Messaging) || Kernel.respond_to?(:respond, true)
+            # The guard tested `defined?(::Lich::Messaging)` and then called
+            # Kernel#respond, so with Messaging loaded but respond absent the
+            # call raised into the rescue below and the script was never told --
+            # the one thing this method exists to do. Test the method that is
+            # actually about to be called.
+            return unless Kernel.respond_to?(:respond, true)
 
             Kernel.send(:respond, "[#{script || 'gtk'}: Gtk::#{name} is not supported yet -- " \
                                   'that part of the window will be blank]')
