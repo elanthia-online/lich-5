@@ -430,4 +430,29 @@ RSpec.describe Lich::WebUI::Runtime do
       expect(page_locks.keys).to be_empty
     end
   end
+
+  # refresh held a per-page lock across render and delivery; attach rendered
+  # and delivered outside it. The attachment is visible in ViewerStore before
+  # its first render lands, so a concurrent refresh could deliver generation 2
+  # and attach then overwrite it with 1.
+  it 'delivers the first render under the same lock refresh uses' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'ordering', title: 'Ordering') do
+      text(content: 'hi')
+    end)
+    held = Queue.new
+    observed = Queue.new
+    allow(runtime).to receive(:send_render).and_wrap_original do |original, *args|
+      observed << args.last
+      original.call(*args)
+    end
+
+    # Refresh cannot interleave: it must wait for the whole attach.
+    attacher = Thread.new { attach(first_connection, page); held << :done }
+    refresher = Thread.new { runtime.refresh(page) }
+    [attacher, refresher].each { |thread| thread.join(5) }
+
+    expect(held.pop).to eq(:done)
+    generations = first_connection.sent.filter_map { |m| m['generation'] }
+    expect(generations).to eq(generations.sort)
+  end
 end

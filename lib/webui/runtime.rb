@@ -202,13 +202,22 @@ module Lich
         @connections_mutex.synchronize { @connections[connection.viewer_id] = connection }
         page = fetch_page(message[:page])
         page.bind_runtime(self)
-        attachment = @viewers.attach(
-          connection_id: connection.viewer_id, address: message[:page], page: page,
-          resume_token: message[:resume]
-        )
-        render = validated_render(page)
-        @viewers.deliver(attachment, render)
-        send_render(connection, attachment)
+        # Under the same per-page lock as refresh. The attachment becomes
+        # visible in ViewerStore before its first render has been delivered,
+        # so a refresh running concurrently could deliver generation 2 and
+        # then this thread would overwrite it with generation 1 -- stale
+        # controls right after opening or reconnecting a page, and nothing
+        # downstream rejects a generation that goes backwards.
+        attachment = nil
+        page_refresh_lock(page).synchronize do
+          attachment = @viewers.attach(
+            connection_id: connection.viewer_id, address: message[:page], page: page,
+            resume_token: message[:resume]
+          )
+          render = validated_render(page)
+          @viewers.deliver(attachment, render)
+          send_render(connection, attachment)
+        end
         enqueue_lifecycle(attachment, :attach)
         :attached
       end

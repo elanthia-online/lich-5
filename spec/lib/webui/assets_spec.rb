@@ -274,4 +274,18 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (socket !== live) return;')
     expect(javascript).not_to include('socket.addEventListener("error", () => socket.close());')
   end
+
+  # Both `hello` and `pages` arrive when something like a sibling modal
+  # opens, and re-attaching a page this socket already holds is refused
+  # ("viewer is already attached") -- so opening a modal produced refusal
+  # notifications the viewer never caused, each one consuming a retry slot.
+  it 'attaches only pages this socket does not already hold' do
+    expect(javascript).to include('if (attachedPages.has(descriptor.address)) return;')
+    expect(javascript).to include('attachedPages.add(descriptor.address);')
+  end
+
+  it 'forgets its attachments when the socket goes, so a reconnect resumes' do
+    expect(javascript).to include('attachedPages = new Set();')
+    expect(javascript).to include('attachedPages.delete(message.page);')
+  end
 end
