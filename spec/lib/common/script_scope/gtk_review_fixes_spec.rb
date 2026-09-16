@@ -398,4 +398,47 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
       expect(warnings.join).to include('occupied first pane')
     end
   end
+
+  # viewer_write rescued every Lich::WebUI::Error as 'the viewer left'. A
+  # value the contract refuses is a bug in what the script asked for, and
+  # treating it as a departure dropped a viewer whose attachment was still
+  # live -- so later programmatic updates silently missed that browser.
+  describe 'a viewer write the contract refuses' do
+    let(:gtk) { Lich::Common::ScriptScope::Gtk }
+    let(:owner) { Struct.new(:name) { def at_exit(&_block) = true }.new('combo') }
+    let(:service) { Lich::WebUI::Service.new }
+    let(:session) { gtk::Session.new(owner, service: service) }
+
+    before do
+      gtk::Session.browser_open = proc { |_url, geometry:, on_start:, on_exit:| [geometry, on_exit]; on_start.call(1); true }
+      gtk::Session.browser_kill = proc { |_pid| nil }
+    end
+
+    after do
+      gtk::Session.browser_open = nil
+      gtk::Session.browser_kill = nil
+      session.shutdown
+      service.stop
+    end
+
+    it 'keeps the viewer and reports the refusal' do
+      window = combo = nil
+      session.sync do
+        window = gtk::Window.new('C')
+        combo = gtk::ComboBoxText.new
+        combo.append_text('one')
+        window.add(combo)
+        window.show_all
+      end
+      session.commit
+      page = session.adapter.page_for(window.handle)
+      session.send(:note_viewer, page, 'viewer-one')
+      gtk.instance_variable_set(:@unsupported, {})
+
+      session.viewer_write(window, combo, :value, 'not an option')
+
+      expect(session.send(:viewers_for, page)).to include('viewer-one')
+      expect(gtk.instance_variable_get(:@unsupported).keys.join).to include('viewer write of value')
+    end
+  end
 end

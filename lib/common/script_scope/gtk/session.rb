@@ -432,6 +432,13 @@ module Lich
 
             viewers_for(page).each do |viewer_id|
               page.set(component.cid, name, value, viewer: viewer_id)
+            rescue Lich::WebUI::SchemaViolationError => error
+              # A value the contract refuses is a bug in what the script
+              # asked for, not evidence the viewer left. Forgetting it here
+              # dropped a viewer whose attachment was still live, so every
+              # later programmatic update silently missed that browser until
+              # some event happened to register it again.
+              Gtk.log_unsupported(widget.short_class_name, "viewer write of #{name}", note: error.message)
             rescue Lich::WebUI::Error
               forget_viewer(page, viewer_id)
             end
