@@ -13,6 +13,10 @@ RSpec.describe Lich::Common::FrontendEditor do
       def self.registered_frontends = %w[stormfront wizard vellum]
       def self.display_name(id) = id == 'stormfront' ? 'Wrayth' : id.capitalize
       def self.capability_vocabulary = %i[xml dialogs]
+
+      def self.definition_for(id)
+        { capabilities: id == 'stormfront' ? %i[xml dialogs] : [] }
+      end
     end
   end
 
@@ -74,6 +78,16 @@ RSpec.describe Lich::Common::FrontendEditor do
       expect(fields).to include(id: 'stormfront', label: 'Wrayth', built_in: true,
                                 command: 'C:/override/Wrayth.exe',
                                 detected_command: 'C:/games/Wrayth.exe')
+    end
+
+    # A built-in's protocol capabilities belong to the catalog, not the player.
+    # They are shown so the editor says what the frontend speaks and disabled
+    # so it cannot be claimed otherwise; reporting none made every built-in
+    # look like it spoke nothing.
+    it 'reports the capabilities the catalog declares for a built-in' do
+      fields = described_class.editor_fields('stormfront', settings: settings, frontend: catalog, locator: locator)
+
+      expect(fields[:capabilities]).to eq(%w[xml dialogs])
     end
 
     it 'returns a custom frontend whole' do

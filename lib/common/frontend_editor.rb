@@ -130,8 +130,18 @@ module Lich
             command: persisted['executable'].to_s,
             detected_command: resolution&.executable_path.to_s,
             directory: '', arguments: join_arguments(persisted['arguments']),
-            capabilities: []
+            # A built-in's protocol capabilities are the catalog's, not the
+            # player's -- they are shown so the editor says what the frontend
+            # speaks, and they are disabled so it cannot be claimed otherwise.
+            # Reporting none made every built-in look like it spoke nothing.
+            capabilities: built_in_capabilities(id, frontend)
           }
+        end
+
+        def built_in_capabilities(id, frontend)
+          Array(frontend.definition_for(id)[:capabilities]).map(&:to_s)
+        rescue StandardError
+          []
         end
 
         def custom_fields(id, document)
