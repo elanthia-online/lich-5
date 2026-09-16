@@ -53,6 +53,24 @@ RSpec.describe 'GTK compatibility shim: drag-and-drop vocabulary' do
     it 'still stubs an unknown widget as a container, not a namespace' do
       expect(gtk::Frobnicator.new).to be_a(gtk::Container)
     end
+
+    # The tell for "class" was a lowercase SECOND letter, so GTK's
+    # acronym-led class names -- UIManager, IMContext -- matched neither
+    # branch and fell through to the enum-member fallback as a bare symbol.
+    # `Gtk::UIManager.new` then raised NoMethodError on Symbol, which is the
+    # same uncaught crash this path exists to prevent. Nothing in the census
+    # names one today; the guarantee is supposed to be unconditional.
+    it 'stubs an acronym-led class name as a widget rather than a symbol' do
+      expect(gtk::UIManager.new).to be_a(gtk::Container)
+      expect(gtk::IMContext.new).to be_a(gtk::Container)
+    end
+
+    # An enum MEMBER is what the symbol fallback is for, and those are all
+    # caps -- read either through a flags namespace or straight off Gtk.
+    it 'still answers an all-caps name as a member symbol' do
+      expect(gtk::SomeOtherFlags::SCREAMING_MEMBER).to eq(:screaming_member)
+      expect(gtk::WIDGET_UNKNOWN_MEMBER).to eq(:widget_unknown_member)
+    end
   end
 
   describe 'a stubbed widget built with constructor arguments' do

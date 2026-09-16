@@ -319,10 +319,10 @@ module Lich
             # at GUI construction, taking with it the row-activated handler it
             # registers a few lines later. Those degrade to a module whose
             # members answer as symbols, exactly as Gdk's fallback does.
-            widget = name.to_s.match?(/\A[A-Z][a-z]/) && !namespace_name?(name)
+            widget = class_name?(name) && !namespace_name?(name)
             value = if widget
                       unimplemented_widget(name)
-                    elsif name.to_s.match?(/\A[A-Z][a-z]/)
+                    elsif class_name?(name)
                       enum_namespace(name)
                     else
                       name.to_s.downcase.to_sym
@@ -333,6 +333,19 @@ module Lich
               log_unsupported('Gtk', name, note: 'constant is not implemented')
             end
             const_set(name, value)
+          end
+
+          # A class name rather than an enum member. CamelCase is the usual
+          # tell, but GTK also ships acronym-led names -- UIManager,
+          # IMContext, RGBA -- and requiring a lowercase second letter sent
+          # every one of them to the enum-member fallback, where they became
+          # a bare symbol: `Gtk::UIManager.new` then raised NoMethodError on
+          # Symbol, which is the uncaught crash this whole path exists to
+          # prevent. An enum MEMBER is the thing being distinguished, and
+          # those are SCREAMING_SNAKE_CASE, so the test is "not all caps".
+          def class_name?(name)
+            text = name.to_s
+            text.match?(/\A[A-Z]/) && !text.match?(/\A[A-Z0-9_]+\z/)
           end
 
           # Names that read as a namespace of constants rather than a widget:
