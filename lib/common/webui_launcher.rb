@@ -515,7 +515,7 @@ module Lich
         end
         selected = state[:frontend_creating] ? [] : Array(state[:frontend_draft]&.fetch(:id, nil))
         ui.group(label: 'Frontends', key: 'frontends-table-section') do
-          table(key: 'frontends-table', height: 220, columns: [
+          table(key: 'frontends-table', max_height: 260, columns: [
                   { key: 'label', label: 'Frontend' }, { key: 'type', label: 'Type' },
                   { key: 'status', label: 'Status' },
                   { key: 'launch', label: 'Executable / command' },

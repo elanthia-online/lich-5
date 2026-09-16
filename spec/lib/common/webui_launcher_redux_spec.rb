@@ -316,7 +316,7 @@ RSpec.describe Lich::Common::WebUILauncher do
     end
 
     it 'keeps the catalog short enough to leave the editor on screen' do
-      expect(find(tree, 'table:frontends-table').props[:height]).to be_a(Integer)
+      expect(find(tree, 'table:frontends-table').props[:max_height]).to be_a(Integer)
     end
 
     # Lich owns a built-in's identity; only the launch override is the

@@ -204,6 +204,11 @@ body:has(.webui-page.bare) { overflow: hidden; }
 [data-disabled="true"] { opacity: 0.55; cursor: default; }
 .webui-table { width: 100%; border-collapse: collapse; }
 .webui-table th, .webui-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; }
+/* A short value wrapping ("Built-" / "in") doubles the height of every
+   row in the table, which is how an eight-row catalog filled a window.
+   Long values -- a path, a command -- still ellipsize rather than wrap. */
+.webui-table th { white-space: nowrap; }
+.webui-table td { max-width: 38ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .webui-table tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .workflow-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
