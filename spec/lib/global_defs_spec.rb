@@ -654,6 +654,100 @@ RSpec.describe 'global_defs.rb built-in script commands' do
   end
 end
 
+RSpec.describe '#detachable_client_send_init' do
+  # Only the shared part lives in global_defs.rb: waiting until the running
+  # game's module reports the login feed is ready, then sending its push. What
+  # ready? checks and what the push contains are covered per game in
+  # spec/lib/gemstone/detachable_client_init_spec.rb and
+  # spec/lib/dragonrealms/detachable_client_init_spec.rb.
+  #
+  # Runs in a subprocess for the same reason as the built-in script command
+  # specs above: loading global_defs.rb in-process redefines global methods.
+  # sleep is replaced with a counter so the wait loop runs instantly. A
+  # stand-in DetachableClientInit replaces the game module; the *_after_sleeps
+  # options say after how many sleeps it becomes defined or ready (0 means from
+  # the start, nil means never).
+  def run_send_init(module_after_sleeps: 0, ready_after_sleeps: 0)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+
+      Object.const_set(:LICH_VERSION, 'test') unless Object.const_defined?(:LICH_VERSION)
+      Lich.define_singleton_method(:log) { |message| puts "LOG:\#{message}" }
+
+      $stand_in_ready = false
+      stand_in = Module.new do
+        def self.ready? = $stand_in_ready
+        def self.init_string = '<init/>'
+      end
+      module_after_sleeps = #{module_after_sleeps.inspect}
+      ready_after_sleeps = #{ready_after_sleeps.inspect}
+      Object.const_set(:DetachableClientInit, stand_in) if module_after_sleeps == 0
+      $stand_in_ready = true if ready_after_sleeps == 0
+
+      sleeps = 0
+      Object.send(:define_method, :sleep) do |_seconds|
+        sleeps += 1
+        Object.const_set(:DetachableClientInit, stand_in) if sleeps == module_after_sleeps
+        $stand_in_ready = true if sleeps == ready_after_sleeps
+      end
+
+      client = Object.new
+      client.define_singleton_method(:puts_main_stream) { |line| puts "SENT:\#{line}" }
+      detachable_client_send_init(client)
+      puts "SLEEPS=\#{sleeps}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    {
+      :sent   => stdout[/^SENT:(.*)$/, 1],
+      :log    => stdout[/^LOG:(.*)$/, 1],
+      :sleeps => stdout[/^SLEEPS=(\d+)$/, 1].to_i,
+    }
+  end
+
+  it 'sends the running game module push without waiting when it is already ready' do
+    result = run_send_init
+
+    expect(result[:sleeps]).to eq(0)
+    expect(result[:sent]).to eq('<init/>')
+  end
+
+  describe 'waiting for the login feed' do
+    it 'stops waiting as soon as the game module reports ready' do
+      result = run_send_init(:ready_after_sleeps => 3)
+
+      expect(result[:sleeps]).to eq(3)
+      expect(result[:sent]).to eq('<init/>')
+    end
+
+    it 'keeps waiting until the game module has been loaded' do
+      result = run_send_init(:module_after_sleeps => 4)
+
+      expect(result[:sleeps]).to eq(4)
+      expect(result[:sent]).to eq('<init/>')
+    end
+
+    it 'still sends the push after giving up on a feed that never becomes ready' do
+      result = run_send_init(:ready_after_sleeps => nil)
+
+      expect(result[:sleeps]).to eq(100)
+      expect(result[:sent]).to eq('<init/>')
+    end
+  end
+
+  it 'skips the push and logs when the game modules were never loaded' do
+    result = run_send_init(:module_after_sleeps => nil)
+
+    expect(result[:sleeps]).to eq(100)
+    expect(result[:sent]).to be_nil
+    expect(result[:log]).to include('game modules not loaded')
+  end
+end
+
 # waitrt? / waitcastrt? - mirrored from lib/global_defs.rb for the reason
 # given at the top of this file. Two contracts: with no options the legacy
 # call (one sleep, then whether roundtime REMAINS), unchanged for every

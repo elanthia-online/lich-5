@@ -50,6 +50,7 @@ module Lich
         require File.join(LIB_DIR, 'gemstone', 'readylist.rb')
         require File.join(LIB_DIR, 'gemstone', 'stowlist.rb')
         require File.join(LIB_DIR, 'gemstone', 'armaments.rb')
+        require File.join(LIB_DIR, 'gemstone', 'detachable_client_init.rb')
         ActiveSpell.watch!
         Infomon.watch!
         self.common_after
@@ -63,6 +64,7 @@ module Lich
         require File.join(LIB_DIR, 'dragonrealms', 'drinfomon.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'commons.rb')
         require File.join(LIB_DIR, 'dragonrealms', 'creature.rb')
+        require File.join(LIB_DIR, 'dragonrealms', 'detachable_client_init.rb')
         DRInfomon.watch!
         self.common_after
       end
