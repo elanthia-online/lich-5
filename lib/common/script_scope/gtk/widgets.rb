@@ -289,6 +289,7 @@ module Lich
             Image Layout Fixed
             Menu MenuBar MenuItem CheckMenuItem RadioMenuItem
             SeparatorMenuItem ImageMenuItem
+            Paned HPaned VPaned Overlay ListBox ListBoxRow ProgressBar
           ].freeze
 
           def const_missing(name)
@@ -2097,18 +2098,121 @@ module Lich
           end
         end
 
+        # Stock button labels. Without this, const_missing turned `Stock` into
+        # an empty widget class and `Gtk::Stock::OK` raised NameError -- which
+        # is where map's room-list dialog died.
+        module Stock
+          OK = 'OK'
+          CANCEL = 'Cancel'
+          YES = 'Yes'
+          NO = 'No'
+          CLOSE = 'Close'
+          APPLY = 'Apply'
+          SAVE = 'Save'
+          OPEN = 'Open'
+          ADD = 'Add'
+          DELETE = 'Delete'
+          EDIT = 'Edit'
+          REFRESH = 'Refresh'
+          QUIT = 'Quit'
+          HELP = 'Help'
+        end
+
+        # A custom dialog: a window with a content area and a row of response
+        # buttons, whose `run` blocks the caller until one is pressed.
+        #
+        # GTK's gtk_dialog_run is a recursive main loop: it blocks the script
+        # while still servicing events, which is how the button it is waiting
+        # on can ever be pressed. The shim does the same. When `run` is called
+        # on the session thread -- creaturebar calls it from a button handler
+        # -- it pumps the session's own queue until a response arrives. Off
+        # that thread it simply waits, because the session thread is free.
+        #
+        # The response returned is the very object the script gave
+        # add_button, so creaturebar's `:ok` and map's `Gtk::ResponseType::OK`
+        # both compare equal to what they passed in.
         class Dialog < Window
-          def initialize(*_args, **_options)
-            super()
+          def initialize(title: nil, parent: nil, flags: nil, buttons: nil, **_options)
+            # to_s: a nil title would reach the page as a nil prop. Lich's
+            # NilClass patch answers nil.empty? with nil, so node_props' own
+            # guard would let it through and the page fail validation.
+            super(title.to_s)
+            @content = VBox.new
+            @actions = HBox.new
+            @responses = Queue.new
+            @response = nil
+            Container.instance_method(:add).bind_call(self, @content)
+            Container.instance_method(:add).bind_call(self, @actions)
+            Array(buttons).each { |(label, response)| add_button(label, response) }
           end
 
-          def add_button(_label, _response)
+          def content_area
+            @content
+          end
+          alias child content_area
+          alias vbox content_area
+
+          def action_area
+            @actions
+          end
+
+          # A script's `dialog.add(widget)` means the content area, not a
+          # third top-level child beside the buttons.
+          def add(child)
+            @content.add(child)
             self
           end
 
+          def add_button(label, response)
+            button = Button.new(label.to_s)
+            dialog = self
+            button.signal_connect(:clicked) { dialog.respond(response) }
+            @actions.add(button)
+            changed!
+            button
+          end
+
+          def add_action_widget(widget, response)
+            dialog = self
+            widget.signal_connect(:clicked) { dialog.respond(response) } if widget.respond_to?(:signal_connect)
+            @actions.add(widget)
+            self
+          end
+
+          def set_default_response(_response)
+            self
+          end
+          alias default_response= set_default_response
+
+          def respond(response)
+            @response = response
+            @responses << response
+            emit(:response, response)
+            self
+          end
+          alias response respond
+
           def run
-            Gtk.log_unsupported('Gtk::Dialog', 'run', note: 'custom dialogs are not rendered yet')
-            ResponseType::DELETE_EVENT
+            show unless @shown
+            @response = nil
+            if @session.on_session_thread?
+              @session.commit
+              @session.pump(0.05) until @response || destroyed?
+              @response || ResponseType::DELETE_EVENT
+            else
+              @session.enqueue { @session.commit }
+              @responses.pop
+            end
+          end
+
+          def destroy
+            @responses << ResponseType::DELETE_EVENT if @responses.empty?
+            super
+          end
+
+          def browser_exited
+            @responses << ResponseType::DELETE_EVENT if @responses.empty?
+            super
           end
         end
 

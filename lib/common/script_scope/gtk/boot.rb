@@ -8,6 +8,7 @@ require_relative 'widgets_data'
 require_relative 'builder'
 require_relative 'menus'
 require_relative 'images'
+require_relative 'containers'
 
 # A pixbuf cannot say which file it was built from, so the shim records that
 # as it is built. Without this every Gtk::Image has a pixbuf and no source,

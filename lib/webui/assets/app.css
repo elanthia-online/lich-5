@@ -211,6 +211,21 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
    image, markers over it, and regions that can be clicked. */
 .webui-image { display: block; max-width: 100%; }
 .webui-composite { position: relative; overflow: hidden; }
+/* split: two panes along an axis, the first sized by the divider position
+   and the second taking the rest. overlay: a base in flow with later
+   children stacked over it. */
+.webui-split { display: flex; min-width: 0; min-height: 0; }
+.webui-split.vertical { flex-direction: column; }
+.split-pane { min-width: 0; min-height: 0; overflow: auto; }
+.split-pane.second { flex: 1 1 0; }
+.split-handle { flex: 0 0 6px; background: var(--border); cursor: col-resize; touch-action: none; }
+.webui-split.vertical > .split-handle { cursor: row-resize; }
+.webui-overlay { position: relative; }
+.webui-overlay > .overlay-layer {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
 .composite-layer { position: absolute; }
 .composite-label { white-space: pre; pointer-events: none; }
 .composite-bar { border: 1px solid var(--border); overflow: hidden; }

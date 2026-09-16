@@ -28,6 +28,21 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (descriptor.title && !descriptor.modal) document.title = descriptor.title;')
   end
 
+  # split and overlay had contract types but no client renderer, so spellson
+  # and jinx rendered blank panes.
+  it 'renders split panes with a draggable divider' do
+    expect(javascript).to match(/^    split\(page, component\)/)
+    expect(javascript).to include('emit(page, component, "move", { position })')
+    # Pointer capture keeps the drag on the handle, leaving nothing on the
+    # document after the tree is rebuilt.
+    expect(javascript).to include('handle.setPointerCapture(event.pointerId)')
+  end
+
+  it 'stacks overlay children over the first in document order' do
+    expect(javascript).to match(/^    overlay\(page, component\)/)
+    expect(javascript).to include('if (index > 0) element.classList.add("overlay-layer")')
+  end
+
   # A composite is the only surface a script can click on, and the contract
   # gates the event behind surface_events so a page opts in.
   it 'emits surface_activate from a composite that asked for it' do

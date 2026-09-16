@@ -348,6 +348,29 @@ module Lich
             Thread.current[THREAD_KEY].equal?(self)
           end
 
+          # Runs at most one queued job, then commits. This is a nested main
+          # loop: GTK's gtk_dialog_run blocks its caller on the main thread
+          # while still servicing events, and Dialog#run does the same by
+          # pumping this queue until its response arrives. Returns false when
+          # nothing was waiting within +timeout+ seconds, so the caller can
+          # re-check its own exit condition. A :stop is put back for run_loop.
+          def pump(timeout = 0.05)
+            job = @queue.pop(timeout: timeout)
+            return false if job.nil?
+
+            if job == :stop
+              @queue << :stop
+              return false
+            end
+            begin
+              job.call
+              commit unless @closed
+            rescue StandardError, ScriptError => error
+              report(error)
+            end
+            true
+          end
+
           # ---- windows ------------------------------------------------------
 
           def register_window(window)
