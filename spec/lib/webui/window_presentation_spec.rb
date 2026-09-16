@@ -12,12 +12,13 @@ RSpec.describe Lich::WebUI::WindowPresentation do
   let(:win32) do
     Class.new do
       attr_reader :calls
-      attr_accessor :ex_style, :windows
+      attr_accessor :ex_style, :style, :windows
 
       def initialize
         @calls = []
         @windows = []
         @ex_style = 0x200100
+        @style = 0x16CF0000
       end
 
       # windows is a list of [hwnd, visible, pid, owner, class_name]
@@ -46,10 +47,12 @@ RSpec.describe Lich::WebUI::WindowPresentation do
         1
       end
 
-      def GetWindowLongW(_hwnd, _index) = @ex_style
+      # -20 is GWL_EXSTYLE (layered), -16 is GWL_STYLE (caption). They are
+      # different words and must not share a value.
+      def GetWindowLongW(_hwnd, index) = index == -16 ? @style : @ex_style
 
-      def SetWindowLongW(hwnd, _index, value)
-        @ex_style = value
+      def SetWindowLongW(hwnd, index, value)
+        index == -16 ? @style = value : @ex_style = value
         @calls << [:set_window_long, hwnd.to_i, value]
         1
       end
@@ -83,8 +86,8 @@ RSpec.describe Lich::WebUI::WindowPresentation do
       expect(described_class.support).to eq({})
     end
 
-    it 'offers exactly the two properties a page cannot do itself' do
-      expect(described_class.support).to eq(always_on_top: true, opacity: true)
+    it 'offers exactly the properties a page cannot do itself' do
+      expect(described_class.support).to eq(always_on_top: true, opacity: true, borderless: true)
     end
   end
 
@@ -153,6 +156,30 @@ RSpec.describe Lich::WebUI::WindowPresentation do
       expect(win32.calls).to include([:set_alpha, 500, 255, 0x2])
       # Never written through SetWindowLong; z-order belongs to SetWindowPos.
       expect(win32.calls.none? { |entry| entry.first == :set_window_long && entry[2] & 0x8 != 0 }).to be(true)
+    end
+
+    # Only the title bar goes: WS_THICKFRAME stays so the window can still be
+    # resized by its edges, and the script that took the caption away keeps
+    # its own way to put it back (map's toggle is in the window's own menu).
+    # A window with no caption is also still closeable with ";kill <script>".
+    it 'takes only the caption when the script asks for a borderless window' do
+      win32.style = 0x16CF_0000 # caption + thickframe, as Chromium opens
+      described_class.apply(Fiddle::Pointer.new(500), always_on_top: false, opacity: 1.0, borderless: true)
+
+      written = win32.calls.select { |entry| entry.first == :set_window_long }.last
+      expect(written[2] & 0x00C0_0000).to eq(0)       # caption cleared
+      expect(written[2] & 0x0004_0000).to eq(0x40000) # thickframe kept
+      # The frame is not recomputed without this, so nothing shows until the
+      # window is resized by something else.
+      expect(win32.calls.any? { |entry| entry.first == :set_window_pos && (entry[3] & 0x0020) != 0 }).to be(true)
+    end
+
+    it 'puts the caption back when the script turns borderless off' do
+      win32.style = 0x160F_0000 # already stripped
+      described_class.apply(Fiddle::Pointer.new(500), always_on_top: false, opacity: 1.0, borderless: false)
+
+      written = win32.calls.select { |entry| entry.first == :set_window_long }.last
+      expect(written[2] & 0x00C0_0000).to eq(0x00C0_0000)
     end
 
     it 'does nothing at all when the host cannot reach the window' do

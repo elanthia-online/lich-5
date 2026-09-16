@@ -1633,8 +1633,19 @@ module Lich
             @vadjustment.value = (y - (height / 2)).clamp(0, max)
           end
 
-          def set_policy(_horizontal, _vertical)
+          # GTK's policy is per-axis, but the contract's `scrollbars` facility
+          # is one switch for the page, and a script that hides one axis is
+          # hiding the furniture rather than the other axis' bar -- map's "Hide
+          # Scrollbars" sets both to NEVER together. Treated as hidden when
+          # neither axis wants a bar.
+          def set_policy(horizontal, vertical)
+            @scrollbars_hidden = [horizontal, vertical].all? { |policy| policy.to_s.downcase == 'never' }
+            changed!
             self
+          end
+
+          def scrollbars_hidden?
+            @scrollbars_hidden ? true : false
           end
 
           def add_with_viewport(child)
@@ -2164,12 +2175,35 @@ module Lich
             facility[:always_on_top] = true if @keep_above
             facility[:borderless] = true if @decorated == false
             facility[:opacity] = @opacity.clamp(0.1, 1.0) if @opacity && @opacity < 1.0
-            # `resizable` has no presentation field: the facility's
-            # `scrollbars` is about the page's own scrollbars, not whether
-            # the window can be dragged bigger, and a browser tab cannot
+            # `resizable` has no presentation field: a browser tab cannot
             # refuse a resize anyway. Kept as readable shadow state only.
+            #
+            # `scrollbars` is about the page's own scrollbars, which is
+            # exactly what a script means by set_policy(:never, :never) -- it
+            # is asking for the furniture to go away, and only the page can do
+            # that. Reported as false so the client hides them.
+            facility[:scrollbars] = false if scrollbars_hidden?
             facility.empty? ? nil : facility
           end
+
+          # True when every scroller in this window has been told to show no
+          # bars. A window whose scrollers disagree keeps them, since the
+          # facility is one switch for the whole page.
+          def scrollbars_hidden?
+            scrollers = []
+            collect_scrollers(self, scrollers)
+            !scrollers.empty? && scrollers.all?(&:scrollbars_hidden?)
+          end
+
+          # respond_to? answers true for everything on a Widget, so the test
+          # has to be what the widget IS, not what it claims to answer.
+          def collect_scrollers(widget, found)
+            found << widget if widget.is_a?(ScrolledWindow)
+            return unless widget.is_a?(Container)
+
+            widget.children.each { |child| collect_scrollers(child, found) }
+          end
+          private :collect_scrollers
 
           def modal=(_value); end
           alias set_modal modal=

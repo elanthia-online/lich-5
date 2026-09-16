@@ -217,6 +217,11 @@ body:has(.webui-page.bare) { overflow: hidden; }
 /* A composite is a fixed box its layers are placed on absolutely: a map
    image, markers over it, and regions that can be clicked. */
 .webui-image { display: block; max-width: 100%; }
+/* A script that asked for no scrollbars still scrolls -- by dragging, by the
+   wheel, by centring itself -- it just wants the furniture gone. */
+.hide-scrollbars .webui-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbars .webui-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
 .webui-composite { position: relative; overflow: hidden; }
 /* A surface inside a scroller can be dragged to pan it, so say so -- and keep
    the browser from starting its own image/text drag instead. */

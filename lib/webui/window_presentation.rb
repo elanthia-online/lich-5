@@ -24,9 +24,17 @@ module Lich
       SWP_NOMOVE     = 0x0002
       SWP_NOACTIVATE = 0x0010
       GWL_EXSTYLE    = -20
+      GWL_STYLE      = -16
       WS_EX_LAYERED  = 0x00080000
       LWA_ALPHA      = 0x0000_0002
       GW_OWNER       = 4
+      # Only the title bar is removed. WS_THICKFRAME stays, so a borderless
+      # window can still be resized by its edges -- and the script that took
+      # the caption away keeps its own way to put it back (map offers the
+      # toggle in the right-click menu that opens on the window itself).
+      WS_CAPTION       = 0x00C00000
+      SWP_FRAMECHANGED = 0x0020
+      SWP_NOZORDER     = 0x0004
       # The class Chromium gives a top-level browser window. A process owns
       # several windows, most of them invisible helpers.
       WINDOW_CLASS = 'Chrome_WidgetWin_1'
@@ -78,7 +86,7 @@ module Lich
         def support
           return {} unless available?
 
-          { always_on_top: true, opacity: true }
+          { always_on_top: true, opacity: true, borderless: true }
         end
 
         # The one visible top-level window belonging to +pid+, or nil.
@@ -111,11 +119,12 @@ module Lich
         # visible as a value -- Window#presentation omits false and returns
         # nil once nothing is set -- so the caller resolves the absence into
         # an explicit default and this applies it.
-        def apply(hwnd, always_on_top:, opacity:)
+        def apply(hwnd, always_on_top:, opacity:, borderless: false)
           return false unless available? && hwnd
 
           set_always_on_top(hwnd, always_on_top)
           set_opacity(hwnd, opacity)
+          set_borderless(hwnd, borderless)
           true
         rescue StandardError => error
           log("applying window presentation failed: #{error.class}: #{error.message}")
@@ -171,6 +180,22 @@ module Lich
           style = win32.GetWindowLongW(hwnd, GWL_EXSTYLE) & 0xFFFF_FFFF
           win32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED) if (style & WS_EX_LAYERED).zero?
           win32.SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA)
+        end
+
+        # Strips (or restores) the title bar. Only WS_CAPTION moves:
+        # WS_THICKFRAME stays so the window is still resizable by its edges,
+        # and WS_SYSMENU stays so alt+space still reaches the system menu.
+        # SWP_FRAMECHANGED is required or the frame is not recomputed and the
+        # change does not show until something else resizes the window.
+        def set_borderless(hwnd, wanted)
+          style = win32.GetWindowLongW(hwnd, GWL_STYLE) & 0xFFFF_FFFF
+          captioned = !(style & WS_CAPTION).zero?
+          return if captioned != wanted
+
+          updated = wanted ? style & ~WS_CAPTION : style | WS_CAPTION
+          win32.SetWindowLongW(hwnd, GWL_STYLE, updated)
+          win32.SetWindowPos(hwnd, Fiddle::Pointer.new(0), 0, 0, 0, 0,
+                             SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER)
         end
 
         def window_matches?(hwnd, pid)

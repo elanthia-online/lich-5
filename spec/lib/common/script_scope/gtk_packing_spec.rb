@@ -292,8 +292,8 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
     it 'carries a toggled-off property to the window as an explicit default' do
       applied = []
       allow(Lich::WebUI::WindowPresentation).to receive(:available?).and_return(true)
-      allow(Lich::WebUI::WindowPresentation).to receive(:apply) do |_hwnd, always_on_top:, opacity:|
-        applied << [always_on_top, opacity]
+      allow(Lich::WebUI::WindowPresentation).to receive(:apply) do |_hwnd, always_on_top:, opacity:, borderless: false|
+        applied << [always_on_top, opacity, borderless]
         true
       end
 
@@ -303,26 +303,23 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       session.sync { window.set_keep_above(false) }
       session.sync { window.set_opacity(1.0) }
 
-      expect(applied.last).to eq([false, 1.0])
+      expect(applied.last).to eq([false, 1.0, false])
     end
 
     it 'records the properties a browser host cannot honor as degradations' do
       window = shown_window { |win| win.set_keep_above(true); win.set_decorated(false) }
       page = session.adapter.page_for(window.handle)
 
-      # borderless is refused on every host: a frameless Chromium app window
-      # leaves the player nothing to drag or close.
-      expect(page.degradations).to include(
-        hash_including(facility: :presentation, property: :borderless,
-                       reason: :unsupported_by_browser_host)
-      )
-      # always_on_top is only a degradation where the host cannot reach the
-      # real window; where it can, the shim raises the window itself.
+      # Both are degradations only where the host cannot reach the real
+      # window; where it can, the shim raises and undecorates it directly.
       refused = page.degradations.map { |refusal| refusal[:property] }
-      if Lich::WebUI::WindowPresentation.support[:always_on_top]
-        expect(refused).not_to include(:always_on_top)
-      else
-        expect(refused).to include(:always_on_top)
+      support = Lich::WebUI::WindowPresentation.support
+      %i[always_on_top borderless].each do |property|
+        if support[property]
+          expect(refused).not_to include(property)
+        else
+          expect(refused).to include(property)
+        end
       end
     end
 

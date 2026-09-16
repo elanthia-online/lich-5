@@ -637,7 +637,8 @@ module Lich
             Lich::WebUI::WindowPresentation.apply(
               hwnd,
               always_on_top: requested[:always_on_top] ? true : false,
-              opacity: requested[:opacity] || 1.0
+              opacity: requested[:opacity] || 1.0,
+              borderless: requested[:borderless] ? true : false
             )
           end
 

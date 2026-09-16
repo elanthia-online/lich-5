@@ -84,10 +84,12 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(page.presentation_support.keys).to contain_exactly(
       :always_on_top, :borderless, :opacity, :scrollbars
     )
-    expect(page.degradations).to include(
-      { facility: :presentation, property: :borderless, reason: :unsupported_by_browser_host }
-    )
-    expect(page.degradations.map { |refusal| refusal[:property] }).not_to include(:opacity, :scrollbars)
+    refused = page.degradations.map { |refusal| refusal[:property] }
+    %i[always_on_top borderless].each do |property|
+      host[property] ? expect(refused).not_to(include(property)) : expect(refused).to(include(property))
+    end
+    # A page can always do these two itself.
+    expect(refused).not_to include(:opacity, :scrollbars)
   end
 
   # An unknown property must not be fetched out of the support table without a

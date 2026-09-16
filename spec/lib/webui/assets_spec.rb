@@ -176,7 +176,8 @@ RSpec.describe 'WebUI browser assets' do
   it 'waits for the pointer to settle before opening a submenu' do
     expect(javascript).to include('const SUBMENU_DWELL_MS = 300;');
     expect(javascript).to include('dwell = window.setTimeout(() => { dwell = null; open(); }, SUBMENU_DWELL_MS);');
-    expect(javascript).to include('button.addEventListener("mouseleave", cancelDwell);');
+    # Leaving no longer only cancels a pending open; it schedules the close.
+    expect(javascript).to include('button.addEventListener("mouseleave", scheduleClose);');
     # A click still opens it immediately.
     expect(javascript).to include('button.addEventListener("click", () => { cancelDwell(); open(); });');
   end
@@ -187,6 +188,28 @@ RSpec.describe 'WebUI browser assets' do
   it 'toggles a check menu item from what is on screen, not a stale render' do
     expect(javascript).to include('const checked = button.getAttribute("aria-checked") === "true";');
     expect(javascript).to include('emit(page, item, "change", { value: next });');
+  end
+
+  # Leaving a submenu should put it away again, but not the instant the
+  # pointer crosses the parent on its way into the child.
+  it 'closes a submenu on a longer dwell once the pointer leaves it' do
+    expect(javascript).to include('const SUBMENU_CLOSE_MS = 450;')
+    expect(javascript).to include('dwell = window.setTimeout(() => { dwell = null; closeMenuLayers(level + 1); }, SUBMENU_CLOSE_MS);')
+    expect(javascript).to include('button.addEventListener("mouseleave", scheduleClose);')
+    # Arriving in the submenu itself calls the closing off.
+    expect(javascript).to include('layer.addEventListener("mouseenter", () => owner.__cancelSubmenuClose());')
+    expect(javascript).to include('layer.addEventListener("mouseleave", () => owner.__scheduleSubmenuClose?.());')
+  end
+
+  # A script asking for no scrollbars means the page's own furniture, and the
+  # page is the only thing that can take it away. The contract declared the
+  # facility supported while the client read nothing at all.
+  it 'hides the page scrollbars when the script asked for none' do
+    expect(javascript).to include('const bare = facilities.presentation && facilities.presentation.scrollbars === false;')
+    expect(javascript).to include('document.documentElement.classList.toggle("hide-scrollbars", !!bare);')
+    css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+    expect(css).to include('.hide-scrollbars .webui-scroll { scrollbar-width: none;')
+    expect(css).to include('.hide-scrollbars .webui-scroll::-webkit-scrollbar { width: 0; height: 0; }')
   end
 
   # A render replaces the whole tree, so every input is a new node. Without

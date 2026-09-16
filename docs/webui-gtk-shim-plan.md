@@ -631,12 +631,23 @@ fixed because two of them are not the shim's to fix.
 - ~~**`keep_above` does not raise the window.**~~ **Done**, same file
   (`SetWindowPos` + `HWND_TOPMOST`). Nine scripts asked for it.
 
-  Both stay degraded everywhere else, deliberately: `xdotool windowstate
-  --add ABOVE` is a no-op under Wayland and `_NET_WM_WINDOW_OPACITY` does
-  nothing without a compositor, so those would report success while
-  changing nothing -- worse than degrading honestly. `borderless` stays
-  refused on every host, including Windows: a Chromium `--app` frame
-  stripped of its caption leaves a window the player cannot move or close.
+- ~~**Borderless windows.**~~ **Done**, same file. Only `WS_CAPTION` is
+  taken: `WS_THICKFRAME` stays, so a borderless window is still resizable
+  by its edges, and `;kill <script>` closes any window whose title bar has
+  gone. An earlier note here refused it outright on the theory that a
+  frameless window strands the player; that was too cautious.
+- ~~**Hide Scrollbars.**~~ **Done.** The contract already had a
+  `scrollbars` facility marked supported, but the client read it nowhere
+  and `ScrolledWindow#set_policy` threw the policy away, so the menu item
+  did nothing. `set_policy(:never, :never)` now reports through the
+  facility and the page hides its own bars; the content still scrolls by
+  drag, wheel and centring.
+
+  always_on_top and opacity stay degraded on every other host,
+  deliberately: `xdotool windowstate --add ABOVE` is a no-op under Wayland
+  and `_NET_WM_WINDOW_OPACITY` does nothing without a compositor, so those
+  would report success while changing nothing -- worse than degrading
+  honestly.
 - **Changing Scale misplaces the room marker.** This one IS a shim bug.
   map redraws its Cairo marker at the new zoom and moves it with
   `Layout#move`; the marker's position and the image's scale stop agreeing,
