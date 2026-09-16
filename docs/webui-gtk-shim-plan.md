@@ -589,6 +589,29 @@ bump on its own. Fold them into the next contract change.
   `Script.current`) is a shared `NullOwner`; nothing cleans it up.
 - `Dialog#run` (custom dialogs) returns `DELETE_EVENT` immediately.
 
+### Deferred map polish (observed live, 2026-09-16)
+
+Three things `;map` still gets wrong once it works. Noted here rather than
+fixed because two of them are not the shim's to fix.
+
+- **Window opacity does not make the window translucent.** The client
+  applies the `presentation` facility's `opacity` to the document, so the
+  whole page fades, but what shows through is the browser's own background
+  rather than whatever is behind the window. Real window translucency is a
+  compositor property; a page cannot reach it. Belongs with the Chromium
+  `--app` window itself -> **slice 7**, beside `always_on_top`.
+- **`keep_above` does not raise the window.** Same class: the runtime
+  already records it as a `presentation` degradation, and only the host
+  window can honour it -> **slice 7** ("this is where `always_on_top` and
+  multi-window layouts become real").
+- **Changing Scale misplaces the room marker.** This one IS a shim bug.
+  map redraws its Cairo marker at the new zoom and moves it with
+  `Layout#move`; the marker's position and the image's scale stop agreeing,
+  so the circle drifts off the room. Suspect the composite `scale` prop is
+  applied to the surface as a CSS transform while layer coordinates stay in
+  unscaled pixels -- check `Layout#node_props`/`composite` against
+  `calculate_scale` before slice 6's canvas work lands on top of it.
+
 ## 7. Open questions for Doug
 
 1. Where does `SPEC-WEBUI-CONTRACT` live? The prose spec the code cites
