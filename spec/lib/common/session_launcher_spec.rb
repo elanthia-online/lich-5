@@ -207,6 +207,23 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'passes --webui-dev to children only when the launch context asks for it' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'], launch_context: { frontend: 'stormfront', webui_dev: true })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', '--webui-dev', hash_including(chdir: anything)
+    )
+
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'], launch_context: { frontend: 'stormfront' })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', hash_including(chdir: anything)
+    )
+  end
+
   it 'forces the parent data directory into detached Multi-Launch children' do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(nil)

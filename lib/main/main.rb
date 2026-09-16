@@ -202,18 +202,23 @@ reconnect_if_wanted = proc {
       dark_theme: Lich.track_dark_mode,
       tab_layout: Lich.track_layout_state,
       autosort: Lich.track_autosort_state,
-      persistent: Lich.track_persistent_launcher_mode
+      persistent: Lich.track_persistent_launcher_mode,
+      webui_dev: true
     )
     @launch_data = webui_launcher.start.await_launch
     next unless @launch_data
-
-    # Scripts started from here on resolve their UI toolkit through
-    # ScriptScope; core keeps whatever it loaded.
-    require File.join(LIB_DIR, 'common', 'script_scope.rb')
-    Lich::Common::ScriptScope.activate!
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
+  end
+
+  # Under --webui-dev, scripts started from here on resolve their UI toolkit
+  # through ScriptScope; core keeps whatever it loaded. This sits after every
+  # login path on purpose: a session the launcher spawns as a child arrives
+  # here through --login, not through the launcher branch above.
+  if @argv_options[:webui_dev]
+    require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    Lich::Common::ScriptScope.activate!
   end
 
   #

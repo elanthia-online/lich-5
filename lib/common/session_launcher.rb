@@ -131,6 +131,9 @@ module Lich
 
           dark_mode = resolve_dark_mode(context)
           flags << "--dark-mode=#{dark_mode}" unless dark_mode.nil?
+          # A WebUI-mode parent spawns WebUI-mode children; the flag is opt-in
+          # and would otherwise be lost across the process boundary.
+          flags << '--webui-dev' if context[:webui_dev] == true
 
           OPTIONAL_PATH_FLAGS.each do |path_flag|
             value = overridden_path_value(context, path_flag)

@@ -41,7 +41,7 @@ module Lich
                      browser_terminate: Process.method(:kill),
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
-                     frontend_locator: FrontendLocator)
+                     frontend_locator: FrontendLocator, webui_dev: false)
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
 
@@ -73,6 +73,7 @@ module Lich
         @closed_condition = ConditionVariable.new
         @lifecycle = :starting
         @persistent = persistent
+        @webui_dev = webui_dev == true
         @autosort = autosort
         @tab_layout = tab_layout
         @dark_theme = dark_theme
@@ -1015,7 +1016,7 @@ module Lich
       def launch_context(entry)
         { char_name: entry.char_name, game_code: entry.game_code, frontend: entry.frontend,
           custom_launch: entry.custom_launch, custom_launch_dir: entry.custom_launch_dir,
-          data_dir: @data_dir, force_path_flags: true }
+          data_dir: @data_dir, force_path_flags: true, webui_dev: @webui_dev }
       end
 
       def terminate_browser(pid)
