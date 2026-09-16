@@ -575,13 +575,33 @@ bump on its own. Fold them into the next contract change.
   real.
 - **Desk mode.** One page, floating draggable panels, for the 28
   `keep_above` scripts when no FE host exists.
-- **Login through the shim.** `lib/common/gui/*` (42 GTK classes incl.
-  `Switch`, `TreeStore`, `AccelGroup`, `CssProvider`) either runs through
-  the shim or is replaced by Doug's `WebUILauncher` (already in the
-  tree). Recommend the latter: it exists, it is tested, and it is what
-  lich-6 ships. Gap to close first: it predates lich-5's configurable
-  frontend registry (#1558), HTTPS web-login fallback (#1570), and
-  `--refresh-characters`/`--add-character` (#1504).
+- ~~**Login through the shim.**~~ **Off the table** (2026-09-16). Running
+  `lib/common/gui/*` through the shim is not being pursued; those 28 files
+  stay GTK for now.
+
+- **Bring `WebUILauncher` up to parity with the GTK launcher.** This is the
+  live piece of the login work. `lib/common/webui_launcher.rb` (1045 lines,
+  four spec files, vendored in PR #1634) is further along than the plan
+  implied -- it already renders saved logins, manual login, accounts,
+  character/account forms and encryption, and it knows about frontends
+  (80 mentions), favorites (43) and master passwords (39). It is **not
+  wired into startup**; nothing references it.
+
+  Verified gaps, checked against the tree rather than assumed:
+
+  | Gap | Evidence |
+  | --- | --- |
+  | Configurable frontend registry (#1558) | `catalog.rb` stores and compares `frontend` as a free-form string; zero references to `FrontendSettings`. It cannot offer a configured or custom frontend. The API to consume is `FrontendSettings.current` / `.settings_for(id)`. |
+  | HTTPS web-login fallback (#1570) | no references at all |
+  | `--refresh-characters` / `--add-character` (#1504) | 2 references; needs checking whether they are real or incidental |
+  | Accessibility | `gui/accessibility.rb` has no counterpart (0 mentions) |
+  | Window settings | `gui/window_settings.rb` has no counterpart (0 mentions) |
+  | Theming | 7 mentions vs a dedicated `gui/theme_utils.rb` |
+  | Conversion UI | 1 mention vs `gui/conversion_ui.rb` |
+
+  Do the registry gap first: it is the one that makes the WebUI launcher
+  unable to launch what the player has configured, and the others are
+  cosmetic or optional beside it.
 - **Goldens.** Doug's `Lich::Common::ConformanceHarness` takes a script
   id and a trace of recorded GTK calls and returns pass/fail. Fill it in:
   record `(class, method, args)` traces from the shim under real scripts
