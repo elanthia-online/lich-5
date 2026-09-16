@@ -81,8 +81,32 @@ module Lich
 
           private
 
+          # GTK's mnemonic rule, measured against the real gem rather than
+          # assumed. With mnemonics on -- Gtk::MenuItem.new's own default --
+          # GTK strips every single underscore, not just the first:
+          #   "E_xit" -> "Exit", "snake_case_name" -> "snakecasename"
+          #
+          # A review read the blanket strip as a bug that mangles interpolated
+          # labels. It does mangle them, and so does GTK, identically -- so
+          # matching it is the whole job. The one real gap was the doubled
+          # underscore, which GTK renders as a literal _ and the old gsub
+          # dropped entirely.
           def mnemonic_free(label)
-            label.to_s.gsub(/_(\S)/, '\1')
+            text = label.to_s
+            result = +''
+            index = 0
+            while index < text.length
+              if text[index] == '_' && text[index + 1] == '_'
+                result << '_'
+                index += 2
+              elsif text[index] == '_' && text[index + 1]
+                index += 1
+              else
+                result << text[index]
+                index += 1
+              end
+            end
+            result
           end
         end
 

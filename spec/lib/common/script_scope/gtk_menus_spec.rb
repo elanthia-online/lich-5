@@ -180,4 +180,30 @@ RSpec.describe 'GTK compatibility shim (slice three: menus, markup, pointer)' do
       expect(bar.children.first.children.first.children.first.props[:label]).to eq('Quit')
     end
   end
+
+  # Checked against real gtk3 3.24.52 with set_text_with_mnemonic, not
+  # assumed: with mnemonics on -- Gtk::MenuItem.new's own default -- GTK
+  # strips every single underscore, and renders a doubled one as a literal.
+  describe 'a label carrying mnemonics' do
+    def resolved(label)
+      Lich::Common::ScriptScope::Gtk::MenuItem.new(label: label).label
+    end
+
+    it 'strips the underscore that marks the accelerator' do
+      expect(resolved('E_xit')).to eq('Exit')
+      expect(resolved('_Save & Close')).to eq('Save & Close')
+    end
+
+    # GTK does the same to these. A review read it as mangling; matching
+    # GTK is the job, and diverging to "protect" the label would be the bug.
+    it 'strips later underscores too, exactly as GTK does' do
+      expect(resolved('snake_case_name')).to eq('snakecasename')
+      expect(resolved('lootsack_2')).to eq('lootsack2')
+    end
+
+    # The one place the old blanket gsub was actually wrong.
+    it 'renders a doubled underscore as one literal underscore' do
+      expect(resolved('a__b')).to eq('a_b')
+    end
+  end
 end
