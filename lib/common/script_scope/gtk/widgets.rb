@@ -980,7 +980,14 @@ module Lich
               # GTK shares leftover width among the children packed to
               # expand; one packed without it keeps its natural width. A
               # weight of 0 is the contract's way of saying natural.
-              weights = children.first(12).map { |child| child.packing&.fetch(:expand, true) == false ? 0 : 1 }
+              # hexpand is the other way a child claims the free width, and
+              # it is how bigshot pushes its Close button to the right edge:
+              # packed non-expanding, but hexpand with halign end.
+              weights = children.first(12).map do |child|
+                next 1 if child.respond_to?(:hexpand?) && child.hexpand?
+
+                child.packing&.fetch(:expand, true) == false ? 0 : 1
+              end
               # With nothing expanding, GTK still has free space to place:
               # pack_start children hug the near edge and pack_end children
               # the far one. Without a stretch between the groups they all

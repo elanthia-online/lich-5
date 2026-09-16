@@ -85,6 +85,15 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field.inline { flex-direction: row; align-items: center; }
+/* GTK draws a check button as box-then-label. Keeping the label first in
+   the DOM (it labels the control) but reversing the visual order lines the
+   boxes up down a grid column, whatever the label widths. */
+.webui-page.bare .field.inline:has(> input[type="checkbox"]),
+.webui-page.bare .field.inline:has(> input[type="radio"]) {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .field-label { font-weight: 500; }
 .field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea { width: 100%; min-height: 32px; }
 .radio-options { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -189,6 +198,10 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
    single space, which `white-space: pre` would give real width. */
 .webui-page.bare .webui-text:empty,
 .webui-page.bare .webui-text.filler { min-width: 0; }
+/* A label GTK marked wrap=false keeps its own width: a grid track that
+   shrinks below it breaks the text anyway, which is how "Hunting Commands
+   (b):" ended up on two lines while (a) stayed on one. */
+.webui-page.bare .webui-text.nowrap:not(.filler) { min-width: max-content; }
 .webui-page.bare .webui-columns:not([data-weighted]) { justify-content: start; }
 
 /* ---- GTK proportions for a script's own window ---------------------------

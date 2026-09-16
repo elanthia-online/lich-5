@@ -597,4 +597,35 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(logged.grep(/dropped Gtk::Label/).size).to eq(1)
     end
   end
+
+  # bigshot pushes its Close button to the right edge of the footer with
+  # hexpand plus halign end, packed non-expanding. Without hexpand reaching
+  # the weights the button's column was natural width, so align had nothing
+  # to push against and the button sat next to its label.
+  describe 'hexpand in a horizontal box' do
+    it 'gives the free width to a child that asked for it with hexpand' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_start(gtk::Label.new('To save properly...'), expand: false, fill: false, padding: 0)
+        button = gtk::Button.new('Close')
+        button.halign = :end
+        button.hexpand = true
+        box.pack_start(button, expand: false, fill: true, padding: 0)
+        box.send(:node_props)
+      end
+
+      expect(props[:weights]).to eq([0, 1])
+    end
+
+    it 'leaves a box alone when nothing asked to expand' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_start(gtk::Label.new('a'), expand: false, fill: false, padding: 0)
+        box.pack_start(gtk::Button.new('b'), expand: false, fill: false, padding: 0)
+        box.send(:node_props)
+      end
+
+      expect(props[:weights]).to eq([0, 0])
+    end
+  end
 end
