@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.15.2'
+      VERSION = '2.15.3'
       MAJOR_VERSION = 2
 
       TYPES = %i[

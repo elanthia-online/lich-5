@@ -288,4 +288,24 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('attachedPages = new Set();')
     expect(javascript).to include('attachedPages.delete(message.page);')
   end
+
+  # captureEditing only kept a draft when the last tree carried a `value`.
+  # A password deliberately never does -- it is write-only -- so any
+  # unrelated render (a geometry update, a tab switch) wiped a half-typed
+  # password.
+  it 'keeps a half-typed password across an unrelated render' do
+    expect(javascript).to include('control.type === "password" && control.value')
+    expect(javascript).to include('state.edits.set(cid, { typed: control.value, base: null });')
+    # base null means the server never had an opinion, so nothing can have
+    # changed under the viewer.
+    expect(javascript).to include('if (edit.base !== null && rendered !== undefined && String(rendered) !== edit.base) continue;')
+  end
+
+  it 'still lets the server win when it changed an ordinary value' do
+    expect(javascript).to include('state.edits.set(cid, { typed: control.value, base: String(rendered) });')
+  end
+
+  it 'still clears a password when the server says to' do
+    expect(javascript).to include('message.type === "clear_sensitive"')
+  end
 end
