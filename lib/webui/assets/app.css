@@ -25,6 +25,11 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-columns { display: grid; align-items: end; }
 .webui-grid { display: grid; align-items: center; }
 .webui-grid > .field { min-width: 0; }
+/* A bare page is a script's own window: it fills the browser window. */
+#pages:has(> .webui-page.bare) { width: 100%; }
+/* Auto grid tracks shrink a 100%-wide input to nothing; keep an entry's natural width. */
+.webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
+.webui-grid > button { white-space: nowrap; }
 .webui-scroll { overflow: auto; min-height: 0; }
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }

@@ -159,7 +159,7 @@ module Lich
             shadow-type xalign yalign sizing search-column headers-visible
             fixed-height-mode column-homogeneous row-homogeneous max-width-chars
             wrap-mode accepts-tab modal tab-fill numeric digits angle wrap
-            use-markup width-chars activates-default has-frame can-default
+            use-markup activates-default has-frame can-default
             has-default focus-on-click relief image-position use-underline
             invisible-char primary-icon-activatable secondary-icon-activatable
             primary-icon-sensitive secondary-icon-sensitive resize-mode
@@ -318,6 +318,11 @@ module Lich
 
           def has_tooltip=(_value); end
 
+          # Which of a size request's axes reach the contract node.
+          def size_request_axes
+            []
+          end
+
           def set_size_request(width, height)
             @width_request = width.to_i.positive? ? width.to_i : nil
             @height_request = height.to_i.positive? ? height.to_i : nil
@@ -475,8 +480,13 @@ module Lich
             props = { key: @key }
             props[:hidden] = true unless @visible
             props[:tooltip] = @tooltip if @tooltip && !@tooltip.empty?
-            props[:width] = @width_request if @width_request
-            props[:height] = @height_request if @height_request
+            # GTK's size request is a minimum that layout grows past; the
+            # contract's width/height are fixed. Only widgets whose natural
+            # size really is the request (inputs, views) pass it through;
+            # for boxes, tables, frames and labels a fixed size would clip
+            # content or stretch rows across dead space.
+            props[:width] = @width_request if @width_request && size_request_axes.include?(:width)
+            props[:height] = @height_request if @height_request && size_request_axes.include?(:height)
             props[:align] = ALIGN_TO_CONTRACT[@halign] if @halign && ALIGN_TO_CONTRACT[@halign]
             margin = @margins.values.max
             props[:margin] = [margin, 512].min if margin.positive?
@@ -1006,6 +1016,10 @@ module Lich
             :scroll
           end
 
+          def size_request_axes
+            parent.is_a?(Window) ? [] : [:height]
+          end
+
           def node_props
             window = window_root
             height = window&.default_height
@@ -1364,6 +1378,12 @@ module Lich
           alias wrap= set_wrap
           alias set_line_wrap set_wrap
 
+          # A label's width-chars is a wrap hint; text wraps naturally here.
+          def width_chars=(_chars); end
+          alias set_width_chars width_chars=
+          alias max_width_chars= width_chars=
+          alias set_max_width_chars width_chars=
+
           def set_selectable(_value)
             self
           end
@@ -1438,6 +1458,16 @@ module Lich
             changed!
           end
           alias set_editable editable=
+
+          def size_request_axes
+            [:width]
+          end
+
+          # Approximates GTK's character-width sizing in pixels.
+          def width_chars=(chars)
+            set_size_request((chars.to_i * 8) + 24, @height_request || -1) if chars.to_i.positive?
+          end
+          alias set_width_chars width_chars=
 
           def editable?
             @editable

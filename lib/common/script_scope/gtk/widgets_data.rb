@@ -351,6 +351,10 @@ module Lich
         # the selection; free text that matches no option becomes one.
         # ------------------------------------------------------------------
         class ComboBox < Widget
+          def size_request_axes
+            [:width]
+          end
+
           attr_reader :child
 
           def initialize(*_args, **options)
@@ -646,6 +650,10 @@ module Lich
 
         class TextView < Widget
           attr_reader :buffer
+
+          def size_request_axes
+            %i[width height]
+          end
 
           def initialize(buffer = nil)
             super()
@@ -1165,6 +1173,10 @@ module Lich
 
         class TreeView < Widget
           attr_reader :model, :selection
+
+          def size_request_axes
+            %i[width height]
+          end
 
           def initialize(model = nil)
             super()
