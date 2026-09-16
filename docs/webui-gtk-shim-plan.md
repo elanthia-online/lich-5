@@ -591,7 +591,7 @@ bump on its own. Fold them into the next contract change.
 
   | Gap | Evidence |
   | --- | --- |
-  | Configurable frontend registry (#1558) | `catalog.rb` stores and compares `frontend` as a free-form string; zero references to `FrontendSettings`. It cannot offer a configured or custom frontend. The API to consume is `FrontendSettings.current` / `.settings_for(id)`. |
+  | ~~Configurable frontend registry (#1558)~~ **done** | Was two gaps, not one. The launcher listed only `FrontendLocator#available`, so a custom frontend -- which has no registry entry, no bundle id and no conventional path -- could never appear however it was configured; `FrontendChoices` fixed that. It also had no counterpart to #1558's **Frontends tab**, so there was no way to configure one in the first place; `FrontendEditor` plus a WebUI tab fixed that. The original row only named the first half. |
   | HTTPS web-login fallback (#1570) | no references at all |
   | `--refresh-characters` / `--add-character` (#1504) | 2 references; needs checking whether they are real or incidental |
   | Accessibility | `gui/accessibility.rb` has no counterpart (0 mentions) |
@@ -599,9 +599,17 @@ bump on its own. Fold them into the next contract change.
   | Theming | 7 mentions vs a dedicated `gui/theme_utils.rb` |
   | Conversion UI | 1 mention vs `gui/conversion_ui.rb` |
 
-  Do the registry gap first: it is the one that makes the WebUI launcher
-  unable to launch what the player has configured, and the others are
-  cosmetic or optional beside it.
+  The registry gap is done. The remaining six are cosmetic or optional
+  beside it, with one exception worth naming: a review found that closing
+  the launcher during authentication does not stop the launch, because
+  `SerialExecutor#stop(wait: false)` does not interrupt work already
+  running. That is a correctness bug in a launcher that is reachable today,
+  not a parity gap, and it should be fixed before the opt-in audience grows.
+
+  A lesson from the registry row: it described the API to consume
+  (`FrontendSettings.current`) and not the UI the upstream PR shipped. Read
+  what a PR adds to the GTK launcher, not only what it adds to the model --
+  half this gap was invisible from the row as written.
 - **Goldens.** Doug's `Lich::Common::ConformanceHarness` takes a script
   id and a trace of recorded GTK calls and returns pass/fail. Fill it in:
   record `(class, method, args)` traces from the shim under real scripts
