@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'securerandom'
+require 'uri'
 require_relative '../../../webui'
 
 module Lich
@@ -253,6 +254,61 @@ module Lich
           def adapter
             @adapter ||= ShimAdapter.new(owner: @owner, service: service)
           end
+
+          # The URL a browser can fetch a local file from. The FileService
+          # serves whole directories, so one registration covers every image
+          # beside the first -- a map directory is registered once, not once
+          # per map.
+          #
+          # Returns nil when the directory is outside the roots the
+          # FileService allows; the caller renders an empty image rather
+          # than leaking a path the server would refuse anyway.
+          def serve_file(path)
+            full = File.expand_path(path.to_s)
+            return nil unless File.file?(full)
+
+            directory = File.dirname(full)
+            @file_roots ||= {}
+            base = @file_roots[directory] ||= register_file_root(directory)
+            return nil unless base
+
+            "#{base}#{URI::DEFAULT_PARSER.escape(File.basename(full))}"
+          end
+
+          # The FileService allows only its own asset root by default, so a
+          # script's images have to name the root they live under. Lich's
+          # own directories are the honest answer: a script may serve what
+          # ships with Lich (maps) or what it installed beside itself, and
+          # nothing else. A directory outside them is refused by the
+          # FileService, which is the behaviour we want -- the shim does not
+          # widen the allowlist, it just names the roots that already exist.
+          SERVABLE_ROOTS = %w[MAP_DIR SCRIPT_DIR DATA_DIR LICH_DIR].freeze
+
+          def register_file_root(directory)
+            root = servable_root_for(directory)
+            return nil unless root
+
+            alias_name = "gtk-#{owner_label.to_s.downcase.gsub(/[^a-z0-9]+/, '-')}-#{@file_roots.size}"
+            service.register_files(alias_name, directory, owner: @owner, script_root: root)
+          rescue StandardError => error
+            log(:warning, "webui-gtk-shim: cannot serve #{directory}: #{error.message}")
+            nil
+          end
+          private :register_file_root
+
+          # The narrowest Lich directory that contains this one, so a script
+          # serving maps does not thereby get to serve the whole install.
+          def servable_root_for(directory)
+            full = File.expand_path(directory)
+            candidates = SERVABLE_ROOTS.filter_map do |name|
+              next unless Object.const_defined?(name)
+
+              File.expand_path(Object.const_get(name).to_s)
+            end
+            candidates.select { |root| full == root || full.start_with?("#{root}/") }
+                      .max_by(&:length)
+          end
+          private :servable_root_for
 
           def owner_label
             return @owner.name if @owner.respond_to?(:name) && @owner.name

@@ -257,6 +257,11 @@ module Lich
               end
             end
             klass.define_singleton_method(:name) { "Gtk::#{name}" }
+            # Marks this as generated. const_missing const_sets what it
+            # returns, so a file loaded later that defines the real class
+            # would reopen this stub rather than replace it; the marker lets
+            # that file tell the two apart and discard the stub.
+            klass.define_singleton_method(:webui_stub?) { true }
             klass
           end
 
@@ -274,7 +279,24 @@ module Lich
           # `warning:` line in a debug file, indistinguishable from the
           # harmless kind. A stubbed widget now says so where the player
           # will see it.
+          # Names this shim defines in files loaded after this one. Stubbing
+          # any of them would be silently permanent -- const_missing
+          # const_sets its answer, so the stub shadows the real class for the
+          # rest of the process and renders an empty box. Raising instead
+          # says plainly that boot.rb has not finished, rather than papering
+          # over it with something that looks like it works.
+          OWN_DEFINITIONS = %i[
+            Image Layout Fixed
+            Menu MenuBar MenuItem CheckMenuItem RadioMenuItem
+            SeparatorMenuItem ImageMenuItem
+          ].freeze
+
           def const_missing(name)
+            if OWN_DEFINITIONS.include?(name)
+              raise NameError, "Gtk::#{name} is defined by the shim but not loaded yet; " \
+                               'require common/script_scope/gtk/boot before using it'
+            end
+
             widget = name.to_s.match?(/\A[A-Z][a-z]/)
             value = widget ? unimplemented_widget(name) : name.to_s.downcase.to_sym
             if widget

@@ -367,13 +367,19 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
     end
 
     it 'gives an unimplemented widget constant an empty container that swallows placement' do
-      # Gtk::Layout and friends: the script keeps running and loses only
-      # that part of its window. Restored so the constant stays missing.
-      gtk.send(:remove_const, :Layout) if gtk.const_defined?(:Layout, false)
+      # The script keeps running and loses only that part of its window.
+      #
+      # This used to use Gtk::Layout, removing the constant to force the
+      # stub -- and its ensure block removed it again, so every example that
+      # ran afterwards saw Layout stubbed rather than implemented. Now that
+      # the shim implements Layout, a name it genuinely does not implement
+      # is the only safe subject: const_missing const_sets its answer, so
+      # stubbing a real class leaks into the rest of the process.
+      gtk.send(:remove_const, :DrawingArea) if gtk.const_defined?(:DrawingArea, false)
 
-      layout = session.sync { gtk::Layout.new }
+      layout = session.sync { gtk::DrawingArea.new }
       expect(layout).to be_a(gtk::Container)
-      expect(layout.class.name).to eq('Gtk::Layout')
+      expect(layout.class.name).to eq('Gtk::DrawingArea')
 
       child = session.sync { gtk::Label.new('marker') }
       expect(session.sync { layout.put(child, 10, 20) }).to equal(layout)
@@ -381,7 +387,7 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(session.sync { layout.set_size(800, 600) }).to equal(layout)
       expect(layout.children).to eq([child])
     ensure
-      gtk.send(:remove_const, :Layout) if gtk.const_defined?(:Layout, false)
+      gtk.send(:remove_const, :DrawingArea) if gtk.const_defined?(:DrawingArea, false)
     end
 
     it 'gives an unimplemented non-widget constant the symbol it was named' do
