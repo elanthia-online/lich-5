@@ -207,6 +207,22 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'forces the parent data directory into detached Multi-Launch children' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('DATA_DIR', '/tmp/active-data')
+
+    described_class.launch(
+      launch_data + ['CHARACTER=Tsetem'],
+      launch_context: { frontend: 'stormfront', data_dir: '/tmp/active-data', force_path_flags: true }
+    )
+
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', '--data=/tmp/active-data', hash_including(chdir: anything)
+    )
+  end
+
   it 'forwards an explicit active_session_dir override' do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(nil)
