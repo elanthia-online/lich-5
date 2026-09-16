@@ -356,7 +356,13 @@ module Lich
              [:text_input, :change], [:textarea, :change], [:number_input, :change],
              [:slider, :change], [:select, :change], [:tabs, :select],
              [:expander, :toggle], [:split, :move], [:table, :selection_change],
-             [:table, :sort_change], [:table, :row_toggle]
+             [:table, :sort_change], [:table, :row_toggle],
+             # A check menu item's `active` is viewer-scoped like the rest, and
+             # the viewer's overlay copy shadows the shared prop from the first
+             # render on. Without a refresh scheduled here the owner's answer --
+             # including a script that refuses the change and sets it back --
+             # never reaches the screen, so the tick never moved.
+             [:menu_item, :change]
           true
         else
           false

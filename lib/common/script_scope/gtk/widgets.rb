@@ -1554,6 +1554,13 @@ module Lich
 
             x = @hadjustment.requested_value
             y = @vadjustment.requested_value
+            # A script clamps its own target to `upper - page_size`, and before
+            # the viewer reports, that is the constructor's 100. An offset
+            # sitting on that stale extent is not the point the script meant --
+            # it is whatever was left after the clamp ate it -- so there is
+            # nothing to recover and nothing to replay.
+            x = nil if x && @hadjustment.at_extent?
+            y = nil if y && @vadjustment.at_extent?
             return unless x || y
 
             @centre_request = [
@@ -1684,6 +1691,18 @@ module Lich
             position[:bottom] = true if @vadjustment.at_extent?
             position[:y] = clamp_offset(vertical) if vertical && !position[:bottom]
             position[:x] = clamp_offset(horizontal) if horizontal
+            # Before the viewer has reported an extent, `upper - page_size` is
+            # the constructor's 100. A log window writing exactly that means
+            # "the bottom" and is honoured as intent. But a script clamping a
+            # much larger target to that stale ceiling lands on it by
+            # arithmetic, not by intent, and sending the leftover pixel moves
+            # the viewer somewhere nobody asked for -- on map's expanded
+            # canvas, into the empty quadrant, which reads as a window with no
+            # map in it. Only the horizontal half gives the two apart: a log
+            # window never asks for one, so an offset on both axes against a
+            # guessed extent is a centring that has been clamped to nothing.
+            return nil if !viewport_known? && position[:bottom] && position[:x]
+
             position.empty? ? nil : position
           end
 

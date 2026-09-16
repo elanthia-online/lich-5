@@ -136,6 +136,8 @@ module Lich
             attachment.values[[component.cid, :sort]] = { column: payload[:column], direction: payload[:direction] }.freeze
           when [:table, :row_toggle]
             attachment.values[[component.cid, "expanded:#{payload[:row]}"]] = payload[:expanded]
+          when [:menu_item, :change] then attachment.values[[component.cid, :active]] = payload[:value]
+          when [:menu, :close] then attachment.values[[component.cid, :open]] = false
           end
         end
       end

@@ -129,6 +129,37 @@ RSpec.describe 'GTK compatibility shim: map interaction' do
       expect(scroller.send(:node_props)).not_to have_key(:scroll_position)
     end
 
+    # Before the viewer reports, `upper - page_size` is the constructor's 100.
+    # A log window writing exactly that means "the bottom" and is honoured. A
+    # script centring on a point far outside that guessed range has its target
+    # clamped down to the same number by arithmetic rather than intent, and
+    # sending the leftover pixel parked map in the empty quadrant of its 2x
+    # canvas -- a window with no map in it.
+    it 'says nothing when a centring was clamped to a guessed extent on both axes' do
+      _window, scroller, = build_map_window
+      session.sync do
+        vertical = scroller.vadjustment
+        horizontal = scroller.hadjustment
+        vertical.value = [[1000, 0].max, vertical.upper - vertical.page_size].min
+        horizontal.value = [[900, 0].max, horizontal.upper - horizontal.page_size].min
+      end
+
+      expect(scroller.send(:node_props)).not_to have_key(:scroll_position)
+    end
+
+    it 'still honours a one-axis write at the extent as the bottom' do
+      # A log window only ever asks for the vertical axis, so it is not
+      # mistaken for a clamped centring.
+      scroller = session.sync do
+        pane = gtk::ScrolledWindow.new
+        adjustment = pane.vadjustment
+        adjustment.value = adjustment.upper - adjustment.page_size
+        pane
+      end
+
+      expect(scroller.send(:node_props)[:scroll_position]).to eq(bottom: true)
+    end
+
     it 'sends the position as the contract record the client applies' do
       _window, scroller, = build_map_window
       session.sync do
@@ -222,6 +253,73 @@ RSpec.describe 'GTK compatibility shim: map interaction' do
       session.commit
 
       expect(nested.send(:node_props)[:max_height]).to eq(252)
+    end
+  end
+
+  describe 'the right-click menu' do
+    def build_menu_window
+      menu = item = nil
+      session.sync do
+        window = gtk::Window.new('Map')
+        window.set_default_size(400, 300)
+        layout = gtk::Layout.new
+        layout.set_size(100, 100)
+        layout.signal_connect('button_press_event') { |_w, _e| nil }
+        window.add(layout)
+        menu = gtk::Menu.new
+        item = gtk::CheckMenuItem.new(label: 'Expanded Canvas')
+        item.active = true
+        menu.append(item)
+        window.show_all
+      end
+      session.commit
+      [menu, item]
+    end
+
+    def menu_props
+      page = service.registry.pages_for(owner).first
+      page.last_render.tree.each.find { |component| component.type == :menu }&.props
+    end
+
+    # `open` is viewer-scoped, so the viewer's overlay copy shadows the shared
+    # prop. Nothing cleared that copy when the menu closed, so every later
+    # render re-raised it -- and because a room change now re-renders, the
+    # menu reappeared on every step the player took.
+    it 'stays shut once the viewer closes it, however often the page redraws' do
+      menu, = build_menu_window
+      session.sync { menu.popup_at_pointer(nil) }
+      session.commit
+      expect(menu_props[:open]).to be(true)
+
+      session.sync { menu.send(:receive_event, :close, Struct.new(:payload).new({})) }
+      session.commit
+      expect(menu_props[:open]).to be(false)
+
+      session.sync { menu.changed! }
+      session.commit
+      expect(menu_props[:open]).to be(false)
+    end
+
+    # A check item's `active` is viewer-scoped too. The viewer's click has to
+    # reach the owner and the owner's answer has to come back, or the tick
+    # never moves -- which is what kept map's Follow and Expanded Canvas from
+    # toggling.
+    it 'carries a toggle through to the script and back to the tick' do
+      menu, item = build_menu_window
+      chosen = []
+      session.sync { item.signal_connect('activate') { chosen << item.active? } }
+      session.sync { menu.popup_at_pointer(nil) }
+      session.commit
+
+      session.sync { item.send(:receive_event, :change, Struct.new(:payload).new({ value: false })) }
+      session.sync { item.send(:receive_event, :activate, Struct.new(:payload).new({})) }
+      session.commit
+
+      expect(item.active?).to be(false)
+      expect(chosen).to eq([false])
+      page = service.registry.pages_for(owner).first
+      node = page.last_render.tree.each.find { |component| component.type == :menu_item }
+      expect(node.props[:active]).to be(false)
     end
   end
 end
