@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.14.0'
+      VERSION = '2.15.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -547,7 +547,15 @@ module Lich
                                   x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
                                   button: property(enum(:primary, :secondary), required: true),
                                   modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true),
-                                  region: property(IDENT)
+                                  region: property(IDENT),
+                                  # 2.15: the enclosing scroller's live offset at the moment of
+                                  # the gesture. x and y are viewport-relative, as a real
+                                  # Gtk::Layout's bin-window pointer is, and the shim seeds the
+                                  # ScrolledWindow's adjustments from these -- so a script's
+                                  # `(hadjustment.value + pointer - offset) / scale` reconstructs
+                                  # the layout-absolute pixel at any scroll offset. Optional: a
+                                  # composite outside a scroller simply omits them.
+                                  scroll_x: property(GEOMETRY), scroll_y: property(GEOMETRY)
                                 ), terminal: true),
       }.freeze
 

@@ -1500,6 +1500,18 @@ module Lich
 
             payload = context.payload || {}
             fetch = ->(name) { payload[name] || payload[name.to_s] }
+            # A script that centred its viewport before the viewer had ever
+            # reported one computed against the window's default size, not the
+            # real pane, and landed half the difference away -- map opened
+            # uncentred and only came right on the first walk. Notice the
+            # first real extent and let the script place itself again now that
+            # allocation tells the truth.
+            # Only the very first report, and only the one the client sends
+            # after laying out -- which is still at the origin. Once the viewer
+            # has actually scrolled somewhere, their position wins and a
+            # pending request is theirs to cancel, not ours to replay.
+            first_extent = !@viewport_known && fetch.call(:page_size).to_i.positive? &&
+                           fetch.call(:position).to_i.zero? && fetch.call(:position_x).to_i.zero?
             @vadjustment.note_viewport(
               value: fetch.call(:position), upper: fetch.call(:upper),
               page_size: fetch.call(:page_size)
@@ -1511,7 +1523,56 @@ module Lich
               value: fetch.call(:position_x), upper: fetch.call(:upper_x),
               page_size: fetch.call(:page_size_x)
             )
+            @viewport_known = true if fetch.call(:page_size).to_i.positive?
+            replay_centre_request if first_extent
+            @centre_request = nil unless first_extent
             super
+          end
+
+          # Whether the viewer has ever reported how big this pane really is.
+          def viewport_known?
+            @viewport_known ? true : false
+          end
+
+          # Re-centre on whatever the script was aiming at, now that the pane's
+          # real size is known. The script computed `target = point -
+          # viewport / 2` against allocation, which until now answered with the
+          # window's default size; recovering the point it meant and redoing
+          # the arithmetic puts the map where it always intended to be.
+          def replay_centre_request
+            return unless @centre_request
+
+            x, y = @centre_request
+            @centre_request = nil
+            centre_viewport_on(x, y)
+          end
+
+          # The point a script centred on, recovered from the offset it asked
+          # for and the viewport size it believed in at the time.
+          def note_centre_request(guessed_width, guessed_height)
+            return if @viewport_known
+
+            x = @hadjustment.requested_value
+            y = @vadjustment.requested_value
+            return unless x || y
+
+            @centre_request = [
+              x ? x + (guessed_width / 2) : nil,
+              y ? y + (guessed_height / 2) : nil,
+            ]
+          end
+
+          def centre_viewport_on(x, y)
+            width = @hadjustment.page_size
+            height = @vadjustment.page_size
+            if x && width.positive?
+              max = [@hadjustment.upper - width, 0].max
+              @hadjustment.value = (x - (width / 2)).clamp(0, max)
+            end
+            return unless y && height.positive?
+
+            max = [@vadjustment.upper - height, 0].max
+            @vadjustment.value = (y - (height / 2)).clamp(0, max)
           end
 
           def set_policy(_horizontal, _vertical)
@@ -1563,13 +1624,49 @@ module Lich
           end
 
           def node_props
-            window = window_root
-            height = window&.default_height
             props = {}
-            props[:max_height] = [height - 48, 120].max if height && parent.is_a?(Window)
+            # A scroller filling its window is sized by the stylesheet, which
+            # tracks the viewport ("height: calc(100vh - 12px)" on a bare
+            # page's own scroll child). Sending max_height too pinned it to a
+            # pixel count taken from the startup default size: the interior
+            # never grew when the window was resized, and when the window
+            # opened smaller than that number the page scrolled as well as the
+            # scroller, which is the second scrollbar. A nested scroller has no
+            # such rule and still needs the bound.
+            unless parent.is_a?(Window)
+              height = window_root&.default_height
+              props[:max_height] = [height - 48, 120].max if height
+            end
             position = scroll_position
             props[:scroll_position] = position if position
             props
+          end
+
+          # scroll_position is viewer-scoped, and a viewer-scoped prop is
+          # seeded into the viewer's overlay once and never again: ViewerStore
+          # writes it `unless attachment.values.key?(key)`, and from then on
+          # serialize_component returns the viewer's stale copy. Re-rendering
+          # therefore could not move a scroller a second time -- map centred on
+          # the room once and every later walk was silently discarded, which
+          # the viewer saw as the map snapping back to the corner.
+          #
+          # Adjustment#notify_owners calls this when an owner defines it and
+          # otherwise only calls changed!, which is exactly the path that died.
+          # viewer_push writes through to each attached viewer, overriding the
+          # seed, the same way a SpinButton pushes its value.
+          def adjustment_moved
+            # Before the viewer has reported its size, remember what the script
+            # was aiming at: allocation is answering with the window default,
+            # so the offset it just computed is off by half the error. The
+            # first real extent replays it.
+            unless viewport_known?
+              base = Widget.instance_method(:allocation).bind_call(self)
+              note_centre_request(base.width, base.height)
+            end
+            position = scroll_position
+            return changed! unless position
+
+            viewer_push(:scroll_position, position)
           end
 
           private
@@ -1763,8 +1860,24 @@ module Lich
           # `upper - page_size` before the viewer has reported an extent still
           # means the bottom, and the default-derived pixel value (100) would
           # be a worse answer than the intent.
+          # "value = upper - page_size" is how a log window spells "the
+          # bottom": the number is derived from the extent, so it means the
+          # end of the content however tall that turns out to be. A number the
+          # script worked out for itself means the pixel it says, even when it
+          # happens to sit past the extent we currently believe in.
+          #
+          # Telling them apart by magnitude alone is what broke map: against
+          # the constructor's 100/0 every offset past 99 looked like "the
+          # bottom", so centring on a room at y=900 was rewritten to "scroll
+          # to the end" and parked the map at the foot of the canvas. So the
+          # test is whether the write actually landed on the extent, which a
+          # derived one does exactly and a coincidental one only does when it
+          # genuinely is the bottom.
           def at_extent?
             return false unless @requested_value
+            # Past the extent is a pixel the script computed against a bigger
+            # canvas than we know about, not a request for the end.
+            return false if @requested_value > (@upper - @page_size) + EXTENT_EPSILON
 
             @requested_value >= (@upper - @page_size) - EXTENT_EPSILON
           end

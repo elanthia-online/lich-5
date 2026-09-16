@@ -133,6 +133,62 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (event.key.length === 1) return event.key;')
   end
 
+  # 2.15: a GTK script converts a click with
+  # (adjustment.value + pointer - offset) / scale, so the pointer has to be
+  # viewport-relative and the offset has to be the live one. Sending the
+  # absolute pixel while the adjustment held a stale default counted the
+  # scroll twice, and a click only found the right room at the origin.
+  it 'splits a surface gesture into a viewport pointer and the live scroll offset' do
+    payload = javascript[/  function surfacePayload\(event, surface, button\) \{.*?\n  \}/m]
+
+    expect(payload).to include('const scroller = surface.closest(".webui-scroll");')
+    expect(payload).to include('const payload = { x: absX - sx, y: absY - sy, button, modifiers };')
+    expect(payload).to include('payload.scroll_x = sx;')
+    # A composite outside a scroller reports no offset rather than a zero the
+    # shim would mistake for a real one.
+    expect(payload).to include('if (scroller) {')
+  end
+
+  # The tree is rebuilt on every commit, so a commit the viewer did not cause
+  # -- a right-click opening a menu, a marker moving -- threw their scroll
+  # position away and snapped the map back to the corner.
+  it 'puts the viewer back where they were scrolled unless the script moved them' do
+    expect(javascript).to include('(page.scrollOffsets ||= new Map()).set(component.cid, {')
+    expect(javascript).to include('const remembered = page.scrollOffsets?.get(component.cid);')
+    # An explicit position from the script still wins for that cycle.
+    expect(javascript).to include('if (position) page.pendingScrolls.push([scroll, position]);')
+    expect(javascript).to include('else if (remembered) page.pendingScrolls.push([scroll, remembered]);')
+  end
+
+  # A GTK script pans by handling motion-notify-event, which the contract has
+  # no equivalent for. It does not need one: the scroller can pan itself, and
+  # the script only ever hears the click that did not become a drag.
+  it 'pans a surface by dragging it, without sending that as a click' do
+    expect(javascript).to include('surface.addEventListener("pointerdown"');
+    expect(javascript).to include('drag.scroller.scrollLeft = drag.left - dx;');
+    expect(javascript).to include('surface.setPointerCapture(event.pointerId)');
+    # The click that ends a drag must not also walk the character.
+    expect(javascript).to include('if (surface.dataset.dragged === "true") {');
+  end
+
+  # A submenu opening the instant the pointer crossed it flashed children open
+  # while the viewer was only travelling down the parent menu.
+  it 'waits for the pointer to settle before opening a submenu' do
+    expect(javascript).to include('const SUBMENU_DWELL_MS = 300;');
+    expect(javascript).to include('dwell = window.setTimeout(() => { dwell = null; open(); }, SUBMENU_DWELL_MS);');
+    expect(javascript).to include('button.addEventListener("mouseleave", cancelDwell);');
+    # A click still opens it immediately.
+    expect(javascript).to include('button.addEventListener("click", () => { cancelDwell(); open(); });');
+  end
+
+  # A menu is rebuilt in place on every commit, so a second click computed
+  # from the props of an older render sent the same value twice and the
+  # toggle appeared not to toggle.
+  it 'toggles a check menu item from what is on screen, not a stale render' do
+    expect(javascript).to include('const checked = button.getAttribute("aria-checked") === "true";');
+    expect(javascript).to include('emit(page, item, "change", { value: next });');
+  end
+
   # A render replaces the whole tree, so every input is a new node. Without
   # this the viewer loses what they were typing whenever a script repaints
   # on a game event.

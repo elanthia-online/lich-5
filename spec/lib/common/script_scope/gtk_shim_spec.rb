@@ -225,7 +225,11 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(root.props).to include(title: "Lich - Spec's Vars", bare: true, size: [640, 300])
       scroll = root.children.first
       expect(scroll.type).to eq(:scroll)
-      expect(scroll.props[:max_height]).to eq(252)
+      # 2.15: a scroller filling its window is sized by the stylesheet, which
+      # tracks the viewport. A pixel max_height taken from the startup default
+      # never grew when the window was resized and, when the window opened
+      # smaller than it, produced a second scrollbar.
+      expect(scroll.props).not_to include(:max_height)
       grid = scroll.children.first.children.first
       expect(grid.type).to eq(:grid)
       expect(grid.props[:cols]).to eq(3)

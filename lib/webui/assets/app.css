@@ -54,12 +54,19 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
 .webui-grid > button { white-space: nowrap; }
 .webui-scroll { overflow: auto; min-height: 0; }
-/* A scroller filling its window is bounded by the real viewport, not only by
-   the max_height the shim derives from the window's default size -- the
-   window is resizable and that default is a guess made before it opened.
-   The shim sets max-height inline, so this sets the height the pane starts
-   from; the smaller of the two still wins. */
-.webui-page.bare > .webui-scroll { height: calc(100vh - 12px); }
+/* A scroller filling its window tracks the real viewport, because the window
+   is resizable and the shim's default size is a guess made before it opened.
+   Sizing it by a fixed `calc(100vh - ...)` meant the padding around it pushed
+   the total past the viewport, so the page scrolled as well as the pane --
+   the grey bar down the right of every window, which then never went away
+   because growing the window grew the pane by exactly as much. Flex instead:
+   the page owns the viewport and the pane takes what is left, whatever the
+   padding turns out to be. */
+html, body { height: 100%; }
+body:has(.webui-page.bare) { overflow: hidden; }
+#pages:has(> .webui-page.bare) { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.webui-page.bare { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.webui-page.bare > .webui-scroll { flex: 1; min-height: 0; }
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }
 .align-start { justify-self: start; align-self: start; }
@@ -211,6 +218,11 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
    image, markers over it, and regions that can be clicked. */
 .webui-image { display: block; max-width: 100%; }
 .webui-composite { position: relative; overflow: hidden; }
+/* A surface inside a scroller can be dragged to pan it, so say so -- and keep
+   the browser from starting its own image/text drag instead. */
+.webui-scroll .webui-composite { cursor: grab; touch-action: none; }
+.webui-scroll .webui-composite:active { cursor: grabbing; }
+.webui-composite img { -webkit-user-drag: none; user-select: none; }
 /* split: two panes along an axis, the first sized by the divider position
    and the second taking the rest. overlay: a base in flow with later
    children stacked over it. */

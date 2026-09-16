@@ -343,6 +343,7 @@ module Lich
             payload = context.payload || {}
             @session.note_pointer(window_root)
             remember_pointer(payload)
+            note_scroll_offset(payload)
             %i[button_press button_release].each do |kind|
               gdk = Event.pointer(kind, payload)
               wanted = kind == :button_press ? :press : :release
@@ -360,6 +361,29 @@ module Lich
             x = (payload[:x] || payload['x']).to_i
             y = (payload[:y] || payload['y']).to_i
             @pointer = [x, y]
+          end
+
+          # 2.15: the gesture reports where the enclosing scroller actually
+          # sat, which is the other half of the coordinate a script computes.
+          # The adjustments only ever learned an offset from a `scrolled`
+          # report, so a click arriving before one -- or after a re-render
+          # reset them -- was translated against a stale value. Recording the
+          # viewer's real offset here makes the script's own arithmetic,
+          # `adjustment.value + pointer`, exact at the moment it runs.
+          def note_scroll_offset(payload)
+            scroller = enclosing_scroller
+            return unless scroller
+
+            x = payload[:scroll_x] || payload['scroll_x']
+            y = payload[:scroll_y] || payload['scroll_y']
+            scroller.hadjustment.note_viewport(value: x) if x
+            scroller.vadjustment.note_viewport(value: y) if y
+          end
+
+          def enclosing_scroller
+            node = parent
+            node = node.parent while node && !node.is_a?(ScrolledWindow)
+            node
           end
 
           def window
