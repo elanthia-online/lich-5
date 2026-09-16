@@ -1,8 +1,16 @@
 # GTK-to-WebUI shim: plan and handoff
 
-Status: slice one merged on branch `feat/webui-port` (2026-09-16). Slices two
-through seven are unstarted. This document is the handoff: everything a new
-session needs to continue without re-deriving it.
+Status: slices one and two are on branch `feat/webui-port` (2026-09-16).
+Slices three through seven are unstarted. This document is the handoff:
+everything a new session needs to continue without re-deriving it.
+
+Slice two landed `Gtk::Builder` and the data widgets (Notebook, SpinButton,
+ComboBox, TreeView family, TextView, Expander, Separator, RadioButton); all
+nine Glade-built scripts render headlessly. Two things it changed that
+section 3 below now reflects: value-bearing widgets always bind their
+`change` event (`Widget#always_bound_events`), and multi-property updates
+go through `ShimAdapter#update` as one validated step. Slice-two live
+checks still owed: `;eloot` and `;bigshot` setup windows in a browser.
 
 ## 1. Where things stand
 
