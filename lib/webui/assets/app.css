@@ -176,6 +176,9 @@ body:has(.webui-page.bare) { overflow: hidden; }
   line-height: 1;
 }
 .webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
+/* A container the contract lets carry `disabled` has no native rendering
+   for it; match the muting a real control gets. */
+[data-disabled="true"] { opacity: 0.55; cursor: default; }
 .webui-table { width: 100%; border-collapse: collapse; }
 .webui-table th, .webui-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; }
 .webui-table tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 15%, transparent); }

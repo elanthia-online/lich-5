@@ -233,4 +233,30 @@ RSpec.describe 'WebUI browser assets' do
     accept = javascript[/function acceptRender\(message\) \{.*?\n  \}/m]
     expect(accept.index('restoreEditing(page, editing);')).to be < accept.index('applyFacilities(page);')
   end
+
+  # The contract declares `disabled` on select and on table, the server sends
+  # it, and the client read it in neither -- so a script that greyed out a
+  # dropdown got a live one, and a disabled table still answered clicks.
+  it 'honours disabled on the controls whose contract carries it' do
+    expect(javascript).to include('control.disabled = component.props.disabled === true;')
+    expect(javascript).to include('if (component.props.disabled === true) return;')
+    # A div has no `disabled` of its own, so a container needs the attribute.
+    expect(javascript).to include('else if (props.disabled === true) element.dataset.disabled = "true";')
+  end
+
+  it 'styles a container that carries disabled, which has no native rendering' do
+    css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+
+    expect(css).to include('[data-disabled="true"]')
+  end
+
+  # `socket` is module-level, so the error handler closed whatever was current
+  # rather than the socket that errored: an error arriving from a superseded
+  # socket closed the live one, whose close handler dialled again.
+  it 'binds each socket handler to the socket it was created for' do
+    expect(javascript).to include('const live = new WebSocket(')
+    expect(javascript).to include('live.addEventListener("error", () => live.close());')
+    expect(javascript).to include('if (socket !== live) return;')
+    expect(javascript).not_to include('socket.addEventListener("error", () => socket.close());')
+  end
 end

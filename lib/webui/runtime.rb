@@ -151,6 +151,14 @@ module Lich
         @refresh_mutex.synchronize { (@page_locks ||= {}.compare_by_identity)[page] ||= Mutex.new }
       end
 
+      # A page's refresh lock outlives nothing: @refresh_state is already
+      # dropped when a page goes quiet, but the lock was kept for the life of
+      # the process, so every page a long session ever opened stayed reachable
+      # through it. Released where the page's other per-page state is.
+      def release_page_refresh_lock(page)
+        @refresh_mutex.synchronize { @page_locks&.delete(page) }
+      end
+
       def terminate_owner(owner)
         pages = @registry.pages_for(owner)
         @dispatcher.shutdown_owner(owner)
@@ -163,6 +171,7 @@ module Lich
         end
         @registry.unregister_owner(owner)
         @degradation_mutex.synchronize { pages.each { |page| @degradations.delete(page) } }
+        pages.each { |page| release_page_refresh_lock(page) }
         pages
       end
 
@@ -175,6 +184,7 @@ module Lich
         @viewers.destroy_page(page)
         @registry.unregister(page.owner, page.id)
         @degradation_mutex.synchronize { @degradations.delete(page) }
+        release_page_refresh_lock(page)
         page
       rescue Error
         nil

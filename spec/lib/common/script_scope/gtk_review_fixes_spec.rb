@@ -279,4 +279,36 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
       expect(offenders).to be_empty
     end
   end
+
+  # Grid reads hexpand? at render rather than recording it at attach, exactly
+  # so a script can set it after attaching. Neither setter called changed!, so
+  # the widget never became dirty and the column kept its old weight.
+  describe 'hexpand and vexpand' do
+    let(:gtk) { Lich::Common::ScriptScope::Gtk }
+
+    it 'marks the widget dirty so a later set re-renders' do
+      label = gtk::Label.new('x')
+      label.instance_variable_set(:@dirty, false)
+      label.hexpand = true
+
+      expect(label.instance_variable_get(:@dirty)).to be(true)
+    end
+
+    it 'marks the widget dirty for vexpand too' do
+      label = gtk::Label.new('x')
+      label.instance_variable_set(:@dirty, false)
+      label.vexpand = true
+
+      expect(label.instance_variable_get(:@dirty)).to be(true)
+    end
+
+    # @vexpand was written and never read by anything.
+    it 'lets the recorded vexpand be read back' do
+      label = gtk::Label.new('x')
+      label.vexpand = true
+
+      expect(label.vexpand?).to be(true)
+      expect(gtk::Label.new('y').vexpand?).to be(false)
+    end
+  end
 end

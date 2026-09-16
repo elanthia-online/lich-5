@@ -392,4 +392,42 @@ RSpec.describe Lich::WebUI::Runtime do
       })).to eq(:refused), "expected #{hostile.inspect} to be refused"
     end
   end
+
+  # The per-page refresh lock was created on first refresh and never released,
+  # so every page a long-lived session ever opened stayed reachable through
+  # @page_locks -- the page, its tree and its owner with it. @refresh_state
+  # was already cleaned up on the same paths; this was the one that was not.
+  describe 'per-page refresh state' do
+    def page_locks
+      runtime.instance_variable_get(:@page_locks)
+    end
+
+    it 'releases the refresh lock of a closed page' do
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'closing', title: 'Closing') do
+        text(content: 'bye')
+      end)
+      attach(first_connection, page)
+      runtime.refresh(page)
+
+      expect(page_locks.keys).to include(page)
+
+      runtime.close_page(page)
+
+      expect(page_locks.keys).not_to include(page)
+    end
+
+    it 'releases every lock the owner held when the owner terminates' do
+      pages = %w[one two].map do |id|
+        registry.register(Lich::WebUI::Page.new(owner: owner, id: id, title: id) { text(content: id) })
+      end
+      pages.each { |page| attach(first_connection, page) }
+      pages.each { |page| runtime.refresh(page) }
+
+      expect(page_locks.keys).to include(*pages)
+
+      runtime.terminate_owner(owner)
+
+      expect(page_locks.keys).to be_empty
+    end
+  end
 end

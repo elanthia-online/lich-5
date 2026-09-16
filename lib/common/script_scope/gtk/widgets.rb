@@ -686,18 +686,32 @@ module Lich
             self
           end
 
+          # Grid reads hexpand? at render rather than at attach, precisely
+          # because a script may set it afterwards -- so without changed! the
+          # widget never became dirty and the column kept its old weight until
+          # something else happened to trigger a re-render.
           def hexpand=(value)
             @hexpand = value ? true : false
+            changed!
           end
           def_setter :set_hexpand, :hexpand=
 
           def vexpand=(value)
             @vexpand = value ? true : false
+            changed!
           end
           def_setter :set_vexpand, :vexpand=
 
           def hexpand?
             @hexpand
+          end
+
+          # @vexpand was set and never read by anything. The contract has no
+          # vertical counterpart to a column's `grow`, so nothing consumes it
+          # yet; the reader at least makes the recorded value observable
+          # rather than silently dead.
+          def vexpand?
+            @vexpand
           end
 
           def xalign=(_value); end
