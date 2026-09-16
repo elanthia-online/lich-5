@@ -28,6 +28,17 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 /* A bare page is a script's own window: it fills the browser window. */
 #pages:has(> .webui-page.bare) { width: 100%; }
 .webui-page.bare { font-size: 13px; }
+/* GTK's controls are about 26px tall and its rows sit tighter than the
+   launcher's. Scoped to bare pages so the login and launcher keep the
+   roomier sizing they were designed at. */
+.webui-page.bare { --gap: 8px; }
+.webui-page.bare button { min-height: 26px; padding: 3px 10px; }
+.webui-page.bare .field { gap: 2px; }
+.webui-page.bare .field input:not([type="checkbox"]):not([type="radio"]),
+.webui-page.bare .field select,
+.webui-page.bare .field textarea { min-height: 26px; }
+.webui-page.bare .webui-group { margin: 0 0 8px; padding: 8px 10px; }
+.webui-page.bare .webui-grid { row-gap: 2px; }
 .webui-page.bare .webui-text { white-space: pre-wrap; }
 .webui-text.nowrap { white-space: pre; }
 .webui-text code { font-family: ui-monospace, Consolas, monospace; }

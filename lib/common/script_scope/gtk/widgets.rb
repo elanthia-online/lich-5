@@ -591,14 +591,29 @@ module Lich
             self
           end
 
-          def method_missing(name, *_args, &_block)
+          # Ruby's conversion and comparison protocol. Answering these at all
+          # turns a script's own bug into a baffling one: map.lic does
+          # arithmetic on a widget it expected to be a number, and a `coerce`
+          # that returns nil raises "coerce must return [x, y]" from deep in
+          # Integer#+, naming neither the widget nor the method. Letting them
+          # raise NoMethodError names the call site instead.
+          PROTOCOL_METHODS = %i[
+            coerce to_int to_i to_f to_str to_ary to_a to_hash to_h to_sym to_proc
+            + - * / % ** <=> < > <= >= =~ each begin end succ
+          ].freeze
+
+          def method_missing(name, *args, &block)
+            return super if PROTOCOL_METHODS.include?(name)
+
             Gtk.log_unsupported(short_class_name, name)
             return self if name.end_with?('=') || name.start_with?('set_')
 
             nil
           end
 
-          def respond_to_missing?(_name, _include_private = false)
+          def respond_to_missing?(name, include_private = false)
+            return super if PROTOCOL_METHODS.include?(name)
+
             true
           end
 
@@ -890,6 +905,18 @@ module Lich
             @orientation == :vertical ? :stack : :columns
           end
 
+          def common_props
+            props = super
+            # vars.lic builds its label cell as a horizontal box with a lone
+            # pack_end label, which GTK renders against the right edge. With
+            # no second child there is no track to stretch, so the box itself
+            # carries the alignment.
+            if @orientation == :horizontal && !@halign && all_packed_end?(render_children)
+              props[:align] = 'end'
+            end
+            props
+          end
+
           # Packing reaches the contract two ways: along a vertical box as
           # child placement (grow/pad), and along a horizontal one as the
           # columns weights, which is what that type has instead.
@@ -917,12 +944,47 @@ module Lich
               # expand; one packed without it keeps its natural width. A
               # weight of 0 is the contract's way of saying natural.
               weights = children.first(12).map { |child| child.packing&.fetch(:expand, true) == false ? 0 : 1 }
+              # With nothing expanding, GTK still has free space to place:
+              # pack_start children hug the near edge and pack_end children
+              # the far one. Without a stretch between the groups they all
+              # clump at the start -- which is why vars.lic's labels, packed
+              # end so they sit against their entry, came out left aligned.
+              if weights.all?(&:zero?) && (gap_at = trailing_gap_index(children))
+                weights = weights.dup
+                weights[gap_at] = 1
+              end
               props[:weights] = weights if weights.any?(&:zero?)
               props
             end
           end
 
           private
+
+          # Where the free space falls when nothing expands: before the first
+          # pack_end child. nil when the box is all starts or all ends, since
+          # then GTK has no split to honor and the children simply sit at
+          # their edge.
+          def trailing_gap_index(children)
+            return nil if @end_children.empty?
+
+            first_end = children.index { |child| @end_children.include?(child) }
+            return nil if first_end.nil? || first_end.zero? || first_end > 11
+
+            first_end
+          end
+
+          # A box whose children are *all* packed end has no column to widen
+          # -- the free space falls before the first of them, outside any
+          # child. The contract says that with alignment on the box itself.
+          def all_packed_end?(children)
+            return false if children.empty?
+
+            children.all? do |child|
+              # An expanding child already fills the box; aligning to the end
+              # would shrink it to its content instead.
+              @end_children.include?(child) && child.packing&.fetch(:expand, true) == false
+            end
+          end
 
           # GTK's pack_start(child, expand = true, fill = true, padding = 0),
           # in every spelling scripts use. The positional form is the GTK 2 C
@@ -2321,12 +2383,75 @@ module Lich
 
       # Sibling namespaces scripts touch alongside Gtk.
       module Gdk
+        # There is no X display behind the browser, so the shim reports one
+        # monitor the size of the default screen. Real geometry arrives with
+        # the viewer's `geometry` facility once a window is attached; until
+        # then this is the same 1280x800 guess the rest of the shim makes.
         class Screen
-          Size = Struct.new(:width, :height)
+          # Answers both the width/height that seven scripts read straight off
+          # `Screen.default` and the monitor rectangle map.lic asks for.
+          Size = Struct.new(:width, :height) do
+            def get_monitor_at_point(_x = nil, _y = nil)
+              0
+            end
+            alias_method :monitor_at_point, :get_monitor_at_point
+
+            def get_monitor_geometry(_monitor = 0)
+              Rectangle.new(0, 0, width, height)
+            end
+            alias_method :monitor_geometry, :get_monitor_geometry
+
+            def n_monitors
+              1
+            end
+
+            def get_monitor_workarea(_monitor = 0)
+              get_monitor_geometry
+            end
+
+            def display
+              Display.default
+            end
+          end
 
           def self.default
             @default ||= Size.new(1280, 800)
           end
+        end
+
+        Rectangle = Struct.new(:x, :y, :width, :height)
+
+        # Gdk::Display.default.default_screen, which map.lic walks to reach
+        # the monitor geometry.
+        class Display
+          def self.default
+            @default ||= new
+          end
+
+          def default_screen
+            Screen.default
+          end
+          alias screen default_screen
+
+          def n_monitors
+            1
+          end
+
+          def get_monitor(_index = 0)
+            Screen.default
+          end
+
+          def primary_monitor
+            Screen.default
+          end
+
+          def name
+            'webui'
+          end
+
+          def flush; end
+
+          def sync; end
         end
 
         class RGBA

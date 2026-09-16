@@ -406,4 +406,100 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(grid.props[:weights]).to eq([0, 1])
     end
   end
+
+  # pack_end packs against the far edge, and GTK places the leftover width
+  # between the two groups even when nothing expands. Without that the
+  # children all clumped at the start, which is why vars.lic's labels came
+  # out left aligned against the GTK original's right.
+  describe 'pack_end placement' do
+    it 'aligns a box whose only child is packed end against the far edge' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_end(gtk::Label.new('day_pass_sack'), expand: false, fill: false, padding: 0)
+        box.send(:common_props)
+      end
+
+      expect(props[:align]).to eq('end')
+    end
+
+    it 'puts the free width between a start group and an end group' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_start(gtk::Label.new('L'), expand: false, fill: false, padding: 0)
+        box.pack_end(gtk::Button.new('R'), expand: false, fill: false, padding: 0)
+        box.send(:node_props)
+      end
+
+      expect(props[:weights]).to eq([0, 1])
+    end
+
+    it 'leaves a box packed only from the start alone' do
+      common, node = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_start(gtk::Label.new('L'), expand: false, fill: false, padding: 0)
+        [box.send(:common_props), box.send(:node_props)]
+      end
+
+      expect(common).not_to have_key(:align)
+      expect(node[:weights]).to eq([0])
+    end
+
+    it 'does not shrink an expanding end child to its content' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.pack_end(gtk::Entry.new, expand: true, fill: true, padding: 0)
+        box.send(:common_props)
+      end
+
+      expect(props).not_to have_key(:align)
+    end
+
+    it 'keeps an explicit halign over the inferred one' do
+      props = session.sync do
+        box = gtk::Box.new(:horizontal)
+        box.halign = :center
+        box.pack_end(gtk::Label.new('x'), expand: false, fill: false, padding: 0)
+        box.send(:common_props)
+      end
+
+      expect(props[:align]).to eq('center')
+    end
+  end
+
+  # map.lic walks Gdk::Display.default.default_screen to a monitor rectangle
+  # and crashed on the missing constant. There is no X display behind a
+  # browser, so the shim reports one monitor the size of the default screen.
+  describe 'Gdk display geometry' do
+    let(:gdk) { Lich::Common::ScriptScope::Gdk }
+
+    it 'walks the display to a monitor rectangle the way map.lic does' do
+      screen = gdk::Display.default.default_screen
+      geometry = screen.get_monitor_geometry(screen.get_monitor_at_point(100, 50))
+
+      expect([geometry.x, geometry.y, geometry.width, geometry.height]).to eq([0, 0, 1280, 800])
+    end
+
+    it 'still answers the width and height seven scripts read off the screen' do
+      expect([gdk::Screen.default.width, gdk::Screen.default.height]).to eq([1280, 800])
+    end
+  end
+
+  # method_missing answered Ruby's own conversion protocol, so arithmetic on
+  # a widget raised "coerce must return [x, y]" from inside Integer#+, naming
+  # neither the widget nor the call site.
+  describe 'the conversion protocol' do
+    it 'refuses to coerce a widget into a number' do
+      widget = session.sync { gtk::Label.new('x') }
+
+      expect { 1 + widget }.to raise_error(TypeError, /can't be coerced/)
+      expect(widget).not_to respond_to(:coerce)
+    end
+
+    it 'still answers the respond_to? guards scripts branch on' do
+      window = session.sync { gtk::Window.new('t') }
+
+      expect(window).to respond_to(:set_opacity)
+      expect(window).to respond_to(:some_gtk_setter_we_do_not_have=)
+    end
+  end
 end
