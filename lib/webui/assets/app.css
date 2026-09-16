@@ -175,6 +175,29 @@ body:has(.webui-page.bare) { overflow: hidden; }
   font-size: 1.15rem;
   line-height: 1;
 }
+/* log: a bounded, scrollable transcript read at the bottom. */
+.webui-log {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: .92em;
+}
+.webui-log > .log-line { white-space: pre-wrap; word-break: break-word; }
+
+.webui-markdown > p:first-child { margin-top: 0; }
+.webui-markdown > p:last-child { margin-bottom: 0; }
+
+/* A sortable header is a control: say so on hover and on focus. */
+.webui-table th.sortable { cursor: pointer; user-select: none; }
+.webui-table th.sortable:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
+.webui-table th.sortable::after { content: ""; opacity: .55; padding-left: 6px; }
+.webui-table th.sortable[aria-sort="ascending"]::after { content: "91"; }
+.webui-table th.sortable[aria-sort="descending"]::after { content: "93"; }
+
 .webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
 /* A container the contract lets carry `disabled` has no native rendering
    for it; match the muting a real control gets. */
