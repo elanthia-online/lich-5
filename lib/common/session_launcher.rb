@@ -188,6 +188,7 @@ module Lich
           # asked for nothing, so don't fall back to this process's own value.
           value = context[context_key]
           return nil if value.to_s.empty?
+          return value if context[:force_path_flags] == true
 
           value_expanded = File.expand_path(value.to_s)
           default_value = default_path_value(path_flag[:option], constant_name, context)
