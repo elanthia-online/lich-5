@@ -206,6 +206,11 @@ reconnect_if_wanted = proc {
     )
     @launch_data = webui_launcher.start.await_launch
     next unless @launch_data
+
+    # Scripts started from here on resolve their UI toolkit through
+    # ScriptScope; core keeps whatever it loaded.
+    require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    Lich::Common::ScriptScope.activate!
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login

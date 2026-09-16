@@ -23,6 +23,9 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-group { min-width: 0; margin: 0 0 14px; padding: 12px; border: 1px solid var(--border); border-radius: 5px; }
 .webui-group > legend { font-weight: 600; padding: 0 5px; }
 .webui-columns { display: grid; align-items: end; }
+.webui-grid { display: grid; align-items: center; }
+.webui-grid > .field { min-width: 0; }
+.webui-scroll { overflow: auto; min-height: 0; }
 .webui-divider { border-top: 1px solid var(--border); margin-block: 8px; }
 
 .webui-tabs > .tab-list { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }

@@ -169,7 +169,7 @@ module Lich
               trusted = script_obj.labels.length <= 1
             end
             if trusted
-              script_binding = TRUSTED_SCRIPT_BINDING.call
+              script_binding = Script.__trusted_binding
             else
               script_binding = Scripting.new.script
             end
@@ -1115,6 +1115,20 @@ module Lich
       def Script.execution_sleep(seconds)
         script = __resolve_current
         script ? script.execution_sleep(seconds) : Kernel.sleep(seconds)
+      end
+
+      # Binding for a trusted script. While ScriptScope is active, scripts
+      # resolve bare constants through Lich::Common::ScriptScope first so a
+      # scope plugin can shadow a toolkit for scripts without core seeing it;
+      # otherwise the historical Lich::Common binding is used unchanged.
+      #
+      # @return [Binding]
+      def Script.__trusted_binding
+        if defined?(Lich::Common::ScriptScope) && Lich::Common::ScriptScope.active?
+          Lich::Common::ScriptScope.script_binding
+        else
+          TRUSTED_SCRIPT_BINDING.call
+        end
       end
 
       # Starts a script, blocking first if the calling script is paused.
@@ -3366,7 +3380,7 @@ module Lich
                     script,
                     :on_error => proc { |error| Script.__send__(:__report_exec_error, error) }
                   ) do
-                    script_binding = TRUSTED_SCRIPT_BINDING.call
+                    script_binding = Script.__trusted_binding
                     eval('script = Script.current', script_binding, script.name.to_s)
                     eval(cmd_data, script_binding, script.name.to_s)
                   end

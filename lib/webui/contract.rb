@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.5.0'
+      VERSION = '2.6.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -281,6 +281,8 @@ module Lich
           events: {
             change: event(record(value: property(string(:input_text), required: true))),
             submit: event(nil, terminal: true),
+            focus: event(nil),
+            blur: event(nil),
           }, value: string(:input_text), value_scope: :viewer,
         },
         password_input: {
@@ -297,7 +299,11 @@ module Lich
             rows: property(integer(min: 1, max: 64), default: 5),
             max_length: property(integer(min: 1, max: 65_536)),
           }, children: :none,
-          events: { change: event(record(value: property(string(:multiline_text), required: true))) },
+          events: {
+            change: event(record(value: property(string(:multiline_text), required: true))),
+            focus: event(nil),
+            blur: event(nil),
+          },
           value: string(:multiline_text), value_scope: :viewer,
         },
         number_input: {
