@@ -127,4 +127,40 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(textarea.placement).to eq(grow: 1)
     end
   end
+
+  # Gtk::Misc#set_padding(xpad, ypad) pads both sides of each axis. Nine
+  # scripts space wrapped labels with it; it used to reach method_missing
+  # and be dropped. Alignment#set_padding names four edges and is a
+  # different method that must keep its own arity.
+  describe 'Gtk::Misc#set_padding' do
+    it 'pads a label on both axes, the contract taking the larger side' do
+      props = session.sync do
+        label = gtk::Label.new('x')
+        label.set_wrap(true).set_width_request(600).set_padding(0, 10)
+        label.send(:common_props)
+      end
+
+      expect(props[:margin]).to eq(10)
+    end
+
+    it 'treats zero padding as no margin at all' do
+      props = session.sync { gtk::Label.new('x').set_padding(0, 0).send(:common_props) }
+
+      expect(props).not_to have_key(:margin)
+    end
+
+    it 'returns self so the scripts can chain off it' do
+      label = session.sync { l = gtk::Label.new('x'); [l, l.set_padding(1, 2)] }
+
+      expect(label.first).to be(label.last)
+    end
+
+    it "leaves Alignment's own four-edge set_padding in place" do
+      props = session.sync do
+        gtk::Alignment.new(0, 0, 0, 0).set_padding(50, 0, 0, 40).send(:common_props)
+      end
+
+      expect(props[:margin]).to eq(50)
+    end
+  end
 end

@@ -460,10 +460,12 @@ module Lich
           def width_request=(width)
             set_size_request(width, @height_request || -1)
           end
+          alias set_width_request width_request=
 
           def height_request=(height)
             set_size_request(@width_request || -1, height)
           end
+          alias set_height_request height_request=
 
           def halign=(value)
             @halign = value.to_s.downcase.to_sym
@@ -492,6 +494,17 @@ module Lich
           def margin=(value)
             @margins = { top: value.to_i, right: value.to_i, bottom: value.to_i, left: value.to_i }
             changed!
+          end
+
+          # Gtk::Misc#set_padding(xpad, ypad): pads both sides of each axis.
+          # Distinct from Alignment#set_padding, which names four edges.
+          # Labels in nine scripts space wrapped text this way; without it
+          # the padding was recorded nowhere and the blocks ran together.
+          def set_padding(xpad, ypad)
+            @margins[:left] = @margins[:right] = xpad.to_i
+            @margins[:top] = @margins[:bottom] = ypad.to_i
+            changed!
+            self
           end
 
           def hexpand=(value)
