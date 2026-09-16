@@ -266,5 +266,47 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(session.sync { entry.set_icon_from_icon_name(:primary, 'x') }).to equal(entry)
       expect(session.sync { entry.some_query }).to be_nil
     end
+
+    it 'gives an unimplemented widget constant an empty container that swallows placement' do
+      # Gtk::Layout and friends: the script keeps running and loses only
+      # that part of its window. Restored so the constant stays missing.
+      gtk.send(:remove_const, :Layout) if gtk.const_defined?(:Layout, false)
+
+      layout = session.sync { gtk::Layout.new }
+      expect(layout).to be_a(gtk::Container)
+      expect(layout.class.name).to eq('Gtk::Layout')
+
+      child = session.sync { gtk::Label.new('marker') }
+      expect(session.sync { layout.put(child, 10, 20) }).to equal(layout)
+      expect(session.sync { layout.move(child, 30, 40) }).to equal(layout)
+      expect(session.sync { layout.set_size(800, 600) }).to equal(layout)
+      expect(layout.children).to eq([child])
+    ensure
+      gtk.send(:remove_const, :Layout) if gtk.const_defined?(:Layout, false)
+    end
+
+    it 'gives an unimplemented non-widget constant the symbol it was named' do
+      gtk.send(:remove_const, :INVENTED_FLAG) if gtk.const_defined?(:INVENTED_FLAG, false)
+
+      expect(gtk::INVENTED_FLAG).to eq(:invented_flag)
+    ensure
+      gtk.send(:remove_const, :INVENTED_FLAG) if gtk.const_defined?(:INVENTED_FLAG, false)
+    end
+  end
+
+  describe 'Gtk::Alignment' do
+    it 'wraps its child and carries xalign as the contract align, unless the scale fills' do
+      aligned = session.sync do
+        box = gtk::Alignment.new(1.0, 0.5, 0.0, 0.0)
+        box.set_padding(4, 4, 8, 8)
+        box.add(gtk::Label.new('Resting Room ID:'))
+        box
+      end
+      filled = session.sync { gtk::Alignment.new(0.0, 0.5, 1.0, 1.0).add(gtk::Label.new('wide')) }
+
+      expect(aligned.common_props).to include(align: 'end', margin: 8)
+      expect(aligned.node_type).to eq(:stack)
+      expect(filled.common_props).not_to include(:align)
+    end
   end
 end

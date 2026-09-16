@@ -65,6 +65,32 @@ module Lich
           const_set(:END, :end) # END is a Ruby keyword; scripts still write Gtk::Align::END
         end
 
+        # GTK 2 spellings that scripts still carry beside their GTK 3 ones.
+        STATE_NORMAL = :normal
+        STATE_ACTIVE = :active
+        STATE_PRELIGHT = :prelight
+        STATE_SELECTED = :selected
+        STATE_INSENSITIVE = :insensitive
+
+        module SortType
+          ASCENDING = :ascending
+          DESCENDING = :descending
+        end
+
+        module WrapMode
+          NONE = :none
+          CHAR = :char
+          WORD = :word
+          WORD_CHAR = :word_char
+        end
+
+        module PositionType
+          LEFT = :left
+          RIGHT = :right
+          TOP = :top
+          BOTTOM = :bottom
+        end
+
         module SelectionMode
           NONE = :none
           SINGLE = :single
@@ -182,6 +208,53 @@ module Lich
             script = Session.current_script&.name
             message = "webui-gtk-shim: unsupported #{key}#{" (#{note})" if note}#{" script=#{script}" if script}"
             Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
+          end
+
+          # A widget class the shim does not implement yet. It renders as an
+          # empty box and accepts every call, so a script that builds one
+          # loses that part of its window instead of dying at load. Scripts
+          # reach these through Gtk.const_missing, never by name here.
+          def unimplemented_widget(name)
+            klass = Class.new(Container) do
+              def node_type
+                :stack
+              end
+
+              def node_props
+                { gap: 0 }
+              end
+
+              # Absolute-positioning containers (Layout, Fixed) take the
+              # coordinates and ignore them; the child still renders.
+              def put(child, _x = nil, _y = nil)
+                add(child)
+              end
+
+              def move(_child, _x = nil, _y = nil)
+                self
+              end
+
+              def set_size(_width = nil, _height = nil)
+                self
+              end
+            end
+            klass.define_singleton_method(:name) { "Gtk::#{name}" }
+            klass
+          end
+
+          # Constants scripts reference that the shim has no implementation
+          # for. A widget class degrades to an empty container; anything else
+          # (an enum member, a flag) becomes the symbol it was named, since
+          # scripts only ever pass those back into methods the shim ignores.
+          # Either way the script keeps running and the gap is logged once.
+          def const_missing(name)
+            value = if name.to_s.match?(/\A[A-Z][a-z]/)
+                      unimplemented_widget(name)
+                    else
+                      name.to_s.downcase.to_sym
+                    end
+            log_unsupported('Gtk', name, note: 'constant is not implemented')
+            const_set(name, value)
           end
 
           def normalize_signal(name)
@@ -1104,6 +1177,63 @@ module Lich
 
           def node_props
             { gap: 0 }
+          end
+        end
+
+        # Gtk::Alignment (deprecated in GTK 3, still the most-used container
+        # in these scripts at ~400 call sites): one child, positioned by
+        # xalign/yalign unless the matching scale is 1.0, which means fill.
+        class Alignment < Container
+          def initialize(xalign = 0.0, yalign = 0.0, xscale = 0.0, yscale = 0.0)
+            super()
+            @xalign = xalign.to_f
+            @yalign = yalign.to_f
+            @xscale = xscale.to_f
+            @yscale = yscale.to_f
+            @padding = { top: 0, bottom: 0, left: 0, right: 0 }
+          end
+
+          def set_alignment(xalign, yalign, xscale = @xscale, yscale = @yscale)
+            @xalign = xalign.to_f
+            @yalign = yalign.to_f
+            @xscale = xscale.to_f
+            @yscale = yscale.to_f
+            changed!
+            self
+          end
+
+          def set_padding(top, bottom, left, right)
+            @padding = {
+              top: top.to_i, bottom: bottom.to_i, left: left.to_i, right: right.to_i,
+            }
+            changed!
+            self
+          end
+
+          def node_type
+            :stack
+          end
+
+          def common_props
+            props = super
+            # A scale of 1.0 fills the cell, so alignment does not apply.
+            props[:align] = horizontal_align unless @xscale >= 1.0 || @halign
+            margin = @padding.values.max
+            props[:margin] = [margin, 512].min if margin.positive?
+            props
+          end
+
+          def node_props
+            { gap: 0 }
+          end
+
+          private
+
+          def horizontal_align
+            if @xalign <= 0.25 then 'start'
+            elsif @xalign >= 0.75 then 'end'
+            else 'center'
+            end
           end
         end
 
