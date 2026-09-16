@@ -18,6 +18,21 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('focusRoot?.matches("input, select, button, textarea")')
   end
 
+  # The shim can now build an image and a composite, but the client had no
+  # renderer for either, so a map arrived as "Renderer not implemented".
+  it 'renders images and every kind of composite layer' do
+    expect(javascript).to match(/^    image\(_?page, component\)/)
+    expect(javascript).to match(/^    composite\(page, component\)/)
+    expect(javascript).to include('function compositeLayer(page, component, layer)')
+    %w[image label bar region].each do |kind|
+      expect(javascript).to include(%(layer.kind === "#{kind}"))
+    end
+    # A region that activates is the only interactive layer.
+    expect(javascript).to include('emit(page, component, "region_activate", { region: layer.key })')
+    # Still built from validated data, never markup.
+    expect(javascript).not_to match(/innerHTML|outerHTML/)
+  end
+
   # A render replaces the whole tree, so every input is a new node. Without
   # this the viewer loses what they were typing whenever a script repaints
   # on a game event.

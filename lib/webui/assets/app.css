@@ -201,6 +201,17 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
   pointer-events: auto;
 }
 .notification.error { border-color: var(--danger); }
+/* A composite is a fixed box its layers are placed on absolutely: a map
+   image, markers over it, and regions that can be clicked. */
+.webui-image { display: block; max-width: 100%; }
+.webui-composite { position: relative; overflow: hidden; }
+.composite-layer { position: absolute; }
+.composite-label { white-space: pre; pointer-events: none; }
+.composite-bar { border: 1px solid var(--border); overflow: hidden; }
+.composite-bar-fill { background: var(--accent); }
+.composite-region { padding: 0; background: transparent; border: 0; cursor: pointer; }
+.composite-region:focus-visible { outline: 2px solid var(--accent); }
+
 .tone-danger { color: var(--danger); }
 .emphasis-strong { font-weight: 700; }
 .emphasis-subtle { opacity: .72; }

@@ -243,6 +243,17 @@ module Lich
             :composite
           end
 
+          # `composite` takes no children: its content is the `layers` prop,
+          # not a subtree. The children a script puts here are still real
+          # widgets -- it holds them, shows and hides them, destroys them --
+          # so they stay in @children and are read by #layers; they are just
+          # never materialized as nodes of their own. Returning them here
+          # instead got the whole Layout dropped with "component accepts no
+          # children", which is a blank window, not a missing image.
+          def render_children
+            []
+          end
+
           # width and height are required on `composite`, and a script sets
           # them with set_size only once it has something to show -- map
           # calls it from update_map_display, which does not run until a map
