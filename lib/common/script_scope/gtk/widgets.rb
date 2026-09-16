@@ -234,6 +234,19 @@ module Lich
           # reach these through Gtk.const_missing, never by name here.
           def unimplemented_widget(name)
             klass = Class.new(Container) do
+              # GTK constructors take arguments and a stub's did not, so a
+              # script building one got ArgumentError rather than the empty
+              # box this is meant to degrade to -- Gtk::TargetEntry.new(target,
+              # flags, info) killed ewaggle's whole window. Accept anything and
+              # keep it, since a value object like TargetEntry is read back.
+              def initialize(*args, **options)
+                super()
+                @stub_args = args
+                @stub_options = options
+              end
+
+              attr_reader :stub_args, :stub_options
+
               def node_type
                 :stack
               end
@@ -298,14 +311,52 @@ module Lich
                                'require common/script_scope/gtk/boot before using it'
             end
 
-            widget = name.to_s.match?(/\A[A-Z][a-z]/)
-            value = widget ? unimplemented_widget(name) : name.to_s.downcase.to_sym
+            # A CamelCase name is *usually* a widget class, but not always: a
+            # flags or enum namespace looks identical and is only ever read
+            # through, never instantiated. Stubbing one as a widget class made
+            # `Gtk::TargetFlags::SAME_APP` raise NameError -- a class has no
+            # fallback for its own missing constants -- which killed ewaggle
+            # at GUI construction, taking with it the row-activated handler it
+            # registers a few lines later. Those degrade to a module whose
+            # members answer as symbols, exactly as Gdk's fallback does.
+            widget = name.to_s.match?(/\A[A-Z][a-z]/) && !namespace_name?(name)
+            value = if widget
+                      unimplemented_widget(name)
+                    elsif name.to_s.match?(/\A[A-Z][a-z]/)
+                      enum_namespace(name)
+                    else
+                      name.to_s.downcase.to_sym
+                    end
             if widget
               report_stubbed_widget(name)
             else
               log_unsupported('Gtk', name, note: 'constant is not implemented')
             end
             const_set(name, value)
+          end
+
+          # Names that read as a namespace of constants rather than a widget:
+          # flags, enums and the target/selection vocabulary drag-and-drop is
+          # described with. A script only ever reads a member out of one and
+          # hands it back to a method the shim ignores.
+          NAMESPACE_SUFFIXES = /(?:Flags|Type|Types|Mode|Modes|Action|Actions|Mask|State|Direction|Priority|Options|Defaults|Style|Policy|Position|Order|Level|Role|Hint|Format|Class|Kind|Target)\z/
+
+          def namespace_name?(name)
+            name.to_s.match?(NAMESPACE_SUFFIXES)
+          end
+
+          # A stand-in for a constant namespace: any member answers as the
+          # symbol it was named, the way Gdk's fallback does, so `A::B` never
+          # raises and the value is inert wherever the script passes it.
+          def enum_namespace(name)
+            namespace = Module.new do
+              def self.const_missing(member)
+                member.to_s.downcase.to_sym
+              end
+            end
+            namespace.define_singleton_method(:name) { "Gtk::#{name}" }
+            namespace.define_singleton_method(:webui_stub?) { true }
+            namespace
           end
 
           # Told once per widget class per session, to the script's own

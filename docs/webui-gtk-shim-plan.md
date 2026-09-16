@@ -517,6 +517,34 @@ bump on its own. Fold them into the next contract change.
 
 ### Slice 6 - canvas and drag-and-drop (contract 2.8)
 
+> **Census, 2026-09-16: most of this slice has no consumer.** Checked against
+> `scripts/*.lic` in this checkout before starting work:
+>
+> - **`Gtk::DrawingArea`: zero users.** Nothing in the corpus draws live.
+> - **`Cairo::` : two users**, `bsprofiles.lic:483` and `map.lic:2492,2544`.
+>   Both draw *offscreen* to a `Cairo::ImageSurface` and convert with
+>   `GdkPixbuf::Pixbuf.new(data:)`. That path already works -- the shim
+>   encodes such a pixbuf to a PNG `data:` URI (`32bd1282`). Neither needs a
+>   canvas type or a Cairo->Canvas2D command list.
+> - **Drag and drop: one user**, `ewaggle.lic` (the plan also named bardwag
+>   and sspell; neither is in this checkout). And ewaggle already offers the
+>   same operation without dragging: `row-activated` (double-click) calls
+>   `move_spell_between_lists`, `ewaggle.lic:547-558`. `row_activate` is
+>   already in the contract and already wired, and it works today.
+>
+> So the canvas type is **not built**: it is speculative infrastructure for a
+> script that does not exist. What ewaggle actually needed was for its setup
+> to stop *raising*: `Gtk::TargetFlags::SAME_APP` raised NameError and
+> `Gtk::TargetEntry.new(target, flags, info)` raised ArgumentError, both from
+> `Gtk.const_missing`, and the calls are unguarded -- so the window died
+> mid-build and took with it the double-click handler registered a few lines
+> later. Fixed by teaching `const_missing` that a flags/enum-shaped name
+> degrades to a namespace of symbols (as `Gdk`'s fallback already did) and
+> that a stubbed widget's constructor accepts arguments.
+>
+> Real browser drag-and-drop between tables remains unbuilt and unneeded.
+> Revisit only if a script appears that can *only* be driven by dragging.
+
 - `canvas` type: `commands: [...]` as a bounded command list (Cairo ->
   Canvas2D: `save/restore`, `translate/scale/rotate`, `move_to/line_to/
   curve_to/arc/rectangle/close_path`, `set_source_rgb(a)`, `set_line_width/
