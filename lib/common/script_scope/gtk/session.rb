@@ -511,10 +511,29 @@ module Lich
             # The frame inside the script is the one worth showing: the shim's
             # own frames say where the error surfaced, not which line of the
             # script asked for it.
-            origin = backtrace.find { |frame| frame.include?('.lic:') }
+            #
+            # Lich evals a script under its bare name, so its frames read
+            # "map:2466", not ".../map.lic:2466". Matching only ".lic:" found
+            # nothing and the location was silently dropped, which is how
+            # "coerce must return [x, y]" went three rounds without ever
+            # naming center_viewport_on.
+            origin = script_origin(backtrace)
             detail = origin ? "#{error.message} at #{script_frame(origin)}" : error.message
             respond("error in Gtk.queue: #{detail}") if respond_to?(:respond, true)
             log(:error, message)
+          end
+
+          # The first frame belonging to the script rather than to the shim
+          # or the Ruby core. Prefers the running script's own name, which is
+          # how Lich labels evaled frames, and still accepts a real ".lic"
+          # path for a script loaded from disk.
+          def script_origin(backtrace)
+            name = owner_label.to_s
+            unless name.empty?
+              named = backtrace.find { |frame| frame.match?(/(\A|[\\\/])#{Regexp.escape(name)}(\.lic)?:\d+/) }
+              return named if named
+            end
+            backtrace.find { |frame| frame.include?('.lic:') }
           end
 
           # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".

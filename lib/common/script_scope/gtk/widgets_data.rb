@@ -985,11 +985,15 @@ module Lich
           end
 
           def method_missing(name, *_args, &_block)
+            return super if Widget::PROTOCOL_METHODS.include?(name)
+
             Gtk.log_unsupported(self.class.name.split('::').last, name)
             name.end_with?('=') || name.start_with?('set_') ? self : nil
           end
 
-          def respond_to_missing?(_name, _include_private = false)
+          def respond_to_missing?(name, include_private = false)
+            return super if Widget::PROTOCOL_METHODS.include?(name)
+
             true
           end
         end

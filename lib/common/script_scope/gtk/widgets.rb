@@ -554,6 +554,27 @@ module Lich
           end
           alias border_width= set_border_width
 
+          # A widget's on-screen rectangle. Only the browser knows the real
+          # one, so this answers with the size the widget asked for, falling
+          # back to its window's default -- which is what GTK would report
+          # before the first allocation anyway.
+          #
+          # It has to answer with numbers rather than fall through to
+          # method_missing: a script reads `allocation.width` and does
+          # arithmetic on it, and nil (or a stub) turns that into a
+          # TypeError several frames away from the script line that asked.
+          Allocation = Struct.new(:x, :y, :width, :height)
+
+          def allocation
+            root = window_root
+            Allocation.new(
+              0, 0,
+              @width_request || root&.default_width || 640,
+              @height_request || root&.default_height || 480
+            )
+          end
+          alias get_allocation allocation
+
           def name=(value)
             @name = value.to_s
           end
@@ -1805,7 +1826,7 @@ module Lich
           end
 
           def allocation
-            Struct.new(:width, :height, :x, :y).new(@default_width || 640, @default_height || 480, 0, 0)
+            Allocation.new(0, 0, @default_width || 640, @default_height || 480)
           end
 
           def size

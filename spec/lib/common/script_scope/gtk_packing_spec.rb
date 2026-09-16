@@ -704,4 +704,113 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(plain.send(:node_props)[:size]).to eq([640, 480])
     end
   end
+
+  # map.lic's center_viewport_on reads `@scroller.allocation.width` and does
+  # arithmetic on it. allocation existed only on Window, so on a
+  # ScrolledWindow it fell through to method_missing and the arithmetic blew
+  # up several frames from the script line that asked -- which is the whole
+  # of ";map"'s "coerce must return [x, y]".
+  describe 'allocation on a widget that is not the window' do
+    it 'reports the enclosing window size for a child that asked for none' do
+      scroller = session.sync do
+        win = gtk::Window.new('Map')
+        win.set_default_size(800, 600)
+        sw = gtk::ScrolledWindow.new
+        win.add(sw)
+        sw
+      end
+
+      expect(scroller.allocation.width).to eq(800)
+      expect(scroller.allocation.height).to eq(600)
+      # The arithmetic map.lic actually does, which used to raise.
+      expect(100 - (scroller.allocation.width / 2)).to eq(-300)
+    end
+
+    it 'prefers the widget own size request over the window default' do
+      scroller = session.sync do
+        win = gtk::Window.new('Map')
+        win.set_default_size(800, 600)
+        sw = gtk::ScrolledWindow.new
+        sw.set_size_request(300, 200)
+        win.add(sw)
+        sw
+      end
+
+      expect([scroller.allocation.width, scroller.allocation.height]).to eq([300, 200])
+    end
+
+    it 'names x and y first, as Gdk::Rectangle does' do
+      expect(gtk::Widget::Allocation.members).to eq(%i[x y width height])
+    end
+
+    it 'still answers on a parentless widget' do
+      expect(session.sync { gtk::ScrolledWindow.new }.allocation.width).to eq(640)
+    end
+  end
+
+  # The cell renderer family are not Widgets, so they never got Widget's
+  # protocol guard: their method_missing answered `coerce` with nil, and Ruby
+  # turned that into "coerce must return [x, y]" -- naming neither the object
+  # nor the call site.
+  describe 'arithmetic on a cell renderer' do
+    it 'raises naming the class instead of a bare coerce failure' do
+      renderer = gtk::CellRendererText.new
+
+      # The message matters as much as the class: "coerce must return [x, y]"
+      # is what Ruby says when method_missing answers coerce with nil, and it
+      # names neither the object nor the call site.
+      expect { 100 - renderer }.to raise_error(TypeError, /CellRendererText can't be coerced/)
+      expect { 100 - renderer }.to raise_error(TypeError) { |error|
+        expect(error.message).not_to include('coerce must return')
+      }
+    end
+
+    it 'still answers the unknown setters scripts call on it' do
+      renderer = gtk::CellRendererText.new
+
+      expect(renderer.set_fixed_height_from_font(1)).to be(renderer)
+      expect(renderer.respond_to?(:coerce)).to be(false)
+    end
+  end
+
+  # Lich evals a script under its bare name, so its backtrace frames read
+  # "map:2466", not "…/map.lic:2466". Matching only ".lic:" found no frame at
+  # all and the error was reported with no location.
+  describe 'naming the script frame in a Gtk.queue error' do
+    let(:reporter) do
+      described = Lich::Common::ScriptScope::Gtk::Session.allocate
+      described.instance_variable_set(:@owner, Struct.new(:name).new('map'))
+      described
+    end
+
+    it 'finds a frame labelled with the bare script name' do
+      backtrace = [
+        "map:2466:in 'Integer#-'",
+        "map:2466:in 'ElanthiaMap::Window#center_viewport_on'",
+        'C:/Gemstone/lich-5/lib/common/script_scope/gtk/session.rb:436:in \'block\''
+      ]
+
+      expect(reporter.send(:script_frame, reporter.send(:script_origin, backtrace))).to eq('map:2466')
+    end
+
+    it 'still finds a frame from a script loaded by path' do
+      reporter.instance_variable_set(:@owner, Struct.new(:name).new('bigshot'))
+      backtrace = ["C:/Gemstone/scripts/scripts/bigshot.lic:99:in 'x'"]
+
+      expect(reporter.send(:script_frame, reporter.send(:script_origin, backtrace))).to eq('bigshot.lic:99')
+    end
+
+    it 'falls back to any .lic frame when the owner name does not appear' do
+      reporter.instance_variable_set(:@owner, Struct.new(:name).new('unrelated'))
+      backtrace = ["C:/Gemstone/scripts/scripts/bigshot.lic:99:in 'x'"]
+
+      expect(reporter.send(:script_origin, backtrace)).to include('bigshot.lic:99')
+    end
+
+    it 'reports no frame when the backtrace is all shim' do
+      backtrace = ['C:/Gemstone/lich-5/lib/common/script_scope/gtk/session.rb:436:in \'block\'']
+
+      expect(reporter.send(:script_origin, backtrace)).to be_nil
+    end
+  end
 end
