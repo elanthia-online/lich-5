@@ -111,8 +111,16 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 [data-cid$="toggle:gui-settings-toggle"]:has(input:checked) { box-shadow: inset 0 0 0 2px var(--accent); }
 
 /* An entry row sits in a stack that already spaces its children, so the
-   row carries no margin of its own -- the two used to add up. */
-[data-cid*="group:entry-"] { padding: 0; border: 0; margin-bottom: 0; }
+   row carries no margin of its own -- the two used to add up.
+   Scoped through .webui-page.bare because the launcher is a bare page and
+   the bare-page group rule (.webui-page.bare .webui-group, three classes)
+   outweighs a lone attribute selector, putting the padding and margin back. */
+.webui-page .webui-group[data-cid*="group:entry-"],
+.webui-page.bare .webui-group[data-cid*="group:entry-"] {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
 [data-cid*="group:entry-"] > legend { display: none; }
 /* Every control in an entry row is the same height. The launch bar was
    36px while Remove and the star were 28px, so the row read as three
