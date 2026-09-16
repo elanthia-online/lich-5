@@ -259,6 +259,33 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
       expect(props[:src]).to include('Flotilla.png')
     end
 
+    # The source map started keyed on pixbuf.object_id, which held no
+    # reference but leaked an integer once the pixbuf was collected. Taking
+    # rubocop's compare_by_identity advice made every key a STRONG reference,
+    # so the module-global map owned every bitmap the tracking patch ever saw
+    # for the life of the process -- an integer leak traded for a native image
+    # buffer leak, with no production caller for forget_all.
+    #
+    # Asserted structurally rather than by forcing GC: whether a given object
+    # is collected on demand is not something a suite sharing a heap can
+    # depend on, and a flaky memory test gets deleted rather than fixed. What
+    # must hold is that the map does not hold keys strongly.
+    it 'holds its keys weakly so a recorded pixbuf can be collected' do
+      sources = gtk::PixbufSources.instance_variable_get(:@sources)
+
+      expect(sources).to be_a(ObjectSpace::WeakKeyMap)
+    end
+
+    it 'still answers the source of a live pixbuf' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      pixbuf = ::GdkPixbuf::Pixbuf.new(file: map_file)
+      gtk::PixbufSources.record(pixbuf, map_file)
+
+      expect(gtk::PixbufSources.path_for(pixbuf)).to include('Flotilla.png')
+    end
+
     # webui_data_uri was `@webui_data_uri ||=`, and a Pixbuf is mutable in
     # place, so a script that redrew one kept serving its first frame.
     it 'reflects a pixbuf redrawn in place rather than its first frame' do

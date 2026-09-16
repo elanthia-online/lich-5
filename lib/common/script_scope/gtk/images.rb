@@ -21,11 +21,23 @@ module Lich
         # the file it was loaded from.
         # ------------------------------------------------------------------
 
-        # Remembers where a pixbuf came from. Keyed by object id rather than
-        # by the pixbuf itself so a script holding one alive does not pin an
-        # entry here, and so two pixbufs of the same file stay distinct.
+        # Remembers where a pixbuf came from, without keeping it alive. Two
+        # pixbufs of the same file stay distinct entries.
+        #
+        # This started as a Hash keyed on `pixbuf.object_id`, which held no
+        # reference to the pixbuf but leaked an integer key once it was
+        # collected. Rubocop reads object_id keys as a compare_by_identity
+        # that was spelled by hand, and taking that advice turned every key
+        # into a STRONG reference: `@sources` then owned every bitmap the
+        # global tracking patch ever recorded, for the life of the process,
+        # with no production caller for forget_all. That is worse than the
+        # leak it replaced -- an integer against a native image buffer.
+        #
+        # ObjectSpace::WeakKeyMap is the structure both versions were
+        # reaching for: identity comparison, and the entry goes when the
+        # pixbuf does.
         module PixbufSources
-          @sources = {}.compare_by_identity
+          @sources = ObjectSpace::WeakKeyMap.new
           @mutex = Mutex.new
 
           class << self
@@ -53,6 +65,12 @@ module Lich
 
             def forget_all
               @mutex.synchronize { @sources.clear }
+            end
+
+            # WeakKeyMap answers key? but not size; tests need a way to ask
+            # whether a specific pixbuf is still recorded.
+            def recorded?(pixbuf)
+              @mutex.synchronize { @sources.key?(pixbuf) }
             end
 
             # A `body_text` prop is bounded, and base64 costs a third on top

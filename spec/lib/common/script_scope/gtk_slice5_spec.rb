@@ -102,6 +102,34 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
       expect { validator.validate_component!(:split, component.props, owner: 's', page_id: 'p', cid: 'c') }.not_to raise_error
     end
 
+    # The adapter assigns named slots by INDEX, so sorting by intended slot
+    # was not enough: a paned holding only add2's child gave that child the
+    # `first` slot, and the browser's split renderer put it on the wrong side.
+    it 'keeps the second pane in its own slot when the first is absent' do
+      component = props_of(:split) do
+        paned = gtk::Paned.new(:horizontal)
+        paned.add2(gtk::Label.new('right only'))
+        paned
+      end
+
+      expect(component.children.map(&:slot)).to eq(%w[first second])
+      expect(component.children.last.props[:content]).to eq('right only')
+    end
+
+    it 'keeps the second pane in its own slot when the first is hidden' do
+      component = props_of(:split) do
+        paned = gtk::Paned.new(:horizontal)
+        hidden = gtk::Label.new('left')
+        paned.add1(hidden)
+        paned.add2(gtk::Label.new('right'))
+        hidden.visible = false
+        paned
+      end
+
+      expect(component.children.map(&:slot)).to eq(%w[first second])
+      expect(component.children.last.props[:content]).to eq('right')
+    end
+
     it 'converts a pixel position to a percent of the window axis' do
       paned = session.sync do
         window = gtk::Window.new('P'); window.set_default_size(400, 300)

@@ -231,8 +231,18 @@ module Lich
           end
 
           # Ordered first, second, so slots are assigned in contract order.
+          #
+          # Sorting alone is not enough: the adapter assigns named slots by
+          # INDEX, so a paned holding only add2's child gave that child the
+          # `first` slot and the browser's split renderer put it on the wrong
+          # side. Hiding or removing the first pane did the same. An absent
+          # first pane keeps its place with a blank stand-in, the way Grid
+          # holds an empty cell open.
           def render_children
-            super.sort_by { |child| SLOTS.index(@slotted[child]) || SLOTS.length }
+            ordered = super.sort_by { |child| SLOTS.index(@slotted[child]) || SLOTS.length }
+            return ordered unless ordered.length == 1 && @slotted[ordered.first] == 'second'
+
+            [first_pane_filler, ordered.first]
           end
 
           def event_for(signal)
@@ -256,6 +266,18 @@ module Lich
           end
 
           private
+
+          # Holds the `first` slot open so the real child keeps `second`.
+          # Memoised: a new widget per render would churn adapter handles.
+          def first_pane_filler
+            @first_pane_filler ||= Gtk::Filler.new.tap { |filler| filler.attach_to(self) }
+          end
+
+          # Declared so materialize! does not treat the stand-in as a child
+          # that has gone away and detach it again every commit.
+          def filler_children
+            @first_pane_filler ? [@first_pane_filler] : []
+          end
 
           def place(child, slot)
             existing = @slotted.key(slot)
