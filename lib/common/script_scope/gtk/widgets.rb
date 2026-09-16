@@ -333,6 +333,20 @@ module Lich
             name.to_s.tr('-', '_').to_sym
           end
 
+          # The symbol a script compares a key event against. A script writes
+          # `when Gdk::Keyval::KEY_Left`, and that constant resolves through
+          # Gdk.const_missing to `"KEY_Left".downcase.to_sym` => :key_left. The
+          # browser sends the GTK keyval name ("Left", "s", "S"), so prefixing
+          # "key_" and downcasing reproduces the same symbol exactly -- which
+          # is why event.keyval == Gdk::Keyval::KEY_Left is true. KEY_s and
+          # KEY_S both collapse to :key_s here as they do through const_missing;
+          # a script that must tell them apart reads event.state.shift_mask?.
+          def keyval_for(name)
+            return nil if name.nil? || name.to_s.empty?
+
+            "key_#{name}".downcase.to_sym
+          end
+
           # Coerces a GtkBuilder property string to the value a setter wants.
           def builder_value(value)
             text = value.to_s
@@ -2073,9 +2087,32 @@ module Lich
           end
 
           # Window signals are lifecycle, not component events; the session
-          # binds them on the page itself.
+          # binds them on the page itself. The exception is key-press-event
+          # (2.14): a window that connects it opts into page-level key events,
+          # which the session binds beside the other lifecycle signals.
           def event_for(*)
             nil
+          end
+
+          # True once a script has connected key-press-event. Read at bind time
+          # (session) and at render (node_props) so the prop and the binding
+          # go together -- the validator refuses a `key` event on a page that
+          # did not ask for it, exactly as a composite opts into surface_events.
+          def key_wanted?
+            @handlers.key?(:key_press_event)
+          end
+
+          # A browser keydown arrived on the page root. Rebuild the Gdk-shaped
+          # event a GTK key handler expects and emit key-press-event to the
+          # script's own handlers, trimmed to each block's arity.
+          def receive_key(context)
+            payload = context.payload || {}
+            keyval = Gtk.keyval_for(payload[:keyval] || payload['keyval'])
+            modifiers = Array(payload[:modifiers] || payload['modifiers']).map(&:to_s)
+            state = ModifierState.new(modifiers.include?('ctrl'), modifiers.include?('shift'), modifiers.include?('alt'))
+            gdk = Event.new(:key_press, nil, state, keyval, nil, nil, nil,
+                            Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond))
+            emit(:key_press_event, gdk)
           end
 
           def node_type
@@ -2090,6 +2127,9 @@ module Lich
             width = [@default_width, @width_request].compact.max
             height = [@default_height, @height_request].compact.max
             props[:size] = [width, height] if width && height
+            # The prop and the key binding go together: the validator refuses a
+            # `key` event unless the page declares it wants them.
+            props[:key_events] = true if key_wanted?
             props
           end
 

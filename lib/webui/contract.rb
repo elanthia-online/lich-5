@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.13.0'
+      VERSION = '2.14.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -114,7 +114,7 @@ module Lich
       ).freeze
 
       ATTRIBUTE_APPLICABILITY = {
-        page: %i[key width height],
+        page: %i[key width height key_events],
         group: %i[key tooltip hidden align margin width height tone context_menu],
         stack: %i[key hidden align margin width height context_menu],
         columns: %i[key hidden align margin width height context_menu],
@@ -172,6 +172,11 @@ module Lich
         # 2.7: key of a `menu` node on the same page, opened by the viewer's
         # secondary-button gesture on this component.
         context_menu: property(IDENT),
+        # 2.14: a page opts in to receiving key events. Named key_events, not
+        # `key`, so it cannot shadow the identifier `key` attribute the page
+        # already carries. The validator refuses a `key` event unless this is
+        # set, and the browser only attaches its keydown listener when it is.
+        key_events: property(BOOL),
       }.freeze
 
       # 2.7: pointer gestures on the surfaces scripts hang popup menus on.
@@ -583,6 +588,19 @@ module Lich
         close: event(record(reason: property(enum(:user, :owner, :timeout), required: true)), terminal: true, lifecycle: true),
         attach: event(nil, lifecycle: true),
         detach: event(nil, lifecycle: true),
+        # 2.14: a key press aimed at the window itself, not a control. A page
+        # root has no per-cid binding channel -- its bindings are routed
+        # wholesale to the lifecycle validator -- so a key event has to live
+        # here to be bound at all, and is dispatched through the same
+        # lifecycle path (which is non-coalescable, so distinct keys pressed
+        # in quick succession are never folded into one). It is deliberately
+        # not terminal: it fires repeatedly over the page's life.
+        # A page must set key_events before it may emit one; the browser only
+        # sends it when a script connected key-press-event.
+        key: event(record(
+          keyval: property(IDENT, required: true),
+          modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
+        ), lifecycle: true),
       }.freeze
 
       def schemas

@@ -112,6 +112,27 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).not_to match(/innerHTML|outerHTML/)
   end
 
+  # 2.14: a window that connected key-press-event gets keys on the page root.
+  # A page key is a lifecycle event and is not in page.bindings, so it cannot
+  # go through emit()'s bound() gate.
+  it 'sends a page key only when the page asked for key events' do
+    expect(javascript).to include('if (component.props.key_events) {')
+    expect(javascript).to include('emitLifecycle(page, component, "key", { keyval, modifiers })')
+    # Listening on the page root, not the document, so one window's keys do
+    # not reach another's, and a focused control keeps its own keys.
+    expect(javascript).to include('root.addEventListener("keydown"')
+    expect(javascript).to include('if (activeCid && activeCid !== component.cid) return;')
+    # The accelerator handler is on the document and would otherwise fire too.
+    expect(javascript).to include('event.stopPropagation()')
+  end
+
+  it 'maps a browser key to the GTK keyval name a script compares against' do
+    expect(javascript).to include('ArrowLeft: "Left"')
+    expect(javascript).to include('PageUp: "Page_Up"')
+    # A single printable character is its own keyval name.
+    expect(javascript).to include('if (event.key.length === 1) return event.key;')
+  end
+
   # A render replaces the whole tree, so every input is a new node. Without
   # this the viewer loses what they were typing whenever a script repaints
   # on a game event.

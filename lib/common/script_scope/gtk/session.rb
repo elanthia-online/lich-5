@@ -558,6 +558,14 @@ module Lich
             adapter.bind(handle, :attach, proc { |context| note_viewer(page, context.viewer_id) })
             adapter.bind(handle, :detach, proc { |context| forget_viewer(page, context.viewer_id) })
             adapter.bind(handle, :close, proc { |_context| enqueue { window.viewer_closed } })
+            # 2.14: a window that connected key-press-event receives keys on the
+            # page root. Bound here beside the other window signals because the
+            # page has no per-cid binding channel; a handler connected after the
+            # window was first shown is not picked up -- the same limitation the
+            # other lifecycle bindings have.
+            if window.key_wanted?
+              adapter.bind(handle, :key, proc { |context| enqueue { window.receive_key(context) } })
+            end
             window.lifecycle_bound!
             adapter.commit
           end

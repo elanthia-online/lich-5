@@ -485,6 +485,8 @@ module Lich
           validate_region_event!(payload, normalized_props, context, event_name)
         when [:composite, :surface_activate]
           violation!('surface events are not enabled', context, event_name) unless normalized_props[:surface_events]
+        when [:page, :key]
+          violation!('key events are not enabled', context, event_name) unless normalized_props[:key_events]
         when [:dialog, :response]
           ids = normalized_props[:buttons].map { |button| (button[:id] || button['id']).to_s }
           violation!('response button does not exist', context, event_name) unless ids.include?(payload[:button])

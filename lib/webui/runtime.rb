@@ -210,8 +210,20 @@ module Lich
           component.type, message[:event], message[:payload] || {}, props: component.props,
           owner: owner_label(attachment.page.owner), page_id: attachment.page.id, cid: component.cid
         )
-        callback = attachment.render.bindings[[component.cid, message[:event].to_sym]]
-        raise Protocol::Refusal.new(:unbound, 'component event has no server binding') unless callback
+        # A page root has no per-cid binding channel: its bindings are routed
+        # to page.lifecycle_bindings, never to render.bindings. A key event
+        # aimed at the window (2.14) therefore resolves there, and rides the
+        # same non-coalescable lifecycle dispatch as attach/detach/close so
+        # distinct keys pressed in quick succession are never folded into one.
+        event_key = message[:event].to_sym
+        callback = attachment.render.bindings[[component.cid, event_key]]
+        unless callback
+          if page_input_event?(component, event_key) && attachment.page.lifecycle_bindings[event_key]
+            enqueue_lifecycle(attachment, event_key, payload)
+            return :queued
+          end
+          raise Protocol::Refusal.new(:unbound, 'component event has no server binding')
+        end
 
         snapshot = build_submission(attachment, component, message)
         @viewers.update(attachment, component, message[:event].to_sym, payload)
@@ -325,6 +337,17 @@ module Lich
 
       def sensitive?(component)
         component.type == :password_input || component.props[:sensitive] == true
+      end
+
+      # A lifecycle-flagged event a browser may originate on the page root
+      # (2.14: key). attach/detach/close are lifecycle too but the server
+      # raises them itself; a client-sent one that is lifecycle-flagged and
+      # aimed at a page is an input event routed through lifecycle_bindings.
+      def page_input_event?(component, event)
+        return false unless component.type == :page
+
+        schema = Contract.schema(:page)[:events][event]
+        schema && schema[:lifecycle] && !schema[:terminal]
       end
 
       def viewer_state_event?(component, event)

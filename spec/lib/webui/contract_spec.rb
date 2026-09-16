@@ -41,7 +41,7 @@ RSpec.describe Lich::WebUI::Contract do
   end
 
   it 'negotiates compatible versions and refuses unsupported majors' do
-    expect(described_class.negotiate!('2.99.0')).to eq('2.13.0')
+    expect(described_class.negotiate!('2.99.0')).to eq(described_class::VERSION)
     expect { described_class.negotiate!('3.0.0') }
       .to raise_error(Lich::WebUI::VersionError, /unsupported contract major 3/)
     expect { described_class.negotiate!('invalid') }
