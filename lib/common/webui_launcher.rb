@@ -8,6 +8,7 @@ require_relative 'authentication/authenticator'
 require_relative 'authentication/launch_data'
 require_relative 'front-end'
 require_relative 'frontend_locator'
+require_relative 'frontend_choices'
 require_relative 'session_launcher'
 require_relative 'webui_launcher/catalog'
 require_relative 'webui_launcher/serial_executor'
@@ -961,18 +962,31 @@ module Lich
         GAME_REALMS.fetch(entry.game_code.to_s, entry.game_code.to_s)
       end
 
+      # Every frontend the player may select, not merely the ones whose
+      # executable was found. Listing only what discovery resolved dropped a
+      # custom frontend the player had configured but that nothing could
+      # auto-detect -- so the launcher could not offer what they had asked
+      # for. Discovery annotates a choice; it never removes one, which is the
+      # rule the GTK selector has always followed.
       def discover_frontends(refresh: false)
-        @frontend_locator.available(gui_selectable: true, refresh: refresh).map do |resolution|
-          { value: resolution.frontend_id.to_s, label: Frontend.display_name(resolution.frontend_id) }
+        FrontendChoices.all(refresh: refresh, locator: @frontend_locator).map do |choice|
+          { value: choice.id, label: choice.label }
         end.freeze
       rescue StandardError => error
         @logger&.call(:warning, "frontend discovery failed error=#{error.class}")
         [].freeze
       end
 
+      # Whether this frontend can actually be launched now. A configured
+      # custom frontend counts even when the locator cannot resolve it: the
+      # player gave it a launch command, and that is what will be run.
       def frontend_available?(frontend, refresh: false)
         return false if frontend.to_s.empty?
         return false unless @frontend_options.any? { |option| option[:value] == frontend }
+
+        choice = FrontendChoices.all(refresh: refresh, locator: @frontend_locator)
+                                .find { |candidate| candidate.id == Frontend.canonical_name(frontend) }
+        return true if choice&.state == :configured
 
         !@frontend_locator.resolve(frontend, refresh: refresh).nil?
       rescue StandardError => error

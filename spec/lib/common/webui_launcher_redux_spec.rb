@@ -165,17 +165,28 @@ RSpec.describe Lich::Common::WebUILauncher do
       .to contain_exactly(hash_including(keys: 'enter', target: a_string_ending_with('button:manual-connect')))
   end
 
-  it 'uses only dynamically discovered frontends, hides custom fields, and right-aligns disabled Play' do
+  # Listing only what discovery resolved made a configured custom frontend
+  # unreachable: a custom definition has no registry entry, no bundle id and
+  # no conventional path, so FrontendLocator#available can never return one.
+  # The player configures it with a launch command and it simply never
+  # appeared in the dropdown. Discovery annotates a choice; it never removes
+  # one, which is the rule GUI::FrontendSelector has always followed.
+  it 'offers every selectable frontend, annotated with what discovery found' do
     manual = find(tree, 'stack:manual-panel')
     frontend = find(manual, 'select:manual-frontend')
     custom_fields = find(manual, 'stack:manual-custom-fields')
     play = find(manual, 'button:manual-play')
     play_columns = find(manual, 'columns:manual-play-actions')
 
-    expect(frontend.props[:options]).to eq([
-                                             { value: 'stormfront', label: 'Wrayth' }, { value: 'saga', label: 'Saga' }
-                                           ])
-    expect(frontend.props[:options].map { |option| option[:value] }).not_to include('wizard', 'avalon')
+    options = frontend.props[:options]
+    # The two the locator resolved are marked detected; the rest stay
+    # selectable and say why they are not ready.
+    expect(options).to include({ value: 'stormfront', label: 'Wrayth (detected)' })
+    expect(options).to include({ value: 'saga', label: 'Saga (detected)' })
+    expect(options.map { |option| option[:value] }).to include('wizard')
+    expect(options.find { |option| option[:value] == 'wizard' }[:label]).to match(/unavailable/)
+    # Stormfront stays pinned first, as it is the historical GUI default.
+    expect(options.first[:value]).to eq('stormfront')
     expect(custom_fields.props[:hidden]).to be(true)
     expect(play.props[:disabled]).to be(true)
     expect(play.slot).to eq('1')
@@ -199,14 +210,13 @@ RSpec.describe Lich::Common::WebUILauncher do
     expect(account_actions.children.map { |button| button.props[:label] }).to eq(['Back to Accounts', 'Add Account'])
   end
 
-  it 'uses the same dynamically discovered frontend choices in account-management forms' do
+  it 'offers the same frontend choices in account-management forms' do
     character_frontend = find(tree, 'select:character-frontend')
     account_frontend = find(tree, 'select:account-frontend')
 
-    expect(character_frontend.props[:options]).to eq([
-                                                       { value: 'stormfront', label: 'Wrayth' },
-                                                       { value: 'saga', label: 'Saga' }
-                                                     ])
+    expect(character_frontend.props[:options]).to include({ value: 'stormfront', label: 'Wrayth (detected)' })
+    expect(character_frontend.props[:options].map { |option| option[:value] }).to include('wizard')
+    # Whatever the list is, both forms must show it identically.
     expect(account_frontend.props[:options]).to eq(character_frontend.props[:options])
   end
 
