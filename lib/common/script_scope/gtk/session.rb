@@ -506,9 +506,22 @@ module Lich
           end
 
           def report(error)
-            message = "error in Gtk.queue: #{error.message}\n\t#{Array(error.backtrace).first(8).join("\n\t")}"
-            respond("error in Gtk.queue: #{error.message}") if respond_to?(:respond, true)
+            backtrace = Array(error.backtrace)
+            message = "error in Gtk.queue: #{error.message}\n\t#{backtrace.first(8).join("\n\t")}"
+            # The frame inside the script is the one worth showing: the shim's
+            # own frames say where the error surfaced, not which line of the
+            # script asked for it.
+            origin = backtrace.find { |frame| frame.include?('.lic:') }
+            detail = origin ? "#{error.message} at #{script_frame(origin)}" : error.message
+            respond("error in Gtk.queue: #{detail}") if respond_to?(:respond, true)
             log(:error, message)
+          end
+
+          # "…/scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+          def script_frame(frame)
+            file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
+            base = file.to_s.split(%r{[\\/]}).last
+            base && line ? "#{base}:#{line}" : frame
           end
 
           def log(level, message)
