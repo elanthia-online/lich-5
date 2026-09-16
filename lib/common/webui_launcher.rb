@@ -215,7 +215,8 @@ module Lich
             manual: @manual.merge(characters: @manual[:characters].dup), active: @active.keys,
             draft_entry_key: @draft_entry_key, window_geometry: @window_geometry.dup,
             frontend_options: @frontend_options.map(&:dup),
-            frontends: frontend_catalog_rows, frontend_draft: @frontend_draft&.dup,
+            frontends: (catalog_rows = frontend_catalog_rows),
+            frontend_draft: frontend_draft_or_default(catalog_rows)&.dup,
             frontend_creating: @frontend_creating, frontend_error: @frontend_error,
           }
         end
@@ -514,20 +515,22 @@ module Lich
         end
         selected = state[:frontend_creating] ? [] : Array(state[:frontend_draft]&.fetch(:id, nil))
         ui.group(label: 'Frontends', key: 'frontends-table-section') do
-          table(key: 'frontends-table', columns: [
+          table(key: 'frontends-table', height: 220, columns: [
                   { key: 'label', label: 'Frontend' }, { key: 'type', label: 'Type' },
-                  { key: 'status', label: 'Status' }, { key: 'launch', label: 'Launch' },
-                  { key: 'arguments', label: 'Arguments' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'launch', label: 'Executable / command' },
+                  { key: 'arguments', label: 'Additional arguments' },
                 ], rows: rows, selection: :single, selected: selected,
                 on: { selection_change: ->(event) { launcher.select_frontend(event) } })
-          columns(count: 3, weights: [1, 1, 1]) do
+          columns(count: 4, weights: [0, 0, 0, 1]) do
             button(slot: '0', key: 'frontends-add', label: 'Add Custom',
                    on: { activate: ->(_event) { launcher.begin_new_frontend } })
-            button(slot: '1', key: 'frontends-reload', label: 'Reload',
-                   on: { activate: ->(_event) { launcher.reload_frontends } })
-            button(slot: '2', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
+            button(slot: '1', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
                    disabled: !launcher.__send__(:frontend_deletable?, state),
                    on: { activate: ->(_event) { launcher.delete_frontend } })
+            button(slot: '2', key: 'frontends-reload', label: 'Reload',
+                   on: { activate: ->(_event) { launcher.reload_frontends } })
+            text(slot: '3', key: 'frontends-button-spacer', content: ' ')
           end
         end
       end
@@ -1146,6 +1149,17 @@ module Lich
       rescue StandardError => error
         @logger&.call(:warning, "frontend catalog failed error=#{error.class}")
         []
+      end
+
+      # The GTK tab selects its first row on load, so the editor is populated
+      # the moment the tab is opened rather than sitting on a placeholder until
+      # something is clicked. Called from render_state, which already holds
+      # @mutex, so it must not lock.
+      def frontend_draft_or_default(rows)
+        return @frontend_draft if @frontend_draft || @frontend_creating
+
+        first = rows.first
+        first && frontend_editor_fields(first[:id])
       end
 
       def frontend_editor_fields(frontend_id)

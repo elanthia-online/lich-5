@@ -291,7 +291,7 @@ RSpec.describe Lich::Common::WebUILauncher do
       table = find(tree, 'table:frontends-table')
 
       expect(table.props[:columns].map { |column| column[:label] })
-        .to eq(['Frontend', 'Type', 'Status', 'Launch', 'Arguments'])
+        .to eq(['Frontend', 'Type', 'Status', 'Executable / command', 'Additional arguments'])
       expect(table.props[:rows]).not_to be_empty
       expect(table.props[:selection]).to eq('single')
     end
@@ -302,12 +302,21 @@ RSpec.describe Lich::Common::WebUILauncher do
       expect(find(tree, 'button:frontends-delete').props[:disabled]).to be(true)
     end
 
-    it 'shows a placeholder until a frontend is chosen' do
+    # The GTK tab selects its first row on load, so the editor is populated the
+    # moment the tab opens. Opening on a placeholder that needs a click first
+    # is the difference that showed up side by side against the real launcher.
+    it 'opens with the first frontend already loaded into the editor' do
       section = find(tree, 'group:frontend-editor-section')
+      table = find(tree, 'table:frontends-table')
 
       expect(section).not_to be_nil
+      expect(find(tree, 'text_input:frontend-id').props[:value]).to eq(table.props[:rows].first[:key])
       expect(section.each.map { |node| node.props[:content] }.compact.join)
-        .to include('Select a frontend to edit')
+        .not_to include('Select a frontend to edit')
+    end
+
+    it 'keeps the catalog short enough to leave the editor on screen' do
+      expect(find(tree, 'table:frontends-table').props[:height]).to be_a(Integer)
     end
 
     # Lich owns a built-in's identity; only the launch override is the
