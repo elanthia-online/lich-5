@@ -990,6 +990,23 @@ module Lich
             raise NotImplementedError
           end
 
+          # Columns a child asked to expand into, by left edge. GTK's default
+          # is not to expand, so a table with no EXPAND anywhere keeps every
+          # column at natural width.
+          def expanding_columns
+            @expanding_columns ||= {}
+          end
+
+          # Per-column share of the leftover width. nil when nothing expands,
+          # so the contract prop stays absent and the client keeps `auto`.
+          def column_weights
+            cols = column_count
+            expanding = expanding_columns.keys.select { |column| column < cols }
+            return nil if expanding.empty?
+
+            Array.new(cols) { |column| expanding.include?(column) ? 1 : 0 }
+          end
+
           def ordered_children
             @children.sort_by { |child| cells.fetch(child, [0, 0, 1, 1]).first(2).reverse }
           end
@@ -1078,9 +1095,17 @@ module Lich
             self.n_columns = columns
           end
 
-          def attach(child, left, right, top, bottom, _xoptions = nil, _yoptions = nil, _xpadding = 0, _ypadding = 0)
+          def attach(child, left, right, top, bottom, xoptions = nil, _yoptions = nil, _xpadding = 0, _ypadding = 0)
             cells[child] = [left.to_i, top.to_i, [right.to_i - left.to_i, 1].max, [bottom.to_i - top.to_i, 1].max]
+            # Gtk::EXPAND in the x options is the only place a Table says
+            # which column should take the free width -- the label column
+            # beside an entry says nothing and must stay natural.
+            expanding_columns[left.to_i] = true if expand?(xoptions)
             add(child)
+          end
+
+          def expand?(options)
+            options.is_a?(Integer) && (options & AttachOptions::EXPAND).positive?
           end
 
           def attach_defaults(child, left, right, top, bottom)
@@ -1101,7 +1126,10 @@ module Lich
           end
 
           def node_props
-            { cols: column_count, gap: 4 }
+            props = { cols: column_count, gap: 4 }
+            weights = column_weights
+            props[:weights] = weights if weights
+            props
           end
         end
 
@@ -1118,6 +1146,17 @@ module Lich
           def attach(child, left, top, width = 1, height = 1)
             cells[child] = [left.to_i, top.to_i, [width.to_i, 1].max, [height.to_i, 1].max]
             add(child)
+          end
+
+          # Gtk::Grid has no attach options; a child asks for the free width
+          # with hexpand, and it can be set after attaching, so this is read
+          # at render rather than recorded at attach.
+          def expanding_columns
+            @children.each_with_object({}) do |child, result|
+              next unless child.respond_to?(:hexpand?) && child.hexpand?
+
+              result[cells.fetch(child, [0, 0, 1, 1]).first] = true
+            end
           end
 
           def attach_next_to(child, sibling, side, width = 1, height = 1)
@@ -1162,7 +1201,10 @@ module Lich
           end
 
           def node_props
-            { cols: column_count, gap: [[@row_spacing, @column_spacing].max, 64].min }
+            props = { cols: column_count, gap: [[@row_spacing, @column_spacing].max, 64].min }
+            weights = column_weights
+            props[:weights] = weights if weights
+            props
           end
 
           private

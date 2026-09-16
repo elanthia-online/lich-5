@@ -221,3 +221,45 @@ scroll request, so the shim does not yank a viewer who scrolled by hand.
 write path, but its scroller wraps a `Gtk::Layout` that does not render
 until `composite` lands in slice five. Left untested against a real
 window for that reason.
+
+---
+
+# Addendum: contract 2.10.0 — grid column weights
+
+Additive. `grid` gained `weights`, the same shape `columns` already has:
+an array of per-column integers naming each column's share of the
+leftover width, where 0 means natural width.
+
+| Property | Shape | Meaning |
+| --- | --- | --- |
+| `weights` | array of integer 0.., max 24 | Per-column share of the free width. Length is the grid's `cols`. |
+
+Without it the client emitted `repeat(cols, auto)`, so every column
+shared the width equally and a label column came out as wide as the
+entry beside it.
+
+## Where the signal comes from
+
+Narrower than it looks. Of 145 `attach` call sites, only 8 live ones
+pass `Gtk::EXPAND`, and every one of them names the entry column of a
+label/entry pair. `Gtk::Table` reads it from the x options at attach.
+
+`Gtk::Grid` has no attach options; a child asks with `hexpand`, which
+scripts set after attaching, so those weights are derived at render
+rather than recorded at attach.
+
+Absent any expand request the property is omitted entirely and the
+client keeps `repeat(cols, auto)` — that is GTK's own default, where a
+table nothing asked to expand does not distribute free space.
+
+## What is deliberately not the signal
+
+`Gtk::Alignment` wraps 71 of those 145 attached children, and its
+`xscale` looked like a second source of truth. It is not: every
+`Alignment` in the corpus is `xscale: 0`, so it can only ever say "do
+not stretch", which is already the default. Reading it would have
+changed nothing and added a second, conflicting path.
+
+A `FILL`-only attach is also not an expand request. FILL says how the
+child sits in a cell it has already been given; EXPAND is what asks for
+a bigger cell.

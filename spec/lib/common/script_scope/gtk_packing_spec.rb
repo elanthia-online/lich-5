@@ -331,4 +331,79 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(session.adapter.page_for(window.handle).last_render.facilities).to eq({})
     end
   end
+
+  # A contract grid shared its width equally between every column, so a label
+  # column was as wide as the entry beside it. GTK's own signal is narrower
+  # than it looks: only 8 attach sites pass EXPAND, and they all name the
+  # entry column, while every Alignment in the corpus is xscale 0.
+  describe 'grid column weights' do
+    it 'gives the free width to the column a table attached with EXPAND' do
+      props = session.sync do
+        table = gtk::Table.new(2, 2)
+        table.attach(gtk::Label.new('Name:'), 0, 1, 0, 1, gtk::FILL, gtk::FILL, 3, 3)
+        table.attach(gtk::Entry.new, 1, 2, 0, 1,
+                     gtk::AttachOptions::EXPAND | gtk::AttachOptions::FILL, gtk::FILL, 3, 3)
+        table.send(:node_props)
+      end
+
+      expect(props[:weights]).to eq([0, 1])
+    end
+
+    it 'says nothing when no column asked to expand, so the client keeps auto' do
+      props = session.sync do
+        table = gtk::Table.new(2, 2)
+        table.attach(gtk::Label.new('a'), 0, 1, 0, 1)
+        table.attach(gtk::Label.new('b'), 1, 2, 0, 1)
+        table.send(:node_props)
+      end
+
+      expect(props).not_to have_key(:weights)
+    end
+
+    it 'ignores a FILL-only attach, which asks to fill its cell and not to grow' do
+      props = session.sync do
+        table = gtk::Table.new(2, 2)
+        table.attach(gtk::Label.new('a'), 0, 1, 0, 1, gtk::FILL, gtk::FILL)
+        table.attach(gtk::Entry.new, 1, 2, 0, 1, gtk::FILL, gtk::FILL)
+        table.send(:node_props)
+      end
+
+      expect(props).not_to have_key(:weights)
+    end
+
+    # Gtk::Grid has no attach options: the child asks with hexpand, and it can
+    # be set after attaching, so the weights are read at render time.
+    it 'takes a Gtk::Grid column from a child hexpand set after the attach' do
+      props = session.sync do
+        grid = gtk::Grid.new
+        entry = gtk::Entry.new
+        grid.attach(gtk::Label.new('x'), 0, 0, 1, 1)
+        grid.attach(entry, 1, 0, 1, 1)
+        entry.hexpand = true
+        grid.send(:node_props)
+      end
+
+      expect(props[:weights]).to eq([0, 1])
+    end
+
+    it 'renders the weights onto the grid node the client reads' do
+      window = session.sync do
+        win = gtk::Window.new('t')
+        table = gtk::Table.new(2, 2)
+        table.attach(gtk::Label.new('Name:'), 0, 1, 0, 1, gtk::FILL, gtk::FILL, 3, 3)
+        table.attach(gtk::Entry.new, 1, 2, 0, 1,
+                     gtk::AttachOptions::EXPAND | gtk::AttachOptions::FILL, gtk::FILL, 3, 3)
+        win.add(table)
+        win.show_all
+        win
+      end
+      session.show_window(window)
+      session.sync {}
+
+      tree = session.adapter.page_for(window.handle).last_render.tree
+      grid = tree.each.find { |component| component.type == :grid }
+
+      expect(grid.props[:weights]).to eq([0, 1])
+    end
+  end
 end

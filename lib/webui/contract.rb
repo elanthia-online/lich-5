@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.9.0'
+      VERSION = '2.10.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -231,6 +231,10 @@ module Lich
             cols: property(integer(min: 1, max: 24), required: true),
             cells: property(integer(min: 0, max: BOUNDS[:children])),
             gap: property(integer(min: 0, max: 64), default: 8),
+            # 2.10: per-column share of the leftover width, as on `columns`.
+            # Without it every column shares equally, so a label column is as
+            # wide as the entry beside it. Weight 0 is natural width.
+            weights: property(array(integer(min: 0), max: 24)),
           }, children: :many, child_properties: {
             span: property(integer(min: 1, max_property: :cols)),
             row_span: property(integer(min: 1, max: 24)),

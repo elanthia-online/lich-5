@@ -403,7 +403,7 @@ Done so far: box packing (`4c09a59e`), per-window page selection (pulled
 forward between slices two and three), scroll adjustments (contract
 2.9.0), and the two dropped setters in `82128165` - `set_width_request` (288 sites, never aliased to
 `width_request=`) and `Gtk::Misc#set_padding(xpad, ypad)` (9 scripts,
-not implemented). Still open below: grid columns, theme, close veto.
+not implemented). Still open below: theme, close veto.
 
 Two gaps deliberately left, both needing a contract change rather than
 shim work: `Alignment`'s `yalign` has nowhere to go (the contract has
@@ -463,9 +463,21 @@ bump on its own. Fold them into the next contract change.
   guard on the window fixes that without a render loop. Handles are
   opaque by design, so the window registers a reader
   (`presentation_source`) rather than the adapter walking back to it.
-- **Grid columns.** `repeat(cols, auto)` shares free space equally;
-  entries should win. Either a `weights` prop on `grid` (like `columns`)
-  or infer from `AttachOptions::EXPAND` per column.
+- **Grid columns.** DONE (contract 2.10.0). Both options in the original
+  note, as it turns out: a `weights` prop on `grid` mirroring `columns`,
+  *fed* by `AttachOptions::EXPAND` per column. `Gtk::Table` records it at
+  attach from the x options; `Gtk::Grid` has no attach options and
+  derives it at render from child `hexpand`, which scripts set after
+  attaching. With nothing expanding the prop is omitted and the client
+  keeps `repeat(cols, auto)`, which is GTK's own behavior.
+
+  The corpus is thinner than the note assumed: only 8 live attach sites
+  of 145 pass EXPAND, all naming the entry column of a label/entry pair.
+  `Gtk::Alignment` wraps 71 of the attached children and looked like a
+  second signal, but every Alignment in the corpus is `xscale: 0`, so it
+  can only say "do not stretch" -- already the default. Reading it would
+  have changed nothing and added a conflicting path, so it is not used.
+  A FILL-only attach is likewise not an expand request.
 - **Theme.** A GTK-shaped stylesheet: control heights, label baselines,
   frame legends, dark mode via `color-scheme`. Doug's `app.css` is
   launcher-specific (`[data-cid*="group:entry-"]` rules); keep those and
