@@ -99,7 +99,7 @@ module Lich
             matches << Fiddle::Pointer.new(hwnd.to_i) if window_matches?(hwnd, pid)
             1
           end
-          win32.EnumWindows(callback, 0)
+          win32.EnumWindows(callback, Fiddle::Pointer.new(0))
           matches.length == 1 ? matches.first : nil
         rescue StandardError => error
           log("finding the browser window failed: #{error.class}: #{error.message}")
@@ -227,7 +227,11 @@ if Lich::Common::Frontend.native_windows_runtime? && !defined?(::WinPresentation
     module ::WinPresentation
       extend Fiddle::Importer
       dlload 'user32.dll'
-      extern 'int EnumWindows(void*, long)'
+      # The LPARAM is pointer-sized, and `long` is four bytes on this LLP64
+      # runtime -- the same mismatch that made SetWindowPos silently no-op
+      # (see set_always_on_top). Inert while the only call site passes 0, but
+      # declared correctly so passing a real value cannot truncate it.
+      extern 'int EnumWindows(void*, void*)'
       extern 'int IsWindowVisible(void*)'
       extern 'int IsWindow(void*)'
       extern 'int GetWindowThreadProcessId(void*, void*)'
