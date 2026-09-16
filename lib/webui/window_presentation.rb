@@ -119,6 +119,9 @@ module Lich
         # where it was -- a no-op reporting success, which is the one outcome
         # worse than degrading honestly. Removing it for real needs the window
         # created frameless, which is a launch-time decision.
+        # rubocop:disable Lint/UnusedMethodArgument -- borderless is part of
+        # the facility's shape and callers still pass it; it is accepted and
+        # deliberately ignored rather than silently dropped from the API.
         def apply(hwnd, always_on_top:, opacity:, borderless: false)
           return false unless available? && hwnd
 
@@ -129,6 +132,7 @@ module Lich
           log("applying window presentation failed: #{error.class}: #{error.message}")
           false
         end
+        # rubocop:enable Lint/UnusedMethodArgument
 
         def alive?(hwnd)
           return false unless available? && hwnd

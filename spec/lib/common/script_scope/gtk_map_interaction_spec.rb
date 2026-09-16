@@ -105,9 +105,8 @@ RSpec.describe 'GTK compatibility shim: map interaction' do
 
       # The pane is really 600 tall; centring on y=1000 means an offset of 700.
       session.sync do
-        scroller.receive_event(:scrolled, Struct.new(:payload).new(
-          { position: 0, upper: 3000, page_size: 600, position_x: 0, upper_x: 2000, page_size_x: 400 }
-        ))
+        extent = { position: 0, upper: 3000, page_size: 600, position_x: 0, upper_x: 2000, page_size_x: 400 }
+        scroller.receive_event(:scrolled, Struct.new(:payload).new(extent))
       end
 
       expect(scroller.vadjustment.value).to eq(700)
@@ -120,9 +119,8 @@ RSpec.describe 'GTK compatibility shim: map interaction' do
       # The viewer is already at 120: their position wins, and the pending
       # request is theirs to cancel rather than ours to replay.
       session.sync do
-        scroller.receive_event(:scrolled, Struct.new(:payload).new(
-          { position: 120, upper: 3000, page_size: 600 }
-        ))
+        extent = { position: 120, upper: 3000, page_size: 600 }
+        scroller.receive_event(:scrolled, Struct.new(:payload).new(extent))
       end
 
       expect(scroller.vadjustment.value).to eq(120)
@@ -188,7 +186,7 @@ RSpec.describe 'GTK compatibility shim: map interaction' do
       session.sync { layout.send(:receive_event, :surface_activate, context) }
 
       expect(scroller.hadjustment.value).to eq(500)
-      expect(scroller.vadjustment.value) .to eq(600)
+      expect(scroller.vadjustment.value).to eq(600)
       # The pointer stays viewport-relative; the script adds the offset back.
       expect(layout.window.pointer[1, 2]).to eq([40, 30])
     end

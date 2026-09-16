@@ -606,9 +606,9 @@ module Lich
         # A page must set key_events before it may emit one; the browser only
         # sends it when a script connected key-press-event.
         key: event(record(
-          keyval: property(IDENT, required: true),
-          modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
-        ), lifecycle: true),
+                     keyval: property(IDENT, required: true),
+                     modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
+                   ), lifecycle: true),
       }.freeze
 
       def schemas
