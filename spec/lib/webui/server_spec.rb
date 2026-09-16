@@ -50,6 +50,23 @@ RSpec.describe Lich::WebUI::Server do
     end.to raise_error(ArgumentError, /must be loopback/)
   end
 
+  it 'rebinds the same port after its accept loop is killed out from under it' do
+    accept_threads = []
+    server = described_class.new(
+      assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {},
+      thread_factory: ->(*args, &block) { Thread.new(*args, &block).tap { |t| accept_threads << t if args.empty? } }
+    ).start
+    port = server.port
+    accept_threads.first.kill.join
+    expect(server.running?).to be(false)
+
+    expect { server.start }.not_to raise_error
+    expect(server.port).to eq(port)
+    expect(server.running?).to be(true)
+  ensure
+    server&.stop
+  end
+
   it 'uses an ephemeral loopback port and authenticates through a one-shot clean redirect', security_id: 'sec-auth-fallback' do
     logs = []
     server = build_server(@assets_dir, logs: logs).start

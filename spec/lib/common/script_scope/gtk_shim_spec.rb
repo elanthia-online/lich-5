@@ -222,6 +222,30 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
     end
   end
 
+  describe 'Session.start_service' do
+    it 'starts the server from a thread outside the calling thread group' do
+      group = ThreadGroup.new
+      groups = []
+      accept_thread = nil
+      probe = Lich::WebUI::Service.new
+      allow(probe.server).to receive(:start) do
+        groups << Thread.current.group
+        accept_thread = Thread.new { sleep }
+        probe.server
+      end
+      allow(probe.server).to receive(:running?).and_return(false)
+
+      Thread.new do
+        group.add(Thread.current)
+        gtk::Session.start_service(probe)
+      end.join
+
+      expect(groups).to eq([ThreadGroup::Default])
+      expect(accept_thread.group).to eq(ThreadGroup::Default)
+      accept_thread.kill
+    end
+  end
+
   describe 'Gtk.queue' do
     it 'runs blocks in order on one thread and reports errors without killing it' do
       log = []

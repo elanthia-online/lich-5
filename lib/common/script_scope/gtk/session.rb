@@ -158,6 +158,37 @@ module Lich
             rescue StandardError
               nil
             end
+
+            # Starts the WebUI service from a thread in the default group.
+            #
+            # A session thread belongs to its script's thread group, and Lich
+            # kills that whole group when the script exits. Threads the server
+            # creates inherit the group of whoever called +start+, so a server
+            # started from a session thread would lose its accept loop with the
+            # first script to use it and could never rebind its port.
+            def start_service(service)
+              return service if service.server.running?
+              return service.start if Thread.current.group.equal?(ThreadGroup::Default)
+
+              gate = Queue.new
+              result = Queue.new
+              thread = Thread.new do
+                gate.pop
+                result << [:ok, service.start]
+              rescue Exception => error # rubocop:disable Lint/RescueException
+                result << [:error, error]
+              end
+              begin
+                ThreadGroup::Default.add(thread)
+              rescue ThreadError
+                nil # an enclosed group keeps its threads; start anyway
+              end
+              gate << true
+              status, value = result.pop
+              raise value if status == :error
+
+              value
+            end
           end
 
           attr_reader :owner
@@ -382,7 +413,7 @@ module Lich
           end
 
           def open_browser(page, window: nil, geometry: nil, &on_exit)
-            service.start
+            self.class.start_service(service)
             url = service.launch_url(page: page)
             opener = self.class.browser_open || method(:default_browser_open)
             session = self

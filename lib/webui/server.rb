@@ -65,6 +65,14 @@ module Lich
         @mutex.synchronize do
           return self if running_locked?
 
+          # A listener whose accept loop died (killed thread) still holds the
+          # port; release it before binding again.
+          begin
+            @server&.close
+          rescue IOError, SystemCallError
+            nil
+          end
+          @server = nil
           @stopping = false
           @server = @server_factory.call(host, port)
           bound = @server.addr
