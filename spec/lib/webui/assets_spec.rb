@@ -308,4 +308,24 @@ RSpec.describe 'WebUI browser assets' do
   it 'still clears a password when the server says to' do
     expect(javascript).to include('message.type === "clear_sensitive"')
   end
+
+  # The contract declares tabs.vertical and app.css has always implemented the
+  # layout; the client gated it on a hardcoded cid, so the property did nothing
+  # for anyone but the accounts page. A declared property that renders nothing
+  # makes the tree lie to an author reading the schema.
+  it 'lays tabs out vertically because the property says so' do
+    expect(javascript).to include('component.props.vertical === true')
+    expect(javascript).to include('tabs.classList.add("vertical");')
+  end
+
+  it 'keeps the cid fallback so the accounts page does not regress' do
+    expect(javascript).to include('component.cid.includes("saved-account-tabs")')
+  end
+
+  it 'names the vertical class for the property rather than for one page' do
+    css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+
+    expect(css).to include('.webui-tabs.vertical')
+    expect(css).not_to include('account-tabs-left')
+  end
 end
