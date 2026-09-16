@@ -126,8 +126,21 @@ module Lich
           # data: URI, which the page's CSP already allows (img-src 'self'
           # data:).
           ::GdkPixbuf::Pixbuf.prepend(Module.new do
+            # Not memoised, deliberately. A Pixbuf is mutable in place -- fill!
+            # and a writable #pixels both exist -- so `@webui_data_uri ||=` served
+            # the first frame forever once a script redrew one, silently.
+            #
+            # Keying a memo on the pixel content was measured and rejected: the
+            # fingerprint has to read #pixels, and at 200x200 that costs 1.6x the
+            # PNG encode it was meant to avoid (1.98ms against 1.23ms). At the size
+            # markers actually are -- map draws an X of a dozen pixels -- the encode
+            # is 0.033ms, which is not worth guarding at all.
+            #
+            # So: correct and cheap rather than stale and clever. If a large inline
+            # image ever lands on a hot path, the fix is a memo the MUTATOR
+            # invalidates, not one that re-derives the content to check.
             def webui_data_uri
-              @webui_data_uri ||= PixbufSources.data_uri(self)
+              PixbufSources.data_uri(self)
             end
           end)
 

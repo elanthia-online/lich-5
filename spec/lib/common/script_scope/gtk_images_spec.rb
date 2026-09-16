@@ -259,6 +259,24 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
       expect(props[:src]).to include('Flotilla.png')
     end
 
+    # webui_data_uri was `@webui_data_uri ||=`, and a Pixbuf is mutable in
+    # place, so a script that redrew one kept serving its first frame.
+    it 'reflects a pixbuf redrawn in place rather than its first frame' do
+      skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
+
+      gtk.install_pixbuf_tracking!
+      pixbuf = ::GdkPixbuf::Pixbuf.new(
+        colorspace: ::GdkPixbuf::Colorspace::RGB, has_alpha: true,
+        bits_per_sample: 8, width: 8, height: 8
+      )
+      pixbuf.fill!(0xff0000ff)
+      first = pixbuf.webui_data_uri
+      pixbuf.fill!(0x00ff00ff)
+
+      expect(first).to start_with('data:image/png;base64,')
+      expect(pixbuf.webui_data_uri).not_to eq(first)
+    end
+
     it 'carries the source across a scale, which is a different object' do
       skip 'gtk3 gem not available' unless defined?(::GdkPixbuf::Pixbuf)
 
