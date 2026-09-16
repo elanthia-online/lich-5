@@ -133,14 +133,14 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
   # and be dropped. Alignment#set_padding names four edges and is a
   # different method that must keep its own arity.
   describe 'Gtk::Misc#set_padding' do
-    it 'pads a label on both axes, the contract taking the larger side' do
+    it 'pads a label on both axes, each side keeping its own value' do
       props = session.sync do
         label = gtk::Label.new('x')
         label.set_wrap(true).set_width_request(600).set_padding(0, 10)
         label.send(:common_props)
       end
 
-      expect(props[:margin]).to eq(10)
+      expect(props[:margin]).to eq(top: 10, bottom: 10)
     end
 
     it 'treats zero padding as no margin at all' do
@@ -160,7 +160,7 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
         gtk::Alignment.new(0, 0, 0, 0).set_padding(50, 0, 0, 40).send(:common_props)
       end
 
-      expect(props[:margin]).to eq(50)
+      expect(props[:margin]).to eq(top: 50, right: 40)
     end
   end
 
@@ -500,6 +500,50 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
 
       expect(window).to respond_to(:set_opacity)
       expect(window).to respond_to(:some_gtk_setter_we_do_not_have=)
+    end
+  end
+
+  # GTK sets one edge at a time. Collapsing the four sides to their max put a
+  # one-sided indent on all four sides: bigshot's glade has 518 one-sided
+  # margins, and a label with margin-start 100 came out inside a 100px box.
+  describe 'per-side margins' do
+    it 'keeps a one-sided indent on the one side' do
+      props = session.sync do
+        label = gtk::Label.new('Note: ...')
+        label.margin_left = 100
+        label.margin_right = 10
+        label.send(:common_props)
+      end
+
+      expect(props[:margin]).to eq(left: 100, right: 10)
+    end
+
+    it 'still sends a plain integer when every side agrees' do
+      props = session.sync do
+        label = gtk::Label.new('x')
+        label.margin = 8
+        label.send(:common_props)
+      end
+
+      expect(props[:margin]).to eq(8)
+    end
+
+    it 'says nothing when no side has a margin' do
+      props = session.sync { gtk::Label.new('x').send(:common_props) }
+
+      expect(props).not_to have_key(:margin)
+    end
+
+    it 'reaches the contract in both shapes' do
+      validator = Lich::WebUI::Validator.new
+      context = { owner: 't', page_id: 'p', cid: 'text:t1' }
+
+      expect { validator.validate_component!(:text, { content: 'x', margin: { left: 100 } }, **context) }
+        .not_to raise_error
+      expect { validator.validate_component!(:text, { content: 'x', margin: 8 }, **context) }
+        .not_to raise_error
+      expect { validator.validate_component!(:text, { content: 'x', margin: { bogus: 5 } }, **context) }
+        .to raise_error(Lich::WebUI::Error)
     end
   end
 end

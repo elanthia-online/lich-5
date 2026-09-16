@@ -653,9 +653,21 @@ module Lich
             props[:width] = @width_request if @width_request && size_request_axes.include?(:width)
             props[:height] = @height_request if @height_request && size_request_axes.include?(:height)
             props[:align] = ALIGN_TO_CONTRACT[@halign] if @halign && ALIGN_TO_CONTRACT[@halign]
-            margin = @margins.values.max
-            props[:margin] = [margin, 512].min if margin.positive?
+            margin = contract_margin
+            props[:margin] = margin if margin
             props
+          end
+
+          # GTK sets one edge at a time, so collapsing the four to their max
+          # put a one-sided indent on all four sides -- bigshot has 518
+          # one-sided margins and came out spread across the window. Sends a
+          # plain integer when every side agrees, which is most widgets.
+          def contract_margin
+            sides = @margins.transform_values { |value| value.to_i.clamp(0, 512) }
+            return nil if sides.values.all?(&:zero?)
+            return sides.values.first if sides.values.uniq.size == 1
+
+            sides.reject { |_side, value| value.zero? }
           end
 
           # Creates or updates this widget's adapter node. Returns the handle.
@@ -1420,8 +1432,14 @@ module Lich
             props = super
             # A scale of 1.0 fills the cell, so alignment does not apply.
             props[:align] = horizontal_align unless @xscale >= 1.0 || @halign
-            margin = @padding.values.max
-            props[:margin] = [margin, 512].min if margin.positive?
+            padding = @padding.transform_values { |value| value.to_i.clamp(0, 512) }
+            unless padding.values.all?(&:zero?)
+              props[:margin] = if padding.values.uniq.size == 1
+                                 padding.values.first
+                               else
+                                 padding.reject { |_side, value| value.zero? }
+                               end
+            end
             props
           end
 

@@ -301,7 +301,7 @@ RSpec.describe 'GTK compatibility shim (slice two): Builder and data widgets' do
       expect(stack.type).to eq(:stack)
       expect(stack.children.map(&:type)).to eq(%i[tabs button])
       button = stack.children.last
-      expect(button.props).to include(label: 'Close', align: 'end', margin: 6)
+      expect(button.props).to include(label: 'Close', align: 'end', margin: { top: 6 })
     end
 
     it 'maps the notebook to tabs with tab-label names, disambiguating duplicates' do

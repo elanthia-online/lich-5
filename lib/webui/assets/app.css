@@ -28,17 +28,6 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 /* A bare page is a script's own window: it fills the browser window. */
 #pages:has(> .webui-page.bare) { width: 100%; }
 .webui-page.bare { font-size: 13px; }
-/* GTK's controls are about 26px tall and its rows sit tighter than the
-   launcher's. Scoped to bare pages so the login and launcher keep the
-   roomier sizing they were designed at. */
-.webui-page.bare { --gap: 8px; }
-.webui-page.bare button { min-height: 26px; padding: 3px 10px; }
-.webui-page.bare .field { gap: 2px; }
-.webui-page.bare .field input:not([type="checkbox"]):not([type="radio"]),
-.webui-page.bare .field select,
-.webui-page.bare .field textarea { min-height: 26px; }
-.webui-page.bare .webui-group { margin: 0 0 8px; padding: 8px 10px; }
-.webui-page.bare .webui-grid { row-gap: 2px; }
 .webui-page.bare .webui-text { white-space: pre-wrap; }
 .webui-text.nowrap { white-space: pre; }
 .webui-text code { font-family: ui-monospace, Consolas, monospace; }
@@ -174,8 +163,10 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 
 @media (max-width: 620px) {
   #pages { padding: 8px; }
-  .webui-columns { grid-template-columns: 1fr !important; }
-  .webui-columns > * { grid-column: 1 !important; }
+  /* The launcher's cards stack on a narrow screen. A script's own window
+     is a fixed layout it chose, so bare pages keep their columns. */
+  .webui-page:not(.bare) .webui-columns { grid-template-columns: 1fr !important; }
+  .webui-page:not(.bare) .webui-columns > * { grid-column: 1 !important; }
   [data-cid*="group:entry-"] > .webui-columns {
     grid-template-columns: minmax(0, 8fr) minmax(72px, 1fr) !important;
   }
@@ -188,3 +179,29 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
   .webui-tabs:not(.account-tabs-left) > .tab-list { overflow-x: auto; }
   .row-actions, .workflow-actions { flex-wrap: wrap; }
 }
+
+/* ---- GTK proportions for a script's own window ---------------------------
+   These come last so they win over the launcher's roomier defaults, which
+   are more specific (.field input:not(...)) than a bare-page prefix alone.
+   GTK controls are ~26px, its rows sit tight, and a label in a grid cell
+   has no gap above it because there is no label text above the control. */
+.webui-page.bare {
+  --gap: 6px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.webui-page.bare #pages,
+#pages:has(> .webui-page.bare) { padding: 6px; }
+.webui-page.bare button { min-height: 24px; padding: 2px 10px; }
+.webui-page.bare .field { gap: 2px; }
+.webui-page.bare .field > input:not([type="checkbox"]):not([type="radio"]),
+.webui-page.bare .field > select,
+.webui-page.bare .field > textarea { min-height: 24px; padding: 2px 6px; }
+.webui-page.bare .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]),
+.webui-page.bare .webui-grid > .field > select { min-width: 0; }
+.webui-page.bare .webui-group { margin: 0 0 6px; padding: 6px 8px; }
+.webui-page.bare .webui-group > legend { padding: 0 4px; }
+/* A control with no label is the common shape in these windows; the
+   wrapper should add no height of its own. */
+.webui-page.bare .field:not(:has(.field-label)) { gap: 0; }
+.webui-page.bare .webui-stack { row-gap: 0; }

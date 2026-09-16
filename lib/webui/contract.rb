@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.10.0'
+      VERSION = '2.11.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -153,7 +153,17 @@ module Lich
         disabled: property(BOOL),
         hidden: property(BOOL),
         align: property(enum(*ALIGNS)),
-        margin: property(integer(min: 0, max: 512)),
+        # 2.11: either one integer for all four sides, or the sides that
+        # differ. GTK sets one edge at a time -- bigshot's glade has 518
+        # one-sided margins -- and collapsing them to a single number put a
+        # 100px indent on all four sides of the widget.
+        margin: property(union(
+          integer(min: 0, max: 512),
+          record(
+            top: property(integer(min: 0, max: 512)), right: property(integer(min: 0, max: 512)),
+            bottom: property(integer(min: 0, max: 512)), left: property(integer(min: 0, max: 512))
+          )
+        )),
         width: property(GEOMETRY),
         height: property(GEOMETRY),
         emphasis: property(enum(*EMPHASES)),

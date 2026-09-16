@@ -357,7 +357,7 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       end
       filled = session.sync { gtk::Alignment.new(0.0, 0.5, 1.0, 1.0).add(gtk::Label.new('wide')) }
 
-      expect(aligned.common_props).to include(align: 'end', margin: 8)
+      expect(aligned.common_props).to include(align: 'end', margin: { top: 4, bottom: 4, left: 8, right: 8 })
       expect(aligned.node_type).to eq(:stack)
       expect(filled.common_props).not_to include(:align)
     end

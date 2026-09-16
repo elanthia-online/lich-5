@@ -263,3 +263,29 @@ changed nothing and added a second, conflicting path.
 A `FILL`-only attach is also not an expand request. FILL says how the
 child sits in a cell it has already been given; EXPAND is what asks for
 a bigger cell.
+
+---
+
+# Addendum: contract 2.11.0 — per-side margins
+
+Additive and backward compatible. The shared `margin` attribute now
+accepts either the integer it always did, or a record naming only the
+sides that differ.
+
+| Shape | Meaning |
+| --- | --- |
+| `margin: 8` | Eight pixels on all four sides, as before. |
+| `margin: {top, right, bottom, left}` | Only the sides given; the rest are zero. Each 0..512. |
+
+## Why
+
+GTK sets one edge at a time -- `margin-start`, `margin-top` -- and the
+shim collapsed the four sides to their maximum. That turned a one-sided
+indent into a box: bigshot's glade has 518 one-sided margins, including
+a note label with `margin-start: 100` and `margin-end: 10` that rendered
+inside a 100px margin on every side. It is most of why the ported
+windows looked spread out, and no stylesheet could have fixed it,
+because the spread was in the tree.
+
+The shim still sends a plain integer when every side agrees, which is
+the common case, so most nodes are unchanged.
