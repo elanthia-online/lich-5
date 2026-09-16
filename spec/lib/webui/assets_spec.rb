@@ -40,6 +40,32 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (event.target.closest(".composite-region")) return;')
   end
 
+  # The tree is rebuilt on every commit, so an unconditional report after
+  # layout sent one of these after every render -- and a render landing in
+  # that gap made it stale, which the viewer saw as a refusal.
+  it 'reports a scroll extent only when it has changed' do
+    expect(javascript).to include('if (page.scrollExtents?.get(component.cid) === extent) return;')
+    expect(javascript).to include('(page.scrollExtents ||= new Map()).set(component.cid, extent);')
+  end
+
+  # One event is remembered for retry, so an unsolicited report must not
+  # overwrite a click still in flight.
+  it 'keeps unsolicited reports out of the retry slot' do
+    expect(javascript).to include('const UNSOLICITED = new Set(["scrolled"]);')
+    expect(javascript).to include('if (!UNSOLICITED.has(event)) {')
+  end
+
+  it 'does not show the viewer a stale report they never sent' do
+    refusal = javascript[/} else if \(message\.type === "refusal"\) \{.*?\n    \}/m]
+
+    # The retry still comes first; only an already-retried event falls through.
+    expect(refusal.index('if (message.reason === "stale_generation" && pendingEvent)'))
+      .to be < refusal.index('console.warn("webui refusal", message);')
+    expect(refusal).to include('if (message.reason === "stale_generation") {')
+    # Any other refusal is still surfaced.
+    expect(refusal).to include('notify(detail ? `${text}: ${detail}` : text, "error")')
+  end
+
   it 'reports both scroll axes, since a GTK adjustment is per-axis' do
     %w[position_x upper_x page_size_x].each do |field|
       expect(javascript.scan(/#{field}:/).size).to eq(2)
