@@ -866,21 +866,21 @@ module Lich
             iter = TreeIter.new(self, next_key, Array.new(n_columns) { |i| coerce(i, nil) }, parent&.key)
             @rows << iter
             row_changed!
-            iter
+            dup_row(iter)
           end
 
           def prepend(parent = nil)
             iter = TreeIter.new(self, next_key, Array.new(n_columns) { |i| coerce(i, nil) }, parent&.key)
             @rows.unshift(iter)
             row_changed!
-            iter
+            dup_row(iter)
           end
 
           def insert(position, parent = nil)
             iter = TreeIter.new(self, next_key, Array.new(n_columns) { |i| coerce(i, nil) }, parent&.key)
             @rows.insert(position.to_i.clamp(0, @rows.length), iter)
             row_changed!
-            iter
+            dup_row(iter)
           end
 
           def remove(iter)
@@ -899,7 +899,7 @@ module Lich
           def each
             return enum_for(:each) unless block_given?
 
-            @rows.dup.each { |iter| yield self, iter.path, iter }
+            @rows.dup.each { |iter| yield self, iter.path, dup_row(iter) }
           end
 
           # A copy, like every iter the model hands out: #next! advances by

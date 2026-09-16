@@ -2471,13 +2471,39 @@ module Lich
           end
 
           def destroy
-            @responses << ResponseType::DELETE_EVENT if @responses.empty?
+            release_waiters
             super
           end
 
-          def browser_exited
-            @responses << ResponseType::DELETE_EVENT if @responses.empty?
+          # The viewer closing the tab is the ordinary way a dialog goes
+          # away, and it arrives here -- not through browser_exited, which
+          # only fires when the whole browser dies. Without this, `run`
+          # waited on a queue nobody would ever push to: a plain
+          # confirmation dialog with no :delete_event handler hung the
+          # script forever. The base class emits :delete_event; the waiters
+          # have to be let go too.
+          def viewer_closed
+            return if @delete_emitted || destroyed?
+
             super
+            release_waiters
+          end
+
+          def browser_exited
+            release_waiters
+            super
+          end
+
+          private
+
+          # Unblocks every thread parked in #run. A single push only wakes
+          # one consumer, so concurrent callers each need their own.
+          def release_waiters
+            @destroyed = true
+            waiting = @responses.num_waiting
+            (waiting.positive? ? waiting : 1).times do
+              @responses << ResponseType::DELETE_EVENT
+            end
           end
         end
 

@@ -191,5 +191,61 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
 
       expect(result).to eq(gtk::ResponseType::DELETE_EVENT)
     end
+
+    # The spec above closes the dialog with #destroy, which is what a script
+    # does. A viewer closing the browser TAB arrives as #viewer_closed
+    # instead -- and Dialog overrode #browser_exited (the whole browser
+    # dying) without overriding that. So the ordinary way to dismiss a
+    # confirmation dialog left #run parked on a queue nobody would push to.
+    it 'unblocks with DELETE_EVENT when the viewer closes the tab' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q5', buttons: [['OK', :ok]]) }
+      result = nil
+      thread = Thread.new { result = dialog.run }
+      sleep 0.2
+      session.sync { dialog.viewer_closed }
+
+      expect(thread.join(3)).not_to be_nil
+      expect(result).to eq(gtk::ResponseType::DELETE_EVENT)
+    end
+
+    it 'unblocks when the whole browser exits' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q6', buttons: [['OK', :ok]]) }
+      result = nil
+      thread = Thread.new { result = dialog.run }
+      sleep 0.2
+      session.sync { dialog.browser_exited }
+
+      expect(thread.join(3)).not_to be_nil
+      expect(result).to eq(gtk::ResponseType::DELETE_EVENT)
+    end
+
+    # One push wakes one consumer. Two threads waiting on the same dialog
+    # left the second parked forever.
+    it 'unblocks every thread waiting on the same dialog' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q7', buttons: [['OK', :ok]]) }
+      results = Queue.new
+      threads = Array.new(2) { Thread.new { results << dialog.run } }
+      sleep 0.3
+      session.sync { dialog.viewer_closed }
+      joined = threads.map { |thread| thread.join(3) }
+
+      expect(joined).to all(be_truthy)
+      expect([results.pop, results.pop]).to all(eq(gtk::ResponseType::DELETE_EVENT))
+    end
+
+    it 'still delivers a real response rather than releasing waiters early' do
+      dialog = ok = nil
+      session.sync do
+        dialog = gtk::Dialog.new(title: 'Q8')
+        ok = dialog.add_button('OK', :ok)
+      end
+      result = nil
+      thread = Thread.new { result = dialog.run }
+      sleep 0.2
+      session.sync { ok.send(:receive_event, :activate, Struct.new(:payload).new({})) }
+      thread.join(3)
+
+      expect(result).to eq(:ok)
+    end
   end
 end
