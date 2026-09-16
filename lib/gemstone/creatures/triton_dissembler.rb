@@ -86,7 +86,8 @@
       "Cloak of Shadows (712)",
       "Fasthr's Reward (115)",
       "Spirit Defense (103)",
-      "Spirit Warding I (101)"
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)"
     ],
     defensive_abilities: [],
     special_defenses: []

@@ -10,7 +10,7 @@
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Miasmal Forest",
       uids: [5003039..5003050, 5004035..5004044, 5004049..5004053]
-    },
-    {
-      name: "unmapped",
-      uids: [5004045..5004048, 5004054..5004054]
     },
     {
       name: "Yegharren Plains",

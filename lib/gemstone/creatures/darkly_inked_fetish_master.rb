@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -75,12 +75,48 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Warding II (107)",
+      "Lesser Shroud (120)",
+      "Spirit Warding I (101)",
+      "Spirit Defense (103)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    },
+    {
+      id: :silence,
+      name: "Silence (210)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 21,
+      effects: { silenced: true },
+      dispellable: nil,
+      notes: "Warding, CS 440-458."
+    },
+    {
+      id: :sleep,
+      name: "Sleep (501)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 19,
+      effects: { asleep: true },
+      dispellable: nil,
+      notes: "Warding, CS 429."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -139,6 +175,20 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sleep: [
+        "A darkly inked fetish master claps {pronoun} palms together, momentarily uniting {pronoun} glowing tattoos before forcefully thrusting {pronoun} hands forward toward you!",
+        "Your mind goes completely blank."
+      ],
+      silence: [
+        "A darkly inked fetish master claps {pronoun} palms together, momentarily uniting {pronoun} glowing tattoos before forcefully thrusting {pronoun} hands forward toward you!",
+        "A fresh smell haunts the chill air here, and underfoot, the ground is green-tinged and full of seeds.  What looks to be strips of cucumber are laid out side by side, studded here and there by a sliced ring of black olive.  Opaque granules the size of small apples appear to have been sprinkled over the cucumbers, and looking up finds a substance that is very pale and porous, much like bread.  Though there is no crust on the odd ceiling above, it has been smeared with a white and green-flecked substance.  You also see a murky soul siphon, a darkly inked fetish master and a darkly inked fetish master.",
+        "A pall of silence settles over you."
+      ],
+      sounds: [
+        "A darkly inked fetish master claps {pronoun} palms together, momentarily uniting {pronoun} glowing tattoos before forcefully thrusting {pronoun} hands forward toward you!",
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

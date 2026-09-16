@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: false,
@@ -33,10 +33,6 @@
     {
       name: "Greymist Woods",
       uids: [3021001..3021016, 3022001..3022034]
-    },
-    {
-      name: "unmapped",
-      uids: [5006010..5006039]
     }
   ],
   attack_attributes: {
@@ -97,7 +93,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -153,6 +160,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

@@ -3,6 +3,8 @@
 # rubocop changes and DR toplevel command handling (2023-06-28)
 # sadly adding global level script methods (2024-06-12)
 
+require_relative 'common/move'
+
 # Sentinel constants for dependency.lic gating.
 # When these are defined, dependency.lic skips its inline versions.
 module Lich
@@ -279,12 +281,12 @@ end
 
 def waitrt
   wait_until { (XMLData.roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkrt
+  Script.execution_sleep checkrt
 end
 
 def waitcastrt
   wait_until { (XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f) > 0 }
-  sleep checkcastrt
+  Script.execution_sleep checkcastrt
 end
 
 def checkrt
@@ -295,21 +297,61 @@ def checkcastrt
   [0, XMLData.cast_roundtime_end.to_f - Time.now.to_f + XMLData.server_time_offset.to_f].max
 end
 
-def waitrt?
-  sleep checkrt
-  return true if checkrt > 0.0
-  return false if checkrt == 0
+# Waits out hard roundtime.
+#
+# With no options this is the legacy call, unchanged for every existing
+# caller: one sleep, then report whether roundtime REMAINS. Passing an
+# option opts into the bounded contract: poll in tenth-of-a-second slices,
+# stop early on +interrupt+ or +cap+, and report whether there was
+# roundtime to wait out when the call began.
+#
+# @param interrupt [#call, nil] checked each slice; true ends the wait early
+# @param cap [Numeric, nil] the longest wait allowed, in seconds
+# @return [Boolean] bounded: whether there was roundtime to wait out;
+#   legacy (no options): whether roundtime remains after the sleep
+def waitrt?(interrupt: nil, cap: nil)
+  if interrupt.nil? && cap.nil?
+    Script.execution_sleep checkrt
+    return checkrt > 0.0
+  end
+
+  had_rt = checkrt > 0.0
+  stop_at = cap ? Time.now + cap : nil
+  while checkrt > 0.0
+    return had_rt if interrupt && interrupt.call
+    return had_rt if stop_at && Time.now >= stop_at
+
+    Script.execution_sleep([checkrt, 0.1].min)
+  end
+  had_rt
 end
 
-def waitcastrt?
-  #  sleep checkcastrt
-  current_castrt = checkcastrt
-  if current_castrt.to_f > 0.0
-    sleep(current_castrt)
-    return true
-  else
-    return false
+# Waits out cast (soft) roundtime; see {waitrt?} for the two contracts.
+#
+# @param interrupt [#call, nil] checked each slice; true ends the wait early
+# @param cap [Numeric, nil] the longest wait allowed, in seconds
+# @return [Boolean] bounded: whether there was cast roundtime to wait out;
+#   legacy (no options): whether there was cast roundtime to sleep on
+def waitcastrt?(interrupt: nil, cap: nil)
+  if interrupt.nil? && cap.nil?
+    current_castrt = checkcastrt
+    if current_castrt.to_f > 0.0
+      Script.execution_sleep(current_castrt)
+      return true
+    else
+      return false
+    end
   end
+
+  had_rt = checkcastrt.to_f > 0.0
+  stop_at = cap ? Time.now + cap : nil
+  while checkcastrt.to_f > 0.0
+    return had_rt if interrupt && interrupt.call
+    return had_rt if stop_at && Time.now >= stop_at
+
+    Script.execution_sleep([checkcastrt.to_f, 0.1].min)
+  end
+  had_rt
 end
 
 def checkpoison
@@ -566,222 +608,14 @@ def o;    'out';       end
 
 def out;  'out';       end
 
+# Moves one exit. Implementation lives in Lich::Common::Move (lib/common/move.rb);
+# this shim keeps the top-level name every script calls.
+#
+# @return [true, false, nil] true moved; false this exit is wrong (callers
+#   may drop it from the map); nil blocked for now (keep the exit). After a
+#   false or nil, Lich::Common::Move.last_failure names the line and cause.
 def move(dir = 'none', giveup_seconds = 10, giveup_lines = 30)
-  # [LNet]-[Private]-Casis: "You begin to make your way up the steep headland pathway.  Before traveling very far, however, you lose your footing on the loose stones.  You struggle in vain to maintain your balance, then find yourself falling to the bay below!"  (20:35:36)
-  # [LNet]-[Private]-Casis: "You smack into the water with a splash and sink far below the surface."  (20:35:50)
-  # You approach the entrance and identify yourself to the guard.  The guard checks over a long scroll of names and says, "I'm sorry, the Guild is open to invitees only.  Please do return at a later date when we will be open to the public."
-  if dir == 'none'
-    echo 'move: no direction given'
-    return false
-  end
-
-  need_full_hands = false
-  tried_open = false
-  tried_fix_drag = false
-  line_count = 0
-  room_count = XMLData.room_count
-  giveup_time = Time.now.to_i + giveup_seconds.to_i
-  save_stream = Array.new
-
-  put_dir = proc {
-    if XMLData.room_count > room_count
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return true
-    end
-    waitrt?
-    wait_while { stunned? }
-    giveup_time = Time.now.to_i + giveup_seconds.to_i
-    line_count = 0
-    save_stream.push(clear)
-    put dir
-  }
-
-  put_dir.call
-
-  loop {
-    line = get?
-    unless line.nil?
-      save_stream.push(line)
-      line_count += 1
-    end
-    if line.nil?
-      sleep 0.1
-    elsif line =~ /^You realize that would be next to impossible while in combat.|^You can't do that while engaged!|^You are engaged to |^You need to retreat out of combat first!|^You try to move, but you're engaged|^While in combat\?  You'll have better luck if you first retreat/
-      # DragonRealms
-      fput 'retreat'
-      fput 'retreat'
-      put_dir.call
-    elsif line =~ /^You can't enter .+ and remain hidden or invisible\.|if he can't see you!$|^You can't enter .+ when you can't be seen\.$|^You can't do that without being seen\.$|^How do you intend to get .*? attention\?  After all, no one can see you right now\.$/
-      fput 'unhide'
-      put_dir.call
-    elsif (line =~ /^You (?:take a few steps toward|trudge up to|limp towards|march up to|sashay gracefully up to|skip happily towards|sneak up to|stumble toward) a rusty doorknob/) and (dir =~ /door/)
-      which = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eight', 'ninth', 'tenth', 'eleventh', 'twelfth']
-      # avoid stomping the room for the entire session due to a transient failure
-      dir = dir.to_s
-      if dir =~ /\b#{which.join('|')}\b/
-        dir.sub!(/\b(#{which.join('|')})\b/) { "#{which[which.index($1) + 1]}" }
-      else
-        dir.sub!('door', 'second door')
-      end
-      put_dir.call
-    elsif line =~ /^You can't go there|^You can't (?:go|swim) in that direction\.|^Where are you trying to go\?|^What were you referring to\?|^I could not find what you were referring to\.|^How do you plan to do that here\?|^You take a few steps towards|^You cannot do that\.|^You settle yourself on|^You shouldn't annoy|^You can't go to|^That's probably not a very good idea|^Maybe you should look|^You are already(?! as far away as you can get)|^You walk over to|^You step over to|The [\w\s]+ is too far away|You may not pass\.|become impassable\.|prevents you from entering\.|Please leave promptly\.|is too far above you to attempt that\.$|^Uh, yeah\.  Right\.$|^Definitely NOT a good idea\.$|^Your attempt fails|^There doesn't seem to be any way to do that at the moment\.$/
-      echo 'move: failed'
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return false
-    elsif line =~ /^[A-z\s-] is unable to follow you\.$|^An unseen force prevents you\.$|^Sorry, you aren't allowed to enter here\.|^That looks like someplace only performers should go\.|^As you climb, your grip gives way and you fall down|^The clerk stops you from entering the partition and says, "I'll need to see your ticket!"$|^The guard stops you, saying, "Only members of registered groups may enter the Meeting Hall\.  If you'd like to visit, ask a group officer for a guest pass\."$|^An? .*? reaches over and grasps [A-Z][a-z]+ by the neck preventing (?:him|her) from being dragged anywhere\.$|^You'll have to wait, [A-Z][a-z]+ .* locker|^As you move toward the gate, you carelessly bump into the guard|^You attempt to enter the back of the shop, but a clerk stops you.  "Your reputation precedes you!|you notice that thick beams are placed across the entry with a small sign that reads, "Abandoned\."$|appears to be closed, perhaps you should try again later\?$/
-      echo 'move: failed'
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      # return nil instead of false to show the direction shouldn't be removed from the map database
-      return nil
-    elsif line =~ /^You grab [A-Z][a-z]+ and try to drag h(?:im|er), but s?he (?:is too heavy|doesn't budge)\.$|^Tentatively, you attempt to swim through the nook\.  After only a few feet, you begin to sink!  Your lungs burn from lack of air, and you begin to panic!  You frantically paddle back to safety!$|^Guards(?:wo)?man [A-Z][a-z]+ stops you and says, "(?:Stop\.|Halt!)  You need to make sure you check in|^You step into the root, but can see no way to climb the slippery tendrils inside\.  After a moment, you step back out\.$|^As you start .*? back to safe ground\.$|^You stumble a bit as you try to enter the pool but feel that your persistence will pay off\.$|^A shimmering field of magical crimson and gold energy flows through the area\.$|^You attempt to navigate your way through the fog, but (?:quickly become entangled|get turned around)|^Trying to judge the climb, you peer over the edge\.\s*A wave of dizziness hits you, and you back away from the .*\.$|^You approach the .*, but the steepness is intimidating\.$|^You make your way (?:up|down) the .*\.\s*Partway (?:up|down), you make the mistake of looking down\. Struck by vertigo, you cling to the .* for a few moments, then slowly climb back (?:up|down)\.$|^You pick your way up the .*, but reach a point where your footing is questionable.\s*Reluctantly, you climb back down.$/
-      sleep 1
-      waitrt?
-      put_dir.call
-    elsif line =~ /^Climbing.*(?:plunge|fall)|^Tentatively, you attempt to climb.*(?:fall|slip)|^You start up the .* but slip after a few feet and fall to the ground|^You start.*but quickly realize|^You.*drop back to the ground|^You leap .* fall unceremoniously to the ground in a heap\.$|^You search for a way to make the climb .*? but without success\.$|^You start to climb .* you fall to the ground|^You attempt to climb .* wrong approach|^You run towards .*? slowly retreat back, reassessing the situation\.|^You attempt to climb down the .*, but you can't seem to find purchase\.|^You start down the .*, but you find it hard going.\s*Rather than risking a fall, you make your way back up\./
-      sleep 1
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      put_dir.call
-    elsif line =~ /^(?:You swim .*, (?:cutting through|navigating)|You swim .*, struggling against|Your lungs burn and your muscles ache)/
-      # swims in Sailor's Grief
-      return true
-    elsif line =~ /^You begin to climb up the silvery thread.* you tumble to the ground/
-      sleep 0.5
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      if checkleft or checkright
-        need_full_hands = true
-        empty_hands
-      end
-      put_dir.call
-    elsif line == 'You are too injured to be doing any climbing!'
-      if (resolve = Spell[9704]) and resolve.known?
-        wait_until { resolve.affordable? }
-        resolve.cast
-        put_dir.call
-      else
-        return nil
-      end
-    elsif line =~ /^You(?:'re going to| will) have to climb that\./
-      dir.gsub!('go', 'climb')
-      put_dir.call
-    elsif line =~ /^You can't climb that\./
-      dir.gsub!('climb', 'go')
-      put_dir.call
-    elsif line =~ /^You can't drag/
-      if tried_fix_drag
-        fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(*save_stream.flatten)
-        return false
-      elsif (dir =~ /^(?:go|climb) .+$/) and (drag_line = reget.reverse.find { |l| l =~ /^You grab .*?(?:'s body)? and drag|^You are now automatically attempting to drag .*? when/ })
-        tried_fix_drag = true
-        name = (/^You grab (.*?)('s body)? and drag/.match(drag_line).captures.first || /^You are now automatically attempting to drag (.*?) when/.match(drag_line).captures.first)
-        target = /^(?:go|climb) (.+)$/.match(dir).captures.first
-        fput "drag #{name}"
-        dir = "drag #{name} #{target}"
-        put_dir.call
-      else
-        tried_fix_drag = true
-        dir.sub!(/^climb /, 'go ')
-        put_dir.call
-      end
-    elsif line =~ /^Maybe if your hands were empty|^You figure freeing up both hands might help\.|^You can't .+ with your hands full\.$|^You'll need empty hands to climb that\.$|^It's a bit too difficult to swim holding|^You will need both hands free for such a difficult task\./
-      need_full_hands = true
-      empty_hands
-      put_dir.call
-    elsif line =~ /(?:appears|seems) to be closed\.$|^You cannot quite manage to squeeze between the stone doors\.$/
-      if tried_open
-        fill_hands if need_full_hands
-        Script.current.downstream_buffer.unshift(*save_stream.flatten)
-        return false
-      else
-        tried_open = true
-        fput dir.sub(/go|climb/, 'open')
-        put_dir.call
-      end
-    elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
-      if $2.to_i > 1
-        sleep($2.to_i - "0.2".to_f)
-      else
-        sleep 0.3
-      end
-      put_dir.call
-    elsif line =~ /will have to stand up first|must be standing first|^You'll have to get up first|^But you're already sitting!|^Shouldn't you be standing first|^That would be quite a trick from that position\.  Try standing up\.|^Perhaps you should stand up|^Standing up might help|^You should really stand up first|You can't do that while sitting|You must be standing to do that|You can't do that while lying down|^You must be standing|^You can't do that from that position/
-      fput 'stand'
-      waitrt?
-      put_dir.call
-    elsif line =~ /^You're still recovering from your recent/
-      sleep 2
-      put_dir.call
-    elsif line =~ /^The ground approaches you at an alarming rate/
-      sleep 1
-      fput 'stand' unless standing?
-      put_dir.call
-    elsif line =~ /You go flying down several feet, landing with a/
-      sleep 1
-      fput 'stand' unless standing?
-      put_dir.call
-    elsif line =~ /^Sorry, you may only type ahead/
-      sleep 1
-      put_dir.call
-    elsif line == 'You are still stunned.'
-      wait_while { stunned? }
-      put_dir.call
-    elsif line =~ /you slip (?:on a patch of ice )?and flail uselessly as you land on your rear(?:\.|!)$|You wobble and stumble only for a moment before landing flat on your face!$|^You slip in the mud and fall flat on your back\!$/
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      put_dir.call
-    elsif line =~ /^You flick your hand (?:up|down)wards and focus your aura on your disk, but your disk only wobbles briefly\.$/
-      put_dir.call
-    elsif line =~ /^You dive into the fast-moving river, but the current catches you and whips you back to shore, wet and battered\.$|^Running through the swampy terrain, you notice a wet patch in the bog|^You flounder around in the water.$|^You blunder around in the water, barely able|^You struggle against the swift current to swim|^You slap at the water in a sad failure to swim|^You work against the swift current to swim/
-      waitrt?
-      put_dir.call
-    elsif line =~ /^(You notice .* at your feet, and do not wish to leave it behind|As you prepare to move away, you remember)/
-      fput "stow feet"
-      sleep 1
-      put_dir.call
-    elsif line =~ /The electricity courses through you in a raging torrent, its power singing in your veins!  Spent, the boltstone apparatus shatters into glinting fragments\.|The lightning strikes you in an agonizing eruption of liquid radiance!/
-      sleep(0.5)
-      wait_while { stunned? }
-      waitrt?
-      fput 'stand' unless standing?
-      waitrt?
-      put_dir.call
-    elsif line == "You don't seem to be able to move to do that."
-      30.times {
-        break if clear.include?('You regain control of your senses!')
-
-        sleep 0.1
-      }
-      put_dir.call
-    elsif line =~ /^It's pitch dark and you can't see a thing!/
-      echo "You will need a light source to continue your journey"
-      return true
-    end
-    if XMLData.room_count > room_count
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return true
-    end
-    if Time.now.to_i >= giveup_time
-      echo "move: no recognized response in #{giveup_seconds} seconds.  giving up."
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return nil
-    end
-    if line_count >= giveup_lines
-      echo "move: no recognized response after #{line_count} lines.  giving up."
-      fill_hands if need_full_hands
-      Script.current.downstream_buffer.unshift(*save_stream.flatten)
-      return nil
-    end
-  }
+  Lich::Common::Move.move(dir, giveup_seconds, giveup_lines)
 end
 
 def watchhealth(value, theproc = nil, &block)
@@ -829,6 +663,7 @@ def wait_until(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -859,6 +694,7 @@ def wait_while(announce = nil)
     end
     sleep 0.25
   end
+ensure
   Thread.current.priority = priosave
 end
 
@@ -1436,13 +1272,13 @@ end
 
 def pause(num = 1)
   if num.to_s =~ /m/
-    sleep((num.sub(/m/, '').to_f * 60))
+    Script.execution_sleep((num.sub(/m/, '').to_f * 60))
   elsif num.to_s =~ /h/
-    sleep((num.sub(/h/, '').to_f * 3600))
+    Script.execution_sleep((num.sub(/h/, '').to_f * 3600))
   elsif num.to_s =~ /d/
-    sleep((num.sub(/d/, '').to_f * 86400))
+    Script.execution_sleep((num.sub(/d/, '').to_f * 86400))
   else
-    sleep(num.to_f)
+    Script.execution_sleep(num.to_f)
   end
 end
 
@@ -1644,11 +1480,58 @@ def fput(message, *waitingfor)
   unless (script = Script.current) then respond('--- waitfor: Unable to identify calling script.'); return false; end
   waitingfor.flatten!
 
-  # Optional timeout via trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
-  # Default 60s prevents infinite hangs when the game stops responding.
-  # Use timeout: 0 to disable (original behavior).
+  # Options via a trailing Hash argument: fput('cmd', 'pattern', timeout: 30)
+  #   timeout:          seconds with no game response before giving up (60;
+  #                     0 disables, the original behavior)
+  #   max_resends:      how many times a refusal ("...wait 3", "struggle to
+  #                     stand", stunned) may trigger a resend before giving
+  #                     up (nil, the original: unbounded)
+  #   interrupt:        a callable checked on every wait and before every
+  #                     resend; true ends the send at once (nil: never)
+  #   resend_transient: on a transient refusal that is not a stun or a
+  #                     web (a "can't seem", "don't seem"), resend after a
+  #                     quarter second instead of giving up (false, the
+  #                     original; bigshot's bs_put resends)
+  #   failures:         :false (the original: every failure returns false)
+  #                     or :symbol - :no_response, :too_many_resends,
+  #                     :interrupted, :dead, :refused - so a caller can
+  #                     tell them apart
   options = (waitingfor.pop if waitingfor.last.is_a?(Hash)) || {}
-  timeout = options[:timeout] || options['timeout'] || 60
+  option = ->(key) { options[key] || options[key.to_s] }
+  timeout = option.call(:timeout) || 60
+  max_resends = option.call(:max_resends)
+  interrupt = option.call(:interrupt)
+  unless interrupt.nil? || interrupt.respond_to?(:call)
+    raise ArgumentError, "fput: interrupt: must respond to call"
+  end
+  resend_transient = option.call(:resend_transient) ? true : false
+  symbols = option.call(:failures) == :symbol
+  fail_with = ->(reason) { symbols ? reason : false }
+  interrupted = -> { interrupt && interrupt.call ? true : false }
+  # With an interrupt, sleep in slices so it lands within a tenth of a
+  # second; without one, the plain sleep of before. True when interrupted.
+  wait = lambda do |seconds|
+    if interrupt.nil?
+      Script.execution_sleep(seconds)
+      return false
+    end
+    slices = (seconds / 0.1).ceil
+    slices.times do
+      return true if interrupted.call
+
+      Script.execution_sleep(0.1)
+    end
+    false
+  end
+  resends = 0
+  # true after 'stand' went out and before its reply came back; the reply
+  # is not the answer to message, so message goes out again on top of it
+  standing = false
+  # a refusal that asks for a resend: false when the cap allows it
+  over_cap = lambda do
+    resends += 1
+    !max_resends.nil? && resends > max_resends
+  end
 
   clear
   put(message)
@@ -1658,9 +1541,11 @@ def fput(message, *waitingfor)
     string = get?
 
     if string.nil?
+      return fail_with.call(:interrupted) if interrupted.call
+
       if timeout > 0 && (Time.now - timer > timeout)
         echo "fput: No game response for #{timeout}s to '#{message}'"
-        return false
+        return fail_with.call(:no_response)
       end
       pause 0.1
       next
@@ -1669,36 +1554,67 @@ def fput(message, *waitingfor)
     timer = Time.now # Reset timeout on any game response
 
     if string =~ /(?:\.\.\.wait |Wait )(?<wait_time>[0-9]+)/
+      return fail_with.call(:too_many_resends) if over_cap.call
+
       hold_up = Regexp.last_match[:wait_time].to_i
-      sleep(hold_up) unless hold_up.nil?
+      return fail_with.call(:interrupted) if wait.call(hold_up)
+
+      standing = false
       clear
       put(message)
       next
     elsif string =~ /^You.+struggle.+stand/
+      # stand in this frame, under the same cap and interrupt, instead of
+      # a nested fput('stand') that started its own count and could not
+      # be interrupted; a persistent struggle recursed until the stack
+      # gave out
+      return fail_with.call(:too_many_resends) if over_cap.call
+      return fail_with.call(:interrupted) if interrupted.call
+
+      standing = true
       clear
-      fput 'stand'
+      put('stand')
       next
     elsif string =~ /stunned|can't do that while|cannot seem|^(?!You rummage).*can't seem|don't seem|Sorry, you may only type ahead/
       if dead?
         echo "You're dead...! You can't do that!"
-        sleep 1
+        Script.execution_sleep 1
         script.downstream_buffer.unshift(string)
-        return false
+        return fail_with.call(:dead)
       elsif checkstunned
         while checkstunned
-          sleep("0.25".to_f)
+          return fail_with.call(:interrupted) if interrupted.call
+
+          Script.execution_sleep("0.25".to_f)
         end
       elsif checkwebbed
         while checkwebbed
-          sleep("0.25".to_f)
+          return fail_with.call(:interrupted) if interrupted.call
+
+          Script.execution_sleep("0.25".to_f)
         end
       elsif string =~ /Sorry, you may only type ahead/
-        sleep 1
+        return fail_with.call(:interrupted) if wait.call(1)
+      elsif resend_transient
+        return fail_with.call(:interrupted) if wait.call(0.25)
       else
-        sleep 0.1
+        Script.execution_sleep 0.1
         script.downstream_buffer.unshift(string)
-        return false
+        return fail_with.call(:refused)
       end
+      if over_cap.call
+        script.downstream_buffer.unshift(string)
+        return fail_with.call(:too_many_resends)
+      end
+
+      standing = false
+      clear
+      put(message)
+      next
+    elsif standing
+      # the reply to 'stand' ("You stand back up.", "You are already
+      # standing"): message went unanswered, send it again
+      standing = false
       clear
       put(message)
       next
@@ -1711,7 +1627,9 @@ def fput(message, *waitingfor)
           script.downstream_buffer.unshift(string)
           return foundit
         end
-        sleep 1
+        return fail_with.call(:too_many_resends) if over_cap.call
+        return fail_with.call(:interrupted) if wait.call(1)
+
         clear
         put(message)
         next
@@ -1979,13 +1897,13 @@ def dothis(action, success_line)
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         break
       elsif line == 'You are still stunned.'
         wait_while { stunned? }
@@ -1993,7 +1911,7 @@ def dothis(action, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -2002,7 +1920,7 @@ def dothis(action, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -2014,7 +1932,7 @@ def dothis(action, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
@@ -2026,28 +1944,32 @@ def dothis(action, success_line)
   }
 end
 
-def dothistimeout(action, timeout, success_line)
+# @param interrupt [#call, nil] checked on every read; true ends the wait
+#   at once and returns nil, the way a timeout does
+def dothistimeout(action, timeout, success_line, interrupt: nil)
   end_time = Time.now.to_f + timeout
   line = nil
   loop {
     Script.current.clear
     put action unless action.nil?
     loop {
+      return nil if interrupt && interrupt.call
+
       line = get?
       if line.nil?
-        sleep 0.1
+        Script.execution_sleep 0.1
       elsif line =~ success_line
         return line
       elsif line =~ /^(\.\.\.w|W)ait ([0-9]+) sec(onds)?\.$/
         if $2.to_i > 1
-          sleep($2.to_i - "0.5".to_f)
+          Script.execution_sleep($2.to_i - "0.5".to_f)
         else
-          sleep 0.3
+          Script.execution_sleep 0.3
         end
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'Sorry, you may only type ahead 1 command.'
-        sleep 1
+        Script.execution_sleep 1
         end_time = Time.now.to_f + timeout
         break
       elsif line == 'You are still stunned.'
@@ -2057,7 +1979,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'That is impossible to do while unconscious!'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line =~ /Your thoughts slowly come back to you as you find yourself lying on the ground\.  You must have been sleeping\.$|^You wake up from your slumber\.$/
           end
@@ -2066,7 +1988,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == "You don't seem to be able to move to do that."
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             break if line == 'The restricting force that envelops you dissolves away.'
           end
@@ -2078,7 +2000,7 @@ def dothistimeout(action, timeout, success_line)
       elsif line == 'You find that impossible under the effects of the lullabye.'
         100.times {
           unless (line = get?)
-            sleep 0.1
+            Script.execution_sleep 0.1
           else
             # fixme
             break if line == 'You shake off the effects of the lullabye.'
@@ -2098,169 +2020,38 @@ $link_highlight_end = ''
 $speech_highlight_start = ''
 $speech_highlight_end = ''
 
+require File.join(LIB_DIR, 'common', 'markup.rb')
+
+# Frontend markup translation lives in Lich::Common::Markup. These six names
+# stay global because scripts in the wild call them unqualified.
+
 def fb_to_sf(line)
-  begin
-    return line if line == "\r\n"
-
-    line = line.gsub(/<c>/, "")
-    return nil if line.gsub("\r\n", '').length < 1
-
-    return line
-  rescue
-    $_CLIENT_.puts "--- Error: fb_to_sf: #{$!}"
-    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
-    Lich.log("--- Error: fb_to_sf: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
-    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
-    Lich.log("Line: #{line}")
-  end
+  Lich::Common::Markup.fb_to_sf(line)
 end
 
 def sf_to_wiz(line, bypass_multiline: false)
-  begin
-    return line if line == "\r\n"
-
-    unless bypass_multiline
-      if $sftowiz_multiline
-        $sftowiz_multiline = $sftowiz_multiline + line
-        line = $sftowiz_multiline
-      end
-      if (line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length)
-        $sftowiz_multiline = line
-        return nil
-      end
-      if (line.scan(/<style id="\w+"[^>]*\/>/).length > line.scan(/<style id=""[^>]*\/>/).length)
-        $sftowiz_multiline = line
-        return nil
-      end
-      $sftowiz_multiline = nil
-    end
-    if line =~ /<LaunchURL src="(.*?)" \/>/
-      $_CLIENT_.puts "\034GSw00005\r\nhttps://www.play.net#{$1}\r\n"
-    end
-    if line =~ /<preset id='speech'>(.*?)<\/preset>/m
-      line = line.sub(/<preset id='speech'>.*?<\/preset>/m, "#{$speech_highlight_start}#{$1}#{$speech_highlight_end}")
-    end
-    if line =~ /<pushStream id="thoughts"[^>]*>\[([^\\]+?)\]\s*(.*?)<popStream\/>/m
-      thought_channel = $1
-      msg = $2
-      thought_channel.gsub!(' ', '-')
-      msg.gsub!('<pushBold/>', '')
-      msg.gsub!('<popBold/>', '')
-      line = line.sub(/<pushStream id="thoughts".*<popStream\/>/m, "You hear the faint thoughts of [#{thought_channel}]-ESP echo in your mind:\r\n#{msg}")
-    end
-    if line =~ /<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m
-      line = line.sub(/<pushStream id="voln"[^>]*>\[Voln \- (?:<a[^>]*>)?([A-Z][a-z]+)(?:<\/a>)?\]\s*(".*")[\r\n]*<popStream\/>/m, "The Symbol of Thought begins to burn in your mind and you hear #{$1} thinking, #{$2}\r\n")
-    end
-    if line =~ /<stream id="thoughts"[^>]*>([^:]+): (.*?)<\/stream>/m
-      line = line.sub(/<stream id="thoughts"[^>]*>.*?<\/stream>/m, "You hear the faint thoughts of #{$1} echo in your mind:\r\n#{$2}")
-    end
-    if line =~ /<pushStream id="familiar"[^>]*>(.*)<popStream\/>/m
-      line = line.sub(/<pushStream id="familiar"[^>]*>.*<popStream\/>/m, "\034GSe\r\n#{$1}\034GSf\r\n")
-    end
-    if line =~ /<pushStream id="death"\/>(.*?)<popStream\/>/m
-      line = line.sub(/<pushStream id="death"\/>.*?<popStream\/>/m, "\034GSw00003\r\n#{$1}\034GSw00004\r\n")
-    end
-    if line =~ /<style id="roomName" \/>(.*?)<style id=""\/>/m
-      line = line.sub(/<style id="roomName" \/>.*?<style id=""\/>/m, "\034GSo\r\n#{$1}\034GSp\r\n")
-    end
-    line.gsub!(/<style id="roomDesc"\/><style id=""\/>\r?\n/, '')
-    if line =~ /<style id="roomDesc"\/>(.*?)<style id=""\/>/m
-      desc = $1.gsub(/<a[^>]*>/, $link_highlight_start).gsub("</a>", $link_highlight_end)
-      line = line.sub(/<style id="roomDesc"\/>.*?<style id=""\/>/m, "\034GSH\r\n#{desc}\034GSI\r\n")
-    end
-    line = line.gsub("</prompt>\r\n", "</prompt>")
-    line = line.gsub("<pushBold/>", "\034GSL\r\n")
-    line = line.gsub("<popBold/>", "\034GSM\r\n")
-    line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-    line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-    line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-    line = line.gsub(/<[^>]+>/, '')
-    line = line.gsub('&gt;', '>')
-    line = line.gsub('&lt;', '<')
-    line = line.gsub('&amp;', '&')
-    return nil if line.gsub("\r\n", '').length < 1
-
-    return line
-  rescue
-    $_CLIENT_.puts "--- Error: sf_to_wiz: #{$!}"
-    $_CLIENT_.puts "$_SERVERSTRING_: #{$_SERVERSTRING_}"
-    Lich.log("--- Error: sf_to_wiz: #{$!}\n\t#{$!.backtrace.join("\n\t")}")
-    Lich.log("$_SERVERSTRING_: #{$_SERVERSTRING_}")
-    Lich.log("Line: #{line}")
-  end
+  Lich::Common::Markup.sf_to_wiz(line, bypass_multiline: bypass_multiline)
 end
 
-# Strip game markup from a server-stream fragment.
+# See Lich::Common::Markup.strip_xml for the multiline contract.
 #
-# @param line [String] one server-stream fragment
-# @param type [String, Symbol, nil] optional multiline buffer key. When nil (the
-#   default) the fragment is stripped statelessly. When given, unfinished
-#   pushStream content is accumulated in a process-global, type-keyed buffer
-#   ($strip_xml_multiline) until a balancing popStream arrives, so an element
-#   split across reads is reassembled before stripping. Pass it as a keyword
-#   (type: "main"); the keyword form is the supported call shape.
-# @return [String, nil]
-#   - the stripped text when printable content remains
-#   - nil when the line is entirely whitespace, when stripping leaves no
-#     printable text, or while a typed multiline fragment is still being
-#     accumulated
-# @note nil is a normal return, not an error. Callers commonly feed the result
-#   straight to String#split; that is safe because NilClass#split is patched to
-#   return [] (see lib/common/class_exts/nilclass.rb), so no nil guard is needed.
+# @note nil is a normal return, not an error. Callers commonly feed the
+#   result straight to String#split; that is safe because NilClass#split is
+#   patched to return [] (see lib/common/class_exts/nilclass.rb).
 def strip_xml(line, type: nil)
-  if type.nil?
-    strip_xml_simple(line)
-  else
-    strip_xml_multiline(line, type)
-  end
+  Lich::Common::Markup.strip_xml(line, type: type)
 end
 
-def strip_xml_simple(line)
-  return nil if line == "\r\n" # short-circuit empty links
-
-  line = line.gsub(/<pushStream id=["'](?:spellfront|inv|bounty|society|reserve|speech|talk)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
-  line = line.gsub(/<stream id="Spells">.*?<\/stream>/m, '')
-  line = line.gsub(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
-  line = line.gsub(/<[^>]+>/, '')
-  line = Lich::Common::XmlEntities.decode(line)
-
-  return nil if line.match?(/\A\s*\z/)
-
-  line
-end
-
-def strip_xml_multiline(line, type)
-  $strip_xml_multiline ||= {}
-  line = $strip_xml_multiline[type] + line if $strip_xml_multiline[type]
-  if line.scan(/<pushStream[^>]*\/>/).length > line.scan(/<popStream[^>]*\/>/).length
-    $strip_xml_multiline[type] = line
-    return nil
-  end
-  $strip_xml_multiline[type] = nil
-  strip_xml_simple(line)
-end
-
-# Internal helpers for strip_xml; not part of the script-facing API.
-private :strip_xml_simple, :strip_xml_multiline
-
+# .dup because markup.rb is frozen_string_literal and global_defs.rb never
+# was: these returned mutable strings before the extraction, and a wild
+# script appending to the result in place would now raise FrozenError. The
+# copy keeps the global contract byte-identical *and* mutable.
 def monsterbold_start
-  if Frontend.supports_gsl?
-    "\034GSL\r\n"
-  elsif Frontend.supports_xml?
-    '<pushBold/>'
-  else
-    ''
-  end
+  Lich::Common::Markup.monsterbold_start.dup
 end
 
 def monsterbold_end
-  if Frontend.supports_gsl?
-    "\034GSM\r\n"
-  elsif Frontend.supports_xml?
-    '<popBold/>'
-  else
-    ''
-  end
+  Lich::Common::Markup.monsterbold_end.dup
 end
 
 # Multiple frontends may attach to one persistent detachable listener. The
@@ -2444,6 +2235,8 @@ def dispatch_client_input(client_string)
   end
 end
 
+require File.join(LIB_DIR, 'common', 'client_commands', 'builtins.rb')
+
 def do_client(client_string)
   client_string.strip!
   #   Buffer.update(client_string, Buffer::UPSTREAM)
@@ -2453,442 +2246,10 @@ def do_client(client_string)
 
   if client_string =~ /^(?:<c>)?#{$lich_char_regex}(.+)$/
     cmd = $1
-    if cmd =~ /^k$|^kill$|^stop$/
-      if Script.running.empty?
-        respond '--- Lich: no scripts to kill'
-      else
-        Script.running.last.kill
-      end
-    elsif cmd =~ /^p$|^pause$/
-      if (s = Script.running.reverse.find { |s_check| not s_check.paused? })
-        s.pause
-      else
-        respond '--- Lich: no scripts to pause'
-      end
-      nil
-    elsif cmd =~ /^u$|^unpause$/
-      if (s = Script.running.reverse.find { |s_check| s_check.paused? })
-        s.unpause
-      else
-        respond '--- Lich: no scripts to unpause'
-      end
-      nil
-    elsif cmd =~ /^ka$|^kill\s?all$|^stop\s?all$/
-      respond('--- Lich: no scripts to kill') if Script.kill_all.zero?
-    elsif cmd == 'kd'
-      respond('--- Lich: no scripts to kill') if Script.kill_all(:force => true).zero?
-    elsif cmd =~ /^pa$|^pause\s?all$/
-      did_something = false
-      Script.running.find_all { |s_check| not s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.pause; did_something = true }
-      respond('--- Lich: no scripts to pause') unless did_something
-    elsif cmd =~ /^ua$|^unpause\s?all$/
-      did_something = false
-      Script.running.find_all { |s_check| s_check.paused? and not s_check.no_pause_all }.each { |s_check| s_check.unpause; did_something = true }
-      respond('--- Lich: no scripts to unpause') unless did_something
-    elsif cmd =~ /^(k|kill|stop|p|pause|u|unpause)\s(.+)/
-      action = $1
-      target = $2
-      script = Script.running.find { |s_running| s_running.name == target } || Script.hidden.find { |s_hidden| s_hidden.name == target } || Script.running.find { |s_running| s_running.name =~ /^#{target}/i } || Script.hidden.find { |s_hidden| s_hidden.name =~ /^#{target}/i }
-      if script.nil?
-        respond "--- Lich: #{target} does not appear to be running! Use '#{$clean_lich_char}list' or '#{$clean_lich_char}listall' to see what's active."
-      elsif action =~ /^(?:k|kill|stop)$/
-        script.kill
-      elsif action =~ /^(?:p|pause)$/
-        script.pause
-      elsif action =~ /^(?:u|unpause)$/
-        script.unpause
-      end
-      target = nil
-    elsif cmd =~ /^list\s?(?:all)?$|^l(?:a)?$/i
-      if cmd =~ /a(?:ll)?/i
-        list = Script.running + Script.hidden
-      else
-        list = Script.running
-      end
-      if list.empty?
-        respond '--- Lich: no active scripts'
-      else
-        respond "--- Lich: #{list.collect { |active| active.paused? ? "#{active.name} (paused)" : active.name }.join(", ")}"
-      end
-      nil
-    elsif cmd =~ /^force\s+[^\s]+/
-      if cmd =~ /^force\s+([^\s]+)\s+(.+)$/
-        Script.start($1, $2, :force => true)
-      elsif cmd =~ /^force\s+([^\s]+)/
-        Script.start($1, :force => true)
-      end
-    elsif cmd =~ /^send |^s /
-      if cmd.split[1] == "to"
-        script = (Script.running + Script.hidden).find { |scr| scr.name == cmd.split[2].chomp.strip } || script = (Script.running + Script.hidden).find { |scr| scr.name =~ /^#{cmd.split[2].chomp.strip}/i }
-        if script
-          msg = cmd.split[3..-1].join(' ').chomp
-          if script.want_downstream
-            script.downstream_buffer.push(msg)
-          else
-            script.unique_buffer.push(msg)
-          end
-          respond "--- sent to '#{script.name}': #{msg}"
-        else
-          respond "--- Lich: '#{cmd.split[2].chomp.strip}' does not match any active script!"
-        end
-        nil
-      else
-        if Script.running.empty? and Script.hidden.empty?
-          respond('--- Lich: no active scripts to send to.')
-        else
-          msg = cmd.split[1..-1].join(' ').chomp
-          respond("--- sent: #{msg}")
-          Script.new_downstream(msg)
-        end
-      end
-    elsif cmd =~ /^(?:exec|e)(q)? (.+)$/
-      cmd_data = $2
-      ExecScript.start(cmd_data, { :quiet => $1 })
-    elsif cmd =~ /^(?:execname|en) ([\w\d-]+) (.+)$/
-      execname = $1
-      cmd_data = $2
-      ExecScript.start(cmd_data, { :name => execname })
-    elsif cmd =~ /^trust\s+(.*)/i
-      script_name = $1
-      if RUBY_VERSION =~ /^2\.[012]\./
-        if File.exist?("#{SCRIPT_DIR}/#{script_name}.lic")
-          if Script.trust(script_name)
-            respond "--- Lich: '#{script_name}' is now a trusted script."
-          else
-            respond "--- Lich: '#{script_name}' is already trusted."
-          end
-        else
-          respond "--- Lich: could not find script: #{script_name}"
-        end
-      else
-        respond "--- Lich: this feature isn't available in this version of Ruby "
-      end
-    elsif cmd =~ /^(?:dis|un)trust\s+(.*)/i
-      script_name = $1
-      if RUBY_VERSION =~ /^2\.[012]\./
-        if Script.distrust(script_name)
-          respond "--- Lich: '#{script_name}' is no longer a trusted script."
-        else
-          respond "--- Lich: '#{script_name}' was not found in the trusted script list."
-        end
-      else
-        respond "--- Lich: this feature isn't available in this version of Ruby "
-      end
-    elsif cmd =~ /^list\s?(?:un)?trust(?:ed)?$|^lt$/i
-      if RUBY_VERSION =~ /^2\.[012]\./
-        list = Script.list_trusted
-        if list.empty?
-          respond "--- Lich: no scripts are trusted"
-        else
-          respond "--- Lich: trusted scripts: #{list.join(', ')}"
-        end
-        nil
-      else
-        respond "--- Lich: this feature isn't available in this version of Ruby "
-      end
-    elsif cmd =~ /^set\s(.+)\s(on|off)/
-      toggle_var = $1
-      set_state = $2
-      did_something = false
-      begin
-        Lich.db.execute("INSERT OR REPLACE INTO lich_settings(name,value) values(?,?);", [toggle_var.to_s.encode('UTF-8'), set_state.to_s.encode('UTF-8')])
-        did_something = true
-      rescue SQLite3::BusyException
-        sleep 0.1
-        retry
-      end
-      respond("--- Lich: toggle #{toggle_var} set #{set_state}") if did_something
-      did_something = false
-      nil
-    elsif cmd =~ /^hmr\s+(?<pattern>.*)/i
-      begin
-        HMR.reload %r{#{Regexp.last_match[:pattern]}}
-      rescue ArgumentError
-        if $!.to_s == 'invalid Unicode escape'
-          respond "--- Lich: error: invalid Unicode escape"
-          respond "--- Lich:   cmd: #{cmd}"
-          respond "--- Lich: \\u is unicode escape, did you mean to use a / instead?"
-        else
-          respond "--- Lich: error: #{$!}\n\t#{$!.backtrace[0..1].join("\n\t")}"
-          Lich.log "error: #{$!}\n\t#{$!.backtrace.join("\n\t")}"
-        end
-      end
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon sync/i
-      ExecScript.start("Infomon.sync", { :quiet => true })
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon (?:reset|redo)!?/i
-      ExecScript.start("Infomon.redo!", { :quiet => true })
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon show( full)?/i
-      case Regexp.last_match(1)
-      when 'full'
-        Infomon.show(true)
-      else
-        Infomon.show(false)
-      end
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^infomon effects?(?: (true|false))?/i
-      new_value = !(Infomon.get_bool("infomon.show_durations"))
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Infomon's effect duration showing to #{new_value}"
-      Infomon.set('infomon.show_durations', new_value)
-    elsif XMLData.game =~ /^GS/ && cmd =~ /^sk\b(?: (add|rm|list|help)(?: ([\d\s]+))?)?/i
-      SK.main(Regexp.last_match(1), Regexp.last_match(2))
-    elsif XMLData.game =~ /^DR/ && cmd =~ /^display flaguid(?: (true|false))?/i
-      new_value = !(Lich.hide_uid_flag)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to NOT display Room Title RealIDs while FLAG ShowRoomID ON to #{new_value}"
-      Lich.hide_uid_flag = new_value
-      respond "Note: this toggle is largely unnecessary now that room UIDs come from the <nav> tag. To hide the game's inline RealIDs, you can simply 'flag showroomid off'."
-    elsif cmd =~ /^display lichid(?: (true|false))?/i
-      new_value = !(Lich.display_lichid)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display Lich ID#s to #{new_value}"
-      Lich.display_lichid = new_value
-    elsif cmd =~ /^display uid(?: (true|false))?/i
-      new_value = !(Lich.display_uid)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display RealID#s to #{new_value}"
-      Lich.display_uid = new_value
-    elsif XMLData.game =~ /^DR/ && cmd =~ /^display roomid(?:\s+(title|line|both))?/i
-      requested = Regexp.last_match(1)&.downcase
-      if requested.nil?
-        respond "DragonRealms room id / RealID display placement is currently: #{Lich.display_roomid_location}"
-        respond "Usage: ;display roomid <title|line|both>  (title = in the room name line, line = a Room Number line below the room, both = both places)"
-      else
-        Lich.display_roomid_location = requested
-        respond "Changing DragonRealms room id / RealID display placement to #{Lich.display_roomid_location}"
-      end
-    elsif cmd =~ /^display exits?(?: (true|false))?/i
-      new_value = !(Lich.display_exits)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display Room Exits of non-StringProc/Obvious exits to #{new_value}"
-      Lich.display_exits = new_value
-    elsif cmd =~ /^display stringprocs?(?: (true|false))?/i
-      new_value = !(Lich.display_stringprocs)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display Room Exits of StringProcs to #{new_value}"
-      Lich.display_stringprocs = new_value
-    elsif cmd =~ /^display roomlinks?(?: (true|false))?/i
-      new_value = !(Lich.display_room_links)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display room exits as clickable command links to #{new_value}"
-      Lich.display_room_links = new_value
-    elsif cmd =~ /^display roommono(?: (true|false))?/i
-      new_value = !(Lich.display_room_mono)
-      case Regexp.last_match(1)
-      when 'true'
-        new_value = true
-      when 'false'
-        new_value = false
-      end
-      respond "Changing Lich to display room information in monospace font to #{new_value}"
-      Lich.display_room_mono = new_value
-    elsif XMLData.game =~ /^DR/ && (expgains_match = cmd.match(/^display expgains?(?: (?<toggle>true|false|on|off))?$/i))
-      if running?('exp-monitor')
-        respond "Error: exp-monitor.lic script is currently running"
-        respond "Stop it first with: #{$clean_lich_char}kill exp-monitor"
-      else
-        new_value = !Lich.display_expgains
-        case expgains_match[:toggle]
-        when 'true', 'on'
-          new_value = true
-        when 'false', 'off'
-          new_value = false
-        end
-        Lich.display_expgains = new_value
-        if new_value
-          respond "Enabling real-time experience gain reporting"
-          DRExpMonitor.start
-        else
-          respond "Disabling real-time experience gain reporting"
-          DRExpMonitor.stop
-        end
-      end
-    elsif XMLData.game =~ /^DR/ && (inlineexp_match = cmd.match(/^display inlineexp(?: (?<toggle>true|false|on|off))?$/i))
-      new_value = !DRExpMonitor.inline_display?
-      case inlineexp_match[:toggle]
-      when 'true', 'on'
-        new_value = true
-      when 'false', 'off'
-        new_value = false
-      end
-      DRExpMonitor.inline_display = new_value
-      if new_value
-        respond "Enabling inline experience display (gained ranks shown in exp window)"
-      else
-        respond "Disabling inline experience display"
-      end
-    elsif XMLData.game =~ /^DR/ && cmd =~ /^display exp-status$/i
-      respond
-      respond "DragonRealms Experience Monitor Status:"
-      respond "  expgains:   #{Lich.display_expgains ? 'ON' : 'OFF'}  (real-time gain messages)"
-      respond "  inlineexp:  #{DRExpMonitor.inline_display? ? 'ON' : 'OFF'}  (cumulative gains in EXP window)"
-      respond "  reporter:   #{DRExpMonitor.active? ? 'RUNNING' : 'STOPPED'}"
-      respond
-      respond "Commands:"
-      respond "  #{$clean_lich_char}display expgains [on|off]    toggle gain messages"
-      respond "  #{$clean_lich_char}display inlineexp [on|off]   toggle inline display"
-      respond
-    elsif (debuglogs_match = cmd.match(/^debuglogs?\s+(?<val>\d+)$/i))
-      new_limit = debuglogs_match[:val].to_i
-      Lich.max_debug_logs = new_limit
-      respond "--- Lich: debug log retention set to #{Lich.max_debug_logs} files"
-    elsif cmd =~ /^debuglogs?$/i
-      respond
-      respond "--- Lich: Debug Log Retention ---"
-      respond "  Current limit:  #{Lich.max_debug_logs} files"
-      respond "  Default:        #{Lich::MAX_DEBUG_LOGS_DEFAULT} files"
-      respond
-      respond "Usage:"
-      respond "  #{$clean_lich_char}debuglogs            show current setting"
-      respond "  #{$clean_lich_char}debuglogs <number>   set retention limit"
-      respond
-    elsif cmd =~ /^debuglogs?\b/i
-      respond "--- Lich: invalid argument. Usage: #{$clean_lich_char}debuglogs [number]"
-    elsif cmd =~ /^(?:lich5-update|l5u)\s+(.*)/i
-      update_parameter = $1.dup
-      Lich::Util::Update.request("#{update_parameter}")
-    elsif cmd =~ /^(?:lich5-update|l5u)/i
-      Lich::Util::Update.request("--help")
-    elsif cmd =~ /^banks$/ && XMLData.game =~ /^GS/
-      Game._puts "<c>bank account"
-      $_CLIENTBUFFER_.push "<c>bank account"
-    elsif XMLData.game =~ /^DR/ && (banks_match = cmd.match(/^banks(?: (all|reset|reset all))?$/i))
-      case banks_match[1]&.downcase
-      when 'all'
-        Lich::DragonRealms::DRBanking.display_banks_all
-      when 'reset'
-        Lich::DragonRealms::DRBanking.reset_character!
-      when 'reset all'
-        Lich::DragonRealms::DRBanking.reset_all!
-      else
-        Lich::DragonRealms::DRBanking.display_banks
-      end
-    elsif cmd =~ /^magic$/ && XMLData.game =~ /^GS/
-      Effects.display
-    elsif cmd =~ /^help$/i
-      respond
-      respond "Lich v#{LICH_VERSION}"
-      respond
-      respond 'built-in commands:'
-      respond "   #{$clean_lich_char}<script name>             start a script"
-      respond "   #{$clean_lich_char}force <script name>       start a script even if it's already running"
-      respond "   #{$clean_lich_char}pause <script name>       pause a script"
-      respond "   #{$clean_lich_char}p <script name>           ''"
-      respond "   #{$clean_lich_char}unpause <script name>     unpause a script"
-      respond "   #{$clean_lich_char}u <script name>           ''"
-      respond "   #{$clean_lich_char}kill <script name>        kill a script"
-      respond "   #{$clean_lich_char}k <script name>           ''"
-      respond "   #{$clean_lich_char}pause                     pause the most recently started script that isn't aready paused"
-      respond "   #{$clean_lich_char}p                         ''"
-      respond "   #{$clean_lich_char}unpause                   unpause the most recently started script that is paused"
-      respond "   #{$clean_lich_char}u                         ''"
-      respond "   #{$clean_lich_char}kill                      kill the most recently started script"
-      respond "   #{$clean_lich_char}k                         ''"
-      respond "   #{$clean_lich_char}list                      show running scripts (except hidden ones)"
-      respond "   #{$clean_lich_char}l                         ''"
-      respond "   #{$clean_lich_char}pause all                 pause all scripts"
-      respond "   #{$clean_lich_char}pa                        ''"
-      respond "   #{$clean_lich_char}unpause all               unpause all scripts"
-      respond "   #{$clean_lich_char}ua                        ''"
-      respond "   #{$clean_lich_char}kill all                  kill all scripts"
-      respond "   #{$clean_lich_char}ka                        ''"
-      respond "   #{$clean_lich_char}kd                        kill all scripts, including protected and hidden scripts"
-      respond "   #{$clean_lich_char}list all                  show all running scripts"
-      respond "   #{$clean_lich_char}la                        ''"
-      respond
-      respond "   #{$clean_lich_char}exec <code>               executes the code as if it was in a script"
-      respond "   #{$clean_lich_char}e <code>                  ''"
-      respond "   #{$clean_lich_char}execq <code>              same as #{$clean_lich_char}exec but without the script active and exited messages"
-      respond "   #{$clean_lich_char}eq <code>                 ''"
-      respond "   #{$clean_lich_char}execname <name> <code>    creates named exec (name#) and then executes the code as if it was in a script"
-      respond
-      if (RUBY_VERSION =~ /^2\.[012]\./)
-        respond "   #{$clean_lich_char}trust <script name>       let the script do whatever it wants"
-        respond "   #{$clean_lich_char}distrust <script name>    restrict the script from doing things that might harm your computer"
-        respond "   #{$clean_lich_char}list trusted              show what scripts are trusted"
-        respond "   #{$clean_lich_char}lt                        ''"
-        respond
-      end
-      respond "   #{$clean_lich_char}send <line>               send a line to all scripts as if it came from the game"
-      respond "   #{$clean_lich_char}send to <script> <line>   send a line to a specific script"
-      respond
-      respond "   #{$clean_lich_char}set <variable> [on|off]   set a global toggle variable on or off"
-      respond "   #{$clean_lich_char}debuglogs                 show debug log retention setting"
-      respond "   #{$clean_lich_char}debuglogs <number>        set how many debug logs to keep (default: #{Lich::MAX_DEBUG_LOGS_DEFAULT})"
-      respond
-      respond "   #{$clean_lich_char}lich5-update --<command>  Lich5 ecosystem management "
-      respond "                              see #{$clean_lich_char}lich5-update --help"
-      respond "   #{$clean_lich_char}hmr <regex filepath>      Hot module reload a Ruby or Lich5 file without relogging, uses Regular Expression matching"
-      if XMLData.game =~ /^GS/
-        respond
-        respond "   #{$clean_lich_char}infomon sync              sends all the various commands to resync character data for infomon (fixskill)"
-        respond "   #{$clean_lich_char}infomon reset             resets entire character infomon db table and then syncs data (fixprof)"
-        respond "   #{$clean_lich_char}infomon effects           toggle display of effect durations"
-        respond "   #{$clean_lich_char}infomon show              shows all current Infomon values for character"
-        respond "   #{$clean_lich_char}sk help                   show information on modifying self-knowledge spells to be known"
-      elsif XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display flaguid           toggle hiding the game's inline RealID in the Room Title (now optional; UIDs come from <nav>)"
-        respond "   #{$clean_lich_char}display roomid <where>    where to show room id/RealID: title (room name line), line (below-room line), or both"
-      end
-      respond "   #{$clean_lich_char}display lichid            toggle display of Lich Map# when displaying room information"
-      respond "   #{$clean_lich_char}display uid               toggle display of RealID Map# when displaying room information"
-      respond "   #{$clean_lich_char}display exits             toggle display of non-StringProc/Obvious exits known for room in mapdb"
-      respond "   #{$clean_lich_char}display stringprocs       toggle display of StringProc exits known for room in mapdb if timeto is valid"
-      respond "   #{$clean_lich_char}display roomlinks         toggle rendering of room exits as clickable command links vs plain text"
-      respond "   #{$clean_lich_char}display roommono          toggle rendering of Lich room information in monospace font vs game font"
-      if XMLData.game =~ /^DR/
-        respond "   #{$clean_lich_char}display expgains          toggle real-time experience gain reporting (DragonRealms only)"
-        respond "   #{$clean_lich_char}display inlineexp         toggle inline exp display in EXP window (DragonRealms only)"
-        respond "   #{$clean_lich_char}display exp-status        show experience monitor status (DragonRealms only)"
-        respond "   #{$clean_lich_char}banks                     show your bank balances (DragonRealms only)"
-        respond "   #{$clean_lich_char}banks all                 show bank balances for all characters (DragonRealms only)"
-        respond "   #{$clean_lich_char}banks reset               clear your bank data (DragonRealms only)"
-        respond "   #{$clean_lich_char}banks reset all           clear all characters' bank data (DragonRealms only)"
-      end
-      respond
-      respond 'If you liked this help message, you might also enjoy:'
-      respond "   #{$clean_lich_char}lnet help" if defined?(LNet)
-      respond "   #{$clean_lich_char}go2 help"
-      respond "   #{$clean_lich_char}repository help"
-      respond "   #{$clean_lich_char}alias help"
-      respond "   #{$clean_lich_char}vars help"
-      respond "   #{$clean_lich_char}autostart help"
-      respond
-    else
+    # Built-in ;commands live in Lich::Common::ClientCommands, which matches
+    # them in registration order and runs the first hit. Anything it does not
+    # claim is a script name.
+    unless Lich::Common::ClientCommands.dispatch(cmd)
       if cmd =~ /^([^\s]+)\s+(.+)/
         Script.start($1, $2)
       else

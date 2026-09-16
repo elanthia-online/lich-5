@@ -99,15 +99,16 @@
     mns_td: (292..311),
     mnm_td: (233..243),
     defensive_spells: [
-      "Elemental Barrier",
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Elemental Focus",
-      "Elemental Targeting",
-      "Mass Blur",
-      "Prismatic Guard",
-      "Thurfel's Ward"
+      "Elemental Barrier (430)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Focus (513)",
+      "Elemental Targeting (425)",
+      "Mass Blur (911)",
+      "Prismatic Guard (905)",
+      "Thurfel's Ward (503)",
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: []

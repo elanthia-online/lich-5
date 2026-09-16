@@ -76,7 +76,10 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Lesser Shroud (120)",
+      "Wall of Force (140)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

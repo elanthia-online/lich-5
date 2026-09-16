@@ -10,7 +10,7 @@
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -88,9 +88,9 @@
     mns_td: (290..315),
     mnm_td: (245..253),
     defensive_spells: [
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Elemental Targetting"
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Targeting (425)"
     ],
     defensive_abilities: [],
     special_defenses: []

@@ -4,12 +4,12 @@
   url: "https://gswiki.play.net/Bloody_halfling_cannibal",
   picture: "",
   level: 101,
-  family: "humanoid",
+  family: "Humanoid",
   type: "biped",
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -91,6 +91,9 @@
       {
         name: "hunger",
         note: "+80 AS"
+      },
+      {
+        name: "frenzy"
       }
     ],
     special_notes: []
@@ -134,10 +137,10 @@
       name: "Frenzy",
       type: :buff,
       target: :self,
-      messaging: [
-        "A bloody halfling cannibal bares {pronoun} teeth in a mad parody of a grin as {pronoun} bloodlust rises!",
-        "A bloody halfling cannibal succumbs further to {pronoun} bloodlust as spittle drips from {pronoun} open mouth!"
-      ]
+      typical_duration_s: nil,
+      effects: nil,
+      dispellable: nil,
+      notes: "Two onset lines seen (bloodlust rises; succumbs further). Mechanical effect not measured."
     }
   ],
   alchemy: [],
@@ -193,7 +196,6 @@
       "A bloody halfling cannibal sniffs at the air, {pronoun} eyes glinting as {pronoun} searches the shadows.",
       "a bloody halfling cannibal's eyes dart around, suspicion warring with hunger in {pronoun} beady eyes."
     ],
-    bite: "A bloody halfling cannibal bares {pronoun} sharpened teeth as {pronoun} tries to bite into you!",
 
     stun_break: [
       "A bloody halfling cannibal gurgles out an animalistic shriek of rage, {pronoun} eyes filling with bloody blackness as {pronoun} surges back into action!"
@@ -227,6 +229,13 @@
       ]
     },
     triggers: {
+      bite: [
+        "A bloody halfling cannibal bares {pronoun} sharpened teeth as {pronoun} tries to bite into you!"
+      ],
+      frenzy: [
+        "A bloody halfling cannibal bares {pronoun} teeth in a mad parody of a grin as {pronoun} bloodlust rises!",
+        "A bloody halfling cannibal succumbs further to {pronoun} bloodlust as spittle drips from {pronoun} open mouth!"
+      ],
       hide: [
         "A bloody halfling cannibal darts into the shadows."
       ],
@@ -254,6 +263,5 @@
       },
       miscellany: []
     },
-    frenzy: "A bloody halfling cannibal bares {pronoun} teeth in a mad parody of a grin as {pronoun} bloodlust rises!"
   }
 }

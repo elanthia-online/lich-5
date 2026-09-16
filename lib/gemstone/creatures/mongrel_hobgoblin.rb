@@ -33,10 +33,6 @@
     {
       name: "Muddy Village",
       uids: [7128001..7128015, 7128026..7128030]
-    },
-    {
-      name: "unmapped",
-      uids: [7128016..7128025]
     }
   ],
   attack_attributes: {

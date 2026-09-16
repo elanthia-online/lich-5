@@ -243,14 +243,17 @@ module Lich
         /You work carefully at tending/,
         /You work carefully at binding/,
         /That area has already been tended to/,
-        /That area is not bleeding/
+        /That area is not bleeding/,
+        /slips free/
       ].freeze
 
       TEND_FAILURE_PATTERNS = [
         /You fumble/,
         /too injured for you to do that/,
         /TEND allows for the tending of wounds/,
-        /^You must have a hand free/
+        /^You must have a hand free/,
+        /^You carelessly attempt/,
+        /^You foolishly attempt/
       ].freeze
 
       TEND_DISLODGE_PATTERNS = [

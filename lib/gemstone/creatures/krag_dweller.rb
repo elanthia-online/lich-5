@@ -35,10 +35,6 @@
     {
       name: "The Hidden Plateau",
       uids: [2167001..2167022]
-    },
-    {
-      name: "unmapped",
-      uids: [13150323..13150324]
     }
   ],
   attack_attributes: {

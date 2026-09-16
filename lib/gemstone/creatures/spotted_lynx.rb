@@ -37,10 +37,6 @@
     {
       name: "Central Caravansary",
       uids: [4748310..4748312, 4748321..4748321]
-    },
-    {
-      name: "unmapped",
-      uids: [4748313..4748320]
     }
   ],
   attack_attributes: {

@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -109,7 +109,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -183,6 +194,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "A triton warden places one hand on top of the other, crossing {pronoun} palms toward you!",
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

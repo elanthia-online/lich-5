@@ -4,16 +4,16 @@
   url: "https://gswiki.play.net/Tattooed_gigas_berserker",
   picture: "",
   level: 103,
-  family: "gigas",
+  family: "Gigas",
   type: "biped",
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
-  sleepable: nil,
+  sleepable: true, # Sleep (501) worked 3x in session logs
   boss: false,
   boss_type: nil,
   otherclass: [],
@@ -82,7 +82,11 @@
         name: "Shield Bash"
       }
     ],
-    special_abilities: [],
+    special_abilities: [
+      {
+        name: "frenzy"
+      }
+    ],
     special_notes: []
   },
   defense_attributes: {
@@ -115,10 +119,10 @@
       name: "Frenzy",
       type: :buff,
       target: :self,
-      messaging: [
-        "A tattooed gigas berserker flies into a wild rage, animalistic fury washing over {pronoun} features!",
-        "A tattooed gigas berserker falls deeper into bloodlust, gnashing {pronoun} teeth and clenching {pronoun} immense muscles!"
-      ]
+      typical_duration_s: nil,
+      effects: nil,
+      dispellable: nil,
+      notes: "Two onset lines seen (wild rage; falls deeper into bloodlust). Mechanical effect not measured."
     }
   ],
   alchemy: [],
@@ -234,7 +238,12 @@
       },
       miscellany: []
     },
-    frenzy: "A tattooed gigas berserker flies into a wild rage, animalistic fury washing over {pronoun} features!"
+    triggers: {
+      frenzy: [
+        "A tattooed gigas berserker flies into a wild rage, animalistic fury washing over {pronoun} features!",
+        "A tattooed gigas berserker falls deeper into bloodlust, gnashing {pronoun} teeth and clenching {pronoun} immense muscles!"
+      ]
+    }
   }
 }
 

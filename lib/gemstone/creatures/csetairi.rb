@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: nil,
@@ -108,7 +108,10 @@
       "Spirit Warding II (107)",
       "Lesser Shroud (120)",
       "Spirit Shield (202)",
-      "Spell Shield (219)"
+      "Spell Shield (219)",
+      "Heroism (215)",
+      "Wall of Force (140)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []

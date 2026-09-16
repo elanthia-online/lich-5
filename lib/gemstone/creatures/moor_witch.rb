@@ -30,10 +30,6 @@
     {
       name: "Shattered Moors",
       uids: [420001..420037, 420040..420046]
-    },
-    {
-      name: "unmapped",
-      uids: [420038..420039]
     }
   ],
   attack_attributes: {
@@ -70,13 +66,13 @@
     mns_td: (116..125),
     mnm_td: (129..139),
     defensive_spells: [
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Elemental Targeting",
-      "Lesser Shroud",
-      "Spirit Defense",
-      "Spirit Warding II"
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Elemental Targeting (425)",
+      "Lesser Shroud (120)",
+      "Spirit Defense (103)",
+      "Spirit Warding II (107)"
     ],
     defensive_abilities: [],
     special_defenses: []

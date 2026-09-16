@@ -27,10 +27,6 @@
     {
       name: "The Hive",
       uids: [13041301..13041329]
-    },
-    {
-      name: "unmapped",
-      uids: [13041330..13041330]
     }
   ],
   attack_attributes: {

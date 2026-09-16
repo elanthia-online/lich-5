@@ -102,21 +102,32 @@
     mns_td: 453,
     mnm_td: 364,
     defensive_spells: [
-      "Cloak of Shadows",
-      "Elemental Defense I",
-      "Elemental Defense II",
-      "Elemental Defense III",
-      "Spirit Shield",
-      "Spirit Warding I",
-      "Spirit Warding II",
-      "Elemental Targeting",
-      "Elemental Barrier"
+      "Cloak of Shadows (712)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Elemental Defense III (414)",
+      "Spirit Shield (202)",
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)",
+      "Elemental Targeting (425)",
+      "Elemental Barrier (430)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: "Summon shambling lurks",
-  abilities: [],
+  abilities: [
+    {
+      id: :corrupt_essence,
+      name: "Corrupt Essence (703)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 17,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "Warding, CS 431."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -197,6 +208,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      corrupt_essence: [
+        "A deathsworn fanatic jabs a trembling finger at you!",
+        "You feel weakened as a blood red haze forms around you."
+      ]
+    }
   }
 }

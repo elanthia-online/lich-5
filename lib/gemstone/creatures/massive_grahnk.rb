@@ -149,7 +149,10 @@
       },
       miscellany: []
     },
-    triggers: {},
-    frenzy: "A massive grahnk whales away, consumed with bloodlust!"
+    triggers: {
+      frenzy: [
+        "A massive grahnk whales away, consumed with bloodlust!"
+      ]
+    }
   }
 }

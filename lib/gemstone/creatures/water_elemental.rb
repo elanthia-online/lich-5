@@ -86,7 +86,8 @@
     defensive_spells: [
       "Elemental Barrier (430)",
       "Elemental Defense II (406)",
-      "Elemental Defense III (414)"
+      "Elemental Defense III (414)",
+      "Elemental Defense I (401)"
     ],
     defensive_abilities: [],
     special_defenses: []

@@ -18,7 +18,7 @@ RSpec.describe Lich::Gemstone::Combat::Recorder do
       def self.off(*); end
       def self.emit(*); end
     end
-    stub_const('Lich::Gemstone::Combat::Observers', observers)
+    stub_const('Lich::Common::Events', observers)
     @tmpdir = Dir.mktmpdir('combat-recorder-schema')
     @db_path = File.join(@tmpdir, 'test.db')
   end

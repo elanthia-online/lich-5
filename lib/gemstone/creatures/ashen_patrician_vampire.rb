@@ -10,7 +10,7 @@
   undead: true,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -100,7 +100,28 @@
     ]
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :mystic_impedance,
+      name: "Mystic Impedance (1708)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 30,
+      effects: { blocks_high_level_spells: true },
+      dispellable: nil,
+      notes: "Warding, CS 389."
+    },
+    {
+      id: :sympathy,
+      name: "Sympathy (1120)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 19,
+      effects: { charmed: true, cannot_attack_caster: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -176,6 +197,15 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sympathy: [
+        "An ashen patrician vampire stares at you, {pronoun} eyes whirling into pits of hypnotic shadow.",
+        "You see the vampire for what {pronoun} is, a luminous being of unparalleled power and grace.  You live to serve {pronoun}."
+      ],
+      mystic_impedance: [
+        "An ashen patrician vampire flicks a finger impatiently at you!",
+        "A dizzying array of golden runes surround and suffuse you before being absorbed into your body."
+      ]
+    }
   }
 }

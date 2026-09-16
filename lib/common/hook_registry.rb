@@ -8,9 +8,17 @@ module Lich
     # and a fix (e.g. to source tracking) lands in one place.
     #
     # An including class is +extend+ed with these as class methods and supplies
-    # its own storage via +_hooks+, +_hook_sources+, +_hook_owners+ and
-    # +_hook_persist+, keeping its own +run+.
+    # its own storage via +_hooks+, +_hook_sources+, +_hook_owners+,
+    # +_hook_persist+ and +_hook_priorities+, keeping its own +run+.
     module HookRegistry
+      # Initialize each registry's lock before it accepts registrations. Keep
+      # the same lock if the registry is extended again during a reload.
+      # @param registry [Class] the extending hook registry
+      # @return [void]
+      def self.extended(registry)
+        registry.instance_variable_set(:@hook_mutex, Mutex.new) unless registry.instance_variable_defined?(:@hook_mutex)
+      end
+
       # Registers +action+ under +name+, recording the current script's name as
       # the source (used by {#sources} for display), its object_id as the owner,
       # and the declared +persist+ disposition (used by {#cleanup_on_death}).
@@ -22,19 +30,34 @@ module Lich
       #   * +nil+   - undeclared: kept for backwards compatibility, but the death
       #               path warns once so the author can declare intent.
       #
+      # Higher-priority hooks run first. Hooks with equal priority retain their
+      # registration order, preserving historical behaviour at the default of
+      # zero. A named replacement keeps its original equal-priority position.
+      #
       # @param name    [String]
       # @param action  [Proc]
-      # @param persist [Boolean, nil] hook lifetime relative to the script
+      # @param persist  [Boolean, nil] hook lifetime relative to the script
+      # @param priority [Numeric] execution priority; higher values run first
       # @return [Proc, false] the stored proc, or false if +action+ is not a Proc
-      def add(name, action, persist: nil)
+      def add(name, action, persist: nil, priority: 0)
         unless action.is_a?(Proc)
           echo "#{hook_label}: not a Proc (#{action})"
           return false
         end
-        _hook_sources[name] = (Script.current&.name || "Unknown")
-        _hook_owners[name]  = Script.current&.object_id
-        _hook_persist[name] = persist
-        _hooks[name] = action
+        unless priority.is_a?(Numeric) && priority.real? &&
+               (!priority.respond_to?(:finite?) || priority.finite?)
+          echo "#{hook_label}: priority must be a finite real Numeric (#{priority.inspect})"
+          return false
+        end
+        script = Script.current
+        @hook_mutex.synchronize do
+          _hook_sources[name] = (script&.name || "Unknown")
+          _hook_owners[name]  = script&.object_id
+          _hook_persist[name] = persist
+          _hook_priorities[name] = priority
+          _hooks[name] = action
+        end
+        action
       end
 
       # Removes the hook registered under +name+ from every map.
@@ -42,10 +65,7 @@ module Lich
       # @param name [String]
       # @return [Proc, nil] the removed proc, if any
       def remove(name)
-        _hook_sources.delete(name)
-        _hook_owners.delete(name)
-        _hook_persist.delete(name)
-        _hooks.delete(name)
+        @hook_mutex.synchronize { remove_hook(name) }
       end
 
       # Invoked from the {ScriptDeath} handler when a script dies. For each hook
@@ -59,16 +79,16 @@ module Lich
       # @param owner_id [Integer] the dying script's +object_id+
       # @return [Integer] the number of hooks removed
       def cleanup_on_death(owner_id)
-        owned = _hook_owners.select { |_name, owner| owner == owner_id }.keys
-        return 0 if owned.empty?
-
         removed    = 0
         undeclared = []
-        owned.each do |name|
-          case _hook_persist[name]
-          when false then (remove(name); removed += 1)
-          when true  then next
-          else undeclared << name
+        @hook_mutex.synchronize do
+          owned = _hook_owners.select { |_name, owner| owner == owner_id }.keys
+          owned.each do |name|
+            case _hook_persist[name]
+            when false then (remove_hook(name); removed += 1)
+            when true  then next
+            else undeclared << name
+            end
           end
         end
         warn_undeclared(undeclared)
@@ -77,14 +97,15 @@ module Lich
 
       # @return [Array<String>] a copy of the registered hook names
       def list
-        _hooks.keys.dup
+        @hook_mutex.synchronize { _hooks.keys }
       end
 
       # Prints a Hook -> Source table via Lich::Messaging.
       # @return [void]
       def sources
+        rows = @hook_mutex.synchronize { _hook_sources.to_a }
         info_table = Terminal::Table.new :headings => ['Hook', 'Source'],
-                                         :rows     => _hook_sources.to_a,
+                                         :rows     => rows,
                                          :style    => { :all_separators => true }
         Lich::Messaging.mono(info_table.to_s)
       end
@@ -94,7 +115,42 @@ module Lich
         _hook_sources
       end
 
+      # Snapshot names and priorities together with registration/removal excluded.
+      # There is no order cache: legacy direct edits to the live maps are visible
+      # on the next dispatch, but bypass synchronization; use add/remove for
+      # concurrent mutations. Sorting and callbacks run outside the lock.
+      #
+      # New names and priority changes take effect on the next dispatch. Actions
+      # are read live before invocation: removed names are skipped, and a name
+      # replaced before its turn runs the new action at its old position for this
+      # pass, preserving historical replacement behaviour.
+      # @return [Array<String>]
+      def ordered_hook_names
+        entries = @hook_mutex.synchronize do
+          _hooks.keys.each_with_index.map { |name, index| [name, _hook_priorities.fetch(name, 0), index] }
+        end
+        entries.sort_by { |_name, priority, index| [-priority, index] }.map(&:first)
+      end
+
       private
+
+      # @param name [String] registered hook name
+      # @return [Proc, nil] the current action; callers invoke it outside the lock
+      def hook_action(name)
+        @hook_mutex.synchronize { _hooks[name] }
+      end
+
+      # Caller holds the registry lock so lifecycle cleanup cannot remove a
+      # replacement registered by another owner partway through cleanup.
+      # @param name [String] registered hook name
+      # @return [Proc, nil] the removed action
+      def remove_hook(name)
+        _hook_sources.delete(name)
+        _hook_owners.delete(name)
+        _hook_persist.delete(name)
+        _hook_priorities.delete(name)
+        _hooks.delete(name)
+      end
 
       # Warns (once per hook name per session) that a script left a hook
       # registered without declaring +persist:+. Surfaces accidental leaks

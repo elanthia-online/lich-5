@@ -113,13 +113,26 @@
       "Self Control (613)",
       "Spirit Warding I (101)",
       "Spirit Defense (103)",
-      "Spirit Warding II (107)"
+      "Spirit Warding II (107)",
+      "Spirit Strike (117)",
+      "Wizard's Shield (919)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :sounds,
+      name: "Sounds (607)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { spell_failure_chance: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -187,6 +200,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      sounds: [
+        "You hear strange noises come from behind and to either side of you."
+      ]
+    }
   }
 }

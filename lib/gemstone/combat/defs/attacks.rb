@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'pattern_gate'
+require_relative 'supplements'
 
 module Lich
   module Gemstone
@@ -33,7 +34,7 @@ module Lich
           BASIC_ATTACKS = [
             AttackDef.new(:attack, [
               /You(?<aimed> take aim and)? swing .+? at (?<target>[^!]+)!/,
-              /You(?<aimed> take aim and)? (?:punch|jab|kick|grapple) with (?<weapon>.+?) at (?<target>[^!]+)!/
+              /You(?<aimed> take aim and)? (?:thrust|punch|jab|kick|grapple) with (?<weapon>.+?) at (?<target>[^!]+)!/
             ].freeze),
             AttackDef.new(:fire, [/You(?<aimed> take aim and)? fire .+? at (?<target>[^!]+)!/].freeze),
             AttackDef.new(:hurl, [/You(?<aimed> take aim and)? throw (?<weapon>.+?) at (?<target>[^!]+)!/].freeze),
@@ -761,9 +762,17 @@ module Lich
           # swing patterns; second-person defs come before third-person so
           # "You swing" never falls through; the generic 2p bolt sits last
           # inside WIKI_SPELL_ATTACKS so named bolts keep their names.
-          ALL_ATTACKS = (PRIORITY_ATTACKS + BASIC_ATTACKS + SPELL_ATTACKS + WIKI_SPELL_ATTACKS +
+          # Player supplements (defs/supplements.rb, DATA_DIR/combat/defs.yaml)
+          # are spliced by slot: :priority ahead of the generic swings, :generic
+          # with the second-person defs, :third_person ahead of the shipped
+          # third-person defs. Each reader returns an empty frozen array when
+          # there is no file, so the shipped assembly is unchanged.
+          ALL_ATTACKS = (PRIORITY_ATTACKS + Supplements.attacks(:priority) +
+                        BASIC_ATTACKS + Supplements.attacks(:generic) +
+                        SPELL_ATTACKS + WIKI_SPELL_ATTACKS +
                         MANEUVER_ATTACKS + WEAPON_ATTACKS +
                         SHIELD_ATTACKS + COMPANION_ATTACKS + ENVIRONMENTAL_ATTACKS +
+                        Supplements.attacks(:third_person) +
                         THIRD_PERSON_SPELL_ATTACKS + THIRD_PERSON_ATTACKS).freeze
 
           # Create lookup table for fast pattern matching
@@ -774,15 +783,52 @@ module Lich
           # Compiled regex for fast detection. NOTE: costs ~0.5ms per
           # non-matching line (unanchored `.+?` alternatives); kept for
           # compatibility but the literal gate below is what the parser uses.
-          ATTACK_DETECTOR = Regexp.union(ATTACK_LOOKUP.map(&:first)).freeze
+          #
+          # Built on first use rather than at load: a supplemental pattern
+          # that is perfectly valid alone can still be illegal inside a
+          # union (a numbered backreference beside a shipped named capture
+          # raises RegexpError), and a union built here would take the whole
+          # def file down with it before TABLE ever existed. Nothing in Lich
+          # reads this; PatternGate.build handles each pattern separately.
+          #
+          # @return [Regexp, nil] nil when the patterns cannot be combined
+          # Back-compat: the old constant name resolves to {detector},
+          # so a script still reading ATTACK_DETECTOR keeps working.
+          def self.const_missing(name)
+            return detector if name == :ATTACK_DETECTOR
+
+            super
+          end
+
+          def self.detector
+            return @detector if defined?(@detector)
+
+            @detector = PatternGate.union_or_nil(ATTACK_LOOKUP.map(&:first), 'attacks')
+          end
 
           # Literal-substring gate (~7us/line): a line can only match an
           # attack pattern if it contains that pattern's longest literal.
           ATTACK_GATE, ATTACK_ALWAYS_SCAN = PatternGate.build(ATTACK_LOOKUP.map(&:first))
 
+          # The lookup and its gate as one frozen table, bound last and in a
+          # single assignment: what the parser reads (see Definitions::Table).
+          TABLE = Table.new(ATTACK_LOOKUP, ATTACK_GATE, ATTACK_ALWAYS_SCAN).freeze
+
+          # The table now reflects this file; stale? answers for it, not for
+          # the document cache (see Supplements.assembled!).
+          Supplements.assembled!(:attacks)
+          # The table just rebound, so any detector built from the previous
+          # one is stale. The memo is a module ivar and survives this file
+          # re-executing, so drop it here rather than leaving a reload
+          # serving the old union (or a cached nil).
+          remove_instance_variable(:@detector) if instance_variable_defined?(:@detector)
+
+          # @return [Table] the current attack table; read once per call
+          def self.table = TABLE
+
           # True when the line cannot match any attack pattern
           def self.rejects?(line)
-            PatternGate.rejects?(ATTACK_GATE, ATTACK_ALWAYS_SCAN, line)
+            TABLE.rejects?(line)
           end
         end
       end

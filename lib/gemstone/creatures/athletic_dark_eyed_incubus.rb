@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Abbey",
       uids: [4132201..4132240, 4132243..4132248]
-    },
-    {
-      name: "unmapped",
-      uids: [4132241..4132242]
     }
   ],
   attack_attributes: {
@@ -89,7 +85,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :earthen_fury,
+      name: "Earthen Fury (917)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 12,
+      effects: { repeated_crit_cycles: true, knockdown: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -156,6 +163,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      earthen_fury: [
+        "An athletic dark-eyed incubus directs {pronoun} otherworldly spellsong at you!",
+        "The ground beneath your feet begins to boil violently!"
+      ]
+    }
   }
 }

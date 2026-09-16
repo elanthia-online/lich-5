@@ -97,7 +97,8 @@
       "Spirit Warding I (101)",
       "Spirit Shield (202)",
       "Prismatic Guard (905)",
-      "Prayer of Protection (303)"
+      "Prayer of Protection (303)",
+      "Thurfel's Ward (503)"
     ],
     defensive_abilities: [],
     special_defenses: []

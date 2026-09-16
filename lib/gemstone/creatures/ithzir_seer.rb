@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -141,13 +141,45 @@
       "Spirit Defense (103)",
       "Spirit Warding II (107)",
       "Spirit Shield (202)",
-      "Spell Shield (219)"
+      "Spell Shield (219)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :frenzy,
+      name: "Frenzy (216)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 18,
+      effects: { anger: true, forced_attack: true },
+      dispellable: nil,
+      notes: "Warding, CS 411-417."
+    },
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    },
+    {
+      id: :silence,
+      name: "Silence (210)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 13,
+      effects: { silenced: true },
+      dispellable: nil,
+      notes: "Warding, CS 431-437."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -243,6 +275,20 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      silence: [
+        "An Ithzir seer raises {pronoun} hand, then slowly lets it descend toward you!",
+        "A pall of silence settles over you."
+      ],
+      interference: [
+        "An Ithzir seer suddenly opens {pronoun} eyes and stares directly at you!",
+        "An Ithzir seer swings a twisted crystal-tipped staff at you!",
+        "The spirits swirl around you, distracting your every action."
+      ],
+      frenzy: [
+        "An Ithzir seer suddenly opens {pronoun} eyes and stares directly at you!",
+        "Anger beyond all reason boils up within you!"
+      ]
+    }
   }
 }

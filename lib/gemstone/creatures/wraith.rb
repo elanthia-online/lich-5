@@ -144,7 +144,10 @@
       },
       miscellany: []
     },
-    triggers: {},
-    frenzy: "A wraith spins in a frenzy and a strong wind whips around you."
+    triggers: {
+      frenzy: [
+        "A wraith spins in a frenzy and a strong wind whips around you."
+      ]
+    }
   }
 }

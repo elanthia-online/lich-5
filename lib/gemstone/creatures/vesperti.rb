@@ -104,7 +104,13 @@
     mjs_td: nil,
     mns_td: nil,
     mnm_td: nil,
-    defensive_spells: [],
+    defensive_spells: [
+      "Spirit Warding II (107)",
+      "Spirit Warding I (101)",
+      "Elemental Defense I (401)",
+      "Elemental Defense II (406)",
+      "Spirit Defense (103)"
+    ],
     defensive_abilities: [],
     special_defenses: []
   },

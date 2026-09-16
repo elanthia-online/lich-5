@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: nil,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Yander's Farm",
       uids: [14005054..14005066]
-    },
-    {
-      name: "unmapped",
-      uids: [21025..21028]
     },
     {
       name: "Smuggling Tunnels",

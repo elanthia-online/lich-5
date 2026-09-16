@@ -34,10 +34,6 @@
     {
       name: "Stormpeak",
       uids: [13150301..13150322]
-    },
-    {
-      name: "unmapped",
-      uids: [13150323..13150324]
     }
   ],
   attack_attributes: {

@@ -111,17 +111,31 @@
     mns_td: (384..392),
     mnm_td: (317..327),
     defensive_spells: [
-      "Divine Shield",
-      "Fasthr's Reward",
-      "Lesser Shroud",
-      "Mantle of Faith",
-      "Warding Sphere"
+      "Divine Shield (1609)",
+      "Fasthr's Reward (115)",
+      "Lesser Shroud (120)",
+      "Mantle of Faith (1601)",
+      "Warding Sphere (310)",
+      "Heroism (215)",
+      "Prayer of Protection (303)",
+      "Spirit Strike (117)"
     ],
     defensive_abilities: [],
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :frenzy,
+      name: "Frenzy (216)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 17,
+      effects: { anger: true, forced_attack: true },
+      dispellable: nil,
+      notes: "Warding, CS 406-421."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -207,6 +221,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      frenzy: [
+        "A triton radical brings a hand forward, pointing at you!",
+        "Anger beyond all reason boils up within you!"
+      ]
+    }
   }
 }

@@ -10,7 +10,7 @@
   undead: true,
   blood: false,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: nil,
@@ -114,7 +114,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :interference,
+      name: "Interference (212)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 23,
+      effects: { as_ds_td_penalty: true },
+      dispellable: nil,
+      notes: "Warding, CS 224."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [
@@ -171,6 +182,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      interference: [
+        "The spirits swirl around you, distracting your every action."
+      ]
+    }
   }
 }

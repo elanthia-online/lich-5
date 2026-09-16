@@ -72,7 +72,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :cold_snap,
+      name: "Cold Snap (512)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 25,
+      effects: { cold_damage_cycles: true, rooted: true },
+      dispellable: nil,
+      notes: "Warding, CS 498."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -131,6 +142,11 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      cold_snap: [
+        "A blubbery humpbacked merrow raises one ill-made limb to point at you!",
+        "An airy mist rolls into the area, carrying a harsh chill with it."
+      ]
+    }
   }
 }

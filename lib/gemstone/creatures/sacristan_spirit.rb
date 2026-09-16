@@ -94,11 +94,11 @@
     mns_td: (90..100),
     mnm_td: (75..80),
     defensive_spells: [
-      "Prayer of Protection",
-      "Prismatic Guard",
-      "Spirit Shield",
-      "Spirit Warding I",
-      "Thurfel's Ward"
+      "Prayer of Protection (303)",
+      "Prismatic Guard (905)",
+      "Spirit Shield (202)",
+      "Spirit Warding I (101)",
+      "Thurfel's Ward (503)"
     ],
     defensive_abilities: [],
     special_defenses: []

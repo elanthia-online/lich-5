@@ -295,7 +295,8 @@ RSpec.describe 'Custom repos integration with FileUpdater' do
   let(:tmpdir) { Dir.mktmpdir('custom-file-updater-test') }
   let(:client) { instance_double(Lich::Util::Update::GitHubClient) }
   let(:resolver) { instance_double(Lich::Util::Update::ChannelResolver) }
-  let(:updater) { Lich::Util::Update::FileUpdater.new(client, resolver) }
+  let(:snapshot_manager) { instance_double(Lich::Util::Update::SnapshotManager) }
+  let(:updater) { Lich::Util::Update::FileUpdater.new(client, resolver, snapshot_manager) }
 
   before do
     stub_const('SCRIPT_DIR', tmpdir)

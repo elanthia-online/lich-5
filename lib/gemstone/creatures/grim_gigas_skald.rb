@@ -9,7 +9,7 @@
   undead: false,
   blood: true,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -60,6 +60,10 @@
       {
         name: "Stunning Shout (1008)",
         cs: (494..499)
+      },
+      {
+        name: "Mindwipe (1225)",
+        cs: 423
       }
     ],
     offensive_spells: [],
@@ -108,7 +112,38 @@
     special_defenses: []
   },
   special_other: "",
-  abilities: [],
+  abilities: [
+    {
+      id: :stunning_shout,
+      name: "Stunning Shout (1008)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: nil,
+      effects: { dizziness: true, stagger: true },
+      dispellable: nil,
+      notes: "Warding. On a failed ward the Debuffs bar Dizziness appears with a stack count (5, 2, 1 seen) and 5-15s countdowns. Duration per level not measured."
+    },
+    {
+      id: :mindwipe,
+      name: "Mindwipe (1225)",
+      type: :debuff,
+      target: :area,
+      typical_duration_s: nil,
+      effects: { level_loss: true },
+      dispellable: nil,
+      notes: "Mass warding, one CS roll per person in the room (CS 423 seen). A failed ward costs levels (\"[You lose 4 levels!]\" seen) and shows a Mindwipe bar; 7s and 16s countdowns seen at first read. Mass duration not measured."
+    },
+    {
+      id: :confusion,
+      name: "Confusion (1211)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 15,
+      effects: { confused: true },
+      dispellable: nil,
+      notes: "Warding, CS 384-396."
+    }
+  ],
   alchemy: [],
   equipment: [
     "a ceremonial boarskin garment adorned with semiprecious gems",
@@ -201,6 +236,22 @@
       },
       miscellany: []
     },
+    triggers: {
+      confusion: [
+        "A grim gigas skald directs the force of {pronoun} voice at you!",
+        "You are confused!"
+      ],
+      stunning_shout: [
+        "You are viciously struck by the sonic energy of a grim gigas skald's cacophonous shout!",
+        "The intensity of the sonic assault disorients you!"
+      ],
+      mindwipe: [
+        "A grim gigas skald's eyes widen as a forbidden insight dawns upon {pronoun}.",
+        "A grim gigas skald directs the force of {pronoun} voice at you!",
+        "A grim gigas skald directs the force of {pronoun} voice at {target}!",
+        "You suddenly feel very drained and confused as your memories slip away."
+      ]
+    }
   }
 }
 

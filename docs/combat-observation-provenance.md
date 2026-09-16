@@ -92,7 +92,7 @@ production already does this through the ordered `AsyncProcessor` worker.
 ## Transient demand and consumer obligations
 
 Existing attack parsing/emission gates use
-`settings[:emit_attacks] || Observers.any_for?(:attack)`. Demand is snapshotted
+`settings[:emit_attacks] || Events.any_for?('combat.attack')`. Demand is snapshotted
 once per complete `Processor.process` invocation, so a subscriber cannot join or
 leave halfway through a batch. Subscribing requests complete native attack
 outcomes beginning with the next processing invocation; unsubscribing restores

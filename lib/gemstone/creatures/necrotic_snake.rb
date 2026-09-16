@@ -33,10 +33,6 @@
     {
       name: "Fethayl Bog",
       uids: [13038001..13038031]
-    },
-    {
-      name: "unmapped",
-      uids: [376002..376002, 376019..376019, 376035..376039]
     }
   ],
   attack_attributes: {

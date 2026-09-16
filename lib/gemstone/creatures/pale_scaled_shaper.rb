@@ -10,7 +10,7 @@
   undead: false,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: nil,
@@ -97,13 +97,15 @@
     mns_td: nil,
     mnm_td: nil,
     defensive_spells: [
-      "Spirit Warding I",
-      "Spirit Warding II",
-      "Lesser Shroud",
-      "Cloak of Shadows",
-      "Spirit Shield",
-      "Bravery",
-      "Thurfel's Ward"
+      "Spirit Warding I (101)",
+      "Spirit Warding II (107)",
+      "Lesser Shroud (120)",
+      "Cloak of Shadows (712)",
+      "Spirit Shield (202)",
+      "Bravery (211)",
+      "Thurfel's Ward (503)",
+      "Wall of Force (140)",
+      "Fasthr's Reward (115)"
     ],
     defensive_abilities: [],
     special_defenses: []

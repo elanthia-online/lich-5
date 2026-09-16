@@ -10,7 +10,7 @@
   undead: true,
   blood: nil,
   bones: nil,
-  limbs: nil,
+  limbs: true,
   witherable: nil,
   sympathy: nil,
   muggable: nil,
@@ -81,7 +81,18 @@
     special_defenses: []
   },
   special_other: nil,
-  abilities: [],
+  abilities: [
+    {
+      id: :weapon_deflection,
+      name: "Weapon Deflection (412)",
+      type: :debuff,
+      target: :opponent,
+      typical_duration_s: 22,
+      effects: { as_penalty: true },
+      dispellable: nil,
+      notes: "No warding roll seen."
+    }
+  ],
   alchemy: [],
   abilities_misc: [],
   equipment: [],
@@ -136,6 +147,10 @@
       },
       miscellany: []
     },
-    triggers: {}
+    triggers: {
+      weapon_deflection: [
+        "Your eyesight becomes blurred slightly."
+      ]
+    }
   }
 }

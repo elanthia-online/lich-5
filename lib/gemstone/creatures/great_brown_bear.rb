@@ -10,7 +10,7 @@
   undead: false,
   blood: true,
   bones: true,
-  limbs: nil,
+  limbs: true,
   witherable: true,
   sympathy: true,
   muggable: true,
@@ -29,10 +29,6 @@
     {
       name: "Upper Trollfang",
       uids: [14001..14023, 17020..17025, 17101..17118, 17127..17127]
-    },
-    {
-      name: "unmapped",
-      uids: [17119..17126]
     }
   ],
   attack_attributes: {

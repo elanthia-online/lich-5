@@ -29,7 +29,7 @@ RSpec.describe 'Recorder kill credit follows combat order' do
       def self.off(*); end
       def self.emit(*); end
     end
-    stub_const('Lich::Gemstone::Combat::Observers', observers)
+    stub_const('Lich::Common::Events', observers)
     allow(processor).to receive(:apply_status_to_target)
     allow(processor).to receive(:apply_ucs_to_target)
     processor.instance_variable_set(:@active_assault, nil)
