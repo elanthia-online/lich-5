@@ -70,15 +70,30 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (!UNSOLICITED.has(event)) {')
   end
 
-  it 'does not show the viewer a stale report they never sent' do
-    refusal = javascript[/} else if \(message\.type === "refusal"\) \{.*?\n    \}/m]
+  # A refusal must be matched to the event it names. The handler used to
+  # replay whatever was in a single pending slot, so sending A then B and
+  # refusing A sent A, B, B -- re-running B while losing A. And the retry
+  # guard was released just before the replay, so the replay installed a
+  # clean guard and the same event could be retried indefinitely.
+  it 'replays only the event a refusal names, and only once' do
+    expect(javascript).to include('requestKey(message.page, message.cid, message.event)')
+    expect(javascript).to include('pendingEvents.get(refusedKey)')
+    expect(javascript).to include('retry.attempt < MAX_EVENT_ATTEMPTS')
+    expect(javascript).to include('const MAX_EVENT_ATTEMPTS = 1;')
+  end
 
-    # The retry still comes first; only an already-retried event falls through.
-    expect(refusal.index('if (message.reason === "stale_generation" && pendingEvent)'))
-      .to be < refusal.index('console.warn("webui refusal", message);')
-    expect(refusal).to include('if (message.reason === "stale_generation") {')
-    # Any other refusal is still surfaced.
-    expect(refusal).to include('notify(detail ? `${text}: ${detail}` : text, "error")')
+  it 'replays the payload the event was sent with, not the current controls' do
+    expect(javascript).to include('submission: message.submission')
+    expect(javascript).to include('emit(page, component, retry.event, retry.payload, retry.attempt + 1)')
+  end
+
+  it 'forgets outstanding events once a render for their page arrives' do
+    expect(javascript).to include('if (record.address === message.page) pendingEvents.delete(key);')
+  end
+
+  it 'still hides a stale refusal from the viewer and surfaces every other' do
+    expect(javascript).to include('if (message.reason === "stale_generation") {')
+    expect(javascript).to include('notify(detail ? `${text}: ${detail}` : text, "error")')
   end
 
   it 'reports both scroll axes, since a GTK adjustment is per-axis' do
