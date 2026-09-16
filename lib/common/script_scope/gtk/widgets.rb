@@ -265,14 +265,45 @@ module Lich
           # (an enum member, a flag) becomes the symbol it was named, since
           # scripts only ever pass those back into methods the shim ignores.
           # Either way the script keeps running and the gap is logged once.
+          #
+          # The two are not equally harmless, and used to log identically.
+          # A missing enum member costs nothing: it is handed straight back
+          # to a method the shim ignores. A missing *widget class* costs the
+          # script everything it was going to put in that widget -- map's
+          # Gtk::Image is the map, and it renders as an empty box with one
+          # `warning:` line in a debug file, indistinguishable from the
+          # harmless kind. A stubbed widget now says so where the player
+          # will see it.
           def const_missing(name)
-            value = if name.to_s.match?(/\A[A-Z][a-z]/)
-                      unimplemented_widget(name)
-                    else
-                      name.to_s.downcase.to_sym
-                    end
-            log_unsupported('Gtk', name, note: 'constant is not implemented')
+            widget = name.to_s.match?(/\A[A-Z][a-z]/)
+            value = widget ? unimplemented_widget(name) : name.to_s.downcase.to_sym
+            if widget
+              report_stubbed_widget(name)
+            else
+              log_unsupported('Gtk', name, note: 'constant is not implemented')
+            end
             const_set(name, value)
+          end
+
+          # Told once per widget class per session, to the script's own
+          # output as well as the log: an empty box on screen is otherwise
+          # indistinguishable from a layout bug.
+          def report_stubbed_widget(name)
+            key = "Gtk::#{name}"
+            return if @unsupported[key]
+
+            @unsupported[key] = true
+            script = Session.current_script&.name
+            detail = "webui-gtk-shim: Gtk::#{name} is not implemented; " \
+                     'anything placed in it renders as an empty box'
+            detail += " script=#{script}" if script
+            Lich.log("warning: #{detail}") if defined?(Lich) && Lich.respond_to?(:log)
+            return unless defined?(::Lich::Messaging) || Kernel.respond_to?(:respond, true)
+
+            Kernel.send(:respond, "[#{script || 'gtk'}: Gtk::#{name} is not supported yet -- " \
+                                  'that part of the window will be blank]')
+          rescue StandardError
+            nil
           end
 
           def normalize_signal(name)

@@ -813,4 +813,57 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(reporter.send(:script_origin, backtrace)).to be_nil
     end
   end
+
+  # An unimplemented constant becomes an empty container so the script keeps
+  # running, but a missing widget class costs the script everything it meant
+  # to put there -- map's Gtk::Image is the map. That used to log exactly
+  # like a missing enum member, which costs nothing.
+  describe 'a constant the shim does not implement' do
+    around do |example|
+      previous = gtk.instance_variable_get(:@unsupported)
+      gtk.instance_variable_set(:@unsupported, {})
+      example.run
+      gtk.instance_variable_set(:@unsupported, previous)
+    end
+
+    it 'tells the script when a widget class is only a stub' do
+      messages = []
+      allow(gtk).to receive(:report_stubbed_widget).and_wrap_original do |original, name|
+        messages << name
+        original.call(name)
+      end
+
+      gtk.const_missing(:DrawingAreaProbe)
+
+      expect(messages).to eq([:DrawingAreaProbe])
+      expect(gtk.const_get(:DrawingAreaProbe).superclass).to be(gtk::Container)
+    end
+
+    it 'says it only once for the same widget' do
+      logged = []
+      allow(gtk).to receive(:log_unsupported) { |*args, **kwargs| logged << [args, kwargs] }
+      stub_const('Lich', Module.new)
+      allow(Lich).to receive(:log) { |message| logged << message }
+
+      2.times { gtk.send(:report_stubbed_widget, :RepeatedProbe) }
+
+      expect(logged.grep(/RepeatedProbe/).size).to eq(1)
+    end
+
+    it 'keeps an enum member on the quiet path' do
+      noted = []
+      allow(gtk).to receive(:log_unsupported) { |_klass, name, **| noted << name }
+
+      gtk.const_missing(:POLICY_PROBE)
+
+      expect(noted).to eq([:POLICY_PROBE])
+      expect(gtk.const_get(:POLICY_PROBE)).to eq(:policy_probe)
+    end
+
+    it 'still returns the stub when nothing can be told' do
+      hide_const('Lich')
+
+      expect(gtk.const_missing(:SilentProbe).superclass).to be(gtk::Container)
+    end
+  end
 end
