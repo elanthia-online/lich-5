@@ -296,9 +296,15 @@ RSpec.describe Lich::Common::WebUILauncher do
       expect(table.props[:selection]).to eq('single')
     end
 
-    it 'offers add, reload and delete, with delete held back until it applies' do
-      expect(find(tree, 'button:frontends-add')).not_to be_nil
-      expect(find(tree, 'button:frontends-reload')).not_to be_nil
+    # GTK keeps all four in one row under the editor. Splitting them -- three
+    # above the table, Save alone at the bottom -- put the action furthest from
+    # the fields it applies to.
+    it 'keeps every action in one row under the editor, in GTK order' do
+      row = find(tree, 'columns:frontend-actions')
+
+      expect(row).not_to be_nil
+      expect(row.children.filter_map { |child| child.props[:label] })
+        .to eq(['Add Custom', 'Save', 'Delete Custom', 'Reload'])
       expect(find(tree, 'button:frontends-delete').props[:disabled]).to be(true)
     end
 

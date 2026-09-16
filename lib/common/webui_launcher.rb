@@ -524,24 +524,24 @@ module Lich
                   { key: 'arguments', label: 'Additional arguments' },
                 ], rows: rows, selection: :single, selected: selected,
                 on: { selection_change: ->(event) { launcher.select_frontend(event) } })
-          columns(count: 4, weights: [0, 0, 0, 1]) do
-            button(slot: '0', key: 'frontends-add', label: 'Add Custom',
-                   on: { activate: ->(_event) { launcher.begin_new_frontend } })
-            button(slot: '1', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
-                   disabled: !launcher.__send__(:frontend_deletable?, state),
-                   on: { activate: ->(_event) { launcher.delete_frontend } })
-            button(slot: '2', key: 'frontends-reload', label: 'Reload',
-                   on: { activate: ->(_event) { launcher.reload_frontends } })
-            text(slot: '3', key: 'frontends-button-spacer', content: ' ')
-          end
         end
       end
 
       def render_frontend_editor(ui, state, draft)
         launcher = self
+        # With no row selected there is nothing to edit, but Add Custom and
+        # Reload must still be reachable -- otherwise an empty catalog, or a
+        # failed load, would leave no way back.
         unless draft
           ui.group(label: 'Frontend Settings', key: 'frontend-editor-section') do
             text(content: 'Select a frontend to edit, or choose Add Custom.')
+            columns(key: 'frontend-actions', count: 3, weights: [0, 0, 1], gap: 6) do
+              button(slot: '0', key: 'frontends-add', label: 'Add Custom',
+                     on: { activate: ->(_event) { launcher.begin_new_frontend } })
+              button(slot: '1', key: 'frontends-reload', label: 'Reload',
+                     on: { activate: ->(_event) { launcher.reload_frontends } })
+              text(slot: '2', key: 'frontend-actions-spacer', content: ' ')
+            end
           end
           return
         end
@@ -555,9 +555,21 @@ module Lich
             text(key: 'frontend-detected', content: "Detected: #{draft[:detected_command]}", tone: :neutral)
           end
           capability_boxes = launcher.__send__(:render_frontend_capabilities, self, draft, built_in)
-          button(key: 'frontend-save', label: 'Save', variant: :primary,
-                 submit: fields + capability_boxes,
-                 on: { activate: ->(event) { launcher.save_frontend(event) } })
+          # One row under the editor, in GTK's order, rather than Save alone at
+          # the bottom and the other three stranded above the table.
+          columns(key: 'frontend-actions', count: 5, weights: [0, 0, 0, 0, 1], gap: 6) do
+            button(slot: '0', key: 'frontends-add', label: 'Add Custom',
+                   on: { activate: ->(_event) { launcher.begin_new_frontend } })
+            button(slot: '1', key: 'frontend-save', label: 'Save', variant: :primary,
+                   submit: fields + capability_boxes,
+                   on: { activate: ->(event) { launcher.save_frontend(event) } })
+            button(slot: '2', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
+                   disabled: !launcher.__send__(:frontend_deletable?, state),
+                   on: { activate: ->(_event) { launcher.delete_frontend } })
+            button(slot: '3', key: 'frontends-reload', label: 'Reload',
+                   on: { activate: ->(_event) { launcher.reload_frontends } })
+            text(slot: '4', key: 'frontend-actions-spacer', content: ' ')
+          end
         end
       end
 
