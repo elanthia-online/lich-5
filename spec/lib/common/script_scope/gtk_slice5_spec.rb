@@ -52,12 +52,30 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
   end
 
   describe 'ProgressBar' do
+    # Real GTK (3.24.52, checked): `text =` alone leaves show-text false and
+    # the text does not render. The shim's guard was tautological, so the
+    # label went out either way and a bar whose text a script had switched
+    # off still showed it. creaturebar's calibrator drives this from a "Text"
+    # checkbox, so it is a live difference rather than a theoretical one.
     it 'renders a progress node with a fraction and label' do
-      bar = session.sync { b = gtk::ProgressBar.new; b.fraction = 0.4; b.text = 'Spirit Warding I'; b }
+      bar = session.sync do
+        b = gtk::ProgressBar.new
+        b.fraction = 0.4
+        b.text = 'Spirit Warding I'
+        b.show_text = true
+        b
+      end
       props = bar.send(:node_props)
 
       expect(props).to include(value: 0.4, label: 'Spirit Warding I')
       expect { validator.validate_component!(:progress, props, owner: 's', page_id: 'p', cid: 'c') }.not_to raise_error
+    end
+
+    it 'withholds the label until show_text asks for it, as GTK does' do
+      bar = session.sync { b = gtk::ProgressBar.new; b.fraction = 0.4; b.text = 'hidden'; b }
+
+      expect(bar.send(:node_props)).to include(value: 0.4)
+      expect(bar.send(:node_props)).not_to have_key(:label)
     end
 
     it 'reports a pulse as indeterminate, and a later fraction ends it' do

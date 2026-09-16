@@ -62,8 +62,11 @@ RSpec.describe 'GTK compatibility shim: GLib sources' do
 
       expect(glib::Source.remove(id)).to be(true)
 
+      # The killed thread may be mid-pass, so let it settle before sampling
+      # rather than racing it: what matters is that it stops, not exactly when.
+      sleep 0.2
       settled = runs
-      sleep 0.15
+      sleep 0.2
 
       expect(runs).to eq(settled)
     end

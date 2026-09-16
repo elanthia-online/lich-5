@@ -55,7 +55,12 @@ module Lich
 
           def node_props
             props = { value: @fraction }
-            props[:label] = @text if @text && !@text.empty? && (@show_text || !@text.empty?)
+            # `(@show_text || !@text.empty?)` was tautological -- the guard
+            # before it already required a non-empty text -- so show_text
+            # decided nothing and a bar whose text a script had switched off
+            # still showed it. In GTK it is what makes the text render at all.
+            # creaturebar's calibrator drives this from a "Text" checkbox.
+            props[:label] = @text if @show_text && @text && !@text.empty?
             props[:indeterminate] = true if @pulsing
             props
           end
