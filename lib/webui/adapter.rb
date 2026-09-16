@@ -220,22 +220,36 @@ module Lich
 
       private
 
+      # Prepares every dirty root under the lock, then refreshes outside it.
+      #
+      # `@service.refresh` reaches `Page#render`, which takes the page's
+      # render mutex and then calls back into `render_children` for the
+      # tree -- which takes this mutex. A viewer attaching on the
+      # connection thread walks the same path in the other order: it holds
+      # the render mutex first and reaches for this one second. Holding
+      # both across the refresh is a lock-order inversion between the
+      # script thread and the connection thread, and it deadlocks.
+      #
+      # Everything that reads adapter state stays inside the lock. Only the
+      # refresh itself moves out, where re-entering through
+      # `render_children` is safe.
       def flush!
-        @mutex.synchronize do
+        pages = @mutex.synchronize do
           selected = @dirty_roots.keys.filter_map do |candidate|
             root_for(candidate) if handle_for(candidate)
           end.uniq
           @dirty_roots.clear
-          selected.each do |root|
+          selected.filter_map do |root|
             next unless handle_for(root)
 
             ensure_page!(root)
             root.page.refresh_definition(
               title: root.props.fetch(:title), props: root.props.except(:title), on: callbacks_for(root)
             )
-            @service.refresh(root.page)
+            root.page
           end
         end
+        pages.each { |page| @service.refresh(page) }
         nil
       end
 

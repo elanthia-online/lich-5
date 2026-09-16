@@ -83,6 +83,51 @@ RSpec.describe Lich::WebUI::Adapter do
     expect(page.last_render.tree.children.first.props[:label]).to eq('After')
   end
 
+  # A viewer attaching takes the page's render mutex and then reaches into
+  # the adapter for the tree; flush! took them in the opposite order and
+  # deadlocked the script thread against the connection thread.
+  it 'refreshes outside its own lock so a concurrent render cannot deadlock it' do
+    page_handle = adapter.create(:page, title: 'Adapter page')
+    button = adapter.create(:button, label: 'Before')
+    adapter.attach(page_handle, button)
+    adapter.send(:flush!)
+    page = service.registry.pages_for(owner).fetch(0)
+
+    # Pauses the first render inside its render block: the render mutex is
+    # held and the adapter's is about to be taken, which is exactly where a
+    # viewer attaching on the connection thread sits. Only the first render
+    # blocks, so flush!'s own render runs through.
+    inside_render = Queue.new
+    release_render = Queue.new
+    paused = false
+    pause_mutex = Mutex.new
+    original_block = page.instance_variable_get(:@render_block)
+    page.instance_variable_set(:@render_block, proc do |builder|
+      first = pause_mutex.synchronize { paused ? false : (paused = true) }
+      if first
+        inside_render << :held
+        release_render.pop
+      end
+      instance_exec(builder, &original_block)
+    end)
+
+    # Connection thread: holds the render mutex, then wants the adapter's.
+    attacher = Thread.new { page.render }
+    inside_render.pop
+
+    # Script thread: wants the render mutex while holding the adapter's.
+    adapter.set(button, :label, 'After')
+    flusher = Thread.new { adapter.send(:flush!) }
+
+    # Let the flusher reach the lock before releasing the paused render --
+    # otherwise it finishes first and the inversion never forms.
+    sleep 0.05 until flusher.status == 'sleep' || !flusher.alive?
+    release_render << :go
+    expect(flusher.join(5)).not_to be_nil, 'flush! deadlocked against a concurrent render'
+    expect(attacher.join(5)).not_to be_nil
+    expect(page.last_render.tree.children.first.props[:label]).to eq('After')
+  end
+
   it 'returns a cancellable future from modal' do
     future = adapter.modal(
       id: 'adapter-dialog', title: 'Question', body: 'Continue?',
