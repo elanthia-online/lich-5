@@ -137,17 +137,34 @@ RSpec.describe 'the launcher switches' do
       expect(route(['--no-gui'], launcher: :webui)).to eq(:headless)
     end
 
-    # Saga starts a session as `<file>.sal --gtk --without-frontend
-    # --detachable-client=N --saga`. The R1 fix made `--gtk` alone open the
-    # GTK launcher, and that launcher then pre-empted the .sal login
-    # (Tysong, 2026-09-17). A toolkit flag beside a session is not a wish
-    # for the launcher, under either toolkit.
-    it 'starts the session, not a launcher, when a .sal comes with the toolkit flag' do
+    # A launcher flag selects which launcher; it does not ask for one. The
+    # R1 fix read it as the latter, so any startup with a launcher flag
+    # beside it -- Saga's `<file>.sal --gtk --without-frontend
+    # --detachable-client=N --saga` (Tysong, 2026-09-17), a `--game=HOST:PORT`
+    # proxy, a force mode -- opened the launcher instead of connecting. The
+    # launcher opens only when the command line asks for nothing else.
+    describe 'a launcher flag beside a session' do
       saga = ['C:\\Users\\Ryan\\AppData\\Local\\Temp\\saga-Pickasso-mu5mjeft.sal', '--gtk', '--without-frontend',
               '--detachable-client=62992', '--saga']
-      expect(route(saga, launcher: :gtk)).to eq(:headless)
-      expect(route(saga.map { |argument| argument == '--gtk' ? '--webui' : argument }, launcher: :webui)).to eq(:headless)
-      expect(route(['--gtk'], launcher: :gtk)).to eq(:gtk)
+      {
+        'Saga'            => saga,
+        'a proxy'         => ['--game=lich.example:8000', '--gtk'],
+        'a force mode'    => ['--gemstone', '--gtk'],
+        'a headless port' => ['--headless', '4000', '--gtk'],
+      }.each do |shape, argv|
+        it "connects rather than opening a launcher for #{shape}" do
+          expect(route(argv, launcher: :gtk)).to eq(:headless)
+          swapped = argv.map { |argument| argument == '--gtk' ? '--webui' : argument }
+          expect(route(swapped, launcher: :webui)).to eq(:headless)
+        end
+      end
+
+      it 'still opens the launcher for the flag alone, or the flag with --gui' do
+        expect(route(['--gtk'], launcher: :gtk)).to eq(:gtk)
+        expect(route(['--webui'], launcher: :webui)).to eq(:webui)
+        expect(route(['--webui-dev'], launcher: :webui)).to eq(:webui)
+        expect(route(['--game=lich.example:8000', '--gui'], launcher: :webui)).to eq(:webui)
+      end
     end
 
     it 'never opens the GTK launcher when gtk3 did not load' do
