@@ -34,6 +34,12 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-columns.compact { gap: 4px !important; align-items: center; }
 .webui-grid { display: grid; align-items: center; }
 .webui-grid > .field { min-width: 0; }
+/* A group inside a grid keeps its min-content width. .webui-group sets
+   min-width: 0 for the launcher's flex rows, but as a grid item that let a
+   track shrink below the group's content and the group spill under its
+   neighbour (eloot's Skinning tab: the exclusions frame drawn across the
+   sheath and weapon boxes). Kept at its content, the page scrolls instead. */
+.webui-grid > .webui-group { min-width: auto; }
 /* A bare page is a script's own window: it fills the browser window. */
 #pages:has(> .webui-page.bare) { width: 100%; }
 .webui-page.bare { font-size: 13px; }
