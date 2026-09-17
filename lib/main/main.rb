@@ -84,6 +84,8 @@ reconnect_if_wanted = proc {
   # Detachable listener stdout notices (connect/disconnect); the disconnect
   # notice is emitted from handle_detachable_client in global_defs at runtime.
   require File.join(LIB_DIR, 'main', 'detachable_client_notice.rb')
+  # Launch-data character-name resolution for the detachable session file.
+  require File.join(LIB_DIR, 'main', 'detachable_session_name.rb')
 
   # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
   # kills scripts and runs their before_dying hooks inline (any of which can
@@ -914,20 +916,17 @@ reconnect_if_wanted = proc {
               }
 
               if resolved_char_name.nil?
-                login_idx = ARGV.index('--login')
-                resolved_char_name = if !login_idx.nil? && ARGV[login_idx + 1]
-                                       ARGV[login_idx + 1].capitalize
-                                     end
-                # A raw --sal launch (no --login) carries no character name in the
-                # fields main.rb already reads (GAMECODE/GAMEPORT/GAMEHOST/GAME) --
-                # the EAccess response it comes from never includes one. Some launch
-                # data (Lich's own re-serialized .sal, or a wrapper tool) may still
-                # carry CHARACTER=/NAME=, the same keys SessionLauncher#build_spawn_args
-                # already treats as authoritative, so check those before falling back
-                # to watching the game stream below.
-                launch_name = @launch_data&.find { |line| line =~ /\A(?:CHARACTER|NAME)=/ }
-                                          &.split('=', 2)&.last&.strip
-                resolved_char_name ||= launch_name.capitalize unless launch_name.to_s.empty?
+                # Reuses the same --login / Account.character / XMLData.name ladder
+                # session_name above was resolved from, so both writers of the
+                # session file (this and Frontend.create_session_file's other call
+                # site) agree on where a name comes from. The "pid-<pid>" fallback
+                # means none of those three had an answer yet -- not a real name.
+                resolved_char_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+                  argv: ARGV,
+                  account_character: (Lich::Common::Account.character rescue nil)
+                )
+                resolved_char_name = nil if resolved_char_name == "pid-#{Process.pid}"
+                resolved_char_name ||= Lich::Main::DetachableSessionName.from_launch_data(@launch_data)
               end
 
               if resolved_char_name
@@ -942,22 +941,26 @@ reconnect_if_wanted = proc {
                 name_poll_thread = Thread.new do
                   begin
                     name_from_stream = nil
-                    # Up to 5 minutes: unlike an automated --login, a bare --sal
-                    # launch usually means the human still has to pick a character
-                    # from an interactive menu, which can take a while.
+                    # Up to 5 minutes: a bare --sal connect is usually followed by
+                    # XMLData.name within seconds, but nothing here guarantees that
+                    # (an interactive character-select menu, a slow connect), and
+                    # the shutdown check below means waiting doesn't cost anything.
                     1_500.times do
-                      break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
+                      break if Lich::Common::ShutdownCoordinator.requested?
 
                       candidate = XMLData.name
-                      if candidate.is_a?(String) && !candidate.empty?
-                        name_from_stream = candidate.dup
+                      if candidate.is_a?(String) && !candidate.strip.empty?
+                        name_from_stream = candidate.strip
                         break
                       end
                       sleep(0.2)
                     end
 
-                    if name_from_stream && !Lich::Common::ShutdownCoordinator.orderly_user_exit?
-                      resolved_char_name = name_from_stream.capitalize
+                    if name_from_stream && !Lich::Common::ShutdownCoordinator.requested?
+                      # Verbatim, like the account_character/XMLData.name tiers
+                      # resolve_session_name uses above -- this is server-authoritative,
+                      # not user-typed, so it isn't .capitalize'd the way --login is.
+                      resolved_char_name = name_from_stream
                       Frontend.create_session_file(resolved_char_name, listener_host, listener_port)
                     end
                   rescue => e
@@ -993,7 +996,7 @@ reconnect_if_wanted = proc {
             # so a stale write can't land after the replacement listener comes up, and
             # so the alive? guard above lets a fresh poller spawn against the new one.
             name_poll_thread&.kill
-            name_poll_thread&.join
+            name_poll_thread&.join(1)
             name_poll_thread = nil
             Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
             sleep 5
@@ -1005,8 +1008,11 @@ reconnect_if_wanted = proc {
         # after cleanup runs and write a session file nothing will ever remove.
         # kill alone doesn't wait for the thread to actually unwind, so join it
         # too -- otherwise cleanup below can race an in-progress session-file write.
+        # Bounded: this runs inside the watchdog-armed shutdown window, and the
+        # poller only ever sleeps in short (0.2s) increments, so it should unwind
+        # almost immediately -- but nothing here should be able to hang teardown.
         name_poll_thread&.kill
-        name_poll_thread&.join
+        name_poll_thread&.join(1)
         server.close rescue nil
         $_DETACHABLE_LISTENER_ = nil
         Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
