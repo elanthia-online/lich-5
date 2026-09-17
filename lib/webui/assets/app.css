@@ -241,8 +241,8 @@ html.webui-measuring .webui-page.bare > .webui-scroll {
 .webui-table th.sortable { cursor: pointer; user-select: none; }
 .webui-table th.sortable:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
 .webui-table th.sortable::after { content: ""; opacity: .55; padding-left: 6px; }
-.webui-table th.sortable[aria-sort="ascending"]::after { content: "91"; }
-.webui-table th.sortable[aria-sort="descending"]::after { content: "93"; }
+.webui-table th.sortable[aria-sort="ascending"]::after { content: "\2191"; }
+.webui-table th.sortable[aria-sort="descending"]::after { content: "\2193"; }
 
 /* The frontend editor is a labelled form: GTK draws a fixed-width label in a
    left column with the field filling the rest, and stacking each label above
@@ -319,9 +319,9 @@ html.webui-measuring .webui-page.bare > .webui-scroll {
 /* The marker is the status made visible; content only, so a screen reader
    reads the label rather than a decorative glyph. */
 .nav-item-marker { text-align: center; opacity: .8; }
-.nav-item[data-status="done"] > .nav-item-marker::before { content: "¹3"; }
-.nav-item[data-status="current"] > .nav-item-marker::before { content: "B8"; }
-.nav-item[data-status="blocked"] > .nav-item-marker::before { content: "98"; opacity: .7; }
+.nav-item[data-status="done"] > .nav-item-marker::before { content: "\2713"; }
+.nav-item[data-status="current"] > .nav-item-marker::before { content: "\25B8"; }
+.nav-item[data-status="blocked"] > .nav-item-marker::before { content: "\2298"; opacity: .7; }
 
 .webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
 /* A container the contract lets carry `disabled` has no native rendering

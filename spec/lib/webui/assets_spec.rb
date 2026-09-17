@@ -57,6 +57,17 @@ RSpec.describe 'WebUI browser assets' do
 
   # Review 2026-09-17, R5/R10/R14. The behaviour is pinned in the jsdom
   # harness (replay, editing and table cases); these are the seams.
+  # The five glyph escapes were written through a shell heredoc, which read
+  # `\2713` as the octal byte 0xB9 followed by "3": every nav status marker
+  # and both sort arrows rendered as a box (found from eohunter, 2026-09-17).
+  # The stylesheet is plain ASCII and names its glyphs by CSS escape.
+  it 'is ASCII, and names its marker and sort glyphs by CSS escape' do
+    css = File.binread(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+    expect(css.bytes.reject { |byte| byte == 10 || byte == 13 || byte.between?(32, 126) }).to eq([])
+    expect(css).to include('content: "\\2713"', 'content: "\\25B8"', 'content: "\\2298"',
+                           'content: "\\2191"', 'content: "\\2193"')
+  end
+
   it 'keeps event records across renders, registers editor cells as controls, and walks table rows as a tree' do
     expect(javascript).to include('const request = ++requestCounter;')
     expect(javascript).to include('if (record.address !== message.page || !record.replay) return;')
