@@ -81,6 +81,34 @@ RSpec.describe Lich::Common::WebUILauncher::Catalog, 'real entry-store integrati
     expect { catalog.credential(before.fetch('Bera')) }.to raise_error(KeyError)
   end
 
+  # The catalog permits the same character under one account with different
+  # frontends or custom launch commands. Those were told apart by an ordinal
+  # on the shared digest, so removing the first moved the second onto the
+  # first's key (review 2026-09-17, R8).
+  it 'keeps the key of a same-character entry when its sibling with another frontend is removed' do
+    %w[stormfront wizard].each do |frontend|
+      catalog.add_character('DOUG', {
+        char_name: 'Aldor', game_code: 'GS3', game_name: 'GemStone IV', frontend: frontend,
+        custom_launch: nil, custom_launch_dir: nil,
+      })
+    end
+    catalog.add_character('DOUG', {
+      char_name: 'Aldor', game_code: 'GS3', game_name: 'GemStone IV', frontend: 'stormfront',
+      custom_launch: 'custom.exe %1', custom_launch_dir: nil,
+    })
+    before = catalog.entries.select { |entry| entry.char_name == 'Aldor' }
+                    .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
+    expect(before.keys).to contain_exactly(['stormfront', nil], ['wizard', nil], ['stormfront', 'custom.exe %1'])
+    expect(before.values).to all(match(/\Aentry-[0-9a-f]{12}\z/)), 'no entry needs an ordinal'
+
+    expect(catalog.remove_entry(before.fetch(['stormfront', nil]))).to be(true)
+    after = catalog.entries.select { |entry| entry.char_name == 'Aldor' }
+                   .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
+    expect(after.fetch(['wizard', nil])).to eq(before.fetch(['wizard', nil]))
+    expect(after.fetch(['stormfront', 'custom.exe %1'])).to eq(before.fetch(['stormfront', 'custom.exe %1']))
+    expect { catalog.credential(before.fetch(['stormfront', nil])) }.to raise_error(KeyError)
+  end
+
   it 'reports an indeterminate favorite state when persistence fails' do
     entry = catalog.entries.first
     allow(catalog).to receive(:write_yaml).and_return(false)

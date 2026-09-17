@@ -351,7 +351,8 @@ module Lich
             data.fetch('accounts', {}).flat_map do |account, account_data|
               account_data.fetch('characters', []).map do |character|
                 {
-                  key: stable_key(account, character['char_name'], character['game_code'], taken),
+                  key: stable_key(account, character['char_name'], character['game_code'],
+                                  character['frontend'], character['custom_launch'], taken),
                   user_id: account, password: account_data['password'],
                   encryption_mode: mode, char_name: character['char_name'], game_code: character['game_code'],
                   game_name: character['game_name'], frontend: character['frontend'],
@@ -375,7 +376,8 @@ module Lich
           taken = {}
           decoded.map do |entry|
             entry = entry.transform_keys(&:to_sym)
-            entry.merge(key: stable_key(entry[:user_id], entry[:char_name], entry[:game_code], taken),
+            entry.merge(key: stable_key(entry[:user_id], entry[:char_name], entry[:game_code],
+                                        entry[:frontend], entry[:custom_launch], taken),
                         encryption_mode: :plaintext)
           end
         rescue StandardError => error
@@ -392,10 +394,17 @@ module Lich
         # makes the entry itself -- account, character, game -- the key
         # survives changes to its neighbours, and a key whose entry is gone
         # simply fails to resolve, which is the refusal a stale action needs.
-        # Two identical characters under one account are told apart by an
-        # ordinal, so keys stay unique even then.
-        def stable_key(user_id, char_name, game_code, taken)
-          digest = OpenSSL::Digest::SHA256.hexdigest([user_id, char_name, game_code].map(&:to_s).join("\0"))[0, 12]
+        # The identity is the whole of what makes an entry distinct -- the
+        # catalog lets one character be saved twice with different frontends
+        # or custom launch commands, and hashing only account, character and
+        # game told those apart by an ordinal, which is a position again:
+        # removing the first moved the second onto its key (review
+        # 2026-09-17, R8). Frontend and custom launch are in the digest now;
+        # an ordinal remains only for entries identical in every field.
+        def stable_key(user_id, char_name, game_code, frontend, custom_launch, taken)
+          digest = OpenSSL::Digest::SHA256.hexdigest(
+            [user_id, char_name, game_code, frontend, custom_launch].map(&:to_s).join("\0")
+          )[0, 12]
           base = "entry-#{digest}"
           count = taken[base] = (taken[base] || 0) + 1
           count == 1 ? base : "#{base}-#{count}"
