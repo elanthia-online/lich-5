@@ -88,8 +88,16 @@ body:has(.webui-page.bare) { overflow: hidden; }
 .webui-page.bare { overflow: auto; }
 /* While the client measures a page's natural size (fitWindow): laid out as
    an inline block so it neither stretches to the viewport nor scrolls. */
-html.webui-measuring #pages { display: inline-block; width: max-content; height: max-content; min-width: 0; }
-html.webui-measuring .webui-page.bare { display: block; flex: none; overflow: visible; width: max-content; }
+   `!important` because the bare-page rules above are written with :has(),
+   whose specificity (an id plus two classes) beats this selector's; without
+   it #pages stayed a viewport-high flex column and every window measured
+   as the size of the screen. */
+html.webui-measuring #pages {
+  display: inline-block !important; width: max-content !important; height: max-content !important; min-width: 0 !important;
+}
+html.webui-measuring .webui-page.bare {
+  display: block !important; flex: none !important; overflow: visible !important; width: max-content !important;
+}
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }
 .align-start { justify-self: start; align-self: start; }
