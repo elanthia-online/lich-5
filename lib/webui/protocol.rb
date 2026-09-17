@@ -47,8 +47,10 @@ module Lich
         JSON.generate(payload)
       end
 
-      def refusal(reason:, message:, page: nil, cid: nil)
-        JSON.generate(type: 'refusal', reason: reason.to_s, message: message, page: page, cid: cid)
+      # `event` names the event refused, so the client can find the record it
+      # kept for that exact send -- a refusal for A must never replay B.
+      def refusal(reason:, message:, page: nil, cid: nil, event: nil)
+        JSON.generate(type: 'refusal', reason: reason.to_s, message: message, page: page, cid: cid, event: event)
       end
 
       def page_closed(address:, reason:)
