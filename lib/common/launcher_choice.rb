@@ -88,6 +88,17 @@ module Lich
       choice = value.to_s.strip.downcase.to_sym
       CHOICES.include?(choice) ? choice : nil
     end
+
+    # The persisted choice as the launcher UI sees it: "the native launcher
+    # next time" or not. The launcher never names a toolkit, so the core
+    # boundary check has nothing to find there.
+    def native_next?
+      setting == :gtk
+    end
+
+    def native_next=(wanted)
+      self.setting = wanted ? :gtk : :webui
+    end
   end
 
   # The launcher this process runs, resolved on first use and then fixed.

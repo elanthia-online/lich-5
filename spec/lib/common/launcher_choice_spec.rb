@@ -62,6 +62,15 @@ RSpec.describe Lich::LauncherChoice do
       expect(db.get_first_value("SELECT count(*) FROM lich_settings WHERE name='launcher';")).to eq(0)
     end
 
+    it 'answers the launcher UI in toolkit-free terms' do
+      expect(described_class.native_next?).to be(false)
+      described_class.native_next = true
+      expect(described_class.setting).to eq(:gtk)
+      expect(described_class.native_next?).to be(true)
+      described_class.native_next = false
+      expect(described_class.setting).to eq(:webui)
+    end
+
     it 'is "no setting" rather than an error before the data directory or the table exists' do
       stub_const('DATA_DIR', File.join(DATA_DIR, 'not-yet'))
       expect(described_class.setting).to be_nil

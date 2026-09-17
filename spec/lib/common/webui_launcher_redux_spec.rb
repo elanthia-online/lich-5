@@ -10,7 +10,11 @@ RSpec.describe Lich::Common::WebUILauncher do
   Entry = Lich::Common::WebUILauncher::Catalog::Entry
 
   class ReduxFrontendLocator
-    Resolution = Data.define(:frontend_id)
+    Resolution = Data.define(:frontend_id, :executable_path, :source) do
+      def initialize(frontend_id:, executable_path: 'C:/games/frontend.exe', source: :detected)
+        super
+      end
+    end
 
     def self.available(gui_selectable:, refresh:)
       raise unless gui_selectable && refresh
@@ -18,9 +22,15 @@ RSpec.describe Lich::Common::WebUILauncher do
       [Resolution.new('stormfront'), Resolution.new('saga')]
     end
 
-    def self.resolve(frontend, refresh: false)
-      Resolution.new(frontend) if %w[stormfront saga].include?(frontend) && [true, false].include?(refresh)
+    # Mirrors FrontendLocator#resolve, whose override and refresh keywords are
+    # both optional -- the Frontends tab asks for a resolution without either.
+    def self.resolve(frontend, override: nil, refresh: false)
+      return unless override.nil? && [true, false].include?(refresh)
+
+      Resolution.new(frontend) if %w[stormfront saga].include?(frontend)
     end
+
+    def self.refresh!(*) = true
   end
 
   class ReduxCatalogFixture
@@ -47,6 +57,8 @@ RSpec.describe Lich::Common::WebUILauncher do
     def add_character(account, character) = @mutations << [:add_character, account, character]
   end
 
+  FrontendEvent = Struct.new(:payload, :submission)
+
   let(:entries) do
     [
       Entry.new('entry-0', 'DOUG', 'Aldor', 'GS3', 'GemStone IV', 'stormfront', nil, nil, true, 1),
@@ -70,9 +82,9 @@ RSpec.describe Lich::Common::WebUILauncher do
     tabs = find(tree, 'tabs:launcher-tabs')
 
     expect(tabs.type).to eq(:tabs)
-    expect(tabs.props[:names]).to eq(['Saved Entry', 'Manual Entry', 'Account Management'])
+    expect(tabs.props[:names]).to eq(['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'])
     expect(tabs.props[:selected]).to eq(0)
-    expect(tabs.children.map(&:slot)).to eq(['Saved Entry', 'Manual Entry', 'Account Management'])
+    expect(tabs.children.map(&:slot)).to eq(['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'])
   end
 
   it 'preserves favorites/account navigation and keeps row actions beside each saved row' do
@@ -148,8 +160,12 @@ RSpec.describe Lich::Common::WebUILauncher do
     controls = settings.each.select { |component| component.type == :toggle }
 
     expect(settings_toggle.props).to include(label: 'GUI Settings', checked: false)
-    expect(controls.map { |control| control.props[:label] })
+    # The four GTK settings keep their order; the launcher choice, which GTK
+    # never had, follows them when the process offers one.
+    expect(controls.map { |control| control.props[:label] }.first(4))
       .to eq(['Dark Theme', 'Tab Layout', 'AutoSort', 'Multi-Launch'])
+    expect(controls.map { |control| control.props[:label] }.drop(4))
+      .to eq(['Use the native launcher next time']).or eq([])
     expect(find(tree, 'stack:gui-settings-options').props[:hidden]).to be(true)
   end
 
@@ -165,17 +181,28 @@ RSpec.describe Lich::Common::WebUILauncher do
       .to contain_exactly(hash_including(keys: 'enter', target: a_string_ending_with('button:manual-connect')))
   end
 
-  it 'uses only dynamically discovered frontends, hides custom fields, and right-aligns disabled Play' do
+  # Listing only what discovery resolved made a configured custom frontend
+  # unreachable: a custom definition has no registry entry, no bundle id and
+  # no conventional path, so FrontendLocator#available can never return one.
+  # The player configures it with a launch command and it simply never
+  # appeared in the dropdown. Discovery annotates a choice; it never removes
+  # one, which is the rule GUI::FrontendSelector has always followed.
+  it 'offers every selectable frontend, annotated with what discovery found' do
     manual = find(tree, 'stack:manual-panel')
     frontend = find(manual, 'select:manual-frontend')
     custom_fields = find(manual, 'stack:manual-custom-fields')
     play = find(manual, 'button:manual-play')
     play_columns = find(manual, 'columns:manual-play-actions')
 
-    expect(frontend.props[:options]).to eq([
-                                             { value: 'stormfront', label: 'Wrayth' }, { value: 'saga', label: 'Saga' }
-                                           ])
-    expect(frontend.props[:options].map { |option| option[:value] }).not_to include('wizard', 'avalon')
+    options = frontend.props[:options]
+    # The two the locator resolved are marked detected; the rest stay
+    # selectable and say why they are not ready.
+    expect(options).to include({ value: 'stormfront', label: 'Wrayth (detected)' })
+    expect(options).to include({ value: 'saga', label: 'Saga (detected)' })
+    expect(options.map { |option| option[:value] }).to include('wizard')
+    expect(options.find { |option| option[:value] == 'wizard' }[:label]).to match(/unavailable/)
+    # Stormfront stays pinned first, as it is the historical GUI default.
+    expect(options.first[:value]).to eq('stormfront')
     expect(custom_fields.props[:hidden]).to be(true)
     expect(play.props[:disabled]).to be(true)
     expect(play.slot).to eq('1')
@@ -199,14 +226,13 @@ RSpec.describe Lich::Common::WebUILauncher do
     expect(account_actions.children.map { |button| button.props[:label] }).to eq(['Back to Accounts', 'Add Account'])
   end
 
-  it 'uses the same dynamically discovered frontend choices in account-management forms' do
+  it 'offers the same frontend choices in account-management forms' do
     character_frontend = find(tree, 'select:character-frontend')
     account_frontend = find(tree, 'select:account-frontend')
 
-    expect(character_frontend.props[:options]).to eq([
-                                                       { value: 'stormfront', label: 'Wrayth' },
-                                                       { value: 'saga', label: 'Saga' }
-                                                     ])
+    expect(character_frontend.props[:options]).to include({ value: 'stormfront', label: 'Wrayth (detected)' })
+    expect(character_frontend.props[:options].map { |option| option[:value] }).to include('wizard')
+    # Whatever the list is, both forms must show it identically.
     expect(account_frontend.props[:options]).to eq(character_frontend.props[:options])
   end
 
@@ -253,6 +279,102 @@ RSpec.describe Lich::Common::WebUILauncher do
     expect { failed.start }.to raise_error(Lich::WebUI::Error, /dedicated launcher window failed/)
     expect(failed.lifecycle).to eq(:closed)
     expect(recovery).to contain_exactly(match(/ERROR:.*Google Chrome.*launcher has stopped/))
+  end
+
+  # PR #1558 added a Frontends tab to the GTK launcher: a catalog list plus an
+  # editor for built-in launch overrides and custom frontends. Without it the
+  # WebUI launcher could offer a configured frontend but gave no way to
+  # configure one, so a custom frontend had to be set up in the GTK launcher or
+  # by hand.
+  describe 'the Frontends tab' do
+    def all_of(component, fragment)
+      component.each.select { |candidate| candidate.cid.include?(fragment) }
+    end
+
+    it 'lists the catalog with the status of each frontend' do
+      table = find(tree, 'table:frontends-table')
+
+      expect(table.props[:columns].map { |column| column[:label] })
+        .to eq(['Frontend', 'Type', 'Status', 'Executable / command', 'Additional arguments'])
+      expect(table.props[:rows]).not_to be_empty
+      expect(table.props[:selection]).to eq('single')
+    end
+
+    # GTK keeps all four in one row under the editor. Splitting them -- three
+    # above the table, Save alone at the bottom -- put the action furthest from
+    # the fields it applies to.
+    it 'keeps every action in one row under the editor, in GTK order' do
+      row = find(tree, 'columns:frontend-actions')
+
+      expect(row).not_to be_nil
+      expect(row.children.filter_map { |child| child.props[:label] })
+        .to eq(['Add Custom', 'Save', 'Delete Custom', 'Reload'])
+      expect(find(tree, 'button:frontends-delete').props[:disabled]).to be(true)
+    end
+
+    # The GTK tab selects its first row on load, so the editor is populated the
+    # moment the tab opens. Opening on a placeholder that needs a click first
+    # is the difference that showed up side by side against the real launcher.
+    it 'opens with the first frontend already loaded into the editor' do
+      section = find(tree, 'group:frontend-editor-section')
+      table = find(tree, 'table:frontends-table')
+
+      expect(section).not_to be_nil
+      expect(find(tree, 'text_input:frontend-id').props[:value]).to eq(table.props[:rows].first[:key])
+      expect(section.each.map { |node| node.props[:content] }.compact.join)
+        .not_to include('Select a frontend to edit')
+    end
+
+    it 'keeps the catalog short enough to leave the editor on screen' do
+      expect(find(tree, 'table:frontends-table').props[:max_height]).to be_a(Integer)
+    end
+
+    # Lich owns a built-in's identity; only the launch override is the
+    # player's to set.
+    it 'locks identity and capabilities when a built-in is selected' do
+      launcher.select_frontend(FrontendEvent.new({ rows: ['stormfront'] }, nil))
+      rendered = launcher.send(:build_page).render.tree
+
+      expect(find(rendered, 'text_input:frontend-id').props[:disabled]).to be(true)
+      expect(find(rendered, 'text_input:frontend-label').props[:disabled]).to be(true)
+      expect(find(rendered, 'text_input:frontend-directory').props[:disabled]).to be(true)
+      expect(all_of(rendered, 'checkbox:frontend-capability-').map { |box| box.props[:disabled] })
+        .to all(be(true))
+      expect(find(rendered, 'button:frontends-delete').props[:disabled]).to be(true)
+    end
+
+    it 'opens an editable form for a new custom frontend' do
+      launcher.begin_new_frontend
+      rendered = launcher.send(:build_page).render.tree
+
+      expect(find(rendered, 'text_input:frontend-id').props[:disabled]).to be_falsey
+      expect(find(rendered, 'text_input:frontend-label').props[:disabled]).to be_falsey
+      # Nothing to delete until it has been saved.
+      expect(find(rendered, 'button:frontends-delete').props[:disabled]).to be(true)
+    end
+
+    it 'maps the submitted fields in the order the editor declared them' do
+      launcher.begin_new_frontend
+      capabilities = Lich::Common::Frontend.capability_vocabulary
+      values = ['vellum', 'Vellum', 'C:/v/vellum-fe.exe', 'C:/v', '--frontend gui']
+      values += Array.new(capabilities.length) { 'false' }
+      values[5] = 'true'
+
+      fields = launcher.send(:frontend_fields_from, FrontendEvent.new(nil, values))
+
+      expect(fields).to include(id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe',
+                                directory: 'C:/v', arguments: '--frontend gui')
+      expect(fields[:capabilities]).to eq([capabilities.first.to_s])
+    end
+
+    it 'reports a refused edit against the editor instead of throwing it away' do
+      launcher.begin_new_frontend
+      launcher.save_frontend(FrontendEvent.new(nil, ['', '', '', '', '']))
+      rendered = launcher.send(:build_page).render.tree
+      messages = find(rendered, 'group:frontend-editor-section').each.map { |node| node.props[:content] }
+
+      expect(messages.compact.join).to match(/Stable ID must use/)
+    end
   end
 end
 # rubocop:enable Lint/ConstantDefinitionInBlock
