@@ -56,6 +56,31 @@ RSpec.describe Lich::Common::WebUILauncher::Catalog, 'real entry-store integrati
     expect(reloaded.entries).to be_empty
   end
 
+  # Keys were generated from the enumeration position on every read, so
+  # removing Alpha renamed Beta to Alpha's old key. A stale editor,
+  # confirmation or queued operation holding Beta's key then acted on the
+  # entry that had moved into it; another launcher or process editing the
+  # shared file was enough to bring that about.
+  it 'keeps an entry key stable when another process removes an earlier entry' do
+    %w[Aldor Cyra].each do |name|
+      catalog.add_character('DOUG', {
+        char_name: name, game_code: 'GS3', game_name: 'GemStone IV', frontend: 'stormfront',
+        custom_launch: nil, custom_launch_dir: nil,
+      })
+    end
+    before = catalog.entries.to_h { |entry| [entry.char_name, entry.key] }
+    expect(before.values.uniq.length).to eq(3)
+
+    other_process = described_class.new(data_dir: data_dir, master_password_manager: manager)
+    expect(other_process.remove_entry(before.fetch('Bera'))).to be(true)
+
+    after = catalog.entries.to_h { |entry| [entry.char_name, entry.key] }
+    expect(after.fetch('Aldor')).to eq(before.fetch('Aldor'))
+    expect(after.fetch('Cyra')).to eq(before.fetch('Cyra'))
+    expect(after).not_to have_value(before.fetch('Bera'))
+    expect { catalog.credential(before.fetch('Bera')) }.to raise_error(KeyError)
+  end
+
   it 'reports an indeterminate favorite state when persistence fails' do
     entry = catalog.entries.first
     allow(catalog).to receive(:write_yaml).and_return(false)
