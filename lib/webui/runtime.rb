@@ -131,6 +131,8 @@ module Lich
 
       def write(page, cid, property, value, viewer: nil)
         component = page_component(page, cid)
+        return write_row_expansion(page, component, property, value, viewer) if row_expansion?(component, property)
+
         name = component_property(component, property)
         scope = property_scope(component, name)
         if %i[sensitive_write_only ephemeral_client].include?(scope)
@@ -605,6 +607,32 @@ module Lich
         when :radio then :selected
         else :value
         end
+      end
+
+      # A table row's expansion is the viewer's own, kept as the row_toggle
+      # event keeps it ("expanded:<row>" in the viewer store), and a script
+      # may set it too: TreeView#expand_row under the shim, or any page that
+      # opens a branch for the viewer (review 2026-09-17 (b), F4). The name
+      # is not a contract property, so it is checked here: a boolean, for a
+      # row the table has.
+      def row_expansion?(component, property)
+        component.type == :table && property.to_s.start_with?('expanded:')
+      end
+
+      def write_row_expansion(page, component, property, value, viewer)
+        name = property.to_s
+        row = name.delete_prefix('expanded:')
+        unless Array(component.props[:rows]).any? { |candidate| candidate[:key].to_s == row }
+          raise UnknownPropertyError.new(
+            "no row #{row.inspect} to expand", owner: owner_label(page.owner), page_id: page.id,
+            cid: component.cid, field: name
+          )
+        end
+
+        attachment = contextual_attachment(page, component, viewer)
+        @viewers.set_property(attachment, component, name, value ? true : false)
+        schedule_refresh(page)
+        nil
       end
 
       def property_scope(component, name)

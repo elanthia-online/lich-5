@@ -383,6 +383,30 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(first_connection.sent.last.dig('tree', 'children', 0, 'props', 'selected')).to eq(1)
   end
 
+  # Review 2026-09-17 (b), F4: a row's expansion was the viewer's to change
+  # through row_toggle and nobody else's; a script expanding a branch (the
+  # shim's TreeView#expand_row) had no write that reached the viewer.
+  it 'lets a script set a viewer\'s row expansion, and refuses a row the table does not have' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'tree', title: 'Tree') do
+      table(key: 'tree', columns: [{ key: 'c0', label: 'Name' }], rows: [
+              { key: 'p1', cells: { 'c0' => 'Parent' }, expanded: false },
+              { key: 'c1', cells: { 'c0' => 'Child' }, parent: 'p1' },
+            ], on: { row_toggle: ->(_event) {} })
+    end)
+    _address, render = attach(first_connection, page)
+    cid = render.dig('tree', 'children', 0, 'cid')
+    expanded = -> { first_connection.sent.last.dig('tree', 'children', 0, 'props', 'rows', 0, 'expanded') }
+    expect(expanded.call).to be(false)
+
+    viewer = viewers.attachments_for(page).first.viewer_id
+    page.set(cid, 'expanded:p1', true, viewer: viewer)
+    Timeout.timeout(2) { sleep(0.001) until expanded.call == true }
+    expect(expanded.call).to be(true)
+
+    expect { page.set(cid, 'expanded:nope', true, viewer: viewer) }
+      .to raise_error(Lich::WebUI::UnknownPropertyError, /no row "nope"/)
+  end
+
   it 'refuses every server-side read and bulk write of sensitive values' do
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'secret', title: 'Secret') do
       password_input(key: 'password')
