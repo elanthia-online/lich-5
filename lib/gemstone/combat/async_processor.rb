@@ -10,7 +10,7 @@
 # one thread - no synchronization needed in Creature/CreatureInstance.
 #
 
-require_relative '../../util/gtk_compaction'
+require_relative '../../util/heap_compaction'
 
 module Lich
   module Gemstone
@@ -57,10 +57,10 @@ module Lich
           @worker.join
 
           # Force GC after shutdown to help with memory fragmentation.
-          # Compaction is routed through Lich::Util::GtkCompaction, which
-          # keeps it safe to use alongside gtk3.
+          # Compaction is routed through Lich::Util::HeapCompaction so a
+          # loaded runtime can guard it (the GTK stack installs a strategy).
           GC.start
-          Lich::Util::GtkCompaction.safe_compact!
+          Lich::Util::HeapCompaction.compact!
         end
 
         def stats

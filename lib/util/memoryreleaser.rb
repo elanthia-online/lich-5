@@ -1,7 +1,7 @@
 require 'fiddle'
 require 'open3'
 require 'rbconfig'
-require_relative 'gtk_compaction'
+require_relative 'heap_compaction'
 
 module Lich
   module Util
@@ -442,15 +442,14 @@ module Lich
         #
         # Performs a full mark and immediate sweep, and attempts to compact
         # the heap if the Ruby version supports it. Compaction is routed
-        # through Lich::Util::GtkCompaction, which keeps it safe to use
-        # alongside gtk3 -- see that module for why a plain GC.compact call
-        # isn't safe once gtk3 is loaded.
+        # through Lich::Util::HeapCompaction so a loaded runtime can guard it
+        # (the GTK stack installs its own strategy there).
         #
         # @return [void]
         # @api private
         def run_gc
           GC.start(full_mark: true, immediate_sweep: true)
-          Lich::Util::GtkCompaction.safe_compact!
+          Lich::Util::HeapCompaction.compact!
         end
 
         # Release memory back to the operating system
