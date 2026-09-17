@@ -5,6 +5,32 @@ require_relative '../../../spec_helper'
 require_relative '../../../login_spec_helper'
 require 'common/webui_launcher/catalog'
 
+RSpec.describe Lich::Common::WebUILauncher::Catalog, 'the saved entry is the one acted on' do
+  # Review 2026-09-17 (b), F6: the launcher saved a manual entry and then
+  # looked it up again by account, character, game and frontend -- the
+  # first of two entries differing only in their custom launch command,
+  # which may be the other one. The save answers with the key it wrote.
+  it 'answers an upsert with the key of that entry, and sets the favorite on it alone' do
+    Dir.mktmpdir('webui-catalog') do |dir|
+      catalog = described_class.new(data_dir: dir)
+      first = { user_id: 'REVIEW', char_name: 'Char', game_code: 'GS3', game_name: 'Game', frontend: 'stormfront', custom_launch: 'command-one' }
+      second = first.merge(custom_launch: 'command-two')
+      first_key = catalog.upsert_manual_entry(first, 'synthetic')
+      second_key = catalog.upsert_manual_entry(second, 'synthetic')
+
+      expect([first_key, second_key]).to all(start_with('entry-'))
+      expect(first_key).not_to eq(second_key)
+      expect(catalog.entries.find { |entry| entry.key == second_key }.custom_launch).to eq('command-two')
+
+      expect(catalog.set_favorite(second_key, true)).to be(true)
+      expect(catalog.set_favorite(second_key, true)).to be(true)
+      favorites = catalog.entries.select(&:favorite).map(&:custom_launch)
+      expect(favorites).to eq(['command-two'])
+      expect(catalog.upsert_manual_entry(second, 'synthetic')).to eq(second_key)
+    end
+  end
+end
+
 RSpec.describe Lich::Common::WebUILauncher::Catalog, 'real entry-store integration' do
   let(:data_dir) { Dir.mktmpdir('webui-catalog') }
   let(:manager) do
