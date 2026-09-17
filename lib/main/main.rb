@@ -897,6 +897,8 @@ reconnect_if_wanted = proc {
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       server = nil
+      resolved_char_name = nil
+      name_poll_thread = nil
       begin
         loop {
           begin
@@ -910,16 +912,59 @@ reconnect_if_wanted = proc {
                 host: server.local_address.ip_address,
                 port: server.local_address.ip_port
               }
-              login_idx = ARGV.index('--login')
-              char_name = if !login_idx.nil? && ARGV[login_idx + 1]
-                            ARGV[login_idx + 1].capitalize
-                          end
 
-              begin
-                Frontend.create_session_file(char_name, $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port]) if char_name
-              rescue => e
-                Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+              if resolved_char_name.nil?
+                login_idx = ARGV.index('--login')
+                resolved_char_name = if !login_idx.nil? && ARGV[login_idx + 1]
+                                       ARGV[login_idx + 1].capitalize
+                                     end
+                # A raw --sal launch (no --login) carries no character name in the
+                # fields main.rb already reads (GAMECODE/GAMEPORT/GAMEHOST/GAME) --
+                # the EAccess response it comes from never includes one. Some launch
+                # data (Lich's own re-serialized .sal, or a wrapper tool) may still
+                # carry CHARACTER=/NAME=, the same keys SessionLauncher#build_spawn_args
+                # already treats as authoritative, so check those before falling back
+                # to watching the game stream below.
+                resolved_char_name ||= @launch_data&.find { |line| line =~ /\A(?:CHARACTER|NAME)=/ }
+                                                   &.split('=', 2)&.last&.capitalize
               end
+
+              if resolved_char_name
+                begin
+                  Frontend.create_session_file(resolved_char_name, $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port])
+                rescue => e
+                  Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                end
+              elsif name_poll_thread.nil? || !name_poll_thread.alive?
+                listener_host = $_DETACHABLE_LISTENER_[:host]
+                listener_port = $_DETACHABLE_LISTENER_[:port]
+                name_poll_thread = Thread.new do
+                  begin
+                    name_from_stream = nil
+                    # Up to 5 minutes: unlike an automated --login, a bare --sal
+                    # launch usually means the human still has to pick a character
+                    # from an interactive menu, which can take a while.
+                    1_500.times do
+                      break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
+
+                      candidate = XMLData.name
+                      if candidate.is_a?(String) && !candidate.empty?
+                        name_from_stream = candidate.dup
+                        break
+                      end
+                      sleep(0.2)
+                    end
+
+                    if name_from_stream && !Lich::Common::ShutdownCoordinator.orderly_user_exit?
+                      resolved_char_name = name_from_stream.capitalize
+                      Frontend.create_session_file(resolved_char_name, listener_host, listener_port)
+                    end
+                  rescue => e
+                    Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                  end
+                end
+              end
+
               detachable_listener_connected(detachable_client_count.positive?)
 
               listen_address = Lich::Main::DetachableClientNotice.address(
@@ -949,6 +994,9 @@ reconnect_if_wanted = proc {
           break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
         }
       ensure
+        # Stop the name-resolution poller before cleaning up so it can't wake up
+        # after cleanup runs and write a session file nothing will ever remove.
+        name_poll_thread&.kill
         server.close rescue nil
         $_DETACHABLE_LISTENER_ = nil
         Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
