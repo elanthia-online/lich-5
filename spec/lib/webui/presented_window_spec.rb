@@ -14,6 +14,7 @@ RSpec.describe Lich::WebUI::PresentedWindow do
 
   before do
     allow(Lich::WebUI::WindowPresentation).to receive(:available?).and_return(true)
+    allow(Lich::WebUI::WindowPresentation).to receive(:existing_windows).and_return([])
     allow(Lich::WebUI::WindowPresentation).to receive(:apply) { |hwnd, **options| applied << [hwnd, options]; true }
   end
 
@@ -26,7 +27,7 @@ RSpec.describe Lich::WebUI::PresentedWindow do
   end
 
   it 'finds the browser window after the process starts and applies the presentation to it' do
-    allow(Lich::WebUI::WindowPresentation).to receive(:discover).with(4242, title: nil).and_yield(77)
+    allow(Lich::WebUI::WindowPresentation).to receive(:discover).with(4242, title: nil, exclude: []).and_yield(77)
 
     window = described_class.open('http://127.0.0.1:1/', presentation: presentation,
                                                          geometry: { width: 400, height: 300 }, opener: opener_yielding(4242))
@@ -47,12 +48,29 @@ RSpec.describe Lich::WebUI::PresentedWindow do
   end
 
   it 'searches by the page title alongside the pid, for a page handed to an already-running browser' do
-    allow(Lich::WebUI::WindowPresentation).to receive(:discover).with(1, title: 'Map: Nisugi').and_yield(31)
+    allow(Lich::WebUI::WindowPresentation).to receive(:discover).with(1, title: 'Map: Nisugi', exclude: []).and_yield(31)
 
     window = described_class.open('http://127.0.0.1:1/', presentation: presentation, title: 'Map: Nisugi', opener: opener_yielding(1))
 
     expect(window).to be_presented
     expect(applied).to eq([[31, { always_on_top: true, opacity: 0.5, borderless: false }]])
+  end
+
+  # Review 2026-09-17 (b), F7: with a shared profile the new window arrives
+  # a moment after the process starts. A window already titled like the
+  # page was the one match on the first poll, and it was adopted and dressed
+  # in the new page's settings. The windows present before the open are
+  # listed first and never adopted.
+  it 'never adopts a window that existed before the browser was opened, however its title reads' do
+    allow(Lich::WebUI::WindowPresentation).to receive(:existing_windows).with('Map: Review').and_return([31])
+    allow(Lich::WebUI::WindowPresentation).to receive(:discover).with(123, title: 'Map: Review', exclude: [31]).and_yield(nil)
+
+    window = described_class.open('http://127.0.0.1:1/', presentation: presentation, title: 'Map: Review', opener: opener_yielding(123))
+
+    expect(window).not_to be_presented
+    expect(applied).to be_empty
+    expect(Lich::WebUI::WindowPresentation).to have_received(:existing_windows).ordered
+    expect(Lich::WebUI::WindowPresentation).to have_received(:discover).ordered
   end
 
   it 'applies nothing when the pid owns no window, or the platform has no presentation, and is nil when no browser opened' do

@@ -147,6 +147,26 @@ RSpec.describe Lich::WebUI::WindowPresentation do
       expect(found.to_i).to eq(21)
     end
 
+    # Review 2026-09-17 (b), F7: the older window with the page's title is
+    # not the new one. Listed before the open, it is excluded from the
+    # search, and the search waits for the window that appears after it.
+    it 'lists the windows a title already names, and discovery skips them to wait for the new one' do
+      described_class.thread_factory = ->(&block) { block.call }
+      win32.windows = [[31, true, 999, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#5)']]
+      existing = described_class.existing_windows('Map: Nisugi')
+      expect(existing).to eq([31])
+
+      polls = 0
+      described_class.sleeper = lambda do |_seconds|
+        polls += 1
+        win32.windows << [32, true, 998, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#5)'] if polls == 2
+      end
+      found = nil
+      described_class.discover(500, timeout: 1.0, title: 'Map: Nisugi', exclude: existing) { |hwnd| found = hwnd }
+      expect(found.to_i).to eq(32)
+      expect(polls).to eq(2)
+    end
+
     it 'is nil when the process owns no window at all' do
       win32.windows = [[31, true, 9999, 0, 'Chrome_WidgetWin_1']]
 
