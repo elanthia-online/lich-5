@@ -188,7 +188,7 @@ module Lich
           # deliberately absent: they are not shimmed (the scripts that used
           # them are rewritten natively), so a script naming one gets the
           # stubbed-widget notice and a ledger entry, not a shadowed class.
-          OWN_DEFINITIONS = %i[].freeze
+          OWN_DEFINITIONS = %i[Paned HPaned VPaned Overlay ListBox ListBoxRow ProgressBar].freeze
 
           def const_missing(name)
             if OWN_DEFINITIONS.include?(name)

@@ -15,6 +15,7 @@ require_relative 'widgets'
 require_relative 'glib'
 require_relative 'widgets_data'
 require_relative 'builder'
+require_relative 'containers'
 
 module Lich
   module Common
