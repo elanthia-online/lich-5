@@ -240,15 +240,24 @@ RSpec.describe Lich::WebUI::Server do
     client = TCPSocket.new('127.0.0.1', listener.addr[1])
     accepted = listener.accept
     connection = Lich::WebUI::Server::Connection.new(client, write_timeout: 0.2)
-    payload = 'x' * (1024 * 1024)
-    stalled = Thread.new { 64.times.map { connection.send_text(payload) } }
-    sleep 0.05
+    # The stall itself, held for longer than the budget: a writer parked in
+    # select inside the lock looks exactly like this to the writer behind it.
+    # Held directly rather than produced with a flood of writes, because how
+    # many writes it takes to fill a loopback socket differs by platform and
+    # the queued write used to slip in between two of them.
+    lock = connection.instance_variable_get(:@write_mutex)
+    held = Queue.new
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { held << true; release.pop } }
+    held.pop
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     queued = connection.send_text('behind')
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-    stalled.join
+    release << true
+    holder.join
     expect(queued).to be(false)
-    expect(elapsed).to be < 1.0
+    expect(connection).not_to be_alive
+    expect(elapsed).to be_between(0.2, 1.0)
   ensure
     [client, accepted, listener].each { |io| io&.close }
   end
