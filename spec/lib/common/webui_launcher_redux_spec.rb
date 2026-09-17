@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'tmpdir'
+require 'fileutils'
 require_relative '../../login_spec_helper'
 require 'common/webui_launcher'
 
@@ -353,23 +355,77 @@ RSpec.describe Lich::Common::WebUILauncher do
       expect(find(rendered, 'button:frontends-delete').props[:disabled]).to be(true)
     end
 
-    it 'maps the submitted fields in the order the editor declared them' do
+    # Driven with the runtime's own Submission, keyed by cid: the previous
+    # version of this example supplied an Array in declaration order, which
+    # the runtime never sends, and concealed that the save read the
+    # Submission's inspect string as the id (review 2026-09-17, R2).
+    def frontend_submission(id:, label:, command:, directory:, arguments:, capabilities: [])
+      values = {
+        'page:launcher/text_input:frontend-id' => id, 'page:launcher/text_input:frontend-label' => label,
+        'page:launcher/text_input:frontend-command' => command, 'page:launcher/text_input:frontend-directory' => directory,
+        'page:launcher/text_input:frontend-arguments' => arguments,
+      }
+      Lich::Common::Frontend.capability_vocabulary.each do |capability|
+        values["page:launcher/columns:row/checkbox:frontend-capability-#{capability}"] = capabilities.include?(capability.to_s)
+      end
+      Lich::WebUI::Submission.new(viewer_id: 'viewer', values: values)
+    end
+
+    it 'maps the submitted fields by the cid each was declared under' do
       launcher.begin_new_frontend
       capabilities = Lich::Common::Frontend.capability_vocabulary
-      values = ['vellum', 'Vellum', 'C:/v/vellum-fe.exe', 'C:/v', '--frontend gui']
-      values += Array.new(capabilities.length) { 'false' }
-      values[5] = 'true'
+      submission = frontend_submission(id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe',
+                                       directory: 'C:/v', arguments: '--frontend gui',
+                                       capabilities: [capabilities.first.to_s])
 
-      fields = launcher.send(:frontend_fields_from, FrontendEvent.new(nil, values))
+      fields = launcher.send(:frontend_fields_from, FrontendEvent.new(nil, submission))
 
       expect(fields).to include(id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe',
                                 directory: 'C:/v', arguments: '--frontend gui')
       expect(fields[:capabilities]).to eq([capabilities.first.to_s])
     end
 
+    it 'saves a new custom frontend from a real submission and can edit it again' do
+      data_dir = Dir.mktmpdir('webui-frontends')
+      launcher = described_class.new(
+        data_dir: data_dir, catalog: catalog, on_launch: proc {}, browser_open: proc { true },
+        frontend_locator: ReduxFrontendLocator
+      )
+      # The document is applied in memory and would be renamed into place;
+      # the rename is the one step this box's temp directory refuses, and
+      # it is not what this example is about.
+      allow(Lich::Common::FrontendSettings).to receive(:write_file)
+      # ...and with nothing on disk, the re-read before each save would
+      # drop the entry it just applied; the in-memory document stands in.
+      allow(Lich::Common::FrontendSettings).to receive(:load!)
+      launcher.begin_new_frontend
+      launcher.save_frontend(FrontendEvent.new(nil, frontend_submission(
+        id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: ''
+      )))
+      expect(launcher.instance_variable_get(:@frontend_error)).to be_nil
+      expect(Lich::Common::FrontendSettings).to have_received(:write_file).with(anything, hash_including('custom' => hash_including('vellum')))
+      # The editor now holds the saved frontend (the catalog table is fed by
+      # the locator stub, which knows nothing of custom entries, so the
+      # draft is read directly).
+      draft = launcher.instance_variable_get(:@frontend_draft)
+      expect(draft).to include(id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe')
+
+      launcher.save_frontend(FrontendEvent.new(nil, frontend_submission(
+        id: 'vellum', label: 'Vellum Two', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: '--x'
+      )))
+      expect(launcher.instance_variable_get(:@frontend_error)).to be_nil
+      expect(launcher.instance_variable_get(:@frontend_draft)).to include(id: 'vellum', label: 'Vellum Two', arguments: '--x')
+    ensure
+      FileUtils.remove_entry(data_dir) if data_dir && File.directory?(data_dir)
+      # The in-memory document and the frontend registry were changed by the
+      # saves above; put both back so no later example meets 'vellum'.
+      Lich::Common::FrontendSettings.instance_variable_set(:@current, Lich::Common::FrontendSettings::EMPTY_CONFIGURATION)
+      Lich::Common::Frontend.replace_user_configuration!(built_in_overrides: {}, custom_definitions: {})
+    end
+
     it 'reports a refused edit against the editor instead of throwing it away' do
       launcher.begin_new_frontend
-      launcher.save_frontend(FrontendEvent.new(nil, ['', '', '', '', '']))
+      launcher.save_frontend(FrontendEvent.new(nil, frontend_submission(id: '', label: '', command: '', directory: '', arguments: '')))
       rendered = launcher.send(:build_page).render.tree
       messages = find(rendered, 'group:frontend-editor-section').each.map { |node| node.props[:content] }
 

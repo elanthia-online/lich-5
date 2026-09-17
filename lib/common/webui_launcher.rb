@@ -137,31 +137,10 @@ module Lich
       end
 
       def close(reason: :user)
-        browser_pid = nil
-        accepted = @mutex.synchronize do
-          next false if %i[closing closed].include?(@lifecycle)
+        closing = @mutex.synchronize { begin_close_locked }
+        return false unless closing
 
-          @lifecycle = :closing
-          @active.clear
-          @detached.clear
-          @manual_credentials.each_value(&:discard!)
-          @manual_credentials.clear
-          browser_pid = @browser_pid
-          @browser_pid = nil
-          true
-        end
-        return false unless accepted
-
-        terminate_browser(browser_pid) if browser_pid
-        @service.terminate_owner(self)
-        @service.stop
-        @executor.stop(wait: false)
-        @mutex.synchronize do
-          @lifecycle = :closed
-          @closed_condition.broadcast
-        end
-        @on_close.call(reason)
-        true
+        finish_close(reason, closing)
       end
 
       def lifecycle = @mutex.synchronize { @lifecycle }
@@ -890,11 +869,16 @@ module Lich
         secret = transfer_secret(password_pair.last)
         operation = begin_operation(:account, event)
         @executor.post do
+          committed = nil
           secret.consume do |password|
             characters = @authenticator.authenticate(account: account, password: password, legacy: true)
-            raise 'account persistence failed' unless @catalog.add_or_update_account(account, password, characters, frontend: frontend)
+            # Authentication takes seconds and the launcher may have been
+            # closed meanwhile; the save is the irreversible step.
+            committed = commit(operation) do
+              raise 'account persistence failed' unless @catalog.add_or_update_account(account, password, characters, frontend: frontend)
+            end
           end
-          complete(operation) { reload_catalog_locked }
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Account authentication or save failed.')
         end
@@ -913,11 +897,14 @@ module Lich
         secret = transfer_secret(master_pair.last)
         operation = begin_operation(:encryption, event)
         @executor.post do
+          committed = nil
           secret.consume do |password|
             master = mode == :enhanced ? password : nil
-            raise 'encryption change failed' unless @catalog.change_encryption_mode(mode, master_password: master)
+            committed = commit(operation) do
+              raise 'encryption change failed' unless @catalog.change_encryption_mode(mode, master_password: master)
+            end
           end
-          complete(operation) { reload_catalog_locked }
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Encryption mode change failed.')
         end
@@ -1098,10 +1085,12 @@ module Lich
           # while authentication ran. The launch below is already refused for
           # a closed launcher; the entry it would never launch must not be
           # written to the catalog either.
-          if (save || favorite) && operation_live?(operation)
+          if save || favorite
             entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
-            saved = @catalog.upsert_manual_entry(entry, password)
-            @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+            commit(operation) do
+              saved = @catalog.upsert_manual_entry(entry, password)
+              @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+            end
           end
         end
         return unless complete(operation) { @manual_credentials.delete(viewer_id)&.discard! }
@@ -1122,12 +1111,13 @@ module Lich
                                              character: entry.char_name, game_code: entry.game_code)
           launch = @launch_data.prepare(auth, entry.frontend, entry.custom_launch, entry.custom_launch_dir)
         end
-        # Checked here rather than after: launching is the irreversible step,
-        # and the launcher may have been closed while authentication ran.
-        return unless operation_live?(operation)
-
+        # Launching is the irreversible step, and the launcher may have been
+        # closed while authentication ran: the launch itself is committed
+        # under the arbiter, so a close cannot slip in between the check and
+        # the launch.
         if @persistent
-          result = @session_launcher.launch(launch, launch_context: launch_context(entry))
+          committed, result = commit(operation) { @session_launcher.launch(launch, launch_context: launch_context(entry)) }
+          return unless committed
           raise 'session launch failed' unless result[:ok]
           complete(operation) { @modal = nil }
           set_notice('Session launched.', :info)
@@ -1145,8 +1135,8 @@ module Lich
       def mutate(kind, event, failure_message, &work)
         operation = begin_operation(kind, event)
         @executor.post do
-          work.call
-          complete(operation) { reload_catalog_locked }
+          committed = commit(operation, &work)
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: failure_message)
         end
@@ -1172,6 +1162,49 @@ module Lich
         end
       end
 
+      # The one place cancellation and an irreversible step are arbitrated.
+      # +work+ runs under the launcher's lock only if the operation is still
+      # the active one of its kind and the launcher is neither closing nor
+      # closed; a close that arrived first refuses it (nil, work not run),
+      # and a close arriving while it runs takes the same lock, so it waits
+      # and then finds the effect done rather than racing it. Checking
+      # liveness and then acting outside the lock left exactly that gap
+      # (review 2026-09-17, R4): an Add Account saved after close, a saved
+      # launch started after close. Returns [true, result] when committed.
+      def commit(operation)
+        @mutex.synchronize do
+          next nil unless @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
+
+          [true, yield]
+        end
+      end
+
+      def begin_close_locked
+        return nil if %i[closing closed].include?(@lifecycle)
+
+        @lifecycle = :closing
+        @active.clear
+        @detached.clear
+        @manual_credentials.each_value(&:discard!)
+        @manual_credentials.clear
+        browser_pid = @browser_pid
+        @browser_pid = nil
+        { browser_pid: browser_pid }
+      end
+
+      def finish_close(reason, closing)
+        terminate_browser(closing[:browser_pid]) if closing[:browser_pid]
+        @service.terminate_owner(self)
+        @service.stop
+        @executor.stop(wait: false)
+        @mutex.synchronize do
+          @lifecycle = :closed
+          @closed_condition.broadcast
+        end
+        @on_close.call(reason)
+        true
+      end
+
       def complete(operation)
         accepted = @mutex.synchronize do
           next false unless @active[operation.kind]&.id == operation.id && @lifecycle != :closed
@@ -1195,11 +1228,20 @@ module Lich
       # A terminal launch always closes the launcher: the persistent-mode
       # saved-entry path never reaches here (perform_saved_launch hands a
       # persistent launcher to @session_launcher instead), and manual Play
-      # is terminal in both modes.
+      # is terminal in both modes. Accepting the launch and beginning the
+      # close are one locked step: a viewer's close accepted first means no
+      # launch, and once the launch is accepted a later close is a no-op
+      # rather than a competing one.
       def terminal_launch(launch, origin)
-        @mutex.synchronize { @launch_result = launch }
+        closing = @mutex.synchronize do
+          started = begin_close_locked
+          @launch_result = launch if started
+          started
+        end
+        return false unless closing
+
         @on_launch.call(launch, origin)
-        close(reason: :launch)
+        finish_close(:launch, closing)
       end
 
       def transfer_secret(carrier)
@@ -1283,21 +1325,27 @@ module Lich
         !draft[:id].to_s.empty?
       end
 
-      # The editor's submitted values, in the order render_frontend_editor
-      # declared them: five text fields, then one checkbox per capability.
+      # The editor's submitted values, by the cid each field was declared
+      # under -- the same way every other workflow reads a submission. This
+      # used to treat the submission as an Array in declaration order, which
+      # a Lich::WebUI::Submission is not: its first "field" came out as the
+      # object's inspect string and every other field empty, so a custom
+      # frontend could never be saved (review 2026-09-17, R2).
       def frontend_fields_from(event)
-        values = Array(event.submission).map(&:to_s)
-        capabilities = Frontend.capability_vocabulary.each_with_index.filter_map do |capability, index|
-          capability.to_s if truthy_submission(values[5 + index])
+        values = submission_values(event.submission)
+        field = ->(suffix) { values.find { |cid, _| cid.end_with?(suffix) }&.last.to_s }
+        capabilities = Frontend.capability_vocabulary.filter_map do |capability|
+          capability.to_s if truthy_submission(field.call("checkbox:frontend-capability-#{capability}"))
         end
         {
-          id: values[0].to_s, label: values[1].to_s, command: values[2].to_s,
-          directory: values[3].to_s, arguments: values[4].to_s, capabilities: capabilities
+          id: field.call('text_input:frontend-id'), label: field.call('text_input:frontend-label'),
+          command: field.call('text_input:frontend-command'), directory: field.call('text_input:frontend-directory'),
+          arguments: field.call('text_input:frontend-arguments'), capabilities: capabilities
         }
       end
 
       def truthy_submission(value)
-        %w[true 1 on yes].include?(value.to_s.strip.downcase)
+        value == true || %w[true 1 on yes].include?(value.to_s.strip.downcase)
       end
 
       def report_frontend_error(error)

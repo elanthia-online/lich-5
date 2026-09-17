@@ -386,6 +386,103 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     expect(launches).to be_empty
   end
 
+  # Review 2026-09-17, R4: Add Account authenticated and then saved before
+  # asking whether the launcher was still open, and the persistent launch
+  # checked liveness, released the lock, and then launched -- a close in
+  # that gap was accepted and the side effect happened anyway. Every
+  # irreversible step now runs under `commit`, which refuses after an
+  # accepted close and makes a concurrent close wait for it.
+  it 'does not save an account for a launcher closed during authentication' do
+    reached = Queue.new
+    release = Queue.new
+    blocking_authenticator = Class.new do
+      define_method(:authenticate) do |**_keywords|
+        reached << :authenticating
+        release.pop
+        [{ char_name: 'Aldor', game_code: 'GS3', game_name: 'GemStone IV' }]
+      end
+    end.new
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: blocking_authenticator, executor: ImmediateExecutor.new,
+      on_launch: proc {}, browser_open: proc { true }, frontend_locator: WorkflowFrontendLocator
+    )
+    submission = Lich::WebUI::Submission.new(viewer_id: 'viewer-1', values: {
+      'page:l/text_input:account-name' => 'DOUG', 'page:l/select:account-frontend' => 'stormfront',
+      'page:l/password_input:account-password' => viewer_secret('account-canary'),
+    })
+    worker = Thread.new { closing.save_account(Event.new('viewer-1', {}, submission)) }
+
+    reached.pop
+    closing.close(reason: :user)
+    release << :go
+
+    expect(worker.join(5)).not_to be_nil
+    expect(catalog.calls.map(&:first)).not_to include(:save_account)
+  end
+
+  it 'refuses a commit after a close was accepted, and a close waits for a commit in progress' do
+    operation = launcher.send(:begin_operation, :favorite, event)
+    launcher.close(reason: :user)
+    ran = false
+    expect(launcher.send(:commit, operation) { ran = true }).to be_nil
+    expect(ran).to be(false)
+
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = open_launcher.send(:begin_operation, :favorite, event)
+    inside = Queue.new
+    release = Queue.new
+    order = []
+    committer = Thread.new do
+      open_launcher.send(:commit, operation) do
+        inside << true
+        release.pop
+        order << :committed
+        :effect
+      end
+    end
+    inside.pop
+    closer = Thread.new do
+      open_launcher.close(reason: :user)
+      order << :closed
+    end
+    sleep 0.05
+    expect(closer.alive?).to be(true), 'close waits for the commit'
+    release << true
+    expect(committer.value).to eq([true, :effect])
+    closer.join(5)
+    expect(order).to eq(%i[committed closed])
+  end
+
+  it 'does not launch terminally after a close was accepted, and closes with the launch reason otherwise' do
+    reasons = []
+    closed_first = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: ->(launch, origin) { launches << [origin, launch] }, browser_open: proc { true },
+      on_close: ->(reason) { reasons << reason }
+    )
+    closed_first.close(reason: :user)
+    expect(closed_first.send(:terminal_launch, { sal: 'SAL' }, :manual)).to be(false)
+    expect(launches).to be_empty
+
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: ->(launch, origin) { launches << [origin, launch] }, browser_open: proc { true },
+      on_close: ->(reason) { reasons << reason }
+    )
+    expect(open_launcher.send(:terminal_launch, { sal: 'SAL' }, :manual)).to be(true)
+    expect(launches).to eq([[:manual, { sal: 'SAL' }]])
+    expect(open_launcher.lifecycle).to eq(:closed)
+    expect(reasons).to eq(%i[user launch])
+    expect(open_launcher.close(reason: :user)).to be(false)
+  end
+
   it 'still launches when the launcher stays open' do
     session_launcher = class_double(Lich::Common::SessionLauncher, launch: { ok: true })
     open_launcher = described_class.new(
