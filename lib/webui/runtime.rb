@@ -21,14 +21,17 @@ module Lich
         always_on_top: false, borderless: false, opacity: true, scrollbars: true,
       }.freeze
 
-      def initialize(registry:, dispatcher: Dispatcher.new, viewers: ViewerStore.new,
+      # +dispatcher+ defaults to one that logs where the runtime does; a
+      # Dispatcher.new default here had no logger, so what its owner threads
+      # rescued went nowhere whatever the service was given.
+      def initialize(registry:, dispatcher: nil, viewers: ViewerStore.new,
                      validator: Validator.new, file_service: nil, logger: nil)
         @registry = registry
-        @dispatcher = dispatcher
+        @logger = logger || proc { |_level, _message| }
+        @dispatcher = dispatcher || Dispatcher.new(logger: @logger)
         @viewers = viewers
         @validator = validator
         @file_service = file_service
-        @logger = logger || proc { |_level, _message| }
         @connections = {}
         @connections_mutex = Mutex.new
         @refresh_mutex = Mutex.new

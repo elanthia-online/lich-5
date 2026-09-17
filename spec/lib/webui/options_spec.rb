@@ -39,6 +39,9 @@ RSpec.describe Lich::WebUI::Options do
     Lich::WebUI.configure(port: port)
 
     service = Lich::WebUI.service
+    expect(service.instance_variable_get(:@logger)).to equal(Lich::WebUI.logger)
+    dispatcher = service.runtime.instance_variable_get(:@dispatcher)
+    expect(dispatcher.instance_variable_get(:@logger)).to equal(Lich::WebUI.logger)
     service.start
     expect(service.server.host).to eq('127.0.0.1')
     expect(service.server.port).to eq(port)
