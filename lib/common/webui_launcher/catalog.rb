@@ -3,7 +3,7 @@
 require 'openssl'
 require 'yaml'
 require_relative '../authentication/entry_store'
-require_relative '../gui/master_password_manager'
+require_relative '../authentication/master_password_manager'
 require_relative '../../webui/sensitive_value'
 
 module Lich
@@ -28,7 +28,7 @@ module Lich
         attr_reader :data_dir
 
         def initialize(data_dir:, entry_store: Authentication::EntryStore,
-                       master_password_manager: GUI::MasterPasswordManager)
+                       master_password_manager: Authentication::MasterPasswordManager)
           @data_dir = data_dir
           @entry_store = entry_store
           @master_password_manager = master_password_manager

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'master_password_prompt_ui'
+require_relative '../authentication/master_password_prompts'
 
 module Lich
   module Common
@@ -8,6 +9,10 @@ module Lich
       # Handles master password prompting and creation flow
       # Orchestrates UI display (via MasterPasswordPromptUI) and business logic
       # Manages validation, Keychain integration, and error handling
+      #
+      # Registers itself as the interactive provider for
+      # Lich::Common::Authentication::MasterPasswordPrompts, so the saved-login
+      # store can ask for a master password without naming GTK.
       module MasterPasswordPrompt
         # Shows master password creation dialog and handles the full flow
         # Validates user input, stores in Keychain, creates validation test
@@ -103,7 +108,27 @@ module Lich
 
           response == Gtk::ResponseType::YES
         end
+
+        # Shows the data-access recovery dialog for a master password missing
+        # from the Keychain. Provider entry point for
+        # Lich::Common::Authentication::MasterPasswordPrompts.
+        #
+        # @param validation_test [Hash] Validation test for password correctness
+        # @return [Hash, nil] { password:, continue_session: } or nil if cancelled
+        def self.show_password_for_data_access(validation_test)
+          MasterPasswordPromptUI.show_password_for_data_access(validation_test)
+        end
+
+        # Ends the GTK session after the user cancels recovery. Provider entry
+        # point for Lich::Common::Authentication::MasterPasswordPrompts.
+        #
+        # @return [Object, nil] GTK shutdown result when GTK is available
+        def self.quit_session
+          Lich::Common.quit_gtk_main_loop
+        end
       end
     end
   end
 end
+
+Lich::Common::Authentication::MasterPasswordPrompts.provider ||= Lich::Common::GUI::MasterPasswordPrompt

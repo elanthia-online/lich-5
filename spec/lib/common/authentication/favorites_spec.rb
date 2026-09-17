@@ -59,7 +59,7 @@ RSpec.describe 'EntryStore Favorites' do
 
   before do
     # Stub Utilities for safe_file_operation
-    allow(Lich::Common::GUI::Utilities).to receive(:safe_file_operation) do |path, operation, content|
+    allow(Lich::Common::Authentication::Utilities).to receive(:safe_file_operation) do |path, operation, content|
       if operation == :write
         File.write(path, content)
         true

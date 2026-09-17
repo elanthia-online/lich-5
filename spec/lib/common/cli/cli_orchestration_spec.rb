@@ -306,7 +306,7 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
       before do
         allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_and_confirm_password)
           .and_return('newmasterpass')
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password).and_return(true)
       end
 
       it 'prompts for and stores a master password before converting' do
@@ -314,7 +314,7 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
 
         expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
         expect(Lich::Common::Authentication::CLIPassword).to have_received(:prompt_and_confirm_password)
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to have_received(:store_master_password)
           .with('newmasterpass')
         expect(Lich::Common::CLI::CLIConversion).to have_received(:convert).with(DATA_DIR, 'enhanced')
       end
@@ -324,12 +324,12 @@ RSpec.describe Lich::Common::CLI::CLIOrchestration do
         stub_const('ARGV', ['--convert-entries', 'enhanced'])
 
         expect { described_class.handle_convert_entries }.to raise_error(SystemExit)
-        expect(Lich::Common::GUI::MasterPasswordManager).not_to have_received(:store_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).not_to have_received(:store_master_password)
         expect(Lich::Common::CLI::CLIConversion).not_to have_received(:convert)
       end
 
       it 'exits 1 without converting when storing the password in the keychain fails' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(false)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password).and_return(false)
         stub_const('ARGV', ['--convert-entries', 'enhanced'])
 
         expect { described_class.handle_convert_entries }.to raise_error(SystemExit)

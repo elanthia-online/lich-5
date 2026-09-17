@@ -2,9 +2,9 @@
 
 require 'yaml'
 require_relative 'entry_store'
-require_relative '../gui/utilities'
-require_relative '../gui/account_manager'
-require_relative '../gui/game_selection'
+require_relative 'utilities'
+require_relative 'account_manager'
+require_relative 'game_names'
 require_relative 'authenticator'
 require_relative 'login_helpers'
 
@@ -59,19 +59,19 @@ module Lich
                         when :plaintext
                           new_password
                         when :standard
-                          Lich::Common::GUI::PasswordCipher.encrypt(
+                          Lich::Common::Authentication::PasswordCipher.encrypt(
                             new_password,
                             mode: :standard,
                             account_name: account
                           )
                         when :enhanced
-                          master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
+                          master_password = Lich::Common::Authentication::MasterPasswordManager.retrieve_master_password
                           if master_password.nil?
                             puts 'error: Enhanced mode requires master password in keychain'
                             Lich.log 'error: CLI change password failed - master password not in keychain'
                             return 1
                           end
-                          Lich::Common::GUI::PasswordCipher.encrypt(
+                          Lich::Common::Authentication::PasswordCipher.encrypt(
                             new_password,
                             mode: :enhanced,
                             account_name: account,
@@ -167,13 +167,13 @@ module Lich
                                 end
 
             # Convert authentication data to character list
-            character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(
+            character_list = Lich::Common::Authentication::AccountManager.convert_auth_data_to_characters(
               auth_data,
               selected_frontend || 'stormfront'
             )
 
             # Save account + characters using AccountManager
-            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, character_list)
+            if Lich::Common::Authentication::AccountManager.add_or_update_account(data_dir, account, password, character_list)
               puts "success: Account '#{account}' added with #{character_list.length} character(s)"
               Lich.log "info: Account '#{account}' added successfully with #{character_list.length} character(s)"
               if selected_frontend.nil? || selected_frontend.empty?
@@ -278,7 +278,7 @@ module Lich
                                 end
 
             # Convert authentication data to character list
-            character_list = Lich::Common::GUI::AccountManager.convert_auth_data_to_characters(
+            character_list = Lich::Common::Authentication::AccountManager.convert_auth_data_to_characters(
               auth_data,
               selected_frontend || 'stormfront'
             )
@@ -313,7 +313,7 @@ module Lich
             end
 
             # Merge into existing account using AccountManager (preserves other data)
-            if Lich::Common::GUI::AccountManager.add_or_update_account(data_dir, account, password, new_characters)
+            if Lich::Common::Authentication::AccountManager.add_or_update_account(data_dir, account, password, new_characters)
               puts "success: Characters refreshed for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
               Lich.log "info: Characters refreshed successfully for account '#{account}' (#{new_characters.length} added, #{character_list.length} found)"
               if selected_frontend.nil? || selected_frontend.empty?
@@ -368,13 +368,13 @@ module Lich
             character_data = {
               char_name: char_name,
               game_code: game_code,
-              game_name: Lich::Common::GUI::GameSelection.get_game_name(game_code),
+              game_name: Lich::Common::Authentication::GameNames.get_game_name(game_code),
               frontend: selected_frontend,
               custom_launch: nil,
               custom_launch_dir: nil
             }
 
-            result = Lich::Common::GUI::AccountManager.add_character(data_dir, account, character_data)
+            result = Lich::Common::Authentication::AccountManager.add_character(data_dir, account, character_data)
 
             if result[:success]
               puts "success: #{result[:message]}"
@@ -423,7 +423,7 @@ module Lich
 
             # Validate old password
             validation_test = yaml_data['master_password_validation_test']
-            unless Lich::Common::GUI::MasterPasswordManager.validate_master_password(old_password, validation_test)
+            unless Lich::Common::Authentication::MasterPasswordManager.validate_master_password(old_password, validation_test)
               puts 'error: Current master password incorrect'
               Lich.log 'error: CLI change master password failed - incorrect current password'
               return 1
@@ -472,14 +472,14 @@ module Lich
             # Re-encrypt all accounts
             yaml_data['accounts'].each do |_username, account_data|
               # Decrypt with old password
-              plaintext = Lich::Common::GUI::PasswordCipher.decrypt(
+              plaintext = Lich::Common::Authentication::PasswordCipher.decrypt(
                 account_data['password'],
                 mode: :enhanced,
                 master_password: old_password
               )
 
               # Encrypt with new password
-              new_encrypted = Lich::Common::GUI::PasswordCipher.encrypt(
+              new_encrypted = Lich::Common::Authentication::PasswordCipher.encrypt(
                 plaintext,
                 mode: :enhanced,
                 master_password: new_password
@@ -489,11 +489,11 @@ module Lich
             end
 
             # Update validation test
-            new_validation = Lich::Common::GUI::MasterPasswordManager.create_validation_test(new_password)
+            new_validation = Lich::Common::Authentication::MasterPasswordManager.create_validation_test(new_password)
             yaml_data['master_password_validation_test'] = new_validation
 
             # Update keychain
-            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(new_password)
+            unless Lich::Common::Authentication::MasterPasswordManager.store_master_password(new_password)
               puts 'error: Failed to update keychain'
               Lich.log 'error: CLI change master password failed - keychain update failed'
               return 1
@@ -629,12 +629,12 @@ module Lich
             end
 
             # Check if keychain is available and has the password
-            unless Lich::Common::GUI::MasterPasswordManager.keychain_available?
+            unless Lich::Common::Authentication::MasterPasswordManager.keychain_available?
               puts "error: Keychain not available on this system"
               return false
             end
 
-            master_password = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
+            master_password = Lich::Common::Authentication::MasterPasswordManager.retrieve_master_password
             if master_password.nil? || master_password.empty?
               puts "error: Master password not found in keychain"
               puts "Use: lich --recover-master-password"
@@ -707,7 +707,7 @@ module Lich
             end
 
             # Validate password against validation test
-            unless Lich::Common::GUI::MasterPasswordManager.validate_master_password(master_password, validation_test)
+            unless Lich::Common::Authentication::MasterPasswordManager.validate_master_password(master_password, validation_test)
               puts "error: Password validation failed"
               Lich.log "error: CLI recover master password failed - password validation failed"
               return 1
@@ -716,7 +716,7 @@ module Lich
             Lich.log "info: Password validated successfully"
 
             # Store validated password in keychain
-            unless Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
+            unless Lich::Common::Authentication::MasterPasswordManager.store_master_password(master_password)
               puts 'error: Failed to store master password in keychain'
               Lich.log 'error: CLI recover master password failed - keychain storage failed'
               return 1
@@ -785,7 +785,7 @@ module Lich
         # @return [String, nil] Master password or nil if unavailable/cancelled
         def self.get_master_password_from_keychain_or_prompt
           # Check if password already exists in keychain
-          existing = Lich::Common::GUI::MasterPasswordManager.retrieve_master_password
+          existing = Lich::Common::Authentication::MasterPasswordManager.retrieve_master_password
           return existing if existing
 
           # Not in keychain, prompt user to create one

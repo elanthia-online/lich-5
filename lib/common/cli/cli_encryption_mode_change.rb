@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../authentication/entry_store'
-require_relative '../gui/master_password_manager'
+require_relative '../authentication/master_password_manager'
 require_relative '../authentication/cli_password'
 
 module Lich
@@ -72,7 +72,7 @@ module Lich
 
             # Validate the password
             validation_test = yaml_data['master_password_validation_test']
-            unless Lich::Common::GUI::MasterPasswordManager.validate_master_password(
+            unless Lich::Common::Authentication::MasterPasswordManager.validate_master_password(
               master_password, validation_test
             )
               puts "error: Incorrect master password"
