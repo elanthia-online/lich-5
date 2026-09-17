@@ -16,7 +16,7 @@ module Lich
     # the validator and the browser client agree on what is permitted.
     module Contract
       # @return [String] the contract version this server speaks, in `major.minor.patch` form
-      VERSION = '2.19.0'
+      VERSION = '2.20.0'
       # @return [Integer] the contract major a client must match to be admitted by {.negotiate!}
       MAJOR_VERSION = 2
 
@@ -24,7 +24,7 @@ module Lich
       TYPES = %i[
         page group stack columns grid tabs expander split overlay scroll divider
         text markdown log progress image
-        button toggle checkbox radio text_input password_input textarea number_input slider select nav
+        button toggle checkbox radio text_input password_input textarea number_input slider select chips nav
         table dialog composite
         menu menu_item
       ].freeze
@@ -180,11 +180,18 @@ module Lich
       ANY_NUMBER = number.freeze
       GEOMETRY = integer(min: BOUNDS[:geometry].begin, max: BOUNDS[:geometry].end).freeze
 
+      # 2.20: an option may name a `group`. Options sharing one are listed
+      # under that heading, in the order the group is first seen; ungrouped
+      # options list as before. `select`, `radio` and `chips` all honour it
+      # -- "what you have readied" above "everything you own" was one run
+      # of options with no seam between them.
       OPTION = record(
         value: property(string(:input_text), required: true),
-        label: property(SHORT, required: true)
+        label: property(SHORT, required: true),
+        group: property(SHORT)
       ).freeze
       OPTIONS = array(OPTION, max: BOUNDS[:collection]).freeze
+      CHIP_VALUES = array(string(:input_text), max: BOUNDS[:collection]).freeze
 
       BUTTON_DEF = record(
         id: property(IDENT, required: true),
@@ -220,6 +227,7 @@ module Lich
         number_input: %i[key tooltip disabled hidden align margin width tone sensitive],
         slider: %i[key tooltip disabled hidden align margin width tone],
         select: %i[key tooltip disabled hidden align margin width tone sensitive],
+        chips: %i[key tooltip disabled hidden align margin width tone],
         nav: %i[key tooltip disabled hidden align margin width height context_menu],
         table: %i[key disabled hidden align margin width height context_menu],
         dialog: %i[key width height tone],
@@ -520,13 +528,38 @@ module Lich
           events: { change: event(record(value: property(ANY_NUMBER, required: true))) },
           value: ANY_NUMBER, value_scope: :viewer,
         },
+        # 2.20: `size` shows that many rows as a list box instead of a
+        # closed dropdown, for a short list where the choice is the point
+        # of the screen.
         select: {
           properties: {
             label: property(SHORT), options: property(OPTIONS, required: true),
             value: property(string(:input_text), scope: :viewer),
+            size: property(integer(min: 2, max: 24)),
           }, children: :none,
           events: { change: event(record(value: property(string(:input_text), required: true))) },
           value: string(:input_text), value_scope: :viewer,
+        },
+        # 2.20: several values from a list. `select` is one value and a
+        # multi-select `table` is rows in a pane, so picking a few short
+        # values from a long list -- areas, creatures, room numbers -- had
+        # to be built from one row per entry with Add and Remove buttons.
+        # The chosen values are chips, each removable inline. The options
+        # are filtered by what is typed and listed only while something is
+        # typed (`searchable`, the default); with it off the whole list
+        # opens on focus. `allow_custom` admits a typed value that is not
+        # an option: a room number has no candidate list to offer. `max`
+        # caps the count. `value` is the viewer's, as every selection is.
+        chips: {
+          properties: {
+            label: property(SHORT), options: property(OPTIONS, default: []),
+            value: property(CHIP_VALUES, default: [], scope: :viewer),
+            placeholder: property(SHORT), searchable: property(BOOL, default: true),
+            allow_custom: property(BOOL, default: false),
+            max: property(integer(min: 1, max: BOUNDS[:collection])),
+          }, children: :none,
+          events: { change: event(record(values: property(CHIP_VALUES, required: true))) },
+          value: CHIP_VALUES, value_scope: :viewer,
         },
         # 2.16: a selection list, which neither `tabs` nor `split` gives an
         # author. `tabs` is flat and carries no per-item state; building a

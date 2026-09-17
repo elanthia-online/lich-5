@@ -17,7 +17,7 @@ module Lich
       Draft = Struct.new(:type, :cid, :props, :children, :slot, :placement, keyword_init: true)
       # The component types the `focus` facility may name.
       FOCUSABLE_TYPES = %i[
-        button toggle checkbox radio text_input password_input textarea number_input slider select
+        button toggle checkbox radio text_input password_input textarea number_input slider select chips
         table dialog composite
       ].freeze
 

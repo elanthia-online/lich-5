@@ -79,6 +79,21 @@ pages = {
           rows: [{ key: 'r1', cells: { name: 'old' } }], selection: 'none',
           on: { cell_edit: noop })
   end,
+  # 2.20 chips: a searchable picker, one with custom values and a cap, and
+  # one that lists everything on focus.
+  'chips'   => Lich::WebUI::Page.new(owner: owner, id: 'chips', title: 'Chips') do
+    areas = [
+      { value: 'thanot', label: 'Thanot', group: 'Icemule' }, { value: 'pinefar', label: 'Pinefar', group: 'Icemule' },
+      { value: 'zul', label: 'Zul Logoth', group: 'Wehnimer' }, { value: 'gyre', label: 'Gyre', group: 'Wehnimer' },
+    ]
+    chips(key: 'areas', label: 'Areas', options: areas, value: ['thanot'], placeholder: 'area', on: { change: noop })
+    chips(key: 'rooms', label: 'Rooms', allow_custom: true, max: 3, value: %w[12345 23456], on: { change: noop })
+    chips(key: 'all', label: 'All', options: areas, searchable: false, on: { change: noop })
+    # 2.20 on the older inputs: a select as a list box with groups, and a
+    # radio with groups.
+    select(key: 'town', label: 'Town', options: areas, value: 'zul', size: 4, on: { change: noop })
+    radio(key: 'side', label: 'Side', group: 'side', options: areas, selected: 'gyre', on: { change: noop })
+  end,
   # Drawn shapes: the 2.17 layers.
   'shapes'  => Lich::WebUI::Page.new(owner: owner, id: 'shapes', title: 'Shapes') do
     composite(key: 'surface', width: 100, height: 100, surface_events: true,

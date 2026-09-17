@@ -156,6 +156,26 @@ html.webui-measuring .webui-page.bare > .webui-scroll {
 .field-label { font-weight: 500; }
 .field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea { width: 100%; min-height: 32px; }
 .radio-options { display: flex; flex-wrap: wrap; gap: 12px; }
+.radio-group { flex-basis: 100%; font-size: .85em; opacity: .7; font-weight: 600; }
+/* 2.20 chips: the chosen values inline before the filter box, the option
+   list below it, over whatever follows. */
+.chips-control { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; width: 100%;
+  min-height: 32px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+.chips-control:focus-within { outline: 2px solid var(--accent); outline-offset: -1px; }
+.chips-list { display: contents; }
+.chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 4px 1px 8px;
+  border-radius: 12px; background: var(--accent); color: white; font-size: .95em; line-height: 1.5; }
+.chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-remove { border: 0; padding: 0 4px; background: transparent; color: inherit; cursor: pointer; line-height: 1; }
+.chip-remove:hover, .chip-remove:focus-visible { background: color-mix(in srgb, black 25%, transparent); border-radius: 8px; }
+.field .chips-control > input { flex: 1 1 80px; min-width: 80px; width: auto; min-height: 24px; border: 0; padding: 2px; background: transparent; }
+.chips-control > input:focus { outline: none; }
+.chips-options { position: absolute; left: -1px; right: -1px; top: 100%; z-index: 1000; max-height: 40vh; overflow: auto;
+  border: 1px solid var(--border); border-radius: 0 0 4px 4px; background: var(--surface-raised, var(--surface)); box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
+.chips-group { padding: 4px 8px 2px; font-size: .85em; opacity: .7; font-weight: 600; }
+.chips-option { padding: 4px 10px; cursor: pointer; }
+.chips-option:hover { background: var(--accent); color: white; }
+.chips-option.custom { font-style: italic; }
 [data-cid$="button:refresh-entries"] { align-self: flex-start; margin-block: 8px; }
 [data-cid$="toggle:gui-settings-toggle"] {
   width: 100%;

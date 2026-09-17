@@ -230,6 +230,7 @@ module Lich
         [:number_input, :change]    => { property: :value,    value: ->(payload) { payload[:value] } },
         [:slider, :change]          => { property: :value,    value: ->(payload) { payload[:value] } },
         [:select, :change]          => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:chips, :change]           => { property: :value,    value: ->(payload) { payload[:values] } },
         [:tabs, :select]            => { property: :selected, value: ->(payload) { payload[:index] } },
         [:expander, :toggle]        => { property: :open,     value: ->(payload) { payload[:open] } },
         [:split, :move]             => { property: :position, value: ->(payload) { payload[:position] } },
@@ -345,7 +346,7 @@ module Lich
         case type
         when :toggle, :checkbox then :checked
         when :radio then :selected
-        when :text_input, :textarea, :number_input, :slider, :select then :value
+        when :text_input, :textarea, :number_input, :slider, :select, :chips then :value
         end
       end
 

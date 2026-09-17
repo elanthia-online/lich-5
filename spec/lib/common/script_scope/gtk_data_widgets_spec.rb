@@ -106,6 +106,7 @@ RSpec.describe 'GTK compatibility shim: data widgets on the viewer' do
         [:number_input, :value]      => [[:SpinButton, :adjustment_moved]],
         [:slider, :value]            => :not_modelled, # no shim widget renders slider
         [:select, :value]            => [[:ComboBox, :active=]],
+        [:chips, :value]             => :not_modelled, # no shim widget renders chips (2.20)
         [:nav, :selected]            => :not_modelled, # no shim widget renders nav
         [:table, 'rows.[].expanded'] => [[:TreeView, :set_row_expanded, ':"expanded:']], # per row, as row_toggle keys it
         [:table, :selected]          => [[:TreeView, :select_keys]],
