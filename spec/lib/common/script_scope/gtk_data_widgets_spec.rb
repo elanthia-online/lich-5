@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../../spec_helper'
+require 'timeout'
 require 'webui'
 require 'common/script_scope'
 require 'common/script_scope/gtk/boot'
@@ -106,7 +107,7 @@ RSpec.describe 'GTK compatibility shim: data widgets on the viewer' do
         [:slider, :value]            => :not_modelled, # no shim widget renders slider
         [:select, :value]            => [[:ComboBox, :active=]],
         [:nav, :selected]            => :not_modelled, # no shim widget renders nav
-        [:table, 'rows.[].expanded'] => :not_modelled, # TreeView#expand_row is a no-op
+        [:table, 'rows.[].expanded'] => [[:TreeView, :set_row_expanded, ':"expanded:']], # per row, as row_toggle keys it
         [:table, :selected]          => [[:TreeView, :select_keys]],
         [:table, :sort]              => :not_modelled, # sort is applied to the model, never pushed
         [:composite, :scroll_to]     => :not_modelled,
@@ -163,9 +164,10 @@ RSpec.describe 'GTK compatibility shim: data widgets on the viewer' do
       writers.each do |(_type, property), pushers|
         next unless pushers.is_a?(Array)
 
-        pushers.each do |(klass, method)|
-          expect(method_source(klass, method)).to include("viewer_push(:#{property}"),
-                                                  "#{klass}##{method} does not viewer_push(:#{property})"
+        pushers.each do |(klass, method, pushed)|
+          expected = "viewer_push(#{pushed || ":#{property}"}"
+          expect(method_source(klass, method)).to include(expected),
+                                                  "#{klass}##{method} does not #{expected}"
         end
       end
     end
@@ -439,6 +441,84 @@ RSpec.describe 'GTK compatibility shim: data widgets' do
 
       expect(combo.active).to eq(1)
       expect(service.runtime.read(page, cid, :value, viewer: viewer)).to eq(combo.active_id)
+    end
+  end
+
+  # Review 2026-09-17 (b), F4: the client folded and unfolded a tree locally
+  # and reported row_toggle, but the shim never bound it, so the report was
+  # dropped as unbound and the next render folded the branch again. The
+  # programmatic expand and collapse were no-ops besides.
+  describe 'tree expansion' do
+    let(:connection) do
+      Class.new do
+        attr_reader :viewer_id, :sent
+
+        def initialize(viewer_id)
+          @viewer_id = viewer_id
+          @sent = []
+        end
+
+        def send_text(payload) = @sent << JSON.parse(payload)
+        def close = nil
+        def alive? = true
+      end.new('viewer-one')
+    end
+
+    def rendered_rows
+      render = connection.sent.reverse.find { |message| message['type'] == 'render' }
+      render.dig('tree', 'children', 0, 'props', 'rows')
+    end
+
+    def until_rendered
+      Timeout.timeout(2) { sleep(0.005) until yield(rendered_rows) }
+    end
+
+    it 'binds row_toggle for a tree store, keeps what the viewer opened, and pushes what the script opens' do
+      window = view = store = nil
+      opened = []
+      session.sync do
+        window = gtk::Window.new('T')
+        store = gtk::TreeStore.new(String)
+        parent = store.append(nil)
+        parent[0] = 'Parent'
+        store.append(parent)[0] = 'Child'
+        store.append(nil)[0] = 'Leaf'
+        view = gtk::TreeView.new(store)
+        view.append_column(gtk::TreeViewColumn.new('Name', gtk::CellRendererText.new, text: 0))
+        view.signal_connect('row-expanded') { |_view, _iter, path| opened << path.to_s }
+        window.add(view)
+        window.show_all
+      end
+      session.commit
+      page = session.adapter.page_for(window.handle)
+      address = service.registry.address_for(page)
+      service.runtime.handle(connection, type: 'attach', page: address, version: Lich::WebUI::Contract::VERSION)
+      viewer = service.runtime.instance_variable_get(:@viewers).attachments_for(page).first.viewer_id
+      session.send(:note_viewer, page, viewer)
+      render = connection.sent.last
+      cid = render.dig('tree', 'children', 0, 'cid')
+      expect(render['bindings'][cid]).to include('row_toggle')
+      expect(rendered_rows.first['expanded']).to be(false)
+      parent_key = rendered_rows.first['key']
+
+      service.runtime.handle(connection, type: 'event', page: address, cid: cid, event: 'row_toggle',
+                                         generation: render['generation'], payload: { row: parent_key, expanded: true })
+      until_rendered { |rows| rows.first['expanded'] == true }
+      session.sync { nil }
+      expect(session.sync { view.row_expanded?(gtk::TreePath.new([0])) }).to be(true)
+      expect(opened).to eq(['0'])
+
+      session.sync { store.append(nil)[0] = 'Another' }
+      until_rendered { |rows| rows.length == 4 }
+      expect(rendered_rows.first['expanded']).to be(true), 'a re-render keeps what the viewer opened'
+
+      session.sync { view.collapse_all }
+      until_rendered { |rows| rows.first['expanded'] == false }
+      expect(session.sync { view.row_expanded?(gtk::TreePath.new([0])) }).to be(false)
+
+      expect(session.sync { view.expand_row(gtk::TreePath.new([0])) }).to be(true)
+      until_rendered { |rows| rows.first['expanded'] == true }
+      expect(session.sync { view.expand_row(gtk::TreePath.new([1])) }).to be(false), 'a leaf does not open'
     end
   end
 

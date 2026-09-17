@@ -1184,6 +1184,11 @@ module Lich
             dup_row(@rows.find { |row| row.key == iter.parent_key })
           end
 
+          # The keys of every row beneath +iter+, at any depth.
+          def iter_descendant_keys(iter)
+            descendants_of(iter.key)
+          end
+
           private
 
           # Every key beneath +key+, at any depth.
@@ -1429,6 +1434,7 @@ module Lich
             super()
             @columns = []
             @selected_keys = []
+            @expanded_keys = []
             @selection = TreeSelection.new(self)
             @headers_visible = true
             self.model = model if model
@@ -1438,6 +1444,7 @@ module Lich
             @model = model
             model&.watch(self)
             @selected_keys = []
+            @expanded_keys = []
             changed!
           end
           def_setter :set_model, :model=
@@ -1492,16 +1499,56 @@ module Lich
             self
           end
 
+          # ---- expansion (review 2026-09-17 (b), F4) ----------------------
+          # Which rows are open is the viewer's own state: the runtime keeps
+          # it per viewer as row_toggle reports it, and the shim binds that
+          # event for a tree store so the report is taken rather than dropped
+          # as unbound -- a branch the player opened used to fold again on
+          # the next render. The shim keeps its own copy for the script's
+          # queries, and the script's own expand and collapse are pushed to
+          # every viewer, as any viewer-scoped write is.
           def expand_all
+            parent_keys.each { |key| set_row_expanded(key, true) }
             self
           end
 
           def collapse_all
+            @expanded_keys.dup.each { |key| set_row_expanded(key, false) }
             self
           end
 
-          def expand_row(*_args)
-            self
+          def expand_row(path, open_all = false)
+            iter = @model&.get_iter(path)
+            return false unless iter && parent_keys.include?(iter.key)
+
+            keys = [iter.key]
+            keys += @model.iter_descendant_keys(iter) & parent_keys if open_all
+            keys.each { |key| set_row_expanded(key, true) }
+            true
+          end
+
+          def collapse_row(path)
+            iter = @model&.get_iter(path)
+            return false unless iter && @expanded_keys.include?(iter.key)
+
+            set_row_expanded(iter.key, false)
+            true
+          end
+
+          def row_expanded?(path)
+            iter = @model&.get_iter(path)
+            iter ? @expanded_keys.include?(iter.key) : false
+          end
+
+          # Rows with a child: the only ones that can open.
+          def parent_keys
+            return [] unless @model
+
+            @model.rows.map(&:parent_key).compact.uniq
+          end
+
+          def hierarchical?
+            @model.is_a?(TreeStore)
           end
 
           def columns_autosize
@@ -1509,7 +1556,11 @@ module Lich
           end
 
           def model_changed!
-            @selected_keys &= @model.rows.map(&:key) if @model
+            if @model
+              keys = @model.rows.map(&:key)
+              @selected_keys &= keys
+              @expanded_keys &= keys
+            end
             changed!
           end
 
@@ -1526,6 +1577,15 @@ module Lich
           # still reaches the model.
           # A cursor over the named row, never the model's own object. Writes
           # through it still land, because the copy shares the values array.
+          def set_row_expanded(key, open)
+            if open
+              @expanded_keys |= [key]
+            else
+              @expanded_keys.delete(key)
+            end
+            viewer_push(:"expanded:#{key}", open ? true : false)
+          end
+
           def find_row_copy(row_key)
             row = @model&.rows&.find { |candidate| candidate.key == row_key }
             row && @model.send(:dup_row, row)
@@ -1559,6 +1619,7 @@ module Lich
             events = []
             events << :selection_change unless @selection.mode == :none
             events << :cell_edit if @columns.any? { |column| column.renderer&.editor }
+            events << :row_toggle if hierarchical?
             events
           end
 
@@ -1574,6 +1635,7 @@ module Lich
               spec
             end
             columns = [{ key: 'c0', label: ' ' }] if columns.empty?
+            parents = parent_keys
             rows = (@model ? @model.rows : []).map do |iter|
               cells = @columns.select(&:visible?).each_with_index.to_h do |column, index|
                 ["c#{index}", cell_value(iter[column.value_column])]
@@ -1581,6 +1643,7 @@ module Lich
               cells = { 'c0' => cell_value(iter[0]) } if @columns.select(&:visible?).empty?
               row = { key: iter.key, cells: cells }
               row[:parent] = iter.parent_key if iter.parent_key
+              row[:expanded] = @expanded_keys.include?(iter.key) if parents.include?(iter.key)
               row
             end
             mode = case @selection.mode
@@ -1605,6 +1668,15 @@ module Lich
               rows = payload_value(context, :rows)
               @selected_keys = Array(rows).map(&:to_s) unless rows.nil?
               @selection.changed!
+            when :row_toggle
+              # The viewer already holds the state it reported; this is the
+              # shim's copy, so nothing is pushed back.
+              key = payload_value(context, :row).to_s
+              if payload_value(context, :expanded)
+                @expanded_keys |= [key]
+              else
+                @expanded_keys.delete(key)
+              end
             when :cell_edit
               row_key = payload_value(context, :row).to_s
               column_key = payload_value(context, :column).to_s
@@ -1637,6 +1709,9 @@ module Lich
               row_key = payload_value(context, :row).to_s
               iter = find_row_copy(row_key)
               emit(:row_activated, iter&.path, @columns.first) if iter
+            elsif event == :row_toggle
+              iter = find_row_copy(payload_value(context, :row).to_s)
+              emit(payload_value(context, :expanded) ? :row_expanded : :row_collapsed, iter, iter.path) if iter
             else
               @handlers.each_key do |signal|
                 emit(signal, Event.new) if event_for(signal) == event
