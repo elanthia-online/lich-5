@@ -50,6 +50,23 @@ RSpec.describe Lich::WebUI::Server do
     end.to raise_error(ArgumentError, /must be loopback/)
   end
 
+  it 'rebinds the same port after its accept loop is killed out from under it' do
+    accept_threads = []
+    server = described_class.new(
+      assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {},
+      thread_factory: ->(*args, &block) { Thread.new(*args, &block).tap { |t| accept_threads << t if args.empty? } }
+    ).start
+    port = server.port
+    accept_threads.first.kill.join
+    expect(server.running?).to be(false)
+
+    expect { server.start }.not_to raise_error
+    expect(server.port).to eq(port)
+    expect(server.running?).to be(true)
+  ensure
+    server&.stop
+  end
+
   it 'uses an ephemeral loopback port and authenticates through a one-shot clean redirect', security_id: 'sec-auth-fallback' do
     logs = []
     server = build_server(@assets_dir, logs: logs).start
@@ -92,6 +109,33 @@ RSpec.describe Lich::WebUI::Server do
   ensure
     first&.stop
     second&.stop
+  end
+
+  # A served file went out through an unbounded File.binread: a script that
+  # registered a root holding one multi-gigabyte file handed the whole thing
+  # to a page's <img> and to Lich's heap. The size is checked before the
+  # read, so an oversized file costs a stat and a 413, not the memory.
+  it 'refuses a served file larger than MAX_FILE_BYTES with 413 before reading it' do
+    served = File.join(@assets_dir, 'huge.png')
+    File.binwrite(served, 'not really a png')
+    file_service = Class.new do
+      def initialize(path) = @path = path
+      def resolve(_alias, _relative) = [@path, 'image/png', 'owner']
+    end.new(served)
+    server = described_class.new(
+      assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {}, file_service: file_service
+    ).start
+    _uri, _response, cookie = authenticate(server)
+    allow(File).to receive(:size).and_call_original
+    allow(File).to receive(:size).with(served).and_return(described_class::MAX_FILE_BYTES + 1)
+    expect(File).not_to receive(:binread).with(served)
+
+    response = request(server, '/files/root/huge.png', 'Cookie' => cookie, 'Sec-Fetch-Site' => 'same-origin')
+
+    expect(described_class::MAX_FILE_BYTES).to eq(32 * 1024 * 1024)
+    expect(response).to start_with('HTTP/1.1 413 Payload Too Large')
+  ensure
+    server&.stop
   end
 
   it 'authenticates WebSocket upgrade, emits hello, and delivers strict messages' do

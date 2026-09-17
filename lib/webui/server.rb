@@ -14,6 +14,10 @@ module Lich
     class Server
       COOKIE_NAME = 'lich_webui'
       MAX_HEADER_BYTES = 8192
+      # A served file is read whole into memory before it goes out. Anything
+      # a page could sensibly show fits in this; anything larger is refused
+      # with a stat, not a read.
+      MAX_FILE_BYTES = 32 * 1024 * 1024
       READ_TIMEOUT = 5
       WS_POLL_INTERVAL = 0.25
       LAUNCH_TOKEN_LIFETIME = 60
@@ -65,6 +69,14 @@ module Lich
         @mutex.synchronize do
           return self if running_locked?
 
+          # A listener whose accept loop died (killed thread) still holds the
+          # port; release it before binding again.
+          begin
+            @server&.close
+          rescue IOError, SystemCallError
+            nil
+          end
+          @server = nil
           @stopping = false
           @server = @server_factory.call(host, port)
           bound = @server.addr
@@ -323,6 +335,8 @@ module Lich
         return respond_error(socket, 404, 'Not Found') unless resolved
 
         path, content_type, = resolved
+        return respond_error(socket, 413, 'Payload Too Large') if File.size(path) > MAX_FILE_BYTES
+
         respond(socket, 200, 'OK', File.binread(path), content_type: content_type, cache_control: 'private, max-age=60')
       end
 
@@ -434,10 +448,6 @@ module Lich
         return mode == 'navigate' if request[:path] == '/auth' || request[:path] == '/'
 
         %w[no-cors same-origin cors].include?(mode)
-      end
-
-      def websocket_upgrade?(request)
-        request && request[:path] == '/ws' && request[:headers]['upgrade'].to_s.casecmp('websocket').zero?
       end
 
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',

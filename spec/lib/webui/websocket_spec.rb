@@ -5,6 +5,43 @@ require 'stringio'
 require 'webui/websocket'
 
 RSpec.describe Lich::WebUI::WebSocket do
+  # read_exact used a blocking io.read after the server's own select had
+  # said the socket was readable, but readable means one byte, not the
+  # whole frame. A client that sent two header bytes and then stopped
+  # parked the connection thread until the server stopped.
+  it 'gives up on a frame whose sender stalls after the header, instead of blocking' do
+    client, server = Socket.pair(:UNIX, :STREAM)
+    # fin + text, masked, 16-bit length to follow: the reader now needs two more bytes.
+    client.write([0x81, 0xFE].pack('CC'))
+    client.flush
+
+    expect do
+      Timeout.timeout(2) { described_class.read_frame(server, read_timeout: 0.1) }
+    end.to raise_error(Lich::WebUI::WebSocket::ProtocolError, 'stream stalled mid-frame')
+    expect(described_class::READ_TIMEOUT).to eq(30)
+  ensure
+    client&.close
+    server&.close
+  end
+
+  it 'still reads a frame that arrives in pieces over a real socket' do
+    client, server = Socket.pair(:UNIX, :STREAM)
+    frame = described_class.encode_client_frame('hello')
+    writer = Thread.new do
+      frame.each_char do |byte|
+        client.write(byte)
+        client.flush
+        sleep 0.005
+      end
+    end
+
+    expect(Timeout.timeout(2) { described_class.read_frame(server, read_timeout: 1).payload }).to eq('hello')
+  ensure
+    writer&.join
+    client&.close
+    server&.close
+  end
+
   it 'round-trips bounded masked client and unmasked server frames' do
     client_frame = described_class.encode_client_frame('hello')
     server_frame = described_class.encode_frame('world')
