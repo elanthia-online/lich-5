@@ -226,6 +226,40 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
       expect(session).to have_received(:report).with(an_instance_of(NoMethodError)).once
     end
 
+    # Review 2026-09-17 (c), Major 1: the closed check and the push were
+    # still two steps. A shutdown between them pushed :stop, the thread
+    # drained an empty queue and ended, and then the job landed behind it
+    # with nobody to run or refuse it. The push is paused exactly there.
+    it 'answers a sync whose enqueue was interleaved with shutdown, one way or the other' do
+      session.sync { :ready }
+      queue = session.instance_variable_get(:@queue)
+      at_push = Queue.new
+      release = Queue.new
+      sync_job = gtk::Session::SyncJob
+      queue.define_singleton_method(:<<) do |job|
+        if job.is_a?(sync_job)
+          at_push << true
+          release.pop
+        end
+        super(job)
+      end
+      waiter = Thread.new { session.sync { :ran } }
+      Timeout.timeout(2) { at_push.pop }
+      closer = Thread.new { session.shutdown }
+      sleep 0.05
+      expect(closer).to be_alive, 'shutdown waits for the enqueue in progress'
+      release << true
+
+      expect(closer.join(2)).not_to be_nil
+      answer = begin
+        Timeout.timeout(2) { waiter.value }
+      rescue Lich::WebUI::Error => error
+        error
+      end
+      expect([:ran, Lich::WebUI::Error]).to include(answer.is_a?(Symbol) ? answer : answer.class)
+      expect(queue.size).to eq(0)
+    end
+
     it 'refuses a sync still queued when the session thread ends, instead of leaving it waiting' do
       session.sync { :ready }
       thread = session.instance_variable_get(:@thread)
@@ -350,9 +384,8 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
 
     it 'leaves no set_ mutator answering something other than the widget' do
       offenders = []
-      gtk.constants.filter_map { |name| gtk.const_get(name) rescue nil }
-                   .select { |value| value.is_a?(Class) && value <= gtk::Widget }
-                   .each do |klass|
+      values = gtk.constants.filter_map { |name| gtk.const_get(name) rescue nil }
+      values.select { |value| value.is_a?(Class) && value <= gtk::Widget }.each do |klass|
         instance = (klass.new rescue (klass.new('x') rescue nil))
         next unless instance
 

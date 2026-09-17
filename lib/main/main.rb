@@ -194,7 +194,12 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || @argv_options[:launcher])
+  # A launcher opens only when no session was asked for. Saga starts one as
+  # `<file>.sal --gtk --without-frontend --detachable-client=N --saga`: the
+  # toolkit flag beside a .sal names how to run that session, not a wish
+  # for the launcher, and opening one there pre-empted the login (Tysong,
+  # 2026-09-17). --login is handled above.
+  elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || (@argv_options[:launcher] && @argv_options[:sal].nil?))
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
     Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     webui_launcher = Lich::Common::WebUILauncher.new(
@@ -212,7 +217,7 @@ reconnect_if_wanted = proc {
   # `--gtk` alone is the advertised way back to the native launcher; it
   # must open it, not fall through to a headless start because ARGV is no
   # longer empty (review 2026-09-17, R1).
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or @argv_options[:launcher] == :gtk)
+  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or (@argv_options[:launcher] == :gtk and @argv_options[:sal].nil?))
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end

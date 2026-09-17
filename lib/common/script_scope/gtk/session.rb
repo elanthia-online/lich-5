@@ -476,10 +476,19 @@ module Lich
           def enqueue(job = nil, &block)
             job ||= block
             raise ArgumentError, 'block required' unless job
-            return nil if @closed
 
-            @queue << job
-            ensure_thread
+            # The closed check, the push and the thread start are one step
+            # under the lock shutdown takes to close: read `@closed` first
+            # and push after, and a shutdown between the two queued a job
+            # behind a :stop the thread had already drained past (review
+            # 2026-09-17 (c), Major 1). Taken means the thread will run it
+            # or refuse it; nothing else.
+            @thread_mutex.synchronize do
+              return nil if @closed
+
+              @queue << job
+              ensure_thread_locked
+            end
             true
           end
 
@@ -1001,9 +1010,11 @@ module Lich
           #
           # @return [void]
           def shutdown
-            return if @closed
+            @thread_mutex.synchronize do
+              return if @closed
 
-            @closed = true
+              @closed = true
+            end
             windows = @mutex.synchronize { @windows.dup }
             # Session teardown is a cancellation, not just a cleanup. A run
             # parked on its Future is not waiting for the browser -- it is
@@ -1033,15 +1044,19 @@ module Lich
           private
 
           def ensure_thread
-            @thread_mutex.synchronize do
-              return if @closed || @thread&.alive?
+            @thread_mutex.synchronize { ensure_thread_locked }
+          end
 
-              session = self
-              @thread = Thread.new do
-                Thread.current[THREAD_KEY] = session
-                Thread.current.name = "webui-gtk:#{owner_label}" if Thread.current.respond_to?(:name=)
-                session.send(:run_loop)
-              end
+          # Under @thread_mutex: starts the session thread unless one is
+          # alive or the session is closed.
+          def ensure_thread_locked
+            return if @closed || @thread&.alive?
+
+            session = self
+            @thread = Thread.new do
+              Thread.current[THREAD_KEY] = session
+              Thread.current.name = "webui-gtk:#{owner_label}" if Thread.current.respond_to?(:name=)
+              session.send(:run_loop)
             end
           end
 

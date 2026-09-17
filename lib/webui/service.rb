@@ -78,11 +78,12 @@ module Lich
       # A single-use authenticated URL for the launcher or one page.
       #
       # @param page [Page, nil] the page to land on, or nil for the launcher
+      # @param lifetime [Integer, nil] seconds the URL stays valid; nil for the server's default
       # @return [String] the URL
       # @raise [Error] when the server is not running or the page is not registered
-      def launch_url(page: nil)
+      def launch_url(page: nil, lifetime: nil)
         target = page ? "/?page=#{registry.address_for(page)}" : '/'
-        server.launch_url(to: target)
+        lifetime ? server.launch_url(to: target, lifetime: lifetime) : server.launch_url(to: target)
       end
 
       # Re-renders a page for every attached viewer.

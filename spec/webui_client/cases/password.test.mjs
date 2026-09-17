@@ -72,6 +72,38 @@ test("a refusal arriving after the record's TTL replays nothing, and clear_sensi
   }
 });
 
+// Review 2026-09-17 (c): a replay recomputed its scope from the current
+// render; one that no longer listed the control gave the replayed record an
+// empty scope, and clear_sensitive could not find the password it carried.
+test("a replayed submission keeps its scope, so clear_sensitive still drops it", async () => {
+  const h = boot();
+  try {
+    const render = h.attach("edits");
+    h.type(h.control(SECRET), "hunter2");
+    await h.frame();
+    h.click(h.element(LOGIN));
+    const original = h.socket.events().at(-1);
+    assert.deepEqual(original.submission, ["hunter2"]);
+
+    h.socket.receive({ type: "refusal", reason: "stale_generation", message: "Message refused",
+      page: render.page, cid: LOGIN, event: "activate", request: original.request });
+    h.rerender(render, (r) => { delete r.submissions[LOGIN]; });
+    await h.tick();
+    const replayed = h.socket.events().at(-1);
+    assert.equal(replayed.cid, LOGIN);
+    assert.deepEqual(replayed.submission, ["hunter2"], "the replay carries the original submission");
+
+    h.socket.receive({ type: "clear_sensitive", cids: [SECRET] });
+    h.socket.receive({ type: "refusal", reason: "stale_generation", message: "Message refused",
+      page: render.page, cid: LOGIN, event: "activate", request: replayed.request });
+    h.rerender(render);
+    await h.tick();
+    assert.equal(h.socket.events().filter((e) => e.event === "activate").length, 2, "the cleared value is not sent a third time");
+  } finally {
+    h.close();
+  }
+});
+
 test("submit does not blank the field; clear_sensitive does", async () => {
   const h = boot();
   try {

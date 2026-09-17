@@ -113,7 +113,13 @@ module Lich
       # @return [String] the URL
       # @raise [Error] when the server is not running
       def launch_url(page: nil)
-        service.launch_url(page: page)
+        service.launch_url(page: page, lifetime: launch_lifetime)
+      end
+
+      # How long a launch URL is good for: a minute when Lich opens the
+      # browser on it at once, ten when the player has to carry it somewhere.
+      def launch_lifetime
+        open_browser? ? nil : Server::REMOTE_LAUNCH_TOKEN_LIFETIME
       end
 
       # Opens a browser window on +page+. With a +presentation+ (a callable

@@ -40,6 +40,15 @@ module Lich
       WS_POLL_INTERVAL = 0.25
       # @return [Integer] seconds a launch token from {#launch_url} stays valid
       LAUNCH_TOKEN_LIFETIME = 60
+      # For a URL a player has to carry somewhere: printed to a console or a
+      # game window, tunnelled, pasted. Sixty seconds covered a browser Lich
+      # opened itself and not this (review 2026-09-17 (c), Major 2).
+      #
+      # @return [Integer] seconds a carried launch URL stays valid
+      REMOTE_LAUNCH_TOKEN_LIFETIME = 600
+      # @return [String] the 403 body for an expired or reused launch link
+      EXPIRED_LAUNCH_MESSAGE = 'This launch link has expired or was already used. Have Lich print a fresh one: ' \
+                               'reopen the window, or call Lich::API.webui_launch_url.'
       # @return [String] the Content-Security-Policy every response carries
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
@@ -158,16 +167,17 @@ module Lich
       #
       # @param to [String] the path to land on after authentication; anything that is not a plain
       #   local path falls back to `/`
-      # @return [String] an `http://<host>:<port>/auth?token=...&to=...` URL valid for
-      #   {LAUNCH_TOKEN_LIFETIME} seconds
+      # @param lifetime [Integer] seconds the token stays valid; {LAUNCH_TOKEN_LIFETIME} for a
+      #   browser opened at once, {REMOTE_LAUNCH_TOKEN_LIFETIME} for a URL the player carries
+      # @return [String] an `http://<host>:<port>/auth?token=...&to=...` URL
       # @raise [Error] when the server is not running
-      def launch_url(to: '/')
+      def launch_url(to: '/', lifetime: LAUNCH_TOKEN_LIFETIME)
         raise Error, 'WebUI server is not running' unless running?
         target = valid_redirect_target?(to) ? to : '/'
         token = SecureRandom.hex(32)
         @mutex.synchronize do
           expire_launch_tokens!
-          @launch_tokens[token] = monotonic_time + LAUNCH_TOKEN_LIFETIME
+          @launch_tokens[token] = monotonic_time + lifetime
         end
         "http://#{url_host}:#{port}/auth?token=#{token}&to=#{URI.encode_www_form_component(target)}"
       end
@@ -464,7 +474,7 @@ module Lich
           expiry = @launch_tokens.delete(token)
           expiry && expiry >= monotonic_time
         end
-        return respond_error(socket, 403, 'Forbidden') unless accepted
+        return respond(socket, 403, 'Forbidden', EXPIRED_LAUNCH_MESSAGE) unless accepted
 
         target = valid_redirect_target?(params['to']) ? params['to'] : '/'
         respond(

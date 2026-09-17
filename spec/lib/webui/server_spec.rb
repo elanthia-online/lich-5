@@ -7,6 +7,27 @@ require 'uri'
 require 'webui/server'
 
 RSpec.describe Lich::WebUI::Server do
+  # Review 2026-09-17 (c), Major 2: a launch URL a player has to carry to
+  # another machine was dead in sixty seconds, and answered with a bare
+  # "Forbidden".
+  it 'mints a launch URL with the lifetime it is asked for, and says so when one has expired' do
+    server = build_server(@assets_dir).start
+    begin
+      remote = server.launch_url(lifetime: described_class::REMOTE_LAUNCH_TOKEN_LIFETIME)
+      tokens = server.instance_variable_get(:@launch_tokens)
+      server.instance_variable_get(:@mutex).synchronize { tokens.transform_values! { |expiry| expiry - 61 } }
+      expect(request(server, URI(remote).request_uri)).to start_with('HTTP/1.1 302 Found')
+
+      short = server.launch_url
+      server.instance_variable_get(:@mutex).synchronize { tokens.transform_values! { |expiry| expiry - 61 } }
+      expired = request(server, URI(short).request_uri)
+      expect(expired).to start_with('HTTP/1.1 403 Forbidden')
+      expect(expired).to include('expired or was already used', 'Lich::API.webui_launch_url')
+    ensure
+      server.stop
+    end
+  end
+
   def request(server, target, headers = {})
     socket = TCPSocket.new(server.host, server.port)
     request_headers = { 'Host' => "127.0.0.1:#{server.port}", 'Connection' => 'close' }.merge(headers)
@@ -78,7 +99,9 @@ RSpec.describe Lich::WebUI::Server do
     token = URI.decode_www_form(uri.query).to_h.fetch('token')
     expect(auth_response).not_to include(token)
     expect(logs.to_s).not_to include(uri.query)
-    expect(request(server, uri.request_uri)).to start_with('HTTP/1.1 403 Forbidden')
+    reused = request(server, uri.request_uri)
+    expect(reused).to start_with('HTTP/1.1 403 Forbidden')
+    expect(reused).to include('expired or was already used')
 
     page = request(server, '/', 'Cookie' => cookie, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate')
     expect(page).to start_with('HTTP/1.1 200 OK')

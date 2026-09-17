@@ -183,11 +183,12 @@ module Lich
         @service.start
         @mutex.synchronize { @lifecycle = :ready }
         @service.refresh(@page)
-        url = @service.launch_url(page: @page)
         unless @open_browser
-          announce_launch_url(url)
+          announce_launch_url(@service.launch_url(page: @page, lifetime: Lich::WebUI::Server::REMOTE_LAUNCH_TOKEN_LIFETIME))
           return self
         end
+
+        url = @service.launch_url(page: @page)
 
         opened = @browser_open.call(url)
         unless opened == false
@@ -199,6 +200,14 @@ module Lich
               '(or Microsoft Edge on Windows) and retry'
       rescue Lich::WebUI::Error => error
         @recovery.call("ERROR: #{error.message}. The WebUI launcher has stopped.")
+        close(reason: :browser_failure)
+        raise
+      rescue Errno::EADDRINUSE => error
+        # A fixed --webui-port is the one most likely to be taken, by a Lich
+        # still running on it; the way out is another port, not another
+        # launcher (review 2026-09-17 (c), finding 6).
+        @recovery.call("WebUI launcher could not bind its port (#{error.message}). " \
+                       'Another Lich may still be holding it; start with a different --webui-port.')
         close(reason: :browser_failure)
         raise
       rescue StandardError => error
@@ -1736,7 +1745,7 @@ module Lich
       def launch_context(entry)
         { char_name: entry.char_name, game_code: entry.game_code, frontend: entry.frontend,
           custom_launch: entry.custom_launch, custom_launch_dir: entry.custom_launch_dir,
-          data_dir: @data_dir, force_path_flags: true, launcher: :webui }
+          data_dir: @data_dir, force_path_flags: true, launcher: :webui, open_browser: @open_browser }
       end
 
       def terminate_browser(pid)
