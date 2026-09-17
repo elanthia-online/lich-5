@@ -1594,8 +1594,8 @@ module Lich
           def selected_iters
             return [] unless @model
 
-            @model.rows.select { |iter| @selected_keys.include?(iter.key) }
-                       .map { |iter| @model.send(:dup_row, iter) }
+            selected = @model.rows.select { |iter| @selected_keys.include?(iter.key) }
+            selected.map { |iter| @model.send(:dup_row, iter) }
           end
 
           def select_keys(keys)
