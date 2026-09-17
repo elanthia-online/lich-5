@@ -8,8 +8,9 @@ import assert from "node:assert/strict";
 import { boot } from "../run.mjs";
 
 function watchWindow(h) {
-  const calls = { resize: [], close: 0 };
+  const calls = { resize: [], move: [], close: 0 };
   h.window.resizeTo = (width, height) => calls.resize.push([width, height]);
+  h.window.moveTo = (x, y) => calls.move.push([x, y]);
   h.window.close = () => { calls.close += 1; };
   return calls;
 }
@@ -65,5 +66,26 @@ test("the last page closing closes the window; an earlier one does not", () => {
     assert.equal(h.document.querySelectorAll(".webui-page").length, 0);
   } finally {
     h.close();
+  }
+});
+
+test("a geometry with a position moves the window there, once; without one it is left alone", () => {
+  const h = boot();
+  const calls = watchWindow(h);
+  try {
+    const render = h.attachWith("actions", (next) => { next.facilities = { geometry: { width: 700, height: 500, x: 40, y: 60 } }; });
+    assert.deepEqual(calls.move, [[40, 60]]);
+    h.rerender(render, (next) => { next.facilities = { geometry: { width: 700, height: 500, x: 1, y: 2 } }; });
+    assert.deepEqual(calls.move, [[40, 60]], "a later position does not fight the viewer's own dragging");
+  } finally {
+    h.close();
+  }
+  const g = boot();
+  const quiet = watchWindow(g);
+  try {
+    g.attachWith("actions", (next) => { next.facilities = { geometry: { width: 700, height: 500 } }; });
+    assert.deepEqual(quiet.move, [], "no position declared, no move");
+  } finally {
+    g.close();
   }
 });
