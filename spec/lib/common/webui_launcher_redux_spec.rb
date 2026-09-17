@@ -400,8 +400,8 @@ RSpec.describe Lich::Common::WebUILauncher do
       allow(Lich::Common::FrontendSettings).to receive(:load!)
       launcher.begin_new_frontend
       launcher.save_frontend(FrontendEvent.new(nil, frontend_submission(
-        id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: ''
-      )))
+                                                      id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: ''
+                                                    )))
       expect(launcher.instance_variable_get(:@frontend_error)).to be_nil
       expect(Lich::Common::FrontendSettings).to have_received(:write_file).with(anything, hash_including('custom' => hash_including('vellum')))
       # The editor now holds the saved frontend (the catalog table is fed by
@@ -411,8 +411,8 @@ RSpec.describe Lich::Common::WebUILauncher do
       expect(draft).to include(id: 'vellum', label: 'Vellum', command: 'C:/v/vellum-fe.exe')
 
       launcher.save_frontend(FrontendEvent.new(nil, frontend_submission(
-        id: 'vellum', label: 'Vellum Two', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: '--x'
-      )))
+                                                      id: 'vellum', label: 'Vellum Two', command: 'C:/v/vellum-fe.exe', directory: 'C:/v', arguments: '--x'
+                                                    )))
       expect(launcher.instance_variable_get(:@frontend_error)).to be_nil
       expect(launcher.instance_variable_get(:@frontend_draft)).to include(id: 'vellum', label: 'Vellum Two', arguments: '--x')
     ensure
