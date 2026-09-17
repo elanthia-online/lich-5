@@ -2824,28 +2824,19 @@ module Lich
                      when :focus_in_event then :focus
                      when :focus_out_event then :blur
                      end
-            # A script's `changed` handler cannot fire on a password field:
-            # the contract gives password_input no `change` event, because a
-            # value that is never echoed back has nothing to report on every
-            # keystroke. Dropping the mapping keeps the binding out of the
-            # node rather than having the adapter refuse the whole widget.
-            # It is a real loss, not a no-op -- the master-password prompt
-            # drives a live strength meter from this handler -- so say so
-            # rather than letting the handler go quiet unexplained.
-            if mapped == :change && !visibility?
-              Gtk.log_unsupported(short_class_name, 'changed on a password entry',
-                                  note: 'password_input has no change event; the value arrives on submit')
-              return nil
-            end
-
+            # A password's `changed` fires too (contract 2.18): the event
+            # carries no value, so the handler sees the entry's text as it
+            # was -- empty until a submit delivers it -- and knows only that
+            # the viewer typed. A handler that needs the current contents
+            # (a live strength meter) cannot have them from here; that is a
+            # limit of never echoing a password, not of this mapping, and
+            # the shim used to suppress the event outright, which lost the
+            # notification as well (review 2026-09-17, R13).
             mapped
           end
 
-          # A password_input has only `submit`: the contract gives it no
-          # `change` event, because a value that is never echoed back has
-          # nothing to report on every keystroke.
           def always_bound_events
-            visibility? ? [:change] : []
+            [:change]
           end
 
           def node_type

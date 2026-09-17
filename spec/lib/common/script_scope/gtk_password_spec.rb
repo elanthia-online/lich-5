@@ -83,18 +83,25 @@ RSpec.describe 'GTK compatibility shim: password entries' do
     expect(build(visible: true).send(:node_props)).to include(:value)
   end
 
-  # password_input has only `submit`; binding `change` would have the
-  # adapter refuse the whole widget, which drops it from its parent.
-  it 'binds only the events a password input has' do
-    expect(build(visible: false).send(:always_bound_events)).to eq([])
+  # Contract 2.18 gave password_input a payload-free `change`; the shim
+  # went on suppressing the script's `changed` handler as if it had none
+  # (review 2026-09-17, R13). The notification fires; the value does not
+  # travel with it.
+  it 'binds change on both kinds of entry' do
+    expect(build(visible: false).send(:always_bound_events)).to eq([:change])
     expect(build(visible: true).send(:always_bound_events)).to eq([:change])
   end
 
-  it 'refuses to map a changed handler onto a password field' do
+  it 'maps a changed handler onto a password field as a notification without the value' do
     entry = build(visible: false)
-
-    expect(entry.send(:event_for, :changed)).to be_nil
+    expect(entry.send(:event_for, :changed)).to eq(:change)
     expect(entry.send(:event_for, :activate)).to eq(:submit)
+
+    fired = []
+    entry.signal_connect('changed') { |widget| fired << widget.text }
+    session.sync { entry.send(:receive_event, :change, Struct.new(:payload).new({})) }
+    expect(fired).to eq([''])
+    expect(entry.text).to eq('')
   end
 
   # An ordinary entry's value does arrive in the event payload, on `change`.

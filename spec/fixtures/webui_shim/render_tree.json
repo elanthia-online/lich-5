@@ -212,6 +212,7 @@
   },
   "bindings": [
     "page:adapter-X/stack:key2/grid:key3/text_input:key5#change",
+    "page:adapter-X/stack:key2/columns:key11/password_input:key12#change",
     "page:adapter-X/stack:key2/checkbox:key14#change",
     "page:adapter-X/stack:key2/scroll:key15#scrolled"
   ]
