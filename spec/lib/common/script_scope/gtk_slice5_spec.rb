@@ -133,7 +133,7 @@ RSpec.describe 'GTK compatibility shim: slice five widgets' do
 
   describe 'a custom Dialog' do
     it 'renders its content and buttons and validates' do
-      dialog = session.sync do
+      session.sync do
         d = gtk::Dialog.new(title: 'Question', buttons: [['Cancel', :cancel], ['OK', :ok]])
         d.content_area.add(gtk::Label.new('Are you sure?'))
         d.show

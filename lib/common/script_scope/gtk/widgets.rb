@@ -2132,6 +2132,10 @@ module Lich
         # add_button, so creaturebar's `:ok` and map's `Gtk::ResponseType::OK`
         # both compare equal to what they passed in.
         class Dialog < Window
+          # rubocop:disable Lint/UnusedMethodArgument -- parent and flags are
+          # Gtk::Dialog.new's own keywords. Scripts pass them, and accepting
+          # and ignoring them is the degradation; dropping them from the
+          # signature would make those calls raise instead.
           def initialize(title: nil, parent: nil, flags: nil, buttons: nil, **_options)
             # to_s: a nil title would reach the page as a nil prop. Lich's
             # NilClass patch answers nil.empty? with nil, so node_props' own
@@ -2145,6 +2149,7 @@ module Lich
             Container.instance_method(:add).bind_call(self, @actions)
             Array(buttons).each { |(label, response)| add_button(label, response) }
           end
+          # rubocop:enable Lint/UnusedMethodArgument
 
           def content_area
             @content
