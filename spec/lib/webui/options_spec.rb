@@ -46,6 +46,9 @@ RSpec.describe Lich::WebUI::Options do
     expect(service.server.host).to eq('127.0.0.1')
     expect(service.server.port).to eq(port)
     expect(Lich::WebUI.open_browser?).to be(false)
+    expect(Lich::WebUI.launch_lifetime).to eq(Lich::WebUI::Server::REMOTE_LAUNCH_TOKEN_LIFETIME)
+    Lich::WebUI.configure(open_browser: true)
+    expect(Lich::WebUI.launch_lifetime).to be_nil
   ensure
     Lich::WebUI.reset!
   end

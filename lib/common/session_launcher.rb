@@ -141,7 +141,7 @@ module Lich
           flags << "--#{launcher}" if launcher
           # A player who cannot see this machine's display cannot see the
           # child's either; the port is not passed, each session has its own.
-          flags << '--webui-no-browser' if ARGV.any? { |argument| argument.to_s.casecmp?('--webui-no-browser') }
+          flags << '--webui-no-browser' unless resolve_open_browser(context)
 
           OPTIONAL_PATH_FLAGS.each do |path_flag|
             value = overridden_path_value(context, path_flag)
@@ -184,6 +184,16 @@ module Lich
           return nil unless defined?(Lich::LauncherChoice)
 
           Lich::LauncherChoice.normalize(context.fetch(:launcher) { Lich::LauncherChoice.flag(ARGV) })
+        end
+
+        # Whether the child should open a browser: what the caller says, or
+        # else what this process was told. Resolved like the launcher flag
+        # above it rather than by reading ARGV again.
+        def resolve_open_browser(context)
+          return context[:open_browser] != false if context.key?(:open_browser)
+          return true unless defined?(Lich::WebUI::Options)
+
+          Lich::WebUI::Options.open_browser?
         end
 
         def resolve_dark_mode(context)

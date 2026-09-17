@@ -35,11 +35,18 @@ ssh -L 4321:127.0.0.1:4321 user@lich-host
 Then open the URL Lich printed, exactly as printed. It names
 `127.0.0.1:4321`, which through the tunnel is the right address.
 
-Script windows in a game session use their own ephemeral port, so each
-one needs its own `-L`. Add them to the same SSH command, or run a
-second tunnel when the URL appears in the game window. A fixed port for
-sessions is not offered because several sessions on one box would
-collide.
+With `--webui-no-browser` a launch URL is good for ten minutes (a minute
+when Lich opens the browser itself). After that the link answers
+"expired or already used"; reopen the window from Lich for a fresh one,
+or ask for it directly with `Lich::API.webui_launch_url` (with
+`page:` for a script window).
+
+A game session runs one WebUI server for the whole process, on its own
+ephemeral port: every script window in that session is a page on it, so
+one more `-L` covers all of them. The port is in the first script
+window URL the session sends to the game window; add it to the SSH
+command, or run a second tunnel then. A fixed port for sessions is not
+offered because several sessions on one box would collide.
 
 ## X11 forwarding
 

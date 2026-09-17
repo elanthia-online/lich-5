@@ -25,6 +25,12 @@ module Lich
       READ_TIMEOUT = 5
       WS_POLL_INTERVAL = 0.25
       LAUNCH_TOKEN_LIFETIME = 60
+      # For a URL a player has to carry somewhere: printed to a console or a
+      # game window, tunnelled, pasted. Sixty seconds covered a browser Lich
+      # opened itself and not this (review 2026-09-17 (c), Major 2).
+      REMOTE_LAUNCH_TOKEN_LIFETIME = 600
+      EXPIRED_LAUNCH_MESSAGE = 'This launch link has expired or was already used. Have Lich print a fresh one: ' \
+                               'reopen the window, or call Lich::API.webui_launch_url.'
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
             "form-action 'self'; frame-ancestors 'none'"
@@ -106,13 +112,13 @@ module Lich
         @mutex.synchronize { @connections.count(&:alive?) }
       end
 
-      def launch_url(to: '/')
+      def launch_url(to: '/', lifetime: LAUNCH_TOKEN_LIFETIME)
         raise Error, 'WebUI server is not running' unless running?
         target = valid_redirect_target?(to) ? to : '/'
         token = SecureRandom.hex(32)
         @mutex.synchronize do
           expire_launch_tokens!
-          @launch_tokens[token] = monotonic_time + LAUNCH_TOKEN_LIFETIME
+          @launch_tokens[token] = monotonic_time + lifetime
         end
         "http://#{url_host}:#{port}/auth?token=#{token}&to=#{URI.encode_www_form_component(target)}"
       end
@@ -359,7 +365,7 @@ module Lich
           expiry = @launch_tokens.delete(token)
           expiry && expiry >= monotonic_time
         end
-        return respond_error(socket, 403, 'Forbidden') unless accepted
+        return respond(socket, 403, 'Forbidden', EXPIRED_LAUNCH_MESSAGE) unless accepted
 
         target = valid_redirect_target?(params['to']) ? params['to'] : '/'
         respond(

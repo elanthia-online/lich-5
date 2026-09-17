@@ -45,9 +45,9 @@ module Lich
         self
       end
 
-      def launch_url(page: nil)
+      def launch_url(page: nil, lifetime: nil)
         target = page ? "/?page=#{registry.address_for(page)}" : '/'
-        server.launch_url(to: target)
+        lifetime ? server.launch_url(to: target, lifetime: lifetime) : server.launch_url(to: target)
       end
 
       def refresh(page)
