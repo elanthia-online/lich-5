@@ -327,6 +327,9 @@ html.webui-measuring .webui-page.bare > .webui-scroll {
    row in the table, which is how an eight-row catalog filled a window.
    Long values -- a path, a command -- still ellipsize rather than wrap. */
 .webui-table th { white-space: nowrap; }
+/* Tree rows: the toggle sits in the first cell, indented per level. */
+.webui-table .tree-toggle { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 0 6px 0 0; font: inherit; line-height: 1; }
+.webui-table .tree-toggle:focus-visible { outline: 2px solid var(--accent); }
 .webui-table td { max-width: 38ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* An editable cell holds its control rather than text; the control fills the
    cell so the column width still governs. */

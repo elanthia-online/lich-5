@@ -55,6 +55,16 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (event.target.closest(".composite-region")) return;')
   end
 
+  # Review 2026-09-17, R5/R10/R14. The behaviour is pinned in the jsdom
+  # harness (replay, editing and table cases); these are the seams.
+  it 'keeps event records across renders, registers editor cells as controls, and walks table rows as a tree' do
+    expect(javascript).to include('const request = ++requestCounter;')
+    expect(javascript).to include('} else if (now - record.sentAt > PENDING_TTL_MS) {')
+    expect(javascript).to include('page.controls.set(`${component.cid}/cell:${row.key}/${column.key}`, control);')
+    expect(javascript).to include('if (row.expanded === true) (childrenOf.get(row.key) || []).forEach((child) => renderRow(child, depth + 1));')
+    expect(javascript).to include('emit(page, component, "row_toggle", { row: row.key, expanded });')
+  end
+
   # 2.19: ctrl+wheel over the surface asks the script to zoom. The listener
   # cannot be passive, or the browser zooms the whole page as well.
   it 'emits surface_zoom from a ctrl+wheel on a composite that asked for it' do
@@ -85,8 +95,8 @@ RSpec.describe 'WebUI browser assets' do
   # guard was released just before the replay, so the replay installed a
   # clean guard and the same event could be retried indefinitely.
   it 'replays only the event a refusal names, and only once' do
-    expect(javascript).to include('requestKey(message.page, message.cid, message.event)')
-    expect(javascript).to include('pendingEvents.get(refusedKey)')
+    expect(javascript).to include('const retry = refusedRecord(message);')
+    expect(javascript).to include('if (Number.isInteger(message.request)) return pendingEvents.get(message.request) || null;')
     expect(javascript).to include('retry.attempt < MAX_EVENT_ATTEMPTS')
     expect(javascript).to include('const MAX_EVENT_ATTEMPTS = 1;')
   end
@@ -129,12 +139,16 @@ RSpec.describe 'WebUI browser assets' do
 
   # The server answers a stale event with the refusal first and then the
   # render that superseded it. A record the refusal marks for replay has to
-  # survive until that render lands -- that tree is the one to replay into --
-  # and every other record for the page is forgotten when it arrives.
-  it 'replays a stale event into the render that follows its refusal, and forgets the rest' do
+  # survive until that render lands -- that tree is the one to replay into.
+  # Every other record survives a render too (review 2026-09-17, R5): a
+  # refresh is not an acknowledgement, and forgetting records on one lost
+  # any click whose refusal arrived after an unrelated refresh.
+  it 'replays a stale event into the render that follows its refusal, and keeps the rest' do
     expect(javascript).to include('retry.replay = true;')
     expect(javascript).to include('if (record.address !== message.page) return;')
-    expect(javascript).to include('if (record.replay) replays.push(record);')
+    expect(javascript).to include('if (record.replay) {')
+    expect(javascript).not_to include('pendingEvents.delete(key);
+      if (record.replay)')
   end
 
   it 'still hides a stale refusal from the viewer and surfaces every other' do

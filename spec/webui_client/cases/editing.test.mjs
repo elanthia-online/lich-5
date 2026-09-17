@@ -80,3 +80,25 @@ test("a genuine server value change wins over the draft", () => {
     h.close();
   }
 });
+
+// Review 2026-09-17, R10: a table's editor cells were not controls, so a
+// half-typed cell was replaced by the model value on any render.
+test("a half-typed table cell survives an unrelated render, and a changed model value wins", () => {
+  const h = boot();
+  try {
+    const render = h.attach("tables");
+    const cell = () => h.element("page:tables/table:editable").querySelector("input");
+    h.type(cell(), "unfinished");
+    h.rerender(render);
+    assert.equal(cell().value, "unfinished");
+    assert.equal(h.document.activeElement, cell(), "focus stays in the cell");
+
+    h.rerender(render, (next) => {
+      const table = next.tree.children.find((child) => child.cid === "page:tables/table:editable");
+      table.props.rows[0].cells.name = "server";
+    });
+    assert.equal(cell().value, "server", "a value the script changed replaces the draft");
+  } finally {
+    h.close();
+  }
+});

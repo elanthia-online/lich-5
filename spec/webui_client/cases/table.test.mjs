@@ -71,3 +71,28 @@ test("a disabled table answers neither clicks nor activation, and a disabled sel
     h.close();
   }
 });
+
+// Review 2026-09-17, R14: tree rows were laid out flat, a collapsed parent
+// still showed its children, and nothing could toggle anything.
+const TREE = "page:tables/table:tree";
+
+test("a collapsed parent hides its children, an expanded one indents them, and the toggle reports row_toggle", () => {
+  const h = boot();
+  try {
+    h.attach("tables");
+    const visible = () => Array.from(h.element(TREE).querySelectorAll("tbody tr")).map((tr) => tr.dataset.rowKey);
+    assert.deepEqual(visible(), ["p1", "p2", "c3", "leaf"]);
+    const toggles = Array.from(h.element(TREE).querySelectorAll(".tree-toggle"));
+    assert.deepEqual(toggles.map((t) => t.getAttribute("aria-expanded")), ["false", "true"]);
+    assert.equal(row(h, TREE, "c3").querySelector("td").style.paddingLeft, "27px");
+    assert.equal(row(h, TREE, "leaf").querySelectorAll(".tree-toggle").length, 0);
+
+    h.click(toggles[0]);
+    assert.deepEqual(visible(), ["p1", "c1", "c2", "p2", "c3", "leaf"], "the table folds locally at once");
+    const events = h.socket.events().filter((e) => e.event === "row_toggle");
+    assert.deepEqual(events.map((e) => e.payload), [{ row: "p1", expanded: true }]);
+    assert.equal(h.socket.events().filter((e) => e.event === "selection_change").length, 0, "a toggle is not a selection");
+  } finally {
+    h.close();
+  }
+});

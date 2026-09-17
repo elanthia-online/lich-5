@@ -64,6 +64,20 @@ pages = {
     options = [{ value: 'x', label: 'X' }, { value: 'y', label: 'Y' }]
     select(key: 'pick', options: options, value: 'x', on: { change: noop })
     select(key: 'frozen', options: options, value: 'x', disabled: true, on: { change: noop })
+    # A tree: a collapsed parent with two children, an expanded one with one.
+    table(key: 'tree', columns: columns, selection: 'single',
+          rows: [
+            { key: 'p1', cells: { name: 'Parent 1' }, expanded: false },
+            { key: 'c1', parent: 'p1', cells: { name: 'Child 1' } },
+            { key: 'c2', parent: 'p1', cells: { name: 'Child 2' } },
+            { key: 'p2', cells: { name: 'Parent 2' }, expanded: true },
+            { key: 'c3', parent: 'p2', cells: { name: 'Child 3' } },
+            { key: 'leaf', cells: { name: 'Leaf' } },
+          ], on: { selection_change: noop, row_toggle: noop })
+    # An editable text column.
+    table(key: 'editable', columns: [{ key: 'name', label: 'Name', editor: { type: 'text' } }],
+          rows: [{ key: 'r1', cells: { name: 'old' } }], selection: 'none',
+          on: { cell_edit: noop })
   end,
   # Drawn shapes: the 2.17 layers.
   'shapes'  => Lich::WebUI::Page.new(owner: owner, id: 'shapes', title: 'Shapes') do

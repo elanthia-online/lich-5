@@ -1,7 +1,7 @@
 {
   "actions": {
     "type": "render",
-    "page": "page-246e4cbd8abd4aa3b576848a4f1e6039",
+    "page": "page-59ad1c3c190e5f275aada41c19f3de78",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -73,11 +73,11 @@
         "page:actions/text_input:note"
       ]
     },
-    "resume": "resume-11548b0b9d7f88e358bb62c06fe096e0"
+    "resume": "resume-2852afae61bb324e6b4ac99da6f5594d"
   },
   "edits": {
     "type": "render",
-    "page": "page-9da87decdc2fc11541565d3ca350a2f2",
+    "page": "page-05bfba85db52da00c88cd385d88dac6b",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -151,11 +151,11 @@
         "page:edits/password_input:secret"
       ]
     },
-    "resume": "resume-f78fcf6147ea559c518086936173fb5d"
+    "resume": "resume-5ee87ecb5209febd2d74e5695d0b2ff3"
   },
   "tables": {
     "type": "render",
-    "page": "page-08e9079f8267bec5d32e6c923b15c9e8",
+    "page": "page-f60166dc26d1582fb40bd65b1bc3ca55",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -318,6 +318,104 @@
             "disabled": true
           },
           "children": []
+        },
+        {
+          "type": "table",
+          "cid": "page:tables/table:tree",
+          "props": {
+            "columns": [
+              {
+                "key": "name",
+                "label": "Name",
+                "align": "start",
+                "sortable": false,
+                "editor": null
+              }
+            ],
+            "rows": [
+              {
+                "key": "p1",
+                "expanded": false,
+                "cells": {
+                  "name": "Parent 1"
+                }
+              },
+              {
+                "key": "c1",
+                "parent": "p1",
+                "expanded": false,
+                "cells": {
+                  "name": "Child 1"
+                }
+              },
+              {
+                "key": "c2",
+                "parent": "p1",
+                "expanded": false,
+                "cells": {
+                  "name": "Child 2"
+                }
+              },
+              {
+                "key": "p2",
+                "expanded": true,
+                "cells": {
+                  "name": "Parent 2"
+                }
+              },
+              {
+                "key": "c3",
+                "parent": "p2",
+                "expanded": false,
+                "cells": {
+                  "name": "Child 3"
+                }
+              },
+              {
+                "key": "leaf",
+                "expanded": false,
+                "cells": {
+                  "name": "Leaf"
+                }
+              }
+            ],
+            "selection": "single",
+            "headers": true,
+            "sortable": false,
+            "key": "tree"
+          },
+          "children": []
+        },
+        {
+          "type": "table",
+          "cid": "page:tables/table:editable",
+          "props": {
+            "columns": [
+              {
+                "key": "name",
+                "label": "Name",
+                "align": "start",
+                "sortable": false,
+                "editor": {
+                  "type": "text"
+                }
+              }
+            ],
+            "rows": [
+              {
+                "key": "r1",
+                "expanded": false,
+                "cells": {
+                  "name": "old"
+                }
+              }
+            ],
+            "selection": "none",
+            "headers": true,
+            "sortable": false,
+            "key": "editable"
+          },
+          "children": []
         }
       ]
     },
@@ -336,14 +434,21 @@
       ],
       "page:tables/select:frozen": [
         "change"
+      ],
+      "page:tables/table:tree": [
+        "selection_change",
+        "row_toggle"
+      ],
+      "page:tables/table:editable": [
+        "cell_edit"
       ]
     },
     "submissions": {},
-    "resume": "resume-68200fed00df6f12992312edd1904738"
+    "resume": "resume-5862605777870f7606fd9a3e234cd311"
   },
   "shapes": {
     "type": "render",
-    "page": "page-5ec49151b3905cc06660d2bf2cbe030b",
+    "page": "page-63e35377a5821a1ebad25194bf2c0d48",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -425,6 +530,6 @@
       ]
     },
     "submissions": {},
-    "resume": "resume-bb1b1ff5e592a7a4f41212193a9de203"
+    "resume": "resume-28562d453abee9bc264efebd9ea2f689"
   }
 }

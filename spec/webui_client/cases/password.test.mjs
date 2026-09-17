@@ -18,7 +18,7 @@ test("typing into a password emits change with no payload, one per animation fra
     assert.deepEqual(h.socket.events(), [], "nothing is sent before the frame");
 
     await h.frame();
-    assert.deepEqual(h.socket.events(), [{
+    assert.deepEqual(h.socket.events().map(({ request, ...rest }) => rest), [{
       type: "event", page: render.page, cid: SECRET, event: "change",
       generation: render.generation, payload: {},
     }]);
