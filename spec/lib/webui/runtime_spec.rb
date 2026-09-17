@@ -73,13 +73,49 @@ RSpec.describe Lich::WebUI::Runtime do
 
     attach(first_connection, page)
 
+    # always_on_top and opacity depend on the host: a page cannot raise its
+    # own window or make the frame translucent, but on a host that can reach
+    # the real window the shim does it there instead. borderless is refused
+    # everywhere -- a frameless Chromium app window cannot be moved or closed.
+    host = Lich::WebUI::WindowPresentation.support
     expect(page.presentation_support).to eq(
-      always_on_top: false, borderless: false, opacity: true, scrollbars: true
+      { always_on_top: false, borderless: false, opacity: true, scrollbars: true }.merge(host)
     )
-    expect(page.degradations).to contain_exactly(
-      { facility: :presentation, property: :always_on_top, reason: :unsupported_by_browser_host },
-      { facility: :presentation, property: :borderless, reason: :unsupported_by_browser_host }
+    expect(page.presentation_support.keys).to contain_exactly(
+      :always_on_top, :borderless, :opacity, :scrollbars
     )
+    refused = page.degradations.map { |refusal| refusal[:property] }
+    %i[always_on_top borderless].each do |property|
+      host[property] ? expect(refused).not_to(include(property)) : expect(refused).to(include(property))
+    end
+    # A page can always do these two itself.
+    expect(refused).not_to include(:opacity, :scrollbars)
+  end
+
+  # The host's contribution is fixed for the life of the process, so the
+  # merged table need not be rebuilt and re-frozen on every render.
+  it 'reports the same frozen presentation support table on every call' do
+    allow(Lich::WebUI::WindowPresentation).to receive(:support).and_return(always_on_top: true, opacity: true)
+
+    first = runtime.presentation_support
+    second = runtime.presentation_support
+
+    expect(first).to eq(always_on_top: true, borderless: false, opacity: true, scrollbars: true)
+    expect(first).to be_frozen
+    expect(second).to equal(first)
+  end
+
+  # An unknown property must not be fetched out of the support table without a
+  # default: that raised out of validated_render, which runs on both attach and
+  # refresh, and took down every page carrying a presentation facility.
+  it 'treats a presentation property it has no opinion about as honoured' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'unknown-presentation', title: 'P2') do
+      presentation(opacity: 0.5)
+    end)
+    forged = double(facilities: { presentation: { opacity: 0.5, invented_property: true } })
+
+    expect { runtime.send(:record_presentation_degradations, page, forged) }.not_to raise_error
+    expect(runtime.degradations(page).map { |refusal| refusal[:property] }).not_to include(:invented_property)
   end
 
   it 'refuses stale and fabricated component events without invoking callbacks', security_id: 'sec-component-id' do
@@ -102,7 +138,16 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(stale).to eq(:refused)
     expect(fabricated).to eq(:refused)
     expect(callbacks).to be_empty
-    expect(first_connection.sent.map { |message| message['reason'] }).to include('stale_generation', 'component_id')
+    sent = first_connection.sent
+    expect(sent.map { |message| message['reason'] }).to include('stale_generation', 'component_id')
+    # One transaction, in order: the refusal names the exact event, so the
+    # client can find the record it kept for it, and the render that
+    # superseded that event follows the refusal -- never precedes it, since
+    # a render makes the client forget every record for its page.
+    refusal_at = sent.index { |message| message['reason'] == 'stale_generation' }
+    expect(sent[refusal_at]).to include('page' => address, 'cid' => button_cid, 'event' => 'activate')
+    expect(sent[refusal_at + 1]).to include('type' => 'render', 'page' => address)
+    expect(sent.count { |message| message['reason'] == 'stale_generation' }).to eq(1)
   end
 
   it 'captures a targeted one-shot sensitive submission without bulk disclosure' do
@@ -138,6 +183,38 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(first_connection.sent.last).to eq('type' => 'clear_sensitive', 'cids' => [password_cid])
     expect(observed).to eq('canary-credential')
     expect(carrier).to be_consumed
+  end
+
+  it 'discards a sensitive submission when the enqueue itself overflows' do
+    # The carrier is normally zeroed by an `ensure` inside the enqueued
+    # block. When enqueue raises OverflowError the block is never stored, so
+    # that ensure never runs -- the overflow path has to discard it itself.
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'login', title: 'Login') do
+      password = password_input(key: 'password')
+      button(key: 'submit', label: 'Log in', submit: [password], on: { activate: ->(_event) {} })
+    end)
+    address, render = attach(first_connection, page)
+    button_cid = render.dig('tree', 'children', 1, 'cid')
+    carriers = []
+    allow(Lich::WebUI::SensitiveValue).to receive(:viewer).and_wrap_original do |original, *args|
+      original.call(*args).tap { |carrier| carriers << carrier }
+    end
+    allow(dispatcher).to receive(:enqueue).and_raise(
+      Lich::WebUI::Dispatcher::OverflowError.new(
+        'WebUI event queue overflow', owner: 'login', page_id: page.id, cid: button_cid, field: 'activate'
+      )
+    )
+
+    result = runtime.handle(first_connection, {
+      type: 'event', page: address, cid: button_cid, event: 'activate',
+      generation: render['generation'], payload: {}, submission: [+'canary-credential'],
+    })
+
+    expect(result).to eq(:refused)
+    expect(first_connection.sent.last['reason']).to eq('overflow')
+    expect(first_connection).to be_closed
+    expect(carriers.length).to eq(1)
+    expect(carriers.first).to be_consumed
   end
 
   it 'refuses attempts to widen or shorten the registered submission scope' do
@@ -338,5 +415,140 @@ RSpec.describe Lich::WebUI::Runtime do
       type: 'attach', page: registry.address_for(page), version: '2.5.0',
     })).to eq(:refused)
     expect(first_connection.sent.last['reason']).to eq('contract')
+  end
+
+  # A Cairo-drawn marker has no file to serve, so the shim inlines it as a
+  # base64 data: URI. The CSP already allows those; the render validator did
+  # not, and refused the whole map the moment its room marker appeared.
+  it 'accepts a base64 data image, which references no served resource' do
+    pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'marker', title: 'Marker') do
+      image(src: pixel)
+    end)
+
+    expect(runtime.handle(first_connection, {
+      type: 'attach', page: registry.address_for(page), version: '2.5.0',
+    })).to eq(:attached)
+  end
+
+  # Gtk::Image.new with no source, or one that was cleared, has nothing to
+  # show and emits an empty src so the layout keeps its place. The render
+  # validator treated that as an unregistered file and refused the whole
+  # page: one blank widget, and the window never opened.
+  it 'accepts an image with an empty src as one with nothing to show' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'blank', title: 'Blank') do
+      image(src: '', alt: 'no image')
+      button(key: 'go', label: 'Go')
+    end)
+
+    expect(runtime.handle(first_connection, {
+      type: 'attach', page: registry.address_for(page), version: '2.5.0',
+    })).to eq(:attached)
+    render = first_connection.sent.last
+    expect(render['type']).to eq('render')
+    expect(render.dig('tree', 'children', 0, 'props')).to include('src' => '', 'alt' => 'no image')
+  end
+
+  it 'still refuses a data URI that is not a base64 image' do
+    [
+      'data:text/html;base64,PHNjcmlwdD4=',
+      'data:image/svg+xml;base64,PHN2Zy8+',
+      'data:image/png;base64,not valid base64!',
+      # Base64 comes in quads: a body whose length is not a multiple of
+      # four is not base64 at all, whatever characters it uses.
+      'data:image/png;base64,iVBOR',
+      'data:image/png;base64,iVBORw=',
+      'data:image/png;base64,iVBO===',
+    ].each do |hostile|
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: "bad-#{hostile.hash.abs}", title: 'Bad') do
+        image(src: hostile)
+      end)
+
+      expect(runtime.handle(first_connection, {
+        type: 'attach', page: registry.address_for(page), version: '2.5.0',
+      })).to eq(:refused), "expected #{hostile.inspect} to be refused"
+    end
+  end
+
+  # The per-page refresh lock was created on first refresh and never released,
+  # so every page a long-lived session ever opened stayed reachable through
+  # @page_locks -- the page, its tree and its owner with it. @refresh_state
+  # was already cleaned up on the same paths; this was the one that was not.
+  describe 'per-page refresh state' do
+    def page_locks
+      runtime.instance_variable_get(:@page_locks)
+    end
+
+    # A refresh thread parked in a write to a browser that stopped reading
+    # held shutdown for as long as the write did; the join is budgeted now.
+    it 'shuts down within its budget even when a refresh thread never returns' do
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'stuck', title: 'Stuck') do
+        text(content: 'stuck')
+      end)
+      parked = Thread.new { sleep }
+      sleep 0.01 until parked.status == 'sleep'
+      runtime.instance_variable_get(:@refresh_state)[page] = { dirty: false, thread: parked }
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      runtime.shutdown(budget: 0.2)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(elapsed).to be < 2.0
+      expect(parked.join(1)).not_to be_nil
+      expect(parked).not_to be_alive
+    end
+
+    it 'releases the refresh lock of a closed page' do
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'closing', title: 'Closing') do
+        text(content: 'bye')
+      end)
+      attach(first_connection, page)
+      runtime.refresh(page)
+
+      expect(page_locks.keys).to include(page)
+
+      runtime.close_page(page)
+
+      expect(page_locks.keys).not_to include(page)
+    end
+
+    it 'releases every lock the owner held when the owner terminates' do
+      pages = %w[one two].map do |id|
+        registry.register(Lich::WebUI::Page.new(owner: owner, id: id, title: id) { text(content: id) })
+      end
+      pages.each { |page| attach(first_connection, page) }
+      pages.each { |page| runtime.refresh(page) }
+
+      expect(page_locks.keys).to include(*pages)
+
+      runtime.terminate_owner(owner)
+
+      expect(page_locks.keys).to be_empty
+    end
+  end
+
+  # refresh held a per-page lock across render and delivery; attach rendered
+  # and delivered outside it. The attachment is visible in ViewerStore before
+  # its first render lands, so a concurrent refresh could deliver generation 2
+  # and attach then overwrite it with 1.
+  it 'delivers the first render under the same lock refresh uses' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'ordering', title: 'Ordering') do
+      text(content: 'hi')
+    end)
+    held = Queue.new
+    observed = Queue.new
+    allow(runtime).to receive(:send_render).and_wrap_original do |original, *args|
+      observed << args.last
+      original.call(*args)
+    end
+
+    # Refresh cannot interleave: it must wait for the whole attach.
+    attacher = Thread.new { attach(first_connection, page); held << :done }
+    refresher = Thread.new { runtime.refresh(page) }
+    [attacher, refresher].each { |thread| thread.join(5) }
+
+    expect(held.pop).to eq(:done)
+    generations = first_connection.sent.filter_map { |m| m['generation'] }
+    expect(generations).to eq(generations.sort)
   end
 end

@@ -21,12 +21,21 @@ module Lich
         '/opt/google/chrome/google-chrome',
       ].freeze
 
+      # Set by the spec helper. A spec that shows a shim window without
+      # stubbing the opener used to spawn a real Chrome on the developer's
+      # desktop, pointed at 127.0.0.1/auth; every spec file had the stub, and
+      # one new describe block without it was enough. With this set, only an
+      # injected +spawn+ (a test double) may run; the real one is refused.
+      NO_BROWSER_ENV = 'LICH_WEBUI_NO_BROWSER'
+
       module_function
 
       def open(url, spawn: Process.method(:spawn), detach: Process.method(:detach), platform: RUBY_PLATFORM,
                browser_path: nil, chrome_path: nil, geometry: nil, on_exit: nil,
                on_start: nil, waitpid: Process.method(:waitpid),
                thread_factory: ->(&block) { Thread.new(&block) })
+        return false if browser_refused?(spawn)
+
         profile_dir = Dir.mktmpdir('lich-webui-browser-') if on_exit
         command = command_for(
           url, platform: platform, browser_path: browser_path || chrome_path,
@@ -46,6 +55,14 @@ module Lich
         false
       end
 
+      # True when a real process spawn is about to happen inside a run that
+      # forbade it. A test double for +spawn+ is always allowed through.
+      def browser_refused?(spawn)
+        return false if ENV[NO_BROWSER_ENV].to_s.empty?
+
+        spawn == Process.method(:spawn)
+      end
+
       def command_for(url, platform: RUBY_PLATFORM, browser_path: nil, chrome_path: nil, geometry: nil,
                       profile_dir: nil)
         executable = browser_path || chrome_path || app_browser_path(platform: platform)
@@ -59,6 +76,12 @@ module Lich
                             else
                               []
                             end
+        # The launch token rides in the command line, so for its single-use
+        # 60-second life it is readable by any other local user who can list
+        # processes (ps, /proc/<pid>/cmdline, the Windows process table).
+        # A shared multi-user desktop is outside the threat model; the
+        # token is one-shot and expires, and the session cookie it redeems
+        # never appears in argv.
         [executable, '--new-window', *profile_arguments, *geometry_arguments(geometry), "--app=#{url}"]
       end
 

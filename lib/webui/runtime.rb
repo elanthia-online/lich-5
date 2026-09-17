@@ -10,6 +10,13 @@ module Lich
     # Server-routed page attachment, viewer state, submission, and callback runtime.
     class Runtime
       EventContext = Data.define(:viewer_id, :page, :component, :event, :payload, :submission)
+      # What a browser page can do on its own. always_on_top and borderless
+      # belong to the window manager, not the page, and a CSS fade cannot make
+      # a window translucent -- what shows through is the browser's own
+      # background. On a host that can reach the real window (native Windows,
+      # through WindowPresentation) the first and third become true; the key
+      # set never changes, only the values, because the degradation walk reads
+      # every requested property out of this table.
       PRESENTATION_SUPPORT = {
         always_on_top: false, borderless: false, opacity: true, scrollbars: true,
       }.freeze
@@ -30,13 +37,38 @@ module Lich
         @degradations = {}.compare_by_identity
       end
 
+      # Memoised: the host's contribution is fixed for the life of the
+      # process, and this is read on every render. Two threads racing the
+      # first call build two equal frozen hashes and one wins; harmless.
       def presentation_support(_page = nil)
-        PRESENTATION_SUPPORT
+        @presentation_support ||= begin
+          host = WindowPresentation.support
+          host.empty? ? PRESENTATION_SUPPORT : PRESENTATION_SUPPORT.merge(host).freeze
+        end
       end
 
       def degradations(page)
         @degradation_mutex.synchronize { Array(@degradations[page]).map(&:dup).freeze }
       end
+
+      # Empties a sensitive input in every browser attached to the page. A
+      # password's value is write-only by contract, so a script's
+      # `entry.text = ""` has no property to push and the viewer kept seeing
+      # the rejected text it had typed; this is the only channel by which
+      # the field on screen can be made to match.
+      def clear_sensitive(page, cid)
+        @viewers.attachments_for(page).each do |attachment|
+          connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
+          next unless connection&.alive?
+
+          connection.send_text(JSON.generate(type: 'clear_sensitive', cids: [cid.to_s]))
+        end
+        nil
+      end
+
+      # Raised by stale! once it has already sent both halves of its answer,
+      # so handle does not send a second refusal on top.
+      class StaleGeneration < Protocol::Refusal; end
 
       def handle(connection, message)
         case message[:type]
@@ -44,16 +76,25 @@ module Lich
         when 'detach' then detach(connection, message)
         when 'event' then event(connection, message)
         end
+      rescue StaleGeneration => error
+        log(:warning, "WebUI event refusal=#{error.reason}")
+        :refused
       rescue Protocol::Refusal => error
         log(:warning, "WebUI event refusal=#{error.reason}")
         connection.send_text(
-          Protocol.refusal(reason: error.reason, message: 'Message refused', page: message[:page], cid: message[:cid])
+          Protocol.refusal(
+            reason: error.reason, message: 'Message refused',
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
+          )
         )
         :refused
       rescue Error => error
         log(:warning, "WebUI event refusal=#{error.class}")
         connection.send_text(
-          Protocol.refusal(reason: :contract, message: 'Message refused', page: message[:page], cid: message[:cid])
+          Protocol.refusal(
+            reason: :contract, message: 'Message refused',
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
+          )
         )
         :refused
       end
@@ -117,17 +158,36 @@ module Lich
         )
       end
 
+      # Serialised per page. A refresh_loop thread and a direct refresh from
+      # the script's commit could both run for the same page; renders are
+      # ordered by Page#render's own lock, but delivery was not, so an older
+      # render could go out after a newer one and the viewer kept the stale
+      # tree.
       def refresh(page)
-        page.bind_runtime(self)
-        render = validated_render(page)
-        @viewers.attachments_for(page).each do |attachment|
-          connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
-          next unless connection&.alive?
+        page_refresh_lock(page).synchronize do
+          page.bind_runtime(self)
+          render = validated_render(page)
+          @viewers.attachments_for(page).each do |attachment|
+            connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
+            next unless connection&.alive?
 
-          @viewers.deliver(attachment, render)
-          send_render(connection, attachment)
+            @viewers.deliver(attachment, render)
+            send_render(connection, attachment)
+          end
+          render.generation
         end
-        render.generation
+      end
+
+      def page_refresh_lock(page)
+        @refresh_mutex.synchronize { (@page_locks ||= {}.compare_by_identity)[page] ||= Mutex.new }
+      end
+
+      # A page's refresh lock outlives nothing: @refresh_state is already
+      # dropped when a page goes quiet, but the lock was kept for the life of
+      # the process, so every page a long session ever opened stayed reachable
+      # through it. Released where the page's other per-page state is.
+      def release_page_refresh_lock(page)
+        @refresh_mutex.synchronize { @page_locks&.delete(page) }
       end
 
       def terminate_owner(owner)
@@ -142,6 +202,7 @@ module Lich
         end
         @registry.unregister_owner(owner)
         @degradation_mutex.synchronize { pages.each { |page| @degradations.delete(page) } }
+        pages.each { |page| release_page_refresh_lock(page) }
         pages
       end
 
@@ -154,15 +215,28 @@ module Lich
         @viewers.destroy_page(page)
         @registry.unregister(page.owner, page.id)
         @degradation_mutex.synchronize { @degradations.delete(page) }
+        release_page_refresh_lock(page)
         page
       rescue Error
         nil
       end
 
-      def shutdown
+      # How long shutdown waits for the refresh threads, all together. A
+      # refresh thread blocked in a socket write to a browser that stopped
+      # reading used to hold shutdown for as long as the write did; the
+      # write is bounded now (Server::Connection::WRITE_TIMEOUT) and so is
+      # this, in case anything else ever parks one.
+      SHUTDOWN_BUDGET = 5.0
+
+      def shutdown(budget: SHUTDOWN_BUDGET)
         @dispatcher.shutdown
         threads = @refresh_mutex.synchronize { @refresh_state.values.filter_map { |state| state[:thread] } }
-        threads.each(&:join)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + budget
+        threads.each do |thread|
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          thread.join([remaining, 0].max)
+          thread.kill if thread.alive?
+        end
       end
 
       private
@@ -171,20 +245,29 @@ module Lich
         @connections_mutex.synchronize { @connections[connection.viewer_id] = connection }
         page = fetch_page(message[:page])
         page.bind_runtime(self)
-        attachment = @viewers.attach(
-          connection_id: connection.viewer_id, address: message[:page], page: page,
-          resume_token: message[:resume]
-        )
-        render = validated_render(page)
-        @viewers.deliver(attachment, render)
-        send_render(connection, attachment)
+        # Under the same per-page lock as refresh. The attachment becomes
+        # visible in ViewerStore before its first render has been delivered,
+        # so a refresh running concurrently could deliver generation 2 and
+        # then this thread would overwrite it with generation 1 -- stale
+        # controls right after opening or reconnecting a page, and nothing
+        # downstream rejects a generation that goes backwards.
+        attachment = nil
+        page_refresh_lock(page).synchronize do
+          attachment = @viewers.attach(
+            connection_id: connection.viewer_id, address: message[:page], page: page,
+            resume_token: message[:resume]
+          )
+          render = validated_render(page)
+          @viewers.deliver(attachment, render)
+          send_render(connection, attachment)
+        end
         enqueue_lifecycle(attachment, :attach)
         :attached
       end
 
       def detach(connection, message)
         attachment = fetch_attachment(connection, message[:page])
-        stale!(connection, attachment) unless message[:generation] == attachment.delivered_generation
+        stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
         enqueue_lifecycle(attachment, :close, reason: :user)
         enqueue_lifecycle(attachment, :detach)
         @viewers.close(connection_id: connection.viewer_id, address: message[:page])
@@ -193,14 +276,26 @@ module Lich
 
       def event(connection, message)
         attachment = fetch_attachment(connection, message[:page])
-        stale!(connection, attachment) unless message[:generation] == attachment.delivered_generation
+        stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
         component = find_component!(attachment, message[:cid])
         payload = @validator.validate_event!(
           component.type, message[:event], message[:payload] || {}, props: component.props,
           owner: owner_label(attachment.page.owner), page_id: attachment.page.id, cid: component.cid
         )
-        callback = attachment.render.bindings[[component.cid, message[:event].to_sym]]
-        raise Protocol::Refusal.new(:unbound, 'component event has no server binding') unless callback
+        # A page root has no per-cid binding channel: its bindings are routed
+        # to page.lifecycle_bindings, never to render.bindings. A key event
+        # aimed at the window (2.14) therefore resolves there, and rides the
+        # same non-coalescable lifecycle dispatch as attach/detach/close so
+        # distinct keys pressed in quick succession are never folded into one.
+        event_key = message[:event].to_sym
+        callback = attachment.render.bindings[[component.cid, event_key]]
+        unless callback
+          if page_input_event?(component, event_key) && attachment.page.lifecycle_bindings[event_key]
+            enqueue_lifecycle(attachment, event_key, payload)
+            return :queued
+          end
+          raise Protocol::Refusal.new(:unbound, 'component event has no server binding')
+        end
 
         snapshot = build_submission(attachment, component, message)
         @viewers.update(attachment, component, message[:event].to_sym, payload)
@@ -220,7 +315,17 @@ module Lich
         schedule_refresh(attachment.page) if viewer_state_event?(component, context.event)
         clear_sensitive_client(connection, snapshot)
         :queued
+      rescue Dispatcher::TerminatedError
+        # The owner is gone and its pages are being closed; the viewer will
+        # hear page_closed. Nothing to enqueue, nothing to keep.
+        snapshot&.discard_sensitive!
+        raise Protocol::Refusal.new(:viewer_gone, 'page owner has shut down')
       rescue Dispatcher::OverflowError
+        # The block's own `ensure` discards the snapshot's sensitive carriers
+        # -- but only once the block runs. An enqueue that overflows raises
+        # before it ever stores the block, so a typed password was left
+        # un-zeroed on the heap until the GC found it.
+        snapshot&.discard_sensitive!
         @viewers.close(connection_id: connection.viewer_id, address: message[:page])
         connection.close
         raise Protocol::Refusal.new(:overflow, 'viewer event queue overflow')
@@ -271,9 +376,23 @@ module Lich
         connection.send_text(JSON.generate(type: 'clear_sensitive', cids: sensitive_cids))
       end
 
-      def stale!(connection, attachment)
+      # A stale event is answered in two parts, in this order: the refusal,
+      # naming the event, and then the render that superseded it. The client
+      # keeps a record per event it sent; the refusal tells it which record
+      # to replay and the render is the state to replay against. It used to
+      # be the other way round, and a render makes the client forget every
+      # record for its page -- so the record was gone before the refusal
+      # that would have replayed it arrived, and a click landing during a
+      # refresh was lost with a generic warning instead of recovered.
+      def stale!(connection, attachment, message)
+        connection.send_text(
+          Protocol.refusal(
+            reason: :stale_generation, message: 'Message refused',
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
+          )
+        )
         send_render(connection, attachment)
-        raise Protocol::Refusal.new(:stale_generation, 'stale generation')
+        raise StaleGeneration.new(:stale_generation, 'stale generation')
       end
 
       def send_render(connection, attachment)
@@ -316,13 +435,30 @@ module Lich
         component.type == :password_input || component.props[:sensitive] == true
       end
 
+      # A lifecycle-flagged event a browser may originate on the page root
+      # (2.14: key). attach/detach/close are lifecycle too but the server
+      # raises them itself; a client-sent one that is lifecycle-flagged and
+      # aimed at a page is an input event routed through lifecycle_bindings.
+      def page_input_event?(component, event)
+        return false unless component.type == :page
+
+        schema = Contract.schema(:page)[:events][event]
+        schema && schema[:lifecycle] && !schema[:terminal]
+      end
+
       def viewer_state_event?(component, event)
         case [component.type, event]
         when [:toggle, :change], [:checkbox, :change], [:radio, :change],
              [:text_input, :change], [:textarea, :change], [:number_input, :change],
              [:slider, :change], [:select, :change], [:tabs, :select],
              [:expander, :toggle], [:split, :move], [:table, :selection_change],
-             [:table, :sort_change], [:table, :row_toggle]
+             [:table, :sort_change], [:table, :row_toggle],
+             # A check menu item's `active` is viewer-scoped like the rest, and
+             # the viewer's overlay copy shadows the shared prop from the first
+             # render on. Without a refresh scheduled here the owner's answer --
+             # including a script that refuses the change and sets it back --
+             # never reaches the screen, so the tick never moved.
+             [:menu_item, :change]
           true
         else
           false
@@ -357,6 +493,12 @@ module Lich
                     else []
                     end
           sources.each do |source|
+            # An empty src is an image with nothing to show yet -- a bare
+            # Gtk::Image.new, a cleared one, or a file that produced no
+            # source. It references nothing, so there is nothing to check;
+            # refusing it took the whole page down for one blank widget.
+            next if source.empty?
+            next if inline_image_source?(source)
             next if @file_service&.resolve_url(source)
 
             raise Error.new(
@@ -371,10 +513,34 @@ module Lich
         render
       end
 
+      # A base64 data: image is self-contained -- it references no server
+      # resource to register -- and the page's CSP already allows it
+      # (img-src 'self' data:). The shim builds these from Cairo surfaces
+      # that have no file: map's room marker, tag markers and note pins.
+      # Matched strictly so nothing but an inline PNG/JPEG/GIF/WebP passes:
+      # a base64 image media type, then a base64 body -- whole quads, then
+      # at most one padded tail, so the length is always a multiple of four.
+      # Anchored and linear: each quad is fixed-width, so there is nothing
+      # for the engine to backtrack over.
+      INLINE_IMAGE = %r{
+        \Adata:image/(?:png|jpeg|gif|webp);base64,
+        (?:[A-Za-z0-9+/]{4})*
+        (?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?\z
+      }x
+
+      def inline_image_source?(source)
+        source.is_a?(String) && INLINE_IMAGE.match?(source)
+      end
+
       def record_presentation_degradations(page, render)
         requested = render.facilities[:presentation] || {}
+        supported = presentation_support(page)
         refusals = requested.each_key.filter_map do |property|
-          next if PRESENTATION_SUPPORT.fetch(property)
+          # A property this table has never heard of is not a refusal: a bare
+          # fetch here would raise out of validated_render, which runs on both
+          # attach and refresh, and take down every page carrying a
+          # presentation facility on every platform.
+          next if supported.fetch(property, true)
 
           {
             facility: :presentation, property: property,

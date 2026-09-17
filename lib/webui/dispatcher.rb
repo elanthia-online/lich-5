@@ -16,6 +16,7 @@ module Lich
 
       class OverflowError < Error; end
       class ReentryError < Error; end
+      class TerminatedError < Error; end
 
       class OwnerState
         attr_accessor :running, :current
@@ -36,14 +37,24 @@ module Lich
         @logger = logger || proc { |_level, _message| }
         @thread_factory = thread_factory || ->(&block) { Thread.new(&block) }
         @owners = {}.compare_by_identity
+        # Owners that have been shut down. Weak, so a dead script's object is
+        # not kept alive by the record that it died. Checked before an owner
+        # state is looked up, because owner_state creates one on demand: a
+        # late enqueue for a shut-down owner -- a browser-exit callback, a
+        # timer -- used to start a fresh worker for it, running beside the
+        # one still blocked in the callback shutdown timed out waiting for.
+        @terminated = ObjectSpace::WeakKeyMap.new
         @mutex = Mutex.new
       end
 
       def enqueue(owner:, page_id:, viewer_id:, cid:, event:, coalescable:, &callable)
         raise ArgumentError, 'owner is required' unless owner
         raise ArgumentError, 'callback block is required' unless callable
-
-        state = owner_state(owner)
+        # The tombstone check and the state lookup are one critical section:
+        # done as two, a shutdown could mark the owner terminal and drop its
+        # state between them, and the lookup then created a fresh worker for
+        # a dead owner.
+        state = owner_state(owner, page_id: page_id, cid: cid)
         queued = Event.new(owner, page_id, viewer_id, cid, event, coalescable, callable)
         state.mutex.synchronize do
           raise Error, 'owner dispatcher is terminated' unless state.running
@@ -59,7 +70,12 @@ module Lich
       end
 
       def shutdown_owner(owner)
-        state = @mutex.synchronize { @owners.delete(owner) }
+        # Marked terminal before the state goes, under the same lock enqueue
+        # checks it under, so no enqueue can slip in between and revive it.
+        state = @mutex.synchronize do
+          @terminated[owner] = true
+          @owners.delete(owner)
+        end
         return false unless state
 
         state.mutex.synchronize do
@@ -79,13 +95,15 @@ module Lich
         owners.each { |owner| shutdown_owner(owner) }
       end
 
+      # Always refused: the dispatcher provides no synchronous wait at all.
+      # Whether the caller is the page's own callback only changes the
+      # message, so a script author can tell a deadlock they nearly wrote
+      # from a wait they simply cannot have.
       def await(page_id)
         context = Thread.current.thread_variable_get(THREAD_CONTEXT_KEY)
-        if context&.page_id == page_id
-          raise ReentryError.new('synchronous event re-entry is refused', page_id: page_id)
-        end
-
-        raise ReentryError.new('dispatcher does not provide synchronous event waits', page_id: page_id)
+        message = +'synchronous event waits are refused'
+        message << "; this is a re-entry from the page's own callback" if context&.page_id == page_id
+        raise ReentryError.new(message, page_id: page_id)
       end
 
       def current_context
@@ -94,8 +112,16 @@ module Lich
 
       private
 
-      def owner_state(owner)
+      # The owner's worker state, created on first use. Refused, under the
+      # same lock, for an owner that has been shut down: creating a state for
+      # one would start a new worker beside whatever its old one is still
+      # finishing.
+      def owner_state(owner, page_id: nil, cid: nil)
         @mutex.synchronize do
+          if @terminated.key?(owner)
+            raise TerminatedError.new('owner has been shut down', owner: owner_label(owner), page_id: page_id, cid: cid)
+          end
+
           @owners[owner] ||= begin
             state = OwnerState.new
             state.thread = @thread_factory.call { run_owner(state) }
@@ -129,33 +155,35 @@ module Lich
       def coalesce_last!(events, queued)
         last = events.last
         return false unless last&.coalescable
-        return false unless last.page_id == queued.page_id && last.cid == queued.cid && last.event == queued.event
+        # Per viewer: two viewers editing the same control are two events,
+        # and folding them together dropped one viewer's update.
+        return false unless last.page_id == queued.page_id && last.cid == queued.cid &&
+                            last.event == queued.event && last.viewer_id == queued.viewer_id
 
         events[-1] = queued
         true
       end
 
+      # Both counts are taken once and then kept current as events are
+      # evicted; recounting the queue on every pass made a full eviction
+      # walk quadratic in the queue length.
       def enforce_bounds!(events, queued)
-        while viewer_count(events, queued.viewer_id) >= VIEWER_LIMIT || page_count(events, queued.page_id) >= PAGE_LIMIT
+        viewers = events.count { |event| event.viewer_id == queued.viewer_id }
+        pages = events.count { |event| event.page_id == queued.page_id }
+        while viewers >= VIEWER_LIMIT || pages >= PAGE_LIMIT
           index = events.index(&:coalescable)
           break unless index
 
-          events.delete_at(index)
+          evicted = events.delete_at(index)
+          viewers -= 1 if evicted.viewer_id == queued.viewer_id
+          pages -= 1 if evicted.page_id == queued.page_id
         end
-        return if viewer_count(events, queued.viewer_id) < VIEWER_LIMIT && page_count(events, queued.page_id) < PAGE_LIMIT
+        return if viewers < VIEWER_LIMIT && pages < PAGE_LIMIT
 
         raise OverflowError.new(
           'WebUI event queue overflow', owner: owner_label(queued.owner),
           page_id: queued.page_id, cid: queued.cid, field: queued.event
         )
-      end
-
-      def viewer_count(events, viewer_id)
-        events.count { |event| event.viewer_id == viewer_id }
-      end
-
-      def page_count(events, page_id)
-        events.count { |event| event.page_id == page_id }
       end
 
       def owner_label(owner)

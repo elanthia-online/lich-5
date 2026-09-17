@@ -3,6 +3,8 @@
 require_relative 'webui/contract'
 require_relative 'webui/adapter'
 require_relative 'webui/browser_launcher'
+require_relative 'webui/window_presentation'
+require_relative 'webui/presented_window'
 require_relative 'webui/dispatcher'
 require_relative 'webui/errors'
 require_relative 'webui/page'
@@ -49,8 +51,15 @@ module Lich
         service.launch_url(page: page)
       end
 
-      def open(page: nil)
-        BrowserLauncher.open(launch_url(page: page))
+      # Opens a browser window on +page+. With a +presentation+ (a callable
+      # answering `always_on_top`/`opacity`/`borderless`), the OS window is
+      # found and dressed accordingly and a PresentedWindow is returned,
+      # whose `apply` re-reads the wishes; without one, true or false.
+      def open(page: nil, presentation: nil, geometry: nil, title: nil)
+        url = launch_url(page: page)
+        return BrowserLauncher.open(url, geometry: geometry) unless presentation
+
+        PresentedWindow.open(url, presentation: presentation, geometry: geometry, title: title)
       end
 
       def refresh(page)

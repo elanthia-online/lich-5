@@ -50,6 +50,23 @@ RSpec.describe Lich::WebUI::Server do
     end.to raise_error(ArgumentError, /must be loopback/)
   end
 
+  it 'rebinds the same port after its accept loop is killed out from under it' do
+    accept_threads = []
+    server = described_class.new(
+      assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {},
+      thread_factory: ->(*args, &block) { Thread.new(*args, &block).tap { |t| accept_threads << t if args.empty? } }
+    ).start
+    port = server.port
+    accept_threads.first.kill.join
+    expect(server.running?).to be(false)
+
+    expect { server.start }.not_to raise_error
+    expect(server.port).to eq(port)
+    expect(server.running?).to be(true)
+  ensure
+    server&.stop
+  end
+
   it 'uses an ephemeral loopback port and authenticates through a one-shot clean redirect', security_id: 'sec-auth-fallback' do
     logs = []
     server = build_server(@assets_dir, logs: logs).start
@@ -82,6 +99,26 @@ RSpec.describe Lich::WebUI::Server do
     server&.stop
   end
 
+  # A browser keys cookies by host and ignores the port. Two Lich sessions
+  # on 127.0.0.1 both setting `lich_webui` overwrote each other's token, and
+  # the first session's next request was refused with 403 (reviewed 2026-09-17,
+  # reproduced in real Chrome). The cookie name carries the port now, so the
+  # jar holds both.
+  it 'names its cookie after its port so two servers share one browser profile' do
+    first = build_server(@assets_dir).start
+    second = build_server(@assets_dir).start
+    _uri, _response, first_cookie = authenticate(first)
+    _uri, _response, second_cookie = authenticate(second)
+    expect(first_cookie).to start_with("lich_webui_#{first.port}=")
+    expect(second_cookie).to start_with("lich_webui_#{second.port}=")
+    jar = "#{first_cookie}; #{second_cookie}"
+    expect(request(first, '/', 'Cookie' => jar, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate')).to start_with('HTTP/1.1 200')
+    expect(request(second, '/', 'Cookie' => jar, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate')).to start_with('HTTP/1.1 200')
+  ensure
+    first&.stop
+    second&.stop
+  end
+
   it 'rejects a session cookie from a prior server session' do
     first = build_server(@assets_dir).start
     _uri, _response, old_cookie = authenticate(first)
@@ -92,6 +129,33 @@ RSpec.describe Lich::WebUI::Server do
   ensure
     first&.stop
     second&.stop
+  end
+
+  # A served file went out through an unbounded File.binread: a script that
+  # registered a root holding one multi-gigabyte file handed the whole thing
+  # to a page's <img> and to Lich's heap. The size is checked before the
+  # read, so an oversized file costs a stat and a 413, not the memory.
+  it 'refuses a served file larger than MAX_FILE_BYTES with 413 before reading it' do
+    served = File.join(@assets_dir, 'huge.png')
+    File.binwrite(served, 'not really a png')
+    file_service = Class.new do
+      def initialize(path) = @path = path
+      def resolve(_alias, _relative) = [@path, 'image/png', 'owner']
+    end.new(served)
+    server = described_class.new(
+      assets_dir: @assets_dir, pages_provider: -> { [] }, message_handler: proc {}, file_service: file_service
+    ).start
+    _uri, _response, cookie = authenticate(server)
+    allow(File).to receive(:size).and_call_original
+    allow(File).to receive(:size).with(served).and_return(described_class::MAX_FILE_BYTES + 1)
+    expect(File).not_to receive(:binread).with(served)
+
+    response = request(server, '/files/root/huge.png', 'Cookie' => cookie, 'Sec-Fetch-Site' => 'same-origin')
+
+    expect(described_class::MAX_FILE_BYTES).to eq(32 * 1024 * 1024)
+    expect(response).to start_with('HTTP/1.1 413 Payload Too Large')
+  ensure
+    server&.stop
   end
 
   it 'authenticates WebSocket upgrade, emits hello, and delivers strict messages' do
@@ -122,5 +186,79 @@ RSpec.describe Lich::WebUI::Server do
   ensure
     socket&.close
     server&.stop
+  end
+
+  # Runtime#refresh writes on the thread that asked for it -- in the shim, a
+  # script's own session thread -- and a browser that stopped reading left
+  # that thread in IO#write with no deadline. The write is bounded now.
+  it 'declares a connection dead instead of blocking forever on a peer that stops reading' do
+    listener = TCPServer.new('127.0.0.1', 0)
+    client = TCPSocket.new('127.0.0.1', listener.addr[1])
+    accepted = listener.accept # never read from: the peer's buffers fill
+    connection = Lich::WebUI::Server::Connection.new(client, write_timeout: 0.2)
+    payload = 'x' * (1024 * 1024)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    results = Array.new(64) { connection.send_text(payload) }
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+    expect(results).to include(false)
+    expect(results.drop_while { |ok| ok }).to all(be(false))
+    expect(connection).not_to be_alive
+    expect(elapsed).to be < 5.0
+  ensure
+    [client, accepted, listener].each { |io| io&.close }
+  end
+
+  # The timeout used to bound each wait for a writable socket, not the
+  # write: a peer draining a byte at a time, each within the timeout, kept a
+  # render write alive for as long as it liked (reviewed 2026-09-17: a 20ms
+  # budget took 249ms). One deadline covers the whole write now, and the
+  # wait for the write lock counts against it too.
+  it 'gives up on the whole write at its deadline, however slowly the peer drains' do
+    fake = Object.new
+    calls = 0
+    fake.define_singleton_method(:write_nonblock) do |bytes, **_|
+      calls += 1
+      calls.odd? ? :wait_writable : [1, bytes.bytesize].min
+    end
+    allow(IO).to receive(:select) do |_read, write, _error, timeout|
+      sleep([timeout, 0.02].min * 0.75)
+      [nil, write, nil]
+    end
+    connection = Lich::WebUI::Server::Connection.new(fake, write_timeout: 0.05)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = connection.send_text('x' * 200)
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    expect(result).to be(false)
+    expect(connection).not_to be_alive
+    expect(elapsed).to be < 0.5
+  end
+
+  it 'gives up on a write queued behind a stalled one at the same deadline' do
+    listener = TCPServer.new('127.0.0.1', 0)
+    client = TCPSocket.new('127.0.0.1', listener.addr[1])
+    accepted = listener.accept
+    connection = Lich::WebUI::Server::Connection.new(client, write_timeout: 0.2)
+    # The stall itself, held for longer than the budget: a writer parked in
+    # select inside the lock looks exactly like this to the writer behind it.
+    # Held directly rather than produced with a flood of writes, because how
+    # many writes it takes to fill a loopback socket differs by platform and
+    # the queued write used to slip in between two of them.
+    lock = connection.instance_variable_get(:@write_mutex)
+    held = Queue.new
+    release = Queue.new
+    holder = Thread.new { lock.synchronize { held << true; release.pop } }
+    held.pop
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    queued = connection.send_text('behind')
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    release << true
+    holder.join
+    expect(queued).to be(false)
+    expect(connection).not_to be_alive
+    expect(elapsed).to be_between(0.2, 1.0)
+  ensure
+    [client, accepted, listener].each { |io| io&.close }
   end
 end

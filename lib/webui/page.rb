@@ -38,7 +38,15 @@ module Lich
         @last_render = nil
         @runtime = nil
         @shared_values = {}
+        # Set by the modal coordinator. A viewer scoped to one page needs to
+        # know that another page is a dialog its own script raised, and the
+        # descriptor is broadcast before the page has rendered, so this
+        # cannot be read back out of the tree.
+        @modal = false
       end
+
+      # Whether this page is a modal dialog rather than a script window.
+      attr_accessor :modal
 
       def generation
         @mutex.synchronize { @generation }

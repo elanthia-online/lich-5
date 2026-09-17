@@ -4,6 +4,29 @@ require_relative '../../spec_helper'
 require 'webui'
 
 RSpec.describe Lich::WebUI::BrowserLauncher do
+  # A spec that showed a shim window without stubbing the opener spawned a
+  # real Chrome on the developer's desktop. Under the spec helper's
+  # LICH_WEBUI_NO_BROWSER the real Process.spawn is refused; a double is not.
+  it 'refuses the real spawn while the no-browser guard is set, and only that' do
+    expect(ENV.fetch('LICH_WEBUI_NO_BROWSER', nil)).to eq('1')
+    expect(Process).not_to receive(:spawn)
+    expect(described_class.open('http://127.0.0.1:1234/auth?token=x', platform: 'darwin',
+                                                                      browser_path: '/nonexistent/chrome')).to be(false)
+
+    calls = 0
+    double = ->(*_arguments, **_options) { calls += 1; 7 }
+    expect(described_class.open('http://127.0.0.1:1234/', spawn: double, detach: ->(*) {}, platform: 'darwin',
+                                                          browser_path: '/nonexistent/chrome')).to be(true)
+    expect(calls).to eq(1)
+
+    saved = ENV.delete('LICH_WEBUI_NO_BROWSER')
+    begin
+      expect(described_class.browser_refused?(Process.method(:spawn))).to be(false)
+    ensure
+      ENV['LICH_WEBUI_NO_BROWSER'] = saved
+    end
+  end
+
   it 'opens macOS URLs in a new Google Chrome app window without invoking a shell' do
     calls = []
     spawn = lambda do |*arguments, **options|

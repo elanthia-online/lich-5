@@ -12,8 +12,16 @@ module Lich
   module WebUI
     # Authenticated loopback-only HTTP/WebSocket service for native WebUI pages.
     class Server
+      # The session cookie's name carries the port, because a browser keys
+      # cookies by host and ignores the port: two Lich sessions on
+      # 127.0.0.1, both setting `lich_webui`, overwrote each other's token
+      # and the first session's next authenticated request was refused.
       COOKIE_NAME = 'lich_webui'
       MAX_HEADER_BYTES = 8192
+      # A served file is read whole into memory before it goes out. Anything
+      # a page could sensibly show fits in this; anything larger is refused
+      # with a stat, not a read.
+      MAX_FILE_BYTES = 32 * 1024 * 1024
       READ_TIMEOUT = 5
       WS_POLL_INTERVAL = 0.25
       LAUNCH_TOKEN_LIFETIME = 60
@@ -65,6 +73,14 @@ module Lich
         @mutex.synchronize do
           return self if running_locked?
 
+          # A listener whose accept loop died (killed thread) still holds the
+          # port; release it before binding again.
+          begin
+            @server&.close
+          rescue IOError, SystemCallError
+            nil
+          end
+          @server = nil
           @stopping = false
           @server = @server_factory.call(host, port)
           bound = @server.addr
@@ -135,12 +151,20 @@ module Lich
 
       # Authenticated WebSocket connection. The viewer id is generated server-side.
       class Connection
+        # How long a write may wait for the peer to drain its socket before the
+        # connection is declared dead. Runtime#refresh writes synchronously on
+        # whatever thread asked for it -- in the shim that is a script's own
+        # session thread -- so a browser that stopped reading (a suspended
+        # laptop, a frozen tab) used to park that script forever.
+        WRITE_TIMEOUT = 10.0
+
         attr_reader :socket, :viewer_id
 
-        def initialize(socket)
+        def initialize(socket, write_timeout: WRITE_TIMEOUT)
           @socket = socket
           @viewer_id = "viewer-#{SecureRandom.hex(16)}"
           @write_mutex = Mutex.new
+          @write_timeout = write_timeout
           @alive = true
         end
 
@@ -168,11 +192,66 @@ module Lich
         def write(bytes)
           return false unless @alive
 
-          @write_mutex.synchronize { @socket.write(bytes) }
-          true
+          # One deadline for the whole operation, taken before waiting for the
+          # writer's turn: a write queued behind a stalled one is stalled too,
+          # and the budget is the caller's, not each wait's.
+          deadline = monotonic_time + @write_timeout
+          return give_up! unless acquire_write_lock(deadline)
+
+          begin
+            write_within_deadline(bytes, deadline)
+          ensure
+            @write_mutex.unlock
+          end
         rescue IOError, SystemCallError
           @alive = false
           false
+        end
+
+        # Never blocks past the deadline: a full send buffer waits on select
+        # for only what is left of the budget, so a peer that drains slowly
+        # cannot keep a large render write alive by making progress a byte at
+        # a time. The connection is dead when the budget runs out.
+        def write_within_deadline(bytes, deadline)
+          remaining = bytes.b
+          until remaining.empty?
+            written = begin
+              @socket.write_nonblock(remaining, exception: false)
+            rescue IO::WaitWritable
+              :wait_writable
+            end
+            if written == :wait_writable
+              budget = deadline - monotonic_time
+              return give_up! if budget <= 0 || !IO.select(nil, [@socket], nil, budget)
+
+              next
+            end
+            remaining = remaining.byteslice(written, remaining.bytesize - written)
+          end
+          true
+        end
+
+        # Mutex has no timed lock; the wait for it is polled against the
+        # deadline so that a writer stuck behind a stalled peer's write gives
+        # up on schedule too instead of queueing forever.
+        LOCK_POLL_INTERVAL = 0.005
+
+        def acquire_write_lock(deadline)
+          until @write_mutex.try_lock
+            return false if monotonic_time >= deadline
+
+            sleep(LOCK_POLL_INTERVAL)
+          end
+          true
+        end
+
+        def give_up!
+          @alive = false
+          false
+        end
+
+        def monotonic_time
+          Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
       end
 
@@ -287,7 +366,7 @@ module Lich
           socket, 302, 'Found', '',
           extra_headers: [
             "Location: #{target}",
-            "Set-Cookie: #{COOKIE_NAME}=#{@session_token}; HttpOnly; SameSite=Strict; Path=/",
+            "Set-Cookie: #{cookie_name}=#{@session_token}; HttpOnly; SameSite=Strict; Path=/",
             'Referrer-Policy: no-referrer',
           ]
         )
@@ -323,6 +402,8 @@ module Lich
         return respond_error(socket, 404, 'Not Found') unless resolved
 
         path, content_type, = resolved
+        return respond_error(socket, 413, 'Payload Too Large') if File.size(path) > MAX_FILE_BYTES
+
         respond(socket, 200, 'OK', File.binread(path), content_type: content_type, cache_control: 'private, max-age=60')
       end
 
@@ -399,9 +480,14 @@ module Lich
       def cookie_token(request)
         request[:headers]['cookie'].to_s.split(';').each do |pair|
           name, value = pair.split('=', 2)
-          return value.to_s.strip if name.to_s.strip == COOKIE_NAME
+          return value.to_s.strip if name.to_s.strip == cookie_name
         end
         nil
+      end
+
+      # Per server instance: see COOKIE_NAME.
+      def cookie_name
+        "#{COOKIE_NAME}_#{port}"
       end
 
       def host_allowed?(request)
@@ -434,10 +520,6 @@ module Lich
         return mode == 'navigate' if request[:path] == '/auth' || request[:path] == '/'
 
         %w[no-cors same-origin cors].include?(mode)
-      end
-
-      def websocket_upgrade?(request)
-        request && request[:path] == '/ws' && request[:headers]['upgrade'].to_s.casecmp('websocket').zero?
       end
 
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',

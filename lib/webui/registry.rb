@@ -80,10 +80,18 @@ module Lich
         raise Error.new('page address is not registered', page_id: address)
       end
 
+      # `owner` and `modal` let a window opened for one page recognise a
+      # modal its own script raised. Without them a page-scoped window
+      # ignores every other page, so a dialog opened from a script's window
+      # never appeared while the script sat blocked waiting for an answer.
+      #
       def descriptors
         @mutex.synchronize do
           @addresses.map do |address, page|
-            { address: address, title: page.title, contract_version: Contract::VERSION }
+            {
+              address: address, title: page.title, contract_version: Contract::VERSION,
+              owner: owner_label(page.owner), modal: page.modal == true
+            }
           end
         end
       end

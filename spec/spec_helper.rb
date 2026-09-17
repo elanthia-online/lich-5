@@ -33,6 +33,11 @@
 # =============================================================================
 
 require 'rspec'
+# No spec may open a real browser. A shim window shown without a stubbed
+# opener, or a launcher spec without an injected spawn, used to pop Chrome on
+# the developer's desktop at 127.0.0.1/auth. Lich::WebUI::BrowserLauncher
+# refuses the real Process.spawn while this is set; injected doubles still run.
+ENV['LICH_WEBUI_NO_BROWSER'] = '1'
 require 'date'
 require 'tmpdir'
 require 'ostruct'

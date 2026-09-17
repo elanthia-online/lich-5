@@ -9,6 +9,10 @@ module Lich
     module WebSocket
       HANDSHAKE_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
       MAX_PAYLOAD_BYTES = 65_536
+      # Longest a reader waits for the next byte of a frame it has started.
+      # Readable means one byte, not a whole frame, so a sender that stops
+      # mid-frame is cut off here rather than parking the connection thread.
+      READ_TIMEOUT = 30
 
       OPCODE_CONTINUATION = 0x0
       OPCODE_TEXT = 0x1
@@ -89,8 +93,8 @@ module Lich
         head << mask_key << unmask(data, mask_key)
       end
 
-      def read_frame(io, require_mask: true)
-        head = read_exact(io, 2)
+      def read_frame(io, require_mask: true, read_timeout: READ_TIMEOUT)
+        head = read_exact(io, 2, read_timeout)
         return nil unless head
 
         byte1, byte2 = head.unpack('CC')
@@ -105,13 +109,13 @@ module Lich
         raise ProtocolError, 'unsupported opcode' unless ALLOWED_OPCODES.include?(opcode)
         raise ProtocolError, 'client frames must be masked' if require_mask && !masked
 
-        length = read_exact!(io, 2).unpack1('n') if length == 126
-        length = read_exact!(io, 8).unpack1('Q>') if length == 127
+        length = read_exact!(io, 2, read_timeout).unpack1('n') if length == 126
+        length = read_exact!(io, 8, read_timeout).unpack1('Q>') if length == 127
         raise ProtocolError, "frame exceeds #{MAX_PAYLOAD_BYTES} bytes" if length > MAX_PAYLOAD_BYTES
         raise ProtocolError, 'control frame exceeds 125 bytes' if opcode >= OPCODE_CLOSE && length > 125
 
-        mask_key = read_exact!(io, 4) if masked
-        payload = length.zero? ? +'' : read_exact!(io, length)
+        mask_key = read_exact!(io, 4, read_timeout) if masked
+        payload = length.zero? ? +'' : read_exact!(io, length, read_timeout)
         payload = unmask(payload, mask_key) if masked
         if opcode == OPCODE_TEXT
           payload.force_encoding(Encoding::UTF_8)
@@ -125,10 +129,24 @@ module Lich
         payload.bytes.each_with_index.map { |byte, index| byte ^ mask[index % 4] }.pack('C*')
       end
 
-      def read_exact(io, count)
+      # Exactly +count+ bytes, nil at a clean end of stream before the first
+      # byte, ProtocolError at an end or a stall after it. A real IO is read
+      # non-blocking under select so a stalled sender is bounded by +timeout+;
+      # an in-memory stream (specs read from StringIO) has nothing to select
+      # on and is read directly.
+      def read_exact(io, count, timeout)
         buffer = +''
+        selectable = io.respond_to?(:to_io)
         while buffer.bytesize < count
-          chunk = io.read(count - buffer.bytesize)
+          wanted = count - buffer.bytesize
+          if selectable
+            raise ProtocolError, 'stream stalled mid-frame' unless IO.select([io], nil, nil, timeout)
+
+            chunk = io.read_nonblock(wanted, exception: false)
+            next if chunk == :wait_readable
+          else
+            chunk = io.read(wanted)
+          end
           return buffer.empty? ? nil : raise(ProtocolError, 'stream ended mid-frame') if chunk.nil? || chunk.empty?
 
           buffer << chunk
@@ -137,8 +155,8 @@ module Lich
       end
       private_class_method :read_exact
 
-      def read_exact!(io, count)
-        read_exact(io, count) || raise(ProtocolError, 'stream ended mid-frame')
+      def read_exact!(io, count, timeout)
+        read_exact(io, count, timeout) || raise(ProtocolError, 'stream ended mid-frame')
       end
       private_class_method :read_exact!
     end
