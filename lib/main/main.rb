@@ -194,12 +194,13 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  # A launcher opens only when no session was asked for. Saga starts one as
-  # `<file>.sal --gtk --without-frontend --detachable-client=N --saga`: the
-  # toolkit flag beside a .sal names how to run that session, not a wish
-  # for the launcher, and opening one there pre-empted the login (Tysong,
-  # 2026-09-17). --login is handled above.
-  elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || (@argv_options[:launcher] && @argv_options[:sal].nil?))
+  # A launcher opens when the command line asks for nothing else (empty, or
+  # launcher flags only: see LauncherChoice.launcher_only?) or for --gui. A
+  # launcher flag beside anything else -- Saga's `<file>.sal --gtk ...`, a
+  # `--game=HOST:PORT`, a force mode -- selects the toolkit for that
+  # session and connects; reading it as a wish for the launcher pre-empted
+  # every one of those logins (Tysong, 2026-09-17). --login is handled above.
+  elsif Lich.launcher == :webui && (@argv_options[:gui] || Lich::LauncherChoice.launcher_only?(ARGV))
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
     Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     webui_launcher = Lich::Common::WebUILauncher.new(
@@ -214,10 +215,9 @@ reconnect_if_wanted = proc {
     # `next` exits the enclosing `@main_thread = Thread.new {` block (line 53),
     # ending the thread so lich.rbw's @main_thread.join returns; it is not loop control.
     next unless @launch_data
-  # `--gtk` alone is the advertised way back to the native launcher; it
-  # must open it, not fall through to a headless start because ARGV is no
-  # longer empty (review 2026-09-17, R1).
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or (@argv_options[:launcher] == :gtk and @argv_options[:sal].nil?))
+  # The same rule for the native launcher: `--gtk` alone opens it (review
+  # 2026-09-17, R1), `--gtk` beside a session does not.
+  elsif defined?(Gtk) and (@argv_options[:gui] or Lich::LauncherChoice.launcher_only?(ARGV))
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end

@@ -31,6 +31,20 @@ module Lich
 
     module_function
 
+    # Whether the command line asks for nothing but a launcher: empty, or
+    # launcher flags only. A launcher flag selects which launcher, it does
+    # not ask for one; `lich --gtk` alone is the advertised way back to the
+    # native launcher (review 2026-09-17, R1), but the same flag beside a
+    # .sal, a `--game=HOST:PORT` or a force mode names how to run that
+    # session, and opening a launcher there pre-empted the login (Tysong,
+    # 2026-09-17: Saga starts `<file>.sal --gtk --without-frontend ...`).
+    #
+    # @param argv [Array<String>] the command line
+    # @return [Boolean] true for an empty line or one made only of launcher flags
+    def launcher_only?(argv)
+      Array(argv).all? { |argument| FLAGS.key?(argument.to_s.downcase) }
+    end
+
     # @param argv [Array<String>] the command line
     # @param setting [#call] reads the persisted choice; nil when there is none
     # @param default [Symbol]
