@@ -483,7 +483,7 @@ RSpec.describe 'WebUI browser assets' do
   # content is larger. The harness cannot measure content in jsdom, so the
   # arithmetic is pinned here; the harness pins the geometry-only path.
   it 'opens a window at the larger of its declared geometry and its natural size, and never lets a grid group spill' do
-    expect(javascript).to include('const natural = naturalPageSize() || { width: 0, height: 0 };')
+    expect(javascript).to include('const natural = measured || { width: 0, height: 0 };')
     expect(javascript).to include('width: Math.max(geometry.width > 0 ? geometry.width : 0, natural.width),')
     expect(javascript).to include('height: Math.max(geometry.height > 0 ? geometry.height : 0, natural.height),')
     css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
