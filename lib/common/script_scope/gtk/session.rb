@@ -222,6 +222,16 @@ module Lich
             # Test seam: replace the browser launcher.
             attr_accessor :browser_open
 
+            # How long a detached viewer has to come back before its window
+            # counts as closed: the client dials back on a 250ms backoff
+            # capped at 5s, so a live browser is back well inside it.
+            DETACH_GRACE = 5.0
+            attr_writer :detach_grace
+
+            def detach_grace
+              @detach_grace || DETACH_GRACE
+            end
+
             # Session for the calling context: the one whose thread we are on,
             # else the one owned by the current script, else a shared session
             # for widgets created outside any script.
@@ -302,6 +312,7 @@ module Lich
             # every read insert, so each page ever asked about stayed alive
             # here until close_window happened to delete it.
             @viewers = {}
+            @detached = {} # page => { viewer_id => grace token }
             @browsers = {} # window => pid
             @window_handles = {} # window => OS window handle, once found
             @mutex = Mutex.new
@@ -779,7 +790,7 @@ module Lich
             return if window.lifecycle_bound?
 
             adapter.bind(handle, :attach, proc { |context| admit_viewer(page, context.viewer_id) })
-            adapter.bind(handle, :detach, proc { |context| forget_viewer(page, context.viewer_id) })
+            adapter.bind(handle, :detach, proc { |context| viewer_detached(window, page, context.viewer_id) })
             adapter.bind(handle, :close, proc { |_context| enqueue { window.viewer_closed } })
             # 2.14: a window that connected key-press-event receives keys on the
             # page root. Bound here beside the other window signals because the
@@ -886,6 +897,7 @@ module Lich
           def admit_viewer(page, viewer_id)
             return unless page && viewer_id
 
+            @mutex.synchronize { @detached[page]&.delete(viewer_id.to_s) }
             live = service.runtime.viewer_ids(page)
             if live.empty? || live.first == viewer_id.to_s
               note_viewer(page, viewer_id)
@@ -903,6 +915,28 @@ module Lich
 
           def forget_viewer(page, viewer_id)
             @mutex.synchronize { @viewers[page]&.delete(viewer_id.to_s) }
+          end
+
+          # A viewer's socket going away arrives as `detach`, which the
+          # runtime also emits for a transient loss the client dials back
+          # from. With no process of ours to watch (D1), closing the browser
+          # window is only ever a detach -- and a script whose window was
+          # closed used to run on, never told. The window counts as closed
+          # when no viewer has come back within the grace (the client's
+          # maximum reconnect backoff), the same rule the launcher applies.
+          def viewer_detached(window, page, viewer_id)
+            forget_viewer(page, viewer_id)
+            token = Object.new
+            @mutex.synchronize { (@detached[page] ||= {})[viewer_id.to_s] = token }
+            grace = self.class.detach_grace
+            Thread.new do
+              sleep(grace)
+              expired = @mutex.synchronize do
+                @detached[page]&.[](viewer_id.to_s).equal?(token) && @detached[page].delete(viewer_id.to_s)
+              end
+              enqueue { window.viewer_closed } if expired && !@closed && viewers_for(page).empty?
+            end
+            nil
           end
 
           def viewers_for(page)

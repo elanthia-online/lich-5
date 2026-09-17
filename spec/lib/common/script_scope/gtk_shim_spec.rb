@@ -340,6 +340,47 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(session.send(:viewers_for, page).length).to eq(1)
     end
 
+    # A tab the viewer closes sends an explicit detach message, which the
+    # runtime turns into `close`. A browser window closed with its X does
+    # not reliably get that message out before the process tears the page
+    # down; what the server sees then is the socket going away, which is
+    # `detach` -- the same signal as a transient loss the client dials back
+    # from -- and, with no process of ours to watch (D1), nothing else. So
+    # eloot's setup window was closed and eloot ran on, never told. A
+    # detach nobody returns from within the grace is the window closing.
+    it 'tells the script its window closed when a dropped socket does not come back' do
+      gtk::Session.detach_grace = 0.05
+      first = connection_class.new('conn-first')
+      attach(first)
+      admitted
+      service.runtime.disconnect(first)
+
+      settle { @closed }
+      expect(@closed).to be(true)
+    ensure
+      gtk::Session.detach_grace = nil
+    end
+
+    it 'says nothing when the viewer dials back inside the grace' do
+      gtk::Session.detach_grace = 0.2
+      first = connection_class.new('conn-first')
+      attach(first)
+      admitted
+      service.runtime.disconnect(first)
+      settle { service.runtime.viewer_ids(page).empty? }
+      expect(@closed).to be(false)
+      # A reconnect is a new connection, hence a new server-minted viewer id.
+      again = connection_class.new('conn-again')
+      attach(again)
+      admitted
+      sleep 0.35
+      session.sync {}
+
+      expect(@closed).to be(false)
+    ensure
+      gtk::Session.detach_grace = nil
+    end
+
     it 'admits a new viewer once the first has detached' do
       first = connection_class.new('conn-first')
       address = attach(first)
