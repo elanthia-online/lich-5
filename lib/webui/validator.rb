@@ -378,6 +378,7 @@ module Lich
         when :progress then validate_progress!(props, context)
         when :radio then validate_options!(props, :selected, context)
         when :select then validate_options!(props, :value, context)
+        when :chips then validate_chips!(props, context)
         when :number_input, :slider then validate_numeric_input!(props, context)
         when :log then validate_log!(props, context)
         when :table then validate_table!(props, context)
@@ -474,6 +475,19 @@ module Lich
         return if props[:options].any? { |option| option[:value] == props[selected_key] }
 
         violation!("#{selected_key} is not present in options", context, selected_key)
+      end
+
+      # 2.20: every chip is an option unless custom values are allowed,
+      # chips are distinct, and no more than `max` of them.
+      def validate_chips!(props, context)
+        validate_unique_options!(props[:options], context, :options)
+        values = props[:value] || []
+        violation!('value entries must be unique', context, :value) unless values.uniq.length == values.length
+        violation!("value exceeds max (#{props[:max]})", context, :value) if props[:max] && values.length > props[:max]
+        return if props[:allow_custom]
+
+        known = (props[:options] || []).map { |option| option[:value] }
+        violation!('value entries must be present in options unless allow_custom', context, :value) unless (values - known).empty?
       end
 
       def validate_unique_options!(options, context, path)
@@ -626,6 +640,14 @@ module Lich
         when :radio, :select
           options = normalized_props[:options].map { |option| (option[:value] || option['value']).to_s }
           violation!('value is not present in options', context, :value) unless options.include?(value)
+        when :chips
+          violation!('value entries must be unique', context, :value) unless value.uniq.length == value.length
+          max = normalized_props[:max]
+          violation!("value exceeds max (#{max})", context, :value) if max && value.length > max
+          unless normalized_props[:allow_custom]
+            options = (normalized_props[:options] || []).map { |option| (option[:value] || option['value']).to_s }
+            violation!('value entries must be present in options unless allow_custom', context, :value) unless (value - options).empty?
+          end
         when :text_input
           max = normalized_props[:max_length] || Contract::BOUNDS[:input_text]
           violation!("value exceeds #{max} characters", context, :value) if value.length > max

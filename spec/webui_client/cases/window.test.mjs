@@ -45,6 +45,54 @@ test("a page whose first render carries geometry opens at that size, chrome incl
   }
 });
 
+// The launcher's GUI Settings fold open under the tabs; a window fitted to
+// the folded page showed the top of them and nothing more, and one fitted
+// while they were open kept the space after they closed.
+test("content that grows or shrinks after the fit moves the window's bottom edge by the same amount", () => {
+  const h = boot();
+  const calls = watchWindow(h);
+  try {
+    let height = 400;
+    h.document.getElementById("pages").getBoundingClientRect = () => ({ width: 600, height, top: 0, left: 0 });
+    const render = h.attachWith("actions", (next) => { next.facilities = { geometry: { width: 700, height: 500 } }; });
+    assert.deepEqual(calls.resize, [[700, 500]]);
+    const outer = [h.window.outerWidth, h.window.outerHeight];
+
+    height = 640;
+    h.rerender(render);
+    assert.deepEqual(calls.resize.at(-1), [outer[0], outer[1] + 240], "opening grows the window by what opened");
+    h.rerender(render);
+    assert.equal(calls.resize.length, 2, "the same content again moves nothing");
+
+    height = 400;
+    h.rerender(render);
+    assert.deepEqual(calls.resize.at(-1), [outer[0], outer[1] - 240], "closing gives the space back");
+  } finally {
+    h.close();
+  }
+});
+
+// Every render carrying the notify facility added a toast, and a resize
+// report re-rendered the page, so resizing the launcher stacked "Session
+// launched." toasts while nothing was happening.
+test("a notice repeated by a re-render is toasted once; a different one is toasted again", () => {
+  const h = boot();
+  try {
+    const toasts = () => h.document.getElementById("notifications").children.length;
+    const render = h.attachWith("actions", (next) => { next.facilities = { notify: { text: "Session launched.", level: "info" } }; });
+    assert.equal(toasts(), 1);
+    h.rerender(render, (next) => { next.facilities = { notify: { text: "Session launched.", level: "info" } }; });
+    assert.equal(toasts(), 1, "the same notice again is not news");
+    h.rerender(render, (next) => { next.facilities = { notify: { text: "Saved.", level: "info" } }; });
+    assert.equal(toasts(), 2);
+    h.rerender(render, (next) => { next.facilities = {}; });
+    h.rerender(render, (next) => { next.facilities = { notify: { text: "Saved.", level: "info" } }; });
+    assert.equal(toasts(), 3, "after a render without it, the notice is news again");
+  } finally {
+    h.close();
+  }
+});
+
 test("a geometry below the minimum is raised to it", () => {
   const h = boot();
   const calls = watchWindow(h);

@@ -57,6 +57,17 @@ RSpec.describe 'WebUI browser assets' do
 
   # Review 2026-09-17, R5/R10/R14. The behaviour is pinned in the jsdom
   # harness (replay, editing and table cases); these are the seams.
+  # The five glyph escapes were written through a shell heredoc, which read
+  # `\2713` as the octal byte 0xB9 followed by "3": every nav status marker
+  # and both sort arrows rendered as a box (found from eohunter, 2026-09-17).
+  # The stylesheet is plain ASCII and names its glyphs by CSS escape.
+  it 'is ASCII, and names its marker and sort glyphs by CSS escape' do
+    css = File.binread(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+    expect(css.bytes.reject { |byte| byte == 10 || byte == 13 || byte.between?(32, 126) }).to eq([])
+    expect(css).to include('content: "\\2713"', 'content: "\\25B8"', 'content: "\\2298"',
+                           'content: "\\2191"', 'content: "\\2193"')
+  end
+
   it 'keeps event records across renders, registers editor cells as controls, and walks table rows as a tree' do
     expect(javascript).to include('const request = ++requestCounter;')
     expect(javascript).to include('if (record.address !== message.page || !record.replay) return;')
@@ -483,7 +494,7 @@ RSpec.describe 'WebUI browser assets' do
   # content is larger. The harness cannot measure content in jsdom, so the
   # arithmetic is pinned here; the harness pins the geometry-only path.
   it 'opens a window at the larger of its declared geometry and its natural size, and never lets a grid group spill' do
-    expect(javascript).to include('const natural = naturalPageSize() || { width: 0, height: 0 };')
+    expect(javascript).to include('const natural = measured || { width: 0, height: 0 };')
     expect(javascript).to include('width: Math.max(geometry.width > 0 ? geometry.width : 0, natural.width),')
     expect(javascript).to include('height: Math.max(geometry.height > 0 ? geometry.height : 0, natural.height),')
     css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))

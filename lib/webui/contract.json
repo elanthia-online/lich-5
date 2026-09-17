@@ -1,6 +1,6 @@
 {
   "envelope_version": 1,
-  "contract_version": "2.19.0",
+  "contract_version": "2.20.0",
   "contract_major": 2,
   "types": [
     "page",
@@ -29,6 +29,7 @@
     "number_input",
     "slider",
     "select",
+    "chips",
     "nav",
     "table",
     "dialog",
@@ -4143,6 +4144,14 @@
                   },
                   "required": true,
                   "scope": "shared"
+                },
+                "group": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": false,
+                  "scope": "shared"
                 }
               },
               "allow_extra": false
@@ -5486,6 +5495,14 @@
                   },
                   "required": true,
                   "scope": "shared"
+                },
+                "group": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": false,
+                  "scope": "shared"
                 }
               },
               "allow_extra": false
@@ -5503,6 +5520,15 @@
           },
           "required": false,
           "scope": "viewer"
+        },
+        "size": {
+          "shape": {
+            "kind": "integer",
+            "min": 2,
+            "max": 24
+          },
+          "required": false,
+          "scope": "shared"
         },
         "key": {
           "shape": {
@@ -5684,6 +5710,289 @@
       "value": {
         "kind": "string",
         "bound": "input_text"
+      },
+      "value_scope": "viewer"
+    },
+    "chips": {
+      "properties": {
+        "label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "options": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "record",
+              "fields": {
+                "value": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "input_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "label": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": true,
+                  "scope": "shared"
+                },
+                "group": {
+                  "shape": {
+                    "kind": "string",
+                    "bound": "short_text"
+                  },
+                  "required": false,
+                  "scope": "shared"
+                }
+              },
+              "allow_extra": false
+            },
+            "min": 0,
+            "max": 512
+          },
+          "required": false,
+          "scope": "shared",
+          "default": []
+        },
+        "value": {
+          "shape": {
+            "kind": "array",
+            "items": {
+              "kind": "string",
+              "bound": "input_text"
+            },
+            "min": 0,
+            "max": 512
+          },
+          "required": false,
+          "scope": "viewer",
+          "default": []
+        },
+        "placeholder": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "searchable": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": true
+        },
+        "allow_custom": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared",
+          "default": false
+        },
+        "max": {
+          "shape": {
+            "kind": "integer",
+            "min": 1,
+            "max": 512
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "key": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tooltip": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "disabled": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "hidden": {
+          "shape": {
+            "kind": "boolean"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "align": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "start",
+              "center",
+              "end",
+              "stretch"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "margin": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "integer",
+                "min": 0,
+                "max": 512
+              },
+              {
+                "kind": "record",
+                "fields": {
+                  "top": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "right": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "bottom": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  },
+                  "left": {
+                    "shape": {
+                      "kind": "integer",
+                      "min": 0,
+                      "max": 512
+                    },
+                    "required": false,
+                    "scope": "shared"
+                  }
+                },
+                "allow_extra": false
+              }
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "width": {
+          "shape": {
+            "kind": "integer",
+            "min": -65536,
+            "max": 65536
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "tone": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "neutral",
+              "positive",
+              "caution",
+              "danger"
+            ]
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_label": {
+          "shape": {
+            "kind": "string",
+            "bound": "short_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_description": {
+          "shape": {
+            "kind": "string",
+            "bound": "body_text"
+          },
+          "required": false,
+          "scope": "shared"
+        },
+        "a11y_role": {
+          "shape": {
+            "kind": "string",
+            "bound": "identifier",
+            "pattern": "\\A[A-Za-z0-9_.:-]{1,128}\\z"
+          },
+          "required": false,
+          "scope": "shared"
+        }
+      },
+      "children": "none",
+      "events": {
+        "change": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "values": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "string",
+                    "bound": "input_text"
+                  },
+                  "min": 0,
+                  "max": 512
+                },
+                "required": true,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        }
+      },
+      "value": {
+        "kind": "array",
+        "items": {
+          "kind": "string",
+          "bound": "input_text"
+        },
+        "min": 0,
+        "max": 512
       },
       "value_scope": "viewer"
     },

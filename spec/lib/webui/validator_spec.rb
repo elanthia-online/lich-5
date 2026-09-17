@@ -156,6 +156,37 @@ RSpec.describe Lich::WebUI::Validator do
       .to raise_error(Lich::WebUI::UnknownEventError, /unknown event/)
   end
 
+  # 2.20: a select may be a list box, and any option may name a group.
+  it 'accepts a select size and grouped options, and refuses a size of one' do
+    options = [{ value: 'a', label: 'A', group: 'G' }, { value: 'b', label: 'B' }]
+    expect(validator.validate_component!(:select, { options: options, value: 'a', size: 4 }, **context)[:size]).to eq(4)
+    expect { validator.validate_component!(:select, { options: options, value: 'a', size: 1 }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError)
+    expect(validator.validate_component!(:radio, { label: 'R', group: 'g', options: options }, **context)[:options].first[:group]).to eq('G')
+  end
+
+  # 2.20: chips are a set of option values, or of anything with allow_custom,
+  # never repeated and never more than max.
+  it 'validates chips values against their options, uniqueness and max' do
+    options = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B', group: 'G' }]
+    expect(validator.validate_component!(:chips, { options: options, value: %w[a b] }, **context)[:value]).to eq(%w[a b])
+    expect { validator.validate_component!(:chips, { options: options, value: %w[a zz] }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /present in options/)
+    expect(validator.validate_component!(:chips, { options: options, allow_custom: true, value: %w[a zz] }, **context)[:value])
+      .to eq(%w[a zz])
+    expect { validator.validate_component!(:chips, { options: options, value: %w[a a] }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /unique/)
+    expect { validator.validate_component!(:chips, { options: options, max: 1, value: %w[a b] }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /exceeds max/)
+
+    props = { options: options, max: 2 }
+    expect(validator.validate_event!(:chips, :change, { values: %w[b a] }, props: props, **context)).to eq(values: %w[b a])
+    expect { validator.validate_input_value!(:chips, %w[a b zz], props: props, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /exceeds max/)
+    expect { validator.validate_input_value!(:chips, %w[zz], props: props, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /present in options/)
+  end
+
   it 'enforces table hierarchy, selection, and editor event values' do
     props = {
       columns: [

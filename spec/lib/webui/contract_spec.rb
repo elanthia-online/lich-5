@@ -8,7 +8,7 @@ RSpec.describe Lich::WebUI::Contract do
     expect(described_class::TYPES).to eq(%i[
                                            page group stack columns grid tabs expander split overlay scroll divider
                                            text markdown log progress image
-                                           button toggle checkbox radio text_input password_input textarea number_input slider select nav
+                                           button toggle checkbox radio text_input password_input textarea number_input slider select chips nav
                                            table dialog composite
                                            menu menu_item
                                          ])

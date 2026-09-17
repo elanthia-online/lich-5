@@ -1,7 +1,7 @@
 {
   "actions": {
     "type": "render",
-    "page": "page-59ad1c3c190e5f275aada41c19f3de78",
+    "page": "page-c891ceea093fc5bc404e9a64b5d709f0",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -73,11 +73,11 @@
         "page:actions/text_input:note"
       ]
     },
-    "resume": "resume-2852afae61bb324e6b4ac99da6f5594d"
+    "resume": "resume-e7aa9425400bcbf4a049c899e100349d"
   },
   "edits": {
     "type": "render",
-    "page": "page-05bfba85db52da00c88cd385d88dac6b",
+    "page": "page-66cbd210e981906187b645685337de0f",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -151,11 +151,11 @@
         "page:edits/password_input:secret"
       ]
     },
-    "resume": "resume-5ee87ecb5209febd2d74e5695d0b2ff3"
+    "resume": "resume-196e125d2f4e8ca0ddaef76e9f4c032f"
   },
   "tables": {
     "type": "render",
-    "page": "page-f60166dc26d1582fb40bd65b1bc3ca55",
+    "page": "page-8eae2e218dd87b8f3eca033ed79b2820",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -444,11 +444,200 @@
       ]
     },
     "submissions": {},
-    "resume": "resume-5862605777870f7606fd9a3e234cd311"
+    "resume": "resume-0b0c37d677f140f033943adf9db8ff3e"
+  },
+  "chips": {
+    "type": "render",
+    "page": "page-a1d724ee442a15064d48fd722ad59594",
+    "generation": 1,
+    "tree": {
+      "type": "page",
+      "cid": "page:chips",
+      "props": {
+        "title": "Chips",
+        "bare": false
+      },
+      "children": [
+        {
+          "type": "chips",
+          "cid": "page:chips/chips:areas",
+          "props": {
+            "label": "Areas",
+            "options": [
+              {
+                "value": "thanot",
+                "label": "Thanot",
+                "group": "Icemule"
+              },
+              {
+                "value": "pinefar",
+                "label": "Pinefar",
+                "group": "Icemule"
+              },
+              {
+                "value": "zul",
+                "label": "Zul Logoth",
+                "group": "Wehnimer"
+              },
+              {
+                "value": "gyre",
+                "label": "Gyre",
+                "group": "Wehnimer"
+              }
+            ],
+            "value": [
+              "thanot"
+            ],
+            "placeholder": "area",
+            "searchable": true,
+            "allow_custom": false,
+            "key": "areas"
+          },
+          "children": []
+        },
+        {
+          "type": "chips",
+          "cid": "page:chips/chips:rooms",
+          "props": {
+            "label": "Rooms",
+            "options": [],
+            "value": [
+              "12345",
+              "23456"
+            ],
+            "searchable": true,
+            "allow_custom": true,
+            "max": 3,
+            "key": "rooms"
+          },
+          "children": []
+        },
+        {
+          "type": "chips",
+          "cid": "page:chips/chips:all",
+          "props": {
+            "label": "All",
+            "options": [
+              {
+                "value": "thanot",
+                "label": "Thanot",
+                "group": "Icemule"
+              },
+              {
+                "value": "pinefar",
+                "label": "Pinefar",
+                "group": "Icemule"
+              },
+              {
+                "value": "zul",
+                "label": "Zul Logoth",
+                "group": "Wehnimer"
+              },
+              {
+                "value": "gyre",
+                "label": "Gyre",
+                "group": "Wehnimer"
+              }
+            ],
+            "value": [],
+            "searchable": false,
+            "allow_custom": false,
+            "key": "all"
+          },
+          "children": []
+        },
+        {
+          "type": "select",
+          "cid": "page:chips/select:town",
+          "props": {
+            "label": "Town",
+            "options": [
+              {
+                "value": "thanot",
+                "label": "Thanot",
+                "group": "Icemule"
+              },
+              {
+                "value": "pinefar",
+                "label": "Pinefar",
+                "group": "Icemule"
+              },
+              {
+                "value": "zul",
+                "label": "Zul Logoth",
+                "group": "Wehnimer"
+              },
+              {
+                "value": "gyre",
+                "label": "Gyre",
+                "group": "Wehnimer"
+              }
+            ],
+            "value": "zul",
+            "size": 4,
+            "key": "town"
+          },
+          "children": []
+        },
+        {
+          "type": "radio",
+          "cid": "page:chips/radio:side",
+          "props": {
+            "label": "Side",
+            "group": "side",
+            "options": [
+              {
+                "value": "thanot",
+                "label": "Thanot",
+                "group": "Icemule"
+              },
+              {
+                "value": "pinefar",
+                "label": "Pinefar",
+                "group": "Icemule"
+              },
+              {
+                "value": "zul",
+                "label": "Zul Logoth",
+                "group": "Wehnimer"
+              },
+              {
+                "value": "gyre",
+                "label": "Gyre",
+                "group": "Wehnimer"
+              }
+            ],
+            "selected": "gyre",
+            "key": "side"
+          },
+          "children": []
+        }
+      ]
+    },
+    "facilities": {},
+    "bindings": {
+      "page:chips/chips:areas": [
+        "change"
+      ],
+      "page:chips/chips:rooms": [
+        "change"
+      ],
+      "page:chips/chips:all": [
+        "change"
+      ],
+      "page:chips/select:town": [
+        "change"
+      ],
+      "page:chips/radio:side": [
+        "change"
+      ]
+    },
+    "submissions": {},
+    "resume": "resume-703f1a18c75200eca83d7abde82468b0"
   },
   "shapes": {
     "type": "render",
-    "page": "page-63e35377a5821a1ebad25194bf2c0d48",
+    "page": "page-ee88e191f7bd420cb455278c6bb8399e",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -530,6 +719,6 @@
       ]
     },
     "submissions": {},
-    "resume": "resume-28562d453abee9bc264efebd9ea2f689"
+    "resume": "resume-48eca37d9a6eb864d7ef0a34cff46e7f"
   }
 }
