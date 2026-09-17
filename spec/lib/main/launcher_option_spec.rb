@@ -16,6 +16,9 @@ RSpec.describe 'the launcher switches' do
     raise 'could not extract OptionParser.execute from argv_options.rb' unless method_body
 
     module_eval(method_body.sub('def self.execute', 'def execute'))
+    # The real one checks the file exists and looks under Wine; the routing
+    # only needs the option recorded.
+    define_method(:handle_sal_file) { |arg| @argv_options[:sal] = arg }
   end
   define_singleton_method(:parser_class) { parser_class }
 
@@ -132,6 +135,19 @@ RSpec.describe 'the launcher switches' do
     it 'starts headless for an explicit --no-gui under either launcher' do
       expect(route(['--no-gui'], launcher: :gtk)).to eq(:headless)
       expect(route(['--no-gui'], launcher: :webui)).to eq(:headless)
+    end
+
+    # Saga starts a session as `<file>.sal --gtk --without-frontend
+    # --detachable-client=N --saga`. The R1 fix made `--gtk` alone open the
+    # GTK launcher, and that launcher then pre-empted the .sal login
+    # (Tysong, 2026-09-17). A toolkit flag beside a session is not a wish
+    # for the launcher, under either toolkit.
+    it 'starts the session, not a launcher, when a .sal comes with the toolkit flag' do
+      saga = ['C:\\Users\\Ryan\\AppData\\Local\\Temp\\saga-Pickasso-mu5mjeft.sal', '--gtk', '--without-frontend',
+              '--detachable-client=62992', '--saga']
+      expect(route(saga, launcher: :gtk)).to eq(:headless)
+      expect(route(saga.map { |argument| argument == '--gtk' ? '--webui' : argument }, launcher: :webui)).to eq(:headless)
+      expect(route(['--gtk'], launcher: :gtk)).to eq(:gtk)
     end
 
     it 'never opens the GTK launcher when gtk3 did not load' do
