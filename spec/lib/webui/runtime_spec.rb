@@ -180,9 +180,15 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(carrier.origin).to eq(:viewer)
     expect(message[:submission].first).to eq('')
     expect(render.to_s).not_to include('canary-credential')
-    expect(first_connection.sent.last).to eq('type' => 'clear_sensitive', 'cids' => [password_cid])
+    # 2.18 (D17): a submission does not empty the field on its own. The
+    # script decides -- a wrong password re-prompts with what was typed
+    # still there -- through clear_sensitive below.
+    expect(first_connection.sent.map { |sent| sent['type'] }).not_to include('clear_sensitive')
     expect(observed).to eq('canary-credential')
     expect(carrier).to be_consumed
+
+    runtime.clear_sensitive(page, password_cid)
+    expect(first_connection.sent.last).to eq('type' => 'clear_sensitive', 'cids' => [password_cid])
   end
 
   # 2.18 (D17): a strength meter needs to know the password changed without

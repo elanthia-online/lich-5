@@ -313,7 +313,11 @@ module Lich
           snapshot&.discard_sensitive!
         end
         schedule_refresh(attachment.page) if viewer_state_event?(component, context.event)
-        clear_sensitive_client(connection, snapshot)
+        # 2.18 (D17): a submission no longer empties the field it was taken
+        # from. The carrier above is consumed once and zeroed, but what the
+        # viewer typed stays on screen until the script says otherwise
+        # through clear_sensitive -- so a wrong password re-prompts with the
+        # text still there instead of an empty field.
         :queued
       rescue Dispatcher::TerminatedError
         # The owner is gone and its pages are being closed; the viewer will
@@ -367,13 +371,6 @@ module Lich
           raw_values[index].replace("\0" * raw_values[index].bytesize)
           raw_values[index].clear
         end
-      end
-
-      def clear_sensitive_client(connection, snapshot)
-        sensitive_cids = snapshot&.sensitive_cids || []
-        return if sensitive_cids.empty?
-
-        connection.send_text(JSON.generate(type: 'clear_sensitive', cids: sensitive_cids))
       end
 
       # A stale event is answered in two parts, in this order: the refusal,
