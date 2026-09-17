@@ -925,8 +925,9 @@ reconnect_if_wanted = proc {
                 # carry CHARACTER=/NAME=, the same keys SessionLauncher#build_spawn_args
                 # already treats as authoritative, so check those before falling back
                 # to watching the game stream below.
-                resolved_char_name ||= @launch_data&.find { |line| line =~ /\A(?:CHARACTER|NAME)=/ }
-                                                   &.split('=', 2)&.last&.capitalize
+                launch_name = @launch_data&.find { |line| line =~ /\A(?:CHARACTER|NAME)=/ }
+                                          &.split('=', 2)&.last&.strip
+                resolved_char_name ||= launch_name.capitalize unless launch_name.to_s.empty?
               end
 
               if resolved_char_name
@@ -988,6 +989,12 @@ reconnect_if_wanted = proc {
             Lich.log "error: detachable_client_thread (accept): #{e}\n\t#{e.backtrace.join("\n\t")}"
             server.close rescue nil
             server = nil
+            # The poller (if any) captured this listener's host/port; kill and join it
+            # so a stale write can't land after the replacement listener comes up, and
+            # so the alive? guard above lets a fresh poller spawn against the new one.
+            name_poll_thread&.kill
+            name_poll_thread&.join
+            name_poll_thread = nil
             Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
             sleep 5
           end
@@ -996,7 +1003,10 @@ reconnect_if_wanted = proc {
       ensure
         # Stop the name-resolution poller before cleaning up so it can't wake up
         # after cleanup runs and write a session file nothing will ever remove.
+        # kill alone doesn't wait for the thread to actually unwind, so join it
+        # too -- otherwise cleanup below can race an in-progress session-file write.
         name_poll_thread&.kill
+        name_poll_thread&.join
         server.close rescue nil
         $_DETACHABLE_LISTENER_ = nil
         Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
