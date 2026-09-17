@@ -76,6 +76,14 @@ body:has(.webui-page.bare) { overflow: hidden; }
 #pages:has(> .webui-page.bare) { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
 .webui-page.bare { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .webui-page.bare > .webui-scroll { flex: 1; min-height: 0; }
+/* A bare page with no scroller of its own -- most script windows -- still
+   has to scroll when it is taller or wider than its window: the body's
+   overflow is hidden for the flex layout above, so the page scrolls instead. */
+.webui-page.bare { overflow: auto; }
+/* While the client measures a page's natural size (fitWindow): laid out as
+   an inline block so it neither stretches to the viewport nor scrolls. */
+html.webui-measuring #pages { display: inline-block; width: max-content; height: max-content; min-width: 0; }
+html.webui-measuring .webui-page.bare { display: block; flex: none; overflow: visible; width: max-content; }
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }
 .align-start { justify-self: start; align-self: start; }

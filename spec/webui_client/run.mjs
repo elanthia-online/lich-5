@@ -123,7 +123,13 @@ export function boot({ query = "" } = {}) {
     // Attaches a fixture page end to end: hello, the client's attach, the
     // render. Returns the render delivered, generation included.
     attach(name) {
+      return this.attachWith(name, null);
+    },
+    // As attach, with `mutate` applied to the first render before it is
+    // delivered (a facility the fixture does not carry, say).
+    attachWith(name, mutate) {
       const render = clone(renders[name]);
+      if (mutate) mutate(render);
       this.hello([render]);
       const attach = this.socket.ofType("attach").find((message) => message.page === render.page);
       if (!attach) throw new Error(`client did not attach ${name}`);
