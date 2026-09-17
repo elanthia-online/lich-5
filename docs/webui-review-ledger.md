@@ -605,9 +605,13 @@ parity tests). The `;map` rewrite the review said was undelivered is
 A follow-up review of the opened PRs (`docs/webui-pr-review-1634-1648-1655.md`,
 against the tips #1648 `dba90bf2` through #1655 `28cd856f`) re-checked
 the part 4 fixes and found seven defects, two of them priority one. Each
-was reproduced by the review's own probe, fixed in the layer it belongs
-to as an ordinary commit merged upward, and pinned by a test that fails
-without the fix.
+was reproduced by the review's own probe, fixed and pinned by a test
+that fails without the fix. The fixes ride together in one PR on top of
+the stack (`webui/review-2-fixes`, based on `webui/default-flip`), not
+in the layer each belongs to: the layer column below says where the
+defect lives, and a fix in a lower layer would have meant merging every
+layer above it and pushing all eight branches again. Post-review fixes
+go on top from here on.
 
 | finding | layer | what changed |
 |---|---|---|
