@@ -866,6 +866,11 @@ module Lich
           def open_browser(page, window: nil, geometry: nil)
             self.class.start_service(service)
             url = service.launch_url(page: page)
+            unless Lich::WebUI.open_browser?
+              announce_launch_url(page, url)
+              return true
+            end
+
             opener = self.class.browser_open || method(:default_browser_open)
             session = self
             opened = opener.call(
@@ -875,6 +880,18 @@ module Lich
             )
             log(:warning, 'browser window failed to open; page is available at the launch URL') if opened == false
             opened
+          end
+
+          # Under --webui-no-browser a script window is a URL the player
+          # opens where their browser is. It goes to the game window through
+          # Messaging when a session has one, and always to the log.
+          def announce_launch_url(page, url)
+            title = page.respond_to?(:title) ? page.title : page.to_s
+            message = "WebUI window #{title.inspect} is ready; open it at #{url}"
+            log(:info, message)
+            Lich::Messaging.msg('info', message) if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          rescue StandardError
+            nil
           end
 
           def default_browser_open(url, geometry:, on_start:)

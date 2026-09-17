@@ -51,6 +51,7 @@ module Lich
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
                      frontend_locator: FrontendLocator, detach_grace: DETACH_GRACE,
+                     open_browser: Lich::WebUI.open_browser?,
                      launcher_choice: (defined?(Lich::LauncherChoice) ? Lich::LauncherChoice : nil))
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
@@ -75,6 +76,7 @@ module Lich
         @window_geometry = @geometry_store.load
         @browser_pid = nil
         @browser_terminate = browser_terminate
+        @open_browser = open_browser
         @browser_open = browser_open || lambda do |url|
           Lich::WebUI::BrowserLauncher.open(
             url, geometry: @window_geometry,
@@ -118,7 +120,13 @@ module Lich
         @service.start
         @mutex.synchronize { @lifecycle = :ready }
         @service.refresh(@page)
-        opened = @browser_open.call(@service.launch_url(page: @page))
+        url = @service.launch_url(page: @page)
+        unless @open_browser
+          announce_launch_url(url)
+          return self
+        end
+
+        opened = @browser_open.call(url)
         unless opened == false
           return self
         end
@@ -134,6 +142,17 @@ module Lich
         @recovery.call("WebUI launcher unavailable: #{error.class}. Retry with the GTK launcher or abort safely.")
         close(reason: :browser_failure)
         raise
+      end
+
+      # With no browser of its own to open, the launcher tells the player
+      # where it is. The URL carries a one-shot token, so it goes to the
+      # console (the player is at one, or they would not have asked for
+      # this) and to the log, and nowhere else.
+      def announce_launch_url(url)
+        message = "WebUI launcher ready; open this URL in your browser: #{url}"
+        $stdout.puts(message)
+        $stdout.flush
+        @logger.call(:info, message)
       end
 
       def close(reason: :user)

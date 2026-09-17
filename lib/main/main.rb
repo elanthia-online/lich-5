@@ -196,6 +196,7 @@ reconnect_if_wanted = proc {
 
   elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || @argv_options[:launcher])
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
+    Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     webui_launcher = Lich::Common::WebUILauncher.new(
       data_dir: DATA_DIR,
       on_launch: proc {},
@@ -222,6 +223,10 @@ reconnect_if_wanted = proc {
   # child arrives here through --login, not through the launcher branch above.
   if Lich.launcher == :webui
     require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    # A session spawned by the launcher gets --webui-no-browser from its
+    # parent; a fixed port is per process and never inherited, since every
+    # session runs its own WebUI server.
+    Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     Lich::Common::ScriptScope.activate!
   end
 

@@ -40,6 +40,16 @@ RSpec.describe 'the launcher switches' do
     end
   end
 
+  it 'records a fixed WebUI port and the no-browser choice for remote play' do
+    ARGV.replace(['--webui-port=4321', '--webui-no-browser'])
+
+    options = parser_class.new.execute
+
+    expect(options[:webui_port]).to eq(4321)
+    expect(options[:webui_browser]).to be(false)
+    expect(options).not_to have_key(:launcher)
+  end
+
   it 'leaves argv_options without a launcher when no switch is given' do
     ARGV.replace(['--gui'])
 

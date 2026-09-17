@@ -87,6 +87,12 @@ module Lich
               @argv_options[:launcher] = :webui
             when /^--gtk$/i
               @argv_options[:launcher] = :gtk
+            # Remote play: a port the player can forward ahead of time, and
+            # the launch URL printed instead of a browser they cannot see.
+            when /^--webui-port=(\d+)$/i
+              @argv_options[:webui_port] = $1.to_i
+            when /^--webui-no-browser$/i
+              @argv_options[:webui_browser] = false
             when /^--game=(.+)$/i
               @argv_options[:game] = $1
             when /^--auth-provider=(eaccess|web)$/i
@@ -144,6 +150,7 @@ module Lich
           StartupTheme.apply(argv_options)
           handle_hosts_dir(argv_options)
           handle_bind_address(argv_options)
+          handle_webui_port(argv_options)
           handle_detachable_client(argv_options)
           handle_sal_launch(argv_options)
           argv_options
@@ -173,6 +180,16 @@ module Lich
 
           argv_options[:bind_address] = result.host
           announce('warning', result.warning) if result.warning
+        end
+
+        # --webui-port must be a real port. Zero is not a fixed port, and
+        # only a fixed one is worth forwarding by hand.
+        def self.handle_webui_port(argv_options)
+          port = argv_options[:webui_port]
+          return if port.nil?
+          return if port.between?(1, 65_535)
+
+          die("--webui-port must be from 1 through 65535, got #{port}")
         end
 
         def self.handle_hosts_dir(argv_options)

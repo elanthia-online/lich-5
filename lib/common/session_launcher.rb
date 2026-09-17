@@ -139,6 +139,9 @@ module Lich
           # names in the context.
           launcher = resolve_launcher(context)
           flags << "--#{launcher}" if launcher
+          # A player who cannot see this machine's display cannot see the
+          # child's either; the port is not passed, each session has its own.
+          flags << '--webui-no-browser' if ARGV.any? { |argument| argument.to_s.casecmp?('--webui-no-browser') }
 
           OPTIONAL_PATH_FLAGS.each do |path_flag|
             value = overridden_path_value(context, path_flag)

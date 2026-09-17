@@ -283,6 +283,33 @@ RSpec.describe Lich::Common::WebUILauncher do
     expect(recovery).to contain_exactly(match(/ERROR:.*Google Chrome.*launcher has stopped/))
   end
 
+  # --webui-no-browser: the player's browser is somewhere else (an SSH tunnel,
+  # a headless box), so the launcher prints the one-shot URL for them to open
+  # there instead of spawning Chrome on a display nobody is looking at.
+  it 'prints the launch URL instead of opening a browser when asked not to' do
+    registry = instance_double(Lich::WebUI::Registry, register: nil)
+    service = instance_double(
+      Lich::WebUI::Service,
+      registry: registry, runtime: instance_double(Lich::WebUI::Runtime),
+      start: nil, refresh: nil, terminate_owner: nil, stop: nil,
+      launch_url: 'http://127.0.0.1:4321/auth?token=redacted'
+    )
+    opened = []
+    logged = []
+    launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: service, on_launch: proc {},
+      browser_open: proc { |url| opened << url; true }, open_browser: false,
+      logger: ->(level, message) { logged << [level, message] }
+    )
+
+    expect { launcher.start }.to output(%r{open this URL in your browser: http://127\.0\.0\.1:4321/auth\?token=redacted}).to_stdout
+    expect(opened).to be_empty
+    expect(launcher.lifecycle).to eq(:ready)
+    expect(logged).to include([:info, a_string_including('http://127.0.0.1:4321/auth?token=redacted')])
+  ensure
+    launcher&.close
+  end
+
   # PR #1558 added a Frontends tab to the GTK launcher: a catalog list plus an
   # editor for built-in launch overrides and custom frontends. Without it the
   # WebUI launcher could offer a configured frontend but gave no way to

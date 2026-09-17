@@ -10,6 +10,7 @@ require_relative 'webui/errors'
 require_relative 'webui/page'
 require_relative 'webui/future'
 require_relative 'webui/modal_coordinator'
+require_relative 'webui/options'
 require_relative 'webui/protocol'
 require_relative 'webui/registry'
 require_relative 'webui/runtime'
@@ -39,12 +40,23 @@ module Lich
       def service
         INITIALIZATION_MUTEX.synchronize do
           @registry ||= Registry.new
-          @service ||= Service.new(registry: @registry)
+          @service ||= Service.new(registry: @registry, port: Options.port)
         end
       end
 
       def start
         service.start
+      end
+
+      # Applies command-line WebUI settings; see Options.
+      def configure(**settings)
+        Options.configure(**settings)
+      end
+
+      # Whether Lich should open a browser itself. When false the caller
+      # surfaces the launch URL for the player to open where their display is.
+      def open_browser?
+        Options.open_browser?
       end
 
       def launch_url(page: nil)
