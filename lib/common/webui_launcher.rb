@@ -923,13 +923,21 @@ module Lich
         carriers = pairs.map { |pair| transfer_secret(pair.last) }
         operation = begin_operation(:master_password, event)
         @executor.post do
-          consume_three(carriers) do |current, replacement, confirmation|
+          # The change itself is arbitrated, like every other irreversible
+          # step: queued behind other work, it used to run after a close
+          # and only its completion was refused (review 2026-09-17 (b), F2).
+          committed = consume_three(carriers) do |current, replacement, confirmation|
             raise 'passwords do not match' unless secure_equal?(replacement, confirmation)
             raise 'password too short' if replacement.length < 8
-            raise 'master password change failed' unless @catalog.change_master_password(current, replacement)
+
+            commit(operation) do
+              raise 'master password change failed' unless @catalog.change_master_password(current, replacement)
+            end
           end
-          complete(operation) { reload_catalog_locked }
-          set_notice('Encryption password changed.', :info)
+          if committed
+            complete(operation) { reload_catalog_locked }
+            set_notice('Encryption password changed.', :info)
+          end
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Master password change failed.')
         ensure
@@ -1087,9 +1095,15 @@ module Lich
           # written to the catalog either.
           if save || favorite
             entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
+            # The catalog answers with the key of the entry it wrote, and
+            # the favorite is set on exactly that one. Looking the entry up
+            # again by account, character, game and frontend found the first
+            # of two entries that differ only in their custom launch command
+            # (review 2026-09-17 (b), F6); and the box asks for a favorite,
+            # so a re-saved entry that already was one stays one.
             commit(operation) do
-              saved = @catalog.upsert_manual_entry(entry, password)
-              @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+              key = @catalog.upsert_manual_entry(entry, password)
+              @catalog.set_favorite(key, true) if favorite && key
             end
           end
         end
@@ -1458,13 +1472,6 @@ module Lich
         rescue StandardError
           nil
         end
-      end
-
-      def find_entry_key(entry)
-        @catalog.entries.find do |candidate|
-          candidate.user_id == entry[:user_id] && candidate.char_name == entry[:char_name] &&
-            candidate.game_code == entry[:game_code] && candidate.frontend == entry[:frontend]
-        end&.key
       end
     end
   end
