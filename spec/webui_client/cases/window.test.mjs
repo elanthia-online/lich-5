@@ -118,3 +118,31 @@ test("the window-geometry field reports the content size, not the outer size", a
     h.close();
   }
 });
+
+test("a resize is still reported when the page re-renders faster than the tracker's interval", async () => {
+  const h = boot();
+  try {
+    Object.defineProperty(h.window, "innerWidth", { value: 1000, configurable: true, writable: true });
+    Object.defineProperty(h.window, "innerHeight", { value: 820, configurable: true, writable: true });
+    const geometryField = (next) => {
+      const note = next.tree.children.find((c) => c.cid.endsWith("text_input:note") || c.cid.endsWith("text_input:window-geometry"));
+      note.cid = "page:actions/text_input:window-geometry";
+      note.props.key = "window-geometry";
+      next.bindings[note.cid] = ["change"];
+      delete next.bindings["page:actions/text_input:note"];
+    };
+    const render = h.attachWith("actions", geometryField);
+    h.window.innerWidth = 900;
+    // Renders every 200ms for a second: each one restarts the tracker.
+    for (let i = 0; i < 5; i += 1) {
+      await h.tick(200);
+      h.rerender(render, geometryField);
+    }
+    await h.tick(700);
+    const reports = h.socket.sent.filter((m) => m.type === "event" && m.cid === "page:actions/text_input:window-geometry");
+    assert.equal(reports.length, 1, "the resize is reported once, not swallowed by the renders");
+    assert.equal(JSON.parse(reports[0].payload.value).width, 900);
+  } finally {
+    h.close();
+  }
+});
