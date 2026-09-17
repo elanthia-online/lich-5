@@ -9,6 +9,10 @@ module Lich
     #
     # Ordinary conversion and serialization always produce REDACTION. The plaintext is available
     # only inside #consume's block and is cleared when that block exits.
+    #
+    # Clearing is best-effort defence in depth, not a guarantee: clear_value! zeroes the buffer
+    # this object dup'd for itself, but copies the VM made along the way -- the caller's original
+    # String, an interned or frozen copy, anything the GC has already moved -- are not scrubbed.
     class SensitiveValue
       REDACTION = '[REDACTED]'
       ORIGINS = %i[viewer server].freeze

@@ -132,7 +132,9 @@ module Gtk
 end
 
 module GLib
-  class Timeout
+  # A module, as the real glib2 gem declares it -- a class here collides with
+  # the gem when both load in one process.
+  module Timeout
     def self.add(_milliseconds)
       # Stub - don't actually add timeout in tests
       false

@@ -18,9 +18,12 @@ module Gtk
   end
 end unless defined?(Gtk::MessageDialog)
 
-# Add GLib::Timeout for debounce scheduling in GUI auth tests.
+# Add GLib::Timeout for debounce scheduling in GUI auth tests. A module, not
+# a class: the real glib2 gem and spec_helper both declare it as one, and
+# Ruby refuses to reopen a class as a module -- so a class here made
+# `require 'gdk_pixbuf2'` in any later spec fail to load the whole suite.
 module GLib
-  class Timeout
+  module Timeout
     def self.add(_milliseconds, &_block); end
   end
 end unless defined?(GLib::Timeout)
