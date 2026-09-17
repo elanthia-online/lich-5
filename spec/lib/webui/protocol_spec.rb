@@ -18,6 +18,27 @@ RSpec.describe Lich::WebUI::Protocol do
     expect(event).to be_frozen
   end
 
+  # Review 2026-09-17, R5: the client keys its in-flight records by a request
+  # id and the refusal echoes it, so a refusal names one send, not "the
+  # newest for that button".
+  it 'accepts a positive integer request id on an event and echoes it in a refusal' do
+    event = described_class.parse_client_message(JSON.generate(
+                                                   type: 'event', page: 'page-abc', cid: 'page:login/button:go',
+                                                   event: 'activate', generation: 1, request: 7
+                                                 ))
+    expect(event[:request]).to eq(7)
+    expect do
+      described_class.parse_client_message(JSON.generate(
+                                             type: 'event', page: 'page-abc', cid: 'page:login/button:go',
+                                             event: 'activate', generation: 1, request: 'seven'
+                                           ))
+    end.to raise_error(Lich::WebUI::Protocol::Refusal) { |error| expect(error.reason).to eq(:malformed) }
+    with = JSON.parse(described_class.refusal(reason: :stale_generation, message: 'm', page: 'p', cid: 'c', event: 'e', request: 7))
+    without = JSON.parse(described_class.refusal(reason: :stale_generation, message: 'm', page: 'p', cid: 'c', event: 'e'))
+    expect(with['request']).to eq(7)
+    expect(without).not_to have_key('request')
+  end
+
   %i[owner script callback method command path source submission_scope].each do |field|
     it "refuses the client routing field #{field}", security_id: 'sec-server-routing' do
       message = {

@@ -84,7 +84,7 @@ module Lich
         connection.send_text(
           Protocol.refusal(
             reason: error.reason, message: 'Message refused',
-            page: message[:page], cid: message[:cid], event: message[:event]
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
           )
         )
         :refused
@@ -93,7 +93,7 @@ module Lich
         connection.send_text(
           Protocol.refusal(
             reason: :contract, message: 'Message refused',
-            page: message[:page], cid: message[:cid], event: message[:event]
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
           )
         )
         :refused
@@ -388,7 +388,7 @@ module Lich
         connection.send_text(
           Protocol.refusal(
             reason: :stale_generation, message: 'Message refused',
-            page: message[:page], cid: message[:cid], event: message[:event]
+            page: message[:page], cid: message[:cid], event: message[:event], request: message[:request]
           )
         )
         send_render(connection, attachment)

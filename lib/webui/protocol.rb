@@ -12,7 +12,10 @@ module Lich
       FIELDS = {
         'attach' => %i[type page version resume],
         'detach' => %i[type page generation],
-        'event'  => %i[type page cid event generation payload submission],
+        # `request` is the client's own id for the send; a refusal echoes it
+        # so the client replays exactly the record it names (two sends from
+        # one button are two records). Optional: an older client omits it.
+        'event'  => %i[type page cid event generation payload submission request],
       }.freeze
       REQUIRED = {
         'attach' => %i[type page version],
@@ -49,8 +52,10 @@ module Lich
 
       # `event` names the event refused, so the client can find the record it
       # kept for that exact send -- a refusal for A must never replay B.
-      def refusal(reason:, message:, page: nil, cid: nil, event: nil)
-        JSON.generate(type: 'refusal', reason: reason.to_s, message: message, page: page, cid: cid, event: event)
+      def refusal(reason:, message:, page: nil, cid: nil, event: nil, request: nil)
+        body = { type: 'refusal', reason: reason.to_s, message: message, page: page, cid: cid, event: event }
+        body[:request] = request if request
+        JSON.generate(body)
       end
 
       def page_closed(address:, reason:)
@@ -115,6 +120,9 @@ module Lich
           end
           unless message[:event].is_a?(String) && message[:event].match?(Contract::IDENTIFIER)
             raise Refusal.new(:malformed, 'event has invalid syntax')
+          end
+          if message.key?(:request) && !(message[:request].is_a?(Integer) && message[:request].positive?)
+            raise Refusal.new(:malformed, 'request must be a positive integer')
           end
           if message.key?(:payload) && !message[:payload].is_a?(Hash)
             raise Refusal.new(:malformed, 'payload must be an object')
