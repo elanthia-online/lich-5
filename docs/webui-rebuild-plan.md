@@ -383,8 +383,11 @@ it, starting from `webui/01-vendor` (#1634, which already sits on
 | L7 | `webui/default-flip` | 1 | launcher_choice | 0 failures |
 
 Contract is 2.19.0 (2.18 payload-free password `change`; 2.19
-`surface_zoom`). These documents (this plan, the review ledger, the
-handoff) ride on L1 so a reviewer of the first PR has them.
+`surface_zoom` and the optional request id on an event). These documents
+(this plan, the review ledger, the handoff) ride on L1 so a reviewer of
+the first PR has them. The outside review of 2026-09-17 (fourteen
+findings, six blocking) is answered finding by finding in the ledger's
+part 4; every fix sits in the layer it belongs to.
 
 Whole-chain run on the L7 tip: 1592 examples across every layer's
 surface, 2 failures, both the known Windows environment ones

@@ -568,3 +568,34 @@ soundfx, spellson, sspell, symbolz, uberfletch, vars, version, xnarost.
 Bundled in lich-5 (15, all also above except `bsprofiles`): alias, armor,
 autostart, bigshot, bsprofiles, ecleanse, eherbs, eloot, ewaggle, go2, jinx,
 map, repository, vars, version.
+
+## Part 4 — the outside review of 2026-09-17 (R1–R14)
+
+A second, independent review of the rebuilt chain (`docs/webui-rebuild-review-2026-09-17.md`,
+written against tips up to L3 `0ec7af2f`) found fourteen defects, six of
+them release-blocking for the default flip. Each was reproduced by its
+probe, fixed in the layer it belongs to, and pinned by a test that fails
+without the fix. Nothing was deferred.
+
+| finding | layer | what changed |
+|---|---|---|
+| R1 `--gtk` alone did not open the GTK launcher | L2 | the GTK branch takes the parsed launcher choice; the launcher_option spec now evaluates both branch predicates against the real parser |
+| R2 Frontends Save read the submission as an Array | L5 | fields are read by cid like every other workflow; the spec drives the editor with a real `Submission` and saves, then edits |
+| R3 two Lich servers overwrote each other's cookie | L1 | the cookie name carries the port; spec authenticates to two servers in one jar |
+| R4 cancellation raced irreversible steps | L5 | `commit` runs each irreversible step under the launcher lock only while live and not closing; a terminal launch accepts the launch and begins the close as one step |
+| R5 a refresh landing before a refusal lost the click | L1 + L3 | events carry a request id the refusal echoes (protocol 2.19 stays; the field is optional); records survive renders and expire by age; harness cases for refresh-then-refusal and two sends from one button |
+| R6 a closed MessageDialog window waited an hour | L1 | the coordinator binds the modal page's close/detach/attach: explicit close dismisses at once, a dropped socket after a 5s grace |
+| R7 cell edits mutated the model before the handler | L6b | only the renderer's own signal is emitted (`edited` with the text, `toggled` with the path) and the handler owns the model; the client makes a committed edit the cell's base so a refusal shows |
+| R8 saved-entry keys aliased same-character entries | L4 | frontend and custom launch are in the digest |
+| R9 a concurrent enqueue revived a shut-down owner | L1 | the state lookup refuses a tombstoned owner under the same lock |
+| R10 table editor drafts were wiped by a render | L3 | editor cells are controls under their own cid, carrying the rendered value |
+| R11 Builder never applied CellRenderer properties | L6b | only setters the class defines are applied; Glade fixture with `editable` and `activatable` |
+| R12 the write timeout bounded each wait, not the write | L1 | one monotonic deadline per write, the lock wait included; slow-drain and queued-behind-a-stall specs |
+| R13 password `changed` still suppressed | L6a | bound as a payload-free notification; the value never travels with it, and the mapping says so |
+| R14 tree rows rendered flat | L3 | rows walk the tree, collapsed descendants are not drawn, children indent, a toggle emits `row_toggle` |
+
+Two of the review's non-numbered notes stand as stated: the boundary
+checker is a warning until L8, and the frontend mutation rules are still
+duplicated between the two launchers (plan: consolidate before L8, with
+parity tests). The `;map` rewrite the review said was undelivered is
+`scripts/map.lic` 3.0.0 (plan, L6c).
