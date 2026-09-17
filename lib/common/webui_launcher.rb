@@ -8,6 +8,8 @@ require_relative 'authentication/authenticator'
 require_relative 'authentication/launch_data'
 require_relative 'front-end'
 require_relative 'frontend_locator'
+require_relative 'frontend_choices'
+require_relative 'frontend_editor'
 require_relative 'session_launcher'
 require_relative 'webui_launcher/catalog'
 require_relative 'webui_launcher/serial_executor'
@@ -18,7 +20,9 @@ module Lich
     # Native launcher built directly on the WebUI author API. GTK remains the default
     # entry path until the R2 human gate is accepted.
     class WebUILauncher
-      TABS = ['Saved Entry', 'Manual Entry', 'Account Management'].freeze
+      TABS = ['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'].freeze
+      # GTK's frontend editor lays capability checks three to a row.
+      CAPABILITIES_PER_ROW = 3
       ACCOUNT_TABS = ['Accounts', 'Add Character', 'Add Account', 'Encryption Management'].freeze
       GAMES = %w[GS3 GSF GSX GST DR DRF DRT].map { |code| { value: code, label: code } }.freeze
       GAME_NAMES = {
@@ -34,6 +38,11 @@ module Lich
 
       attr_reader :page
 
+      # How long a detached viewer has to come back before the launcher
+      # treats the detach as a closed window. The client dials back on a
+      # 250ms backoff capped at 5s, so a live browser is back well inside it.
+      DETACH_GRACE = 5.0
+
       def initialize(data_dir:, on_launch:, service: Lich::WebUI.service, catalog: nil,
                      authenticator: Authentication, launch_data: Authentication::LaunchData,
                      session_launcher: SessionLauncher, executor: SerialExecutor.new,
@@ -41,7 +50,8 @@ module Lich
                      browser_terminate: Process.method(:kill),
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
-                     frontend_locator: FrontendLocator)
+                     frontend_locator: FrontendLocator, detach_grace: DETACH_GRACE,
+                     launcher_choice: (defined?(Lich::LauncherChoice) ? Lich::LauncherChoice : nil))
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
 
@@ -55,6 +65,12 @@ module Lich
         @logger = logger || proc { |level, message| Lich.log("#{level}: #{message}") if Lich.respond_to?(:log) }
         @frontend_locator = frontend_locator
         @frontend_options = discover_frontends(refresh: true)
+        # The Frontends tab: which row is selected, whether the editor is
+        # holding a new custom frontend that has no id yet, and the field
+        # values as the player has typed them.
+        @frontend_draft = nil
+        @frontend_creating = false
+        @frontend_error = nil
         @geometry_store = geometry_store || WindowGeometryStore.new(data_dir: data_dir)
         @window_geometry = @geometry_store.load
         @browser_pid = nil
@@ -73,6 +89,10 @@ module Lich
         @closed_condition = ConditionVariable.new
         @lifecycle = :starting
         @persistent = persistent
+        # Reads and writes the persisted launcher choice (Lich::LauncherChoice
+        # in production); nil when the process has no such thing, in which
+        # case the toggle is not offered.
+        @launcher_choice = launcher_choice
         @autosort = autosort
         @tab_layout = tab_layout
         @dark_theme = dark_theme
@@ -84,6 +104,8 @@ module Lich
         @manual = default_manual_state
         @manual_credentials = {}
         @draft_entry_key = nil
+        @detach_grace = detach_grace
+        @detached = {}
         reload_catalog
       end
 
@@ -115,30 +137,10 @@ module Lich
       end
 
       def close(reason: :user)
-        browser_pid = nil
-        accepted = @mutex.synchronize do
-          next false if %i[closing closed].include?(@lifecycle)
+        closing = @mutex.synchronize { begin_close_locked }
+        return false unless closing
 
-          @lifecycle = :closing
-          @active.clear
-          @manual_credentials.each_value(&:discard!)
-          @manual_credentials.clear
-          browser_pid = @browser_pid
-          @browser_pid = nil
-          true
-        end
-        return false unless accepted
-
-        terminate_browser(browser_pid) if browser_pid
-        @service.terminate_owner(self)
-        @service.stop
-        @executor.stop(wait: false)
-        @mutex.synchronize do
-          @lifecycle = :closed
-          @closed_condition.broadcast
-        end
-        @on_close.call(reason)
-        true
+        finish_close(reason, closing)
       end
 
       def lifecycle = @mutex.synchronize { @lifecycle }
@@ -164,7 +166,8 @@ module Lich
           props: { bare: true },
           on: {
             close: ->(_event) { launcher.close(reason: :user) },
-            detach: ->(event) { launcher.browser_window_closed(event.viewer_id) },
+            attach: ->(event) { launcher.browser_window_attached(event.viewer_id) },
+            detach: ->(event) { launcher.browser_window_detached(event.viewer_id) },
           }
         ) do
           state = launcher.__send__(:render_state)
@@ -176,6 +179,7 @@ module Lich
               manual_controls = launcher.__send__(:render_manual, self, state)
             end
             stack(slot: TABS[2], key: 'accounts-panel') { launcher.__send__(:render_accounts, self, state) }
+            stack(slot: TABS[3], key: 'frontends-panel') { launcher.__send__(:render_frontends, self, state) }
           end
           manual_default = state[:manual][:phase] == :editing ? manual_controls[:connect] : manual_controls[:play]
           accelerators([{ keys: 'enter', target: manual_default.cid, event: 'activate' }])
@@ -201,10 +205,15 @@ module Lich
             encryption_mode: @encryption_mode, keychain: @catalog.enhanced_encryption_available?,
             persistent: @persistent, autosort: @autosort, tab_layout: @tab_layout,
             dark_theme: @dark_theme, settings_visible: @settings_visible,
+            launcher_choice_offered: !@launcher_choice.nil?,
+            native_launcher_next: @launcher_choice ? @launcher_choice.native_next? : false,
             notice: @notice, modal: @modal&.dup,
             manual: @manual.merge(characters: @manual[:characters].dup), active: @active.keys,
             draft_entry_key: @draft_entry_key, window_geometry: @window_geometry.dup,
             frontend_options: @frontend_options.map(&:dup),
+            frontends: (catalog_rows = frontend_catalog_rows),
+            frontend_draft: frontend_draft_or_default(catalog_rows)&.dup,
+            frontend_creating: @frontend_creating, frontend_error: @frontend_error,
           }
         end
       end
@@ -216,12 +225,14 @@ module Lich
         if state[:tab_layout]
           ui.tabs(key: 'saved-account-tabs', names: names, selected: 0,
                   on: { select: ->(_event) {} }) do
-            stack(slot: 'FAVORITES', key: 'favorites-panel') do
+            # 4, to match the gap inside each row; the default 8 left the
+            # list looking twice as loose as the buttons within a row.
+            stack(slot: 'FAVORITES', key: 'favorites-panel', gap: 4) do
               launcher.__send__(:render_entry_rows, self, state[:entries].select(&:favorite), state,
                                 empty: 'No favorite characters yet.')
             end
             account_names.each do |account|
-              stack(slot: account, key: "saved-account-#{account}") do
+              stack(slot: account, key: "saved-account-#{account}", gap: 4) do
                 launcher.__send__(:render_entry_rows, self,
                                   state[:entries].select { |entry| entry.user_id == account }, state,
                                   empty: 'No saved characters for this account.')
@@ -258,6 +269,13 @@ module Lich
             text(key: 'sort-order-description',
                  content: state[:autosort] ? 'Sort order: favorites first, then account/game/character.' :
                                             'Sort order: saved entry order.')
+            if state[:launcher_choice_offered]
+              # The persisted half of Lich.launcher: an explicit launcher flag
+              # still wins over it, and the change applies to the next start.
+              toggle(key: 'native-launcher-next', label: 'Use the native launcher next time',
+                     checked: state[:native_launcher_next],
+                     on: { change: ->(event) { launcher.setting_changed(event, :native_launcher_next) } })
+            end
           end
         end
       end
@@ -478,6 +496,128 @@ module Lich
         end
       end
 
+      # The Frontends tab: the catalog on top, an editor for the selected row
+      # below. Mirrors GUI::FrontendManagerTab, which #1558 added to the GTK
+      # launcher -- detection is shown as status only, and nothing here ever
+      # launches a frontend or touches account associations.
+      def render_frontends(ui, state)
+        launcher = self
+        draft = state[:frontend_draft]
+        ui.stack(key: 'frontends-body', gap: 8) do
+          launcher.__send__(:render_frontend_catalog, self, state)
+          launcher.__send__(:render_frontend_editor, self, state, draft)
+        end
+      end
+
+      def render_frontend_catalog(ui, state)
+        launcher = self
+        rows = state[:frontends].map do |row|
+          { key: row[:id], cells: { 'label' => row[:label], 'type' => row[:type],
+                                    'status' => row[:status], 'launch' => row[:launch].to_s,
+                                    'arguments' => row[:arguments].to_s } }
+        end
+        selected = state[:frontend_creating] ? [] : Array(state[:frontend_draft]&.fetch(:id, nil))
+        ui.group(label: 'Frontends', key: 'frontends-table-section') do
+          table(key: 'frontends-table', max_height: 260, columns: [
+                  { key: 'label', label: 'Frontend' }, { key: 'type', label: 'Type' },
+                  { key: 'status', label: 'Status' },
+                  { key: 'launch', label: 'Executable / command' },
+                  { key: 'arguments', label: 'Additional arguments' },
+                ], rows: rows, selection: :single, selected: selected,
+                on: { selection_change: ->(event) { launcher.select_frontend(event) } })
+        end
+      end
+
+      def render_frontend_editor(ui, state, draft)
+        launcher = self
+        # With no row selected there is nothing to edit, but Add Custom and
+        # Reload must still be reachable -- otherwise an empty catalog, or a
+        # failed load, would leave no way back.
+        unless draft
+          ui.group(label: 'Frontend Settings', key: 'frontend-editor-section') do
+            text(content: 'Select a frontend to edit, or choose Add Custom.')
+            columns(key: 'frontend-actions', count: 3, weights: [0, 0, 1], gap: 6) do
+              button(slot: '0', key: 'frontends-add', label: 'Add Custom',
+                     on: { activate: ->(_event) { launcher.begin_new_frontend } })
+              button(slot: '1', key: 'frontends-reload', label: 'Reload',
+                     on: { activate: ->(_event) { launcher.reload_frontends } })
+              text(slot: '2', key: 'frontend-actions-spacer', content: ' ')
+            end
+          end
+          return
+        end
+
+        built_in = draft[:built_in]
+        ui.group(label: built_in ? "#{draft[:label]} (built-in)" : 'Frontend Settings',
+                 key: 'frontend-editor-section') do
+          text(content: state[:frontend_error], tone: :danger) if state[:frontend_error]
+          fields = launcher.__send__(:render_frontend_fields, self, state, draft, built_in)
+          if built_in && !draft[:detected_command].to_s.empty?
+            text(key: 'frontend-detected', content: "Detected: #{draft[:detected_command]}", tone: :neutral)
+          end
+          capability_boxes = launcher.__send__(:render_frontend_capabilities, self, draft, built_in)
+          # One row under the editor, in GTK's order, rather than Save alone at
+          # the bottom and the other three stranded above the table.
+          columns(key: 'frontend-actions', count: 5, weights: [0, 0, 0, 0, 1], gap: 6) do
+            button(slot: '0', key: 'frontends-add', label: 'Add Custom',
+                   on: { activate: ->(_event) { launcher.begin_new_frontend } })
+            button(slot: '1', key: 'frontend-save', label: 'Save', variant: :primary,
+                   submit: fields + capability_boxes,
+                   on: { activate: ->(event) { launcher.save_frontend(event) } })
+            button(slot: '2', key: 'frontends-delete', label: 'Delete Custom', variant: :danger,
+                   disabled: !launcher.__send__(:frontend_deletable?, state),
+                   on: { activate: ->(_event) { launcher.delete_frontend } })
+            button(slot: '3', key: 'frontends-reload', label: 'Reload',
+                   on: { activate: ->(_event) { launcher.reload_frontends } })
+            text(slot: '4', key: 'frontend-actions-spacer', content: ' ')
+          end
+        end
+      end
+
+      # GTK lays this editor out as rows: a fixed-width label on the left and
+      # the field filling the rest. Emitting the inputs as a flat sequence put
+      # every label on its own line above its field and roughly doubled the
+      # height of the form, so each row is its own two-column grid. The label
+      # still belongs to the input -- it is the input's own `label` prop, not
+      # a separate text node -- so the control keeps its accessible name.
+      def render_frontend_fields(ui, state, draft, built_in)
+        [
+          [:id, 'Stable ID', draft[:id].to_s, !state[:frontend_creating], 64, nil],
+          [:label, 'Label', draft[:label].to_s, built_in, 128, nil],
+          [:command, built_in ? 'Executable override' : 'Command', draft[:command].to_s, false, 512, nil],
+          [:directory, 'Working directory', draft[:directory].to_s, built_in, 512, nil],
+          [:arguments, 'Additional arguments', draft[:arguments].to_s, false, 512,
+           'Shell quoting, for example: --flag "two words"'],
+        ].map do |name, label, value, disabled, max_length, placeholder|
+          options = { key: "frontend-#{name}", label: label, value: value,
+                      disabled: disabled, max_length: max_length }
+          # An absent placeholder is absent, not nil: the contract types it as
+          # a String and refuses nil rather than treating it as unset.
+          options[:placeholder] = placeholder if placeholder
+          ui.text_input(**options)
+        end
+      end
+
+      # A built-in declares its own protocol capabilities; only a custom
+      # frontend may choose them.
+      def render_frontend_capabilities(ui, draft, built_in)
+        selected = Array(draft[:capabilities]).map(&:to_s)
+        boxes = []
+        # GTK lays these out three across; one per line turned six checkboxes
+        # into six rows and pushed Save off the bottom of the form.
+        Frontend.capability_vocabulary.each_slice(CAPABILITIES_PER_ROW).with_index do |row, index|
+          ui.columns(key: "frontend-capability-row-#{index}", count: CAPABILITIES_PER_ROW,
+                     weights: Array.new(CAPABILITIES_PER_ROW, 1), gap: 8) do
+            row.each_with_index do |capability, column|
+              boxes << checkbox(slot: column.to_s, key: "frontend-capability-#{capability}",
+                                label: capability.to_s, checked: selected.include?(capability.to_s),
+                                disabled: built_in)
+            end
+          end
+        end
+        boxes
+      end
+
       def render_modal(ui, modal)
         launcher = self
         case modal[:kind]
@@ -506,10 +646,15 @@ module Lich
           when :tab_layout then @tab_layout = value
           when :dark_theme then @dark_theme = value
           when :settings_visible then @settings_visible = value
+          when :native_launcher_next then nil # persisted below, not held here
           else raise ArgumentError, "unknown launcher setting: #{setting}"
           end
         end
-        if setting != :settings_visible && @catalog.respond_to?(:update_launcher_setting)
+        if setting == :native_launcher_next
+          raise ArgumentError, 'launcher choice is not offered' unless @launcher_choice
+
+          @launcher_choice.native_next = value ? true : false
+        elsif setting != :settings_visible && @catalog.respond_to?(:update_launcher_setting)
           @catalog.update_launcher_setting(setting, value)
         end
         reload_catalog if setting == :autosort
@@ -528,8 +673,16 @@ module Lich
         account = event.submission.fetch(account_cid).to_s.strip.upcase
         return manual_error('User ID is required.') if account.empty?
 
+        # Claim the operation before touching the secret. A double-click can
+        # outrun the refresh that disables Connect; the loser must be told so
+        # (the dispatcher swallows a raise) and must not consume its password
+        # into a SensitiveValue nobody will ever read.
+        begin
+          operation = begin_operation(:manual_auth, event)
+        rescue Lich::WebUI::Error
+          return manual_error('Authentication is already in progress.')
+        end
         credential = transfer_secret(event.submission.fetch(password_cid))
-        operation = begin_operation(:manual_auth, event)
         @mutex.synchronize { @manual.merge!(phase: :authenticating, account: account, error: nil) }
         refresh
         @executor.post do
@@ -716,11 +869,16 @@ module Lich
         secret = transfer_secret(password_pair.last)
         operation = begin_operation(:account, event)
         @executor.post do
+          committed = nil
           secret.consume do |password|
             characters = @authenticator.authenticate(account: account, password: password, legacy: true)
-            raise 'account persistence failed' unless @catalog.add_or_update_account(account, password, characters, frontend: frontend)
+            # Authentication takes seconds and the launcher may have been
+            # closed meanwhile; the save is the irreversible step.
+            committed = commit(operation) do
+              raise 'account persistence failed' unless @catalog.add_or_update_account(account, password, characters, frontend: frontend)
+            end
           end
-          complete(operation) { reload_catalog_locked }
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Account authentication or save failed.')
         end
@@ -739,11 +897,14 @@ module Lich
         secret = transfer_secret(master_pair.last)
         operation = begin_operation(:encryption, event)
         @executor.post do
+          committed = nil
           secret.consume do |password|
             master = mode == :enhanced ? password : nil
-            raise 'encryption change failed' unless @catalog.change_encryption_mode(mode, master_password: master)
+            committed = commit(operation) do
+              raise 'encryption change failed' unless @catalog.change_encryption_mode(mode, master_password: master)
+            end
           end
-          complete(operation) { reload_catalog_locked }
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Encryption mode change failed.')
         end
@@ -792,9 +953,118 @@ module Lich
         end
       end
 
+      # A socket detach is not a closed window. The runtime emits it for any
+      # transport loss -- a dropped or reloaded socket included -- and the
+      # client dials back within its backoff and re-attaches with its resume
+      # token, which arrives here as `attach`. Closing on the detach itself
+      # tore the launcher down before that reconnect could land. So a detach
+      # opens a grace period: an attach inside it cancels the close, and only
+      # a detach that outlives it closes the launcher. A dedicated browser
+      # process that exits still closes it at once, through on_exit.
+      def browser_window_detached(viewer_id)
+        token = @mutex.synchronize do
+          next nil if %i[closing closed].include?(@lifecycle)
+
+          @detached[viewer_id] = Object.new
+        end
+        return unless token
+
+        Thread.new do
+          sleep(@detach_grace)
+          expired = @mutex.synchronize { @detached[viewer_id].equal?(token) && @detached.delete(viewer_id) }
+          browser_window_closed(viewer_id) if expired
+        end
+        nil
+      end
+
+      def browser_window_attached(viewer_id)
+        @mutex.synchronize { @detached.delete(viewer_id) }
+        nil
+      end
+
       def browser_window_closed(viewer_id)
         viewer_gone(viewer_id)
         close(reason: :browser_window_closed)
+      end
+
+      # ---- Frontends tab ------------------------------------------------
+
+      def select_frontend(event)
+        id = event.payload.fetch(:rows).first
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = id ? frontend_editor_fields(id) : nil
+        end
+        refresh
+      end
+
+      def begin_new_frontend
+        @mutex.synchronize do
+          @frontend_creating = true
+          @frontend_error = nil
+          @frontend_draft = {
+            id: '', label: '', built_in: false, command: '', detected_command: '',
+            directory: '', arguments: '', capabilities: []
+          }
+        end
+        refresh
+      end
+
+      # Re-reads frontends.yml and re-runs detection, keeping the selection.
+      def reload_frontends
+        previous = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
+        FrontendSettings.load!(data_dir: @data_dir)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = previous && !previous.empty? ? frontend_editor_fields(previous) : nil
+          @frontend_options = nil
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice('Reloaded frontend settings.', :info)
+      rescue StandardError => error
+        report_frontend_error(error)
+      end
+
+      def save_frontend(event)
+        fields = frontend_fields_from(event)
+        creating = @mutex.synchronize { @frontend_creating }
+        # Re-read before writing: the GTK launcher and another Lich share this
+        # file, and a stale document would drop whatever they added.
+        FrontendSettings.load!(data_dir: @data_dir)
+        builtins, custom, id = FrontendEditor.apply(FrontendSettings.current, fields, creating: creating)
+        FrontendSettings.replace!(data_dir: @data_dir, builtins: builtins, custom: custom)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = frontend_editor_fields(id)
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice("Saved #{Frontend.display_name(id)}.", :info)
+      rescue StandardError => error
+        report_frontend_error(error)
+      end
+
+      def delete_frontend
+        id = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
+        raise ArgumentError, 'Select a custom frontend to delete.' if id.nil? || id.empty?
+
+        FrontendSettings.load!(data_dir: @data_dir)
+        builtins, custom = FrontendEditor.remove(FrontendSettings.current, id)
+        FrontendSettings.replace!(data_dir: @data_dir, builtins: builtins, custom: custom)
+        @frontend_locator.refresh!
+        @mutex.synchronize do
+          @frontend_creating = false
+          @frontend_error = nil
+          @frontend_draft = nil
+        end
+        @frontend_options = discover_frontends(refresh: false)
+        set_notice("Deleted custom frontend #{id}.", :info)
+      rescue StandardError => error
+        report_frontend_error(error)
       end
 
       private
@@ -811,13 +1081,20 @@ module Lich
           launch = @launch_data.prepare(auth, frontend, custom, custom_dir)
           save = submitted(values, 'checkbox:manual-save')
           favorite = submitted(values, 'checkbox:manual-favorite')
+          # Saving is irreversible too, and the launcher may have been closed
+          # while authentication ran. The launch below is already refused for
+          # a closed launcher; the entry it would never launch must not be
+          # written to the catalog either.
           if save || favorite
             entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
-            saved = @catalog.upsert_manual_entry(entry, password)
-            @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+            commit(operation) do
+              saved = @catalog.upsert_manual_entry(entry, password)
+              @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+            end
           end
         end
-        complete(operation) { @manual_credentials.delete(viewer_id)&.discard! }
+        return unless complete(operation) { @manual_credentials.delete(viewer_id)&.discard! }
+
         terminal_launch(launch, :manual)
       rescue StandardError => error
         fail_operation(operation, error, manual: 'Launch failed. Retry from Manual Entry.')
@@ -834,13 +1111,17 @@ module Lich
                                              character: entry.char_name, game_code: entry.game_code)
           launch = @launch_data.prepare(auth, entry.frontend, entry.custom_launch, entry.custom_launch_dir)
         end
+        # Launching is the irreversible step, and the launcher may have been
+        # closed while authentication ran: the launch itself is committed
+        # under the arbiter, so a close cannot slip in between the check and
+        # the launch.
         if @persistent
-          result = @session_launcher.launch(launch, launch_context: launch_context(entry))
+          committed, result = commit(operation) { @session_launcher.launch(launch, launch_context: launch_context(entry)) }
+          return unless committed
           raise 'session launch failed' unless result[:ok]
           complete(operation) { @modal = nil }
           set_notice('Session launched.', :info)
-        else
-          complete(operation) { @modal = nil }
+        elsif complete(operation) { @modal = nil }
           terminal_launch(launch, :saved_entry)
         end
       rescue Catalog::MasterPasswordRequired
@@ -854,8 +1135,8 @@ module Lich
       def mutate(kind, event, failure_message, &work)
         operation = begin_operation(kind, event)
         @executor.post do
-          work.call
-          complete(operation) { reload_catalog_locked }
+          committed = commit(operation, &work)
+          complete(operation) { reload_catalog_locked } if committed
         rescue StandardError => error
           fail_operation(operation, error, notice: failure_message)
         end
@@ -868,6 +1149,60 @@ module Lich
           @active[kind] = operation
         end
         operation
+      end
+
+      # Whether this operation is still the one the launcher is waiting on.
+      # Authentication can take seconds and the player may close the launcher
+      # while it runs; SerialExecutor#stop(wait: false) does not interrupt work
+      # already in flight, so a path that commits a side effect has to ask
+      # before committing it rather than after.
+      def operation_live?(operation)
+        @mutex.synchronize do
+          @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
+        end
+      end
+
+      # The one place cancellation and an irreversible step are arbitrated.
+      # +work+ runs under the launcher's lock only if the operation is still
+      # the active one of its kind and the launcher is neither closing nor
+      # closed; a close that arrived first refuses it (nil, work not run),
+      # and a close arriving while it runs takes the same lock, so it waits
+      # and then finds the effect done rather than racing it. Checking
+      # liveness and then acting outside the lock left exactly that gap
+      # (review 2026-09-17, R4): an Add Account saved after close, a saved
+      # launch started after close. Returns [true, result] when committed.
+      def commit(operation)
+        @mutex.synchronize do
+          next nil unless @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
+
+          [true, yield]
+        end
+      end
+
+      def begin_close_locked
+        return nil if %i[closing closed].include?(@lifecycle)
+
+        @lifecycle = :closing
+        @active.clear
+        @detached.clear
+        @manual_credentials.each_value(&:discard!)
+        @manual_credentials.clear
+        browser_pid = @browser_pid
+        @browser_pid = nil
+        { browser_pid: browser_pid }
+      end
+
+      def finish_close(reason, closing)
+        terminate_browser(closing[:browser_pid]) if closing[:browser_pid]
+        @service.terminate_owner(self)
+        @service.stop
+        @executor.stop(wait: false)
+        @mutex.synchronize do
+          @lifecycle = :closed
+          @closed_condition.broadcast
+        end
+        @on_close.call(reason)
+        true
       end
 
       def complete(operation)
@@ -890,10 +1225,23 @@ module Lich
         @logger.call(:error, "launcher operation failed kind=#{operation.kind} error=#{error.class}")
       end
 
+      # A terminal launch always closes the launcher: the persistent-mode
+      # saved-entry path never reaches here (perform_saved_launch hands a
+      # persistent launcher to @session_launcher instead), and manual Play
+      # is terminal in both modes. Accepting the launch and beginning the
+      # close are one locked step: a viewer's close accepted first means no
+      # launch, and once the launch is accepted a later close is a no-op
+      # rather than a competing one.
       def terminal_launch(launch, origin)
-        @mutex.synchronize { @launch_result = launch }
+        closing = @mutex.synchronize do
+          started = begin_close_locked
+          @launch_result = launch if started
+          started
+        end
+        return false unless closing
+
         @on_launch.call(launch, origin)
-        close(reason: :launch) unless origin == :saved_entry && @persistent
+        finish_close(:launch, closing)
       end
 
       def transfer_secret(carrier)
@@ -940,6 +1288,74 @@ module Lich
         refresh
       end
 
+      # Catalog rows for the tab. Called from inside render_state, which
+      # already holds @mutex, so this must not lock.
+      def frontend_catalog_rows
+        FrontendEditor.rows(locator: @frontend_locator)
+      rescue StandardError => error
+        @logger&.call(:warning, "frontend catalog failed error=#{error.class}")
+        []
+      end
+
+      # The GTK tab selects its first row on load, so the editor is populated
+      # the moment the tab is opened rather than sitting on a placeholder until
+      # something is clicked. Called from render_state, which already holds
+      # @mutex, so it must not lock.
+      def frontend_draft_or_default(rows)
+        return @frontend_draft if @frontend_draft || @frontend_creating
+
+        first = rows.first
+        first && frontend_editor_fields(first[:id])
+      end
+
+      def frontend_editor_fields(frontend_id)
+        FrontendEditor.editor_fields(frontend_id, locator: @frontend_locator)
+      rescue StandardError => error
+        @logger&.call(:warning, "frontend editor load failed error=#{error.class}")
+        nil
+      end
+
+      # Delete is offered only for a custom frontend that exists: a built-in
+      # cannot be removed, and a draft being created has nothing to delete yet.
+      def frontend_deletable?(state)
+        draft = state[:frontend_draft]
+        return false if draft.nil? || state[:frontend_creating]
+        return false if draft[:built_in]
+
+        !draft[:id].to_s.empty?
+      end
+
+      # The editor's submitted values, by the cid each field was declared
+      # under -- the same way every other workflow reads a submission. This
+      # used to treat the submission as an Array in declaration order, which
+      # a Lich::WebUI::Submission is not: its first "field" came out as the
+      # object's inspect string and every other field empty, so a custom
+      # frontend could never be saved (review 2026-09-17, R2).
+      def frontend_fields_from(event)
+        values = submission_values(event.submission)
+        field = ->(suffix) { values.find { |cid, _| cid.end_with?(suffix) }&.last.to_s }
+        capabilities = Frontend.capability_vocabulary.filter_map do |capability|
+          capability.to_s if truthy_submission(field.call("checkbox:frontend-capability-#{capability}"))
+        end
+        {
+          id: field.call('text_input:frontend-id'), label: field.call('text_input:frontend-label'),
+          command: field.call('text_input:frontend-command'), directory: field.call('text_input:frontend-directory'),
+          arguments: field.call('text_input:frontend-arguments'), capabilities: capabilities
+        }
+      end
+
+      def truthy_submission(value)
+        value == true || %w[true 1 on yes].include?(value.to_s.strip.downcase)
+      end
+
+      def report_frontend_error(error)
+        raise error unless error.is_a?(ArgumentError) || error.is_a?(IOError) || error.is_a?(StandardError)
+
+        @mutex.synchronize { @frontend_error = error.message }
+        refresh
+        false
+      end
+
       def normalize_characters(characters)
         Array(characters).map do |character|
           values = character.transform_keys { |key| key.to_s.downcase.to_sym }
@@ -958,18 +1374,31 @@ module Lich
         GAME_REALMS.fetch(entry.game_code.to_s, entry.game_code.to_s)
       end
 
+      # Every frontend the player may select, not merely the ones whose
+      # executable was found. Listing only what discovery resolved dropped a
+      # custom frontend the player had configured but that nothing could
+      # auto-detect -- so the launcher could not offer what they had asked
+      # for. Discovery annotates a choice; it never removes one, which is the
+      # rule the GTK selector has always followed.
       def discover_frontends(refresh: false)
-        @frontend_locator.available(gui_selectable: true, refresh: refresh).map do |resolution|
-          { value: resolution.frontend_id.to_s, label: Frontend.display_name(resolution.frontend_id) }
+        FrontendChoices.all(refresh: refresh, locator: @frontend_locator).map do |choice|
+          { value: choice.id, label: choice.label }
         end.freeze
       rescue StandardError => error
         @logger&.call(:warning, "frontend discovery failed error=#{error.class}")
         [].freeze
       end
 
+      # Whether this frontend can actually be launched now. A configured
+      # custom frontend counts even when the locator cannot resolve it: the
+      # player gave it a launch command, and that is what will be run.
       def frontend_available?(frontend, refresh: false)
         return false if frontend.to_s.empty?
         return false unless @frontend_options.any? { |option| option[:value] == frontend }
+
+        choice = FrontendChoices.all(refresh: refresh, locator: @frontend_locator)
+                                .find { |candidate| candidate.id == Frontend.canonical_name(frontend) }
+        return true if choice&.state == :configured
 
         !@frontend_locator.resolve(frontend, refresh: refresh).nil?
       rescue StandardError => error

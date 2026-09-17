@@ -14,6 +14,13 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     def stop(wait: true) = wait
   end
 
+  # Holds posted work so an operation stays in flight for the example.
+  class QueuedExecutor
+    def initialize = @queue = []
+    def post(&work) = @queue << work
+    def stop(wait: true) = wait
+  end
+
   class WorkflowFrontendLocator
     Resolution = Data.define(:frontend_id)
 
@@ -198,6 +205,31 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     expect(WorkflowFrontendLocator.resolved).to include(['stormfront', true])
   end
 
+  it 'refuses a second Connect while authentication is in flight without consuming its secret' do
+    queued = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: service, authenticator: authenticator,
+      executor: QueuedExecutor.new, on_launch: proc {}, browser_open: proc { true },
+      frontend_locator: WorkflowFrontendLocator
+    )
+    first = viewer_secret('first-click')
+    second = viewer_secret('second-click')
+
+    queued.manual_connect(event({ 'account' => 'doug', 'password' => first }), 'account', 'password')
+    expect(first).to be_consumed
+    connect = queued.send(:build_page).render.tree.each.find { |component| component.cid.end_with?('button:manual-connect') }
+    expect(connect.props[:disabled]).to be(true)
+
+    # A double-click can outrun the refresh that disables the button, so the
+    # second submission must be refused on the server without raising into
+    # the dispatcher (which would swallow it) and without eating the secret.
+    expect { queued.manual_connect(event({ 'account' => 'doug', 'password' => second }), 'account', 'password') }
+      .not_to raise_error
+    expect(second).not_to be_consumed
+    expect(queued.send(:render_state)[:manual][:error]).to match(/already in progress/i)
+    expect(queued.send(:render_state)[:manual][:phase]).to eq(:authenticating)
+    expect(queued.active_operations.keys).to eq([:manual_auth])
+  end
+
   it 'discards an unlock submission if its modal has already closed' do
     secret = viewer_secret('late-secret')
 
@@ -282,6 +314,189 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
     )
   end
 
+  # SerialExecutor#stop(wait: false) does not interrupt work already running,
+  # and authentication can take seconds. Closing the launcher mid-authentication
+  # used to launch anyway: the persistent path called SessionLauncher before
+  # consulting complete, and the terminal paths ignored whether the completion
+  # was accepted. An immediate executor cannot show this -- the launch has to be
+  # in flight while close runs.
+  it 'does not launch a session for a launcher closed during authentication' do
+    reached = Queue.new
+    release = Queue.new
+    blocking_authenticator = Class.new do
+      define_method(:authenticate) do |**_keywords|
+        reached << :authenticating
+        release.pop
+        { ok: true, sal: 'SAL' }
+      end
+    end.new
+    session_launcher = class_double(Lich::Common::SessionLauncher, launch: { ok: true })
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: blocking_authenticator, executor: ImmediateExecutor.new,
+      session_launcher: session_launcher, persistent: true,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = closing.send(:begin_operation, :saved_entry, event)
+    worker = Thread.new { closing.send(:perform_saved_launch, operation, 'entry-0') }
+
+    reached.pop
+    closing.close(reason: :user)
+    release << :go
+
+    expect(worker.join(5)).not_to be_nil
+    expect(session_launcher).not_to have_received(:launch)
+  end
+
+  # The manual path persisted the entry inside authentication, before it
+  # consulted whether the launcher was still open: close mid-authentication
+  # and the launch was refused but the catalog still gained the entry.
+  it 'neither saves nor launches a manual entry for a launcher closed during authentication' do
+    reached = Queue.new
+    release = Queue.new
+    blocking_authenticator = Class.new do
+      define_method(:authenticate) do |**_keywords|
+        reached << :authenticating
+        release.pop
+        { game: 'STORM', key: 'session-key', gamehost: 'example', gameport: '1' }
+      end
+    end.new
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: blocking_authenticator, executor: ImmediateExecutor.new,
+      on_launch: ->(launch, origin) { launches << [origin, launch] }, browser_open: proc { true },
+      frontend_locator: WorkflowFrontendLocator
+    )
+    operation = closing.send(:begin_operation, :manual, event)
+    values = {
+      'select:manual-frontend' => 'stormfront', 'checkbox:manual-custom-enabled' => false,
+      'checkbox:manual-save' => true, 'checkbox:manual-favorite' => true,
+    }
+    character = { char_name: 'Aldor', game_code: 'GS3', game_name: 'GemStone IV' }
+    worker = Thread.new do
+      closing.send(:perform_manual_launch, operation, 'viewer-1', 'doug', character, viewer_secret('manual-canary'), values)
+    end
+
+    reached.pop
+    closing.close(reason: :user)
+    release << :go
+
+    expect(worker.join(5)).not_to be_nil
+    expect(catalog.calls.map(&:first)).not_to include(:save_manual, :favorite)
+    expect(launches).to be_empty
+  end
+
+  # Review 2026-09-17, R4: Add Account authenticated and then saved before
+  # asking whether the launcher was still open, and the persistent launch
+  # checked liveness, released the lock, and then launched -- a close in
+  # that gap was accepted and the side effect happened anyway. Every
+  # irreversible step now runs under `commit`, which refuses after an
+  # accepted close and makes a concurrent close wait for it.
+  it 'does not save an account for a launcher closed during authentication' do
+    reached = Queue.new
+    release = Queue.new
+    blocking_authenticator = Class.new do
+      define_method(:authenticate) do |**_keywords|
+        reached << :authenticating
+        release.pop
+        [{ char_name: 'Aldor', game_code: 'GS3', game_name: 'GemStone IV' }]
+      end
+    end.new
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: blocking_authenticator, executor: ImmediateExecutor.new,
+      on_launch: proc {}, browser_open: proc { true }, frontend_locator: WorkflowFrontendLocator
+    )
+    submission = Lich::WebUI::Submission.new(viewer_id: 'viewer-1', values: {
+      'page:l/text_input:account-name' => 'DOUG', 'page:l/select:account-frontend' => 'stormfront',
+      'page:l/password_input:account-password' => viewer_secret('account-canary'),
+    })
+    worker = Thread.new { closing.save_account(Event.new('viewer-1', {}, submission)) }
+
+    reached.pop
+    closing.close(reason: :user)
+    release << :go
+
+    expect(worker.join(5)).not_to be_nil
+    expect(catalog.calls.map(&:first)).not_to include(:save_account)
+  end
+
+  it 'refuses a commit after a close was accepted, and a close waits for a commit in progress' do
+    operation = launcher.send(:begin_operation, :favorite, event)
+    launcher.close(reason: :user)
+    ran = false
+    expect(launcher.send(:commit, operation) { ran = true }).to be_nil
+    expect(ran).to be(false)
+
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = open_launcher.send(:begin_operation, :favorite, event)
+    inside = Queue.new
+    release = Queue.new
+    order = []
+    committer = Thread.new do
+      open_launcher.send(:commit, operation) do
+        inside << true
+        release.pop
+        order << :committed
+        :effect
+      end
+    end
+    inside.pop
+    closer = Thread.new do
+      open_launcher.close(reason: :user)
+      order << :closed
+    end
+    sleep 0.05
+    expect(closer.alive?).to be(true), 'close waits for the commit'
+    release << true
+    expect(committer.value).to eq([true, :effect])
+    closer.join(5)
+    expect(order).to eq(%i[committed closed])
+  end
+
+  it 'does not launch terminally after a close was accepted, and closes with the launch reason otherwise' do
+    reasons = []
+    closed_first = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: ->(launch, origin) { launches << [origin, launch] }, browser_open: proc { true },
+      on_close: ->(reason) { reasons << reason }
+    )
+    closed_first.close(reason: :user)
+    expect(closed_first.send(:terminal_launch, { sal: 'SAL' }, :manual)).to be(false)
+    expect(launches).to be_empty
+
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      on_launch: ->(launch, origin) { launches << [origin, launch] }, browser_open: proc { true },
+      on_close: ->(reason) { reasons << reason }
+    )
+    expect(open_launcher.send(:terminal_launch, { sal: 'SAL' }, :manual)).to be(true)
+    expect(launches).to eq([[:manual, { sal: 'SAL' }]])
+    expect(open_launcher.lifecycle).to eq(:closed)
+    expect(reasons).to eq(%i[user launch])
+    expect(open_launcher.close(reason: :user)).to be(false)
+  end
+
+  it 'still launches when the launcher stays open' do
+    session_launcher = class_double(Lich::Common::SessionLauncher, launch: { ok: true })
+    open_launcher = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: ImmediateExecutor.new,
+      session_launcher: session_launcher, persistent: true,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    operation = open_launcher.send(:begin_operation, :saved_entry, event)
+    open_launcher.send(:perform_saved_launch, operation, 'entry-0')
+
+    expect(session_launcher).to have_received(:launch).once
+  end
+
   it 'switches tab/list layout and exercises saved versus automatic sort order under GUI Settings' do
     second = entry.with(key: 'entry-1', char_name: 'Bera')
     first = entry.with(key: 'entry-0', char_name: 'Aldor')
@@ -301,6 +516,69 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
       .to eq(['Aldor (GS Prime)', 'Bera (GS Prime)'])
     expect(catalog.calls).to include([:setting, :tab_layout, false], [:setting, :tab_layout, true],
                                      [:setting, :autosort, true])
+  end
+
+  # The persisted half of Lich.launcher lives in lich_settings; the launcher
+  # is where a player who is already in the WebUI can choose to come back to
+  # GTK next time, or pin the WebUI. An explicit flag still wins over it.
+  it 'offers the native-launcher-next-time toggle only when a launcher choice exists, and writes it' do
+    choice = Class.new do
+      attr_accessor :setting
+
+      def initialize(setting) = @setting = setting
+      def native_next? = @setting == :gtk
+
+      def native_next=(wanted)
+        @setting = wanted ? :gtk : :webui
+      end
+    end.new(:gtk)
+    choosing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: service, authenticator: authenticator,
+      executor: ImmediateExecutor.new, on_launch: ->(*) {}, browser_open: proc { true },
+      frontend_locator: WorkflowFrontendLocator, launcher_choice: choice
+    )
+    choosing.setting_changed(event({}, payload: { value: true }), :settings_visible)
+    tree = choosing.send(:build_page).render.tree
+    toggle = tree.each.find { |component| component.cid.end_with?('toggle:native-launcher-next') }
+    expect(toggle.props[:checked]).to be(true)
+
+    choosing.setting_changed(event({}, payload: { value: false }), :native_launcher_next)
+    expect(choice.setting).to eq(:webui)
+    choosing.setting_changed(event({}, payload: { value: true }), :native_launcher_next)
+    expect(choice.setting).to eq(:gtk)
+    expect(catalog.calls).not_to include(a_collection_including(:native_launcher_next))
+
+    silent = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: service, authenticator: authenticator,
+      executor: ImmediateExecutor.new, on_launch: ->(*) {}, browser_open: proc { true },
+      frontend_locator: WorkflowFrontendLocator, launcher_choice: nil
+    )
+    silent.setting_changed(event({}, payload: { value: true }), :settings_visible)
+    cids = silent.send(:build_page).render.tree.each.map(&:cid)
+    expect(cids).not_to include(a_string_ending_with('toggle:native-launcher-next'))
+    expect { silent.setting_changed(event({}, payload: { value: true }), :native_launcher_next) }
+      .to raise_error(ArgumentError, /not offered/)
+  end
+
+  # The runtime emits detach for any transport loss, and the client dials
+  # back and re-attaches with its resume token. Closing on the detach itself
+  # tore the launcher down before that reconnect could land.
+  it 'survives a socket detach that re-attaches within the grace, and closes on one that does not' do
+    resilient = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new, executor: ImmediateExecutor.new,
+      on_launch: proc {}, browser_open: proc { true }, detach_grace: 0.05
+    )
+    expect(resilient.send(:build_page).lifecycle_bindings.keys).to include(:attach, :detach)
+
+    resilient.browser_window_detached('viewer-1')
+    resilient.browser_window_attached('viewer-1')
+    sleep 0.2
+    expect(resilient.lifecycle).not_to eq(:closed)
+
+    resilient.browser_window_detached('viewer-1')
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
+    sleep 0.02 until resilient.lifecycle == :closed || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+    expect(resilient.lifecycle).to eq(:closed)
   end
 
   it 'clears viewer-owned state and closes the launcher service when its browser window disconnects' do
