@@ -115,6 +115,76 @@ RSpec.describe Lich::WebUI::Dispatcher do
     release << true
   end
 
+  # Bounds are enforced by evicting the oldest coalescable events first.
+  # This pins the eviction result so the count bookkeeping inside
+  # enforce_bounds! can change shape without changing what survives.
+  it 'evicts the oldest coalescable events, one per excess, to admit a new event at the limit' do
+    started = Queue.new
+    release = Queue.new
+    delivered = Queue.new
+    dispatcher.enqueue(
+      owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'blocker',
+      event: :activate, coalescable: false
+    ) do
+      started << true
+      release.pop
+    end
+    started.pop
+    # Distinct cids, so none of these coalesce with its predecessor.
+    described_class::VIEWER_LIMIT.times do |index|
+      dispatcher.enqueue(
+        owner: owner, page_id: 'page', viewer_id: 'viewer', cid: "input-#{index}",
+        event: :change, coalescable: true
+      ) { delivered << index }
+    end
+    2.times do |extra|
+      expect(dispatcher.enqueue(
+        owner: owner, page_id: 'page', viewer_id: 'viewer', cid: "terminal-#{extra}",
+        event: :activate, coalescable: false
+      ) { delivered << "terminal-#{extra}" }).to eq(:queued)
+    end
+    release << true
+
+    results = described_class::VIEWER_LIMIT.times.map { delivered.pop }
+    # The two oldest coalescable events made room; everything else survived in order.
+    expect(results).to eq([*2...described_class::VIEWER_LIMIT, 'terminal-0', 'terminal-1'])
+  end
+
+  # shutdown_owner waits a bounded time for the owner's callback and then
+  # drops the owner state whether or not it returned. Enqueuing for the same
+  # owner afterwards found no state, made a fresh one, and started a second
+  # worker beside the first, still blocked in its callback. Late producers
+  # are real: browser-exit callbacks and timers fire after teardown.
+  it 'refuses a late enqueue for a shut-down owner instead of reviving it' do
+    stub_const('Lich::WebUI::Dispatcher::SHUTDOWN_JOIN_TIMEOUT', 0.05)
+    started = Queue.new
+    release = Queue.new
+    ran = Queue.new
+    dispatcher.enqueue(
+      owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'blocker',
+      event: :activate, coalescable: false
+    ) do
+      started << true
+      release.pop
+      ran << :first
+    end
+    started.pop
+
+    expect(dispatcher.shutdown_owner(owner)).to be(true)
+    expect do
+      dispatcher.enqueue(
+        owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'late',
+        event: :activate, coalescable: false
+      ) { ran << :late }
+    end.to raise_error(Lich::WebUI::Dispatcher::TerminatedError)
+
+    release << true
+    expect(ran.pop).to eq(:first)
+    sleep 0.05
+    expect(ran).to be_empty
+    expect(dispatcher.shutdown_owner(owner)).to be(false)
+  end
+
   it 'refuses synchronous waits from callbacks instead of deadlocking' do
     result = Queue.new
     dispatcher.enqueue(
@@ -129,5 +199,38 @@ RSpec.describe Lich::WebUI::Dispatcher do
     end
 
     expect(result.pop).to be_a(Lich::WebUI::Dispatcher::ReentryError)
+  end
+
+  # There is one refusal, not two: the dispatcher never provides a
+  # synchronous wait. Whether the caller was the page's own callback only
+  # changes what the message says, so a script author can tell a deadlock
+  # they nearly wrote from a wait they simply cannot have.
+  it 'refuses every synchronous wait with one error that names re-entry when it is one' do
+    outside = begin
+      dispatcher.await('page')
+    rescue StandardError => error
+      error
+    end
+    inside = Queue.new
+    dispatcher.enqueue(
+      owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+      event: :activate, coalescable: false
+    ) do
+      inside << begin
+        dispatcher.await('page')
+      rescue StandardError => error
+        error
+      end
+    end
+    inside = inside.pop
+
+    expect(outside).to be_a(Lich::WebUI::Dispatcher::ReentryError)
+    expect(outside.message).to eq('synchronous event waits are refused (page=page)')
+    expect(outside.page_id).to eq('page')
+    expect(inside).to be_a(Lich::WebUI::Dispatcher::ReentryError)
+    expect(inside.message).to eq(
+      "synchronous event waits are refused; this is a re-entry from the page's own callback (page=page)"
+    )
+    expect(inside.page_id).to eq('page')
   end
 end
