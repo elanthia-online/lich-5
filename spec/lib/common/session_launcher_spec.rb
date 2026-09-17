@@ -223,6 +223,28 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'hands a child the launcher its parent resolved, as an explicit flag' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    require_relative '../../../lib/common/launcher_choice'
+
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'],
+                           launch_context: { frontend: 'stormfront', launcher: :webui })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', '--webui', hash_including(chdir: anything)
+    )
+
+    # The parent's own explicit flag travels; a setting or the default does
+    # not need to, since the child re-derives those the same way.
+    stub_const('ARGV', ['--gtk'])
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'], launch_context: { frontend: 'stormfront' })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', '--gtk', hash_including(chdir: anything)
+    )
+  end
+
   it 'forwards an explicit active_session_dir override' do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(nil)
