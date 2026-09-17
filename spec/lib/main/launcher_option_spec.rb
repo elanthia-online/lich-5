@@ -149,6 +149,8 @@ RSpec.describe 'the launcher switches' do
       {
         'Saga'            => saga,
         'a proxy'         => ['--game=lich.example:8000', '--gtk'],
+        'a short proxy'   => ['-g', 'lich.example:8000', '--gtk'],
+        'a .sal alone'    => ['C:\temp\Gse.~xt', '--gtk'],
         'a force mode'    => ['--gemstone', '--gtk'],
         'a headless port' => ['--headless', '4000', '--gtk'],
       }.each do |shape, argv|
