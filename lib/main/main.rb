@@ -208,7 +208,10 @@ reconnect_if_wanted = proc {
     # `next` exits the enclosing `@main_thread = Thread.new {` block (line 53),
     # ending the thread so lich.rbw's @main_thread.join returns; it is not loop control.
     next unless @launch_data
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+  # `--gtk` alone is the advertised way back to the native launcher; it
+  # must open it, not fall through to a headless start because ARGV is no
+  # longer empty (review 2026-09-17, R1).
+  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or @argv_options[:launcher] == :gtk)
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end

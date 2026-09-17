@@ -17,6 +17,7 @@ RSpec.describe 'the launcher switches' do
 
     module_eval(method_body.sub('def self.execute', 'def execute'))
   end
+  define_singleton_method(:parser_class) { parser_class }
 
   around do |example|
     original_argv = ARGV.dup
@@ -65,6 +66,67 @@ RSpec.describe 'the launcher switches' do
     expect(init).to include('elsif Lich.launcher == :webui')
     expect(entrypoint).to include('if defined?(Gtk) && Lich.launcher == :gtk')
     expect([main, init, entrypoint].join).not_to include('webui_dev')
+  end
+
+  # The source-order assertions above did not exercise the routing, and the
+  # review of 2026-09-17 (R1) found that `--gtk` alone opened nothing: the
+  # GTK branch still asked for ARGV.empty? or --gui, and `--gtk` is neither.
+  # main.rb runs at load, so the two branch predicates are lifted out of the
+  # source and evaluated against the real parser's output.
+  describe 'the launcher branches, evaluated' do
+    main_source = File.read(File.join(LIB_DIR, 'main', 'main.rb'))
+    webui_predicate = main_source[/^\s*elsif (Lich\.launcher == :webui && \(.*?\))$/, 1]
+    gtk_predicate = main_source[/^\s*elsif (defined\?\(Gtk\) and \(.*?\))$/, 1]
+    raise 'could not extract the launcher predicates from main.rb' unless webui_predicate && gtk_predicate
+
+    harness_class = Class.new do
+      def initialize(argv_options, launcher, gtk_loaded)
+        @argv_options = argv_options
+        @launcher = launcher
+        @gtk_loaded = gtk_loaded
+      end
+
+      define_method(:opens_webui?) { instance_eval(webui_predicate.gsub('Lich.launcher', '@launcher')) }
+      define_method(:opens_gtk?) { instance_eval(gtk_predicate.gsub('defined?(Gtk)', '@gtk_loaded')) }
+    end
+    define_singleton_method(:harness_class) { harness_class }
+
+    def route(argv, launcher:, gtk_loaded: launcher == :gtk)
+      ARGV.replace(argv)
+      options = parser_class.new.execute
+      harness = harness_class.new(options, launcher, gtk_loaded)
+      if harness.opens_webui? then :webui
+      elsif harness.opens_gtk? then :gtk
+      else :headless
+      end
+    end
+
+    let(:parser_class) { self.class.parser_class }
+    let(:harness_class) { self.class.harness_class }
+
+    it 'opens the GTK launcher for --gtk alone' do
+      expect(route(['--gtk'], launcher: :gtk)).to eq(:gtk)
+    end
+
+    it 'opens the WebUI launcher for --webui alone and for no arguments under the WebUI default' do
+      expect(route(['--webui'], launcher: :webui)).to eq(:webui)
+      expect(route([], launcher: :webui)).to eq(:webui)
+    end
+
+    it 'follows a persisted GTK choice with no arguments, and --gui under either launcher' do
+      expect(route([], launcher: :gtk)).to eq(:gtk)
+      expect(route(['--gui'], launcher: :gtk)).to eq(:gtk)
+      expect(route(['--gui'], launcher: :webui)).to eq(:webui)
+    end
+
+    it 'starts headless for an explicit --no-gui under either launcher' do
+      expect(route(['--no-gui'], launcher: :gtk)).to eq(:headless)
+      expect(route(['--no-gui'], launcher: :webui)).to eq(:headless)
+    end
+
+    it 'never opens the GTK launcher when gtk3 did not load' do
+      expect(route(['--gtk'], launcher: :gtk, gtk_loaded: false)).to eq(:headless)
+    end
   end
 
   it 'loads gtk3 only when the launcher is GTK' do
