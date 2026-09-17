@@ -2680,6 +2680,7 @@ module Lich
           Gtk.log_unsupported('Gdk', name, note: 'constant is not implemented')
           const_set(name, value)
         end
+
         # There is no X display behind the browser, so the shim reports one
         # monitor the size of the default screen. Real geometry arrives with
         # the viewer's `geometry` facility once a window is attached; until

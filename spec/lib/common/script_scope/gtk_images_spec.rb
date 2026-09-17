@@ -44,10 +44,12 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
     end
     header = [width, height].pack('N2') + [8, 0, 0, 0, 0].pack('C5')
     raw = ([0].pack('C') + ([0] * width).pack('C*')) * height
+    # rubocop:disable Custom/AsciiOnlySource -- PNG's magic bytes
     "\x89PNG\r\n\x1A\n".b +
       chunk.call('IHDR', header) +
       chunk.call('IDAT', Zlib::Deflate.deflate(raw)) +
       chunk.call('IEND', '')
+    # rubocop:enable Custom/AsciiOnlySource
   end
 
   before do
@@ -86,8 +88,8 @@ RSpec.describe 'GTK compatibility shim: images and layouts' do
       expect(session.serve_file(File.join(File.expand_path('..', root), 'nothing.png'))).to be_nil
     end
 
-    # A prefix match alone would accept "…/maps-elsewhere" as being inside
-    # "…/maps"; the containment check requires a separator.
+    # A prefix match alone would accept ".../maps-elsewhere" as being inside
+    # ".../maps"; the containment check requires a separator.
     it 'does not serve a sibling of a permitted root' do
       stub_const('MAP_DIR', root)
       stub_const('DATA_DIR', root)
