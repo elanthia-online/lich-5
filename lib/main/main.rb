@@ -223,6 +223,7 @@ reconnect_if_wanted = proc {
   # child arrives here through --login, not through the launcher branch above.
   if Lich.launcher == :webui
     require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    require File.join(LIB_DIR, 'webui.rb')
     # A session spawned by the launcher gets --webui-no-browser from its
     # parent; a fixed port is per process and never inherited, since every
     # session runs its own WebUI server.
