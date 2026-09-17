@@ -1,0 +1,12 @@
+{
+  "name": "lich-webui-client-harness",
+  "private": true,
+  "description": "Behavioural harness for lib/webui/assets/app.js: the real client in jsdom against a fake WebSocket.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test cases/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
+  }
+}

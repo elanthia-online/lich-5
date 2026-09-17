@@ -1,0 +1,425 @@
+{
+  "actions": {
+    "type": "render",
+    "page": "page-8a02f8b0480f527fe2872c6ff18f0d8e",
+    "generation": 1,
+    "tree": {
+      "type": "page",
+      "cid": "page:actions",
+      "props": {
+        "title": "Actions",
+        "bare": false
+      },
+      "children": [
+        {
+          "type": "button",
+          "cid": "page:actions/button:a",
+          "props": {
+            "label": "A",
+            "variant": "default",
+            "key": "a"
+          },
+          "children": []
+        },
+        {
+          "type": "button",
+          "cid": "page:actions/button:b",
+          "props": {
+            "label": "B",
+            "variant": "default",
+            "key": "b"
+          },
+          "children": []
+        },
+        {
+          "type": "text_input",
+          "cid": "page:actions/text_input:note",
+          "props": {
+            "value": "first",
+            "search": false,
+            "key": "note"
+          },
+          "children": []
+        },
+        {
+          "type": "button",
+          "cid": "page:actions/button:save",
+          "props": {
+            "label": "Save",
+            "variant": "default",
+            "key": "save"
+          },
+          "children": []
+        }
+      ]
+    },
+    "facilities": {},
+    "bindings": {
+      "page:actions/button:a": [
+        "activate"
+      ],
+      "page:actions/button:b": [
+        "activate"
+      ],
+      "page:actions/text_input:note": [
+        "change"
+      ],
+      "page:actions/button:save": [
+        "activate"
+      ]
+    },
+    "submissions": {
+      "page:actions/button:save": [
+        "page:actions/text_input:note"
+      ]
+    },
+    "resume": "resume-98e5d1baa1db7f199ebdf79e0e325bcd"
+  },
+  "edits": {
+    "type": "render",
+    "page": "page-5973b55c9e7e58ec45ce08c24eb3e056",
+    "generation": 1,
+    "tree": {
+      "type": "page",
+      "cid": "page:edits",
+      "props": {
+        "title": "Edits",
+        "bare": false
+      },
+      "children": [
+        {
+          "type": "text_input",
+          "cid": "page:edits/text_input:name",
+          "props": {
+            "value": "Alice",
+            "search": false,
+            "key": "name"
+          },
+          "children": []
+        },
+        {
+          "type": "number_input",
+          "cid": "page:edits/number_input:count",
+          "props": {
+            "value": 3,
+            "min": 0,
+            "max": 100,
+            "step": 1,
+            "key": "count"
+          },
+          "children": []
+        },
+        {
+          "type": "password_input",
+          "cid": "page:edits/password_input:secret",
+          "props": {
+            "key": "secret",
+            "sensitive": true
+          },
+          "children": []
+        },
+        {
+          "type": "button",
+          "cid": "page:edits/button:login",
+          "props": {
+            "label": "Log in",
+            "variant": "default",
+            "key": "login"
+          },
+          "children": []
+        }
+      ]
+    },
+    "facilities": {},
+    "bindings": {
+      "page:edits/text_input:name": [
+        "change"
+      ],
+      "page:edits/number_input:count": [
+        "change"
+      ],
+      "page:edits/password_input:secret": [
+        "change",
+        "submit"
+      ],
+      "page:edits/button:login": [
+        "activate"
+      ]
+    },
+    "submissions": {
+      "page:edits/button:login": [
+        "page:edits/password_input:secret"
+      ]
+    },
+    "resume": "resume-64f7650bfc52fbb4e5eb434cac6635d9"
+  },
+  "tables": {
+    "type": "render",
+    "page": "page-f3de9d19625034230ced441f9c2d8d3d",
+    "generation": 1,
+    "tree": {
+      "type": "page",
+      "cid": "page:tables",
+      "props": {
+        "title": "Tables",
+        "bare": false
+      },
+      "children": [
+        {
+          "type": "table",
+          "cid": "page:tables/table:live",
+          "props": {
+            "columns": [
+              {
+                "key": "name",
+                "label": "Name",
+                "align": "start",
+                "sortable": false,
+                "editor": null
+              }
+            ],
+            "rows": [
+              {
+                "key": "a",
+                "expanded": false,
+                "cells": {
+                  "name": "A"
+                }
+              },
+              {
+                "key": "b",
+                "expanded": false,
+                "cells": {
+                  "name": "B"
+                }
+              },
+              {
+                "key": "c",
+                "expanded": false,
+                "cells": {
+                  "name": "C"
+                }
+              },
+              {
+                "key": "d",
+                "expanded": false,
+                "cells": {
+                  "name": "D"
+                }
+              },
+              {
+                "key": "e",
+                "expanded": false,
+                "cells": {
+                  "name": "E"
+                }
+              }
+            ],
+            "selection": "multi",
+            "headers": true,
+            "sortable": false,
+            "key": "live"
+          },
+          "children": []
+        },
+        {
+          "type": "table",
+          "cid": "page:tables/table:locked",
+          "props": {
+            "columns": [
+              {
+                "key": "name",
+                "label": "Name",
+                "align": "start",
+                "sortable": false,
+                "editor": null
+              }
+            ],
+            "rows": [
+              {
+                "key": "a",
+                "expanded": false,
+                "cells": {
+                  "name": "A"
+                }
+              },
+              {
+                "key": "b",
+                "expanded": false,
+                "cells": {
+                  "name": "B"
+                }
+              },
+              {
+                "key": "c",
+                "expanded": false,
+                "cells": {
+                  "name": "C"
+                }
+              },
+              {
+                "key": "d",
+                "expanded": false,
+                "cells": {
+                  "name": "D"
+                }
+              },
+              {
+                "key": "e",
+                "expanded": false,
+                "cells": {
+                  "name": "E"
+                }
+              }
+            ],
+            "selection": "multi",
+            "headers": true,
+            "sortable": false,
+            "key": "locked",
+            "disabled": true
+          },
+          "children": []
+        },
+        {
+          "type": "select",
+          "cid": "page:tables/select:pick",
+          "props": {
+            "options": [
+              {
+                "value": "x",
+                "label": "X"
+              },
+              {
+                "value": "y",
+                "label": "Y"
+              }
+            ],
+            "value": "x",
+            "key": "pick"
+          },
+          "children": []
+        },
+        {
+          "type": "select",
+          "cid": "page:tables/select:frozen",
+          "props": {
+            "options": [
+              {
+                "value": "x",
+                "label": "X"
+              },
+              {
+                "value": "y",
+                "label": "Y"
+              }
+            ],
+            "value": "x",
+            "key": "frozen",
+            "disabled": true
+          },
+          "children": []
+        }
+      ]
+    },
+    "facilities": {},
+    "bindings": {
+      "page:tables/table:live": [
+        "selection_change",
+        "row_activate"
+      ],
+      "page:tables/table:locked": [
+        "selection_change",
+        "row_activate"
+      ],
+      "page:tables/select:pick": [
+        "change"
+      ],
+      "page:tables/select:frozen": [
+        "change"
+      ]
+    },
+    "submissions": {},
+    "resume": "resume-baacc3cf20af29c0e2ecbe80578d94e4"
+  },
+  "shapes": {
+    "type": "render",
+    "page": "page-a1d0fd0ba67263d03a2c59d5e9437bf4",
+    "generation": 1,
+    "tree": {
+      "type": "page",
+      "cid": "page:shapes",
+      "props": {
+        "title": "Shapes",
+        "bare": false
+      },
+      "children": [
+        {
+          "type": "composite",
+          "cid": "page:shapes/composite:surface",
+          "props": {
+            "key": "surface",
+            "width": 100,
+            "height": 100,
+            "scale": 1.0,
+            "surface_events": false,
+            "layers": [
+              {
+                "kind": "ellipse",
+                "x": 10,
+                "y": 10,
+                "w": 20,
+                "h": 20,
+                "stroke": {
+                  "r": 255,
+                  "g": 0,
+                  "b": 0,
+                  "a": 0.8
+                },
+                "stroke_width": 3,
+                "opacity": 1.0
+              },
+              {
+                "kind": "rect",
+                "x": 40,
+                "y": 40,
+                "w": 30,
+                "h": 20,
+                "stroke": {
+                  "tone": "danger"
+                },
+                "fill": {
+                  "r": 0,
+                  "g": 0,
+                  "b": 255,
+                  "a": 0.5
+                },
+                "stroke_width": 1.0,
+                "opacity": 1.0
+              },
+              {
+                "kind": "line",
+                "x1": 0,
+                "y1": 0,
+                "x2": 99,
+                "y2": 99,
+                "stroke": {
+                  "r": 0,
+                  "g": 200,
+                  "b": 0,
+                  "a": 1.0
+                },
+                "stroke_width": 2,
+                "opacity": 1.0
+              }
+            ]
+          },
+          "children": []
+        }
+      ]
+    },
+    "facilities": {},
+    "bindings": {},
+    "submissions": {},
+    "resume": "resume-ccc8b40e4c192ec04ba5434d9cc82ecd"
+  }
+}

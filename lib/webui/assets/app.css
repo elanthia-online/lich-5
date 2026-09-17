@@ -6,6 +6,11 @@
   --border: color-mix(in srgb, CanvasText 26%, transparent);
   --accent: #2468b4;
   --danger: #b12a2a;
+  /* The contract's four tones as paint, for a shape or bar tinted by tone. */
+  --tone-neutral: CanvasText;
+  --tone-positive: #2e7d32;
+  --tone-caution: #b26a00;
+  --tone-danger: var(--danger);
   --gap: 12px;
 }
 
