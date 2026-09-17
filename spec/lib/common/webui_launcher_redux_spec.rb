@@ -132,6 +132,18 @@ RSpec.describe Lich::Common::WebUILauncher do
     )
   end
 
+  # Every render carried the notice, so a resize report or a refresh toasted
+  # "Session launched." again while nothing was happening.
+  it 'carries a notice in the render that shows it and in no later one' do
+    launcher.send(:set_notice, 'Session launched.', :info)
+    page = launcher.send(:build_page)
+
+    expect(page.render.facilities[:notify]).to eq(text: 'Session launched.', level: 'info')
+    expect(page.render.facilities[:notify]).to be_nil
+    launcher.send(:set_notice, 'Saved.', :info)
+    expect(page.render.facilities[:notify]).to eq(text: 'Saved.', level: 'info')
+  end
+
   it 'authors saved geometry and persists bounded browser geometry proposals' do
     geometry_store = instance_double(
       Lich::Common::WebUILauncher::WindowGeometryStore,

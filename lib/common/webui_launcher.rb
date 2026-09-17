@@ -223,7 +223,16 @@ module Lich
           end
           geometry(**geometry_options)
           presentation(always_on_top: false, scrollbars: true)
+          launcher.__send__(:notice_shown, state[:notice])
         end
+      end
+
+      # A notice is shown once: the render that carries it is the one the
+      # client toasts. It used to stay set, so every later render -- a
+      # resize report, a refresh -- carried it again and the toasts piled
+      # up while nothing was happening (2026-09-17).
+      def notice_shown(notice)
+        @mutex.synchronize { @notice = nil if notice && @notice.equal?(notice) }
       end
 
       def render_state
