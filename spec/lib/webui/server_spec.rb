@@ -99,6 +99,26 @@ RSpec.describe Lich::WebUI::Server do
     server&.stop
   end
 
+  # A browser keys cookies by host and ignores the port. Two Lich sessions
+  # on 127.0.0.1 both setting `lich_webui` overwrote each other's token, and
+  # the first session's next request was refused with 403 (reviewed 2026-09-17,
+  # reproduced in real Chrome). The cookie name carries the port now, so the
+  # jar holds both.
+  it 'names its cookie after its port so two servers share one browser profile' do
+    first = build_server(@assets_dir).start
+    second = build_server(@assets_dir).start
+    _uri, _response, first_cookie = authenticate(first)
+    _uri, _response, second_cookie = authenticate(second)
+    expect(first_cookie).to start_with("lich_webui_#{first.port}=")
+    expect(second_cookie).to start_with("lich_webui_#{second.port}=")
+    jar = "#{first_cookie}; #{second_cookie}"
+    expect(request(first, '/', 'Cookie' => jar, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate')).to start_with('HTTP/1.1 200')
+    expect(request(second, '/', 'Cookie' => jar, 'Sec-Fetch-Site' => 'same-origin', 'Sec-Fetch-Mode' => 'navigate')).to start_with('HTTP/1.1 200')
+  ensure
+    first&.stop
+    second&.stop
+  end
+
   it 'rejects a session cookie from a prior server session' do
     first = build_server(@assets_dir).start
     _uri, _response, old_cookie = authenticate(first)
@@ -186,6 +206,49 @@ RSpec.describe Lich::WebUI::Server do
     expect(results.drop_while { |ok| ok }).to all(be(false))
     expect(connection).not_to be_alive
     expect(elapsed).to be < 5.0
+  ensure
+    [client, accepted, listener].each { |io| io&.close }
+  end
+
+  # The timeout used to bound each wait for a writable socket, not the
+  # write: a peer draining a byte at a time, each within the timeout, kept a
+  # render write alive for as long as it liked (reviewed 2026-09-17: a 20ms
+  # budget took 249ms). One deadline covers the whole write now, and the
+  # wait for the write lock counts against it too.
+  it 'gives up on the whole write at its deadline, however slowly the peer drains' do
+    fake = Object.new
+    calls = 0
+    fake.define_singleton_method(:write_nonblock) do |bytes, **_|
+      calls += 1
+      calls.odd? ? :wait_writable : [1, bytes.bytesize].min
+    end
+    allow(IO).to receive(:select) do |_read, write, _error, timeout|
+      sleep([timeout, 0.02].min * 0.75)
+      [nil, write, nil]
+    end
+    connection = Lich::WebUI::Server::Connection.new(fake, write_timeout: 0.05)
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = connection.send_text('x' * 200)
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    expect(result).to be(false)
+    expect(connection).not_to be_alive
+    expect(elapsed).to be < 0.5
+  end
+
+  it 'gives up on a write queued behind a stalled one at the same deadline' do
+    listener = TCPServer.new('127.0.0.1', 0)
+    client = TCPSocket.new('127.0.0.1', listener.addr[1])
+    accepted = listener.accept
+    connection = Lich::WebUI::Server::Connection.new(client, write_timeout: 0.2)
+    payload = 'x' * (1024 * 1024)
+    stalled = Thread.new { 64.times.map { connection.send_text(payload) } }
+    sleep 0.05
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    queued = connection.send_text('behind')
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    stalled.join
+    expect(queued).to be(false)
+    expect(elapsed).to be < 1.0
   ensure
     [client, accepted, listener].each { |io| io&.close }
   end

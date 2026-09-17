@@ -12,6 +12,10 @@ module Lich
   module WebUI
     # Authenticated loopback-only HTTP/WebSocket service for native WebUI pages.
     class Server
+      # The session cookie's name carries the port, because a browser keys
+      # cookies by host and ignores the port: two Lich sessions on
+      # 127.0.0.1, both setting `lich_webui`, overwrote each other's token
+      # and the first session's next authenticated request was refused.
       COOKIE_NAME = 'lich_webui'
       MAX_HEADER_BYTES = 8192
       # A served file is read whole into memory before it goes out. Anything
@@ -188,16 +192,27 @@ module Lich
         def write(bytes)
           return false unless @alive
 
-          @write_mutex.synchronize { write_within_timeout(bytes) }
+          # One deadline for the whole operation, taken before waiting for the
+          # writer's turn: a write queued behind a stalled one is stalled too,
+          # and the budget is the caller's, not each wait's.
+          deadline = monotonic_time + @write_timeout
+          return give_up! unless acquire_write_lock(deadline)
+
+          begin
+            write_within_deadline(bytes, deadline)
+          ensure
+            @write_mutex.unlock
+          end
         rescue IOError, SystemCallError
           @alive = false
           false
         end
 
-        # Writes without ever blocking longer than the timeout: a full send
-        # buffer waits on select, and a peer that does not drain it within the
-        # budget makes the connection dead rather than the writer stuck.
-        def write_within_timeout(bytes)
+        # Never blocks past the deadline: a full send buffer waits on select
+        # for only what is left of the budget, so a peer that drains slowly
+        # cannot keep a large render write alive by making progress a byte at
+        # a time. The connection is dead when the budget runs out.
+        def write_within_deadline(bytes, deadline)
           remaining = bytes.b
           until remaining.empty?
             written = begin
@@ -206,15 +221,37 @@ module Lich
               :wait_writable
             end
             if written == :wait_writable
-              unless IO.select(nil, [@socket], nil, @write_timeout)
-                @alive = false
-                return false
-              end
+              budget = deadline - monotonic_time
+              return give_up! if budget <= 0 || !IO.select(nil, [@socket], nil, budget)
+
               next
             end
             remaining = remaining.byteslice(written, remaining.bytesize - written)
           end
           true
+        end
+
+        # Mutex has no timed lock; the wait for it is polled against the
+        # deadline so that a writer stuck behind a stalled peer's write gives
+        # up on schedule too instead of queueing forever.
+        LOCK_POLL_INTERVAL = 0.005
+
+        def acquire_write_lock(deadline)
+          until @write_mutex.try_lock
+            return false if monotonic_time >= deadline
+
+            sleep(LOCK_POLL_INTERVAL)
+          end
+          true
+        end
+
+        def give_up!
+          @alive = false
+          false
+        end
+
+        def monotonic_time
+          Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
       end
 
@@ -329,7 +366,7 @@ module Lich
           socket, 302, 'Found', '',
           extra_headers: [
             "Location: #{target}",
-            "Set-Cookie: #{COOKIE_NAME}=#{@session_token}; HttpOnly; SameSite=Strict; Path=/",
+            "Set-Cookie: #{cookie_name}=#{@session_token}; HttpOnly; SameSite=Strict; Path=/",
             'Referrer-Policy: no-referrer',
           ]
         )
@@ -443,9 +480,14 @@ module Lich
       def cookie_token(request)
         request[:headers]['cookie'].to_s.split(';').each do |pair|
           name, value = pair.split('=', 2)
-          return value.to_s.strip if name.to_s.strip == COOKIE_NAME
+          return value.to_s.strip if name.to_s.strip == cookie_name
         end
         nil
+      end
+
+      # Per server instance: see COOKIE_NAME.
+      def cookie_name
+        "#{COOKIE_NAME}_#{port}"
       end
 
       def host_allowed?(request)

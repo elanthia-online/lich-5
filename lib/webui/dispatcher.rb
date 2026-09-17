@@ -50,11 +50,11 @@ module Lich
       def enqueue(owner:, page_id:, viewer_id:, cid:, event:, coalescable:, &callable)
         raise ArgumentError, 'owner is required' unless owner
         raise ArgumentError, 'callback block is required' unless callable
-        if @mutex.synchronize { @terminated.key?(owner) }
-          raise TerminatedError.new('owner has been shut down', owner: owner_label(owner), page_id: page_id, cid: cid)
-        end
-
-        state = owner_state(owner)
+        # The tombstone check and the state lookup are one critical section:
+        # done as two, a shutdown could mark the owner terminal and drop its
+        # state between them, and the lookup then created a fresh worker for
+        # a dead owner.
+        state = owner_state(owner, page_id: page_id, cid: cid)
         queued = Event.new(owner, page_id, viewer_id, cid, event, coalescable, callable)
         state.mutex.synchronize do
           raise Error, 'owner dispatcher is terminated' unless state.running
@@ -112,8 +112,16 @@ module Lich
 
       private
 
-      def owner_state(owner)
+      # The owner's worker state, created on first use. Refused, under the
+      # same lock, for an owner that has been shut down: creating a state for
+      # one would start a new worker beside whatever its old one is still
+      # finishing.
+      def owner_state(owner, page_id: nil, cid: nil)
         @mutex.synchronize do
+          if @terminated.key?(owner)
+            raise TerminatedError.new('owner has been shut down', owner: owner_label(owner), page_id: page_id, cid: cid)
+          end
+
           @owners[owner] ||= begin
             state = OwnerState.new
             state.thread = @thread_factory.call { run_owner(state) }

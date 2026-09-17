@@ -185,6 +185,44 @@ RSpec.describe Lich::WebUI::Dispatcher do
     expect(dispatcher.shutdown_owner(owner)).to be(false)
   end
 
+  # The sequential case above passed while a concurrent one still revived
+  # the owner: the tombstone check and the state lookup were two critical
+  # sections, and a shutdown landing between them left the lookup to create
+  # a fresh worker. The state lookup itself now refuses a tombstoned owner,
+  # so there is no gap for a shutdown to land in.
+  it 'refuses to create a worker state for an owner shut down since the enqueue began' do
+    dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'a', event: :activate, coalescable: false) { nil }
+    expect(dispatcher.shutdown_owner(owner)).to be(true)
+    expect { dispatcher.send(:owner_state, owner) }.to raise_error(Lich::WebUI::Dispatcher::TerminatedError)
+    # Nothing was created: the owner is not back in the table, so a second
+    # shutdown finds nothing to stop.
+    expect(dispatcher.shutdown_owner(owner)).to be(false)
+  end
+
+  it 'does not revive an owner when an enqueue races its shutdown' do
+    ran = Queue.new
+    workers = 50.times.map do
+      subject_owner = Object.new
+      dispatcher.enqueue(owner: subject_owner, page_id: 'page', viewer_id: 'viewer', cid: 'warm', event: :activate, coalescable: false) { nil }
+      subject_owner
+    end
+    threads = workers.flat_map do |subject_owner|
+      [
+        Thread.new { dispatcher.shutdown_owner(subject_owner) },
+        Thread.new do
+          dispatcher.enqueue(owner: subject_owner, page_id: 'page', viewer_id: 'viewer', cid: 'late', event: :activate, coalescable: false) { ran << subject_owner }
+        rescue Lich::WebUI::Dispatcher::TerminatedError, Lich::WebUI::Dispatcher::Error
+          nil
+        end
+      ]
+    end
+    threads.each(&:join)
+    sleep 0.1
+    # Whatever ran, ran on a worker that existed before its shutdown; no
+    # owner has a live worker afterwards.
+    workers.each { |subject_owner| expect(dispatcher.shutdown_owner(subject_owner)).to be(false) }
+  end
+
   it 'refuses synchronous waits from callbacks instead of deadlocking' do
     result = Queue.new
     dispatcher.enqueue(
