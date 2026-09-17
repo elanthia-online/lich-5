@@ -192,6 +192,54 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
       expect(session.sync { :alive }).to eq(:alive)
       expect(session).to have_received(:report).with(an_instance_of(NoMethodError)).at_least(:once)
     end
+
+    # Review 2026-09-17 (b), F1: the batch's commit ran outside the rescue,
+    # so an error inside materialize! ended the thread; a sync queued while
+    # the failing commit was still running saw a live thread, did not start
+    # another, and waited for ever. The barrier fixes that ordering.
+    it 'answers a sync queued behind a commit that raises, on the same thread' do
+      allow(session).to receive(:report)
+      entered = Queue.new
+      release = Queue.new
+      window = Object.new
+      window.define_singleton_method(:handle) { true }
+      window.define_singleton_method(:materialize!) do |_adapter|
+        entered << true
+        release.pop
+        raise NoMethodError, 'deliberate commit error'
+      end
+      session.sync { :ready }
+      thread = session.instance_variable_get(:@thread)
+      session.instance_variable_set(:@windows, [window])
+
+      session.enqueue { nil }
+      Timeout.timeout(2) { entered.pop }
+      waiting = Thread.new { session.sync { :pending } }
+      Timeout.timeout(2) { Thread.pass until session.instance_variable_get(:@queue).size.positive? }
+      session.instance_variable_set(:@windows, [])
+      release << true
+
+      expect(waiting.join(2)).not_to be_nil
+      expect(waiting.value).to eq(:pending)
+      expect(session.instance_variable_get(:@thread)).to equal(thread)
+      expect(thread).to be_alive
+      expect(session).to have_received(:report).with(an_instance_of(NoMethodError)).once
+    end
+
+    it 'refuses a sync still queued when the session thread ends, instead of leaving it waiting' do
+      session.sync { :ready }
+      thread = session.instance_variable_get(:@thread)
+      gate = Queue.new
+      session.enqueue { gate.pop }
+      Timeout.timeout(2) { Thread.pass until gate.num_waiting == 1 }
+      waiting = Thread.new { session.sync { :never } }
+      Timeout.timeout(2) { Thread.pass until session.instance_variable_get(:@queue).size.positive? }
+      thread.kill.join
+
+      expect { waiting.value }.to raise_error(Lich::WebUI::Error, /shut down/)
+      session.shutdown
+      expect { session.sync { :late } }.to raise_error(Lich::WebUI::Error, /shut down/)
+    end
   end
 end
 
