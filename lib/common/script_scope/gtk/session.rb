@@ -330,6 +330,7 @@ module Lich
             @window_handles = {} # window => OS window handle, once found
             @mutex = Mutex.new
             @pending_viewer_writes = []
+            @reported_degradations = Set.new # [page, facility, property], each reported once (D16)
             @closed = false
           end
 
@@ -493,9 +494,34 @@ module Lich
             windows.each { |window| window.materialize!(adapter) if window.handle }
             adapter.commit
             flush_viewer_writes
+            report_degradations(windows)
           rescue Lich::WebUI::Error => error
             log(:error, "commit failed: #{error.message}")
           end
+
+          # What the runtime refused of a window's presentation (keep_above
+          # on a host that cannot reach the OS window, say) is recorded on
+          # the page and shown to nobody. Each refusal is reported once per
+          # window through the ledger (D16), so it lands in the per-script
+          # summary beside every other gap. The render that records it is
+          # the one adapter.commit just delivered, so this reads the current
+          # answer, not a stale one.
+          def report_degradations(windows)
+            windows.each do |window|
+              next unless window.handle
+
+              page = adapter.page_for(window.handle)
+              next unless page
+
+              page.degradations.each do |refusal|
+                key = [page, refusal[:facility], refusal[:property]]
+                next unless @mutex.synchronize { @reported_degradations.add?(key) }
+
+                Gtk.log_unsupported('Gtk::Window', "#{refusal[:facility]} #{refusal[:property]}", note: refusal[:reason].to_s)
+              end
+            end
+          end
+          private :report_degradations
 
           # Pushes a viewer-scoped value (entry text, checkbox state) to every
           # viewer currently attached to the widget's page, so the browser's

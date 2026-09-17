@@ -345,6 +345,26 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       end
     end
 
+    # D16 (ledger part 2): a degradation the runtime records was shown to
+    # nobody. The session reports each one once through the ledger, so it
+    # lands in the per-script summary beside every other gap.
+    it 'reports each presentation degradation once through the ledger (D16)' do
+      gtk.reset_unsupported!
+      allow(service.runtime).to receive(:presentation_support)
+        .and_return({ always_on_top: false, borderless: false, opacity: false }.freeze)
+      window = shown_window { |win| win.set_keep_above(true); win.set_decorated(false) }
+      session.sync {}
+      session.sync { window.set_opacity(0.5) }
+      session.sync {}
+
+      entries = gtk.unsupported_report.values.flat_map(&:to_a).to_h
+      expect(entries.keys).to contain_exactly(
+        'Gtk::Window#presentation always_on_top', 'Gtk::Window#presentation borderless', 'Gtk::Window#presentation opacity'
+      )
+      expect(entries.values.map { |entry| entry[:count] }).to all(eq(1))
+      expect(entries.values.map { |entry| entry[:note] }).to all(include('unsupported_by_browser_host'))
+    end
+
     # creaturebar spells "hide the window" as set_opacity(0.0). The contract
     # floor is 0.1, so the facility clamps -- but the script still reads back
     # what it wrote, and the refusal is the honest answer.
