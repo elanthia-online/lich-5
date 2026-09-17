@@ -207,6 +207,50 @@ GTK_BUILDER_SPEC_XML = <<~'XML'
   </interface>
 XML
 
+# Review 2026-09-17, R11: renderer properties from Glade never applied.
+RENDERER_PROPERTIES_XML = <<~XML
+  <?xml version="1.0" encoding="UTF-8"?>
+  <interface>
+    <object class="GtkListStore" id="store">
+      <columns>
+        <column type="gchararray"/>
+        <column type="gboolean"/>
+      </columns>
+    </object>
+    <object class="GtkWindow" id="main">
+      <property name="title">Renderers</property>
+      <child>
+        <object class="GtkTreeView" id="view">
+          <property name="visible">True</property>
+          <property name="model">store</property>
+          <child>
+            <object class="GtkTreeViewColumn">
+              <property name="title">Name</property>
+              <child>
+                <object class="GtkCellRendererText">
+                  <property name="editable">True</property>
+                </object>
+                <attributes><attribute name="text">0</attribute></attributes>
+              </child>
+            </object>
+          </child>
+          <child>
+            <object class="GtkTreeViewColumn">
+              <property name="title">Locked</property>
+              <child>
+                <object class="GtkCellRendererToggle">
+                  <property name="activatable">False</property>
+                </object>
+                <attributes><attribute name="active">1</attribute></attributes>
+              </child>
+            </object>
+          </child>
+        </object>
+      </child>
+    </object>
+  </interface>
+XML
+
 RSpec.describe 'GTK compatibility shim (slice two): Builder and data widgets' do
   let(:gtk) { Lich::Common::ScriptScope::Gtk }
   let(:owner) { Struct.new(:name) { def at_exit(&_block) = true }.new('eloot') }
@@ -251,6 +295,21 @@ RSpec.describe 'GTK compatibility shim (slice two): Builder and data widgets' do
 
   def component(page, key)
     page.last_render.tree.each.find { |candidate| candidate.props[:key] == key } || raise("no component with key #{key}")
+  end
+
+  it 'applies editable and activatable from Glade to the cell renderers' do
+    builder = nil
+    window = nil
+    session.sync do
+      builder = setup_class.new
+      builder.add_from_string(RENDERER_PROPERTIES_XML)
+      window = builder.get_object('main')
+      window.show_all
+    end
+    session.commit
+    table = page_for(window).last_render.tree.each.find { |node| node.type == :table } || raise('no table')
+
+    expect(table.props[:columns].map { |column| column[:editor] }).to eq([{ type: 'text' }, nil])
   end
 
   def fire(page, widget, event, payload = {}, viewer_id: 'attachment-spec')

@@ -1209,9 +1209,14 @@ module Lich
             @handlers[Gtk.normalize_signal(signal)].each { |handler| Widget.call_handler(handler, [self, *args]) }
           end
 
+          # Only a setter the renderer actually defines is applied. This
+          # used to test `!respond_to?(:method_missing)`, which is false for
+          # every renderer since they all define it, so no Glade property
+          # ever reached a renderer: an `editable` column stayed read-only
+          # (review 2026-09-17, R11).
           def apply_builder_property(name, value)
             setter = "#{name.to_s.tr('-', '_')}="
-            public_send(setter, Gtk.builder_value(value)) if respond_to?(setter, false) && !respond_to?(:method_missing)
+            public_send(setter, Gtk.builder_value(value)) if self.class.public_method_defined?(setter)
             self
           end
 
@@ -1607,10 +1612,21 @@ module Lich
               index = column_key.delete_prefix('c').to_i
               column = @columns.select(&:visible?)[index]
               iter = find_row_copy(row_key)
-              if column && iter
-                iter[column.value_column] = value
-                column.renderer&.emit(:edited, iter.path.to_s, value)
-                column.renderer&.emit(:toggled, iter.path.to_s)
+              # The script owns the model, as under GTK: the renderer's
+              # signal tells it what the viewer did and its handler decides
+              # what the cell holds. Writing the value first and then
+              # emitting both signals meant a conventional toggle handler
+              # (`iter[col] = !iter[col]`) inverted the value the shim had
+              # just set, putting the checkbox back where it started, and a
+              # text handler could not refuse an edit without undoing one
+              # (review 2026-09-17, R7). A text renderer's `edited` carries
+              # the new text; a toggle's `toggled` carries the path alone.
+              if column && iter && (renderer = column.renderer)
+                if renderer.is_a?(CellRendererToggle)
+                  renderer.emit(:toggled, iter.path.to_s)
+                else
+                  renderer.emit(:edited, iter.path.to_s, value)
+                end
               end
             end
           end

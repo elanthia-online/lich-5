@@ -496,7 +496,44 @@ RSpec.describe 'GTK compatibility shim: data widgets' do
       end
 
       expect(fired).to eq([[:activated, '0'], [:edited, '0', 'ALPHA']])
-      expect(store.to_enum(:each).map { |_model, _path, row| row[0] }).to eq(%w[ALPHA beta])
+      # The script owns the model: an `edited` handler that does not write
+      # the value has refused the edit, and the model still says alpha.
+      expect(store.to_enum(:each).map { |_model, _path, row| row[0] }).to eq(%w[alpha beta])
+    end
+
+    # Review 2026-09-17, R7: the shim wrote the submitted value and then
+    # emitted `toggled`, so the conventional handler inverted the value the
+    # shim had just set and the checkbox went back to where it started.
+    it 'lets the script mutate the model on a cell edit, as GTK does' do
+      window = view = store = nil
+      session.sync do
+        window = gtk::Window.new('T')
+        store = gtk::ListStore.new(String, TrueClass)
+        row = store.append
+        row[0] = 'alpha'
+        row[1] = false
+        view = gtk::TreeView.new(store)
+        text = gtk::CellRendererText.new
+        text.editable = true
+        toggle = gtk::CellRendererToggle.new
+        view.append_column(gtk::TreeViewColumn.new('Name', text, text: 0))
+        view.append_column(gtk::TreeViewColumn.new('On', toggle, active: 1))
+        text.signal_connect('edited') { |_renderer, path, value| store.get_iter(path)[0] = value.upcase if value != 'refused' }
+        toggle.signal_connect('toggled') { |_renderer, path| iter = store.get_iter(path); iter[1] = !iter[1] }
+        window.add(view)
+        window.show_all
+      end
+      session.commit
+      table = session.adapter.page_for(window.handle).last_render.tree.each.find { |node| node.type == :table }
+      row_key = table.props[:rows].first[:key]
+      edit = ->(column, value) { session.sync { view.send(:receive_event, :cell_edit, Struct.new(:payload).new({ row: row_key, column: column, value: value })) } }
+
+      edit.call('c1', true)
+      expect(store.to_enum(:each).map { |_model, _path, row| row[1] }).to eq([true]), 'the toggle handler flipped false to true'
+      edit.call('c0', 'refused')
+      expect(store.to_enum(:each).map { |_model, _path, row| row[0] }).to eq(['alpha']), 'a refused edit leaves the model alone'
+      edit.call('c0', 'beta')
+      expect(store.to_enum(:each).map { |_model, _path, row| row[0] }).to eq(['BETA']), 'an accepted edit is whatever the handler wrote'
     end
   end
 end
