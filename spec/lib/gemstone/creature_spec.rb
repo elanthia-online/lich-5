@@ -129,6 +129,7 @@ RSpec.describe Lich::Gemstone::CreatureTemplate do
       allow(map).to receive(:ids_from_uid) { |u| rooms.key?(u - 100) ? [u - 100] : [] }
       allow(map).to receive(:[]) { |id| rooms[id] }
       allow(map).to receive(:list).and_return(rooms.values)
+      allow(map).to receive(:boundary_rooms_for).with([1, 2, 3]).and_return([4])
       map
     end
 
@@ -149,8 +150,12 @@ RSpec.describe Lich::Gemstone::CreatureTemplate do
       expect(template.rooms_by_area).to eq('Strip' => [1, 3], 'Middle' => [2], 'Unmapped' => [])
     end
 
-    it "returns bordering rooms from edges in either direction, excluding the creature's own rooms" do
-      expect(template.boundary_rooms).to eq([4, 5])
+    # The walk itself is Map.boundary_rooms_for (map_base_spec); the template
+    # hands it the creature's rooms and memoizes the answer.
+    it 'asks the map for the boundary of its rooms, once' do
+      expect(template.boundary_rooms).to eq([4])
+      expect(template.boundary_rooms).to eq([4])
+      expect(fake_map).to have_received(:boundary_rooms_for).once
     end
   end
 
