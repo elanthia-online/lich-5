@@ -51,6 +51,7 @@ module Lich
                      recovery: nil, logger: nil, persistent: false, autosort: false,
                      tab_layout: true, dark_theme: false, geometry_store: nil,
                      frontend_locator: FrontendLocator, detach_grace: DETACH_GRACE,
+                     open_browser: Lich::WebUI.open_browser?,
                      launcher_choice: (defined?(Lich::LauncherChoice) ? Lich::LauncherChoice : nil))
         raise ArgumentError, 'data_dir is required' if data_dir.to_s.empty?
         raise ArgumentError, 'on_launch must respond to call' unless on_launch.respond_to?(:call)
@@ -75,6 +76,7 @@ module Lich
         @window_geometry = @geometry_store.load
         @browser_pid = nil
         @browser_terminate = browser_terminate
+        @open_browser = open_browser
         @browser_open = browser_open || lambda do |url|
           Lich::WebUI::BrowserLauncher.open(
             url, geometry: @window_geometry,
@@ -118,7 +120,14 @@ module Lich
         @service.start
         @mutex.synchronize { @lifecycle = :ready }
         @service.refresh(@page)
-        opened = @browser_open.call(@service.launch_url(page: @page))
+        unless @open_browser
+          announce_launch_url(@service.launch_url(page: @page, lifetime: Lich::WebUI::Server::REMOTE_LAUNCH_TOKEN_LIFETIME))
+          return self
+        end
+
+        url = @service.launch_url(page: @page)
+
+        opened = @browser_open.call(url)
         unless opened == false
           return self
         end
@@ -130,10 +139,29 @@ module Lich
         @recovery.call("ERROR: #{error.message}. The WebUI launcher has stopped.")
         close(reason: :browser_failure)
         raise
+      rescue Errno::EADDRINUSE => error
+        # A fixed --webui-port is the one most likely to be taken, by a Lich
+        # still running on it; the way out is another port, not another
+        # launcher (review 2026-09-17 (c), finding 6).
+        @recovery.call("WebUI launcher could not bind its port (#{error.message}). " \
+                       'Another Lich may still be holding it; start with a different --webui-port.')
+        close(reason: :browser_failure)
+        raise
       rescue StandardError => error
         @recovery.call("WebUI launcher unavailable: #{error.class}. Retry with the GTK launcher or abort safely.")
         close(reason: :browser_failure)
         raise
+      end
+
+      # With no browser of its own to open, the launcher tells the player
+      # where it is. The URL carries a one-shot token, so it goes to the
+      # console (the player is at one, or they would not have asked for
+      # this) and to the log, and nowhere else.
+      def announce_launch_url(url)
+        message = "WebUI launcher ready; open this URL in your browser: #{url}"
+        $stdout.puts(message)
+        $stdout.flush
+        @logger.call(:info, message)
       end
 
       def close(reason: :user)
@@ -923,13 +951,21 @@ module Lich
         carriers = pairs.map { |pair| transfer_secret(pair.last) }
         operation = begin_operation(:master_password, event)
         @executor.post do
-          consume_three(carriers) do |current, replacement, confirmation|
+          # The change itself is arbitrated, like every other irreversible
+          # step: queued behind other work, it used to run after a close
+          # and only its completion was refused (review 2026-09-17 (b), F2).
+          committed = consume_three(carriers) do |current, replacement, confirmation|
             raise 'passwords do not match' unless secure_equal?(replacement, confirmation)
             raise 'password too short' if replacement.length < 8
-            raise 'master password change failed' unless @catalog.change_master_password(current, replacement)
+
+            commit(operation) do
+              raise 'master password change failed' unless @catalog.change_master_password(current, replacement)
+            end
           end
-          complete(operation) { reload_catalog_locked }
-          set_notice('Encryption password changed.', :info)
+          if committed
+            complete(operation) { reload_catalog_locked }
+            set_notice('Encryption password changed.', :info)
+          end
         rescue StandardError => error
           fail_operation(operation, error, notice: 'Master password change failed.')
         ensure
@@ -1087,9 +1123,15 @@ module Lich
           # written to the catalog either.
           if save || favorite
             entry = character.merge(user_id: account, frontend: frontend, custom_launch: custom, custom_launch_dir: custom_dir)
+            # The catalog answers with the key of the entry it wrote, and
+            # the favorite is set on exactly that one. Looking the entry up
+            # again by account, character, game and frontend found the first
+            # of two entries that differ only in their custom launch command
+            # (review 2026-09-17 (b), F6); and the box asks for a favorite,
+            # so a re-saved entry that already was one stays one.
             commit(operation) do
-              saved = @catalog.upsert_manual_entry(entry, password)
-              @catalog.toggle_favorite(find_entry_key(entry)) if favorite && saved
+              key = @catalog.upsert_manual_entry(entry, password)
+              @catalog.set_favorite(key, true) if favorite && key
             end
           end
         end
@@ -1444,7 +1486,7 @@ module Lich
       def launch_context(entry)
         { char_name: entry.char_name, game_code: entry.game_code, frontend: entry.frontend,
           custom_launch: entry.custom_launch, custom_launch_dir: entry.custom_launch_dir,
-          data_dir: @data_dir, force_path_flags: true, launcher: :webui }
+          data_dir: @data_dir, force_path_flags: true, launcher: :webui, open_browser: @open_browser }
       end
 
       def terminate_browser(pid)
@@ -1458,13 +1500,6 @@ module Lich
         rescue StandardError
           nil
         end
-      end
-
-      def find_entry_key(entry)
-        @catalog.entries.find do |candidate|
-          candidate.user_id == entry[:user_id] && candidate.char_name == entry[:char_name] &&
-            candidate.game_code == entry[:game_code] && candidate.frontend == entry[:frontend]
-        end&.key
       end
     end
   end

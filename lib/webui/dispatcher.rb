@@ -21,6 +21,10 @@ module Lich
       class OwnerState
         attr_accessor :running, :current
         attr_accessor :thread
+        # The last failure reported for this owner, so an identical one that
+        # follows it is not reported again in full. One string per owner,
+        # dropped with the owner.
+        attr_accessor :last_failure
         attr_reader :events, :mutex, :condition
 
         def initialize
@@ -30,12 +34,18 @@ module Lich
           @running = true
           @current = nil
           @thread = nil
+          @last_failure = nil
         end
       end
 
-      def initialize(logger: nil, thread_factory: nil)
+      # @param logger [#call, nil] receives `(level, message)`; nil discards
+      # @param thread_factory [#call, nil] builds an owner's thread from a block; nil uses Thread.new
+      # @param notifier [#call, nil] receives `(owner, message)` when a callback raises; nil uses
+      #   {#notify_script}, which tells a script owner through its own output
+      def initialize(logger: nil, thread_factory: nil, notifier: nil)
         @logger = logger || proc { |_level, _message| }
         @thread_factory = thread_factory || ->(&block) { Thread.new(&block) }
+        @notifier = notifier || method(:notify_script)
         @owners = {}.compare_by_identity
         # Owners that have been shut down. Weak, so a dead script's object is
         # not kept alive by the record that it died. Checked before an owner
@@ -144,7 +154,7 @@ module Lich
           begin
             queued.callable.call
           rescue StandardError => error
-            log(:error, "WebUI callback failed owner=#{owner_label(queued.owner)} error=#{error.class}")
+            report_failure(state, queued, error)
           ensure
             Thread.current.thread_variable_set(THREAD_CONTEXT_KEY, nil)
             state.current = nil
@@ -191,6 +201,65 @@ module Lich
         return owner.name if owner.respond_to?(:name) && owner.name
 
         "#{owner.class}:#{owner.object_id}"
+      end
+
+      # What a callback raised, told to the log and to the owner. It used to
+      # be one log line naming only the exception class, through a logger
+      # that Lich never supplied: every handler error in every native WebUI
+      # script was discarded, and the player saw a control that did nothing.
+      # The shim already reported its handlers' errors with the script frame
+      # (Session#report); this is the same for the pages a script builds
+      # itself.
+      #
+      # The same failure again, straight after itself, is one log line and
+      # no notification: a broken control clicked twenty times is twenty
+      # events, and the player has read the message once. A different
+      # failure in between is reported in full again, so a second distinct
+      # error is never hidden behind the first.
+      def report_failure(state, queued, error)
+        label = owner_label(queued.owner)
+        backtrace = Array(error.backtrace)
+        origin = script_origin(backtrace, label)
+        where = origin ? " at #{script_frame(origin)}" : ''
+        detail = "error in WebUI handler #{queued.event} on #{queued.cid}: #{error.message}#{where}"
+        if state.last_failure == detail
+          log(:error, "#{detail} owner=#{label} (again)")
+          return
+        end
+
+        state.last_failure = detail
+        log(:error, "#{detail} owner=#{label} error=#{error.class}\n\t#{backtrace.first(8).join("\n\t")}")
+        @notifier.call(queued.owner, detail)
+      rescue StandardError
+        nil
+      end
+
+      # The default notifier: a script owner hears about the error in its
+      # own output, through Lich's `respond`, the way a script error does.
+      # Any other owner (the launcher) has the log.
+      def notify_script(owner, message)
+        return unless defined?(::Script) && owner.is_a?(::Script)
+        return unless respond_to?(:respond, true)
+
+        respond(message)
+      end
+
+      # The first backtrace frame inside the owner's script. Lich evals a
+      # script under its bare name, so its frames read "map:2466" rather
+      # than ".../map.lic:2466"; both spellings are matched.
+      def script_origin(backtrace, name)
+        unless name.to_s.empty?
+          named = backtrace.find { |frame| frame.match?(/(\A|[\\\/])#{Regexp.escape(name.to_s)}(\.lic)?:\d+/) }
+          return named if named
+        end
+        backtrace.find { |frame| frame.include?('.lic:') }
+      end
+
+      # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+      def script_frame(frame)
+        file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
+        base = file.to_s.split(%r{[\\/]}).last
+        base && line ? "#{base}:#{line}" : frame
       end
 
       def log(level, message)

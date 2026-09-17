@@ -599,3 +599,63 @@ checker is a warning until L8, and the frontend mutation rules are still
 duplicated between the two launchers (plan: consolidate before L8, with
 parity tests). The `;map` rewrite the review said was undelivered is
 `scripts/map.lic` 3.0.0 (plan, L6c).
+
+## Part 5 — the second outside review of 2026-09-17 (F1–F7)
+
+A follow-up review of the opened PRs (`docs/webui-pr-review-1634-1648-1655.md`,
+against the tips #1648 `dba90bf2` through #1655 `28cd856f`) re-checked
+the part 4 fixes and found seven defects, two of them priority one. Each
+was reproduced by the review's own probe, fixed and pinned by a test
+that fails without the fix. The fixes ride together in one PR on top of
+the stack (`webui/review-2-fixes`, based on `webui/default-flip`), not
+in the layer each belongs to: the layer column below says where the
+defect lives, and a fix in a lower layer would have meant merging every
+layer above it and pushing all eight branches again. Post-review fixes
+go on top from here on.
+
+| finding | layer | what changed |
+|---|---|---|
+| F1 a commit that raised killed the session thread and stranded a queued `sync` | L6a | the batch's commit is inside the same rescue as its jobs and the loop reports and continues; a synchronous job is an object the thread refuses if it ever ends with the job still queued; `enqueue` answers whether it took the job so `sync` cannot queue behind a shutdown |
+| F2 the master-password change ran after close | L5 | the catalog call runs under `commit(operation)`, as every other irreversible step; a queued-executor spec closes before the job runs |
+| F3 modal close raced the detach context | L1 | `detach` builds both lifecycle jobs before dispatching either; a lifecycle job with no render is skipped rather than raised |
+| F4 shim tree expansion vanished on the next render | L3 + L6b | a tree store binds `row_toggle`, so the viewer store keeps the viewer's expansion across renders; the shim keeps its copy for `row_expanded?`, emits `row-expanded`/`row-collapsed`, and `expand_all`, `collapse_all`, `expand_row`, `collapse_row` push per row through the new `page.set(cid, "expanded:<row>", bool, viewer:)` write |
+| F5 event records had no effective expiry and kept cleared passwords | L3 | every send and every received message sweep expired records, a refusal is aged before it is honoured, a closed page and a dropped socket drop their records, a control the script cleared drops every record that carried its value, and the set is capped at 256; no timer, which would have held the page's event loop |
+| F6 the favorite could land on a sibling entry | L5 | the catalog answers an upsert with the key of the entry it wrote and the launcher favorites that key; `set_favorite` sets rather than toggles, so a re-saved favorite stays one |
+| F7 title discovery adopted a pre-existing window | L1 | the windows already carrying the title are listed before the browser opens and excluded from discovery; only a window that appears after the open can be adopted |
+
+On F5, the review asked for a timer or an acknowledgment protocol. Neither
+was taken: a timer in the page holds its event loop (and the harness
+process) for nothing, and an acknowledgment would be a protocol change
+the native consumer would have to follow. Retention is bounded instead by
+the page's own traffic, its close, its socket and the cap; an idle page
+that receives nothing at all keeps at most 256 records until its next
+message.
+
+## Part 6 — the third outside review, of the whole stack (2026-09-17)
+
+`docs/webui-pr-review-stack-combined-2026-09-17.md` reviewed #1634,
+#1648–#1655, #1657 and #1658 together, re-verified F1–F7 (six fixed,
+one partly) and found two Majors, both in #1657. Everything below is one
+set of commits on `webui/review-2-fixes`, merged into `webui/yard-docs`.
+
+| finding | what changed |
+|---|---|
+| Major 1: the F1 fix left `enqueue`'s closed check and push as two steps, so a shutdown between them stranded the job behind a `:stop` the thread had already drained past | the check, the push and the thread start are one step under `@thread_mutex`, which `shutdown` takes to set `@closed`; the spec pauses the real push exactly there and asserts the `sync` is answered either way, and that `shutdown` waits for the enqueue in progress |
+| Major 2: a `--webui-no-browser` launch URL died in sixty seconds and answered a bare 403 | `Server#launch_url` takes a `lifetime`; a URL the player has to carry (no-browser, launcher and script windows alike) lives `REMOTE_LAUNCH_TOKEN_LIFETIME` = ten minutes; an expired or reused link answers 403 with a body saying so and naming `Lich::API.webui_launch_url`; the doc says both |
+| 3: the remote-play doc said one tunnel per script window | one WebUI server per game session, every script window a page on it: one more `-L` per session |
+| 4: four `Layout/MultilineMethodCallIndentation` offenses (RuboCop 1.91 on Linux; 1.8x here did not flag them) | the three chains are written as two statements; no chained continuation lines remain in the stack's files |
+| 5: 163 documented private methods without `@api private` | tagged on `webui/yard-docs`, per `docs/YARD-STYLE-GUIDE.md` |
+| 6: a busy `--webui-port` reported "unavailable, retry with GTK" | `Errno::EADDRINUSE` is caught by name and the message says which port, that another Lich may hold it, and to pick another `--webui-port` |
+| 7: the `@return`/`@raise` tags on `enqueue` and `sync` promised what Major 1 broke | true as written now |
+| 8: the child's `--webui-no-browser` was read from raw `ARGV` | resolved like the launcher flag beside it: `open_browser` in the launch context, else `Lich::WebUI::Options` |
+| 9: `yard` not in the bundle | in the development group |
+
+The open questions:
+
+- **`PresentedWindow#adopt` trusts the requested pid rather than the HWND's owner.** Deliberate. With a shared Chromium profile the new window is legitimately owned by the Chrome that was already running, so the discovered HWND's pid is *expected* not to match; ownership cannot be the test. The identity evidence is the exclusion list (a window that existed before the open is never adopted) plus the refusal of more than one match. The pid check in `adopt` only discards a result from a search the window has since outlived.
+- **A replay recomputed its record's `scope` from the current render**, so a render that no longer listed the control gave the replayed record an empty scope and `clear_sensitive` could not find the password it carried. Fixed: a replay's record inherits the scope of the record it replays, with a harness case that drops the `submissions` entry between the send and its refusal and asserts the cleared value is not sent again.
+- **Shim expansion state is per page, not per viewer.** Correct because D26 holds: `Session#admit_viewer` refuses any viewer whose id is not the page's first, and a reconnecting browser re-attaches under its resume token with the same viewer id, so a shim page never has two viewers with two expansion states.
+- **The `@!method` / `@!macro` directives in #1658** were checked by running `yard doc` (now in the bundle) and reading its warnings; see `webui/yard-docs`.
+
+Also here, found by Tysong the same day and scoped by the reviewer: **a launcher flag beside a session opened the launcher.** The R1 fix read `--gtk` (or `--webui`) as "open the launcher" when it means "select which launcher", so any startup that carried one beside something else connected nothing: Saga's `<file>.sal --gtk --without-frontend --detachable-client=N --saga`, a `--game=HOST:PORT` proxy, a force mode. `LauncherChoice.launcher_only?` says whether the command line asks for nothing but a launcher (empty, or launcher flags only); both branches in `main.rb` open on that or on `--gui`, which is `main`'s rule plus exactly the bare-flag case R1 asked for. The routing spec evaluates Saga's real argument list, a proxy, a force mode and a headless port, each under both toolkits, against both branch predicates.
+

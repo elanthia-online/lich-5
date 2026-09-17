@@ -383,6 +383,30 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(first_connection.sent.last.dig('tree', 'children', 0, 'props', 'selected')).to eq(1)
   end
 
+  # Review 2026-09-17 (b), F4: a row's expansion was the viewer's to change
+  # through row_toggle and nobody else's; a script expanding a branch (the
+  # shim's TreeView#expand_row) had no write that reached the viewer.
+  it 'lets a script set a viewer\'s row expansion, and refuses a row the table does not have' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'tree', title: 'Tree') do
+      table(key: 'tree', columns: [{ key: 'c0', label: 'Name' }], rows: [
+              { key: 'p1', cells: { 'c0' => 'Parent' }, expanded: false },
+              { key: 'c1', cells: { 'c0' => 'Child' }, parent: 'p1' },
+            ], on: { row_toggle: ->(_event) {} })
+    end)
+    _address, render = attach(first_connection, page)
+    cid = render.dig('tree', 'children', 0, 'cid')
+    expanded = -> { first_connection.sent.last.dig('tree', 'children', 0, 'props', 'rows', 0, 'expanded') }
+    expect(expanded.call).to be(false)
+
+    viewer = viewers.attachments_for(page).first.viewer_id
+    page.set(cid, 'expanded:p1', true, viewer: viewer)
+    Timeout.timeout(2) { sleep(0.001) until expanded.call == true }
+    expect(expanded.call).to be(true)
+
+    expect { page.set(cid, 'expanded:nope', true, viewer: viewer) }
+      .to raise_error(Lich::WebUI::UnknownPropertyError, /no row "nope"/)
+  end
+
   it 'refuses every server-side read and bulk write of sensitive values' do
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'secret', title: 'Secret') do
       password_input(key: 'password')
@@ -409,6 +433,35 @@ RSpec.describe Lich::WebUI::Runtime do
 
     expected = [[:attach, {}], [:close, { reason: :user }], [:detach, {}]]
     expect(3.times.map { lifecycle.pop }).to eq(expected)
+  end
+
+  # Review 2026-09-17 (b), F3: detach queued close and then built the detach
+  # context, but the close callback may already have run -- a modal's close
+  # resolves its Future and the completion closes the page, which clears
+  # the attachment's render -- and building the second context then raised
+  # on a nil render. Both contexts are captured before either is dispatched.
+  it 'still delivers the detach callback when the close callback closed the page first' do
+    immediate = Class.new do
+      def enqueue(**_options) = yield
+      def shutdown; end
+    end.new
+    prompt = described_class.new(registry: registry, dispatcher: immediate, viewers: viewers)
+    lifecycle = []
+    page = registry.register(Lich::WebUI::Page.new(
+      owner: owner, id: 'modal', title: 'Modal', on: {
+        close: ->(context) { lifecycle << context.event; prompt.close_page(context.page) },
+        detach: ->(context) { lifecycle << context.event },
+      }
+    ) {})
+    address = registry.address_for(page)
+    prompt.handle(first_connection, { type: 'attach', page: address })
+    render = first_connection.sent.last
+
+    expect do
+      prompt.handle(first_connection, { type: 'detach', page: address, generation: render['generation'] })
+    end.not_to raise_error
+    expect(lifecycle).to eq(%i[close detach])
+    expect(registry.size).to be_zero
   end
 
   it 'refuses events after disconnect and after page removal with distinct reasons' do

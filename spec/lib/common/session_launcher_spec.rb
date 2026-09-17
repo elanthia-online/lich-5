@@ -223,6 +223,18 @@ RSpec.describe Lich::Common::SessionLauncher do
     )
   end
 
+  it 'passes --webui-no-browser on to a child, but never a fixed port' do
+    allow(described_class).to receive(:optional_spawn_flags).and_call_original
+    allow(Lich).to receive(:track_dark_mode).and_return(nil)
+    stub_const('ARGV', ['--webui-port=4321'])
+
+    described_class.launch(launch_data + ['CHARACTER=Tsetem'], launch_context: { frontend: 'stormfront', open_browser: false })
+    expect(described_class).to have_received(:spawn).with(
+      '/usr/bin/ruby', File.expand_path($PROGRAM_NAME), '--login', 'Tsetem', '--GST', '--stormfront',
+      '--custom-launch=/path/to/custom', '--webui-no-browser', hash_including(chdir: anything)
+    )
+  end
+
   it 'hands a child the launcher its parent resolved, as an explicit flag' do
     allow(described_class).to receive(:optional_spawn_flags).and_call_original
     allow(Lich).to receive(:track_dark_mode).and_return(nil)

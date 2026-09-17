@@ -157,6 +157,7 @@ GEM
     webrick (1.9.2)
     win32ole (1.9.3)
     yaml (0.4.0)
+    yard (0.9.45)
     zlib (3.2.3)
 
 PLATFORMS
@@ -222,6 +223,7 @@ DEPENDENCIES
   webrick
   win32ole
   yaml
+  yard
   zlib
 
 CHECKSUMS
@@ -314,6 +316,7 @@ CHECKSUMS
   webrick (1.9.2) sha256=beb4a15fc474defed24a3bda4ffd88a490d517c9e4e6118c3edce59e45864131
   win32ole (1.9.3) sha256=01f43dc5dc13806e6e58204f538b4a28f3d85968ea89074abc9a3cd118e94d96
   yaml (0.4.0) sha256=240e69d1e6ce3584d6085978719a0faa6218ae426e034d8f9b02fb54d3471942
+  yard (0.9.45) sha256=52e211493f7cb8a3ebf7e104a25a1e73937a3103092545d34cb88fafebb3dc51
   zlib (3.2.3) sha256=5bd316698b32f31a64ab910a8b6c282442ca1626a81bbd6a1674e8522e319c20
 
 BUNDLED WITH

@@ -135,7 +135,19 @@ module Lich
               'custom_launch'     => entry[:custom_launch],
               'custom_launch_dir' => entry[:custom_launch_dir]
             )
-            write_yaml(data)
+            return nil unless write_yaml(data)
+
+            # The key of the entry just written -- the whole identity, custom
+            # launch included, so a caller acting on the saved entry acts on
+            # this one and not on a sibling that shares its character and
+            # frontend (review 2026-09-17 (b), F6).
+            entries_without_lock.find do |candidate|
+              candidate[:user_id] == account &&
+                candidate[:char_name].to_s.casecmp?(character['char_name'].to_s) &&
+                candidate[:game_code].to_s == character['game_code'] &&
+                candidate[:frontend].to_s == character['frontend'] &&
+                candidate[:custom_launch].to_s == character['custom_launch'].to_s
+            end&.fetch(:key)
           end
         end
 
@@ -268,6 +280,16 @@ module Lich
         end
 
         def toggle_favorite(entry_key)
+          update_favorite(entry_key) { |current| !current }
+        end
+
+        # Makes the entry a favorite, or not, whatever it was: what a box
+        # labelled "favorite" on a save asks for. Answers as toggle_favorite.
+        def set_favorite(entry_key, wanted)
+          update_favorite(entry_key) { |_current| wanted ? true : false }
+        end
+
+        def update_favorite(entry_key)
           @mutex.synchronize do
             metadata = entries_without_lock.find { |entry| entry[:key] == entry_key }
             return false unless metadata
@@ -277,7 +299,9 @@ module Lich
             character = account&.fetch('characters', [])&.find { |candidate| character_match?(candidate, metadata) }
             return false unless character
 
-            favorite = character['is_favorite'] != true
+            favorite = yield(character['is_favorite'] == true)
+            return favorite if favorite == (character['is_favorite'] == true)
+
             character['is_favorite'] = favorite
             if favorite
               character['favorite_order'] = next_favorite_order(data)

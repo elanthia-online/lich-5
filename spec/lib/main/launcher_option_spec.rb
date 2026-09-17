@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require File.join(LIB_DIR, 'common', 'launcher_choice')
 
 # lib/main/argv_options.rb auto-executes ArgvOptions.process_argv at load
 # time, so it cannot be required in isolation. As spec/lib/main/argv_options_spec.rb
@@ -16,6 +17,9 @@ RSpec.describe 'the launcher switches' do
     raise 'could not extract OptionParser.execute from argv_options.rb' unless method_body
 
     module_eval(method_body.sub('def self.execute', 'def execute'))
+    # The real one checks the file exists and looks under Wine; the routing
+    # only needs the option recorded.
+    define_method(:handle_sal_file) { |arg| @argv_options[:sal] = arg }
   end
   define_singleton_method(:parser_class) { parser_class }
 
@@ -38,6 +42,16 @@ RSpec.describe 'the launcher switches' do
       expect(options).not_to have_key(:gui)
       expect(options).not_to have_key(:webui_dev)
     end
+  end
+
+  it 'records a fixed WebUI port and the no-browser choice for remote play' do
+    ARGV.replace(['--webui-port=4321', '--webui-no-browser'])
+
+    options = parser_class.new.execute
+
+    expect(options[:webui_port]).to eq(4321)
+    expect(options[:webui_browser]).to be(false)
+    expect(options).not_to have_key(:launcher)
   end
 
   it 'leaves argv_options without a launcher when no switch is given' do
@@ -122,6 +136,38 @@ RSpec.describe 'the launcher switches' do
     it 'starts headless for an explicit --no-gui under either launcher' do
       expect(route(['--no-gui'], launcher: :gtk)).to eq(:headless)
       expect(route(['--no-gui'], launcher: :webui)).to eq(:headless)
+    end
+
+    # A launcher flag selects which launcher; it does not ask for one. The
+    # R1 fix read it as the latter, so any startup with a launcher flag
+    # beside it -- Saga's `<file>.sal --gtk --without-frontend
+    # --detachable-client=N --saga` (Tysong, 2026-09-17), a `--game=HOST:PORT`
+    # proxy, a force mode -- opened the launcher instead of connecting. The
+    # launcher opens only when the command line asks for nothing else.
+    describe 'a launcher flag beside a session' do
+      saga = ['C:\\Users\\Ryan\\AppData\\Local\\Temp\\saga-Pickasso-mu5mjeft.sal', '--gtk', '--without-frontend',
+              '--detachable-client=62992', '--saga']
+      {
+        'Saga'            => saga,
+        'a proxy'         => ['--game=lich.example:8000', '--gtk'],
+        'a short proxy'   => ['-g', 'lich.example:8000', '--gtk'],
+        'a .sal alone'    => ['C:\temp\Gse.~xt', '--gtk'],
+        'a force mode'    => ['--gemstone', '--gtk'],
+        'a headless port' => ['--headless', '4000', '--gtk'],
+      }.each do |shape, argv|
+        it "connects rather than opening a launcher for #{shape}" do
+          expect(route(argv, launcher: :gtk)).to eq(:headless)
+          swapped = argv.map { |argument| argument == '--gtk' ? '--webui' : argument }
+          expect(route(swapped, launcher: :webui)).to eq(:headless)
+        end
+      end
+
+      it 'still opens the launcher for the flag alone, or the flag with --gui' do
+        expect(route(['--gtk'], launcher: :gtk)).to eq(:gtk)
+        expect(route(['--webui'], launcher: :webui)).to eq(:webui)
+        expect(route(['--webui-dev'], launcher: :webui)).to eq(:webui)
+        expect(route(['--game=lich.example:8000', '--gui'], launcher: :webui)).to eq(:webui)
+      end
     end
 
     it 'never opens the GTK launcher when gtk3 did not load' do

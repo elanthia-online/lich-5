@@ -26,17 +26,23 @@ module Lich
       # browser profile the spawned process hands the page to the Chrome
       # already running and exits, so its pid owns no window, and the title
       # is the only thing that names the window from outside.
+      # The windows already carrying that title are listed before the
+      # browser is asked for a new one, and discovery never adopts them: a
+      # second page with the same title, opened while the first is still up,
+      # used to dress the first one (review 2026-09-17 (b), F7).
       def self.open(url, presentation:, geometry: nil, title: nil, opener: BrowserLauncher.method(:open))
-        window = new(presentation, title: title)
+        existing = title ? WindowPresentation.existing_windows(title) : []
+        window = new(presentation, title: title, exclude: existing)
         opened = opener.call(url, geometry: geometry, on_start: ->(pid) { window.started(pid) })
         opened ? window : nil
       end
 
-      def initialize(presentation, title: nil)
+      def initialize(presentation, title: nil, exclude: [])
         raise ArgumentError, 'presentation must respond to call' unless presentation.respond_to?(:call)
 
         @presentation = presentation
         @title = title
+        @exclude = exclude.dup.freeze
         @mutex = Mutex.new
         @pid = nil
         @hwnd = nil
@@ -50,7 +56,7 @@ module Lich
         @mutex.synchronize { @pid = pid }
         return unless WindowPresentation.available?
 
-        WindowPresentation.discover(pid, title: @title) { |hwnd| adopt(pid, hwnd) }
+        WindowPresentation.discover(pid, title: @title, exclude: @exclude) { |hwnd| adopt(pid, hwnd) }
         nil
       end
 

@@ -10,6 +10,7 @@ require_relative 'webui/errors'
 require_relative 'webui/page'
 require_relative 'webui/future'
 require_relative 'webui/modal_coordinator'
+require_relative 'webui/options'
 require_relative 'webui/protocol'
 require_relative 'webui/registry'
 require_relative 'webui/runtime'
@@ -39,7 +40,19 @@ module Lich
       def service
         INITIALIZATION_MUTEX.synchronize do
           @registry ||= Registry.new
-          @service ||= Service.new(registry: @registry)
+          @service ||= Service.new(registry: @registry, port: Options.port, logger: logger)
+        end
+      end
+
+      # Where the service, runtime and dispatcher write: the Lich log. The
+      # service used to be built without a logger, so everything they
+      # recorded -- a handler that raised, a refused write, a timed-out
+      # socket -- went to a proc that did nothing.
+      #
+      # @return [Proc] receives `(level, message)`
+      def logger
+        @logger ||= lambda do |level, message|
+          Lich.log("#{level}: webui: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
         end
       end
 
@@ -47,8 +60,25 @@ module Lich
         service.start
       end
 
+      # Applies command-line WebUI settings; see Options.
+      def configure(**settings)
+        Options.configure(**settings)
+      end
+
+      # Whether Lich should open a browser itself. When false the caller
+      # surfaces the launch URL for the player to open where their display is.
+      def open_browser?
+        Options.open_browser?
+      end
+
       def launch_url(page: nil)
-        service.launch_url(page: page)
+        service.launch_url(page: page, lifetime: launch_lifetime)
+      end
+
+      # How long a launch URL is good for: a minute when Lich opens the
+      # browser on it at once, ten when the player has to carry it somewhere.
+      def launch_lifetime
+        open_browser? ? nil : Server::REMOTE_LAUNCH_TOKEN_LIFETIME
       end
 
       # Opens a browser window on +page+. With a +presentation+ (a callable

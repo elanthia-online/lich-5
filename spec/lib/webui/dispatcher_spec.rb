@@ -24,6 +24,78 @@ RSpec.describe Lich::WebUI::Dispatcher do
     expect(results.first.last).not_to eq(Thread.current)
   end
 
+  # Every handler exception in every native WebUI script was discarded: the
+  # rescue logged only the exception class, through a logger Lich never
+  # supplied, and the owner was never told.
+  describe 'a callback that raises' do
+    it 'tells the log the message, class and script frame, and the owner the message' do
+      logged = Queue.new
+      told = Queue.new
+      reporting = described_class.new(logger: ->(level, message) { logged << [level, message] },
+                                      notifier: ->(owner, message) { told << [owner, message] })
+      script = Struct.new(:name).new('map')
+      begin
+        reporting.enqueue(owner: script, page_id: 'page', viewer_id: 'viewer', cid: 'button:go',
+                          event: :activate, coalescable: false) do
+          raise NoMethodError, "undefined method 'centre' for nil", ['map:2466:in \'recentre\'', 'lib/webui/dispatcher.rb:146:in \'run_owner\'']
+        end
+        level, message = logged.pop
+        expect(level).to eq(:error)
+        expect(message).to include("error in WebUI handler activate on button:go: undefined method 'centre' for nil at map:2466")
+        expect(message).to include('owner=map error=NoMethodError')
+        expect(message).to include("\n\tmap:2466")
+        expect(told.pop).to eq([script, "error in WebUI handler activate on button:go: undefined method 'centre' for nil at map:2466"])
+      ensure
+        reporting.shutdown
+      end
+    end
+
+    it 'reports the same failure again only as one log line, and a different one in full' do
+      logged = []
+      told = []
+      reporting = described_class.new(logger: ->(_level, message) { logged << message },
+                                      notifier: ->(_owner, message) { told << message })
+      done = Queue.new
+      begin
+        %w[one one one two one].each do |which|
+          reporting.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+                            event: :activate, coalescable: false) do
+            done << which
+            raise which
+          end
+        end
+        5.times { done.pop }
+        reporting.shutdown
+
+        expect(told).to eq(['error in WebUI handler activate on button: one',
+                            'error in WebUI handler activate on button: two',
+                            'error in WebUI handler activate on button: one'])
+        expect(logged.length).to eq(5)
+        expect(logged.count { |line| line.end_with?('(again)') }).to eq(2)
+      ensure
+        reporting.shutdown
+      end
+    end
+
+    it 'goes on to the next callback for the same owner' do
+      ran = Queue.new
+      dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'a', event: :activate,
+                         coalescable: false) { raise 'first' }
+      dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'b', event: :activate,
+                         coalescable: false) { ran << :second }
+      expect(ran.pop).to eq(:second)
+    end
+
+    it 'by default tells a Script owner through respond, and no one else' do
+      stub_const('Script', Class.new)
+      said = []
+      dispatcher.define_singleton_method(:respond) { |message| said << message }
+      expect(dispatcher.send(:notify_script, Script.new, 'boom')).to eq(['boom'])
+      expect(dispatcher.send(:notify_script, Object.new, 'boom')).to be_nil
+      expect(said).to eq(['boom'])
+    end
+  end
+
   it 'runs different owners independently' do
     started = Queue.new
     release = Queue.new

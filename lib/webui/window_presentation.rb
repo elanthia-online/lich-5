@@ -157,7 +157,16 @@ module Lich
         # for one with that title, so a page handed to an already-running
         # Chrome is found on the first poll rather than after the pid search
         # has run out its whole timeout.
-        def discover(pid, timeout: DISCOVERY_TIMEOUT, title: nil, &on_found)
+        # +exclude+ names windows that must not be taken whatever their
+        # title: the ones that already existed when this page was opened.
+        # The title is the page's own, not the window's, and a second copy
+        # of the same page is titled the same. When the pid owned nothing
+        # yet and the older window was the only match, it was adopted and
+        # dressed in the new page's settings while the new window, arriving
+        # a moment later, was never looked for again (review 2026-09-17 (b),
+        # F7). A window that was there before the open cannot be the one it
+        # opened.
+        def discover(pid, timeout: DISCOVERY_TIMEOUT, title: nil, exclude: [], &on_found)
           return nil unless available?
 
           # The finders are built on the search thread itself (see poll):
@@ -165,9 +174,24 @@ module Lich
           # never matched anything, silently.
           poll(timeout, on_found) do
             by_pid = window_finder(pid)
-            by_title = title && window_finder(nil, title: title)
+            by_title = title && window_finder(nil, title: title, exclude: exclude)
             -> { by_pid.call || by_title&.call }
           end
+        end
+
+        # Every visible top-level Chromium window whose title starts with
+        # +prefix+, as integers, enumerated once on the calling thread. Taken
+        # before a page's browser is opened, it is what discover must not
+        # adopt for that page.
+        def existing_windows(prefix)
+          return [] unless available?
+
+          callback, matches = enumeration(nil, prefix, [])
+          win32.EnumWindows(callback, Fiddle::Pointer.new(0))
+          matches.map(&:to_i)
+        rescue StandardError => error
+          log("listing the browser windows failed: #{error.class}: #{error.message}")
+          []
         end
 
         private
@@ -201,15 +225,9 @@ module Lich
         # More than one match is logged, once per finder rather than once per
         # poll, so a launch that reused a browser process -- a shared profile
         # -- shows up in the log instead of quietly polling to the deadline.
-        def window_finder(pid, title: nil)
-          matches = []
+        def window_finder(pid, title: nil, exclude: [])
           warned = false
-          callback = Fiddle::Closure::BlockCaller.new(
-            Fiddle::TYPE_INT, [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
-          ) do |hwnd, _|
-            matches << Fiddle::Pointer.new(hwnd.to_i) if window_matches?(hwnd, pid, title)
-            1
-          end
+          callback, matches = enumeration(pid, title, exclude)
           lambda do
             matches.clear
             win32.EnumWindows(callback, Fiddle::Pointer.new(0))
@@ -226,6 +244,23 @@ module Lich
         rescue StandardError => error
           log("finding the browser window failed: #{error.class}: #{error.message}")
           -> { nil }
+        end
+
+        # The enumeration callback and the list it fills: one closure, built
+        # on the thread that will call EnumWindows with it. Handles in
+        # +exclude+ are never listed.
+        def enumeration(pid, title, exclude)
+          matches = []
+          excluded = exclude.map(&:to_i)
+          callback = Fiddle::Closure::BlockCaller.new(
+            Fiddle::TYPE_INT, [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
+          ) do |hwnd, _|
+            if !excluded.include?(hwnd.to_i) && window_matches?(hwnd, pid, title)
+              matches << Fiddle::Pointer.new(hwnd.to_i)
+            end
+            1
+          end
+          [callback, matches]
         end
 
         def set_always_on_top(hwnd, wanted)

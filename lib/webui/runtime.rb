@@ -21,14 +21,17 @@ module Lich
         always_on_top: false, borderless: false, opacity: true, scrollbars: true,
       }.freeze
 
-      def initialize(registry:, dispatcher: Dispatcher.new, viewers: ViewerStore.new,
+      # +dispatcher+ defaults to one that logs where the runtime does; a
+      # Dispatcher.new default here had no logger, so what its owner threads
+      # rescued went nowhere whatever the service was given.
+      def initialize(registry:, dispatcher: nil, viewers: ViewerStore.new,
                      validator: Validator.new, file_service: nil, logger: nil)
         @registry = registry
-        @dispatcher = dispatcher
+        @logger = logger || proc { |_level, _message| }
+        @dispatcher = dispatcher || Dispatcher.new(logger: @logger)
         @viewers = viewers
         @validator = validator
         @file_service = file_service
-        @logger = logger || proc { |_level, _message| }
         @connections = {}
         @connections_mutex = Mutex.new
         @refresh_mutex = Mutex.new
@@ -131,6 +134,8 @@ module Lich
 
       def write(page, cid, property, value, viewer: nil)
         component = page_component(page, cid)
+        return write_row_expansion(page, component, property, value, viewer) if row_expansion?(component, property)
+
         name = component_property(component, property)
         scope = property_scope(component, name)
         if %i[sensitive_write_only ephemeral_client].include?(scope)
@@ -288,8 +293,13 @@ module Lich
       def detach(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
-        enqueue_lifecycle(attachment, :close, reason: :user)
-        enqueue_lifecycle(attachment, :detach)
+        # Both contexts are built before either callback can run. The close
+        # callback may resolve a modal, whose completion closes the page and
+        # clears this attachment's render; a detach context built after that
+        # read the render of nothing and the detach callback was lost
+        # (review 2026-09-17 (b), F3).
+        jobs = [lifecycle_job(attachment, :close, reason: :user), lifecycle_job(attachment, :detach)]
+        jobs.each { |job| job&.call }
         @viewers.close(connection_id: connection.viewer_id, address: message[:page])
         :detached
       end
@@ -566,17 +576,29 @@ module Lich
       end
 
       def enqueue_lifecycle(attachment, event, payload = {})
-        callback = attachment.page.lifecycle_bindings[event]
-        return unless callback
+        lifecycle_job(attachment, event, payload)&.call
+      end
 
-        component = attachment.render.tree
+      # The enqueue of a lifecycle callback, with its context captured now
+      # and the dispatch deferred to the call: a caller that queues two
+      # callbacks captures both before running either.
+      def lifecycle_job(attachment, event, payload = {})
+        callback = attachment.page.lifecycle_bindings[event]
+        render = attachment.render
+        return unless callback && render
+
+        component = render.tree
         context = EventContext.new(
           attachment.viewer_id, attachment.page, component, event, payload.freeze, nil
         )
-        @dispatcher.enqueue(
-          owner: attachment.page.owner, page_id: attachment.page.id,
-          viewer_id: attachment.viewer_id, cid: component.cid, event: event, coalescable: false
-        ) { callback.call(context) }
+        page = attachment.page
+        viewer_id = attachment.viewer_id
+        lambda do
+          @dispatcher.enqueue(
+            owner: page.owner, page_id: page.id, viewer_id: viewer_id,
+            cid: component.cid, event: event, coalescable: false
+          ) { callback.call(context) }
+        end
       end
 
       def component_property(component, property)
@@ -588,6 +610,32 @@ module Lich
         when :radio then :selected
         else :value
         end
+      end
+
+      # A table row's expansion is the viewer's own, kept as the row_toggle
+      # event keeps it ("expanded:<row>" in the viewer store), and a script
+      # may set it too: TreeView#expand_row under the shim, or any page that
+      # opens a branch for the viewer (review 2026-09-17 (b), F4). The name
+      # is not a contract property, so it is checked here: a boolean, for a
+      # row the table has.
+      def row_expansion?(component, property)
+        component.type == :table && property.to_s.start_with?('expanded:')
+      end
+
+      def write_row_expansion(page, component, property, value, viewer)
+        name = property.to_s
+        row = name.delete_prefix('expanded:')
+        unless Array(component.props[:rows]).any? { |candidate| candidate[:key].to_s == row }
+          raise UnknownPropertyError.new(
+            "no row #{row.inspect} to expand", owner: owner_label(page.owner), page_id: page.id,
+            cid: component.cid, field: name
+          )
+        end
+
+        attachment = contextual_attachment(page, component, viewer)
+        @viewers.set_property(attachment, component, name, value ? true : false)
+        schedule_refresh(page)
+        nil
       end
 
       def property_scope(component, name)

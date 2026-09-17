@@ -85,10 +85,11 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
 
     def upsert_manual_entry(entry, password)
       @calls << [:save_manual, entry, password]
-      true
+      'entry-saved'
     end
 
     def toggle_favorite(key) = @calls << [:favorite, key]
+    def set_favorite(key, wanted) = @calls << [:favorite, key, wanted]
     def remove_entry(key) = @calls << [:remove_entry, key]
     def remove_account(account) = @calls << [:remove_account, account]
     def add_character(account, character) = @calls << [:add_character, account, character]
@@ -419,6 +420,29 @@ RSpec.describe Lich::Common::WebUILauncher, 'actual-core workflows' do
 
     expect(worker.join(5)).not_to be_nil
     expect(catalog.calls.map(&:first)).not_to include(:save_account)
+  end
+
+  # Review 2026-09-17 (b), F2: the master-password change called the
+  # catalog directly from its queued job, and only its completion consulted
+  # the arbiter. Closing the launcher stops the executor without dropping
+  # what is already queued, so a change waiting behind other work still
+  # rewrote the credential store after the close.
+  it 'does not change the master password for a launcher closed while the change was queued' do
+    queued = QueuedExecutor.new
+    closing = described_class.new(
+      data_dir: '/fixture', catalog: catalog, service: WorkflowService.new,
+      authenticator: authenticator, executor: queued,
+      on_launch: proc {}, browser_open: proc { true }
+    )
+    closing.change_master_password(event({
+      'password_input:master-current' => viewer_secret('current-pass'),
+      'password_input:master-new'     => viewer_secret('replacement-pass'),
+      'password_input:master-confirm' => viewer_secret('replacement-pass'),
+    }))
+    closing.close(reason: :user)
+    queued.instance_variable_get(:@queue).each(&:call)
+
+    expect(catalog.calls.map(&:first)).not_to include(:change_master)
   end
 
   it 'refuses a commit after a close was accepted, and a close waits for a commit in progress' do

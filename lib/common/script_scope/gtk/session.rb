@@ -338,17 +338,49 @@ module Lich
 
           # ---- the emulated GTK thread ------------------------------------
 
-          def enqueue(&block)
-            raise ArgumentError, 'block required' unless block
-            # A closed session takes no more work. Timers and lifecycle
-            # callbacks fire after shutdown, and ensure_thread would start a
-            # fresh session thread just to run them -- a callback executing
-            # with the session closed and every window already gone.
-            return nil if @closed
+          # Queues +block+ for the session thread. True when it was taken;
+          # nil for a closed session, which takes no more work: timers and
+          # lifecycle callbacks fire after shutdown, and ensure_thread would
+          # start a fresh session thread just to run them -- a callback
+          # executing with the session closed and every window already gone.
+          def enqueue(job = nil, &block)
+            job ||= block
+            raise ArgumentError, 'block required' unless job
 
-            @queue << block
-            ensure_thread
-            nil
+            # The closed check, the push and the thread start are one step
+            # under the lock shutdown takes to close: read `@closed` first
+            # and push after, and a shutdown between the two queued a job
+            # behind a :stop the thread had already drained past (review
+            # 2026-09-17 (c), Major 1). Taken means the thread will run it
+            # or refuse it; nothing else.
+            @thread_mutex.synchronize do
+              return nil if @closed
+
+              @queue << job
+              ensure_thread_locked
+            end
+            true
+          end
+
+          # A synchronous job: the caller waits on +done+ for its answer,
+          # so it must always get one. The session thread answers it by
+          # running it; a session thread that ends with it still queued
+          # answers it with a refusal (review 2026-09-17 (b), F1).
+          class SyncJob
+            def initialize(block, done)
+              @block = block
+              @done = done
+            end
+
+            def call
+              @done << [:ok, @block.call]
+            rescue Exception => error # rubocop:disable Lint/RescueException
+              @done << [:error, error]
+            end
+
+            def reject(error)
+              @done << [:error, error]
+            end
           end
 
           # Runs +block+ on the session thread and waits for it. Never call
@@ -356,14 +388,13 @@ module Lich
           # specs and for script threads that need a synchronous round trip.
           def sync(&block)
             return block.call if on_session_thread?
-            raise Lich::WebUI::Error, 'session has been shut down' if @closed
 
             done = Queue.new
-            enqueue do
-              done << [:ok, block.call]
-            rescue Exception => error # rubocop:disable Lint/RescueException
-              done << [:error, error]
-            end
+            job = SyncJob.new(block, done)
+            # The closed check and the enqueue used to be two steps, and a
+            # shutdown between them queued a job nobody would ever run.
+            raise Lich::WebUI::Error, 'session has been shut down' unless enqueue(job)
+
             status, value = done.pop
             raise value if status == :error
 
@@ -417,9 +448,6 @@ module Lich
               begin
                 job.call
               rescue StandardError, ScriptError => error
-                # commit rescues only WebUI errors; a NoMethodError inside a
-                # widget's node_props used to escape here and end the
-                # session thread, taking every window with it.
                 report(error)
               end
               count += 1
@@ -433,7 +461,16 @@ module Lich
                 break
               end
             end
-            commit unless @closed
+            # Inside the same boundary as the jobs. commit rescues only WebUI
+            # errors; a NoMethodError inside a widget's materialize! or
+            # node_props escaped the batch and ended the session thread,
+            # taking every window with it and leaving a sync queued behind
+            # the crash waiting for ever (review 2026-09-17 (b), F1).
+            begin
+              commit unless @closed
+            rescue StandardError, ScriptError => error
+              report(error)
+            end
           end
           private :run_batch
 
@@ -723,9 +760,11 @@ module Lich
           # ---- teardown ----------------------------------------------------
 
           def shutdown
-            return if @closed
+            @thread_mutex.synchronize do
+              return if @closed
 
-            @closed = true
+              @closed = true
+            end
             windows = @mutex.synchronize { @windows.dup }
             # Session teardown is a cancellation, not just a cleanup. A run
             # parked on its Future is not waiting for the browser -- it is
@@ -755,25 +794,51 @@ module Lich
           private
 
           def ensure_thread
-            @thread_mutex.synchronize do
-              return if @closed || @thread&.alive?
+            @thread_mutex.synchronize { ensure_thread_locked }
+          end
 
-              session = self
-              @thread = Thread.new do
-                Thread.current[THREAD_KEY] = session
-                Thread.current.name = "webui-gtk:#{owner_label}" if Thread.current.respond_to?(:name=)
-                session.send(:run_loop)
-              end
+          # Under @thread_mutex: starts the session thread unless one is
+          # alive or the session is closed.
+          def ensure_thread_locked
+            return if @closed || @thread&.alive?
+
+            session = self
+            @thread = Thread.new do
+              Thread.current[THREAD_KEY] = session
+              Thread.current.name = "webui-gtk:#{owner_label}" if Thread.current.respond_to?(:name=)
+              session.send(:run_loop)
             end
           end
 
+          # The session thread's whole life. Nothing a job or a commit raises
+          # ends it: a script's error is reported, as GTK's main loop reports
+          # one raised in a callback, and the loop goes on. It ends at :stop,
+          # and then answers every synchronous job still queued with a
+          # refusal, so no caller is left waiting on a thread that is gone.
           def run_loop
             loop do
               job = @queue.pop
               break if job == :stop
 
-              run_batch(job)
+              begin
+                run_batch(job)
+              rescue Exception => error # rubocop:disable Lint/RescueException
+                report(error)
+              end
             end
+          ensure
+            reject_queued_jobs
+          end
+
+          def reject_queued_jobs
+            refusal = Lich::WebUI::Error.new('session has been shut down')
+            loop do
+              job = @queue.pop(timeout: 0)
+              break if job.nil?
+              job.reject(refusal) if job.respond_to?(:reject)
+            end
+          rescue StandardError
+            nil
           end
 
           def hook_owner_exit
@@ -816,6 +881,11 @@ module Lich
           def open_browser(page, window: nil, geometry: nil)
             self.class.start_service(service)
             url = service.launch_url(page: page)
+            unless Lich::WebUI.open_browser?
+              announce_launch_url(page, url)
+              return true
+            end
+
             opener = self.class.browser_open || method(:default_browser_open)
             session = self
             opened = opener.call(
@@ -825,6 +895,18 @@ module Lich
             )
             log(:warning, 'browser window failed to open; page is available at the launch URL') if opened == false
             opened
+          end
+
+          # Under --webui-no-browser a script window is a URL the player
+          # opens where their browser is. It goes to the game window through
+          # Messaging when a session has one, and always to the log.
+          def announce_launch_url(page, url)
+            title = page.respond_to?(:title) ? page.title : page.to_s
+            message = "WebUI window #{title.inspect} is ready; open it at #{url}"
+            log(:info, message)
+            Lich::Messaging.msg('info', message) if defined?(Lich::Messaging) && Lich::Messaging.respond_to?(:msg)
+          rescue StandardError
+            nil
           end
 
           def default_browser_open(url, geometry:, on_start:)

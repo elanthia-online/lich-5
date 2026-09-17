@@ -59,7 +59,7 @@ RSpec.describe 'WebUI browser assets' do
   # harness (replay, editing and table cases); these are the seams.
   it 'keeps event records across renders, registers editor cells as controls, and walks table rows as a tree' do
     expect(javascript).to include('const request = ++requestCounter;')
-    expect(javascript).to include('} else if (now - record.sentAt > PENDING_TTL_MS) {')
+    expect(javascript).to include('if (record.address !== message.page || !record.replay) return;')
     expect(javascript).to include('page.controls.set(`${component.cid}/cell:${row.key}/${column.key}`, control);')
     expect(javascript).to include('if (row.expanded === true) (childrenOf.get(row.key) || []).forEach((child) => renderRow(child, depth + 1));')
     expect(javascript).to include('emit(page, component, "row_toggle", { row: row.key, expanded });')
@@ -134,7 +134,7 @@ RSpec.describe 'WebUI browser assets' do
   it 'replays the payload and submission the event was sent with, not the current controls' do
     expect(javascript).to include('submission: message.submission')
     expect(javascript).to include('if (submission !== undefined) message.submission = submission;')
-    expect(javascript).to include('emit(page, component, retry.event, retry.payload, retry.attempt + 1, retry.submission);')
+    expect(javascript).to include('emit(page, component, retry.event, retry.payload, retry.attempt + 1, retry.submission, retry.scope);')
   end
 
   # The server answers a stale event with the refusal first and then the
@@ -145,8 +145,8 @@ RSpec.describe 'WebUI browser assets' do
   # any click whose refusal arrived after an unrelated refresh.
   it 'replays a stale event into the render that follows its refusal, and keeps the rest' do
     expect(javascript).to include('retry.replay = true;')
-    expect(javascript).to include('if (record.address !== message.page) return;')
-    expect(javascript).to include('if (record.replay) {')
+    expect(javascript).to include('dropPending((record) => record.address === message.page);')
+    expect(javascript).to include('dropPending((record) => record.scope.some((cid) => message.cids.includes(cid)));')
     expect(javascript).not_to include('pendingEvents.delete(key);
       if (record.replay)')
   end

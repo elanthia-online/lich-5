@@ -245,6 +245,8 @@ module Lich
             --frontend-command=CMD
             --game=HOST:PORT
             --bind-address=HOST
+            --webui-port=PORT
+            --webui-no-browser
 
           Notes:
             The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
@@ -260,6 +262,14 @@ module Lich
             lan (its private LAN address), or any (0.0.0.0). Lich's listen sockets are
             unauthenticated - anyone who can reach one controls the session - so
             prefer tailscale over lan or any.
+            The WebUI (launcher and script windows) is served on 127.0.0.1 only and
+            is reached through a one-shot launch URL. To play from another machine,
+            forward that port (for example: ssh -L PORT:127.0.0.1:PORT host) and open
+            the URL there. --webui-port=PORT fixes the launcher's port so it can be
+            forwarded ahead of time; --webui-no-browser prints each launch URL to the
+            console (and script-window URLs to the game window) instead of opening a
+            browser on this machine. Sessions started from the launcher inherit
+            --webui-no-browser and each choose their own port.
             Multiple frontends may attach to one detachable port. Each receives game
             output, and commands from all attached frontends are processed serially.
             Compatibility flags remain supported but are intentionally omitted from the default help screen.

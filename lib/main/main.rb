@@ -194,8 +194,15 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || @argv_options[:launcher])
+  # A launcher opens when the command line asks for nothing else (empty, or
+  # launcher flags only: see LauncherChoice.launcher_only?) or for --gui. A
+  # launcher flag beside anything else -- Saga's `<file>.sal --gtk ...`, a
+  # `--game=HOST:PORT`, a force mode -- selects the toolkit for that
+  # session and connects; reading it as a wish for the launcher pre-empted
+  # every one of those logins (Tysong, 2026-09-17). --login is handled above.
+  elsif Lich.launcher == :webui && (@argv_options[:gui] || Lich::LauncherChoice.launcher_only?(ARGV))
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
+    Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     webui_launcher = Lich::Common::WebUILauncher.new(
       data_dir: DATA_DIR,
       on_launch: proc {},
@@ -208,10 +215,9 @@ reconnect_if_wanted = proc {
     # `next` exits the enclosing `@main_thread = Thread.new {` block (line 53),
     # ending the thread so lich.rbw's @main_thread.join returns; it is not loop control.
     next unless @launch_data
-  # `--gtk` alone is the advertised way back to the native launcher; it
-  # must open it, not fall through to a headless start because ARGV is no
-  # longer empty (review 2026-09-17, R1).
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or @argv_options[:launcher] == :gtk)
+  # The same rule for the native launcher: `--gtk` alone opens it (review
+  # 2026-09-17, R1), `--gtk` beside a session does not.
+  elsif defined?(Gtk) and (@argv_options[:gui] or Lich::LauncherChoice.launcher_only?(ARGV))
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
   end
@@ -222,6 +228,11 @@ reconnect_if_wanted = proc {
   # child arrives here through --login, not through the launcher branch above.
   if Lich.launcher == :webui
     require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    require File.join(LIB_DIR, 'webui.rb')
+    # A session spawned by the launcher gets --webui-no-browser from its
+    # parent; a fixed port is per process and never inherited, since every
+    # session runs its own WebUI server.
+    Lich::WebUI.configure(port: @argv_options[:webui_port], open_browser: @argv_options[:webui_browser])
     Lich::Common::ScriptScope.activate!
   end
 
