@@ -2393,8 +2393,8 @@ module Lich
             super(title.to_s)
             @content = VBox.new
             @actions = HBox.new
-            @responses = Queue.new
-            @response = NO_RESPONSE
+            @runs = [] # one Future per thread parked in #run (D15)
+            @runs_mutex = Mutex.new
             Container.instance_method(:add).bind_call(self, @content)
             Container.instance_method(:add).bind_call(self, @actions)
             Array(buttons).each { |(label, response)| add_button(label, response) }
@@ -2439,44 +2439,42 @@ module Lich
           end
           alias default_response= set_default_response
 
-          # "No answer yet". run promises to return the very object given to
-          # add_button, and false and nil are legal ones: `add_button('No',
-          # false)` is how a yes/no dialog is spelled. The loop used to be
-          # `until @response`, so a false answer could never end it, and the
-          # fallback `@response || DELETE_EVENT` turned a nil one into a
-          # close. Only this object means nobody has answered.
-          NO_RESPONSE = Object.new.freeze
-          private_constant :NO_RESPONSE
-
+          # Answers every run parked on this dialog. run promises to return
+          # the very object given to add_button, and false and nil are legal
+          # ones: `add_button('No', false)` is how a yes/no dialog is
+          # spelled. A Future's result carries the answer as its button and
+          # a cancellation as its reason, so false and nil survive and only
+          # a reason means nobody answered.
           def respond(response)
-            @response = response
-            @responses << response
+            each_run { |future| future.resolve(button: response) }
             emit(:response, response)
             self
           end
           alias response respond
 
+          # Blocks until answered, cancelled, or destroyed. Each run waits on
+          # its own Future (D15) -- the same thing a MessageDialog waits on,
+          # tracked by the session so shutdown cancels both through one
+          # path -- so a run answered twice leaves nothing for the next run
+          # to pop, and two threads waiting on one dialog are both released.
           def run
             show unless @shown
-            @response = NO_RESPONSE
-            # A run answered more than once -- a double click, or a respond
-            # racing a close -- left the extra answers queued, and the NEXT
-            # run popped one of them and returned before the viewer had seen
-            # the dialog at all. Each run waits for its own answer.
-            @responses.clear
+            future = @session.await_answer
+            @runs_mutex.synchronize { @runs << future }
             if @session.on_session_thread?
               @session.commit
-              @session.pump(0.05) while @response.equal?(NO_RESPONSE) && !destroyed?
-              @response.equal?(NO_RESPONSE) ? ResponseType::DELETE_EVENT : @response
+              @session.pump(0.05) until future.resolved? || destroyed?
             else
               @session.request_commit
-              answer = @responses.pop
-              answer.equal?(NO_RESPONSE) ? ResponseType::DELETE_EVENT : answer
+              future.await
             end
+            answer_from(future)
+          ensure
+            @runs_mutex.synchronize { @runs.delete(future) } if future
           end
 
           def destroy
-            release_waiters
+            cancel_runs(:destroyed)
             super
           end
 
@@ -2492,26 +2490,36 @@ module Lich
             return if @delete_emitted || destroyed?
 
             super
-            release_waiters
-          end
-
-          # The session is going away, so nobody will ever answer. Distinct
-          # from a window close, which is the viewer's doing and arrives
-          # through the lifecycle path above.
-          def session_terminated
-            release_waiters
+            cancel_runs(:closed)
           end
 
           private
 
-          # Unblocks every thread parked in #run. A single push only wakes
-          # one consumer, so concurrent callers each need their own.
-          def release_waiters
+          def each_run(&block)
+            @runs_mutex.synchronize { @runs.dup }.each(&block)
+          end
+
+          # Releases every thread parked in #run with DELETE_EVENT. The
+          # session's own shutdown reaches the same Futures through
+          # Session#cancel_pending_answers; this is the dialog-side path.
+          def cancel_runs(reason)
             @destroyed = true
-            waiting = @responses.num_waiting
-            (waiting.positive? ? waiting : 1).times do
-              @responses << ResponseType::DELETE_EVENT
+            each_run { |future| future.cancel(reason: reason) }
+          end
+
+          # The run's answer, or DELETE_EVENT when it was cancelled -- by the
+          # viewer, by destroy, or by the session shutting down, which also
+          # makes the dialog report itself destroyed. An unresolved Future
+          # here means the pump loop ended on destroyed?.
+          def answer_from(future)
+            result = future.await(timeout: 0)
+            return ResponseType::DELETE_EVENT if result.nil?
+
+            if result.reason
+              @destroyed = true if result.reason == :terminated
+              return ResponseType::DELETE_EVENT
             end
+            result.button
           end
         end
 

@@ -230,4 +230,42 @@ RSpec.describe 'GTK compatibility shim: Dialog' do
       expect(result).to eq(:ok)
     end
   end
+
+  # D15 (ledger part 2): Dialog waited on a Queue while MessageDialog waited
+  # on a Future through ModalCoordinator, and the shutdown gap (F4) happened
+  # because only one of them was cancelled. Both now wait on a Future the
+  # session tracks, and one cancellation path releases them.
+  describe 'the shared cancellation path (D15)' do
+    it 'waits on a Future the session tracks, exactly as a MessageDialog does' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q14', buttons: [['OK', :ok]]) }
+      waiter = Thread.new { dialog.run }
+      sleep 0.2
+
+      expect(session.pending_answers).to eq(1)
+
+      session.sync { dialog.viewer_closed }
+      waiter.join(3)
+
+      expect(session.pending_answers).to eq(0)
+    end
+
+    it 'cancels a pending Dialog and a pending MessageDialog together at shutdown' do
+      dialog = session.sync { gtk::Dialog.new(title: 'Q15', buttons: [['OK', :ok]]) }
+      results = Queue.new
+      dialog_waiter = Thread.new { results << [:dialog, dialog.run] }
+      message_waiter = Thread.new do
+        results << [:message, session.sync { gtk::MessageDialog.new(buttons: :ok, message: 'x') }.run]
+      end
+      sleep 0.3
+      expect(session.pending_answers).to eq(2)
+
+      session.shutdown
+
+      expect(dialog_waiter.join(3)).not_to be_nil
+      expect(message_waiter.join(3)).not_to be_nil
+      answers = [results.pop, results.pop].to_h
+      expect(answers).to eq(dialog: gtk::ResponseType::DELETE_EVENT, message: gtk::ResponseType::DELETE_EVENT)
+      expect(session.pending_answers).to eq(0)
+    end
+  end
 end

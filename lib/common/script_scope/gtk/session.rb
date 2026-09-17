@@ -331,6 +331,7 @@ module Lich
             @mutex = Mutex.new
             @pending_viewer_writes = []
             @reported_degradations = Set.new # [page, facility, property], each reported once (D16)
+            @pending_answers = [] # Futures a Dialog or MessageDialog run is parked on (D15)
             @closed = false
           end
 
@@ -671,7 +672,7 @@ module Lich
           # ---- modals ------------------------------------------------------
 
           # Opens a contract dialog and returns its Future. The caller awaits
-          # it on the session thread; that is the blocking Gtk::Dialog#run.
+          # it; that is the blocking Gtk::MessageDialog#run.
           def modal(title:, buttons:, body: nil, default_button: nil)
             id = "modal-#{SecureRandom.hex(6)}"
             future = service.modal(
@@ -685,8 +686,31 @@ module Lich
             # to a sibling modal from the same owner, so a window of ours is
             # enough; with none, open one for the dialog itself.
             open_modal_window(id, future) unless windows_open?
+            await_answer(future)
+          end
+
+          # The one place a blocking answer is waited for (D15). A
+          # MessageDialog's Future comes from the ModalCoordinator; a
+          # Dialog#run makes its own. Both are tracked here until they
+          # resolve, so shutdown cancels every parked run through the same
+          # path -- the shutdown gap (F4) happened because only one of the
+          # two waiters was released.
+          def await_answer(future = Lich::WebUI::Future.new)
+            @mutex.synchronize { @pending_answers << future }
+            future.then { @mutex.synchronize { @pending_answers.delete(future) } }
             future
           end
+
+          def pending_answers
+            @mutex.synchronize { @pending_answers.length }
+          end
+
+          def cancel_pending_answers(reason)
+            futures = @mutex.synchronize { @pending_answers.dup }
+            futures.each { |future| future.cancel(reason: reason) }
+            nil
+          end
+          private :cancel_pending_answers
 
           # A window of this script's own is open, so a modal raised now
           # will be shown in it: the client attaches to a sibling modal from
@@ -716,15 +740,13 @@ module Lich
 
             @closed = true
             windows = @mutex.synchronize { @windows.dup }
-            # Session teardown is a cancellation, not just a cleanup. A
-            # Dialog#run parked on its queue is not waiting for the browser --
-            # it is waiting for an answer that is never coming now, and
-            # close_window only removes adapter and browser state. Without
-            # this an off-thread run stayed blocked for the life of the
-            # process and the dialog never reported itself destroyed.
-            windows.each do |window|
-              window.session_terminated if window.respond_to?(:session_terminated)
-            end
+            # Session teardown is a cancellation, not just a cleanup. A run
+            # parked on its Future is not waiting for the browser -- it is
+            # waiting for an answer that is never coming now, and
+            # close_window only removes adapter and browser state. Every
+            # pending answer, Dialog or MessageDialog, is cancelled through
+            # the one path (D15).
+            cancel_pending_answers(:terminated)
             windows.each { |window| close_window(window) }
             begin
               service.terminate_owner(@owner)
