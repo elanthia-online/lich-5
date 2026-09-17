@@ -44,7 +44,9 @@ module Lich
             instance_exec(self, &content) if content
           end
         end
+        page.modal = true
         @registry.register(page)
+        registered = page
         page.bind_runtime(@runtime)
         timer = timeout && Thread.new do
           sleep(timeout)
@@ -56,6 +58,10 @@ module Lich
         future
       rescue StandardError
         future&.cancel(reason: :error)
+        # Cancelling only reaches the page through future.then, which is
+        # armed last. A failure between register and then would otherwise
+        # leave the page registered with nothing that will ever close it.
+        forget_registered(registered)
         raise
       end
 
@@ -80,6 +86,15 @@ module Lich
           future.resolve(reason: :no_viewer)
         end
         future
+      end
+
+      def forget_registered(page)
+        return unless page
+
+        @mutex.synchronize { @pending.delete_if { |_future, pending| pending.page.equal?(page) } }
+        @registry.unregister(page.owner, page.id)
+      rescue StandardError => error
+        @logger.call(:warning, "WebUI modal unregister failed=#{error.class}")
       end
 
       def complete(future, result)

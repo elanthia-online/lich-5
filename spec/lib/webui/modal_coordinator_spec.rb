@@ -62,6 +62,22 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     expect(registry.size).to be_zero
   end
 
+  # The rescue in #open cancelled the future, but a failure after the page
+  # was registered and before future.then was armed left the page in the
+  # registry with nothing that would ever close it: listed to every
+  # viewer, never resolved, never removed.
+  it 'unregisters the modal page when open fails after registering it' do
+    modal = coordinator(viewers_present: true)
+    # The timeout timer is created between register and future.then.
+    allow(Thread).to receive(:new).and_raise(ThreadError, 'no more threads')
+
+    expect do
+      modal.open(owner: owner, id: 'orphan', title: 'Orphan', buttons: buttons, no_viewer: :abort, timeout: 1)
+    end.to raise_error(ThreadError, 'no more threads')
+    expect(registry.size).to be_zero
+    expect(modal.pending_count).to be_zero
+  end
+
   it 'prohibits credential modals from waiting for a viewer' do
     expect do
       coordinator(viewers_present: false).open(
