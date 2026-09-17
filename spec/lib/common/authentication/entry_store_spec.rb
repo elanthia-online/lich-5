@@ -4,13 +4,13 @@ require 'rspec'
 require 'fileutils'
 require 'tmpdir'
 require_relative '../../../login_spec_helper'
-require_relative '../../../../lib/common/gui/state'
+require_relative '../../../../lib/common/authentication/legacy_entry_file'
 require_relative '../../../../lib/common/authentication/entry_store'
-require_relative '../../../../lib/common/gui/master_password_manager'
+require_relative '../../../../lib/common/authentication/master_password_manager'
 require_relative '../../../../lib/common/gui/master_password_prompt'
 
 # Alias for easier test access
-State = Lich::Common::GUI::State
+State = Lich::Common::Authentication::LegacyEntryFile
 
 # Stub required dependencies at module/class level (no redefining)
 module Lich
@@ -33,9 +33,9 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
       File.write(dat_file, 'dummy')
 
       # Stub the external dependencies on actual classes
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password).and_return(nil)
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test).and_return('validation_test')
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password).and_return(true)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password).and_return(nil)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test).and_return('validation_test')
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password).and_return(true)
       allow(Lich::Common::GUI::MasterPasswordPrompt).to receive(:show_create_master_password_dialog).and_return('TestPassword123')
       allow(State).to receive(:load_saved_entries).and_return([])
       allow(described_class).to receive(:save_entries).and_return(true)
@@ -212,7 +212,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
   describe '.ensure_master_password_exists' do
     context 'when master password already in Keychain' do
       before do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return('ExistingPassword123')
       end
 
@@ -227,11 +227,11 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
     context 'when master password not in Keychain' do
       before do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(nil)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
           .and_return('validation_test')
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
       end
 
@@ -259,7 +259,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         allow(Lich::Common::GUI::MasterPasswordPrompt).to receive(:show_create_master_password_dialog)
           .and_return(password)
 
-        expect(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
           .with(password)
           .and_return('validation_test')
 
@@ -578,7 +578,7 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
 
       before do
         # Stub MasterPasswordManager for auto-retrieval in decrypt
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(master_password)
       end
 
@@ -613,11 +613,11 @@ RSpec.describe Lich::Common::Authentication::EntryStore do
         )
 
         expect(decrypted).to eq(password)
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:retrieve_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to have_received(:retrieve_master_password)
       end
 
       it 'raises error when master password not found in keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(nil)
 
         encrypted = described_class.encrypt_password(

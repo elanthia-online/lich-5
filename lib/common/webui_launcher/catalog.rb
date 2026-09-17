@@ -3,7 +3,7 @@
 require 'openssl'
 require 'yaml'
 require_relative '../authentication/entry_store'
-require_relative '../gui/master_password_manager'
+require_relative '../authentication/master_password_manager'
 require_relative '../../webui/sensitive_value'
 
 module Lich
@@ -28,7 +28,7 @@ module Lich
         attr_reader :data_dir
 
         def initialize(data_dir:, entry_store: Authentication::EntryStore,
-                       master_password_manager: GUI::MasterPasswordManager)
+                       master_password_manager: Authentication::MasterPasswordManager)
           @data_dir = data_dir
           @entry_store = entry_store
           @master_password_manager = master_password_manager
@@ -37,9 +37,9 @@ module Lich
 
         def entries(autosort: false)
           @mutex.synchronize do
-            source_entries.map.with_index do |entry, index|
+            source_entries.map do |entry|
               Entry.new(
-                "entry-#{index}", entry.fetch(:user_id).to_s, entry.fetch(:char_name).to_s,
+                entry.fetch(:key), entry.fetch(:user_id).to_s, entry.fetch(:char_name).to_s,
                 entry.fetch(:game_code).to_s, entry[:game_name].to_s, entry[:frontend].to_s,
                 entry[:custom_launch], entry[:custom_launch_dir], entry[:is_favorite] == true,
                 entry[:favorite_order]
@@ -334,7 +334,7 @@ module Lich
 
         def source_entries
           raw_entries = entries_without_lock
-          raw_entries.map { |entry| entry.except(:key, :password, :encryption_mode) }
+          raw_entries.map { |entry| entry.except(:password, :encryption_mode) }
         ensure
           raw_entries&.each do |entry|
             password = entry[:password]
@@ -347,12 +347,13 @@ module Lich
           if File.exist?(file)
             data = yaml_data
             mode = data.fetch('encryption_mode', 'plaintext').to_sym
-            index = -1
+            taken = {}
             data.fetch('accounts', {}).flat_map do |account, account_data|
               account_data.fetch('characters', []).map do |character|
-                index += 1
                 {
-                  key: "entry-#{index}", user_id: account, password: account_data['password'],
+                  key: stable_key(account, character['char_name'], character['game_code'],
+                                  character['frontend'], character['custom_launch'], taken),
+                  user_id: account, password: account_data['password'],
                   encryption_mode: mode, char_name: character['char_name'], game_code: character['game_code'],
                   game_name: character['game_name'], frontend: character['frontend'],
                   custom_launch: character['custom_launch'], custom_launch_dir: character['custom_launch_dir'],
@@ -372,12 +373,41 @@ module Lich
           decoded = File.open(file, 'rb') { |io| Marshal.load(io.read.unpack1('m')) }
           return [] unless decoded.is_a?(Array) && decoded.all? { |entry| valid_legacy_entry?(entry) }
 
-          decoded.map.with_index do |entry, index|
-            entry.transform_keys(&:to_sym).merge(key: "entry-#{index}", encryption_mode: :plaintext)
+          taken = {}
+          decoded.map do |entry|
+            entry = entry.transform_keys(&:to_sym)
+            entry.merge(key: stable_key(entry[:user_id], entry[:char_name], entry[:game_code],
+                                        entry[:frontend], entry[:custom_launch], taken),
+                        encryption_mode: :plaintext)
           end
         rescue StandardError => error
           Lich.log("error: unable to read legacy launcher entries: #{error.class}: #{error.message}") if Lich.respond_to?(:log)
           []
+        end
+
+        # An entry's key is its identity, not its position. Keys used to be
+        # "entry-N" from the enumeration index on every read, so removing one
+        # entry renamed every entry after it: a stale editor, confirmation or
+        # queued operation holding Beta's key then acted on the entry that
+        # had moved into it, and a second launcher or process editing the
+        # shared file was enough to bring that about. Derived from what
+        # makes the entry itself -- account, character, game -- the key
+        # survives changes to its neighbours, and a key whose entry is gone
+        # simply fails to resolve, which is the refusal a stale action needs.
+        # The identity is the whole of what makes an entry distinct -- the
+        # catalog lets one character be saved twice with different frontends
+        # or custom launch commands, and hashing only account, character and
+        # game told those apart by an ordinal, which is a position again:
+        # removing the first moved the second onto its key (review
+        # 2026-09-17, R8). Frontend and custom launch are in the digest now;
+        # an ordinal remains only for entries identical in every field.
+        def stable_key(user_id, char_name, game_code, frontend, custom_launch, taken)
+          digest = OpenSSL::Digest::SHA256.hexdigest(
+            [user_id, char_name, game_code, frontend, custom_launch].map(&:to_s).join("\0")
+          )[0, 12]
+          base = "entry-#{digest}"
+          count = taken[base] = (taken[base] || 0) + 1
+          count == 1 ? base : "#{base}-#{count}"
         end
 
         def raw_credential(metadata)

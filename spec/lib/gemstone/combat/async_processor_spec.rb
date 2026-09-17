@@ -6,8 +6,8 @@ require 'gemstone/combat/async_processor'
 # AsyncProcessor is a single ordered worker thread fed by a Queue. This spec
 # locks down:
 #   1. The GC.compact regression guard carried over from the thread-pool era:
-#      shutdown must route compaction through GtkCompaction.safe_compact!,
-#      never a raw GC.compact (raw compaction is unsafe alongside gtk3).
+#      shutdown must route compaction through HeapCompaction.compact!, never
+#      a raw GC.compact (a loaded runtime may need compaction guarded).
 #   2. Queue-worker semantics: chunks are processed in arrival order on one
 #      thread, enqueueing never blocks, a Processor error doesn't kill the
 #      worker, and shutdown drains queued work before joining.
@@ -21,7 +21,7 @@ RSpec.describe Lich::Gemstone::Combat::AsyncProcessor do
 
   def quiet_gc
     allow(GC).to receive(:start)
-    allow(Lich::Util::GtkCompaction).to receive(:safe_compact!)
+    allow(Lich::Util::HeapCompaction).to receive(:compact!)
   end
 
   describe '#process_async' do
@@ -121,18 +121,18 @@ RSpec.describe Lich::Gemstone::Combat::AsyncProcessor do
       expect(GC).to have_received(:start).with(no_args)
     end
 
-    it 'delegates compaction to Lich::Util::GtkCompaction.safe_compact!' do
+    it 'delegates compaction to Lich::Util::HeapCompaction.compact!' do
       quiet_gc
       processor = described_class.new
       processor.shutdown
 
-      expect(Lich::Util::GtkCompaction).to have_received(:safe_compact!)
+      expect(Lich::Util::HeapCompaction).to have_received(:compact!)
     end
 
     it 'never calls GC.compact directly' do
       # The exact regression this guard exists to catch: a future edit that
-      # "simplifies" back to a raw GC.compact call bypasses GtkCompaction's
-      # safety logic entirely.
+      # "simplifies" back to a raw GC.compact call bypasses HeapCompaction's
+      # installed strategy entirely.
       quiet_gc
       allow(GC).to receive(:compact)
       processor = described_class.new
@@ -147,7 +147,7 @@ RSpec.describe Lich::Gemstone::Combat::AsyncProcessor do
       processor = described_class.new
 
       expect { processor.shutdown }.not_to raise_error
-      expect(Lich::Util::GtkCompaction).to have_received(:safe_compact!)
+      expect(Lich::Util::HeapCompaction).to have_received(:compact!)
     end
   end
 

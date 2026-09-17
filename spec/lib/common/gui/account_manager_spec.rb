@@ -83,7 +83,7 @@ RSpec.describe Lich::Common::GUI::AccountManager do
 
       it "handles file write errors" do
         # Mock file write error - updated to use verified_file_operation
-        allow(Lich::Common::GUI::Utilities).to receive(:verified_file_operation).and_return(false)
+        allow(Lich::Common::Authentication::Utilities).to receive(:verified_file_operation).and_return(false)
 
         # Should return false on write error
         expect(described_class.add_or_update_account(data_dir, username, password)).to be false

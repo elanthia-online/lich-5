@@ -25,14 +25,14 @@ module Lich
   end
 end
 
-# Extend GUI mocks with additional methods needed for CLI password tests
+# Extend authentication mocks with additional methods needed for CLI password tests
 module Lich
   module Common
-    module GUI
+    module Authentication
       module PasswordCipher
         def self.encrypt(*_args, **_kwargs); end
         def self.decrypt(*_args, **_kwargs); end
-      end unless defined?(Lich::Common::GUI::PasswordCipher)
+      end unless defined?(Lich::Common::Authentication::PasswordCipher)
 
       module MasterPasswordManager
         class << self
@@ -56,7 +56,7 @@ module Lich
             {}
           end
         end
-      end unless defined?(Lich::Common::GUI::MasterPasswordManager)
+      end unless defined?(Lich::Common::Authentication::MasterPasswordManager)
 
       module AccountManager
         def self.convert_auth_data_to_characters(*_args)
@@ -66,7 +66,7 @@ module Lich
         def self.add_or_update_account(*_args)
           true
         end
-      end unless defined?(Lich::Common::GUI::AccountManager)
+      end unless defined?(Lich::Common::Authentication::AccountManager)
     end
   end
 end
@@ -81,7 +81,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     # Mock YamlState.yaml_file_path
     allow(Lich::Common::Authentication::EntryStore).to receive(:yaml_file_path).and_return(yaml_file)
     # Mock keychain availability
-    allow(Lich::Common::GUI::MasterPasswordManager).to receive(:keychain_available?).and_return(true)
+    allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:keychain_available?).and_return(true)
   end
 
   after do
@@ -142,12 +142,12 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'calls PasswordCipher.encrypt for standard mode' do
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new_password')
 
         Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
 
-        expect(Lich::Common::GUI::PasswordCipher).to have_received(:encrypt).with(
+        expect(Lich::Common::Authentication::PasswordCipher).to have_received(:encrypt).with(
           'newpassword',
           mode: :standard,
           account_name: 'DOUG'
@@ -155,7 +155,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'updates password field in standard mode' do
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new_password')
 
         Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
@@ -165,7 +165,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'returns 0 on success' do
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new_password')
 
         exit_code = Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
@@ -190,18 +190,18 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'retrieves master password from keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return('master_password')
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new_password')
 
         Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
 
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:retrieve_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to have_received(:retrieve_master_password)
       end
 
       it 'returns 1 when master password not in keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(nil)
 
         exit_code = Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
@@ -209,14 +209,14 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'encrypts with master password from keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return('my_master_password')
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new_password')
 
         Lich::Common::Authentication::CLIPassword.change_account_password('DOUG', 'newpassword')
 
-        expect(Lich::Common::GUI::PasswordCipher).to have_received(:encrypt).with(
+        expect(Lich::Common::Authentication::PasswordCipher).to have_received(:encrypt).with(
           'newpassword',
           mode: :enhanced,
           account_name: 'DOUG',
@@ -277,7 +277,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
                       { char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' },
                       { char_name: 'Char2', game_code: 'GS3', game_name: 'GemStone IV' }
                     ])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
@@ -308,19 +308,19 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'saves account with provided frontend' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'stormfront')
 
       # Should call with frontend set
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account)
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_or_update_account)
     end
 
     it 'returns 0 on success' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
@@ -330,7 +330,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'returns 1 when AccountManager.add_or_update_account fails' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(false)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'wizard')
@@ -369,7 +369,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'decrypts the stored plaintext password and authenticates with it' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
@@ -384,7 +384,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'decrypts using the account entry.yaml encryption_mode' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
       allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_call_original
 
@@ -423,12 +423,12 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'merges fetched characters into existing account via AccountManager.add_or_update_account' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account).and_return(true)
 
       exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
 
       expect(exit_code).to eq(0)
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_or_update_account).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_or_update_account).with(
         anything, 'DOUG', 'password', anything
       )
     end
@@ -436,30 +436,30 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'passes explicit frontend to convert_auth_data_to_characters' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
-      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
       Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'avalon')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'avalon')
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'avalon')
     end
 
     it 'falls back to predominant frontend when none provided' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
-      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
       # DOUG's only existing character uses 'wizard', so that's the predominant frontend
       Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'wizard')
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'wizard')
     end
 
     it 'returns 1 when AccountManager.add_or_update_account fails' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(false)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account).and_return(false)
 
       exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
       expect(exit_code).to eq(1)
@@ -477,26 +477,26 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
       allow(Lich::Common::Authentication::CLIPassword).to receive(:prompt_for_frontend).and_return(nil)
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account).and_return(true)
-      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account).and_return(true)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:convert_auth_data_to_characters).and_call_original
 
       expect {
         Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG')
       }.to output(/note: No frontend selected - defaulted to stormfront, rerun with --frontend to change it/).to_stdout
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'stormfront')
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:convert_auth_data_to_characters).with(anything, 'stormfront')
     end
 
     it 'returns 3 and does not save when conversion drops all characters (defensive guard)' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Newchar', game_code: 'DR', game_name: 'DragonRealms' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:convert_auth_data_to_characters).and_return([])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:convert_auth_data_to_characters).and_return([])
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
 
       exit_code = Lich::Common::Authentication::CLIPassword.refresh_characters('DOUG', 'wizard')
 
       expect(exit_code).to eq(3)
-      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_or_update_account)
+      expect(Lich::Common::Authentication::AccountManager).not_to have_received(:add_or_update_account)
     end
 
     # These exercise the real persistence path instead of stubbing
@@ -623,64 +623,64 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'calls AccountManager.add_character with the given char_name and default game_code' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: "Character 'Newchar' added successfully." })
 
       Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
         anything, 'DOUG', hash_including(char_name: 'Newchar', game_code: 'DR')
       )
     end
 
     it 'uses an explicit game_code when provided' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'GS3')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
         anything, 'DOUG', hash_including(game_code: 'GS3')
       )
     end
 
     it 'uses an explicit frontend when provided' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', frontend: 'avalon')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
         anything, 'DOUG', hash_including(frontend: 'avalon')
       )
     end
 
     it 'falls back to the predominant frontend when none provided' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       # DOUG's only existing character uses 'wizard', so that's the predominant frontend
       Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
         anything, 'DOUG', hash_including(frontend: 'wizard')
       )
     end
 
     it 'falls back to stormfront when no frontend is provided or determinable' do
       File.write(yaml_file, YAML.dump('encryption_mode' => 'plaintext', 'accounts' => { 'DOUG' => { 'password' => 'password' } }))
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
 
-      expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+      expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
         anything, 'DOUG', hash_including(frontend: 'stormfront')
       )
     end
 
     it 'returns 0 on success' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
@@ -688,7 +688,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 and surfaces the message when AccountManager.add_character fails (e.g. duplicate)' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: false, message: "Character 'Newchar' already exists for DR (wizard) with this launch configuration. Duplicates are not allowed." })
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar')
@@ -696,7 +696,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 and surfaces the message when the account does not exist' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: false, message: "Account 'NONEXISTENT' not found. Please add the account first." })
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('NONEXISTENT', 'Newchar')
@@ -714,30 +714,30 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     # retired code (GSX) or an unrecognized one must be rejected here too, before
     # AccountManager persists a record whose game_name is 'Unknown'.
     it 'returns 1 without persisting a character for a retired game code' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'GSX')
 
       expect(exit_code).to eq(1)
-      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_character)
+      expect(Lich::Common::Authentication::AccountManager).not_to have_received(:add_character)
     end
 
     it 'returns 1 without persisting a character for an unrecognized game code' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
 
       exit_code = Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: 'ZZ')
 
       expect(exit_code).to eq(1)
-      expect(Lich::Common::GUI::AccountManager).not_to have_received(:add_character)
+      expect(Lich::Common::Authentication::AccountManager).not_to have_received(:add_character)
     end
 
     it 'persists every game code the login validator accepts' do
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_character)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_character)
         .and_return({ success: true, message: 'ok' })
 
       Lich::Common::Authentication::LoginHelpers::VALID_GAME_CODES.each do |game_code|
         expect(Lich::Common::Authentication::CLIPassword.add_character('DOUG', 'Newchar', game_code: game_code)).to eq(0), game_code
-        expect(Lich::Common::GUI::AccountManager).to have_received(:add_character).with(
+        expect(Lich::Common::Authentication::AccountManager).to have_received(:add_character).with(
           anything, 'DOUG', hash_including(game_code: game_code, game_name: satisfy { |name| name != 'Unknown' })
         )
       end
@@ -836,7 +836,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'validates old password against validation test' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(false)
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('wrongpass')
@@ -844,7 +844,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when old password validation fails' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(false)
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('wrongpass')
@@ -852,16 +852,16 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'prompts for new password' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("newpass\n", "newpass\n")
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
         .and_return({})
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
         .and_return(true)
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
         .and_return('plaintext_pass')
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
         .and_return('encrypted_new')
 
       Lich::Common::Authentication::CLIPassword.change_master_password('oldpass')
@@ -870,16 +870,16 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 're-encrypts all accounts with new password' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("newpassword\n", "newpassword\n")
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
         .and_return({ 'validation_salt' => 'new_salt', 'validation_hash' => 'new_hash' })
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
         .and_return(true)
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
         .and_return('plaintext_pass')
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
         .and_return('encrypted_new')
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('oldpass')
@@ -889,7 +889,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when passwords do not match' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("newpass1\n", "newpass2\n")
 
@@ -898,7 +898,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when password is too short' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("short\n", "short\n")
 
@@ -907,16 +907,16 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when keychain update fails' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("newpassword\n", "newpassword\n")
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
         .and_return({})
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
         .and_return(false)
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
         .and_return('plaintext_pass')
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
         .and_return('encrypted_new')
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('oldpass')
@@ -924,16 +924,16 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 0 on success' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
       allow($stdin).to receive(:gets).and_return("newpassword\n", "newpassword\n")
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
         .and_return({ 'validation_salt' => 'new_salt', 'validation_hash' => 'new_hash' })
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
         .and_return(true)
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
         .and_return('plaintext_pass')
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
         .and_return('encrypted_new')
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('oldpass')
@@ -941,15 +941,15 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'accepts new password as argument and does not prompt' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
         .and_return({ 'validation_salt' => 'new_salt', 'validation_hash' => 'new_hash' })
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
         .and_return(true)
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
         .and_return('plaintext_pass')
-      allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+      allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
         .and_return('encrypted_new')
 
       # Should NOT call $stdin.gets when new_password is provided
@@ -960,7 +960,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     end
 
     it 'returns 1 when new password is too short (from argument)' do
-      allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+      allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
         .and_return(true)
 
       exit_code = Lich::Common::Authentication::CLIPassword.change_master_password('oldpass', 'short')
@@ -984,7 +984,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'does not log password values in add_account' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       expect(Lich).not_to receive(:log).with(/password123|secretpass/)
@@ -995,7 +995,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
     it 'saves YAML with 0600 permissions in add_account' do
       allow(Lich::Common::Authentication).to receive(:authenticate)
         .and_return([{ char_name: 'Char1', game_code: 'GS3', game_name: 'GemStone IV' }])
-      allow(Lich::Common::GUI::AccountManager).to receive(:add_or_update_account)
+      allow(Lich::Common::Authentication::AccountManager).to receive(:add_or_update_account)
         .and_return(true)
 
       Lich::Common::Authentication::CLIPassword.add_account('DOUG', 'password', 'stormfront')
@@ -1016,7 +1016,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'returns true when master password is available in keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return('master_password')
 
         result = Lich::Common::Authentication::CLIPassword.validate_master_password_available
@@ -1024,7 +1024,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'returns false when master password is missing from keychain' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(nil)
 
         result = Lich::Common::Authentication::CLIPassword.validate_master_password_available
@@ -1032,7 +1032,7 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'prints helpful recovery message when keychain is missing' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:retrieve_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:retrieve_master_password)
           .and_return(nil)
 
         # Just verify puts is called with recovery-related output
@@ -1134,13 +1134,13 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       it 'prompts for new master password interactively' do
         allow($stdin).to receive(:gets).and_return("newpassword\n", "newpassword\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
           .and_return({ 'validation_salt' => 'salt', 'validation_hash' => 'hash' })
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
           .and_return('plaintext_pass')
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new')
 
         Lich::Common::Authentication::CLIPassword.recover_master_password
@@ -1171,33 +1171,33 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       it 'validates password against validation test' do
         allow($stdin).to receive(:gets).and_return("master_password\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
 
         Lich::Common::Authentication::CLIPassword.recover_master_password
 
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:validate_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to have_received(:validate_master_password)
           .with('master_password', kind_of(Hash))
       end
 
       it 'stores master password in keychain after validation' do
         allow($stdin).to receive(:gets).and_return("master_password\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
 
         Lich::Common::Authentication::CLIPassword.recover_master_password
 
-        expect(Lich::Common::GUI::MasterPasswordManager).to have_received(:store_master_password)
+        expect(Lich::Common::Authentication::MasterPasswordManager).to have_received(:store_master_password)
           .with('master_password')
       end
 
       it 'returns 1 when password validation fails' do
         allow($stdin).to receive(:gets).and_return("wrong_password\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(false)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password
@@ -1206,9 +1206,9 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       it 'returns 1 when keychain storage fails' do
         allow($stdin).to receive(:gets).and_return("master_password\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(false)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password
@@ -1217,9 +1217,9 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       it 'returns 0 on successful recovery' do
         allow($stdin).to receive(:gets).and_return("master_password\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password
@@ -1243,9 +1243,9 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'accepts password as argument without prompting' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
 
         expect($stdin).not_to receive(:gets)
@@ -1259,9 +1259,9 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
       end
 
       it 'returns 0 with valid direct password' do
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:validate_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:validate_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
 
         exit_code = Lich::Common::Authentication::CLIPassword.recover_master_password('validpassword12345')
@@ -1281,13 +1281,13 @@ RSpec.describe Lich::Common::Authentication::CLIPassword do
 
       it 'does not log master password values' do
         allow($stdin).to receive(:gets).and_return("newpassword\n", "newpassword\n")
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:create_validation_test)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:create_validation_test)
           .and_return({})
-        allow(Lich::Common::GUI::MasterPasswordManager).to receive(:store_master_password)
+        allow(Lich::Common::Authentication::MasterPasswordManager).to receive(:store_master_password)
           .and_return(true)
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:decrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:decrypt)
           .and_return('plaintext_pass')
-        allow(Lich::Common::GUI::PasswordCipher).to receive(:encrypt)
+        allow(Lich::Common::Authentication::PasswordCipher).to receive(:encrypt)
           .and_return('encrypted_new')
 
         expect(Lich).not_to receive(:log).with(/newpassword/)

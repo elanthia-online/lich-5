@@ -6,6 +6,9 @@ require_relative 'gui/account_manager_ui'
 require_relative 'authentication/authenticator'
 require_relative 'authentication/entry_store'
 require_relative 'authentication/gui'
+# Registers the GTK dialogs as the master-password prompt provider before
+# EntryStore can need them (conversion runs inside gui_login).
+require_relative 'gui/master_password_prompt'
 require_relative 'session_launcher'
 require_relative 'gui/components'
 require_relative 'gui/conversion_ui'

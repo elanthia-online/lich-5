@@ -48,6 +48,24 @@ RSpec.describe Lich::Util::GtkCompaction do
   end
 
   # ---------------------------------------------------------------------
+  # HeapCompaction strategy registration
+  # ---------------------------------------------------------------------
+  describe 'HeapCompaction strategy' do
+    # Requiring this file is what routes core's compaction (MemoryReleaser,
+    # Combat::AsyncProcessor call Lich::Util::HeapCompaction.compact!)
+    # through safe_compact!. Core itself never names GtkCompaction.
+    it 'is installed by requiring this file and calls safe_compact!' do
+      strategy = Lich::Util::HeapCompaction.strategy
+      expect(strategy).to respond_to(:call)
+
+      allow(described_class).to receive(:safe_compact!).and_return(:guarded)
+
+      expect(strategy.call).to eq(:guarded)
+      expect(described_class).to have_received(:safe_compact!)
+    end
+  end
+
+  # ---------------------------------------------------------------------
   # gtk_loaded?
   # ---------------------------------------------------------------------
   describe '.gtk_loaded?' do

@@ -8,7 +8,7 @@ require_relative 'cli_encryption_mode_change'
 require_relative '../authentication/cli'
 require_relative '../authentication/login_helpers'
 require_relative '../authentication/web_login'
-require_relative '../gui/game_selection'
+require_relative '../authentication/game_names'
 require_relative 'cli_option_validator'
 
 module Lich
@@ -237,8 +237,8 @@ module Lich
             end
 
             # Store password in keychain so ensure_master_password_exists finds it
-            require_relative '../gui/master_password_manager'
-            stored = Lich::Common::GUI::MasterPasswordManager.store_master_password(master_password)
+            require_relative '../authentication/master_password_manager'
+            stored = Lich::Common::Authentication::MasterPasswordManager.store_master_password(master_password)
             unless stored
               puts 'error: Failed to store master password in keychain'
               exit 1

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../authentication/login_helpers'
+require_relative '../authentication/game_names'
 
 module Lich
   module Common
@@ -9,24 +10,14 @@ module Lich
       # Implements accurate game selection with proper accessibility support
       module GameSelection
         # User-friendly display names for canonical game codes.
-        GAME_NAMES = {
-          'GS3' => 'GemStone IV',
-          'GST' => 'GemStone IV Prime Test',
-          'GSF' => 'GemStone IV Shattered',
-          'DR'  => 'DragonRealms',
-          'DRX' => 'DragonRealms Platinum',
-          'DRT' => 'DragonRealms Prime Test',
-          'DRF' => 'DragonRealms Fallen'
-        }.freeze
+        GAME_NAMES = Authentication::GameNames::GAME_NAMES
 
         # Game code to display name mapping, derived from the canonical validator.
-        GAME_MAPPING = Authentication::LoginHelpers::VALID_GAME_CODES.to_h do |game_code|
-          [game_code, GAME_NAMES.fetch(game_code)]
-        end.freeze
+        GAME_MAPPING = Authentication::GameNames::GAME_MAPPING
 
         # Display name to game code mapping (reverse of GAME_MAPPING)
         # Used for converting user-selected display names back to game codes
-        REVERSE_GAME_MAPPING = GAME_MAPPING.invert.freeze
+        REVERSE_GAME_MAPPING = Authentication::GameNames::REVERSE_GAME_MAPPING
 
         # Creates an accessible game selection combo box
         # Builds a dropdown with all available games and proper accessibility support
@@ -80,9 +71,7 @@ module Lich
         # @param game_code [String] Game code
         # @return [String] Display name for the game
         def self.get_game_name(game_code)
-          return 'Unknown' unless Authentication::LoginHelpers.valid_game_code?(game_code)
-
-          GAME_MAPPING.fetch(game_code)
+          Authentication::GameNames.get_game_name(game_code)
         end
 
         # Updates an existing combo box with the current game options

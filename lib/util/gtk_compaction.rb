@@ -1,4 +1,5 @@
 require 'fiddle'
+require_relative 'heap_compaction'
 
 module Lich
   module Util
@@ -237,3 +238,8 @@ module Lich
     end
   end
 end
+
+# Requiring this file (lich.rbw does, before gtk3 loads) routes every core
+# compaction -- MemoryReleaser, Combat::AsyncProcessor -- through
+# safe_compact!. Core itself only ever calls Lich::Util::HeapCompaction.
+Lich::Util::HeapCompaction.strategy = -> { Lich::Util::GtkCompaction.safe_compact! }
