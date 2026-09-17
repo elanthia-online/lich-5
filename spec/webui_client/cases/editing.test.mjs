@@ -98,6 +98,16 @@ test("a half-typed table cell survives an unrelated render, and a changed model 
       table.props.rows[0].cells.name = "server";
     });
     assert.equal(cell().value, "server", "a value the script changed replaces the draft");
+
+    // A committed edit the script refused: the render carries the old value
+    // and the cell shows it, not the refused keystrokes.
+    h.commit(cell(), "refused");
+    assert.equal(h.socket.events().filter((e) => e.event === "cell_edit").length, 1);
+    h.rerender(render, (next) => {
+      const table = next.tree.children.find((child) => child.cid === "page:tables/table:editable");
+      table.props.rows[0].cells.name = "server";
+    });
+    assert.equal(cell().value, "server", "the script's answer shows after a commit");
   } finally {
     h.close();
   }
