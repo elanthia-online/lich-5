@@ -3,6 +3,7 @@
 require_relative 'webui/contract'
 require_relative 'webui/adapter'
 require_relative 'webui/browser_launcher'
+require_relative 'webui/window_presentation'
 require_relative 'webui/dispatcher'
 require_relative 'webui/errors'
 require_relative 'webui/page'
