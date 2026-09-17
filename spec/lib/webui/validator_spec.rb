@@ -71,6 +71,33 @@ RSpec.describe Lich::WebUI::Validator do
     expect { validator.validate_component!(:composite, composite, **context) }.not_to raise_error
   end
 
+  it 'accepts the Pango markup subset on text and refuses anything else', security_id: 'sec-escaping' do
+    accepted = '<b>Town</b> <span color="#ff0000" size="12000" font_desc="Courier Bold 9">x</span> &amp; <tt>y</tt>'
+    expect(validator.validate_component!(:text, { content: 'x', markup: accepted }, **context)[:markup]).to eq(accepted)
+
+    {
+      '<script>x</script>'                     => /tag script is not allowed/,
+      '<b onclick="x">x</b>'                   => /only allowed on span/,
+      '<span style="italic" href="x">x</span>' => /attribute href is not allowed/,
+      '<span color="url(x)">x</span>'          => /color has an invalid value/,
+      '<span font_desc="a; b">x</span>'        => /font_desc has an invalid value/,
+      '<b>unclosed'                            => /not well-formed/,
+    }.each do |markup, message|
+      expect { validator.validate_component!(:text, { content: 'x', markup: markup }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError, message)
+    end
+  end
+
+  it 'requires a label on every menu item but a separator, and a group only on radios' do
+    expect { validator.validate_component!(:menu_item, { kind: 'separator' }, **context) }.not_to raise_error
+    expect { validator.validate_component!(:menu_item, { kind: 'check' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /missing required property label/)
+    expect { validator.validate_component!(:menu_item, { kind: 'separator', label: 'x' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /separator carries no label/)
+    expect { validator.validate_component!(:menu_item, { kind: 'check', label: 'x', group: 'g' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /group applies to radio items only/)
+  end
+
   it 'enforces boundary values without clamping' do
     expect { validator.validate_component!(:stack, { gap: 64 }, **context) }.not_to raise_error
     expect { validator.validate_component!(:stack, { gap: 65 }, **context) }
@@ -103,6 +130,23 @@ RSpec.describe Lich::WebUI::Validator do
     expect do
       validator.validate_event!(:number_input, :change, { value: 3 }, props: number_props, **context)
     end.to raise_error(Lich::WebUI::SchemaViolationError, /within min and max/)
+  end
+
+  # 2.18 (D17): a password's `change` says only that the value changed. It is
+  # the one change event with no payload, and the one sensitive control
+  # allowed to emit change at all -- a text_input marked sensitive still may
+  # not, because its change would carry the value.
+  it 'accepts a payload-free change on a password, and nothing more', security_id: 'sec-sensitive-change' do
+    props = validator.validate_component!(:password_input, {}, **context)
+
+    expect(validator.validate_event!(:password_input, :change, {}, props: props, **context)).to eq({})
+    expect(validator.validate_event!(:password_input, :change, nil, props: props, **context)).to eq({})
+    expect { validator.validate_event!(:password_input, :change, { value: 'hunter2' }, props: props, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /accepts no payload/)
+
+    sensitive = validator.validate_component!(:text_input, { value: '', sensitive: true }, **context)
+    expect { validator.validate_event!(:text_input, :change, { value: 'x' }, props: sensitive, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /sensitive components cannot emit change/)
   end
 
   it 'refuses an event that is not registered for the component type', security_id: 'sec-event-type' do
@@ -148,6 +192,25 @@ RSpec.describe Lich::WebUI::Validator do
         { x: 1, y: 1, button: 'primary', modifiers: [] }, props: props, **context
       )
     end.to raise_error(Lich::WebUI::SchemaViolationError, /surface events are not enabled/)
+    expect do
+      validator.validate_event!(
+        :composite, :surface_zoom,
+        { direction: 'in', x: 1, y: 1, modifiers: ['ctrl'] }, props: props, **context
+      )
+    end.to raise_error(Lich::WebUI::SchemaViolationError, /surface events are not enabled/)
+  end
+
+  it 'accepts a surface_zoom with a direction and the pointer once surface events are on' do
+    props = validator.validate_component!(:composite, { width: 10, height: 10, surface_events: true, layers: [] }, **context)
+    expect do
+      validator.validate_event!(
+        :composite, :surface_zoom,
+        { direction: 'out', x: 3, y: 4, modifiers: ['ctrl'], scroll_x: 0, scroll_y: 12 }, props: props, **context
+      )
+    end.not_to raise_error
+    expect do
+      validator.validate_event!(:composite, :surface_zoom, { direction: 'sideways', x: 3, y: 4, modifiers: [] }, props: props, **context)
+    end.to raise_error(Lich::WebUI::SchemaViolationError)
   end
 
   it 'requires dialog defaults only for the default absent-viewer policy' do

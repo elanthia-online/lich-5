@@ -180,9 +180,39 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(carrier.origin).to eq(:viewer)
     expect(message[:submission].first).to eq('')
     expect(render.to_s).not_to include('canary-credential')
-    expect(first_connection.sent.last).to eq('type' => 'clear_sensitive', 'cids' => [password_cid])
+    # 2.18 (D17): a submission does not empty the field on its own. The
+    # script decides -- a wrong password re-prompts with what was typed
+    # still there -- through clear_sensitive below.
+    expect(first_connection.sent.map { |sent| sent['type'] }).not_to include('clear_sensitive')
     expect(observed).to eq('canary-credential')
     expect(carrier).to be_consumed
+
+    runtime.clear_sensitive(page, password_cid)
+    expect(first_connection.sent.last).to eq('type' => 'clear_sensitive', 'cids' => [password_cid])
+  end
+
+  # 2.18 (D17): a strength meter needs to know the password changed without
+  # ever seeing it. The event reaches the script with an empty payload, no
+  # submission, and empties nothing on screen.
+  it 'delivers a payload-free password change to its binding without clearing the field' do
+    callbacks = Queue.new
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'login', title: 'Login') do
+      password_input(key: 'password', on: { change: ->(event) { callbacks << event } })
+    end)
+    address, render = attach(first_connection, page)
+    password_cid = render.dig('tree', 'children', 0, 'cid')
+
+    result = runtime.handle(first_connection, {
+      type: 'event', page: address, cid: password_cid, event: 'change',
+      generation: render['generation'], payload: {},
+    })
+    event = Timeout.timeout(2) { callbacks.pop }
+
+    expect(result).to eq(:queued)
+    expect(event.event).to eq(:change)
+    expect(event.payload).to eq({})
+    expect(event.submission.cids).to be_empty
+    expect(first_connection.sent.map { |sent| sent['type'] }).not_to include('clear_sensitive')
   end
 
   it 'discards a sensitive submission when the enqueue itself overflows' do
@@ -447,6 +477,27 @@ RSpec.describe Lich::WebUI::Runtime do
     render = first_connection.sent.last
     expect(render['type']).to eq('render')
     expect(render.dig('tree', 'children', 0, 'props')).to include('src' => '', 'alt' => 'no image')
+  end
+
+  # Composite layers used to be an image-only affair: every layer was a PNG
+  # and each was rasterised, PNG-encoded and shipped inline under a size
+  # cap. Shapes are data; they reference nothing and need no source check.
+  it 'accepts a composite of drawn shapes, which reference no served resource' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'marks', title: 'Marks') do
+      composite(key: 'surface', width: 100, height: 100, layers: [
+                  { kind: 'ellipse', x: 10, y: 10, w: 20, h: 20, stroke: { r: 255, g: 0, b: 0, a: 0.8 }, stroke_width: 3 },
+                  { kind: 'rect', x: 40, y: 40, w: 30, h: 20, stroke: { tone: 'danger' } },
+                  { kind: 'line', x1: 0, y1: 0, x2: 99, y2: 99, stroke: { r: 0, g: 200, b: 0, a: 1.0 }, stroke_width: 2 },
+                  { kind: 'line', x1: 99, y1: 0, x2: 0, y2: 99, stroke: { r: 0, g: 200, b: 0, a: 1.0 }, stroke_width: 2 },
+                ])
+    end)
+
+    expect(runtime.handle(first_connection, {
+      type: 'attach', page: registry.address_for(page), version: '2.5.0',
+    })).to eq(:attached)
+    layers = first_connection.sent.last.dig('tree', 'children', 0, 'props', 'layers')
+    expect(layers.map { |layer| layer['kind'] }).to eq(%w[ellipse rect line line])
+    expect(layers.first).to include('stroke_width' => 3, 'opacity' => 1.0)
   end
 
   it 'still refuses a data URI that is not a base64 image' do

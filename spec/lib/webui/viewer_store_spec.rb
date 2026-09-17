@@ -87,4 +87,29 @@ RSpec.describe Lich::WebUI::ViewerStore do
     serialized = store.serialize(attachment)
     expect(serialized.dig(:children, 0, :props, :open)).to be false
   end
+
+  # One table decides both what an event writes into the viewer's overlay
+  # and whether the owner is refreshed. It must name only events the
+  # contract declares on that type, and every property it writes must be
+  # one the contract scopes to the viewer.
+  it 'lists only contract events that touch viewer-scoped properties, and the runtime refreshes from it' do
+    contract = Lich::WebUI::Contract
+    described_class::VIEWER_STATE_EVENTS.each do |(type, event), entry|
+      schema = contract.schema(type)
+      expect(schema[:events]).to have_key(event), "#{type} declares no #{event} event"
+      property = entry[:property]
+      property = property.call(row: 'r').to_s.split(':').first.to_sym if property.respond_to?(:call)
+      next if property == :expanded # nested in table rows
+
+      expect(schema.dig(:properties, property, :scope)).to eq(:viewer), "#{type}.#{property} is not viewer-scoped"
+    end
+
+    expect(described_class.viewer_state_event?(:toggle, :change)).to be(true)
+    expect(described_class.refresh_after?(:toggle, :change)).to be(true)
+    expect(described_class.viewer_state_event?(:menu, :close)).to be(true)
+    expect(described_class.refresh_after?(:menu, :close)).to be(false)
+    expect(described_class.viewer_state_event?(:button, :activate)).to be(false)
+    expect(described_class.refresh_after?(:button, :activate)).to be(false)
+    expect(File.read(File.join(__dir__, '../../../lib/webui/runtime.rb'))).to include('ViewerStore.refresh_after?')
+  end
 end

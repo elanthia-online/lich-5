@@ -121,23 +121,58 @@ module Lich
         end
       end
 
+      # Every event that changes a viewer's own copy of a property, in one
+      # place: which property the overlay records, what it takes from the
+      # payload, and whether the owner is re-rendered afterwards. The runtime
+      # used to keep its own list of these for the refresh decision, so an
+      # event could update the overlay and forget the refresh, or the other
+      # way round; both now read this table.
+      #
+      # `refresh: false` is for an event whose effect the client already
+      # showed and the owner has nothing to answer (a menu closing).
+      VIEWER_STATE_EVENTS = {
+        [:toggle, :change]          => { property: :checked,  value: ->(payload) { payload[:value] } },
+        [:checkbox, :change]        => { property: :checked,  value: ->(payload) { payload[:value] } },
+        [:radio, :change]           => { property: :selected, value: ->(payload) { payload[:value] } },
+        [:text_input, :change]      => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:textarea, :change]        => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:number_input, :change]    => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:slider, :change]          => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:select, :change]          => { property: :value,    value: ->(payload) { payload[:value] } },
+        [:tabs, :select]            => { property: :selected, value: ->(payload) { payload[:index] } },
+        [:expander, :toggle]        => { property: :open,     value: ->(payload) { payload[:open] } },
+        [:split, :move]             => { property: :position, value: ->(payload) { payload[:position] } },
+        [:table, :selection_change] => { property: :selected, value: ->(payload) { payload[:rows] } },
+        [:table, :sort_change]      => { property: :sort,
+                                         value: ->(payload) { { column: payload[:column], direction: payload[:direction] }.freeze } },
+        [:table, :row_toggle]       => { property: ->(payload) { "expanded:#{payload[:row]}" },
+                                         value: ->(payload) { payload[:expanded] } },
+        # A check menu item's `active` is viewer-scoped like the rest, and the
+        # viewer's overlay copy shadows the shared prop from the first render
+        # on. Without a refresh the owner's answer -- including a script that
+        # refuses the change and sets it back -- never reaches the screen.
+        [:menu_item, :change]       => { property: :active,   value: ->(payload) { payload[:value] } },
+        [:menu, :close]             => { property: :open,     value: ->(_payload) { false }, refresh: false },
+      }.freeze
+
+      # @return [Boolean] whether this event updates the viewer's overlay
+      def self.viewer_state_event?(type, event)
+        VIEWER_STATE_EVENTS.key?([type, event])
+      end
+
+      # @return [Boolean] whether the owner is re-rendered after this event
+      def self.refresh_after?(type, event)
+        entry = VIEWER_STATE_EVENTS[[type, event]]
+        !entry.nil? && entry.fetch(:refresh, true)
+      end
+
       def update(attachment, component, event, payload)
-        @mutex.synchronize do
-          case [component.type, event]
-          when [:toggle, :change], [:checkbox, :change] then attachment.values[[component.cid, :checked]] = payload[:value]
-          when [:radio, :change] then attachment.values[[component.cid, :selected]] = payload[:value]
-          when [:text_input, :change], [:textarea, :change], [:number_input, :change], [:slider, :change], [:select, :change]
-            attachment.values[[component.cid, :value]] = payload[:value]
-          when [:tabs, :select] then attachment.values[[component.cid, :selected]] = payload[:index]
-          when [:expander, :toggle] then attachment.values[[component.cid, :open]] = payload[:open]
-          when [:split, :move] then attachment.values[[component.cid, :position]] = payload[:position]
-          when [:table, :selection_change] then attachment.values[[component.cid, :selected]] = payload[:rows]
-          when [:table, :sort_change]
-            attachment.values[[component.cid, :sort]] = { column: payload[:column], direction: payload[:direction] }.freeze
-          when [:table, :row_toggle]
-            attachment.values[[component.cid, "expanded:#{payload[:row]}"]] = payload[:expanded]
-          end
-        end
+        entry = VIEWER_STATE_EVENTS[[component.type, event]]
+        return unless entry
+
+        property = entry[:property]
+        property = property.call(payload) if property.respond_to?(:call)
+        @mutex.synchronize { attachment.values[[component.cid, property]] = entry[:value].call(payload) }
       end
 
       def set_input(attachment, component, value)

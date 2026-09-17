@@ -8,14 +8,29 @@ require_relative '../../../lib/webui/sensitive_value'
 RSpec.describe 'WebUI contract foundation' do
   let(:contract) { Lich::WebUI::Contract }
 
-  it 'publishes exactly the locked 2.5.0 vocabulary' do
-    expect(contract::VERSION).to eq('2.5.0')
+  it 'publishes exactly the locked 2.19.0 vocabulary' do
+    expect(contract::VERSION).to eq('2.19.0')
     expect(contract::TYPES).to contain_exactly(
       :page, :group, :stack, :columns, :grid, :tabs, :expander, :split, :overlay, :scroll, :divider,
       :text, :markdown, :log, :progress, :image, :button, :toggle, :checkbox, :radio, :text_input,
-      :password_input, :textarea, :number_input, :slider, :select, :table, :dialog, :composite
+      :password_input, :textarea, :number_input, :slider, :select, :table, :dialog, :composite,
+      :menu, :menu_item, :nav
     )
-    expect(contract.schemas.size).to eq(29)
+    expect(contract.schemas.size).to eq(32)
+  end
+
+  # 2.14: a page root has no per-cid binding channel -- its bindings go to the
+  # lifecycle validator -- so a window's key press has to be a page lifecycle
+  # event to be bound at all. Being lifecycle also makes it non-coalescable,
+  # which is what keeps two different keys pressed in quick succession from
+  # folding into one.
+  it 'carries a page key event that is lifecycle but never terminal' do
+    schema = contract.schema(:page)[:events].fetch(:key)
+
+    expect(schema[:lifecycle]).to be(true)
+    expect(schema[:terminal]).to be(false)
+    expect(schema[:payload][:fields].keys).to contain_exactly(:keyval, :modifiers)
+    expect(contract.schema(:page)[:properties]).to include(:key_events)
   end
 
   it 'refuses unknown types and unsupported major versions' do
@@ -23,12 +38,16 @@ RSpec.describe 'WebUI contract foundation' do
     expect { contract.negotiate!('3.0.0') }.to raise_error(Lich::WebUI::VersionError, /unsupported contract major/)
   end
 
+  # 2.18 (D17): a password may say that it changed, so a script can drive a
+  # strength meter, but the event carries nothing -- the value stays
+  # write-only and reaches the script through a submission alone.
   it 'makes password values sensitive-write-only with no value-bearing change event' do
     schema = contract.schema(:password_input)
 
     expect(schema[:sensitive]).to be(true)
     expect(schema[:value_scope]).to eq(:sensitive_write_only)
-    expect(schema[:events].keys).to eq([:submit])
+    expect(schema[:events].keys).to eq([:change, :submit])
+    expect(schema[:events][:change][:payload]).to be_nil
     expect(schema[:properties].fetch(:sensitive)).to include(forced: true, default: true)
   end
 

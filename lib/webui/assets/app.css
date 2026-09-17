@@ -6,6 +6,11 @@
   --border: color-mix(in srgb, CanvasText 26%, transparent);
   --accent: #2468b4;
   --danger: #b12a2a;
+  /* The contract's four tones as paint, for a shape or bar tinted by tone. */
+  --tone-neutral: CanvasText;
+  --tone-positive: #2e7d32;
+  --tone-caution: #b26a00;
+  --tone-danger: var(--danger);
   --gap: 12px;
 }
 
@@ -23,6 +28,92 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-group { min-width: 0; margin: 0 0 14px; padding: 12px; border: 1px solid var(--border); border-radius: 5px; }
 .webui-group > legend { font-weight: 600; padding: 0 5px; }
 .webui-columns { display: grid; align-items: end; }
+/* `compact` packs a row rather than spacing it at the page gap. The
+   client set the class and nothing styled it, so the property was still
+   inert after it was read. */
+.webui-columns.compact { gap: 4px !important; align-items: center; }
+.webui-grid { display: grid; align-items: center; }
+.webui-grid > .field { min-width: 0; }
+/* A group inside a grid keeps its min-content width. .webui-group sets
+   min-width: 0 for the launcher's flex rows, but as a grid item that let a
+   track shrink below the group's content and the group spill under its
+   neighbour (eloot's Skinning tab: the exclusions frame drawn across the
+   sheath and weapon boxes). Kept at its content, the page scrolls instead. */
+.webui-grid > .webui-group { min-width: auto; }
+/* A bare page is a script's own window: it fills the browser window. */
+#pages:has(> .webui-page.bare) { width: 100%; }
+.webui-page.bare { font-size: 13px; }
+.webui-page.bare .webui-text { white-space: pre-wrap; }
+.webui-text.nowrap { white-space: pre; }
+.webui-text code { font-family: ui-monospace, Consolas, monospace; }
+
+.webui-menubar { display: flex; gap: 2px; padding: 2px 4px; border-bottom: 1px solid var(--border); }
+.webui-menubar-item { min-height: 26px; padding: 2px 10px; border: 1px solid transparent; border-radius: 3px; background: transparent; }
+.webui-menubar-item:hover, .webui-menubar-item:focus-visible { background: color-mix(in srgb, CanvasText 10%, transparent); }
+.webui-menu-popup {
+  position: fixed; z-index: 1000; min-width: 160px; max-height: 80vh; overflow: auto;
+  padding: 4px; border: 1px solid var(--border); border-radius: 5px;
+  background: var(--surface-raised); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+.webui-menu-list { display: flex; flex-direction: column; }
+.webui-menu-item {
+  display: grid; grid-template-columns: 1.2em 1fr auto; align-items: center; gap: 6px;
+  min-height: 26px; padding: 2px 10px 2px 6px; border: 0; border-radius: 3px;
+  background: transparent; color: inherit; text-align: left; white-space: nowrap;
+}
+.webui-menu-item:hover:not([disabled]), .webui-menu-item:focus-visible { background: var(--accent); color: white; }
+.webui-menu-item[disabled] { opacity: .5; }
+.webui-menu-item .menu-mark { text-align: center; }
+.webui-menu-separator { margin: 4px 2px; border: 0; border-top: 1px solid var(--border); }
+/* Auto grid tracks shrink a 100%-wide input to nothing; keep an entry's natural width. */
+.webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]), .webui-grid > .field > select { min-width: 150px; }
+.webui-grid > button { white-space: nowrap; }
+.webui-scroll { overflow: auto; min-height: 0; }
+/* A scroller filling its window tracks the real viewport, because the window
+   is resizable and the shim's default size is a guess made before it opened.
+   Sizing it by a fixed `calc(100vh - ...)` meant the padding around it pushed
+   the total past the viewport, so the page scrolled as well as the pane --
+   the grey bar down the right of every window, which then never went away
+   because growing the window grew the pane by exactly as much. Flex instead:
+   the page owns the viewport and the pane takes what is left, whatever the
+   padding turns out to be. */
+html, body { height: 100%; }
+body:has(.webui-page.bare) { overflow: hidden; }
+#pages:has(> .webui-page.bare) { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+.webui-page.bare { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.webui-page.bare > .webui-scroll { flex: 1; min-height: 0; }
+/* A bare page with no scroller of its own -- most script windows -- still
+   has to scroll when it is taller or wider than its window: the body's
+   overflow is hidden for the flex layout above, so the page scrolls instead. */
+.webui-page.bare { overflow: auto; }
+/* While the client measures a page's natural size (fitWindow): laid out as
+   an inline block so it neither stretches to the viewport nor scrolls.
+   `!important` because the bare-page rules above are written with :has(),
+   whose specificity (an id plus two classes) beats this selector's; without
+   it #pages stayed a viewport-high flex column and every window measured
+   as the size of the screen. */
+html.webui-measuring #pages {
+  display: inline-block !important; width: max-content !important; height: max-content !important; min-width: 0 !important;
+}
+html.webui-measuring .webui-page.bare {
+  display: block !important; flex: none !important; overflow: visible !important; width: max-content !important;
+}
+/* A scroller that is the bare page's own child fills the window at run
+   time (the flex rule above), so its content is not the page's natural
+   size -- a GTK ScrolledWindow's natural size is not its child's either.
+   Without this a map sheet inside it measured as the sheet, and the window
+   opened the size of the screen instead of its declared geometry. A nested
+   scroller keeps its content's width: eloot's tabs measure through one. */
+html.webui-measuring .webui-page.bare > .webui-scroll {
+  width: 0 !important; height: 0 !important; min-height: 0 !important; overflow: hidden !important;
+}
+.webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
+.webui-expander[open] > summary { margin-bottom: 8px; }
+.align-start { justify-self: start; align-self: start; }
+.align-center { justify-self: center; align-self: center; }
+.align-end { justify-self: end; align-self: end; }
+.align-stretch { justify-self: stretch; align-self: stretch; }
+.field textarea { resize: vertical; }
 .webui-divider { border-top: 1px solid var(--border); margin-block: 8px; }
 
 .webui-tabs > .tab-list { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
@@ -30,23 +121,32 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .webui-tabs > .tab-list > button[aria-selected="true"] { border-color: var(--border); border-bottom-color: var(--surface); font-weight: 600; }
 .tab-panel { padding-top: 14px; }
 .webui-tabs.nested > .tab-list { padding-left: 12px; }
-.webui-tabs.account-tabs-left { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); align-items: start; }
-.webui-tabs.account-tabs-left > .tab-list {
+.webui-tabs.vertical { display: grid; grid-template-columns: minmax(110px, auto) minmax(0, 1fr); align-items: start; }
+.webui-tabs.vertical > .tab-list {
   grid-column: 1;
   grid-row: 1;
   flex-direction: column;
   border-right: 1px solid var(--border);
   border-bottom: 0;
 }
-.webui-tabs.account-tabs-left > .tab-list > button { text-align: left; border-radius: 4px 0 0 4px; }
-.webui-tabs.account-tabs-left > .tab-list > button[aria-selected="true"] {
+.webui-tabs.vertical > .tab-list > button { text-align: left; border-radius: 4px 0 0 4px; }
+.webui-tabs.vertical > .tab-list > button[aria-selected="true"] {
   border-right-color: var(--surface);
   border-bottom-color: var(--border);
 }
-.webui-tabs.account-tabs-left > .tab-panel { grid-column: 2; grid-row: 1; padding: 0 0 0 14px; }
+.webui-tabs.vertical > .tab-panel { grid-column: 2; grid-row: 1; padding: 0 0 0 14px; }
 
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field.inline { flex-direction: row; align-items: center; }
+/* GTK draws a check button as box-then-label. Keeping the label first in
+   the DOM (it labels the control) but reversing the visual order lines the
+   boxes up down a grid column, whatever the label widths. */
+.webui-page.bare .field.inline:has(> input[type="checkbox"]),
+.webui-page.bare .field.inline:has(> input[type="radio"]) {
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  gap: 6px;
+}
 .field-label { font-weight: 500; }
 .field input:not([type="checkbox"]):not([type="radio"]), .field select, .field textarea { width: 100%; min-height: 32px; }
 .radio-options { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -63,10 +163,24 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 [data-cid$="toggle:gui-settings-toggle"] input { position: absolute; opacity: 0; pointer-events: none; }
 [data-cid$="toggle:gui-settings-toggle"]:has(input:checked) { box-shadow: inset 0 0 0 2px var(--accent); }
 
-[data-cid*="group:entry-"] { padding: 0; border: 0; margin-bottom: 4px; }
+/* An entry row sits in a stack that already spaces its children, so the
+   row carries no margin of its own -- the two used to add up.
+   Scoped through .webui-page.bare because the launcher is a bare page and
+   the bare-page group rule (.webui-page.bare .webui-group, three classes)
+   outweighs a lone attribute selector, putting the padding and margin back. */
+.webui-page .webui-group[data-cid*="group:entry-"],
+.webui-page.bare .webui-group[data-cid*="group:entry-"] {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
 [data-cid*="group:entry-"] > legend { display: none; }
+/* Every control in an entry row is the same height. The launch bar was
+   36px while Remove and the star were 28px, so the row read as three
+   different sizes. */
+[data-cid*="group:entry-"] { --entry-row-height: 36px; }
 [data-cid*="button:play-entry-"] {
-  min-height: 28px;
+  min-height: var(--entry-row-height);
   width: 100%;
   padding: 2px 10px;
   text-align: center;
@@ -76,7 +190,7 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 .entry-launch {
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr;
-  min-height: 36px;
+  min-height: var(--entry-row-height, 36px);
   padding: 0;
   align-items: stretch;
 }
@@ -93,22 +207,137 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
   white-space: nowrap;
 }
 .entry-launch-part + .entry-launch-part { border-left: 1px solid color-mix(in srgb, white 38%, transparent); }
-[data-cid*="button:remove-entry-"] { min-height: 28px; padding-block: 2px; }
+[data-cid*="button:remove-entry-"] { min-height: var(--entry-row-height, 36px); padding-block: 2px; }
 [data-cid*="button:favorite-entry-"] {
   min-width: 32px;
-  min-height: 28px;
+  min-height: var(--entry-row-height, 36px);
   padding: 2px 6px;
   font-size: 1.15rem;
   line-height: 1;
 }
-[data-cid*="group:entry-"] > .webui-columns:has(.entry-launch) > [data-cid*="button:remove-entry-"],
-[data-cid*="group:entry-"] > .webui-columns:has(.entry-launch) > [data-cid*="button:favorite-entry-"] {
-  min-height: 36px;
+/* log: a bounded, scrollable transcript read at the bottom. */
+.webui-log {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: .92em;
+}
+.webui-log > .log-line { white-space: pre-wrap; word-break: break-word; }
+
+.webui-markdown > p:first-child { margin-top: 0; }
+.webui-markdown > p:last-child { margin-bottom: 0; }
+
+/* A sortable header is a control: say so on hover and on focus. */
+.webui-table th.sortable { cursor: pointer; user-select: none; }
+.webui-table th.sortable:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
+.webui-table th.sortable::after { content: ""; opacity: .55; padding-left: 6px; }
+.webui-table th.sortable[aria-sort="ascending"]::after { content: "91"; }
+.webui-table th.sortable[aria-sort="descending"]::after { content: "93"; }
+
+/* The frontend editor is a labelled form: GTK draws a fixed-width label in a
+   left column with the field filling the rest, and stacking each label above
+   its field roughly doubled the height of the form. `field` is a flex column
+   whose label span and control are siblings, so turning the row sideways is a
+   container-scoped override rather than a contract property. Scoped to this
+   one group so no other tab, and no script window, is affected. */
+[data-cid$="group:frontend-editor-section"] > .field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+[data-cid$="group:frontend-editor-section"] > .field > .field-label {
+  text-align: right;
+  font-weight: 400;
+}
+/* The capability rows are their own grid; their checkboxes keep the inline
+   box-then-label shape rather than inheriting the two-column rule above. */
+[data-cid*="frontend-capability-row-"] { margin-bottom: 4px; }
+[data-cid*="frontend-capability-row-"] .field.inline { gap: 6px; }
+[data-cid$="text:frontend-detected"] {
+  margin: -2px 0 8px 158px;
+  opacity: .75;
+  font-size: .92em;
 }
 
+/* A selectable group is a card: a bordered block the viewer can choose. */
+.webui-group.selectable { cursor: pointer; }
+.webui-group.selectable:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.webui-group.selectable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.webui-group.selectable[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.webui-group.selectable[aria-disabled="true"] { cursor: default; opacity: .6; }
+
+/* nav: a selection rail. Sections are flat headers, items carry a status
+   marker, an optional subtitle and an optional badge. */
+.webui-nav > .nav-list { display: flex; flex-direction: column; gap: 1px; }
+.webui-nav > .nav-list:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.nav-section {
+  padding: 10px 10px 4px;
+  font-size: .82em;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  opacity: .6;
+}
+.nav-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.nav-item:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
+.nav-item[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); font-weight: 600; }
+.nav-item[aria-disabled="true"] { opacity: .5; cursor: default; }
+.nav-item-body { min-width: 0; }
+.nav-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item-detail { font-size: .85em; opacity: .7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, CanvasText 14%, transparent);
+  font-size: .82em;
+  text-align: center;
+}
+/* The marker is the status made visible; content only, so a screen reader
+   reads the label rather than a decorative glyph. */
+.nav-item-marker { text-align: center; opacity: .8; }
+.nav-item[data-status="done"] > .nav-item-marker::before { content: "¹3"; }
+.nav-item[data-status="current"] > .nav-item-marker::before { content: "B8"; }
+.nav-item[data-status="blocked"] > .nav-item-marker::before { content: "98"; opacity: .7; }
+
 .webui-table-wrap { overflow: auto; border: 1px solid var(--border); }
+/* A container the contract lets carry `disabled` has no native rendering
+   for it; match the muting a real control gets. */
+[data-disabled="true"] { opacity: 0.55; cursor: default; }
 .webui-table { width: 100%; border-collapse: collapse; }
 .webui-table th, .webui-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; }
+/* A short value wrapping ("Built-" / "in") doubles the height of every
+   row in the table, which is how an eight-row catalog filled a window.
+   Long values -- a path, a command -- still ellipsize rather than wrap. */
+.webui-table th { white-space: nowrap; }
+/* Tree rows: the toggle sits in the first cell, indented per level. */
+.webui-table .tree-toggle { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 0 6px 0 0; font: inherit; line-height: 1; }
+.webui-table .tree-toggle:focus-visible { outline: 2px solid var(--accent); }
+.webui-table td { max-width: 38ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* An editable cell holds its control rather than text; the control fills the
+   cell so the column width still governs. */
+.webui-table td.editable-cell { padding: 2px 4px; }
+.webui-table td.editable-cell > input[type="text"],
+.webui-table td.editable-cell > input[type="number"],
+.webui-table td.editable-cell > select { width: 100%; min-height: 26px; }
+.webui-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .webui-table tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 15%, transparent); }
 .row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .workflow-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
@@ -116,7 +345,74 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 
 .webui-dialog { width: min(92vw, 520px); border: 1px solid var(--border); border-radius: 6px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-.notification { margin: 8px; padding: 10px; border: 1px solid var(--border); background: var(--surface-raised); }
+/* Notifications overlay the page rather than flowing after it. #notifications
+   had no rule at all, so it was a plain block following #pages: on a tall
+   window "Session launched." landed below every entry row, off the bottom of
+   the visible area, and scrolled away as the page grew. */
+#notifications {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  /* The strip spans the window so stacked toasts line up, but only the
+     toasts themselves take the pointer. */
+  max-width: min(92vw, 420px);
+  pointer-events: none;
+}
+.notification {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 28%);
+  pointer-events: auto;
+}
+.notification.error { border-color: var(--danger); }
+/* A composite is a fixed box its layers are placed on absolutely: a map
+   image, markers over it, and regions that can be clicked. */
+.webui-image { display: block; max-width: 100%; }
+/* A script that asked for no scrollbars still scrolls -- by dragging, by the
+   wheel, by centring itself -- it just wants the furniture gone. */
+.hide-scrollbars .webui-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.hide-scrollbars .webui-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+.webui-composite { position: relative; overflow: hidden; }
+/* A surface inside a scroller can be dragged to pan it, so say so -- and keep
+   the browser from starting its own image/text drag instead. */
+.webui-scroll .webui-composite { cursor: grab; touch-action: none; }
+.webui-scroll .webui-composite:active { cursor: grabbing; }
+.webui-composite img { -webkit-user-drag: none; user-select: none; }
+/* split: two panes along an axis, the first sized by the divider position
+   and the second taking the rest. overlay: a base in flow with later
+   children stacked over it. */
+.webui-split { display: flex; min-width: 0; min-height: 0; }
+.webui-split.vertical { flex-direction: column; }
+.split-pane { min-width: 0; min-height: 0; overflow: auto; }
+.split-pane.second { flex: 1 1 0; }
+.split-handle { flex: 0 0 6px; background: var(--border); cursor: col-resize; touch-action: none; }
+.webui-split.vertical > .split-handle { cursor: row-resize; }
+.webui-overlay { position: relative; }
+.webui-overlay > .overlay-layer {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.composite-layer { position: absolute; }
+.composite-label { white-space: pre; pointer-events: none; }
+/* A drawn shape is decoration over the surface: clicks fall through to the
+   region or surface beneath it, and its stroke may extend past its box. */
+.composite-shape { pointer-events: none; overflow: visible; display: block; }
+.composite-bar { border: 1px solid var(--border); overflow: hidden; }
+.composite-bar-fill { background: var(--accent); }
+.composite-region { padding: 0; background: transparent; border: 0; cursor: pointer; }
+.composite-region:focus-visible { outline: 2px solid var(--accent); }
+
 .tone-danger { color: var(--danger); }
 .emphasis-strong { font-weight: 700; }
 .emphasis-subtle { opacity: .72; }
@@ -125,8 +421,10 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
 
 @media (max-width: 620px) {
   #pages { padding: 8px; }
-  .webui-columns { grid-template-columns: 1fr !important; }
-  .webui-columns > * { grid-column: 1 !important; }
+  /* The launcher's cards stack on a narrow screen. A script's own window
+     is a fixed layout it chose, so bare pages keep their columns. */
+  .webui-page:not(.bare) .webui-columns { grid-template-columns: 1fr !important; }
+  .webui-page:not(.bare) .webui-columns > * { grid-column: 1 !important; }
   [data-cid*="group:entry-"] > .webui-columns {
     grid-template-columns: minmax(0, 8fr) minmax(72px, 1fr) !important;
   }
@@ -136,6 +434,47 @@ button.danger { color: white; background: var(--danger); border: 1px solid var(-
   [data-cid*="group:entry-"] > .webui-columns > :nth-child(1) { grid-column: 1 !important; }
   [data-cid*="group:entry-"] > .webui-columns > :nth-child(2) { grid-column: 2 !important; }
   [data-cid*="group:entry-"] > .webui-columns > :nth-child(3) { grid-column: 3 !important; }
-  .webui-tabs:not(.account-tabs-left) > .tab-list { overflow-x: auto; }
+  .webui-tabs:not(.vertical) > .tab-list { overflow-x: auto; }
   .row-actions, .workflow-actions { flex-wrap: wrap; }
 }
+
+/* A grid that asked for no weights is a GTK table nothing packed to
+   expand: it hugs its content instead of spreading across the window.
+   `justify-content: start` keeps the auto tracks at their natural width
+   rather than letting them absorb the container's slack. */
+.webui-page.bare .webui-grid:not([data-weighted]) { justify-content: start; }
+/* A filler holds a hole GTK left empty in the table. Its content is a
+   single space, which `white-space: pre` would give real width. */
+.webui-page.bare .webui-text:empty,
+.webui-page.bare .webui-text.filler { min-width: 0; }
+/* A label GTK marked wrap=false keeps its own width: a grid track that
+   shrinks below it breaks the text anyway, which is how "Hunting Commands
+   (b):" ended up on two lines while (a) stayed on one. */
+.webui-page.bare .webui-text.nowrap:not(.filler) { min-width: max-content; }
+.webui-page.bare .webui-columns:not([data-weighted]) { justify-content: start; }
+
+/* ---- GTK proportions for a script's own window ---------------------------
+   These come last so they win over the launcher's roomier defaults, which
+   are more specific (.field input:not(...)) than a bare-page prefix alone.
+   GTK controls are ~26px, its rows sit tight, and a label in a grid cell
+   has no gap above it because there is no label text above the control. */
+.webui-page.bare {
+  --gap: 6px;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.webui-page.bare #pages,
+#pages:has(> .webui-page.bare) { padding: 6px; }
+.webui-page.bare button { min-height: 24px; padding: 2px 10px; }
+.webui-page.bare .field { gap: 2px; }
+.webui-page.bare .field > input:not([type="checkbox"]):not([type="radio"]),
+.webui-page.bare .field > select,
+.webui-page.bare .field > textarea { min-height: 24px; padding: 2px 6px; }
+.webui-page.bare .webui-grid > .field > input:not([type="checkbox"]):not([type="radio"]),
+.webui-page.bare .webui-grid > .field > select { min-width: 0; }
+.webui-page.bare .webui-group { margin: 0 0 6px; padding: 6px 8px; }
+.webui-page.bare .webui-group > legend { padding: 0 4px; }
+/* A control with no label is the common shape in these windows; the
+   wrapper should add no height of its own. */
+.webui-page.bare .field:not(:has(.field-label)) { gap: 0; }
+.webui-page.bare .webui-stack { row-gap: 0; }

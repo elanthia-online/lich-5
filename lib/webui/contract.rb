@@ -6,19 +6,20 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.5.0'
+      VERSION = '2.19.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
         page group stack columns grid tabs expander split overlay scroll divider
         text markdown log progress image
-        button toggle checkbox radio text_input password_input textarea number_input slider select
+        button toggle checkbox radio text_input password_input textarea number_input slider select nav
         table dialog composite
+        menu menu_item
       ].freeze
 
       STRUCTURE_TYPES = TYPES.first(11).freeze
       DISPLAY_TYPES = TYPES.slice(11, 5).freeze
-      INPUT_TYPES = TYPES.slice(16, 10).freeze
+      INPUT_TYPES = TYPES.slice(16, 11).freeze
 
       TONES = %w[neutral positive caution danger].freeze
       EMPHASES = %w[normal strong subtle].freeze
@@ -113,23 +114,23 @@ module Lich
       ).freeze
 
       ATTRIBUTE_APPLICABILITY = {
-        page: %i[key width height],
-        group: %i[key tooltip hidden align margin width height tone],
-        stack: %i[key hidden align margin width height],
-        columns: %i[key hidden align margin width height],
-        grid: %i[key hidden align margin width height],
+        page: %i[key width height key_events],
+        group: %i[key tooltip hidden align margin width height tone context_menu],
+        stack: %i[key hidden align margin width height context_menu],
+        columns: %i[key hidden align margin width height context_menu],
+        grid: %i[key hidden align margin width height context_menu],
         tabs: %i[key disabled hidden align margin width height],
-        expander: %i[key tooltip disabled hidden align margin width height],
+        expander: %i[key tooltip disabled hidden align margin width height context_menu],
         split: %i[key hidden align margin width height],
-        overlay: %i[key hidden align margin width height],
-        scroll: %i[key hidden align margin width height],
+        overlay: %i[key hidden align margin width height context_menu],
+        scroll: %i[key hidden align margin width height context_menu],
         divider: %i[key hidden margin width tone],
-        text: %i[key tooltip hidden align margin width emphasis tone],
+        text: %i[key tooltip hidden align margin width emphasis tone context_menu],
         markdown: %i[key hidden align margin width],
-        log: %i[key hidden align margin width height],
+        log: %i[key hidden align margin width height context_menu],
         progress: %i[key tooltip hidden align margin width tone],
-        image: %i[key tooltip hidden align margin width height],
-        button: %i[key tooltip disabled hidden align margin width emphasis tone],
+        image: %i[key tooltip hidden align margin width height context_menu],
+        button: %i[key tooltip disabled hidden align margin width emphasis tone context_menu],
         toggle: %i[key tooltip disabled hidden align margin width tone],
         checkbox: %i[key tooltip disabled hidden align margin width tone],
         radio: %i[key tooltip disabled hidden align margin width tone],
@@ -139,9 +140,12 @@ module Lich
         number_input: %i[key tooltip disabled hidden align margin width tone sensitive],
         slider: %i[key tooltip disabled hidden align margin width tone],
         select: %i[key tooltip disabled hidden align margin width tone sensitive],
-        table: %i[key disabled hidden align margin width height],
+        nav: %i[key tooltip disabled hidden align margin width height context_menu],
+        table: %i[key disabled hidden align margin width height context_menu],
         dialog: %i[key width height tone],
-        composite: %i[key tooltip hidden align margin width height],
+        composite: %i[key tooltip hidden align margin width height context_menu],
+        menu: %i[key hidden align margin width],
+        menu_item: %i[key tooltip disabled hidden],
       }.freeze
 
       ATTRIBUTE_SCHEMAS = {
@@ -150,13 +154,58 @@ module Lich
         disabled: property(BOOL),
         hidden: property(BOOL),
         align: property(enum(*ALIGNS)),
-        margin: property(integer(min: 0, max: 512)),
+        # 2.11: either one integer for all four sides, or the sides that
+        # differ. GTK sets one edge at a time -- bigshot's glade has 518
+        # one-sided margins -- and collapsing them to a single number put a
+        # 100px indent on all four sides of the widget.
+        margin: property(union(
+                           integer(min: 0, max: 512),
+                           record(
+                             top: property(integer(min: 0, max: 512)), right: property(integer(min: 0, max: 512)),
+                             bottom: property(integer(min: 0, max: 512)), left: property(integer(min: 0, max: 512))
+                           )
+                         )),
         width: property(GEOMETRY),
         height: property(GEOMETRY),
         emphasis: property(enum(*EMPHASES)),
         tone: property(enum(*TONES)),
         sensitive: property(BOOL),
+        # 2.7: key of a `menu` node on the same page, opened by the viewer's
+        # secondary-button gesture on this component.
+        context_menu: property(IDENT),
+        # 2.14: a page opts in to receiving key events. Named key_events, not
+        # `key`, so it cannot shadow the identifier `key` attribute the page
+        # already carries. The validator refuses a `key` event unless this is
+        # set, and the browser only attaches its keydown listener when it is.
+        key_events: property(BOOL),
       }.freeze
+
+      # 2.7: pointer gestures on the surfaces scripts hang popup menus on.
+      POINTER_PAYLOAD = record(
+        button: property(enum(:primary, :middle, :secondary), required: true),
+        x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
+        modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
+      ).freeze
+      POINTER_EVENTS = {
+        press: event(POINTER_PAYLOAD), release: event(POINTER_PAYLOAD),
+      }.freeze
+      POINTER_TYPES = %i[group stack text image].freeze
+
+      # 2.7: the Pango subset a `text` may carry in `markup`. The validator
+      # parses it; the client builds nodes from the parse, never from HTML.
+      MARKUP_TAGS = %w[b i u s tt big small span].freeze
+      MARKUP_SPAN_ATTRIBUTES = %w[
+        foreground color fgcolor background bgcolor size weight style underline font_desc font
+      ].freeze
+      MARKUP_SIZES = %w[xx-small x-small small medium large x-large xx-large smaller larger].freeze
+      # The subset of MARKUP_SIZES that reads as a type scale rather than a
+      # relative nudge: `smaller`/`larger` depend on context, which a
+      # first-class property should not.
+      TEXT_SIZES = %w[xx-small x-small small medium large x-large xx-large].freeze
+      MARKUP_WEIGHTS = %w[ultralight light normal bold ultrabold heavy].freeze
+      MARKUP_STYLES = %w[normal oblique italic].freeze
+      MARKUP_UNDERLINES = %w[none single double low error].freeze
+      MARKUP_COLOR = /\A(?:#\h{3}|#\h{6}|[a-z]{3,20})\z/i
 
       ACCESSIBILITY_SCHEMAS = {
         a11y_label: property(SHORT),
@@ -173,25 +222,49 @@ module Lich
           }, children: :many, events: {}, value: nil,
         },
         group: {
-          properties: { label: property(SHORT, required: true), collapsible: property(BOOL, default: false) },
-          children: :many, events: {}, value: nil,
+          # 2.16: `selectable` turns a group into a card -- a bordered block
+          # the viewer can choose. A new node type would duplicate everything
+          # a group already does (label, border, children, collapsible) to add
+          # one state, so the state goes here instead. `selected` is
+          # viewer-scoped, as every other selection in the contract is.
+          properties: {
+            label: property(SHORT, required: true), collapsible: property(BOOL, default: false),
+            selectable: property(BOOL, default: false), selected: property(BOOL, default: false, scope: :viewer)
+          },
+          children: :many,
+          events: { select: event(record(selected: property(BOOL, required: true))) },
+          value: nil,
         },
         stack: {
           properties: { gap: property(integer(min: 0, max: 64), default: 8) },
-          children: :many, events: {}, value: nil,
+          children: :many, child_properties: {
+            # 2.8: a child that takes a share of the leftover space along the
+            # stack's axis, and extra space around it. Together these are
+            # GTK's box packing, which every legacy script relies on.
+            grow: property(integer(min: 0, max: 64)),
+            pad: property(integer(min: 0, max: 512)),
+          }, events: {}, value: nil,
         },
         columns: {
           properties: {
             count: property(integer(min: 1, max: 12), required: true),
             weights: property(array(integer(min: 0), max: 12)), compact: property(BOOL, default: false),
             gap: property(integer(min: 0, max: 64), default: 8),
-          }, children: { kind: :named_dynamic, count_property: :count }, events: {}, value: nil,
+          }, children: { kind: :named_dynamic, count_property: :count },
+          # 2.8: extra space around a child, the other half of box packing.
+          # A column's share of the width is its weight, not a placement.
+          child_properties: { pad: property(integer(min: 0, max: 512)) },
+          events: {}, value: nil,
         },
         grid: {
           properties: {
             cols: property(integer(min: 1, max: 24), required: true),
             cells: property(integer(min: 0, max: BOUNDS[:children])),
             gap: property(integer(min: 0, max: 64), default: 8),
+            # 2.10: per-column share of the leftover width, as on `columns`.
+            # Without it every column shares equally, so a label column is as
+            # wide as the entry beside it. Weight 0 is natural width.
+            weights: property(array(integer(min: 0), max: 24)),
           }, children: :many, child_properties: {
             span: property(integer(min: 1, max_property: :cols)),
             row_span: property(integer(min: 1, max: 24)),
@@ -220,12 +293,46 @@ module Lich
           child_properties: { z: property(integer(min: 0, max: 99)) }, events: {}, value: nil,
         },
         scroll: {
-          properties: { max_height: property(GEOMETRY), scroll_to: property(IDENT, scope: :viewer) },
-          children: :many, events: { scrolled: event(record(position: property(GEOMETRY, required: true))) }, value: nil,
+          properties: {
+            max_height: property(GEOMETRY), scroll_to: property(IDENT, scope: :viewer),
+            # Where the viewer is scrolled, in pixels. `scroll_to` names a cid
+            # to bring into view; this is the raw offset GTK's Adjustment
+            # speaks, and `bottom` is the scroll-to-bottom scripts actually
+            # write (they compute `upper - page_size`, which only the viewer
+            # knows).
+            scroll_position: property(record(
+                                        x: property(GEOMETRY), y: property(GEOMETRY), bottom: property(BOOL)
+                                      ), scope: :viewer),
+          },
+          children: :many,
+          # `upper` and `page_size` are the content extent and the visible
+          # height. Only the viewer knows them, and scripts read them back to
+          # work out where the bottom is.
+          events: {
+            # 2.13: the horizontal axis, as `position_x`/`upper_x`/
+            # `page_size_x`. GTK's Adjustment is per-axis and a script that
+            # pans or centres a wide canvas reads both; without these the
+            # horizontal half was a constructor default. Optional, so a
+            # client that reports only the vertical axis stays valid.
+            scrolled: event(record(
+                              position: property(GEOMETRY, required: true),
+                              upper: property(GEOMETRY), page_size: property(GEOMETRY),
+                              position_x: property(GEOMETRY), upper_x: property(GEOMETRY),
+                              page_size_x: property(GEOMETRY)
+                            )),
+          }, value: nil,
         },
         divider: { properties: { label: property(SHORT) }, children: :none, events: {}, value: nil },
         text: {
-          properties: { content: property(BODY, required: true), wrap: property(BOOL, default: true) },
+          properties: {
+            content: property(BODY, required: true), wrap: property(BOOL, default: true),
+            markup: property(BODY),
+            # 2.16: a type scale, so a heading does not need a markup span
+            # wrapped round it to be one size larger. The vocabulary is
+            # Pango's own, which the markup path already accepts, so the two
+            # spellings agree rather than competing.
+            size: property(enum(*TEXT_SIZES)),
+          },
           children: :none, events: {}, value: nil,
         },
         markdown: {
@@ -281,6 +388,8 @@ module Lich
           events: {
             change: event(record(value: property(string(:input_text), required: true))),
             submit: event(nil, terminal: true),
+            focus: event(nil),
+            blur: event(nil),
           }, value: string(:input_text), value_scope: :viewer,
         },
         password_input: {
@@ -288,7 +397,11 @@ module Lich
             label: property(SHORT), placeholder: property(SHORT),
             max_length: property(integer(min: 1, max: 8192)),
             revealable: property(BOOL, default: false, scope: :ephemeral_client),
-          }, children: :none, events: { submit: event(nil, terminal: true) },
+          }, children: :none,
+          # 2.18: `change` says only that the value changed -- it carries
+          # nothing, so a script can drive a strength meter without the
+          # password ever leaving the browser except through a submission.
+          events: { change: event(nil), submit: event(nil, terminal: true) },
           value: string(:input_text), value_scope: :sensitive_write_only, sensitive: true,
         },
         textarea: {
@@ -297,7 +410,11 @@ module Lich
             rows: property(integer(min: 1, max: 64), default: 5),
             max_length: property(integer(min: 1, max: 65_536)),
           }, children: :none,
-          events: { change: event(record(value: property(string(:multiline_text), required: true))) },
+          events: {
+            change: event(record(value: property(string(:multiline_text), required: true))),
+            focus: event(nil),
+            blur: event(nil),
+          },
           value: string(:multiline_text), value_scope: :viewer,
         },
         number_input: {
@@ -326,6 +443,30 @@ module Lich
           events: { change: event(record(value: property(string(:input_text), required: true))) },
           value: string(:input_text), value_scope: :viewer,
         },
+        # 2.16: a selection list, which neither `tabs` nor `split` gives an
+        # author. `tabs` is flat and carries no per-item state; building a
+        # rail out of `split` plus buttons means hand-rolling the list and
+        # losing keyboard navigation and ARIA with it. An item may name a
+        # `section` to group under, carry a `detail` subtitle, a `status` the
+        # client renders as a marker, and a `badge` for a count.
+        #
+        # Sections are flat headers rather than nested items: selection stays
+        # one-dimensional, which is what makes arrow-key navigation and a
+        # single `selected` identifier work.
+        nav: {
+          properties: {
+            items: property(array(record(
+                                    id: property(IDENT, required: true),
+                                    label: property(SHORT, required: true),
+                                    section: property(SHORT), detail: property(SHORT),
+                                    status: property(enum(:none, :done, :current, :blocked), default: 'none'),
+                                    badge: property(SHORT), disabled: property(BOOL, default: false)
+                                  ), max: BOUNDS[:collection]), required: true),
+            selected: property(IDENT, scope: :viewer),
+          }, children: :none,
+          events: { select: event(record(id: property(IDENT, required: true))) },
+          value: IDENT, value_scope: :viewer,
+        },
         table: { properties: {}, children: :none, events: {}, value: nil, special: :table },
         dialog: {
           properties: {
@@ -337,6 +478,24 @@ module Lich
           events: { response: event(record(button: property(IDENT, required: true)), terminal: true) }, value: nil,
         },
         composite: { properties: {}, children: :none, events: {}, value: nil, special: :composite },
+        menu: {
+          properties: {
+            bar: property(BOOL, default: false),
+            open: property(BOOL, default: false, scope: :viewer),
+          }, children: :many, events: { close: event(nil) }, value: nil,
+        },
+        menu_item: {
+          properties: {
+            label: property(SHORT),
+            kind: property(enum(:normal, :check, :radio, :separator), default: 'normal'),
+            active: property(BOOL, default: false, scope: :viewer),
+            group: property(IDENT),
+          }, children: :many,
+          events: {
+            activate: event(nil, terminal: true),
+            change: event(record(value: property(BOOL, required: true))),
+          }, value: nil,
+        },
       }.freeze
 
       TABLE_COLUMN = record(
@@ -355,6 +514,10 @@ module Lich
         rows: property(array(TABLE_ROW, max: BOUNDS[:table_rows]), required: true),
         selection: property(enum(:none, :single, :multi), default: 'none'),
         selected: property(array(IDENT, max: BOUNDS[:table_rows]), scope: :viewer),
+        # 2.12: GTK's headers-visible. A tree view used as a plain list --
+        # eloot has twelve -- names its columns for the model's sake and
+        # never shows them, so the label is internal, not a heading.
+        headers: property(BOOL, default: true),
         sortable: property(BOOL, default: false),
         sort: property(record(
                          column: property(IDENT, required: true), direction: property(enum(:asc, :desc), required: true)
@@ -384,6 +547,19 @@ module Lich
         a: property(number(min: 0.0, max: 1.0), required: true)
       ).freeze
       TINT = union(record(tone: property(enum(*TONES), required: true)), RGBA).freeze
+      # 2.17: drawn shapes. A script that marked a map with a circle or an X
+      # had to rasterise it with Cairo into a pixbuf, encode that to PNG and
+      # ship it inline under a size cap -- for a dozen pixels. A shape is
+      # data the browser draws crisp at any zoom: `line` between two points,
+      # `rect` and `ellipse` inscribed in a box. Stroke and fill are optional
+      # tints; a shape with neither draws nothing. Every one of the three
+      # scripts that drew with Cairo used exactly these -- stroked circle,
+      # stroked box, two crossed lines -- and nothing else.
+      SHAPE_STYLE = {
+        stroke: property(TINT), fill: property(TINT),
+        stroke_width: property(number(min: 0.0, max: 64.0), default: 1.0),
+        opacity: property(number(min: 0.0, max: 1.0), default: 1.0),
+      }.freeze
       POINT_FIELDS = {
         x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
       }.freeze
@@ -412,7 +588,23 @@ module Lich
           x1: property(GEOMETRY, required: true), y1: property(GEOMETRY, required: true),
           x2: property(GEOMETRY, required: true), y2: property(GEOMETRY, required: true),
           label: property(SHORT), activates: property(BOOL, default: false)
-        )
+        ),
+        record({
+          kind: property(enum(:line), required: true),
+          x1: property(GEOMETRY, required: true), y1: property(GEOMETRY, required: true),
+          x2: property(GEOMETRY, required: true), y2: property(GEOMETRY, required: true),
+          **SHAPE_STYLE,
+        }),
+        record({
+          kind: property(enum(:rect), required: true), **POINT_FIELDS,
+          w: property(GEOMETRY, required: true), h: property(GEOMETRY, required: true),
+          **SHAPE_STYLE,
+        }),
+        record({
+          kind: property(enum(:ellipse), required: true), **POINT_FIELDS,
+          w: property(GEOMETRY, required: true), h: property(GEOMETRY, required: true),
+          **SHAPE_STYLE,
+        })
       ).freeze
 
       COMPOSITE_PROPERTIES = {
@@ -432,8 +624,27 @@ module Lich
                                   x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
                                   button: property(enum(:primary, :secondary), required: true),
                                   modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true),
-                                  region: property(IDENT)
+                                  region: property(IDENT),
+                                  # 2.15: the enclosing scroller's live offset at the moment of
+                                  # the gesture. x and y are viewport-relative, as a real
+                                  # Gtk::Layout's bin-window pointer is, and the shim seeds the
+                                  # ScrolledWindow's adjustments from these -- so a script's
+                                  # `(hadjustment.value + pointer - offset) / scale` reconstructs
+                                  # the layout-absolute pixel at any scroll offset. Optional: a
+                                  # composite outside a scroller simply omits them.
+                                  scroll_x: property(GEOMETRY), scroll_y: property(GEOMETRY)
                                 ), terminal: true),
+        # 2.19: ctrl+wheel over the surface. GTK scripts zoom a map from
+        # scroll-event with the control mask; the client turns that gesture
+        # into a direction plus the same viewport pixel and scroll offset a
+        # click carries, so the script can keep the point under the pointer
+        # where it was after rescaling. Plain wheel stays the scroller's.
+        surface_zoom: event(record(
+                              direction: property(enum(:in, :out), required: true),
+                              x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
+                              modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true),
+                              scroll_x: property(GEOMETRY), scroll_y: property(GEOMETRY)
+                            )),
       }.freeze
 
       FACILITIES = {
@@ -473,6 +684,19 @@ module Lich
         close: event(record(reason: property(enum(:user, :owner, :timeout), required: true)), terminal: true, lifecycle: true),
         attach: event(nil, lifecycle: true),
         detach: event(nil, lifecycle: true),
+        # 2.14: a key press aimed at the window itself, not a control. A page
+        # root has no per-cid binding channel -- its bindings are routed
+        # wholesale to the lifecycle validator -- so a key event has to live
+        # here to be bound at all, and is dispatched through the same
+        # lifecycle path (which is non-coalescable, so distinct keys pressed
+        # in quick succession are never folded into one). It is deliberately
+        # not terminal: it fires repeatedly over the page's life.
+        # A page must set key_events before it may emit one; the browser only
+        # sends it when a script connected key-press-event.
+        key: event(record(
+                     keyval: property(IDENT, required: true),
+                     modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true)
+                   ), lifecycle: true),
       }.freeze
 
       def schemas
@@ -490,6 +714,7 @@ module Lich
             end
             base[:properties].merge!(COMPOSITE_PROPERTIES) if type == :composite
             base[:events].merge!(COMPOSITE_EVENTS) if type == :composite
+            base[:events].merge!(deep_dup(POINTER_EVENTS)) if POINTER_TYPES.include?(type)
             base[:properties].merge!(deep_dup(ACCESSIBILITY_SCHEMAS))
             if type == :password_input
               base[:properties][:sensitive][:forced] = true

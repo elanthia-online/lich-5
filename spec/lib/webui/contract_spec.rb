@@ -4,12 +4,13 @@ require_relative '../../spec_helper'
 require 'webui/contract'
 
 RSpec.describe Lich::WebUI::Contract do
-  it 'declares exactly the locked 29-type vocabulary' do
+  it 'declares exactly the locked 32-type vocabulary' do
     expect(described_class::TYPES).to eq(%i[
                                            page group stack columns grid tabs expander split overlay scroll divider
                                            text markdown log progress image
-                                           button toggle checkbox radio text_input password_input textarea number_input slider select
+                                           button toggle checkbox radio text_input password_input textarea number_input slider select nav
                                            table dialog composite
+                                           menu menu_item
                                          ])
     expect(described_class.schemas.keys).to contain_exactly(*described_class::TYPES)
   end
@@ -28,7 +29,8 @@ RSpec.describe Lich::WebUI::Contract do
 
     expect(schema[:sensitive]).to be true
     expect(schema[:value_scope]).to eq(:sensitive_write_only)
-    expect(schema[:events].keys).to eq([:submit])
+    expect(schema[:events].keys).to eq([:change, :submit])
+    expect(schema[:events][:change][:payload]).to be_nil
     expect(schema[:properties][:sensitive]).to include(default: true, forced: true)
   end
 
@@ -40,7 +42,7 @@ RSpec.describe Lich::WebUI::Contract do
   end
 
   it 'negotiates compatible versions and refuses unsupported majors' do
-    expect(described_class.negotiate!('2.99.0')).to eq('2.5.0')
+    expect(described_class.negotiate!('2.99.0')).to eq(described_class::VERSION)
     expect { described_class.negotiate!('3.0.0') }
       .to raise_error(Lich::WebUI::VersionError, /unsupported contract major 3/)
     expect { described_class.negotiate!('invalid') }

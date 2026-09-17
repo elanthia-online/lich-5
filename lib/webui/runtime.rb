@@ -312,8 +312,14 @@ module Lich
         ensure
           snapshot&.discard_sensitive!
         end
-        schedule_refresh(attachment.page) if viewer_state_event?(component, context.event)
-        clear_sensitive_client(connection, snapshot)
+        # The overlay update and the refresh decision read one table
+        # (ViewerStore::VIEWER_STATE_EVENTS), so neither can be forgotten.
+        schedule_refresh(attachment.page) if ViewerStore.refresh_after?(component.type, context.event)
+        # 2.18 (D17): a submission no longer empties the field it was taken
+        # from. The carrier above is consumed once and zeroed, but what the
+        # viewer typed stays on screen until the script says otherwise
+        # through clear_sensitive -- so a wrong password re-prompts with the
+        # text still there instead of an empty field.
         :queued
       rescue Dispatcher::TerminatedError
         # The owner is gone and its pages are being closed; the viewer will
@@ -367,13 +373,6 @@ module Lich
           raw_values[index].replace("\0" * raw_values[index].bytesize)
           raw_values[index].clear
         end
-      end
-
-      def clear_sensitive_client(connection, snapshot)
-        sensitive_cids = snapshot&.sensitive_cids || []
-        return if sensitive_cids.empty?
-
-        connection.send_text(JSON.generate(type: 'clear_sensitive', cids: sensitive_cids))
       end
 
       # A stale event is answered in two parts, in this order: the refusal,
@@ -444,25 +443,6 @@ module Lich
 
         schema = Contract.schema(:page)[:events][event]
         schema && schema[:lifecycle] && !schema[:terminal]
-      end
-
-      def viewer_state_event?(component, event)
-        case [component.type, event]
-        when [:toggle, :change], [:checkbox, :change], [:radio, :change],
-             [:text_input, :change], [:textarea, :change], [:number_input, :change],
-             [:slider, :change], [:select, :change], [:tabs, :select],
-             [:expander, :toggle], [:split, :move], [:table, :selection_change],
-             [:table, :sort_change], [:table, :row_toggle],
-             # A check menu item's `active` is viewer-scoped like the rest, and
-             # the viewer's overlay copy shadows the shared prop from the first
-             # render on. Without a refresh scheduled here the owner's answer --
-             # including a script that refuses the change and sets it back --
-             # never reaches the screen, so the tick never moved.
-             [:menu_item, :change]
-          true
-        else
-          false
-        end
       end
 
       def owner_label(owner)
