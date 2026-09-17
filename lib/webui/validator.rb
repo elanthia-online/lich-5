@@ -171,6 +171,7 @@ module Lich
       private
 
       # Normalises a property hash against its definitions: unknown keys, required keys, defaults, forced values.
+      # @api private
       def validate_properties(definitions, props, context)
         violation!('properties must be a Hash', context, :properties) unless props.is_a?(Hash)
 
@@ -196,6 +197,7 @@ module Lich
       end
 
       # Dispatches on a shape's `:kind` to the matching checker; `path` names the value in errors.
+      # @api private
       def validate_shape(shape, value, context, path)
         case shape.fetch(:kind)
         when :string
@@ -296,6 +298,7 @@ module Lich
       end
 
       # Returns the first variant's result that accepts the value, or fails with every variant's reason.
+      # @api private
       def validate_union(shape, value, context, path)
         failures = shape.fetch(:variants).filter_map do |variant|
           begin
@@ -308,6 +311,7 @@ module Lich
       end
 
       # A table column's cell editor: nil, or a record whose fields depend on its `type`.
+      # @api private
       def validate_editor(value, context, path)
         return nil if value.nil?
         violation!('must be a Hash or nil', context, path) unless value.is_a?(Hash)
@@ -346,6 +350,7 @@ module Lich
       end
 
       # A table row's cells: column key (an identifier) to editor scalar.
+      # @api private
       def validate_cell_map(value, context, path)
         violation!('must be a Hash', context, path) unless value.is_a?(Hash)
 
@@ -364,6 +369,7 @@ module Lich
       end
 
       # Per-type cross-field invariants, run after the property shapes have passed.
+      # @api private
       def validate_component_invariants!(type, props, context)
         validate_sensitive!(type, props, context)
         case type
@@ -383,6 +389,7 @@ module Lich
       end
 
       # A menu item is either a separator (no label) or a labelled item.
+      # @api private
       def validate_menu_item!(props, context)
         if props[:kind] == 'separator'
           violation!('separator carries no label', context, :label) if props.key?(:label)
@@ -394,6 +401,7 @@ module Lich
 
       # Parses `markup` as XML and refuses anything outside the Pango subset
       # the contract names, so the client can build nodes from the parse.
+      # @api private
       def validate_markup!(props, context)
         markup = props[:markup]
         return unless markup
@@ -556,6 +564,7 @@ module Lich
       end
 
       # Per-event invariants that need the component's live properties (row and option membership, enablement).
+      # @api private
       def validate_event_invariants!(type, event_name, payload, props, context)
         normalized_props = props.transform_keys { |key| normalize_name(key) }
         case [type, event_name]
@@ -610,6 +619,7 @@ module Lich
       end
 
       # Bounds on a submitted value that only the component's properties know (options, length, range).
+      # @api private
       def validate_dynamic_input_value!(type, value, props, context)
         normalized_props = props.transform_keys { |key| normalize_name(key) }
         case type
@@ -685,6 +695,7 @@ module Lich
       end
 
       # Symbolises identifier-shaped keys, refusing non-name keys and duplicates.
+      # @api private
       def normalize_hash_keys(hash, context)
         hash.each_with_object({}) do |(key, value), normalized|
           name = normalize_name(key)
@@ -695,6 +706,7 @@ module Lich
       end
 
       # A symbol for a symbol or identifier-shaped string; nil for anything else.
+      # @api private
       def normalize_name(name)
         return name if name.is_a?(Symbol)
         return name.to_sym if name.is_a?(String) && name.match?(Contract::IDENTIFIER)
@@ -703,6 +715,7 @@ module Lich
       end
 
       # Raises a SchemaViolationError attributed to the context and field.
+      # @api private
       def violation!(message, context, field)
         raise SchemaViolationError.new(message, **error_context(context, field))
       end

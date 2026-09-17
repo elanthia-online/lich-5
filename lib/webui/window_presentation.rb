@@ -268,6 +268,7 @@ module Lich
         # second, and the caller's thread is the one a script's handlers run
         # on. +build_finder+ is called on that thread, once: one enumeration
         # callback for the whole search, not one per poll.
+        # @api private
         def poll(timeout, on_found, &build_finder)
           thread_factory.call do
             finder = build_finder.call
@@ -293,6 +294,7 @@ module Lich
         # More than one match is logged, once per finder rather than once per
         # poll, so a launch that reused a browser process -- a shared profile
         # -- shows up in the log instead of quietly polling to the deadline.
+        # @api private
         def window_finder(pid, title: nil, exclude: [])
           warned = false
           callback, matches = enumeration(pid, title, exclude)
@@ -317,6 +319,7 @@ module Lich
         # The enumeration callback and the list it fills: one closure, built
         # on the thread that will call EnumWindows with it. Handles in
         # +exclude+ are never listed.
+        # @api private
         def enumeration(pid, title, exclude)
           matches = []
           excluded = exclude.map(&:to_i)
@@ -352,6 +355,7 @@ module Lich
         end
 
         # Whether a window is a visible, unowned, top-level Chromium window of the pid and title asked for.
+        # @api private
         def window_matches?(hwnd, pid, title = nil)
           return false if win32.IsWindowVisible(hwnd).zero?
           return false if pid && owning_pid(hwnd) != pid

@@ -220,6 +220,7 @@ module Lich
           # Handles are opaque by design, so the adapter cannot walk back to
           # the widget; the window supplies its own presentation through
           # +presentation_source+, which Session sets when it renders.
+          # @api private
           def declare_facilities(builder, node)
             return unless node.type == :page
 
@@ -240,6 +241,7 @@ module Lich
           # a widget destroyed or detached since the declaration -- drops
           # that input rather than failing the whole page on a cid the
           # builder never saw.
+          # @api private
           def render_completed(builder, drafts)
             @submissions.each do |handle, input_handles|
               terminal = drafts[handle]
@@ -606,6 +608,7 @@ module Lich
           # Runs +first+ and every job already queued behind it, up to
           # BATCH_LIMIT, then commits once (D3). A :stop found mid-batch is
           # put back for run_loop to see after the commit.
+          # @api private
           def run_batch(first)
             job = first
             count = 0
@@ -712,6 +715,7 @@ module Lich
           # summary beside every other gap. The render that records it is
           # the one adapter.commit just delivered, so this reads the current
           # answer, not a stale one.
+          # @api private
           def report_degradations(windows)
             windows.each do |window|
               next unless window.handle
@@ -1049,6 +1053,7 @@ module Lich
 
           # Under @thread_mutex: starts the session thread unless one is
           # alive or the session is closed.
+          # @api private
           def ensure_thread_locked
             return if @closed || @thread&.alive?
 
@@ -1065,6 +1070,7 @@ module Lich
           # one raised in a callback, and the loop goes on. It ends at :stop,
           # and then answers every synchronous job still queued with a
           # refusal, so no caller is left waiting on a thread that is gone.
+          # @api private
           def run_loop
             loop do
               job = @queue.pop
@@ -1128,6 +1134,7 @@ module Lich
           # presentation lookup (keep_above, opacity) needs to find the
           # window; where the pid is not the window's, that lookup finds
           # nothing and the presentation degrades through the ledger.
+          # @api private
           def open_browser(page, window: nil, geometry: nil)
             self.class.start_service(service)
             url = service.launch_url(page: page)
@@ -1150,6 +1157,7 @@ module Lich
           # Under --webui-no-browser a script window is a URL the player
           # opens where their browser is. It goes to the game window through
           # Messaging when a session has one, and always to the log.
+          # @api private
           def announce_launch_url(page, url)
             title = page.respond_to?(:title) ? page.title : page.to_s
             message = "WebUI window #{title.inspect} is ready; open it at #{url}"
@@ -1173,6 +1181,7 @@ module Lich
           # The search runs on its own thread: it takes about a quarter of a
           # second, and the session thread is the one every script handler and
           # timer runs on.
+          # @api private
           def watch_window_presentation(window, pid)
             return unless Lich::WebUI::WindowPresentation.available?
 
@@ -1231,6 +1240,7 @@ module Lich
           # callbacks arrive through the dispatcher and two viewers' can run
           # in either order, so each one asks whether it is the earliest
           # live attachment rather than whether anyone else is there.
+          # @api private
           def admit_viewer(page, viewer_id)
             return unless page && viewer_id
 
@@ -1261,6 +1271,7 @@ module Lich
           # closed used to run on, never told. The window counts as closed
           # when no viewer has come back within the grace (the client's
           # maximum reconnect backoff), the same rule the launcher applies.
+          # @api private
           def viewer_detached(window, page, viewer_id)
             forget_viewer(page, viewer_id)
             token = Object.new
@@ -1302,6 +1313,7 @@ module Lich
           # or the Ruby core. Prefers the running script's own name, which is
           # how Lich labels evaled frames, and still accepts a real ".lic"
           # path for a script loaded from disk.
+          # @api private
           def script_origin(backtrace)
             name = owner_label.to_s
             unless name.empty?
@@ -1312,6 +1324,7 @@ module Lich
           end
 
           # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+          # @api private
           def script_frame(frame)
             file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
             base = file.to_s.split(%r{[\\/]}).last

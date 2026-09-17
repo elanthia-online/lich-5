@@ -250,6 +250,7 @@ module Lich
         # A built-in persists only what it overrides, and nothing at all once
         # both fields are cleared -- otherwise frontends.yml accumulates empty
         # entries that shadow the catalog.
+        # @api private
         def update_builtin(builtins, frontend_id, fields)
           executable = optional_scalar('Executable override', fields[:command])
           arguments = parse_arguments(fields[:arguments])

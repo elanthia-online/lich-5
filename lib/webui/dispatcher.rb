@@ -216,6 +216,7 @@ module Lich
       # same lock, for an owner that has been shut down: creating a state for
       # one would start a new worker beside whatever its old one is still
       # finishing.
+      # @api private
       def owner_state(owner, page_id: nil, cid: nil)
         @mutex.synchronize do
           if @terminated.key?(owner)
@@ -231,6 +232,7 @@ module Lich
       end
 
       # The owner thread's loop: take the next event, run it with its context set, until shut down.
+      # @api private
       def run_owner(state)
         loop do
           queued = state.mutex.synchronize do
@@ -254,6 +256,7 @@ module Lich
       end
 
       # Replaces the last queued event with this one when both are the same coalescable event.
+      # @api private
       def coalesce_last!(events, queued)
         last = events.last
         return false unless last&.coalescable
@@ -269,6 +272,7 @@ module Lich
       # Both counts are taken once and then kept current as events are
       # evicted; recounting the queue on every pass made a full eviction
       # walk quadratic in the queue length.
+      # @api private
       def enforce_bounds!(events, queued)
         viewers = events.count { |event| event.viewer_id == queued.viewer_id }
         pages = events.count { |event| event.page_id == queued.page_id }
@@ -308,6 +312,7 @@ module Lich
       # events, and the player has read the message once. A different
       # failure in between is reported in full again, so a second distinct
       # error is never hidden behind the first.
+      # @api private
       def report_failure(state, queued, error)
         label = owner_label(queued.owner)
         backtrace = Array(error.backtrace)
@@ -329,6 +334,7 @@ module Lich
       # The default notifier: a script owner hears about the error in its
       # own output, through Lich's `respond`, the way a script error does.
       # Any other owner (the launcher) has the log.
+      # @api private
       def notify_script(owner, message)
         return unless defined?(::Script) && owner.is_a?(::Script)
         return unless respond_to?(:respond, true)
@@ -339,6 +345,7 @@ module Lich
       # The first backtrace frame inside the owner's script. Lich evals a
       # script under its bare name, so its frames read "map:2466" rather
       # than ".../map.lic:2466"; both spellings are matched.
+      # @api private
       def script_origin(backtrace, name)
         unless name.to_s.empty?
           named = backtrace.find { |frame| frame.match?(/(\A|[\\\/])#{Regexp.escape(name.to_s)}(\.lic)?:\d+/) }
@@ -348,6 +355,7 @@ module Lich
       end
 
       # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+      # @api private
       def script_frame(frame)
         file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
         base = file.to_s.split(%r{[\\/]}).last

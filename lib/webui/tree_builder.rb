@@ -317,6 +317,7 @@ module Lich
       end
 
       # A menu holds items; an item holds at most one submenu.
+      # @api private
       def validate_menu_children!(draft)
         case draft.type
         when :menu

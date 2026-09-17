@@ -358,6 +358,7 @@ module Lich
       # Everything that reads adapter state stays inside the lock. Only the
       # refresh itself moves out, where re-entering through
       # `render_children` is safe.
+      # @api private
       def flush!
         pages = @mutex.synchronize do
           selected = @dirty_roots.keys.filter_map do |candidate|
@@ -379,6 +380,7 @@ module Lich
       end
 
       # Registers a Page for a page root the first time it is flushed.
+      # @api private
       def ensure_page!(root)
         return root.page if root.page
         raise attributed_error('only page roots can be rendered') unless root.type == :page
@@ -400,6 +402,7 @@ module Lich
       # placement, presentation facility and submission scopes) supplies it
       # through the three hooks below rather than walking the tree itself,
       # so the two can never drift (D13).
+      # @api private
       def render_children(builder, node)
         @mutex.synchronize do
           declare_facilities(builder, node)
@@ -413,6 +416,7 @@ module Lich
       # +drafts+ collects handle => draft across the whole pass, because a
       # scope that names other components by cid can only be installed once
       # every cid has been minted.
+      # @api private
       def render_child_components!(builder, node, drafts)
         adapter = self
         node.children.each do |child_handle|
@@ -434,18 +438,22 @@ module Lich
 
       # Facilities the page root declares (presentation, say). Nothing by
       # default.
+      # @api private
       def declare_facilities(_builder, _node); end
 
       # The placement a child renders with (grid span, box padding). None by
       # default.
+      # @api private
       def child_placement(_handle)
         {}
       end
 
       # Runs once every component in the pass has a draft, and so a cid.
+      # @api private
       def render_completed(_builder, _drafts); end
 
       # The node's props with this adapter's viewer's viewer-scoped values overlaid.
+      # @api private
       def effective_props(node, handle)
         Contract.schema(node.type)[:properties].each_with_object(node.props.dup) do |(name, definition), result|
           next unless definition[:scope] == :viewer && @viewer
@@ -456,11 +464,13 @@ module Lich
       end
 
       # Event name to callable for a node's bindings.
+      # @api private
       def callbacks_for(node)
         node.bindings.to_h { |event, binding_id| [event, @bindings.fetch(binding_id).last] }
       end
 
       # Validates one property in the context of the node's others and returns its normalised value.
+      # @api private
       def validate_property(node, handle, name, value)
         @validator.validate_component!(
           node.type, node.props.merge(name => value), owner: owner_label,
@@ -469,6 +479,7 @@ module Lich
       end
 
       # The normalised name and definition of a property, treating `:value` as the type's value shape.
+      # @api private
       def property!(node, handle, property)
         name = normalize_name(property)
         component_schema = Contract.schema(node.type)
@@ -485,18 +496,21 @@ module Lich
       end
 
       # Whether the property is write-only: sensitive scope, or the value of a sensitive input.
+      # @api private
       def sensitive_property?(node, name, definition)
         definition[:scope] == :sensitive_write_only ||
           (name == :value && (node.type == :password_input || node.props[:sensitive] == true))
       end
 
       # This adapter's viewer's value for the property, or the node's prop when none was set.
+      # @api private
       def viewer_value(node, handle, name)
         viewer = viewer!
         deep_copy(@viewer_values.fetch([viewer, handle, name], node.props[name]))
       end
 
       # The adapter's viewer, or an AmbiguousViewerError when it was created without one.
+      # @api private
       def viewer!
         return @viewer if @viewer
 
@@ -505,6 +519,7 @@ module Lich
       end
 
       # Recomputes each child's slot name from its position, for types with named children.
+      # @api private
       def assign_child_slots!(parent)
         rule = Contract.schema(parent.type)[:children]
         parent.children.each_with_index do |child_handle, index|
@@ -521,6 +536,7 @@ module Lich
       end
 
       # Refuses an attach to a named-children parent that already has every slot filled.
+      # @api private
       def validate_child_capacity!(handle, node)
         rule = Contract.schema(node.type)[:children]
         return unless rule.is_a?(Hash)
@@ -534,11 +550,13 @@ module Lich
       end
 
       # Whether the node's type places children in named slots.
+      # @api private
       def named_children?(node)
         Contract.schema(node.type)[:children].is_a?(Hash)
       end
 
       # The node for a handle; an attributed error for a destroyed or unknown one.
+      # @api private
       def node!(handle)
         return @nodes.fetch(handle) if @nodes.key?(handle)
         raise attributed_error('handle is already destroyed', handle) if @destroyed.key?(handle)
@@ -547,6 +565,7 @@ module Lich
       end
 
       # Forgets a node and its subtree: bindings, viewer values, and the handle map.
+      # @api private
       def destroy_node!(handle)
         node = @nodes.delete(handle)
         @handles_by_node.delete(node)
@@ -557,11 +576,13 @@ module Lich
       end
 
       # Closes a rendered page through the runtime with reason owner.
+      # @api private
       def close_page(page)
         @service.runtime.close_page(page, reason: :owner)
       end
 
       # The topmost ancestor of a node.
+      # @api private
       def root_for(node)
         current = node
         current = node!(current.parent) while current.parent
@@ -569,27 +590,32 @@ module Lich
       end
 
       # Marks a root as needing a render on the next flush.
+      # @api private
       def dirty!(root)
         @dirty_roots[root] = true
       end
 
       # The handle for a node, or nil once the node is destroyed.
+      # @api private
       def handle_for(node)
         @handles_by_node[node]
       end
 
       # The page id a root renders under, or a placeholder for errors before any root exists.
+      # @api private
       def adapter_page_id(root = nil)
         suffix = root ? handle_for(root).object_id.to_s(36) : 'unrendered'
         "adapter-#{suffix}"
       end
 
       # The cid a handle is attributed by in errors.
+      # @api private
       def handle_label(handle)
         handle ? "opaque-#{handle.object_id.to_s(36)}" : 'adapter'
       end
 
       # A printable name for the owner, for error attribution.
+      # @api private
       def owner_label
         return @owner.webui_owner_id if @owner.respond_to?(:webui_owner_id)
         return @owner.name if @owner.respond_to?(:name) && @owner.name
@@ -598,6 +624,7 @@ module Lich
       end
 
       # Re-raises an error as an attributed Error of the same class, unless it is already attributed.
+      # @api private
       def attributed(error, handle = nil, field = nil)
         return error if error.is_a?(Error) && error.owner
 
@@ -609,6 +636,7 @@ module Lich
       end
 
       # A new Error attributed to this adapter, and to a handle and field when given.
+      # @api private
       def attributed_error(message, handle = nil, field = nil)
         Error.new(
           message, owner: owner_label, page_id: adapter_page_id,
@@ -617,11 +645,13 @@ module Lich
       end
 
       # A copy of the hash with every key normalised to a contract name symbol.
+      # @api private
       def symbolize(hash)
         hash.to_h { |key, value| [normalize_name(key), value] }
       end
 
       # A symbol for a symbol or identifier-shaped string; ArgumentError for anything else.
+      # @api private
       def normalize_name(value)
         return value if value.is_a?(Symbol)
         return value.to_sym if value.is_a?(String) && value.match?(Contract::IDENTIFIER)
@@ -630,6 +660,7 @@ module Lich
       end
 
       # A structural copy: hashes, arrays and strings are duplicated, everything else shared.
+      # @api private
       def deep_copy(value)
         case value
         when Hash then value.to_h { |key, item| [key, deep_copy(item)] }

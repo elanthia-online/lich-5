@@ -71,6 +71,7 @@ module Lich
       private
 
       # Whether the `value` property must never leave the server.
+      # @api private
       def sensitive_value?
         type == :password_input || props[:sensitive] == true
       end

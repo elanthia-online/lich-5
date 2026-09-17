@@ -293,6 +293,7 @@ module Lich
         private
 
         # Writes the bytes under the write lock within one deadline; false and dead on failure.
+        # @api private
         def write(bytes)
           return false unless @alive
 
@@ -316,6 +317,7 @@ module Lich
         # for only what is left of the budget, so a peer that drains slowly
         # cannot keep a large render write alive by making progress a byte at
         # a time. The connection is dead when the budget runs out.
+        # @api private
         def write_within_deadline(bytes, deadline)
           remaining = bytes.b
           until remaining.empty?
@@ -343,6 +345,7 @@ module Lich
         LOCK_POLL_INTERVAL = 0.005
 
         # Polls for the write lock until taken or the deadline passes.
+        # @api private
         def acquire_write_lock(deadline)
           until @write_mutex.try_lock
             return false if monotonic_time >= deadline
@@ -353,12 +356,14 @@ module Lich
         end
 
         # Declares the connection dead; returns false so a write can return it directly.
+        # @api private
         def give_up!
           @alive = false
           false
         end
 
         # The monotonic clock, in seconds.
+        # @api private
         def monotonic_time
           Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
@@ -367,6 +372,7 @@ module Lich
       private
 
       # Accepts clients until the listener is closed, one handler thread each.
+      # @api private
       def accept_loop
         loop do
           listener = @mutex.synchronize { @server }
@@ -385,6 +391,7 @@ module Lich
       end
 
       # Runs handle_client and drops the thread from the client list when done.
+      # @api private
       def handle_client_thread(socket)
         handle_client(socket)
       ensure
@@ -392,6 +399,7 @@ module Lich
       end
 
       # Reads one request, checks its origin headers, and routes it by path.
+      # @api private
       def handle_client(socket)
         websocket = false
         request = read_request(socket)
@@ -422,6 +430,7 @@ module Lich
       end
 
       # Reads the request head within READ_TIMEOUT and MAX_HEADER_BYTES; nil when the client goes quiet.
+      # @api private
       def read_request(socket)
         deadline = monotonic_time + READ_TIMEOUT
         buffer = +''
@@ -440,6 +449,7 @@ module Lich
       end
 
       # Parses an HTTP/1.1 request head into method, path, query and lower-cased headers; bodies are refused.
+      # @api private
       def parse_request(raw)
         head = raw.split("\r\n\r\n", 2).first
         lines = head.split("\r\n")
@@ -464,6 +474,7 @@ module Lich
       end
 
       # Exchanges a live launch token for the session cookie and redirects to the requested path.
+      # @api private
       def handle_auth(socket, request)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
 
@@ -490,6 +501,7 @@ module Lich
       end
 
       # Serves one of ASSET_ROUTES to an authenticated client, honouring If-None-Match.
+      # @api private
       def handle_asset(socket, request)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
         return respond_error(socket, 403, 'Forbidden') unless authorized?(request)
@@ -509,6 +521,7 @@ module Lich
       end
 
       # Serves a registered file through the file service, refusing anything over MAX_FILE_BYTES.
+      # @api private
       def handle_file(socket, request, alias_name, relative_path)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
         return respond_error(socket, 403, 'Forbidden') unless authorized?(request)
@@ -525,6 +538,7 @@ module Lich
       end
 
       # Completes the WebSocket handshake, sends hello, and runs the frame loop until the socket closes.
+      # @api private
       def handle_websocket(socket, request)
         unless request[:method] == 'GET' && authorized?(request) && origin_allowed?(request)
           return respond_error(socket, 403, 'Forbidden')
@@ -564,6 +578,7 @@ module Lich
       end
 
       # Reads frames while the connection lives: pongs pings, dispatches text, stops on close.
+      # @api private
       def websocket_loop(connection)
         while connection.alive?
           next unless IO.select([connection.socket], nil, nil, WS_POLL_INTERVAL)
@@ -582,6 +597,7 @@ module Lich
       end
 
       # Parses one text frame and hands it to the message handler; failures answer with a refusal.
+      # @api private
       def dispatch_message(connection, raw)
         message = Protocol.parse_client_message(raw)
         @message_handler.call(connection, message)
@@ -594,11 +610,13 @@ module Lich
       end
 
       # Whether the request carries this instance's session cookie.
+      # @api private
       def authorized?(request)
         Protocol.secure_compare(@session_token, cookie_token(request))
       end
 
       # The value of this instance's session cookie in the request, or nil.
+      # @api private
       def cookie_token(request)
         request[:headers]['cookie'].to_s.split(';').each do |pair|
           name, value = pair.split('=', 2)
@@ -608,16 +626,19 @@ module Lich
       end
 
       # Per server instance: see COOKIE_NAME.
+      # @api private
       def cookie_name
         "#{COOKIE_NAME}_#{port}"
       end
 
       # Whether the Host header names this server on loopback.
+      # @api private
       def host_allowed?(request)
         allowed_hosts.include?(request[:headers]['host'].to_s)
       end
 
       # The host:port spellings a request may address this server by.
+      # @api private
       def allowed_hosts
         hosts = ["127.0.0.1:#{port}", "localhost:#{port}"]
         hosts << "[::1]:#{port}" if host == '::1'
@@ -625,18 +646,21 @@ module Lich
       end
 
       # Whether the Origin header is one of this server's own origins.
+      # @api private
       def origin_allowed?(request)
         origin = request[:headers]['origin'].to_s
         allowed_hosts.any? { |allowed| origin == "http://#{allowed}" }
       end
 
       # Like origin_allowed?, but a request without an Origin header passes.
+      # @api private
       def origin_allowed_if_present?(request)
         origin = request[:headers]['origin']
         origin.nil? || origin_allowed?(request)
       end
 
       # Checks Sec-Fetch-Site and Sec-Fetch-Mode against what each route legitimately sees.
+      # @api private
       def fetch_metadata_allowed?(request)
         site = request[:headers]['sec-fetch-site']
         return false if site && !%w[same-origin none].include?(site)
@@ -650,6 +674,7 @@ module Lich
       end
 
       # Writes a complete HTTP/1.1 response with the hardening headers every response carries.
+      # @api private
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',
                   cache_control: 'no-store', extra_headers: [])
         headers = [
@@ -663,47 +688,56 @@ module Lich
       end
 
       # A plain-text error response whose body is the reason phrase.
+      # @api private
       def respond_error(socket, status, reason)
         respond(socket, status, reason, reason)
       end
 
       # Drops launch tokens past their expiry. Caller holds @mutex.
+      # @api private
       def expire_launch_tokens!
         now = monotonic_time
         @launch_tokens.delete_if { |_token, expiry| expiry < now }
       end
 
       # A local absolute path with no scheme-relative prefix or header-breaking newlines.
+      # @api private
       def valid_redirect_target?(target)
         target.is_a?(String) && target.start_with?('/') && !target.start_with?('//') && !target.match?(/[\r\n]/)
       end
 
       # Whether an address is one of LOOPBACK_HOSTS.
+      # @api private
       def loopback_address?(address)
         LOOPBACK_HOSTS.include?(address)
       end
 
       # The host as it appears in a URL: IPv6 loopback is bracketed.
+      # @api private
       def url_host
         host == '::1' ? '[::1]' : host
       end
 
       # The monotonic clock, in seconds.
+      # @api private
       def monotonic_time
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       # Whether the accept thread is alive. Caller holds @mutex.
+      # @api private
       def running_locked?
         @accept_thread&.alive? || false
       end
 
       # Whether stop has begun.
+      # @api private
       def stopping?
         @mutex.synchronize { @stopping }
       end
 
       # Joins a thread briefly, killing it if it does not finish.
+      # @api private
       def join_or_kill(thread)
         return unless thread
 
@@ -712,6 +746,7 @@ module Lich
       end
 
       # Hands a line to the logger; a logger that raises is ignored.
+      # @api private
       def log(level, message)
         @logger.call(level, message)
       rescue StandardError

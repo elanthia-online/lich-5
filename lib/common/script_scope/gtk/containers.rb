@@ -435,12 +435,14 @@ module Lich
 
           # Holds the `first` slot open so the real child keeps `second`.
           # Memoised: a new widget per render would churn adapter handles.
+          # @api private
           def first_pane_filler
             @first_pane_filler ||= Gtk::Filler.new.tap { |filler| filler.attach_to(self) }
           end
 
           # Declared so materialize! does not treat the stand-in as a child
           # that has gone away and detach it again every commit.
+          # @api private
           def filler_children
             @first_pane_filler ? [@first_pane_filler] : []
           end

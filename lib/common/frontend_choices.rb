@@ -116,6 +116,7 @@ module Lich
         # A custom frontend the player has given a launch command to is
         # configured whether or not discovery found anything; a built-in is
         # detected only when its executable was actually located.
+        # @api private
         def state_for(definition, resolved)
           return :configured if configured_custom?(definition)
           return :detected if resolved.key?(definition[:id])

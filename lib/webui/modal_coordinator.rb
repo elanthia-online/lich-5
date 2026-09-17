@@ -152,6 +152,7 @@ module Lich
       private
 
       # Resolves a modal nobody is connected to see, per its no_viewer policy.
+      # @api private
       def resolve_absent_viewer(future, props)
         if props[:no_viewer] == 'default'
           future.resolve(button: props[:default_button], reason: :no_viewer)
@@ -162,6 +163,7 @@ module Lich
       end
 
       # Drops a page that was registered before open failed.
+      # @api private
       def forget_registered(page)
         return unless page
 
@@ -172,6 +174,7 @@ module Lich
       end
 
       # A viewer attached to the modal's page; a pending dismissal is cancelled.
+      # @api private
       def viewer_arrived(future)
         @mutex.synchronize do
           @attached[future] += 1
@@ -183,6 +186,7 @@ module Lich
       # A viewer's socket dropped (or it detached). When that was the last
       # one, the future resolves as dismissed once the grace passes with
       # nobody back; a viewer arriving in the meantime cancels it.
+      # @api private
       def viewer_left(future)
         token = Object.new
         last = @mutex.synchronize do
@@ -203,6 +207,7 @@ module Lich
       end
 
       # The future resolved: stop the timer, close the page, and tell the launcher.
+      # @api private
       def complete(future, result)
         pending = @mutex.synchronize do
           @dismissals.delete(future)

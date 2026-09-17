@@ -189,6 +189,10 @@ module Lich
         # Whether the child should open a browser: what the caller says, or
         # else what this process was told. Resolved like the launcher flag
         # above it rather than by reading ARGV again.
+        #
+        # @param context [Hash] the launch context
+        # @return [Boolean] whether the child opens a browser
+        # @api private
         def resolve_open_browser(context)
           return context[:open_browser] != false if context.key?(:open_browser)
           return true unless defined?(Lich::WebUI::Options)

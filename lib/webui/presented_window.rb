@@ -105,6 +105,7 @@ module Lich
       private
 
       # Records the found window and dresses it, unless the process changed meanwhile.
+      # @api private
       def adopt(pid, hwnd)
         return unless hwnd
         # The process may have been replaced while the search ran; a stale

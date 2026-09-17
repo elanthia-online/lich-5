@@ -867,6 +867,7 @@ module Lich
 
           # The entry child shows the selection; when that selection goes away
           # the mirrored text goes with it. Text the viewer typed stays.
+          # @api private
           def clear_mirrored_entry
             return unless @child && @active_id && @child.text == option_label(@active_id)
 
@@ -1967,6 +1968,7 @@ module Lich
           private
 
           # Every key beneath +key+, at any depth.
+          # @api private
           def descendants_of(key)
             direct = @rows.select { |row| row.parent_key == key }.map(&:key)
             direct.flat_map { |child| [child] + descendants_of(child) }

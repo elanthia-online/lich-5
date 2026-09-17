@@ -570,6 +570,7 @@ module Lich
         # removing the first moved the second onto its key (review
         # 2026-09-17, R8). Frontend and custom launch are in the digest now;
         # an ordinal remains only for entries identical in every field.
+        # @api private
         def stable_key(user_id, char_name, game_code, frontend, custom_launch, taken)
           digest = OpenSSL::Digest::SHA256.hexdigest(
             [user_id, char_name, game_code, frontend, custom_launch].map(&:to_s).join("\0")

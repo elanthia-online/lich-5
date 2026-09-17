@@ -753,7 +753,7 @@ module Lich
             @hexpand
           end
 
-          # @vexpand was set and never read by anything. The contract has no
+          # `@vexpand` was set and never read by anything. The contract has no
           # vertical counterpart to a column's `grow`, so nothing consumes it
           # yet; the reader at least makes the recorded value observable
           # rather than silently dead.
@@ -1247,6 +1247,7 @@ module Lich
           private
 
           # Drops any common prop the contract does not allow on this type.
+          # @api private
           def filter_props(props)
             allowed = Lich::WebUI::Contract.schema(node_type)[:properties]
             props.select { |name, _value| allowed.key?(name) }
@@ -1655,6 +1656,7 @@ module Lich
           # pack_end child. nil when the box is all starts or all ends, since
           # then GTK has no split to honor and the children simply sit at
           # their edge.
+          # @api private
           def trailing_gap_index(children)
             return nil if @end_children.empty?
 
@@ -1667,6 +1669,7 @@ module Lich
           # A box whose children are *all* packed end has no column to widen
           # -- the free space falls before the first of them, outside any
           # child. The contract says that with alignment on the box itself.
+          # @api private
           def all_packed_end?(children)
             return false if children.empty?
 
@@ -1681,6 +1684,7 @@ module Lich
           # in every spelling scripts use. The positional form is the GTK 2 C
           # API, where the flags are integers: 0 is false there, but truthy in
           # Ruby, so they are read as numbers when given as numbers.
+          # @api private
           def packing_from(positional, options)
             expand, fill, padding = positional
             {
@@ -2433,6 +2437,7 @@ module Lich
           # not a pixel offset -- it derived the number from an extent only
           # the viewer knows. Pass the intent instead, so the browser scrolls
           # to the real bottom however tall the content turned out to be.
+          # @api private
           def scroll_position
             vertical = @vadjustment.requested_value
             horizontal = @hadjustment.requested_value
@@ -2866,6 +2871,7 @@ module Lich
           # An owner whose value is viewer-scoped (SpinButton) has to push it,
           # not just re-render: `spin.adjustment.value = x` bypassed the
           # owner's own setter and the viewer kept the old number.
+          # @api private
           def notify_owners
             @owners.each do |owner|
               if owner.respond_to?(:adjustment_moved)
@@ -3187,6 +3193,7 @@ module Lich
 
           # Tested by class: the question is what the widget IS, since only a
           # ScrolledWindow has bars to hide.
+          # @api private
           def collect_scrollers(widget, found)
             found << widget if widget.is_a?(ScrolledWindow)
             return unless widget.is_a?(Container)
@@ -3575,6 +3582,7 @@ module Lich
           # Releases every thread parked in #run with DELETE_EVENT. The
           # session's own shutdown reaches the same Futures through
           # Session#cancel_pending_answers; this is the dialog-side path.
+          # @api private
           def cancel_runs(reason)
             @destroyed = true
             each_run { |future| future.cancel(reason: reason) }
@@ -3584,6 +3592,7 @@ module Lich
           # viewer, by destroy, or by the session shutting down, which also
           # makes the dialog report itself destroyed. An unresolved Future
           # here means the pump loop ended on destroyed?.
+          # @api private
           def answer_from(future)
             result = future.await(timeout: 0)
             return ResponseType::DELETE_EVENT if result.nil?

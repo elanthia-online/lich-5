@@ -133,6 +133,7 @@ module Lich
           # @param note [String, nil] detail kept with the first hit
           # @return [Array(String, Boolean)] the script name and whether this
           #   is the first time that script hit this API
+          # @api private
           def record_unsupported(key, note)
             script = Session.current_script&.name
             entries = (@unsupported[script.to_s] ||= {})

@@ -209,6 +209,7 @@ module Lich
           # Convert Ruby string to UTF-16LE wide character string pointer
           # @param str [String] String to convert
           # @return [FFI::MemoryPointer] Pointer to wide character string
+          # @api private
           def string_to_wide(str)
             wide_str = str.encode('UTF-16LE')
             # Add UTF-16LE null terminator
@@ -222,6 +223,7 @@ module Lich
           # Convert UTF-16LE wide character pointer to Ruby string
           # @param ptr [FFI::Pointer] Pointer to wide character string
           # @return [String] Decoded Ruby string
+          # @api private
           def wide_to_string(ptr)
             return nil if ptr.null?
 

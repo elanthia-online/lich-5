@@ -257,6 +257,7 @@ module Lich
       end
 
       # Re-validates the tree with shared values written since the last render merged in.
+      # @api private
       def apply_shared_values(component, shared_values)
         overrides = shared_values.each_with_object({}) do |((cid, property), value), result|
           (result[cid] ||= {})[property] = value

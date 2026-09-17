@@ -14,7 +14,7 @@ module Lich
       class << self
         # Replaces the compaction strategy.
         #
-        # @param callable [#call, nil] runs one compaction; nil restores GC.compact
+        # @param value [#call, nil] runs one compaction; nil restores GC.compact
         attr_writer :strategy
 
         # @return [#call, nil] the installed strategy, or nil for GC.compact

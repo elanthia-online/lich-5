@@ -618,6 +618,7 @@ module Lich
       # below. Mirrors GUI::FrontendManagerTab, which #1558 added to the GTK
       # launcher -- detection is shown as status only, and nothing here ever
       # launches a frontend or touches account associations.
+      # @api private
       def render_frontends(ui, state)
         launcher = self
         draft = state[:frontend_draft]
@@ -698,6 +699,7 @@ module Lich
       # height of the form, so each row is its own two-column grid. The label
       # still belongs to the input -- it is the input's own `label` prop, not
       # a separate text node -- so the control keeps its accessible name.
+      # @api private
       def render_frontend_fields(ui, state, draft, built_in)
         [
           [:id, 'Stable ID', draft[:id].to_s, !state[:frontend_creating], 64, nil],
@@ -718,6 +720,7 @@ module Lich
 
       # A built-in declares its own protocol capabilities; only a custom
       # frontend may choose them.
+      # @api private
       def render_frontend_capabilities(ui, draft, built_in)
         selected = Array(draft[:capabilities]).map(&:to_s)
         boxes = []
@@ -1457,6 +1460,7 @@ module Lich
       # while it runs; SerialExecutor#stop(wait: false) does not interrupt work
       # already in flight, so a path that commits a side effect has to ask
       # before committing it rather than after.
+      # @api private
       def operation_live?(operation)
         @mutex.synchronize do
           @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
@@ -1472,6 +1476,7 @@ module Lich
       # liveness and then acting outside the lock left exactly that gap
       # (review 2026-09-17, R4): an Add Account saved after close, a saved
       # launch started after close. Returns [true, result] when committed.
+      # @api private
       def commit(operation)
         @mutex.synchronize do
           next nil unless @active[operation.kind]&.id == operation.id && !%i[closing closed].include?(@lifecycle)
@@ -1533,6 +1538,7 @@ module Lich
       # close are one locked step: a viewer's close accepted first means no
       # launch, and once the launch is accepted a later close is a no-op
       # rather than a competing one.
+      # @api private
       def terminal_launch(launch, origin)
         closing = @mutex.synchronize do
           started = begin_close_locked
@@ -1591,6 +1597,7 @@ module Lich
 
       # Catalog rows for the tab. Called from inside render_state, which
       # already holds @mutex, so this must not lock.
+      # @api private
       def frontend_catalog_rows
         FrontendEditor.rows(locator: @frontend_locator)
       rescue StandardError => error
@@ -1602,6 +1609,7 @@ module Lich
       # the moment the tab is opened rather than sitting on a placeholder until
       # something is clicked. Called from render_state, which already holds
       # @mutex, so it must not lock.
+      # @api private
       def frontend_draft_or_default(rows)
         return @frontend_draft if @frontend_draft || @frontend_creating
 
@@ -1618,6 +1626,7 @@ module Lich
 
       # Delete is offered only for a custom frontend that exists: a built-in
       # cannot be removed, and a draft being created has nothing to delete yet.
+      # @api private
       def frontend_deletable?(state)
         draft = state[:frontend_draft]
         return false if draft.nil? || state[:frontend_creating]
@@ -1632,6 +1641,7 @@ module Lich
       # a Lich::WebUI::Submission is not: its first "field" came out as the
       # object's inspect string and every other field empty, so a custom
       # frontend could never be saved (review 2026-09-17, R2).
+      # @api private
       def frontend_fields_from(event)
         values = submission_values(event.submission)
         field = ->(suffix) { values.find { |cid, _| cid.end_with?(suffix) }&.last.to_s }
@@ -1681,6 +1691,7 @@ module Lich
       # auto-detect -- so the launcher could not offer what they had asked
       # for. Discovery annotates a choice; it never removes one, which is the
       # rule the GTK selector has always followed.
+      # @api private
       def discover_frontends(refresh: false)
         FrontendChoices.all(refresh: refresh, locator: @frontend_locator).map do |choice|
           { value: choice.id, label: choice.label }
@@ -1693,6 +1704,7 @@ module Lich
       # Whether this frontend can actually be launched now. A configured
       # custom frontend counts even when the locator cannot resolve it: the
       # player gave it a launch command, and that is what will be run.
+      # @api private
       def frontend_available?(frontend, refresh: false)
         return false if frontend.to_s.empty?
         return false unless @frontend_options.any? { |option| option[:value] == frontend }

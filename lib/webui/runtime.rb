@@ -395,6 +395,7 @@ module Lich
       private
 
       # Attaches the connection to the addressed page and delivers its first render under the page lock.
+      # @api private
       def attach(connection, message)
         @connections_mutex.synchronize { @connections[connection.viewer_id] = connection }
         page = fetch_page(message[:page])
@@ -420,6 +421,7 @@ module Lich
       end
 
       # Fires close (reason user) and detach for the attachment, then drops it.
+      # @api private
       def detach(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
@@ -435,6 +437,7 @@ module Lich
       end
 
       # Validates a component event, snapshots its submission, and enqueues the bound callback.
+      # @api private
       def event(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
@@ -499,6 +502,7 @@ module Lich
       end
 
       # Validates the submitted values in the terminal component's scope and wraps them as a Submission.
+      # @api private
       def build_submission(attachment, terminal, message)
         scope = attachment.render.submissions.fetch(terminal.cid, [])
         raw_values = message.fetch(:submission, [])
@@ -528,6 +532,7 @@ module Lich
       end
 
       # Zeroes the raw strings of sensitive submissions once they have been copied out.
+      # @api private
       def scrub_sensitive_raw!(components, raw_values)
         components.each_with_index do |component, index|
           next unless sensitive?(component)
@@ -546,6 +551,7 @@ module Lich
       # record for its page -- so the record was gone before the refusal
       # that would have replayed it arrived, and a click landing during a
       # refresh was lost with a generic warning instead of recovered.
+      # @api private
       def stale!(connection, attachment, message)
         connection.send_text(
           Protocol.refusal(
@@ -558,6 +564,7 @@ module Lich
       end
 
       # Sends the attachment's delivered render, with its bindings and submission scopes, to the connection.
+      # @api private
       def send_render(connection, attachment)
         bindings = attachment.render.bindings.keys.group_by(&:first).transform_values do |pairs|
           pairs.map(&:last).map(&:to_s)
@@ -573,6 +580,7 @@ module Lich
       end
 
       # The component with that cid in the attachment's delivered render, or a component_id refusal.
+      # @api private
       def find_component!(attachment, cid)
         component = attachment.render.tree.each.find { |candidate| candidate.cid == cid }
         return component if component
@@ -581,6 +589,7 @@ module Lich
       end
 
       # The viewer's serialised tree, with composite popup page ids rewritten to server addresses.
+      # @api private
       def serialize_for_client(attachment)
         tree = @viewers.serialize(attachment)
         rewrite_popup_addresses(tree, attachment.page.owner)
@@ -597,6 +606,7 @@ module Lich
       end
 
       # Whether a component's value must never leave the browser except through a submission.
+      # @api private
       def sensitive?(component)
         component.type == :password_input || component.props[:sensitive] == true
       end
@@ -605,6 +615,7 @@ module Lich
       # (2.14: key). attach/detach/close are lifecycle too but the server
       # raises them itself; a client-sent one that is lifecycle-flagged and
       # aimed at a page is an input event routed through lifecycle_bindings.
+      # @api private
       def page_input_event?(component, event)
         return false unless component.type == :page
 
@@ -613,6 +624,7 @@ module Lich
       end
 
       # A printable name for an owner, for error attribution and logs.
+      # @api private
       def owner_label(owner)
         return owner.webui_owner_id if owner.respond_to?(:webui_owner_id)
         return owner.name if owner.respond_to?(:name) && owner.name
@@ -621,6 +633,7 @@ module Lich
       end
 
       # The component with that cid in the page's last (or a fresh) render.
+      # @api private
       def page_component(page, cid)
         render = page.last_render || page.render
         component = render.tree.each.find { |candidate| candidate.cid == cid.to_s }
@@ -630,6 +643,7 @@ module Lich
       end
 
       # Renders the page and refuses image sources that are neither inline nor served, and unregistered popups.
+      # @api private
       def validated_render(page)
         render = page.render
         record_presentation_degradations(page, render)
@@ -683,6 +697,7 @@ module Lich
       end
 
       # Records which requested presentation properties the host cannot honour, for degradations.
+      # @api private
       def record_presentation_degradations(page, render)
         requested = render.facilities[:presentation] || {}
         supported = presentation_support(page)
@@ -702,6 +717,7 @@ module Lich
       end
 
       # The registered page at a server address, or a page_gone refusal.
+      # @api private
       def fetch_page(address)
         @registry.fetch_address(address)
       rescue Error
@@ -709,6 +725,7 @@ module Lich
       end
 
       # The connection's attachment to the addressed page, or a page_gone / viewer_gone refusal.
+      # @api private
       def fetch_attachment(connection, address)
         fetch_page(address)
         @viewers.fetch(connection_id: connection.viewer_id, address: address)
@@ -719,6 +736,7 @@ module Lich
       end
 
       # Enqueues the page's lifecycle callback for the event, if one is bound.
+      # @api private
       def enqueue_lifecycle(attachment, event, payload = {})
         lifecycle_job(attachment, event, payload)&.call
       end
@@ -726,6 +744,7 @@ module Lich
       # The enqueue of a lifecycle callback, with its context captured now
       # and the dispatch deferred to the call: a caller that queues two
       # callbacks captures both before running either.
+      # @api private
       def lifecycle_job(attachment, event, payload = {})
         callback = attachment.page.lifecycle_bindings[event]
         render = attachment.render
@@ -746,6 +765,7 @@ module Lich
       end
 
       # Maps `:value` to the type's input property name; other names pass through as symbols.
+      # @api private
       def component_property(component, property)
         key = property.to_sym
         return key unless key == :value
@@ -763,11 +783,13 @@ module Lich
       # opens a branch for the viewer (review 2026-09-17 (b), F4). The name
       # is not a contract property, so it is checked here: a boolean, for a
       # row the table has.
+      # @api private
       def row_expansion?(component, property)
         component.type == :table && property.to_s.start_with?('expanded:')
       end
 
       # Sets a table row's expansion for the viewer; the row must exist.
+      # @api private
       def write_row_expansion(page, component, property, value, viewer)
         name = property.to_s
         row = name.delete_prefix('expanded:')
@@ -785,6 +807,7 @@ module Lich
       end
 
       # The scope a property is held in, from the schema; KeyError for a name the type lacks.
+      # @api private
       def property_scope(component, name)
         schema = Contract.schema(component.type)
         return :sensitive_write_only if name == :value && sensitive?(component)
@@ -797,6 +820,7 @@ module Lich
       end
 
       # The attachment for an explicit viewer, or the viewer of the running callback.
+      # @api private
       def contextual_attachment(page, component, viewer)
         viewer_id = viewer || @dispatcher.current_context&.viewer_id
         unless viewer_id
@@ -810,6 +834,7 @@ module Lich
       end
 
       # Starts a refresh thread for the page, or marks the running one dirty so it goes round again.
+      # @api private
       def schedule_refresh(page)
         @refresh_mutex.synchronize do
           state = (@refresh_state[page] ||= { dirty: false, thread: nil })
@@ -822,6 +847,7 @@ module Lich
       end
 
       # Refreshes the page until no write has marked it dirty during the last pass.
+      # @api private
       def refresh_loop(page, state)
         loop do
           refresh(page)
@@ -839,6 +865,7 @@ module Lich
       end
 
       # Hands a line to the logger; a logger that raises is ignored.
+      # @api private
       def log(level, message)
         @logger.call(level, message)
       rescue StandardError

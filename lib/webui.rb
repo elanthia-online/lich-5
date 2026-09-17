@@ -118,6 +118,8 @@ module Lich
 
       # How long a launch URL is good for: a minute when Lich opens the
       # browser on it at once, ten when the player has to carry it somewhere.
+      #
+      # @return [Integer, nil] seconds, or nil for the server's default
       def launch_lifetime
         open_browser? ? nil : Server::REMOTE_LAUNCH_TOKEN_LIFETIME
       end

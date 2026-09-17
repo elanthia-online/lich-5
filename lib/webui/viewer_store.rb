@@ -309,6 +309,7 @@ module Lich
       private
 
       # Copies each viewer-scoped prop into the overlay, unless the viewer already has a value.
+      # @api private
       def seed_values!(attachment, component)
         schema = Contract.schema(component.type)
         schema[:properties].each do |name, definition|
