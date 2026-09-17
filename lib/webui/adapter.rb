@@ -28,6 +28,12 @@ module Lich
         @viewer = viewer
         @validator = validator
         @nodes = {}.compare_by_identity
+        # handle_for was Hash#key, which scans values -- and a Node is a
+        # Struct, so each candidate is a memberwise == that recurses into
+        # props and children. flush! calls it twice per dirty root, on every
+        # commit, and the shim commits on every property write. Measured at
+        # 401 nodes: 0.162ms a call against 0.00005ms through this map.
+        @handles_by_node = {}.compare_by_identity
         @destroyed = {}.compare_by_identity
         @bindings = {}
         @viewer_values = {}
@@ -51,6 +57,7 @@ module Lich
         )
         @mutex.synchronize do
           @nodes[handle] = node
+          @handles_by_node[node] = handle
           dirty!(node) if normalized == :page
         end
         handle
@@ -178,7 +185,10 @@ module Lich
             attributed_error('unknown binding', nil, binding_id)
           )
           node = node!(handle)
-          node.bindings.delete(event)
+          # Only if this id is still the one the node holds: a later bind for
+          # the same event replaces it, and unbinding the old id must not
+          # remove its replacement.
+          node.bindings.delete(event) if node.bindings[event] == binding_id.to_s
           dirty!(root_for(node))
         end
         nil
@@ -193,6 +203,9 @@ module Lich
           if node.parent
             parent = node!(node.parent)
             parent.children.delete(handle)
+            # As detach does: named slots are positional, and the gap left by
+            # the destroyed child shifted every later sibling.
+            assign_child_slots!(parent)
             dirty!(root_for(parent))
           end
           destroy_node!(handle)
@@ -220,22 +233,36 @@ module Lich
 
       private
 
+      # Prepares every dirty root under the lock, then refreshes outside it.
+      #
+      # `@service.refresh` reaches `Page#render`, which takes the page's
+      # render mutex and then calls back into `render_children` for the
+      # tree -- which takes this mutex. A viewer attaching on the
+      # connection thread walks the same path in the other order: it holds
+      # the render mutex first and reaches for this one second. Holding
+      # both across the refresh is a lock-order inversion between the
+      # script thread and the connection thread, and it deadlocks.
+      #
+      # Everything that reads adapter state stays inside the lock. Only the
+      # refresh itself moves out, where re-entering through
+      # `render_children` is safe.
       def flush!
-        @mutex.synchronize do
+        pages = @mutex.synchronize do
           selected = @dirty_roots.keys.filter_map do |candidate|
             root_for(candidate) if handle_for(candidate)
           end.uniq
           @dirty_roots.clear
-          selected.each do |root|
+          selected.filter_map do |root|
             next unless handle_for(root)
 
             ensure_page!(root)
             root.page.refresh_definition(
               title: root.props.fetch(:title), props: root.props.except(:title), on: callbacks_for(root)
             )
-            @service.refresh(root.page)
+            root.page
           end
         end
+        pages.each { |page| @service.refresh(page) }
         nil
       end
 
@@ -363,6 +390,7 @@ module Lich
 
       def destroy_node!(handle)
         node = @nodes.delete(handle)
+        @handles_by_node.delete(node)
         node.children.each { |child| destroy_node!(child) }
         node.bindings.each_value { |binding_id| @bindings.delete(binding_id) }
         @viewer_values.delete_if { |(_viewer, candidate, _property), _value| candidate.equal?(handle) }
@@ -384,7 +412,7 @@ module Lich
       end
 
       def handle_for(node)
-        @nodes.key(node)
+        @handles_by_node[node]
       end
 
       def adapter_page_id(root = nil)
