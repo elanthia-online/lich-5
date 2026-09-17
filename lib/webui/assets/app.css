@@ -98,6 +98,15 @@ html.webui-measuring #pages {
 html.webui-measuring .webui-page.bare {
   display: block !important; flex: none !important; overflow: visible !important; width: max-content !important;
 }
+/* A scroller that is the bare page's own child fills the window at run
+   time (the flex rule above), so its content is not the page's natural
+   size -- a GTK ScrolledWindow's natural size is not its child's either.
+   Without this a map sheet inside it measured as the sheet, and the window
+   opened the size of the screen instead of its declared geometry. A nested
+   scroller keeps its content's width: eloot's tabs measure through one. */
+html.webui-measuring .webui-page.bare > .webui-scroll {
+  width: 0 !important; height: 0 !important; min-height: 0 !important; overflow: hidden !important;
+}
 .webui-expander > summary { cursor: pointer; font-weight: 500; padding: 4px 0; }
 .webui-expander[open] > summary { margin-bottom: 8px; }
 .align-start { justify-self: start; align-self: start; }

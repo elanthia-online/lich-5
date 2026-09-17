@@ -476,4 +476,15 @@ RSpec.describe 'WebUI browser assets' do
     expect(css).to include('.webui-grid > .webui-group { min-width: auto; }')
     expect(css).to include('.webui-page.bare { overflow: auto; }')
   end
+
+  # A window-level scroller fills the window, so what is inside it is not
+  # the page's natural size (a map sheet measured as the sheet); and once a
+  # window is fitted to its one page, geometry no longer restyles the page,
+  # so a viewer resizing the window gets a page that follows it.
+  it 'measures a bare page without its own scroller and stops restyling a fitted page from geometry' do
+    css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+    expect(css).to include('html.webui-measuring .webui-page.bare > .webui-scroll {')
+    expect(css).to include('  width: 0 !important; height: 0 !important; min-height: 0 !important; overflow: hidden !important;')
+    expect(javascript).to include('if (facilities.geometry && !(pages.size === 1 && page.fitted)) {')
+  end
 end
