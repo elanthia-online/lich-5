@@ -95,8 +95,14 @@ body:has(.webui-page.bare) { overflow: hidden; }
 html.webui-measuring #pages {
   display: inline-block !important; width: max-content !important; height: max-content !important; min-width: 0 !important;
 }
+/* min-height: 0 because applyFacilities has already put the declared
+   geometry on the page as its min-height by the time fitWindow measures.
+   Measured with it, the "natural" size was the declared size plus the
+   bare page's 6px padding on each side, which fitWindow then took as the
+   content winning and saved as the new size: every open was 12px taller. */
 html.webui-measuring .webui-page.bare {
   display: block !important; flex: none !important; overflow: visible !important; width: max-content !important;
+  min-height: 0 !important;
 }
 /* A scroller that is the bare page's own child fills the window at run
    time (the flex rule above), so its content is not the page's natural
