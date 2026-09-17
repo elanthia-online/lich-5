@@ -2,62 +2,116 @@
 
 require_relative '../../spec_helper'
 require_relative '../../../lib/common/limitedarray'
-require 'tmpdir'
+require 'webui'
 require 'common/script_scope'
+require 'common/script_scope/gtk/boot'
 
 RSpec.describe Lich::Common::ScriptScope do
   let(:scope) { described_class }
+  let(:gtk) { scope::Gtk }
+  let(:owner) { Struct.new(:name) { def at_exit(&_block) = true }.new('scope') }
+  let(:service) { Lich::WebUI::Service.new }
+  let(:session) { gtk::Session.new(owner, service: service) }
 
-  def with_scope_active(active)
-    previous = scope.instance_variable_get(:@active)
-    scope.instance_variable_set(:@active, active)
-    yield
+  before do
+    gtk::Session.browser_open = proc { |_url, on_start:, **| on_start.call(1); true }
+    allow(gtk::Session).to receive(:for).with(anything).and_return(session)
+  end
+
+  after do
+    gtk::Session.browser_open = nil
+    session.shutdown
+    service.stop
+  end
+
+  # Evaluates +source+ in a script binding with nested-constant adoption on,
+  # the way a running script has it, and removes the constants it defined.
+  def as_script(source, *constants)
+    scope.instance_variable_set(:@adopt_nested_constants, true)
+    session.sync { eval(source, scope.script_binding) }
   ensure
-    scope.instance_variable_set(:@active, previous)
+    scope.instance_variable_set(:@adopt_nested_constants, false)
+    constants.each { |name| scope.send(:remove_const, name) if scope.const_defined?(name, false) }
   end
 
-  describe '.activate!' do
-    it 'loads every plugin boot file the glob finds, once, and reports active' do
-      Dir.mktmpdir('script-scope-') do |dir|
-        boot = File.join(dir, 'boot.rb')
-        File.write(boot, "$script_scope_spec_booted = ($script_scope_spec_booted || 0) + 1\n")
-        stub_const('Lich::Common::ScriptScope::PLUGIN_GLOB', File.join(dir, '*.rb'))
-        $script_scope_spec_booted = 0
+  # A script class that subclasses a shim widget gets its helpers through
+  # InheritedHelpers, a module `include`d on the class. Ruby places an
+  # included module directly above the class, so its method_missing runs
+  # BEFORE Gtk::Widget#method_missing: a real inherited method still wins
+  # (it is found before any method_missing), but a helper that shares a
+  # name with an unimplemented GTK call is reached rather than degraded.
+  describe 'InheritedHelpers' do
+    it 'reaches a top-level helper from a script class that subclasses a shim widget' do
+      result = as_script(<<~SCRIPT, :ScopeSpecWindow)
+        def __scope_spec_title = "FROM-HELPER"
 
-        with_scope_active(false) do
-          expect(scope.activate!).to be(true)
-          expect(scope.active?).to be(true)
-          expect(scope.activate!).to be(true)
+        class ScopeSpecWindow < Gtk::Window
+          def initialize
+            super(__scope_spec_title)
+          end
+
+          def helper_reaches = __scope_spec_title
         end
-        expect($script_scope_spec_booted).to eq(1)
-      ensure
-        $LOADED_FEATURES.delete_if { |path| path.start_with?(dir) }
-        $script_scope_spec_booted = nil
-      end
+
+        window = ScopeSpecWindow.new
+        [window.helper_reaches, window.title, window.class.superclass == Gtk::Window]
+      SCRIPT
+
+      expect(result).to eq(['FROM-HELPER', 'FROM-HELPER', true])
+    end
+
+    it 'reaches a top-level helper from a class nested two modules deep' do
+      result = as_script(<<~SCRIPT, :ScopeSpecFoo)
+        def __scope_spec_deep = "DEEP"
+
+        module ScopeSpecFoo
+          module Bar
+            class Baz
+              def go = __scope_spec_deep
+            end
+          end
+        end
+
+        ScopeSpecFoo::Bar::Baz.new.go
+      SCRIPT
+
+      expect(result).to eq('DEEP')
+    end
+
+    it 'lets a helper answer before the shim degrades an unimplemented call on a subclass' do
+      result = as_script(<<~SCRIPT, :ScopeSpecPreempt)
+        def set_some_gtk_thing_the_shim_lacks = "HELPER-FIRST"
+
+        class ScopeSpecPreempt < Gtk::Window
+          def go = set_some_gtk_thing_the_shim_lacks
+        end
+
+        [ScopeSpecPreempt.new("t").go, ScopeSpecPreempt.ancestors]
+      SCRIPT
+
+      answer, ancestors = result
+      expect(answer).to eq('HELPER-FIRST')
+      expect(ancestors.index(scope::InheritedHelpers)).to be < ancestors.index(gtk::Widget)
+    end
+
+    it 'still lets a real inherited method win over a same-named helper' do
+      result = as_script(<<~SCRIPT, :ScopeSpecShadow)
+        def title = "SHADOW"
+
+        class ScopeSpecShadow < Gtk::Window
+          def go = title
+        end
+
+        ScopeSpecShadow.new("REAL").go
+      SCRIPT
+
+      expect(result).to eq('REAL')
     end
   end
 
-  describe '.script_binding' do
-    it 'resolves bare constants through ScriptScope, then Lich::Common, then Lich' do
-      binding = scope.script_binding
-
-      expect(eval('Module.nesting', binding)).to eq([scope, Lich::Common, Lich])
-      expect(eval('LimitedArray', binding)).to be(Lich::Common::LimitedArray)
-    end
-
-    it 'gives every script its own local-variable table' do
-      first = scope.script_binding
-      second = scope.script_binding
-      eval('scope_spec_local = 1', first)
-
-      expect(first.local_variable_defined?(:scope_spec_local)).to be(true)
-      expect(second.local_variable_defined?(:scope_spec_local)).to be(false)
-    end
-  end
-
-  # The one place the series touches core. It must hand out exactly the
-  # historical binding while the scope is inactive, and the scope's while
-  # it is active.
+  # The one core symbol the scope touches. Loaded here rather than at file
+  # level so the rest of the suite never sees Script; the other script specs
+  # do the same.
   describe 'Script.__trusted_binding' do
     before(:context) do
       require_relative '../../../lib/common/script'
@@ -68,6 +122,14 @@ RSpec.describe Lich::Common::ScriptScope do
         Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
       end
       $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
+    end
+
+    def with_scope_active(active)
+      previous = scope.instance_variable_get(:@active)
+      scope.instance_variable_set(:@active, active)
+      yield
+    ensure
+      scope.instance_variable_set(:@active, previous)
     end
 
     # TRUSTED_SCRIPT_BINDING calls `_script` on Lich::Common itself, which
@@ -83,11 +145,13 @@ RSpec.describe Lich::Common::ScriptScope do
       end
     end
 
-    it 'resolves constants through Lich::Common in the historical binding, not through the scope' do
+    it "resolves constants through Lich::Common in the historical binding, not through the scope" do
       includer = Class.new { include Lich::Common }.new
       binding = includer._script
 
       expect(eval('Module.nesting', binding)).to eq([Lich::Common, Lich])
+      expect(eval('defined?(ScriptScope::Gtk::Window)', binding)).to be_truthy
+      expect(eval('defined?(Gtk) && Gtk', binding)).not_to be(gtk)
     end
 
     it 'hands out a ScriptScope binding while the scope is active' do
@@ -95,6 +159,18 @@ RSpec.describe Lich::Common::ScriptScope do
         binding = Lich::Common::Script.__trusted_binding
 
         expect(eval('Module.nesting', binding).first).to be(scope)
+        expect(eval('Gtk', binding)).to be(gtk)
+      end
+    end
+
+    it 'gives every script its own local-variable table' do
+      with_scope_active(true) do
+        first = Lich::Common::Script.__trusted_binding
+        second = Lich::Common::Script.__trusted_binding
+        eval('scope_spec_local = 1', first)
+
+        expect(first.local_variable_defined?(:scope_spec_local)).to be(true)
+        expect(second.local_variable_defined?(:scope_spec_local)).to be(false)
       end
     end
   end

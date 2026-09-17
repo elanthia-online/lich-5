@@ -163,6 +163,26 @@ module Lich
       # ordered by Page#render's own lock, but delivery was not, so an older
       # render could go out after a newer one and the viewer kept the stale
       # tree.
+      # The viewer ids of every live attachment to +page+, in attach order.
+      def viewer_ids(page)
+        @viewers.attachments_for(page).map(&:viewer_id)
+      end
+
+      # Closes one viewer's attachment to +page+, telling that viewer why
+      # with page_closed. The page itself stays registered and every other
+      # viewer keeps its attachment; this is how an owner declines a viewer
+      # it will not serve (a shim page refusing a second viewer, D26).
+      # Returns false when the viewer was not attached.
+      def close_attachment(page, viewer_id, reason:)
+        attachment = @viewers.attachment_for_viewer(page, viewer_id)
+        connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
+        connection&.send_text(Protocol.page_closed(address: attachment.address, reason: reason))
+        @viewers.close(connection_id: attachment.connection_id, address: attachment.address)
+        true
+      rescue Error
+        false
+      end
+
       def refresh(page)
         page_refresh_lock(page).synchronize do
           page.bind_runtime(self)

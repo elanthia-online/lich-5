@@ -282,21 +282,55 @@ module Lich
         root.page = page
       end
 
+      # One render pass for a page root. The traversal is the only one: a
+      # subclass that carries more than props beside its nodes (the shim's
+      # placement, presentation facility and submission scopes) supplies it
+      # through the three hooks below rather than walking the tree itself,
+      # so the two can never drift (D13).
       def render_children(builder, node)
         @mutex.synchronize do
-          adapter = self
-          node.children.each do |child_handle|
-            child = @nodes.fetch(child_handle)
-            props = effective_props(child, child_handle)
-            bindings = child.bindings.to_h do |event, binding_id|
-              [event, @bindings.fetch(binding_id).last]
-            end
-            builder.component(child.type, slot: child.slot, on: bindings, **props) do
-              adapter.send(:render_children, self, child)
-            end
-          end
+          declare_facilities(builder, node)
+          drafts = {}.compare_by_identity
+          render_child_components!(builder, node, drafts)
+          render_completed(builder, drafts)
         end
       end
+
+      # Caller holds @mutex (a Monitor, so the recursion may retake it).
+      # +drafts+ collects handle => draft across the whole pass, because a
+      # scope that names other components by cid can only be installed once
+      # every cid has been minted.
+      def render_child_components!(builder, node, drafts)
+        adapter = self
+        node.children.each do |child_handle|
+          child = @nodes.fetch(child_handle)
+          props = effective_props(child, child_handle)
+          bindings = child.bindings.to_h do |event, binding_id|
+            [event, @bindings.fetch(binding_id).last]
+          end
+          drafts[child_handle] =
+            builder.component(child.type, slot: child.slot, on: bindings, placement: child_placement(child_handle), **props) do
+              adapter.send(:render_child_components!, self, child, drafts)
+            end
+        end
+      end
+
+      # --- traversal hooks --------------------------------------------------
+      # Each is called under @mutex during render_children; a subclass
+      # overrides what it carries and leaves the walk alone.
+
+      # Facilities the page root declares (presentation, say). Nothing by
+      # default.
+      def declare_facilities(_builder, _node); end
+
+      # The placement a child renders with (grid span, box padding). None by
+      # default.
+      def child_placement(_handle)
+        {}
+      end
+
+      # Runs once every component in the pass has a draft, and so a cid.
+      def render_completed(_builder, _drafts); end
 
       def effective_props(node, handle)
         Contract.schema(node.type)[:properties].each_with_object(node.props.dup) do |(name, definition), result|
