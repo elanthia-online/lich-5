@@ -138,6 +138,9 @@ module Lich
 
           private
 
+          # The base adapter owns the traversal (D13); the shim supplies what
+          # it carries beside each node through the three hooks it calls.
+
           # A window's presentation properties belong to the page, not to any
           # component, so they are declared once as the page root renders.
           # The runtime refuses what a browser host cannot do and records the
@@ -147,56 +150,26 @@ module Lich
           # Handles are opaque by design, so the adapter cannot walk back to
           # the widget; the window supplies its own presentation through
           # +presentation_source+, which Session sets when it renders.
-          def declare_presentation(builder, node)
+          def declare_facilities(builder, node)
             return unless node.type == :page
 
-            handle = @mutex.synchronize { handle_for(node) }
-            presentation = @presentation_sources&.[](handle)&.call
+            presentation = @presentation_sources[handle_for(node)]&.call
             builder.facility(:presentation, presentation) if presentation
           end
 
-          def render_children(builder, node)
-            declare_presentation(builder, node)
-            # A submission scope names cids, and a cid is only known once the
-            # tree builder has minted it. Collect handle => draft across the
-            # whole pass, then install the scopes: the terminal may be
-            # rendered before the inputs it names, and validate_submissions!
-            # runs at build, after every draft exists.
-            drafts = {}.compare_by_identity
-            render_child_components(builder, node, drafts)
-            install_submissions!(builder, drafts)
+          def child_placement(handle)
+            @placements[handle] || {}
           end
 
-          def render_child_components(builder, node, drafts)
-            @mutex.synchronize { render_child_components!(builder, node, drafts) }
-          end
-
-          # Caller holds @mutex: the recursion must not retake it, because a
-          # Ruby Mutex is not reentrant and every level of the tree passes
-          # through here.
-          def render_child_components!(builder, node, drafts)
-            adapter = self
-            node.children.each do |child_handle|
-              child = @nodes.fetch(child_handle)
-              props = effective_props(child, child_handle)
-              bindings = child.bindings.to_h do |event, binding_id|
-                [event, @bindings.fetch(binding_id).last]
-              end
-              placement = @placements[child_handle] || {}
-              drafts[child_handle] =
-                builder.component(child.type, slot: child.slot, on: bindings, placement: placement, **props) do
-                  adapter.send(:render_child_components!, self, child, drafts)
-                end
-            end
-          end
-
-          # Installs every declared scope now that each handle's cid is known.
-          # A scope naming an input that did not render -- a widget destroyed
-          # or detached since the declaration -- drops that input rather than
-          # failing the whole page on a cid the builder never saw.
-          def install_submissions!(builder, drafts)
-            scopes = @mutex.synchronize { @submissions.to_a }
-            scopes.each do |handle, input_handles|
+          # Installs every declared submission scope now that each handle's
+          # cid is known: a scope names cids, and a cid is only minted as its
+          # component renders, so the terminal may be rendered before the
+          # inputs it names. A scope naming an input that did not render --
+          # a widget destroyed or detached since the declaration -- drops
+          # that input rather than failing the whole page on a cid the
+          # builder never saw.
+          def render_completed(builder, drafts)
+            @submissions.each do |handle, input_handles|
               terminal = drafts[handle]
               next unless terminal
 

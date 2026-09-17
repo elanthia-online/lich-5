@@ -1,0 +1,214 @@
+{
+  "tree": {
+    "type": "page",
+    "cid": "page:adapter-X",
+    "props": {
+      "title": "Every hook",
+      "bare": true,
+      "size": [
+        500,
+        400
+      ],
+      "key": "key1"
+    },
+    "children": [
+      {
+        "type": "stack",
+        "cid": "page:adapter-X/stack:key2",
+        "props": {
+          "gap": 0,
+          "key": "key2"
+        },
+        "children": [
+          {
+            "type": "grid",
+            "cid": "page:adapter-X/stack:key2/grid:key3",
+            "props": {
+              "cols": 3,
+              "gap": 4,
+              "weights": [
+                1,
+                0,
+                0
+              ],
+              "key": "key3"
+            },
+            "children": [
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key4",
+                "props": {
+                  "content": "Name",
+                  "wrap": false,
+                  "key": "key4"
+                },
+                "children": []
+              },
+              {
+                "type": "text_input",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text_input:key5",
+                "props": {
+                  "value": "Nisugi",
+                  "search": false,
+                  "key": "key5"
+                },
+                "children": [],
+                "placement": {
+                  "span": 2
+                }
+              },
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key6",
+                "props": {
+                  "content": "Tall",
+                  "wrap": false,
+                  "key": "key6"
+                },
+                "children": [],
+                "placement": {
+                  "row_span": 2
+                }
+              },
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key7",
+                "props": {
+                  "content": " ",
+                  "wrap": true,
+                  "key": "key7"
+                },
+                "children": []
+              },
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key8",
+                "props": {
+                  "content": " ",
+                  "wrap": true,
+                  "key": "key8"
+                },
+                "children": []
+              },
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key9",
+                "props": {
+                  "content": " ",
+                  "wrap": true,
+                  "key": "key9"
+                },
+                "children": []
+              },
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/grid:key3/text:key10",
+                "props": {
+                  "content": " ",
+                  "wrap": true,
+                  "key": "key10"
+                },
+                "children": []
+              }
+            ],
+            "placement": {
+              "pad": 4
+            }
+          },
+          {
+            "type": "columns",
+            "cid": "page:adapter-X/stack:key2/columns:key11",
+            "props": {
+              "count": 2,
+              "weights": [
+                1,
+                0
+              ],
+              "compact": false,
+              "gap": 0,
+              "key": "key11"
+            },
+            "children": [
+              {
+                "type": "password_input",
+                "cid": "page:adapter-X/stack:key2/columns:key11/password_input:key12",
+                "props": {
+                  "revealable": false,
+                  "key": "key12",
+                  "sensitive": true
+                },
+                "children": [],
+                "slot": "0",
+                "placement": {
+                  "pad": 2
+                }
+              },
+              {
+                "type": "button",
+                "cid": "page:adapter-X/stack:key2/columns:key11/button:key13",
+                "props": {
+                  "label": "Connect",
+                  "variant": "default",
+                  "key": "key13"
+                },
+                "children": [],
+                "slot": "1"
+              }
+            ]
+          },
+          {
+            "type": "checkbox",
+            "cid": "page:adapter-X/stack:key2/checkbox:key14",
+            "props": {
+              "label": "Remember",
+              "checked": true,
+              "key": "key14"
+            },
+            "children": []
+          },
+          {
+            "type": "scroll",
+            "cid": "page:adapter-X/stack:key2/scroll:key15",
+            "props": {
+              "max_height": 352,
+              "key": "key15"
+            },
+            "children": [
+              {
+                "type": "text",
+                "cid": "page:adapter-X/stack:key2/scroll:key15/text:key16",
+                "props": {
+                  "content": "body",
+                  "wrap": false,
+                  "key": "key16"
+                },
+                "children": []
+              }
+            ],
+            "placement": {
+              "grow": 1
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "facilities": {
+    "presentation": {
+      "always_on_top": true
+    }
+  },
+  "submissions": {
+    "page:adapter-X/stack:key2/columns:key11/button:key13": [
+      "page:adapter-X/stack:key2/columns:key11/password_input:key12"
+    ],
+    "page:adapter-X/stack:key2/checkbox:key14": [
+      "page:adapter-X/stack:key2/columns:key11/password_input:key12"
+    ]
+  },
+  "bindings": [
+    "page:adapter-X/stack:key2/grid:key3/text_input:key5#change",
+    "page:adapter-X/stack:key2/checkbox:key14#change",
+    "page:adapter-X/stack:key2/scroll:key15#scrolled"
+  ]
+}
