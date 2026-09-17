@@ -644,6 +644,22 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
       expect(window).to respond_to(:set_opacity)
       expect(window).to respond_to(:some_gtk_setter_we_do_not_have=)
     end
+
+    # D4 (ledger part 2): respond_to? said yes to everything, so a script
+    # probing for a capability got "yes" and then silence. It now answers
+    # only for the shapes method_missing actually handles -- set_* and *=
+    # setters, which degrade to the widget -- and is honest about the rest.
+    it 'answers respond_to? only for the setter shapes method_missing handles (D4)' do
+      widget = session.sync { gtk::Label.new('x') }
+
+      expect(widget).not_to respond_to(:frobnicate)
+      expect(widget).not_to respond_to(:frobnicate?)
+      expect(widget).to respond_to(:set_frobnicate)
+      expect(widget).to respond_to(:frobnicate=)
+      expect(widget).to respond_to(:text) # a real method is unaffected
+      expect(widget.method(:set_frobnicate)).to be_a(Method) # the shape it promises, it delivers
+      expect(session.sync { widget.set_frobnicate(1) }).to equal(widget)
+    end
   end
 
   # GTK sets one edge at a time. Collapsing the four sides to their max put a

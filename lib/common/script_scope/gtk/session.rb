@@ -614,9 +614,7 @@ module Lich
                 # entries from one response. So every input in the scope takes
                 # its own value before the terminal's handler runs and reads
                 # them back.
-                # Tested on the class: a shim widget answers respond_to? for
-                # every name so it can swallow unimplemented GTK API.
-                window.distribute_submitted(carried) if carried && window.class.method_defined?(:distribute_submitted)
+                window.distribute_submitted(carried) if carried && window.respond_to?(:distribute_submitted)
                 handler.call(delivered)
               end
             end

@@ -649,10 +649,15 @@ module Lich
             nil
           end
 
+          # Honest about what method_missing will do (D4): only a setter
+          # shape (set_* or *=) is answered, because only those degrade to
+          # something a script can use -- the widget itself. Every other
+          # name falls through to Ruby's own answer, so a script that probes
+          # for a capability is told no rather than yes-and-then-silence.
           def respond_to_missing?(name, include_private = false)
             return super if PROTOCOL_METHODS.include?(name)
 
-            true
+            name.end_with?('=') || name.start_with?('set_') || super
           end
 
           # --- materialization ------------------------------------------------
@@ -2051,12 +2056,11 @@ module Lich
             end
           end
 
-          # Walks the widget tree. Capability is tested with the class, not
-          # respond_to?: a shim widget answers respond_to? for every name, so
-          # that it can swallow the GTK API it does not implement.
+          # Walks the widget tree. respond_to? is honest since D4, so the
+          # capability test is the ordinary one.
           def each_submittable(node = self, &block)
-            yield node if node.class.method_defined?(:accept_submitted)
-            return unless node.class.method_defined?(:children)
+            yield node if node.respond_to?(:accept_submitted)
+            return unless node.respond_to?(:children)
 
             # A Bin reports its single child through #children, but a widget
             # that has none at all reports nil rather than an empty list.
@@ -2202,8 +2206,8 @@ module Lich
             !scrollers.empty? && scrollers.all?(&:scrollbars_hidden?)
           end
 
-          # respond_to? answers true for everything on a Widget, so the test
-          # has to be what the widget IS, not what it claims to answer.
+          # Tested by class: the question is what the widget IS, since only a
+          # ScrolledWindow has bars to hide.
           def collect_scrollers(widget, found)
             found << widget if widget.is_a?(ScrolledWindow)
             return unless widget.is_a?(Container)
