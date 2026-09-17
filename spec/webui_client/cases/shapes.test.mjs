@@ -57,3 +57,31 @@ test("ellipse, rect and line layers render SVG children with the right geometry 
     h.close();
   }
 });
+
+// 2.19: ctrl+wheel over a surface that asked for surface events is a zoom
+// request carrying the pointer, not a scroll.
+test("ctrl+wheel emits surface_zoom with a direction and the pointer; a plain wheel does not", () => {
+  const h = boot();
+  try {
+    h.attach("shapes");
+    const surface = h.element(SURFACE);
+    const wheel = (init) => surface.dispatchEvent(new h.window.WheelEvent("wheel", { bubbles: true, cancelable: true, ...init }));
+
+    wheel({ deltaY: -120, clientX: 30, clientY: 40 });
+    assert.equal(h.socket.ofType("event").filter((m) => m.event === "surface_zoom").length, 0);
+
+    const cancelled = !wheel({ deltaY: -120, clientX: 30, clientY: 40, ctrlKey: true });
+    assert.equal(cancelled, true, "the browser's own ctrl+wheel zoom must be suppressed");
+    wheel({ deltaY: 120, clientX: 30, clientY: 40, ctrlKey: true, shiftKey: true });
+
+    const zooms = h.socket.ofType("event").filter((m) => m.event === "surface_zoom");
+    assert.equal(zooms.length, 2);
+    assert.equal(zooms[0].payload.direction, "in");
+    assert.equal(zooms[1].payload.direction, "out");
+    assert.deepEqual(zooms[1].payload.modifiers, ["ctrl", "shift"]);
+    assert.equal("button" in zooms[0].payload, false);
+    assert.equal(typeof zooms[0].payload.x, "number");
+  } finally {
+    h.close();
+  }
+});

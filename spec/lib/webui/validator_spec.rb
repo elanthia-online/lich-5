@@ -192,6 +192,25 @@ RSpec.describe Lich::WebUI::Validator do
         { x: 1, y: 1, button: 'primary', modifiers: [] }, props: props, **context
       )
     end.to raise_error(Lich::WebUI::SchemaViolationError, /surface events are not enabled/)
+    expect do
+      validator.validate_event!(
+        :composite, :surface_zoom,
+        { direction: 'in', x: 1, y: 1, modifiers: ['ctrl'] }, props: props, **context
+      )
+    end.to raise_error(Lich::WebUI::SchemaViolationError, /surface events are not enabled/)
+  end
+
+  it 'accepts a surface_zoom with a direction and the pointer once surface events are on' do
+    props = validator.validate_component!(:composite, { width: 10, height: 10, surface_events: true, layers: [] }, **context)
+    expect do
+      validator.validate_event!(
+        :composite, :surface_zoom,
+        { direction: 'out', x: 3, y: 4, modifiers: ['ctrl'], scroll_x: 0, scroll_y: 12 }, props: props, **context
+      )
+    end.not_to raise_error
+    expect do
+      validator.validate_event!(:composite, :surface_zoom, { direction: 'sideways', x: 3, y: 4, modifiers: [] }, props: props, **context)
+    end.to raise_error(Lich::WebUI::SchemaViolationError)
   end
 
   it 'requires dialog defaults only for the default absent-viewer policy' do

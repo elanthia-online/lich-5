@@ -483,7 +483,7 @@ module Lich
           validate_sort_event!(payload, normalized_props, context, event_name)
         when [:composite, :region_activate]
           validate_region_event!(payload, normalized_props, context, event_name)
-        when [:composite, :surface_activate]
+        when [:composite, :surface_activate], [:composite, :surface_zoom]
           violation!('surface events are not enabled', context, event_name) unless normalized_props[:surface_events]
         when [:page, :key]
           violation!('key events are not enabled', context, event_name) unless normalized_props[:key_events]

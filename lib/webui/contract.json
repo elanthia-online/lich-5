@@ -1,6 +1,6 @@
 {
   "envelope_version": 1,
-  "contract_version": "2.18.0",
+  "contract_version": "2.19.0",
   "contract_major": 2,
   "types": [
     "page",
@@ -8054,6 +8054,81 @@
             "allow_extra": false
           },
           "terminal": true,
+          "lifecycle": false,
+          "structural": false
+        },
+        "surface_zoom": {
+          "payload": {
+            "kind": "record",
+            "fields": {
+              "direction": {
+                "shape": {
+                  "kind": "enum",
+                  "values": [
+                    "in",
+                    "out"
+                  ]
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "modifiers": {
+                "shape": {
+                  "kind": "array",
+                  "items": {
+                    "kind": "enum",
+                    "values": [
+                      "ctrl",
+                      "shift",
+                      "alt"
+                    ]
+                  },
+                  "min": 0,
+                  "max": 3
+                },
+                "required": true,
+                "scope": "shared"
+              },
+              "scroll_x": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              },
+              "scroll_y": {
+                "shape": {
+                  "kind": "integer",
+                  "min": -65536,
+                  "max": 65536
+                },
+                "required": false,
+                "scope": "shared"
+              }
+            },
+            "allow_extra": false
+          },
+          "terminal": false,
           "lifecycle": false,
           "structural": false
         }

@@ -55,6 +55,15 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('if (event.target.closest(".composite-region")) return;')
   end
 
+  # 2.19: ctrl+wheel over the surface asks the script to zoom. The listener
+  # cannot be passive, or the browser zooms the whole page as well.
+  it 'emits surface_zoom from a ctrl+wheel on a composite that asked for it' do
+    expect(javascript).to include('if (!event.ctrlKey || event.deltaY === 0) return;')
+    expect(javascript).to include('payload.direction = event.deltaY < 0 ? "in" : "out";')
+    expect(javascript).to include('emit(page, component, "surface_zoom", payload);')
+    expect(javascript).to include('}, { passive: false });')
+  end
+
   # The tree is rebuilt on every commit, so an unconditional report after
   # layout sent one of these after every render -- and a render landing in
   # that gap made it stale, which the viewer saw as a refusal.

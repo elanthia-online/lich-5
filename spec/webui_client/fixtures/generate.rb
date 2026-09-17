@@ -67,7 +67,8 @@ pages = {
   end,
   # Drawn shapes: the 2.17 layers.
   'shapes'  => Lich::WebUI::Page.new(owner: owner, id: 'shapes', title: 'Shapes') do
-    composite(key: 'surface', width: 100, height: 100, layers: [
+    composite(key: 'surface', width: 100, height: 100, surface_events: true,
+              on: { surface_activate: noop, surface_zoom: noop }, layers: [
                 { kind: 'ellipse', x: 10, y: 10, w: 20, h: 20, stroke: { r: 255, g: 0, b: 0, a: 0.8 }, stroke_width: 3 },
                 { kind: 'rect', x: 40, y: 40, w: 30, h: 20, stroke: { tone: 'danger' }, fill: { r: 0, g: 0, b: 255, a: 0.5 } },
                 { kind: 'line', x1: 0, y1: 0, x2: 99, y2: 99, stroke: { r: 0, g: 200, b: 0, a: 1.0 }, stroke_width: 2 },

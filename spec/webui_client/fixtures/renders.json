@@ -1,7 +1,7 @@
 {
   "actions": {
     "type": "render",
-    "page": "page-8a02f8b0480f527fe2872c6ff18f0d8e",
+    "page": "page-246e4cbd8abd4aa3b576848a4f1e6039",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -73,11 +73,11 @@
         "page:actions/text_input:note"
       ]
     },
-    "resume": "resume-98e5d1baa1db7f199ebdf79e0e325bcd"
+    "resume": "resume-11548b0b9d7f88e358bb62c06fe096e0"
   },
   "edits": {
     "type": "render",
-    "page": "page-5973b55c9e7e58ec45ce08c24eb3e056",
+    "page": "page-9da87decdc2fc11541565d3ca350a2f2",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -151,11 +151,11 @@
         "page:edits/password_input:secret"
       ]
     },
-    "resume": "resume-64f7650bfc52fbb4e5eb434cac6635d9"
+    "resume": "resume-f78fcf6147ea559c518086936173fb5d"
   },
   "tables": {
     "type": "render",
-    "page": "page-f3de9d19625034230ced441f9c2d8d3d",
+    "page": "page-08e9079f8267bec5d32e6c923b15c9e8",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -339,11 +339,11 @@
       ]
     },
     "submissions": {},
-    "resume": "resume-baacc3cf20af29c0e2ecbe80578d94e4"
+    "resume": "resume-68200fed00df6f12992312edd1904738"
   },
   "shapes": {
     "type": "render",
-    "page": "page-a1d0fd0ba67263d03a2c59d5e9437bf4",
+    "page": "page-5ec49151b3905cc06660d2bf2cbe030b",
     "generation": 1,
     "tree": {
       "type": "page",
@@ -361,7 +361,7 @@
             "width": 100,
             "height": 100,
             "scale": 1.0,
-            "surface_events": false,
+            "surface_events": true,
             "layers": [
               {
                 "kind": "ellipse",
@@ -418,8 +418,13 @@
       ]
     },
     "facilities": {},
-    "bindings": {},
+    "bindings": {
+      "page:shapes/composite:surface": [
+        "surface_activate",
+        "surface_zoom"
+      ]
+    },
     "submissions": {},
-    "resume": "resume-ccc8b40e4c192ec04ba5434d9cc82ecd"
+    "resume": "resume-bb1b1ff5e592a7a4f41212193a9de203"
   }
 }

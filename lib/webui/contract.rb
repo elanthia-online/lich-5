@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.18.0'
+      VERSION = '2.19.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -634,6 +634,17 @@ module Lich
                                   # composite outside a scroller simply omits them.
                                   scroll_x: property(GEOMETRY), scroll_y: property(GEOMETRY)
                                 ), terminal: true),
+        # 2.19: ctrl+wheel over the surface. GTK scripts zoom a map from
+        # scroll-event with the control mask; the client turns that gesture
+        # into a direction plus the same viewport pixel and scroll offset a
+        # click carries, so the script can keep the point under the pointer
+        # where it was after rescaling. Plain wheel stays the scroller's.
+        surface_zoom: event(record(
+                              direction: property(enum(:in, :out), required: true),
+                              x: property(GEOMETRY, required: true), y: property(GEOMETRY, required: true),
+                              modifiers: property(array(enum(:ctrl, :shift, :alt), max: 3), required: true),
+                              scroll_x: property(GEOMETRY), scroll_y: property(GEOMETRY)
+                            )),
       }.freeze
 
       FACILITIES = {
