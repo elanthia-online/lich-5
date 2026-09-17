@@ -561,13 +561,19 @@ module Lich
           # TypeError several frames away from the script line that asked.
           Allocation = Struct.new(:x, :y, :width, :height)
 
+          #
+          # With no size request and no window to inherit from it answers
+          # 640x480, and says so through the ledger (D5): the number is a
+          # guess, and a script that centres on it deserves a log line.
           def allocation
             root = window_root
-            Allocation.new(
-              0, 0,
-              @width_request || root&.default_width || 640,
-              @height_request || root&.default_height || 480
-            )
+            width = @width_request || root&.default_width
+            height = @height_request || root&.default_height
+            if width.nil? || height.nil?
+              Gtk.log_unsupported(short_class_name, 'allocation',
+                                  note: 'no size request and no window to inherit from; answering 640x480')
+            end
+            Allocation.new(0, 0, width || 640, height || 480)
           end
           alias get_allocation allocation
 

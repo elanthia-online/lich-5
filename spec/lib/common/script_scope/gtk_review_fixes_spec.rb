@@ -127,6 +127,43 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
     end
   end
 
+  # D5 (ledger part 2): allocation answers the requested size, the window's
+  # default, or 640x480 when there is no window at all. A confident wrong
+  # number beats the "coerce must return [x, y]" that nil used to become
+  # several frames later, but it was silent. The fallback now says so once
+  # through the ledger, so "the map centred somewhere odd" has a log line.
+  describe 'Widget#allocation without a window (D5)' do
+    before { gtk.reset_unsupported! }
+
+    it 'answers 640x480 and reports the fallback once' do
+      label = session.sync { gtk::Label.new('loose') }
+
+      first = session.sync { label.allocation }
+      session.sync { label.allocation }
+
+      expect([first.width, first.height]).to eq([640, 480])
+      entries = gtk.unsupported_report.values.flat_map(&:to_a)
+      expect(entries.map(&:first)).to eq(['Gtk::Label#allocation'])
+      expect(entries.first.last[:count]).to eq(2)
+      expect(entries.first.last[:note]).to include('640x480')
+    end
+
+    it 'says nothing when the widget asked for a size or sits in a window' do
+      sized = session.sync { gtk::Label.new('sized').tap { |l| l.set_size_request(100, 20) } }
+      housed = session.sync do
+        window = gtk::Window.new('H')
+        window.set_default_size(300, 200)
+        label = gtk::Label.new('housed')
+        window.add(label)
+        label
+      end
+
+      expect(session.sync { sized.allocation }.width).to eq(100)
+      expect(session.sync { housed.allocation }.width).to eq(300)
+      expect(gtk.unsupported_report).to be_empty
+    end
+  end
+
   describe 'a widget that is destroyed' do
     it 'says so, for every widget and not only a window' do
       label = session.sync { gtk::Label.new('x') }
