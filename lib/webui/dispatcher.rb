@@ -21,6 +21,10 @@ module Lich
       class OwnerState
         attr_accessor :running, :current
         attr_accessor :thread
+        # The last failure reported for this owner, so an identical one that
+        # follows it is not reported again in full. One string per owner,
+        # dropped with the owner.
+        attr_accessor :last_failure
         attr_reader :events, :mutex, :condition
 
         def initialize
@@ -30,6 +34,7 @@ module Lich
           @running = true
           @current = nil
           @thread = nil
+          @last_failure = nil
         end
       end
 
@@ -149,7 +154,7 @@ module Lich
           begin
             queued.callable.call
           rescue StandardError => error
-            report_failure(queued, error)
+            report_failure(state, queued, error)
           ensure
             Thread.current.thread_variable_set(THREAD_CONTEXT_KEY, nil)
             state.current = nil
@@ -205,12 +210,24 @@ module Lich
       # The shim already reported its handlers' errors with the script frame
       # (Session#report); this is the same for the pages a script builds
       # itself.
-      def report_failure(queued, error)
+      #
+      # The same failure again, straight after itself, is one log line and
+      # no notification: a broken control clicked twenty times is twenty
+      # events, and the player has read the message once. A different
+      # failure in between is reported in full again, so a second distinct
+      # error is never hidden behind the first.
+      def report_failure(state, queued, error)
         label = owner_label(queued.owner)
         backtrace = Array(error.backtrace)
         origin = script_origin(backtrace, label)
         where = origin ? " at #{script_frame(origin)}" : ''
         detail = "error in WebUI handler #{queued.event} on #{queued.cid}: #{error.message}#{where}"
+        if state.last_failure == detail
+          log(:error, "#{detail} owner=#{label} (again)")
+          return
+        end
+
+        state.last_failure = detail
         log(:error, "#{detail} owner=#{label} error=#{error.class}\n\t#{backtrace.first(8).join("\n\t")}")
         @notifier.call(queued.owner, detail)
       rescue StandardError
