@@ -517,7 +517,7 @@ module Lich
             log(:error, message)
           end
 
-          # "…/scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+          # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
           def script_frame(frame)
             file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
             base = file.to_s.split(%r{[\\/]}).last

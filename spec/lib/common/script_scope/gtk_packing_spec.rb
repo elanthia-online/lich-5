@@ -634,7 +634,7 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
   # <a href=...> as literal text.
   describe 'use-markup from a Glade file' do
     let(:wiki) do
-      'Additional details: <a href="https://gswiki.play.net/x" title="x">'         'https://gswiki.play.net/x</a>'
+      'Additional details: <a href="https://gswiki.play.net/x" title="x">' + 'https://gswiki.play.net/x</a>'
     end
 
     it 'parses the markup rather than printing the tags' do

@@ -167,6 +167,8 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
 
   describe 'validation at the GTK boundary' do
     it 'keeps all grid cells and fillers when an entry has a long tooltip' do
+      # rubocop:disable Custom/AsciiOnlySource -- a non-ASCII tooltip is the
+      # point: the contract truncates by characters, not by bytes.
       tooltip = 'é' * 600
       in_scope do
         @window = gtk::Window.new
@@ -183,6 +185,7 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       grid = tree.each.find { |node| node.type == :grid }
       expect(grid.children.map(&:type)).to eq(%i[text text_input text text])
       expect(grid.children[1].props).to include(value: 'hunting commands', tooltip: 'é' * 512)
+      # rubocop:enable Custom/AsciiOnlySource
       expect(@entry.tooltip_text).to eq(tooltip)
     end
 

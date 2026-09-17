@@ -158,12 +158,12 @@ module Lich
         # one-sided margins -- and collapsing them to a single number put a
         # 100px indent on all four sides of the widget.
         margin: property(union(
-          integer(min: 0, max: 512),
-          record(
-            top: property(integer(min: 0, max: 512)), right: property(integer(min: 0, max: 512)),
-            bottom: property(integer(min: 0, max: 512)), left: property(integer(min: 0, max: 512))
-          )
-        )),
+                           integer(min: 0, max: 512),
+                           record(
+                             top: property(integer(min: 0, max: 512)), right: property(integer(min: 0, max: 512)),
+                             bottom: property(integer(min: 0, max: 512)), left: property(integer(min: 0, max: 512))
+                           )
+                         )),
         width: property(GEOMETRY),
         height: property(GEOMETRY),
         emphasis: property(enum(*EMPHASES)),
@@ -281,8 +281,8 @@ module Lich
             # write (they compute `upper - page_size`, which only the viewer
             # knows).
             scroll_position: property(record(
-              x: property(GEOMETRY), y: property(GEOMETRY), bottom: property(BOOL)
-            ), scope: :viewer),
+                                        x: property(GEOMETRY), y: property(GEOMETRY), bottom: property(BOOL)
+                                      ), scope: :viewer),
           },
           children: :many,
           # `upper` and `page_size` are the content extent and the visible
@@ -290,9 +290,9 @@ module Lich
           # work out where the bottom is.
           events: {
             scrolled: event(record(
-              position: property(GEOMETRY, required: true),
-              upper: property(GEOMETRY), page_size: property(GEOMETRY)
-            )),
+                              position: property(GEOMETRY, required: true),
+                              upper: property(GEOMETRY), page_size: property(GEOMETRY)
+                            )),
           }, value: nil,
         },
         divider: { properties: { label: property(SHORT) }, children: :none, events: {}, value: nil },

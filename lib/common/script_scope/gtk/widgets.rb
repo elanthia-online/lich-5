@@ -212,7 +212,7 @@ module Lich
             return if @dropped[key]
 
             @dropped[key] = true
-            message = "webui-gtk-shim: dropped #{child.short_class_name}"                       "#{" key=#{label}" if label} from its parent: #{error.message}"
+            message = "webui-gtk-shim: dropped #{child.short_class_name}" + "#{" key=#{label}" if label} from its parent: #{error.message}"
             script = Session.current_script&.name
             message += " script=#{script}" if script
             Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
