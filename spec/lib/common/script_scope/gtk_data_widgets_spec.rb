@@ -289,6 +289,44 @@ RSpec.describe 'GTK compatibility shim: data widgets' do
     end
   end
 
+  # ;armor died at `tv.buffer.tag_table`: a TextBuffer had no tag table, and
+  # Gtk::TextTag was an unimplemented-widget stub. A tag is state a script
+  # builds and applies; the textarea shows plain text, so applying one is
+  # reported through the ledger and the text is kept whole.
+  describe 'text tags on a buffer' do
+    before { gtk.reset_unsupported! }
+
+    it 'lets a script build, add and apply a tag the way armor does, keeping the text and saying so once' do
+      buffer = gtk::TextBuffer.new
+      buffer.text = "Head\nBody"
+      tag = gtk::TextTag.new('just_page')
+      tag.set_property('justification', :center)
+      buffer.tag_table.add(tag)
+      buffer.apply_tag(tag, buffer.start_iter, buffer.end_iter)
+      buffer.apply_tag(tag, buffer.start_iter, buffer.end_iter)
+
+      expect(gtk::TextTag).not_to respond_to(:webui_stub?)
+      expect(buffer.tag_table.lookup('just_page')).to be(tag)
+      expect(tag['justification']).to eq(:center)
+      expect(buffer.text).to eq("Head\nBody")
+      report = gtk.unsupported_report.values.first || {}
+      expect(report.fetch('Gtk::TextBuffer#apply_tag')).to include(count: 2)
+    end
+
+    it 'creates a tag into its own table and inserts tagged text as plain text' do
+      buffer = gtk::TextBuffer.new
+      created = buffer.create_tag('bold', 'weight' => 700)
+      expect(buffer.tag_table.lookup('bold')).to be(created)
+      expect(created['weight']).to eq(700)
+
+      buffer.insert_with_tags(buffer.end_iter, 'hello', created)
+      buffer.insert_with_tags_by_name(buffer.end_iter, ' world', 'bold')
+      expect(buffer.text).to eq('hello world')
+      report = gtk.unsupported_report.values.first || {}
+      expect(report.fetch('Gtk::TextBuffer#insert_with_tags')).to include(count: 2)
+    end
+  end
+
   describe 'a value the contract cannot carry' do
     before { gtk.reset_unsupported! }
 

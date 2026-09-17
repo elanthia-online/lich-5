@@ -565,14 +565,69 @@ module Lich
           end
         end
 
+        # A text tag: a named bundle of properties a script applies to a
+        # range of a buffer (armor justifies a page, localchat colours a
+        # line). The contract's textarea carries plain text, so a tag is
+        # kept as readable state and its application is reported through
+        # the ledger once; the text itself is never lost.
+        class TextTag
+          attr_reader :name, :properties
+
+          def initialize(name = nil, properties = {})
+            @name = name&.to_s
+            @properties = {}
+            properties.each { |key, value| set_property(key, value) }
+          end
+
+          def set_property(name, value)
+            @properties[name.to_s.tr('_', '-')] = value
+            self
+          end
+          alias []= set_property
+
+          def [](name)
+            @properties[name.to_s.tr('_', '-')]
+          end
+
+          def priority = 0
+
+          def priority=(_value)
+            nil
+          end
+        end
+
+        class TextTagTable
+          def initialize
+            @tags = []
+          end
+
+          def add(tag)
+            @tags << tag unless @tags.include?(tag)
+            true
+          end
+
+          def remove(tag)
+            @tags.delete(tag)
+            nil
+          end
+
+          def lookup(name)
+            @tags.find { |tag| tag.name == name.to_s }
+          end
+
+          def size = @tags.length
+          def each(&block) = @tags.each(&block)
+        end
+
         class TextBuffer
           extend Setters
-          attr_reader :text
+          attr_reader :text, :tag_table
 
-          def initialize(_table = nil)
+          def initialize(table = nil)
             @text = +''
             @views = []
             @handlers = Hash.new { |hash, signal| hash[signal] = [] }
+            @tag_table = table.is_a?(TextTagTable) ? table : TextTagTable.new
           end
 
           def watch(view)
@@ -637,14 +692,34 @@ module Lich
             [@text.count("\n") + 1, 1].max
           end
 
-          def create_tag(name = nil, **_properties)
-            Gtk.log_unsupported('Gtk::TextBuffer', 'create_tag', note: 'rich text ranges are not rendered yet')
-            name
+          def create_tag(name = nil, properties = {}, **keyword_properties)
+            tag = TextTag.new(name, (properties.is_a?(Hash) ? properties : {}).merge(keyword_properties))
+            @tag_table.add(tag)
+            tag
           end
 
-          def apply_tag(*_args)
+          # A tag on a range is kept in the tag table and not rendered: the
+          # textarea the buffer becomes carries plain text. Said once per
+          # script through the ledger, never by dropping the text.
+          def apply_tag(_tag, _from = nil, _to = nil)
+            Gtk.log_unsupported('Gtk::TextBuffer', 'apply_tag', note: 'rich text ranges are not rendered')
             self
           end
+
+          def apply_tag_by_name(_name, _from = nil, _to = nil)
+            Gtk.log_unsupported('Gtk::TextBuffer', 'apply_tag', note: 'rich text ranges are not rendered')
+            self
+          end
+
+          def remove_tag(_tag, _from = nil, _to = nil) = self
+          def remove_tag_by_name(_name, _from = nil, _to = nil) = self
+          def remove_all_tags(_from = nil, _to = nil) = self
+
+          def insert_with_tags(iter, string, *_tags)
+            Gtk.log_unsupported('Gtk::TextBuffer', 'insert_with_tags', note: 'rich text ranges are not rendered')
+            insert(iter, string)
+          end
+          alias insert_with_tags_by_name insert_with_tags
 
           def create_mark(*_args)
             end_iter
