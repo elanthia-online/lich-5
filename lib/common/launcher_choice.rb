@@ -24,7 +24,7 @@ module Lich
   # :gtk choice does that.
   module LauncherChoice
     CHOICES = %i[webui gtk].freeze
-    DEFAULT = :gtk
+    DEFAULT = :webui
     SETTING = 'launcher'
     FLAGS = { '--webui' => :webui, '--webui-dev' => :webui, '--gtk' => :gtk }.freeze
     BUSY_RETRIES = 20

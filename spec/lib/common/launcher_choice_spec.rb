@@ -30,6 +30,15 @@ RSpec.describe Lich::LauncherChoice do
       expect(described_class.resolve(argv: [], setting: -> {})).to eq(described_class::DEFAULT)
       expect(described_class::CHOICES).to include(described_class::DEFAULT)
     end
+
+    # The 5.x default: the WebUI launcher. GTK stays reachable behind --gtk
+    # or the persisted setting until Lich 6 deletes it. Flipping this line
+    # back is the whole rollback.
+    it 'launches the WebUI when nothing says otherwise' do
+      expect(described_class::DEFAULT).to eq(:webui)
+      expect(described_class.resolve(argv: ['--login', 'Tsetem'], setting: -> {})).to eq(:webui)
+      expect(described_class.resolve(argv: ['--gtk'], setting: -> {})).to eq(:gtk)
+    end
   end
 
   describe 'the persisted setting' do
