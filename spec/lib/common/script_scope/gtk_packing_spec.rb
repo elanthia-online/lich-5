@@ -774,7 +774,7 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
   end
 
   # Lich evals a script under its bare name, so its backtrace frames read
-  # "map:2466", not "…/map.lic:2466". Matching only ".lic:" found no frame at
+  # "map:2466", not ".../map.lic:2466". Matching only ".lic:" found no frame at
   # all and the error was reported with no location.
   describe 'naming the script frame in a Gtk.queue error' do
     let(:reporter) do
