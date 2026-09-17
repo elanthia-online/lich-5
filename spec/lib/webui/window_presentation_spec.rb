@@ -42,6 +42,13 @@ RSpec.describe Lich::WebUI::WindowPresentation do
         row(hwnd)[4].length
       end
 
+      # A sixth column, the title, is optional in a row.
+      def GetWindowTextW(hwnd, buffer, _max)
+        title = (row(hwnd)[5] || '').encode('UTF-16LE')
+        buffer[0, title.bytesize] = title
+        (row(hwnd)[5] || '').length
+      end
+
       def SetWindowPos(hwnd, insert_after, *rest)
         @calls << [:set_window_pos, hwnd.to_i, insert_after.to_i, rest.last]
         1
@@ -113,6 +120,31 @@ RSpec.describe Lich::WebUI::WindowPresentation do
       ]
 
       expect(described_class.find_window(4242)).to be_nil
+    end
+
+    # A shared browser profile hands the page to the Chrome already running
+    # and the spawned process exits, so its pid owns nothing; the window's
+    # title is the page's own.
+    it 'finds a window by its title prefix, and refuses to choose between two' do
+      win32.windows = [
+        [11, true, 500, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#123)'],
+        [12, true, 500, 0, 'Chrome_WidgetWin_1', 'Eloot Setup'],
+        [13, false, 500, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#9)'],
+      ]
+      expect(described_class.find_window_by_title('Map: Nisugi').to_i).to eq(11)
+      expect(described_class.find_window_by_title('Bigshot')).to be_nil
+
+      win32.windows << [14, true, 501, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#124)']
+      expect(described_class.find_window_by_title('Map: Nisugi')).to be_nil
+    end
+
+    it 'discovers by title on the same poll when the process owns no window' do
+      described_class.thread_factory = ->(&block) { block.call }
+      described_class.sleeper = ->(_seconds) { raise 'should not have needed a second poll' }
+      win32.windows = [[21, true, 999, 0, 'Chrome_WidgetWin_1', 'Map: Nisugi (#5)']]
+      found = nil
+      described_class.discover(500, title: 'Map: Nisugi') { |hwnd| found = hwnd }
+      expect(found.to_i).to eq(21)
     end
 
     it 'is nil when the process owns no window at all' do

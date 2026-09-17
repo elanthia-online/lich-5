@@ -95,6 +95,24 @@ module Lich
           window_finder(pid).call
         end
 
+        # The one visible top-level Chromium window whose title starts with
+        # +prefix+. A shared browser profile hands the page to the Chrome
+        # already running and the spawned process exits, so its pid owns no
+        # window; the window's title is the page's own, which the page chose
+        # and knows.
+        def find_window_by_title(prefix)
+          return nil unless available?
+
+          window_finder(nil, title: prefix).call
+        end
+
+        # As discover, by title prefix instead of pid.
+        def discover_by_title(prefix, timeout: DISCOVERY_TIMEOUT, &on_found)
+          return nil unless available?
+
+          poll(timeout, on_found) { window_finder(nil, title: prefix) }
+        end
+
         # Applies a fully-resolved desired state. Both properties are always
         # named, never "leave alone": a script turning keep-above off is not
         # visible as a value -- Window#presentation omits false and returns
@@ -135,12 +153,32 @@ module Lich
         # caller's own thread. Never runs on the session thread: the session
         # thread is the one every script handler and timer runs on, and
         # polling there would stall all of them.
-        def discover(pid, timeout: DISCOVERY_TIMEOUT, &on_found)
+        # With a +title+, each poll looks for the process's window and then
+        # for one with that title, so a page handed to an already-running
+        # Chrome is found on the first poll rather than after the pid search
+        # has run out its whole timeout.
+        def discover(pid, timeout: DISCOVERY_TIMEOUT, title: nil, &on_found)
           return nil unless available?
 
+          # The finders are built on the search thread itself (see poll):
+          # a Fiddle closure built on one thread and entered from another
+          # never matched anything, silently.
+          poll(timeout, on_found) do
+            by_pid = window_finder(pid)
+            by_title = title && window_finder(nil, title: title)
+            -> { by_pid.call || by_title&.call }
+          end
+        end
+
+        private
+
+        # Runs the search on its own thread: it takes about a quarter of a
+        # second, and the caller's thread is the one a script's handlers run
+        # on. +build_finder+ is called on that thread, once: one enumeration
+        # callback for the whole search, not one per poll.
+        def poll(timeout, on_found, &build_finder)
           thread_factory.call do
-            # One enumeration callback for the whole search, not one per poll.
-            finder = window_finder(pid)
+            finder = build_finder.call
             deadline = timeout
             hwnd = nil
             while deadline.positive?
@@ -154,8 +192,6 @@ module Lich
           end
         end
 
-        private
-
         # A callable that enumerates once per call and answers as find_window
         # does. The Fiddle closure is built here, once, and captured: a
         # discovery polls up to DISCOVERY_TIMEOUT / DISCOVERY_INTERVAL times
@@ -165,13 +201,13 @@ module Lich
         # More than one match is logged, once per finder rather than once per
         # poll, so a launch that reused a browser process -- a shared profile
         # -- shows up in the log instead of quietly polling to the deadline.
-        def window_finder(pid)
+        def window_finder(pid, title: nil)
           matches = []
           warned = false
           callback = Fiddle::Closure::BlockCaller.new(
             Fiddle::TYPE_INT, [Fiddle::TYPE_VOIDP, Fiddle::TYPE_LONG]
           ) do |hwnd, _|
-            matches << Fiddle::Pointer.new(hwnd.to_i) if window_matches?(hwnd, pid)
+            matches << Fiddle::Pointer.new(hwnd.to_i) if window_matches?(hwnd, pid, title)
             1
           end
           lambda do
@@ -179,7 +215,8 @@ module Lich
             win32.EnumWindows(callback, Fiddle::Pointer.new(0))
             if matches.length > 1 && !warned
               warned = true
-              log("process #{pid} owns #{matches.length} visible top-level windows; refusing to choose one")
+              subject = pid ? "process #{pid} owns" : "title #{title.inspect} names"
+              log("#{subject} #{matches.length} visible top-level windows; refusing to choose one")
             end
             matches.length == 1 ? matches.first : nil
           rescue StandardError => error
@@ -211,13 +248,24 @@ module Lich
           win32.SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA)
         end
 
-        def window_matches?(hwnd, pid)
+        def window_matches?(hwnd, pid, title = nil)
           return false if win32.IsWindowVisible(hwnd).zero?
-          return false unless owning_pid(hwnd) == pid
+          return false if pid && owning_pid(hwnd) != pid
           # A top-level window, not a menu or a tooltip Chromium also owns.
           return false unless win32.GetWindow(hwnd, GW_OWNER).to_i.zero?
+          return false unless window_class(hwnd) == WINDOW_CLASS
 
-          window_class(hwnd) == WINDOW_CLASS
+          title.nil? || window_title(hwnd).start_with?(title)
+        end
+
+        def window_title(hwnd)
+          buffer = Fiddle::Pointer.malloc(1024)
+          length = win32.GetWindowTextW(hwnd, buffer, 511)
+          return '' unless length.positive?
+
+          buffer[0, length * 2].force_encoding('UTF-16LE').encode('UTF-8')
+        rescue StandardError
+          ''
         end
 
         def owning_pid(hwnd)
@@ -266,6 +314,7 @@ if Lich::Common::Frontend.native_windows_runtime? && !defined?(::WinPresentation
       extern 'int IsWindow(void*)'
       extern 'int GetWindowThreadProcessId(void*, void*)'
       extern 'int GetClassNameW(void*, void*, int)'
+      extern 'int GetWindowTextW(void*, void*, int)'
       extern 'void* GetWindow(void*, unsigned int)'
       # hWndInsertAfter is void* on purpose; see set_always_on_top.
       extern 'int SetWindowPos(void*, void*, int, int, int, int, unsigned int)'
