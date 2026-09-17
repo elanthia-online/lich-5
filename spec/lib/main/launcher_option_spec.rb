@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require File.join(LIB_DIR, 'common', 'launcher_choice')
 
 # lib/main/argv_options.rb auto-executes ArgvOptions.process_argv at load
 # time, so it cannot be required in isolation. As spec/lib/main/argv_options_spec.rb
