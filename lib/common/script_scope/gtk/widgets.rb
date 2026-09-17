@@ -2267,10 +2267,6 @@ module Lich
             emit(:delete_event, Event.new(:delete))
           end
 
-          def browser_exited
-            viewer_closed
-          end
-
           def lifecycle_bound?
             @lifecycle_bound
           end
@@ -2473,10 +2469,11 @@ module Lich
             super
           end
 
-          # The viewer closing the tab is the ordinary way a dialog goes
-          # away, and it arrives here -- not through browser_exited, which
-          # only fires when the whole browser dies. Without this, `run`
-          # waited on a queue nobody would ever push to: a plain
+          # The viewer closing the window is the ordinary way a dialog goes
+          # away, and since D1 it is the only viewer-side way: nothing
+          # watches the browser process any more, so a closed window arrives
+          # through the page's detach/close lifecycle and lands here. Without
+          # this, `run` waited on a queue nobody would ever push to: a plain
           # confirmation dialog with no :delete_event handler hung the
           # script forever. The base class emits :delete_event; the waiters
           # have to be let go too.
@@ -2487,14 +2484,9 @@ module Lich
             release_waiters
           end
 
-          def browser_exited
-            release_waiters
-            super
-          end
-
           # The session is going away, so nobody will ever answer. Distinct
-          # from a tab close or the browser dying: those are the viewer's
-          # doing and arrive through their own paths.
+          # from a window close, which is the viewer's doing and arrives
+          # through the lifecycle path above.
           def session_terminated
             release_waiters
           end

@@ -17,14 +17,12 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
   let(:opened) { [] }
 
   before do
-    gtk::Session.browser_open = proc { |url, geometry:, on_start:, on_exit:| opened << [url, geometry, on_exit]; on_start.call(4242); true }
-    gtk::Session.browser_kill = proc { |pid| opened << [:killed, pid] }
+    gtk::Session.browser_open = proc { |url, geometry:, on_start:| opened << [url, geometry]; on_start.call(4242); true }
     allow(gtk::Session).to receive(:for).with(anything).and_return(session)
   end
 
   after do
     gtk::Session.browser_open = nil
-    gtk::Session.browser_kill = nil
     session.shutdown
   end
 
@@ -255,20 +253,66 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(closes).not_to be_nil
       closes.call(Lich::WebUI::Runtime::EventContext.new('attachment-1', page, tree, :close, { reason: 'user' }, nil))
       session.sync {}
-      in_scope { @window.browser_exited }
+      in_scope { @window.viewer_closed }
 
       expect(@closed).to be(true)
       expect(session.adapter.page_for(@window.handle)).not_to be_nil
     end
 
-    it 'destroys the page and the browser window on Window#destroy' do
+    # D1: the window lands in the user's ordinary browser, sharing its
+    # process, so there is no process of ours to kill; the page is closed
+    # and the client removes it.
+    it 'destroys the page on Window#destroy and never kills a browser process' do
       handle = @window.handle
+      expect(Process).not_to receive(:kill)
       in_scope { @window.destroy }
       session.sync {}
 
       expect(session.adapter.page_for(handle)).to be_nil
       expect(service.registry.pages_for(owner)).to be_empty
-      expect(opened.last).to eq([:killed, 4242])
+      expect(opened).to eq([opened.first])
+      expect(gtk::Session).not_to respond_to(:browser_kill)
+    end
+  end
+
+  # D1 (ledger part 2): lich-6 gives the private profile and the process
+  # monitor to the launcher only; a script page opens through
+  # BrowserLauncher.open(url) with no on_exit, so it lands in the user's
+  # ordinary Chrome as an app window. Shim windows do the same. A closed
+  # window is noticed through the viewer detach/close path, not by watching
+  # a process; on_start still yields the pid the Windows presentation
+  # lookup needs.
+  describe 'opening a shim window (D1)' do
+    it 'asks the launcher for an app window with a geometry and a pid callback, and nothing else' do
+      gtk::Session.browser_open = nil
+      calls = []
+      allow(Lich::WebUI::BrowserLauncher).to receive(:open) { |url, **options| calls << [url, options]; true }
+
+      build_vars_window
+
+      expect(calls.length).to eq(1)
+      url, options = calls.first
+      expect(url).to include('/auth?token=')
+      expect(options.keys.sort).to eq(%i[geometry on_start])
+      expect(options[:geometry]).to eq(width: 640, height: 300)
+      expect(options[:on_start]).to be_a(Proc)
+    end
+
+    it 'has no browser-exit path left on a window or a dialog' do
+      expect(gtk::Window.instance_methods).not_to include(:browser_exited)
+      expect(gtk::Dialog.instance_methods).not_to include(:browser_exited)
+    end
+
+    it 'opens a modal of its own without a process monitor when no window is open' do
+      gtk::Session.browser_open = nil
+      calls = []
+      allow(Lich::WebUI::BrowserLauncher).to receive(:open) { |_url, **options| calls << options; true }
+
+      future = session.modal(title: 'Q', buttons: [{ id: 'ok', label: 'OK', variant: 'primary' }])
+      future.cancel(reason: :test)
+
+      expect(calls.length).to eq(1)
+      expect(calls.first.keys.sort).to eq(%i[geometry on_start])
     end
   end
 

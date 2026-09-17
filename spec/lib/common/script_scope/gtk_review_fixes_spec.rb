@@ -18,8 +18,7 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
   let(:pushes) { [] }
 
   before do
-    gtk::Session.browser_open = proc { |_url, geometry:, on_start:, on_exit:| [geometry, on_exit]; on_start.call(1); true }
-    gtk::Session.browser_kill = proc { |_pid| nil }
+    gtk::Session.browser_open = proc { |_url, on_start:, **| on_start.call(1); true }
     allow(gtk::Session).to receive(:for).with(anything).and_return(session)
     recorder = pushes
     session.define_singleton_method(:viewer_write) do |_window, widget, name, value|
@@ -29,7 +28,6 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
 
   after do
     gtk::Session.browser_open = nil
-    gtk::Session.browser_kill = nil
     session.shutdown
     service.stop
   end
@@ -377,13 +375,11 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
 
     # These show windows; without the seam a real browser opens on the desktop.
     before do
-      gtk::Session.browser_open = proc { |_url, geometry:, on_start:, on_exit:| [geometry, on_exit]; on_start.call(1); true }
-      gtk::Session.browser_kill = proc { |_pid| nil }
+      gtk::Session.browser_open = proc { |_url, on_start:, **| on_start.call(1); true }
     end
 
     after do
       gtk::Session.browser_open = nil
-      gtk::Session.browser_kill = nil
       session.shutdown
       service.stop
     end
@@ -479,13 +475,11 @@ RSpec.describe Lich::WebUI::Runtime, 'review fixes' do
     let(:session) { gtk::Session.new(owner, service: service) }
 
     before do
-      gtk::Session.browser_open = proc { |_url, geometry:, on_start:, on_exit:| [geometry, on_exit]; on_start.call(1); true }
-      gtk::Session.browser_kill = proc { |_pid| nil }
+      gtk::Session.browser_open = proc { |_url, on_start:, **| on_start.call(1); true }
     end
 
     after do
       gtk::Session.browser_open = nil
-      gtk::Session.browser_kill = nil
       session.shutdown
       service.stop
     end

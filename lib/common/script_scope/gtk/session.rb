@@ -241,11 +241,10 @@ module Lich
           @sessions = {}.compare_by_identity
           @registry_mutex = Mutex.new
           @browser_open = nil
-          @browser_kill = nil
 
           class << self
-            # Test seams: replace the browser process launcher/killer.
-            attr_accessor :browser_open, :browser_kill
+            # Test seam: replace the browser launcher.
+            attr_accessor :browser_open
 
             # Session for the calling context: the one whose thread we are on,
             # else the one owned by the current script, else a shared session
@@ -352,7 +351,7 @@ module Lich
 
           def enqueue(&block)
             raise ArgumentError, 'block required' unless block
-            # A closed session takes no more work. Timers and browser-exit
+            # A closed session takes no more work. Timers and lifecycle
             # callbacks fire after shutdown, and ensure_thread would start a
             # fresh session thread just to run them -- a callback executing
             # with the session closed and every window already gone.
@@ -426,23 +425,25 @@ module Lich
             open_browser(page, window: window, geometry: window.browser_geometry)
           end
 
+          # Closes the page. The browser window is not ours to kill (D1): it
+          # is an app window of the user's ordinary browser, and the client
+          # drops the page when it hears page_closed.
           def close_window(window)
             handle = window.handle
-            pid = @mutex.synchronize do
+            @mutex.synchronize do
               @windows.delete(window)
               @window_handles.delete(window)
               @browsers.delete(window)
             end
-            if handle
-              page = adapter.page_for(handle)
-              @mutex.synchronize { @viewers.delete(page) } if page
-              begin
-                adapter.destroy(handle)
-              rescue Lich::WebUI::Error => error
-                log(:warning, "destroy failed: #{error.message}")
-              end
+            return unless handle
+
+            page = adapter.page_for(handle)
+            @mutex.synchronize { @viewers.delete(page) } if page
+            begin
+              adapter.destroy(handle)
+            rescue Lich::WebUI::Error => error
+              log(:warning, "destroy failed: #{error.message}")
             end
-            kill_browser(pid) if pid
           end
 
           # ---- rendering ---------------------------------------------------
@@ -632,9 +633,14 @@ module Lich
             @mutex.synchronize { @browsers.any? }
           end
 
-          def open_modal_window(id, future)
+          # A modal with no window of the script's own to show in gets one.
+          # It opens like every other shim window (D1): nothing watches its
+          # process, so a modal whose window is closed unanswered waits for
+          # its timeout or for the owner to terminate, exactly as a modal
+          # raised in an existing window does.
+          def open_modal_window(id, _future)
             page = service.registry.fetch(@owner, id)
-            open_browser(page, geometry: { width: 460, height: 240 }) { future.cancel(reason: :closed) }
+            open_browser(page, geometry: { width: 460, height: 240 })
           rescue Lich::WebUI::Error => error
             log(:warning, "modal window failed to open: #{error.message}")
           end
@@ -733,7 +739,16 @@ module Lich
             adapter.commit
           end
 
-          def open_browser(page, window: nil, geometry: nil, &on_exit)
+          # Opens the page the way lich-6 opens a script page (D1): an app
+          # window in the user's ordinary browser, with no private profile
+          # and no process monitor -- so no on_exit. A window the viewer
+          # closes is noticed through the page's detach/close lifecycle,
+          # which bind_lifecycle routes to Window#viewer_closed. on_start
+          # still yields the launcher's pid, which is what the Windows
+          # presentation lookup (keep_above, opacity) needs to find the
+          # window; where the pid is not the window's, that lookup finds
+          # nothing and the presentation degrades through the ledger.
+          def open_browser(page, window: nil, geometry: nil)
             self.class.start_service(service)
             url = service.launch_url(page: page)
             opener = self.class.browser_open || method(:default_browser_open)
@@ -741,15 +756,14 @@ module Lich
             opened = opener.call(
               url,
               geometry: geometry,
-              on_start: proc { |pid| session.send(:remember_browser, window, pid) if window },
-              on_exit: on_exit || proc { enqueue { window.browser_exited } if window }
+              on_start: proc { |pid| session.send(:remember_browser, window, pid) if window }
             )
             log(:warning, 'browser window failed to open; page is available at the launch URL') if opened == false
             opened
           end
 
-          def default_browser_open(url, geometry:, on_start:, on_exit:)
-            Lich::WebUI::BrowserLauncher.open(url, geometry: geometry, on_start: on_start, on_exit: on_exit)
+          def default_browser_open(url, geometry:, on_start:)
+            Lich::WebUI::BrowserLauncher.open(url, geometry: geometry, on_start: on_start)
           end
 
           def remember_browser(window, pid)
@@ -801,13 +815,6 @@ module Lich
               opacity: requested[:opacity] || 1.0,
               borderless: requested[:borderless] ? true : false
             )
-          end
-
-          def kill_browser(pid)
-            killer = self.class.browser_kill || proc { |target| Process.kill('KILL', target) }
-            killer.call(pid)
-          rescue StandardError
-            nil
           end
 
           def note_viewer(page, viewer_id)
