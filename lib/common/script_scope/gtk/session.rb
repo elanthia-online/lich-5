@@ -385,12 +385,13 @@ module Lich
             Thread.current[THREAD_KEY].equal?(self)
           end
 
-          # Runs at most one queued job, then commits. This is a nested main
-          # loop: GTK's gtk_dialog_run blocks its caller on the main thread
-          # while still servicing events, and Dialog#run does the same by
-          # pumping this queue until its response arrives. Returns false when
-          # nothing was waiting within +timeout+ seconds, so the caller can
-          # re-check its own exit condition. A :stop is put back for run_loop.
+          # Runs the queued jobs as one batch, then commits once. This is a
+          # nested main loop: GTK's gtk_dialog_run blocks its caller on the
+          # main thread while still servicing events, and Dialog#run does the
+          # same by pumping this queue until its response arrives. Returns
+          # false when nothing was waiting within +timeout+ seconds, so the
+          # caller can re-check its own exit condition. A :stop is put back
+          # for run_loop.
           def pump(timeout = 0.05)
             job = @queue.pop(timeout: timeout)
             return false if job.nil?
@@ -399,14 +400,53 @@ module Lich
               @queue << :stop
               return false
             end
-            begin
-              job.call
-              commit unless @closed
-            rescue StandardError, ScriptError => error
-              report(error)
-            end
+            run_batch(job)
             true
           end
+
+          # Asks for a render after the current batch (D3). A script thread
+          # that pokes a widget used to enqueue a full commit per write, and
+          # every job ended in another; twenty label writes re-rendered every
+          # window forty times. The job here does nothing -- the batch it
+          # joins commits once when it is drained.
+          def request_commit
+            enqueue { nil }
+          end
+
+          # How many jobs one batch may take before it commits. A flood of
+          # events (a held key, a busy timer) still renders between batches
+          # rather than starving the viewer until the queue is empty.
+          BATCH_LIMIT = 64
+
+          # Runs +first+ and every job already queued behind it, up to
+          # BATCH_LIMIT, then commits once (D3). A :stop found mid-batch is
+          # put back for run_loop to see after the commit.
+          def run_batch(first)
+            job = first
+            count = 0
+            loop do
+              begin
+                job.call
+              rescue StandardError, ScriptError => error
+                # commit rescues only WebUI errors; a NoMethodError inside a
+                # widget's node_props used to escape here and end the
+                # session thread, taking every window with it.
+                report(error)
+              end
+              count += 1
+              break if count >= BATCH_LIMIT
+
+              job = @queue.pop(timeout: 0)
+              break if job.nil?
+
+              if job == :stop
+                @queue << :stop
+                break
+              end
+            end
+            commit unless @closed
+          end
+          private :run_batch
 
           # ---- windows ------------------------------------------------------
 
@@ -699,15 +739,7 @@ module Lich
               job = @queue.pop
               break if job == :stop
 
-              begin
-                job.call
-                commit unless @closed
-              rescue StandardError, ScriptError => error
-                # commit rescues only WebUI errors; a NoMethodError inside a
-                # widget's node_props used to escape here and end the
-                # session thread, taking every window with it.
-                report(error)
-              end
+              run_batch(job)
             end
           end
 

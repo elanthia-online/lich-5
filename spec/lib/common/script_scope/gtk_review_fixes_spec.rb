@@ -59,6 +59,74 @@ RSpec.describe 'GTK compatibility shim: review fixes' do
     end
   end
 
+  # D3 (ledger part 2): every property write from a script thread used to
+  # enqueue a full commit, and every job the session ran ended in another,
+  # so a script setting twenty labels re-rendered every window forty
+  # times. The session now drains everything already queued and commits
+  # once per batch; a nested pump does the same.
+  describe 'coalesced commits (D3)' do
+    let(:sequence) { [] }
+
+    def shown_label
+      label = nil
+      session.sync do
+        window = gtk::Window.new('Burst')
+        window.set_default_size(100, 100)
+        label = gtk::Label.new('0')
+        window.add(label)
+        window.show_all
+      end
+      session.sync {}
+      label
+    end
+
+    def rendered_content(label)
+      page = service.registry.pages_for(owner).fetch(0)
+      page.last_render.tree.each.find { |node| node.props[:key] == label.key }.props[:content]
+    end
+
+    it 'runs a burst of off-thread writes as one batch with one commit after it' do
+      label = shown_label
+      log = sequence
+      allow(session).to(receive(:commit).and_wrap_original { |original, *args| log << :commit; original.call(*args) })
+      gate = Queue.new
+      session.enqueue { gate.pop }
+      20.times { |i| label.text = i.to_s } # off the session thread: each asks for a commit
+      session.enqueue { log << :done }
+      gate << :go
+      session.sync {}
+
+      expect(log.take_while { |entry| entry != :done }).to eq([])
+      expect(log.index(:commit)).to eq(log.index(:done) + 1)
+      expect(rendered_content(label)).to eq('19')
+    end
+
+    it 'commits once per pump, however many jobs were waiting' do
+      shown_label
+      commits = 0
+      allow(session).to(receive(:commit).and_wrap_original { |original, *args| commits += 1; original.call(*args) })
+      gate = Queue.new
+      session.enqueue { gate.pop }
+      sleep 0.05 # the session thread is now parked inside that job
+      ran = []
+      5.times { |i| session.enqueue { ran << i } }
+
+      before = commits
+      pumped = session.pump(0.05)
+      during = commits - before
+      gate << :go
+      session.sync {}
+
+      expect(pumped).to be(true)
+      expect(ran).to eq([0, 1, 2, 3, 4])
+      expect(during).to eq(1)
+    end
+
+    it 'bounds a batch so a flood still renders between batches' do
+      expect(gtk::Session::BATCH_LIMIT).to be <= gtk::Session::HOP_LIMIT
+    end
+  end
+
   describe 'a widget that is destroyed' do
     it 'says so, for every widget and not only a window' do
       label = session.sync { gtk::Label.new('x') }

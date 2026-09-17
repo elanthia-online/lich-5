@@ -590,7 +590,7 @@ module Lich
             @destroyed = true
             @parent&.remove(self)
             emit(:destroy)
-            @session.enqueue { @session.commit } unless @session.on_session_thread?
+            @session.request_commit unless @session.on_session_thread?
             nil
           end
 
@@ -675,8 +675,9 @@ module Lich
             window = window_root
             return unless window&.handle && @session.on_session_thread? == false
 
-            # Off-thread mutation (a script thread poking a widget): render soon.
-            @session.enqueue { @session.commit }
+            # Off-thread mutation (a script thread poking a widget): render
+            # after the batch this joins (D3), not once per write.
+            @session.request_commit
           end
 
           # A viewer-scoped property (checked, value, open, selected) has a
@@ -2237,7 +2238,7 @@ module Lich
           def show
             super
             if @shown
-              @session.enqueue { @session.commit }
+              @session.request_commit
             else
               @shown = true
               @session.enqueue { @session.show_window(self) }
@@ -2458,7 +2459,7 @@ module Lich
               @session.pump(0.05) while @response.equal?(NO_RESPONSE) && !destroyed?
               @response.equal?(NO_RESPONSE) ? ResponseType::DELETE_EVENT : @response
             else
-              @session.enqueue { @session.commit }
+              @session.request_commit
               answer = @responses.pop
               answer.equal?(NO_RESPONSE) ? ResponseType::DELETE_EVENT : answer
             end
