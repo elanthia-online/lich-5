@@ -160,7 +160,7 @@ require File.join(LIB_DIR, 'common', 'uservars.rb')
 
 ## was here ##
 
-if defined?(Gtk) && !@argv_options[:webui_dev]
+if defined?(Gtk) && Lich.launcher == :gtk
   Thread.current.priority = -10
   Gtk.main
   # Terminal teardown backstop: Gtk.main has returned, so we are on the GTK

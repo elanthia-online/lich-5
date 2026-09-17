@@ -194,7 +194,7 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
-  elsif @argv_options[:webui_dev]
+  elsif Lich.launcher == :webui && (ARGV.empty? || @argv_options[:gui] || @argv_options[:launcher])
     require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
     webui_launcher = Lich::Common::WebUILauncher.new(
       data_dir: DATA_DIR,
@@ -205,10 +205,24 @@ reconnect_if_wanted = proc {
       persistent: Lich.track_persistent_launcher_mode
     )
     @launch_data = webui_launcher.start.await_launch
+    # `next` exits the enclosing `@main_thread = Thread.new {` block (line 53),
+    # ending the thread so lich.rbw's @main_thread.join returns; it is not loop control.
     next unless @launch_data
-  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
+  # `--gtk` alone is the advertised way back to the native launcher; it
+  # must open it, not fall through to a headless start because ARGV is no
+  # longer empty (review 2026-09-17, R1).
+  elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui] or @argv_options[:launcher] == :gtk)
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
+  end
+
+  # With the WebUI as the launcher, scripts started from here on resolve their
+  # UI toolkit through ScriptScope; core keeps whatever it loaded. This sits
+  # after every login path on purpose: a session the launcher spawns as a
+  # child arrives here through --login, not through the launcher branch above.
+  if Lich.launcher == :webui
+    require File.join(LIB_DIR, 'common', 'script_scope.rb')
+    Lich::Common::ScriptScope.activate!
   end
 
   #

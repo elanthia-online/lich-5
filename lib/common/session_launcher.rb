@@ -132,6 +132,14 @@ module Lich
           dark_mode = resolve_dark_mode(context)
           flags << "--dark-mode=#{dark_mode}" unless dark_mode.nil?
 
+          # A child re-derives the launcher from the setting and the default
+          # exactly as its parent did, so those need no flag. An explicit
+          # --webui or --gtk on the parent's command line is the one thing the
+          # child cannot see, so that travels; so does a launcher the caller
+          # names in the context.
+          launcher = resolve_launcher(context)
+          flags << "--#{launcher}" if launcher
+
           OPTIONAL_PATH_FLAGS.each do |path_flag|
             value = overridden_path_value(context, path_flag)
             next if value.to_s.empty?
@@ -167,6 +175,14 @@ module Lich
         #
         # @param context [Hash]
         # @return [Boolean, nil]
+        # @return [Symbol, nil] :webui or :gtk from the context, else the
+        #   explicit flag this process was started with, else nil
+        def resolve_launcher(context)
+          return nil unless defined?(Lich::LauncherChoice)
+
+          Lich::LauncherChoice.normalize(context.fetch(:launcher) { Lich::LauncherChoice.flag(ARGV) })
+        end
+
         def resolve_dark_mode(context)
           return context[:dark_mode] if context.key?(:dark_mode)
           return nil unless Lich.respond_to?(:track_dark_mode)

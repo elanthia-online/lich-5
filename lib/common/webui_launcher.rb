@@ -1015,7 +1015,7 @@ module Lich
       def launch_context(entry)
         { char_name: entry.char_name, game_code: entry.game_code, frontend: entry.frontend,
           custom_launch: entry.custom_launch, custom_launch_dir: entry.custom_launch_dir,
-          data_dir: @data_dir, force_path_flags: true }
+          data_dir: @data_dir, force_path_flags: true, launcher: :webui }
       end
 
       def terminate_browser(pid)
