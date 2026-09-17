@@ -89,3 +89,32 @@ test("a geometry with a position moves the window there, once; without one it is
     g.close();
   }
 });
+
+test("the window-geometry field reports the content size, not the outer size", async () => {
+  const h = boot();
+  try {
+    Object.defineProperty(h.window, "outerWidth", { value: 1100, configurable: true, writable: true });
+    Object.defineProperty(h.window, "outerHeight", { value: 900, configurable: true, writable: true });
+    Object.defineProperty(h.window, "innerWidth", { value: 1000, configurable: true, writable: true });
+    Object.defineProperty(h.window, "innerHeight", { value: 820, configurable: true, writable: true });
+    // The fixture's note field, made the geometry field by its key: the
+    // client picks the tracker by cid.
+    h.attachWith("actions", (next) => {
+      const note = next.tree.children.find((c) => c.cid === "page:actions/text_input:note");
+      note.cid = "page:actions/text_input:window-geometry";
+      note.props.key = "window-geometry";
+      next.bindings[note.cid] = next.bindings["page:actions/text_input:note"];
+      delete next.bindings["page:actions/text_input:note"];
+    });
+    h.window.innerWidth = 980;
+    h.window.innerHeight = 800;
+    await h.tick(700);
+    const reports = h.socket.sent.filter((m) => m.type === "event" && m.cid === "page:actions/text_input:window-geometry");
+    assert.equal(reports.length, 1, "one report for one change");
+    const geometry = JSON.parse(reports[0].payload.value);
+    assert.equal(geometry.width, 980);
+    assert.equal(geometry.height, 800);
+  } finally {
+    h.close();
+  }
+});
