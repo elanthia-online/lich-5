@@ -631,3 +631,31 @@ the page's own traffic, its close, its socket and the cap; an idle page
 that receives nothing at all keeps at most 256 records until its next
 message.
 
+## Part 6 — the third outside review, of the whole stack (2026-09-17)
+
+`docs/webui-pr-review-stack-combined-2026-09-17.md` reviewed #1634,
+#1648–#1655, #1657 and #1658 together, re-verified F1–F7 (six fixed,
+one partly) and found two Majors, both in #1657. Everything below is one
+set of commits on `webui/review-2-fixes`, merged into `webui/yard-docs`.
+
+| finding | what changed |
+|---|---|
+| Major 1: the F1 fix left `enqueue`'s closed check and push as two steps, so a shutdown between them stranded the job behind a `:stop` the thread had already drained past | the check, the push and the thread start are one step under `@thread_mutex`, which `shutdown` takes to set `@closed`; the spec pauses the real push exactly there and asserts the `sync` is answered either way, and that `shutdown` waits for the enqueue in progress |
+| Major 2: a `--webui-no-browser` launch URL died in sixty seconds and answered a bare 403 | `Server#launch_url` takes a `lifetime`; a URL the player has to carry (no-browser, launcher and script windows alike) lives `REMOTE_LAUNCH_TOKEN_LIFETIME` = ten minutes; an expired or reused link answers 403 with a body saying so and naming `Lich::API.webui_launch_url`; the doc says both |
+| 3: the remote-play doc said one tunnel per script window | one WebUI server per game session, every script window a page on it: one more `-L` per session |
+| 4: four `Layout/MultilineMethodCallIndentation` offenses (RuboCop 1.91 on Linux; 1.8x here did not flag them) | the three chains are written as two statements; no chained continuation lines remain in the stack's files |
+| 5: 163 documented private methods without `@api private` | tagged on `webui/yard-docs`, per `docs/YARD-STYLE-GUIDE.md` |
+| 6: a busy `--webui-port` reported "unavailable, retry with GTK" | `Errno::EADDRINUSE` is caught by name and the message says which port, that another Lich may hold it, and to pick another `--webui-port` |
+| 7: the `@return`/`@raise` tags on `enqueue` and `sync` promised what Major 1 broke | true as written now |
+| 8: the child's `--webui-no-browser` was read from raw `ARGV` | resolved like the launcher flag beside it: `open_browser` in the launch context, else `Lich::WebUI::Options` |
+| 9: `yard` not in the bundle | in the development group |
+
+The open questions:
+
+- **`PresentedWindow#adopt` trusts the requested pid rather than the HWND's owner.** Deliberate. With a shared Chromium profile the new window is legitimately owned by the Chrome that was already running, so the discovered HWND's pid is *expected* not to match; ownership cannot be the test. The identity evidence is the exclusion list (a window that existed before the open is never adopted) plus the refusal of more than one match. The pid check in `adopt` only discards a result from a search the window has since outlived.
+- **A replay recomputed its record's `scope` from the current render**, so a render that no longer listed the control gave the replayed record an empty scope and `clear_sensitive` could not find the password it carried. Fixed: a replay's record inherits the scope of the record it replays, with a harness case that drops the `submissions` entry between the send and its refusal and asserts the cleared value is not sent again.
+- **Shim expansion state is per page, not per viewer.** Correct because D26 holds: `Session#admit_viewer` refuses any viewer whose id is not the page's first, and a reconnecting browser re-attaches under its resume token with the same viewer id, so a shim page never has two viewers with two expansion states.
+- **The `@!method` / `@!macro` directives in #1658** were checked by running `yard doc` (now in the bundle) and reading its warnings; see `webui/yard-docs`.
+
+Also here, found by Tysong the same day: **Saga's direct login opened the launcher.** Saga starts a session as `<file>.sal --gtk --without-frontend --detachable-client=N --saga`, and the R1 fix had made `--gtk` alone open the GTK launcher, which then pre-empted the `.sal` login. Both launcher branches in `main.rb` now open only when no session was asked for: a toolkit flag beside a `.sal` runs that session. The routing spec evaluates the real Saga argument list against both branch predicates.
+
