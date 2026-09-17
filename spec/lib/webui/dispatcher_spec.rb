@@ -50,6 +50,33 @@ RSpec.describe Lich::WebUI::Dispatcher do
       end
     end
 
+    it 'reports the same failure again only as one log line, and a different one in full' do
+      logged = []
+      told = []
+      reporting = described_class.new(logger: ->(_level, message) { logged << message },
+                                      notifier: ->(_owner, message) { told << message })
+      done = Queue.new
+      begin
+        %w[one one one two one].each do |which|
+          reporting.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'button',
+                            event: :activate, coalescable: false) do
+            done << which
+            raise which
+          end
+        end
+        5.times { done.pop }
+        reporting.shutdown
+
+        expect(told).to eq(['error in WebUI handler activate on button: one',
+                            'error in WebUI handler activate on button: two',
+                            'error in WebUI handler activate on button: one'])
+        expect(logged.length).to eq(5)
+        expect(logged.count { |line| line.end_with?('(again)') }).to eq(2)
+      ensure
+        reporting.shutdown
+      end
+    end
+
     it 'goes on to the next callback for the same owner' do
       ran = Queue.new
       dispatcher.enqueue(owner: owner, page_id: 'page', viewer_id: 'viewer', cid: 'a', event: :activate,
