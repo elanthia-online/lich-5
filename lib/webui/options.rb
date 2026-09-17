@@ -13,24 +13,35 @@ module Lich
     # the URL printed instead of a window they cannot see.
     module Options
       class << self
+        # The port the server binds.
+        #
         # @return [Integer] the port to bind; 0 asks the OS for a free one
         def port
           @port || 0
         end
 
+        # Whether Lich opens a browser window itself.
+        #
         # @return [Boolean] whether Lich opens a browser window itself
         def open_browser?
           @open_browser.nil? ? true : @open_browser
         end
 
+        # Records the command-line settings; a nil leaves that setting as it was.
+        #
         # @param port [Integer, nil] a fixed port, or nil for ephemeral
         # @param open_browser [Boolean, nil] false to print the launch URL instead
+        # @return [Module] self
+        # @raise [ArgumentError] when +port+ is not an integer
         def configure(port: nil, open_browser: nil)
           @port = Integer(port) unless port.nil?
           @open_browser = open_browser unless open_browser.nil?
           self
         end
 
+        # Forgets both settings (test seam).
+        #
+        # @return [void]
         def reset!
           @port = nil
           @open_browser = nil

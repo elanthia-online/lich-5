@@ -30,6 +30,14 @@ module Lich
       # browser is asked for a new one, and discovery never adopts them: a
       # second page with the same title, opened while the first is still up,
       # used to dress the first one (review 2026-09-17 (b), F7).
+      #
+      # @param url [String] the launch URL to open
+      # @param presentation [#call] answers the current window wishes as a Hash
+      # @param geometry [Hash{Symbol => Object}, nil] `width:`, `height:` and optional `position:`
+      # @param title [String, nil] the page's window title, or a prefix of it
+      # @param opener [#call] opens the browser; {BrowserLauncher.open} unless a test injects one
+      # @return [PresentedWindow, nil] the window, or nil when no browser could be opened
+      # @raise [ArgumentError] when +presentation+ does not respond to call
       def self.open(url, presentation:, geometry: nil, title: nil, opener: BrowserLauncher.method(:open))
         existing = title ? WindowPresentation.existing_windows(title) : []
         window = new(presentation, title: title, exclude: existing)
@@ -37,6 +45,13 @@ module Lich
         opened ? window : nil
       end
 
+      # Builds a window that has not yet been opened; see {.open}.
+      #
+      # @param presentation [#call] answers the current window wishes as a Hash
+      # @param title [String, nil] the page's window title, or a prefix of it
+      # @param exclude [Array<Integer>] window handles discovery must never adopt
+      # @return [PresentedWindow] the window
+      # @raise [ArgumentError] when +presentation+ does not respond to call
       def initialize(presentation, title: nil, exclude: [])
         raise ArgumentError, 'presentation must respond to call' unless presentation.respond_to?(:call)
 
@@ -52,6 +67,9 @@ module Lich
       # and dress it: by pid first, and when the pid owns no window, by the
       # page's title. Where the platform has no window presentation, or
       # neither finds it, nothing is applied and `presented?` stays false.
+      #
+      # @param pid [Integer] the spawned browser's process id
+      # @return [nil]
       def started(pid)
         @mutex.synchronize { @pid = pid }
         return unless WindowPresentation.available?
@@ -60,12 +78,17 @@ module Lich
         nil
       end
 
+      # Whether the OS window has been found.
+      #
+      # @return [Boolean]
       def presented?
         @mutex.synchronize { !@hwnd.nil? }
       end
 
       # Re-reads the presentation and applies it. A no-op until the window
       # has been found, and after it has gone.
+      #
+      # @return [Boolean] whether the presentation was applied
       def apply
         hwnd = @mutex.synchronize { @hwnd }
         return false unless hwnd
@@ -81,6 +104,7 @@ module Lich
 
       private
 
+      # Records the found window and dresses it, unless the process changed meanwhile.
       def adopt(pid, hwnd)
         return unless hwnd
         # The process may have been replaced while the search ran; a stale

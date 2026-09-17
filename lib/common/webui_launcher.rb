@@ -19,23 +19,43 @@ module Lich
   module Common
     # Native launcher built directly on the WebUI author API. GTK remains the default
     # entry path until the R2 human gate is accepted.
+    #
+    # The launcher is one WebUI page (Saved Entry, Manual Entry, Account Management
+    # and Frontends tabs) plus the workflows behind it. Page callbacks run on the
+    # WebUI dispatcher and only record intent; anything that authenticates or
+    # writes the catalog is posted to a {SerialExecutor}, and every irreversible
+    # step is arbitrated through the private `commit` so a close cannot race it.
+    # State is guarded by one mutex and re-rendered through `render_state`.
+    #
+    # A launch ends the launcher: `on_launch` receives the launch data and the
+    # page closes, unless persistent mode hands saved-entry launches to the
+    # session launcher instead.
     class WebUILauncher
+      # Top-level tab names, in order.
       TABS = ['Saved Entry', 'Manual Entry', 'Account Management', 'Frontends'].freeze
       # GTK's frontend editor lays capability checks three to a row.
       CAPABILITIES_PER_ROW = 3
+      # Tab names inside Account Management, in order.
       ACCOUNT_TABS = ['Accounts', 'Add Character', 'Add Account', 'Encryption Management'].freeze
+      # Game code options for the character form.
       GAMES = %w[GS3 GSF GSX GST DR DRF DRT].map { |code| { value: code, label: code } }.freeze
+      # Display name for each game code.
       GAME_NAMES = {
         'GS3' => 'GemStone IV', 'GSF' => 'GemStone IV Shattered', 'GSX' => 'GemStone IV Platinum',
         'GST' => 'GemStone IV Prime Test', 'DR' => 'DragonRealms', 'DRF' => 'DragonRealms The Fallen',
         'DRT' => 'DragonRealms Prime Test',
       }.freeze
+      # Short realm label for each game code, shown on saved entry rows.
       GAME_REALMS = {
         'GS3' => 'GS Prime', 'GSF' => 'GS Shattered', 'GSX' => 'GS Platinum', 'GST' => 'GS Test',
         'DR' => 'DR Prime', 'DRF' => 'DR Fallen', 'DRT' => 'DR Test',
       }.freeze
+      # One in-flight workflow: a random id, its kind (:manual_auth, :saved_launch,
+      # :account, ...) and the viewer that started it. Only one of each kind may be
+      # active at a time.
       Operation = Data.define(:id, :kind, :viewer_id)
 
+      # @return [Lich::WebUI::Page, nil] the launcher page, once {#start} has built it
       attr_reader :page
 
       # How long a detached viewer has to come back before the launcher
@@ -43,6 +63,38 @@ module Lich
       # 250ms backoff capped at 5s, so a live browser is back well inside it.
       DETACH_GRACE = 5.0
 
+      # Builds the launcher and loads the catalog; nothing is served until {#start}.
+      #
+      # @param data_dir [String] directory holding the saved-login files and settings
+      # @param on_launch [#call] called with (launch_data, origin) when a terminal launch is accepted;
+      #   origin is :manual or :saved_entry
+      # @param service [Lich::WebUI::Service] the WebUI service to register the page with
+      # @param catalog [Catalog, nil] saved-login access; built from data_dir when nil
+      # @param authenticator [#authenticate] Simutronics authentication (Authentication in production)
+      # @param launch_data [#prepare] builds launch data from an authentication result
+      # @param session_launcher [#launch] launches a session in persistent mode
+      # @param executor [SerialExecutor] worker that runs authentication and catalog writes
+      # @param browser_open [#call, nil] opens the launcher URL; defaults to the dedicated
+      #   Chrome/Edge window via Lich::WebUI::BrowserLauncher
+      # @param on_close [#call, nil] called with the close reason Symbol once the launcher has closed
+      # @param browser_terminate [#call] sends a signal to the browser pid, as Process.kill does
+      # @param recovery [#call, nil] receives a player-facing message when the launcher cannot start;
+      #   defaults to writing it to stderr
+      # @param logger [#call, nil] receives (level, message); defaults to Lich.log
+      # @param persistent [Boolean] multi-launch mode: saved-entry launches do not close the launcher
+      # @param autosort [Boolean] sort saved entries by game, account and character
+      # @param tab_layout [Boolean] show saved entries as per-account tabs rather than one list
+      # @param dark_theme [Boolean] initial dark theme setting
+      # @param geometry_store [WindowGeometryStore, nil] window geometry persistence; built from
+      #   data_dir when nil
+      # @param frontend_locator [#resolve, #available, #refresh!] frontend executable discovery
+      # @param detach_grace [Float] seconds a detached viewer may take to re-attach before the
+      #   launcher closes; see {DETACH_GRACE}
+      # @param open_browser [Boolean] false announces the URL instead of opening a browser
+      # @param launcher_choice [#native_next?, #native_next=, nil] persisted launcher preference;
+      #   the "native launcher next time" toggle is offered only when present
+      # @return [WebUILauncher]
+      # @raise [ArgumentError] when data_dir is blank or on_launch is not callable
       def initialize(data_dir:, on_launch:, service: Lich::WebUI.service, catalog: nil,
                      authenticator: Authentication, launch_data: Authentication::LaunchData,
                      session_launcher: SessionLauncher, executor: SerialExecutor.new,
@@ -111,8 +163,19 @@ module Lich
         reload_catalog
       end
 
+      # The owner id the WebUI registry files this launcher's page under.
+      #
+      # @return [String] 'core.launcher'
       def webui_owner_id = 'core.launcher'
 
+      # Builds and registers the page, starts the WebUI service and opens (or announces) the URL.
+      #
+      # Any failure closes the launcher with reason :browser_failure, reports through
+      # the recovery callback, and re-raises so the caller can fall back to GTK.
+      #
+      # @return [WebUILauncher] self
+      # @raise [Lich::WebUI::Error] when the dedicated browser window cannot be opened
+      # @raise [StandardError] whatever the WebUI service raised while starting
       def start
         @page = build_page
         @service.registry.register(@page)
@@ -144,10 +207,15 @@ module Lich
         raise
       end
 
+      # Prints the launcher URL to the console and the log for a no-browser start.
+      #
       # With no browser of its own to open, the launcher tells the player
       # where it is. The URL carries a one-shot token, so it goes to the
       # console (the player is at one, or they would not have asked for
       # this) and to the log, and nowhere else.
+      #
+      # @param url [String] the launch URL, token included
+      # @return [void]
       def announce_launch_url(url)
         message = "WebUI launcher ready; open this URL in your browser: #{url}"
         $stdout.puts(message)
@@ -155,6 +223,14 @@ module Lich
         @logger.call(:info, message)
       end
 
+      # Closes the launcher: cancels active operations, discards held secrets,
+      # terminates the dedicated browser, stops the service and executor, and
+      # notifies on_close.
+      #
+      # @param reason [Symbol] why it closed (:user, :launch, :browser_window_closed,
+      #   :browser_process_exit, :browser_failure)
+      # @return [Boolean] true when this call performed the close; false when it was already
+      #   closing or closed
       def close(reason: :user)
         closing = @mutex.synchronize { begin_close_locked }
         return false unless closing
@@ -162,9 +238,20 @@ module Lich
         finish_close(reason, closing)
       end
 
+      # The launcher's lifecycle state.
+      #
+      # @return [Symbol] :starting, :ready, :closing or :closed
       def lifecycle = @mutex.synchronize { @lifecycle }
+
+      # A snapshot of the in-flight operations, by kind.
+      #
+      # @return [Hash{Symbol => Operation}] frozen copy
       def active_operations = @mutex.synchronize { @active.dup.freeze }
 
+      # Blocks until the launcher has closed and returns what it launched.
+      #
+      # @return [Array<String>, nil] the launch data accepted by a terminal launch, or nil when the
+      #   launcher closed without launching
       def await_launch
         @mutex.synchronize do
           @closed_condition.wait(@mutex) until @lifecycle == :closed
@@ -172,6 +259,9 @@ module Lich
         end
       end
 
+      # Renders the page and returns its component tree, for tests and inspection.
+      #
+      # @return [Object] the rendered page tree
       def render_tree
         @page.render.tree
       end
@@ -656,6 +746,14 @@ module Lich
 
       public
 
+      # Applies a GUI Settings toggle and persists it.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] change event whose payload carries :value
+      # @param setting [Symbol] :persistent, :autosort, :tab_layout, :dark_theme, :settings_visible or
+      #   :native_launcher_next
+      # @return [void]
+      # @raise [ArgumentError] for an unknown setting, or :native_launcher_next when no launcher
+      #   choice is offered
       def setting_changed(event, setting)
         value = event.payload.fetch(:value)
         @mutex.synchronize do
@@ -680,6 +778,12 @@ module Lich
         refresh
       end
 
+      # Saves the outer-window geometry the client reported through the hidden input.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] change event whose payload :value is a JSON
+      #   geometry object
+      # @return [Hash{Symbol => Object}, false] the validated geometry, or false when the payload is
+      #   unparseable or the geometry is rejected
       def window_geometry_changed(event)
         geometry = @geometry_store.save(JSON.parse(event.payload.fetch(:value)))
         @mutex.synchronize { @window_geometry = geometry } if geometry
@@ -688,6 +792,16 @@ module Lich
         false
       end
 
+      # Manual Entry "Connect": authenticates the typed credentials and lists the characters.
+      #
+      # The password is moved into a viewer-origin SensitiveValue, consumed for the
+      # authentication on the executor, and a fresh copy is retained for the later
+      # Play. Failure returns the form to editing with an error.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the submission
+      # @param account_cid [String] cid of the User ID input in the submission
+      # @param password_cid [String] cid of the password input in the submission
+      # @return [void]
       def manual_connect(event, account_cid, password_cid)
         account = event.submission.fetch(account_cid).to_s.strip.upcase
         return manual_error('User ID is required.') if account.empty?
@@ -722,12 +836,24 @@ module Lich
         end
       end
 
+      # Records the character row selected in the Manual Entry table.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] selection_change event whose payload :rows
+      #   holds the selected row keys
+      # @return [void]
       def manual_select(event)
         selected = event.payload.fetch(:rows).first
         @mutex.synchronize { @manual[:selected] = selected }
         refresh
       end
 
+      # Records a Manual Entry launch option; a frontend that only launches natively
+      # clears the custom launch box.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] change event whose payload carries :value
+      # @param option [Symbol] :frontend or :custom_enabled
+      # @return [void]
+      # @raise [ArgumentError] for an unknown option
       def manual_option_changed(event, option)
         value = event.payload.fetch(:value)
         @mutex.synchronize do
@@ -745,6 +871,10 @@ module Lich
         refresh
       end
 
+      # Manual Entry "Disconnect": discards the retained password and resets the form.
+      #
+      # @param viewer_id [String] the viewer whose credentials are dropped
+      # @return [void]
       def manual_disconnect(viewer_id)
         @mutex.synchronize do
           @manual_credentials.delete(viewer_id)&.discard!
@@ -753,6 +883,14 @@ module Lich
         refresh
       end
 
+      # Manual Entry "Play": authenticates the selected character and launches it.
+      #
+      # The launch is terminal in both modes. When Save or Favorite is checked the
+      # entry is written to the catalog first, under the same operation.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the launch options
+      #   submission
+      # @return [void]
       def manual_play(event)
         state = @mutex.synchronize do
           selected = @manual[:selected].to_s
@@ -775,11 +913,28 @@ module Lich
         @executor.post { perform_manual_launch(operation, event.viewer_id, account, character, credential, values) }
       end
 
+      # Saved Entry "Play": decrypts the entry's password, authenticates and launches.
+      #
+      # In persistent mode the session launcher runs it and the launcher stays
+      # open; otherwise the launch is terminal. An entry under enhanced encryption
+      # with no master password in the keychain opens the unlock dialog instead.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event
+      # @param entry_key [String] the {Catalog::Entry#key} to launch
+      # @return [Boolean] true once the work is queued
+      # @raise [Lich::WebUI::Error] when a saved launch is already in progress
       def saved_launch(event, entry_key)
         operation = begin_operation(:saved_launch, event)
         @executor.post { perform_saved_launch(operation, entry_key) }
       end
 
+      # Handles the master password dialog: validates the password, stores it in the
+      # keychain and continues the saved launch it interrupted.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] dialog response whose payload :button is
+      #   'cancel' or 'unlock'
+      # @param password_cid [String] cid of the master password input in the submission
+      # @return [void]
       def unlock_response(event, password_cid)
         return cancel_modal if event.payload[:button] == 'cancel'
 
@@ -802,34 +957,64 @@ module Lich
         end
       end
 
+      # Flips a saved entry's favorite star and reloads the catalog.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event
+      # @param entry_key [String] the {Catalog::Entry#key} to change
+      # @return [Boolean] true once the work is queued
+      # @raise [Lich::WebUI::Error] when a favorite update is already in progress
       def toggle_favorite(event, entry_key)
         mutate(:favorite, event, 'Favorite update failed.') do
           raise 'favorite update failed' if @catalog.toggle_favorite(entry_key).nil?
         end
       end
 
+      # Opens the removal confirmation for one saved entry; {#delete_response} acts on it.
+      #
+      # @param _event [Lich::WebUI::Runtime::EventContext] activate event, unused
+      # @param entry_key [String] the {Catalog::Entry#key} to remove
+      # @return [void]
       def remove_entry(_event, entry_key)
         @mutex.synchronize { @modal = { kind: :confirm_delete, entry_key: entry_key, body: 'Remove this saved character?' } }
         refresh
       end
 
+      # Records the row selected in the Account Management table as the draft entry.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] selection_change event whose payload :rows
+      #   holds the selected row keys
+      # @return [void]
       def select_managed_entry(event)
         @mutex.synchronize { @draft_entry_key = event.payload.fetch(:rows).first }
         refresh
       end
 
+      # "Edit Character": re-renders so the character form shows the draft entry.
+      #
+      # @return [void]
       def begin_edit = refresh
 
+      # "Back to Accounts": drops the draft entry selection.
+      #
+      # @return [void]
       def cancel_edit
         @mutex.synchronize { @draft_entry_key = nil }
         refresh
       end
 
+      # "Remove Character": opens the removal confirmation for the draft entry, if any.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event
+      # @return [void]
       def remove_selected_entry(event)
         key = @mutex.synchronize { @draft_entry_key }
         remove_entry(event, key) if key
       end
 
+      # "Remove Account": opens the removal confirmation for the draft entry's account.
+      #
+      # @param _event [Lich::WebUI::Runtime::EventContext] activate event, unused
+      # @return [void]
       def remove_selected_account(_event)
         entry = @mutex.synchronize { @entries.find { |candidate| candidate.key == @draft_entry_key } }
         return unless entry
@@ -841,6 +1026,11 @@ module Lich
         refresh
       end
 
+      # Handles the removal confirmation: removes the account or entry it named.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] dialog response whose payload :button is
+      #   'cancel' or 'remove'
+      # @return [void]
       def delete_response(event)
         return cancel_modal unless event.payload[:button] == 'remove'
 
@@ -854,6 +1044,11 @@ module Lich
         end
       end
 
+      # Saves the character form: updates the draft entry, or adds a character to the
+      # chosen account when no entry is being edited.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the form submission
+      # @return [void]
       def save_character(event)
         values = submission_values(event.submission)
         entry_key = @mutex.synchronize { @draft_entry_key }
@@ -876,6 +1071,10 @@ module Lich
         end
       end
 
+      # "Add Account": authenticates the account, then saves it with the characters found.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the form submission
+      # @return [void]
       def save_account(event)
         values = submission_values(event.submission)
         account = values.find { |key, _| key.end_with?('text_input:account-name') }&.last.to_s.strip.upcase
@@ -903,6 +1102,14 @@ module Lich
         end
       end
 
+      # "Change Encryption Mode": re-encrypts the store under the selected mode.
+      #
+      # Enhanced mode is refused up front when no keychain is present; the master
+      # password field is only used for enhanced mode.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the mode radio and
+      #   master password submission
+      # @return [void]
       def change_encryption(event)
         values = submission_values(event.submission)
         mode = values.find { |key, _| key.end_with?('radio:encryption-mode') }&.last.to_s.to_sym
@@ -929,6 +1136,12 @@ module Lich
         end
       end
 
+      # "Change Encryption Password": replaces the master password after checking that
+      # the new one is confirmed and at least eight characters.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the current, new and
+      #   confirmation password submission
+      # @return [void]
       def change_master_password(event)
         values = submission_values(event.submission)
         pairs = %w[master-current master-new master-confirm].map do |key|
@@ -964,6 +1177,9 @@ module Lich
         end
       end
 
+      # "Refresh Entries": re-reads the catalog on the executor and re-renders.
+      #
+      # @return [Boolean] true once the work is queued
       def refresh_catalog
         @executor.post do
           reload_catalog
@@ -971,6 +1187,11 @@ module Lich
         end
       end
 
+      # Forgets everything held for a viewer that has gone: its retained manual
+      # credentials, its operations, the manual form and any open modal.
+      #
+      # @param viewer_id [String] the departed viewer
+      # @return [void]
       def viewer_gone(viewer_id)
         @mutex.synchronize do
           @manual_credentials.delete(viewer_id)&.discard!
@@ -980,6 +1201,8 @@ module Lich
         end
       end
 
+      # Starts the detach grace period for a viewer whose socket dropped.
+      #
       # A socket detach is not a closed window. The runtime emits it for any
       # transport loss -- a dropped or reloaded socket included -- and the
       # client dials back within its backoff and re-attaches with its resume
@@ -988,6 +1211,9 @@ module Lich
       # opens a grace period: an attach inside it cancels the close, and only
       # a detach that outlives it closes the launcher. A dedicated browser
       # process that exits still closes it at once, through on_exit.
+      #
+      # @param viewer_id [String] the detached viewer
+      # @return [nil]
       def browser_window_detached(viewer_id)
         token = @mutex.synchronize do
           next nil if %i[closing closed].include?(@lifecycle)
@@ -1004,11 +1230,19 @@ module Lich
         nil
       end
 
+      # Cancels the detach grace period: the viewer came back.
+      #
+      # @param viewer_id [String] the re-attached viewer
+      # @return [nil]
       def browser_window_attached(viewer_id)
         @mutex.synchronize { @detached.delete(viewer_id) }
         nil
       end
 
+      # Treats the viewer's window as closed: forgets the viewer and closes the launcher.
+      #
+      # @param viewer_id [String] the viewer whose window closed
+      # @return [Boolean] whether this call performed the close; see {#close}
       def browser_window_closed(viewer_id)
         viewer_gone(viewer_id)
         close(reason: :browser_window_closed)
@@ -1016,6 +1250,11 @@ module Lich
 
       # ---- Frontends tab ------------------------------------------------
 
+      # Loads the selected catalog row into the frontend editor.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] selection_change event whose payload :rows
+      #   holds the selected frontend ids
+      # @return [void]
       def select_frontend(event)
         id = event.payload.fetch(:rows).first
         @mutex.synchronize do
@@ -1026,6 +1265,9 @@ module Lich
         refresh
       end
 
+      # "Add Custom": puts an empty custom frontend draft in the editor.
+      #
+      # @return [void]
       def begin_new_frontend
         @mutex.synchronize do
           @frontend_creating = true
@@ -1039,6 +1281,10 @@ module Lich
       end
 
       # Re-reads frontends.yml and re-runs detection, keeping the selection.
+      #
+      # An error is shown in the editor rather than raised.
+      #
+      # @return [void]
       def reload_frontends
         previous = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
         FrontendSettings.load!(data_dir: @data_dir)
@@ -1055,6 +1301,13 @@ module Lich
         report_frontend_error(error)
       end
 
+      # "Save": validates the editor fields through FrontendEditor and writes frontends.yml.
+      #
+      # A validation error is shown in the editor rather than raised.
+      #
+      # @param event [Lich::WebUI::Runtime::EventContext] activate event carrying the editor fields
+      #   and capability checkboxes
+      # @return [void]
       def save_frontend(event)
         fields = frontend_fields_from(event)
         creating = @mutex.synchronize { @frontend_creating }
@@ -1075,6 +1328,12 @@ module Lich
         report_frontend_error(error)
       end
 
+      # "Delete Custom": removes the selected custom frontend from frontends.yml.
+      #
+      # An error (including a built-in or missing selection) is shown in the editor
+      # rather than raised.
+      #
+      # @return [void]
       def delete_frontend
         id = @mutex.synchronize { @frontend_draft&.fetch(:id, nil) }
         raise ArgumentError, 'Select a custom frontend to delete.' if id.nil? || id.empty?

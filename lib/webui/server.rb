@@ -11,32 +11,69 @@ require_relative 'websocket'
 module Lich
   module WebUI
     # Authenticated loopback-only HTTP/WebSocket service for native WebUI pages.
+    #
+    # The server owns the listening socket and one thread per client. It serves the
+    # static client assets and registered files over HTTP, hands a browser its session
+    # cookie through a one-shot launch token, upgrades `/ws` to a WebSocket, and passes
+    # every parsed client message to the `message_handler` (the {Runtime}). It never
+    # binds outside loopback and refuses requests whose Host, Origin or Fetch Metadata
+    # headers say they came from anywhere else.
     class Server
       # The session cookie's name carries the port, because a browser keys
       # cookies by host and ignores the port: two Lich sessions on
       # 127.0.0.1, both setting `lich_webui`, overwrote each other's token
       # and the first session's next authenticated request was refused.
+      #
+      # @return [String] the cookie name prefix; the port is appended per instance
       COOKIE_NAME = 'lich_webui'
+      # @return [Integer] the most bytes of request head accepted before the request is refused
       MAX_HEADER_BYTES = 8192
       # A served file is read whole into memory before it goes out. Anything
       # a page could sensibly show fits in this; anything larger is refused
       # with a stat, not a read.
+      #
+      # @return [Integer] the largest file `/files/` will serve, in bytes
       MAX_FILE_BYTES = 32 * 1024 * 1024
+      # @return [Integer] seconds a client has to send its request head
       READ_TIMEOUT = 5
+      # @return [Float] seconds the WebSocket loop waits on select between liveness checks
       WS_POLL_INTERVAL = 0.25
+      # @return [Integer] seconds a launch token from {#launch_url} stays valid
       LAUNCH_TOKEN_LIFETIME = 60
+      # @return [String] the Content-Security-Policy every response carries
       CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; " \
             "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; " \
             "form-action 'self'; frame-ancestors 'none'"
+      # @return [Hash{String => Array(String, String)}] request path to `[asset filename, content type]`
       ASSET_ROUTES = {
         '/'               => ['index.html', 'text/html; charset=utf-8'],
         '/assets/app.js'  => ['app.js', 'text/javascript; charset=utf-8'],
         '/assets/app.css' => ['app.css', 'text/css; charset=utf-8'],
       }.freeze
+      # @return [Array<String>] the only addresses the server may bind
       LOOPBACK_HOSTS = %w[127.0.0.1 ::1].freeze
 
+      # @!attribute [r] host
+      #   @return [String] the loopback address the server binds
+      # @!attribute [r] port
+      #   @return [Integer] the bound port; 0 until {#start} when an ephemeral port was requested
       attr_reader :host, :port
 
+      # Creates a server; nothing listens until {#start}.
+      #
+      # @param assets_dir [String] directory holding `index.html`, `app.js` and `app.css`
+      # @param pages_provider [#call] returns the page list sent in the WebSocket `hello`
+      # @param message_handler [#call] receives `(connection, message)` for every parsed client message
+      # @param disconnect_handler [#call, nil] receives `(connection)` when a WebSocket closes
+      # @param file_service [FileService, nil] resolves `/files/<alias>/<path>` requests; nil serves none
+      # @param host [String] a {LOOPBACK_HOSTS} address to bind
+      # @param port [Integer] the port to bind, 0 for an ephemeral one
+      # @param logger [#call, nil] receives `(level, message)`; nil discards
+      # @param server_factory [#call, nil] builds the listener from `(host, port)`; defaults to TCPServer
+      # @param thread_factory [#call, nil] spawns threads like `Thread.new`; defaults to Thread.new
+      # @return [Server] the new server
+      # @raise [ArgumentError] when the host is not loopback, the port is out of range, a handler does
+      #   not respond to call, or assets_dir is not a directory
       def initialize(assets_dir:, pages_provider:, message_handler:, disconnect_handler: nil, file_service: nil,
                      host: '127.0.0.1', port: 0, logger: nil,
                      server_factory: nil, thread_factory: nil)
@@ -69,6 +106,11 @@ module Lich
         @stopping = false
       end
 
+      # Binds the listener and starts the accept thread; a no-op when already running.
+      #
+      # @return [Server] self
+      # @raise [Error] when the bound address resolved outside loopback
+      # @raise [SystemCallError] when the port cannot be bound
       def start
         @mutex.synchronize do
           return self if running_locked?
@@ -98,14 +140,27 @@ module Lich
         raise
       end
 
+      # Whether the accept thread is alive.
+      #
+      # @return [Boolean] true while the server is accepting connections
       def running?
         @mutex.synchronize { running_locked? }
       end
 
+      # Counts the WebSocket connections that are still alive.
+      #
+      # @return [Integer] the live connection count
       def connection_count
         @mutex.synchronize { @connections.count(&:alive?) }
       end
 
+      # Mints a one-shot launch URL that sets the session cookie and redirects into the client.
+      #
+      # @param to [String] the path to land on after authentication; anything that is not a plain
+      #   local path falls back to `/`
+      # @return [String] an `http://<host>:<port>/auth?token=...&to=...` URL valid for
+      #   {LAUNCH_TOKEN_LIFETIME} seconds
+      # @raise [Error] when the server is not running
       def launch_url(to: '/')
         raise Error, 'WebUI server is not running' unless running?
         target = valid_redirect_target?(to) ? to : '/'
@@ -117,12 +172,21 @@ module Lich
         "http://#{url_host}:#{port}/auth?token=#{token}&to=#{URI.encode_www_form_component(target)}"
       end
 
+      # Sends one text message to every current WebSocket connection.
+      #
+      # @param payload [String, Object] JSON text, or an object to encode with `JSON.generate`
+      # @return [Array<Connection>] the connections the message was sent to
       def broadcast(payload)
         json = payload.is_a?(String) ? payload : JSON.generate(payload)
         connections = @mutex.synchronize { @connections.dup }
         connections.each { |connection| connection.send_text(json) }
       end
 
+      # Closes every connection and the listener, and joins or kills the server's threads.
+      #
+      # Safe to call when not running.
+      #
+      # @return [nil]
       def stop
         server = nil
         accept_thread = nil
@@ -150,16 +214,31 @@ module Lich
       end
 
       # Authenticated WebSocket connection. The viewer id is generated server-side.
+      #
+      # One per upgraded socket. Writes are serialised and bounded by {WRITE_TIMEOUT}; a
+      # write that cannot complete in time marks the connection dead rather than blocking
+      # the caller, and the server's loop then closes it.
       class Connection
         # How long a write may wait for the peer to drain its socket before the
         # connection is declared dead. Runtime#refresh writes synchronously on
         # whatever thread asked for it -- in the shim that is a script's own
         # session thread -- so a browser that stopped reading (a suspended
         # laptop, a frozen tab) used to park that script forever.
+        #
+        # @return [Float] the default write budget in seconds
         WRITE_TIMEOUT = 10.0
 
+        # @!attribute [r] socket
+        #   @return [BasicSocket] the upgraded client socket
+        # @!attribute [r] viewer_id
+        #   @return [String] the server-minted id that names this connection to the runtime
         attr_reader :socket, :viewer_id
 
+        # Wraps an upgraded socket as a live connection with a fresh viewer id.
+        #
+        # @param socket [BasicSocket] the client socket after the WebSocket handshake
+        # @param write_timeout [Numeric] seconds a single write may take before the connection is dead
+        # @return [Connection] the new connection
         def initialize(socket, write_timeout: WRITE_TIMEOUT)
           @socket = socket
           @viewer_id = "viewer-#{SecureRandom.hex(16)}"
@@ -168,16 +247,30 @@ module Lich
           @alive = true
         end
 
+        # Whether the connection is still usable.
+        #
+        # @return [Boolean] false once closed or once a write failed or timed out
         def alive? = @alive
 
+        # Sends one WebSocket text frame.
+        #
+        # @param payload [String] the text to send, normally JSON
+        # @return [Boolean] true when fully written; false when the connection is or became dead
         def send_text(payload)
           write(WebSocket.encode_text_message(payload))
         end
 
+        # Answers a ping with a pong carrying the same payload.
+        #
+        # @param payload [String] the ping frame's payload
+        # @return [Boolean] true when fully written; false when the connection is or became dead
         def send_pong(payload)
           write(WebSocket.encode_frame(payload, opcode: WebSocket::OPCODE_PONG))
         end
 
+        # Marks the connection dead and shuts the socket down in both directions.
+        #
+        # @return [nil]
         def close
           return unless @alive
 
@@ -189,6 +282,7 @@ module Lich
 
         private
 
+        # Writes the bytes under the write lock within one deadline; false and dead on failure.
         def write(bytes)
           return false unless @alive
 
@@ -234,8 +328,11 @@ module Lich
         # Mutex has no timed lock; the wait for it is polled against the
         # deadline so that a writer stuck behind a stalled peer's write gives
         # up on schedule too instead of queueing forever.
+        #
+        # @return [Float] seconds between attempts to take the write lock
         LOCK_POLL_INTERVAL = 0.005
 
+        # Polls for the write lock until taken or the deadline passes.
         def acquire_write_lock(deadline)
           until @write_mutex.try_lock
             return false if monotonic_time >= deadline
@@ -245,11 +342,13 @@ module Lich
           true
         end
 
+        # Declares the connection dead; returns false so a write can return it directly.
         def give_up!
           @alive = false
           false
         end
 
+        # The monotonic clock, in seconds.
         def monotonic_time
           Process.clock_gettime(Process::CLOCK_MONOTONIC)
         end
@@ -257,6 +356,7 @@ module Lich
 
       private
 
+      # Accepts clients until the listener is closed, one handler thread each.
       def accept_loop
         loop do
           listener = @mutex.synchronize { @server }
@@ -274,12 +374,14 @@ module Lich
         end
       end
 
+      # Runs handle_client and drops the thread from the client list when done.
       def handle_client_thread(socket)
         handle_client(socket)
       ensure
         @mutex.synchronize { @client_threads.delete(Thread.current) }
       end
 
+      # Reads one request, checks its origin headers, and routes it by path.
       def handle_client(socket)
         websocket = false
         request = read_request(socket)
@@ -309,6 +411,7 @@ module Lich
         end
       end
 
+      # Reads the request head within READ_TIMEOUT and MAX_HEADER_BYTES; nil when the client goes quiet.
       def read_request(socket)
         deadline = monotonic_time + READ_TIMEOUT
         buffer = +''
@@ -326,6 +429,7 @@ module Lich
         parse_request(buffer)
       end
 
+      # Parses an HTTP/1.1 request head into method, path, query and lower-cased headers; bodies are refused.
       def parse_request(raw)
         head = raw.split("\r\n\r\n", 2).first
         lines = head.split("\r\n")
@@ -349,6 +453,7 @@ module Lich
         { method: method, path: path, query: query, headers: headers }
       end
 
+      # Exchanges a live launch token for the session cookie and redirects to the requested path.
       def handle_auth(socket, request)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
 
@@ -374,6 +479,7 @@ module Lich
         respond_error(socket, 400, 'Bad Request')
       end
 
+      # Serves one of ASSET_ROUTES to an authenticated client, honouring If-None-Match.
       def handle_asset(socket, request)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
         return respond_error(socket, 403, 'Forbidden') unless authorized?(request)
@@ -392,6 +498,7 @@ module Lich
         end
       end
 
+      # Serves a registered file through the file service, refusing anything over MAX_FILE_BYTES.
       def handle_file(socket, request, alias_name, relative_path)
         return respond_error(socket, 405, 'Method Not Allowed') unless request[:method] == 'GET'
         return respond_error(socket, 403, 'Forbidden') unless authorized?(request)
@@ -407,6 +514,7 @@ module Lich
         respond(socket, 200, 'OK', File.binread(path), content_type: content_type, cache_control: 'private, max-age=60')
       end
 
+      # Completes the WebSocket handshake, sends hello, and runs the frame loop until the socket closes.
       def handle_websocket(socket, request)
         unless request[:method] == 'GET' && authorized?(request) && origin_allowed?(request)
           return respond_error(socket, 403, 'Forbidden')
@@ -445,6 +553,7 @@ module Lich
         end
       end
 
+      # Reads frames while the connection lives: pongs pings, dispatches text, stops on close.
       def websocket_loop(connection)
         while connection.alive?
           next unless IO.select([connection.socket], nil, nil, WS_POLL_INTERVAL)
@@ -462,6 +571,7 @@ module Lich
         log(:warning, "WebUI websocket refusal=#{error.class}")
       end
 
+      # Parses one text frame and hands it to the message handler; failures answer with a refusal.
       def dispatch_message(connection, raw)
         message = Protocol.parse_client_message(raw)
         @message_handler.call(connection, message)
@@ -473,10 +583,12 @@ module Lich
         connection.send_text(Protocol.refusal(reason: :handler, message: 'Message refused'))
       end
 
+      # Whether the request carries this instance's session cookie.
       def authorized?(request)
         Protocol.secure_compare(@session_token, cookie_token(request))
       end
 
+      # The value of this instance's session cookie in the request, or nil.
       def cookie_token(request)
         request[:headers]['cookie'].to_s.split(';').each do |pair|
           name, value = pair.split('=', 2)
@@ -490,26 +602,31 @@ module Lich
         "#{COOKIE_NAME}_#{port}"
       end
 
+      # Whether the Host header names this server on loopback.
       def host_allowed?(request)
         allowed_hosts.include?(request[:headers]['host'].to_s)
       end
 
+      # The host:port spellings a request may address this server by.
       def allowed_hosts
         hosts = ["127.0.0.1:#{port}", "localhost:#{port}"]
         hosts << "[::1]:#{port}" if host == '::1'
         hosts
       end
 
+      # Whether the Origin header is one of this server's own origins.
       def origin_allowed?(request)
         origin = request[:headers]['origin'].to_s
         allowed_hosts.any? { |allowed| origin == "http://#{allowed}" }
       end
 
+      # Like origin_allowed?, but a request without an Origin header passes.
       def origin_allowed_if_present?(request)
         origin = request[:headers]['origin']
         origin.nil? || origin_allowed?(request)
       end
 
+      # Checks Sec-Fetch-Site and Sec-Fetch-Mode against what each route legitimately sees.
       def fetch_metadata_allowed?(request)
         site = request[:headers]['sec-fetch-site']
         return false if site && !%w[same-origin none].include?(site)
@@ -522,6 +639,7 @@ module Lich
         %w[no-cors same-origin cors].include?(mode)
       end
 
+      # Writes a complete HTTP/1.1 response with the hardening headers every response carries.
       def respond(socket, status, reason, body, content_type: 'text/plain; charset=utf-8',
                   cache_control: 'no-store', extra_headers: [])
         headers = [
@@ -534,39 +652,48 @@ module Lich
         socket.write(headers.join("\r\n") + "\r\n\r\n" + body)
       end
 
+      # A plain-text error response whose body is the reason phrase.
       def respond_error(socket, status, reason)
         respond(socket, status, reason, reason)
       end
 
+      # Drops launch tokens past their expiry. Caller holds @mutex.
       def expire_launch_tokens!
         now = monotonic_time
         @launch_tokens.delete_if { |_token, expiry| expiry < now }
       end
 
+      # A local absolute path with no scheme-relative prefix or header-breaking newlines.
       def valid_redirect_target?(target)
         target.is_a?(String) && target.start_with?('/') && !target.start_with?('//') && !target.match?(/[\r\n]/)
       end
 
+      # Whether an address is one of LOOPBACK_HOSTS.
       def loopback_address?(address)
         LOOPBACK_HOSTS.include?(address)
       end
 
+      # The host as it appears in a URL: IPv6 loopback is bracketed.
       def url_host
         host == '::1' ? '[::1]' : host
       end
 
+      # The monotonic clock, in seconds.
       def monotonic_time
         Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
+      # Whether the accept thread is alive. Caller holds @mutex.
       def running_locked?
         @accept_thread&.alive? || false
       end
 
+      # Whether stop has begun.
       def stopping?
         @mutex.synchronize { @stopping }
       end
 
+      # Joins a thread briefly, killing it if it does not finish.
       def join_or_kill(thread)
         return unless thread
 
@@ -574,6 +701,7 @@ module Lich
         thread.kill if thread.alive?
       end
 
+      # Hands a line to the logger; a logger that raises is ignored.
       def log(level, message)
         @logger.call(level, message)
       rescue StandardError

@@ -8,7 +8,16 @@ require_relative 'viewer_store'
 module Lich
   module WebUI
     # Server-routed page attachment, viewer state, submission, and callback runtime.
+    #
+    # The runtime sits between the {Server} (browser connections and parsed protocol
+    # messages) and the script side ({Page}, its callbacks and the {Dispatcher} that runs
+    # them). It attaches viewers to pages, delivers renders, validates and routes events
+    # into callbacks, holds the per-viewer state through {ViewerStore}, answers property
+    # reads and writes on a page's behalf, and tears everything down when an owner or a
+    # page goes away.
     class Runtime
+      # What a callback receives: the viewer that acted, the page, the component, the event
+      # name, its validated payload and, for terminal events, the {Submission} snapshot.
       EventContext = Data.define(:viewer_id, :page, :component, :event, :payload, :submission)
       # What a browser page can do on its own. always_on_top and borderless
       # belong to the window manager, not the page, and a CSS fade cannot make
@@ -17,10 +26,22 @@ module Lich
       # through WindowPresentation) the first and third become true; the key
       # set never changes, only the values, because the degradation walk reads
       # every requested property out of this table.
+      #
+      # @return [Hash{Symbol => Boolean}] presentation property to whether a bare browser page supports it
       PRESENTATION_SUPPORT = {
         always_on_top: false, borderless: false, opacity: true, scrollbars: true,
       }.freeze
 
+      # Creates a runtime over a page registry and its collaborators.
+      #
+      # @param registry [Registry] where pages and their addresses are looked up
+      # @param dispatcher [Dispatcher] runs callbacks on per-owner threads
+      # @param viewers [ViewerStore] holds attachments and viewer-scoped state
+      # @param validator [Validator] checks event payloads, submissions and property writes
+      # @param file_service [FileService, nil] resolves image sources to served files; nil refuses all
+      #   non-inline sources
+      # @param logger [#call, nil] receives `(level, message)`; nil discards
+      # @return [Runtime] the new runtime
       def initialize(registry:, dispatcher: Dispatcher.new, viewers: ViewerStore.new,
                      validator: Validator.new, file_service: nil, logger: nil)
         @registry = registry
@@ -37,9 +58,15 @@ module Lich
         @degradations = {}.compare_by_identity
       end
 
+      # Reports which presentation facility properties this host can honour.
+      #
       # Memoised: the host's contribution is fixed for the life of the
       # process, and this is read on every render. Two threads racing the
       # first call build two equal frozen hashes and one wins; harmless.
+      #
+      # @param _page [Page, nil] accepted for interface symmetry; support is per host, not per page
+      # @return [Hash{Symbol => Boolean}] {PRESENTATION_SUPPORT} overlaid with what
+      #   {WindowPresentation.support} reports
       def presentation_support(_page = nil)
         @presentation_support ||= begin
           host = WindowPresentation.support
@@ -47,15 +74,25 @@ module Lich
         end
       end
 
+      # Lists the presentation properties the page asked for that the host refused at its last render.
+      #
+      # @param page [Page] the page whose degradations were recorded
+      # @return [Array<Hash{Symbol => Symbol}>] frozen entries of `facility:`, `property:` and `reason:`;
+      #   empty when nothing was refused or the page has not rendered
       def degradations(page)
         @degradation_mutex.synchronize { Array(@degradations[page]).map(&:dup).freeze }
       end
 
-      # Empties a sensitive input in every browser attached to the page. A
-      # password's value is write-only by contract, so a script's
+      # Empties a sensitive input in every browser attached to the page.
+      #
+      # A password's value is write-only by contract, so a script's
       # `entry.text = ""` has no property to push and the viewer kept seeing
       # the rejected text it had typed; this is the only channel by which
       # the field on screen can be made to match.
+      #
+      # @param page [Page] the page the input is on
+      # @param cid [String, #to_s] the input's component id
+      # @return [nil]
       def clear_sensitive(page, cid)
         @viewers.attachments_for(page).each do |attachment|
           connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
@@ -66,10 +103,18 @@ module Lich
         nil
       end
 
+      # Refusal of a message whose generation is behind the delivered render.
+      #
       # Raised by stale! once it has already sent both halves of its answer,
       # so handle does not send a second refusal on top.
       class StaleGeneration < Protocol::Refusal; end
 
+      # Routes one parsed client message (attach, detach or event) and answers refusals on the wire.
+      #
+      # @param connection [Server::Connection] the browser connection the message arrived on
+      # @param message [Hash{Symbol => Object}] a message from {Protocol.parse_client_message}
+      # @return [Symbol, nil] `:attached`, `:detached` or `:queued` on success, `:refused` when a
+      #   refusal was sent, nil for a type the runtime does not handle
       def handle(connection, message)
         case message[:type]
         when 'attach' then attach(connection, message)
@@ -99,6 +144,13 @@ module Lich
         :refused
       end
 
+      # Forgets a closed connection and fires `detach` for each attachment it held.
+      #
+      # The attachments themselves stay in the {ViewerStore} for the reconnect window, so a
+      # browser that comes back with its resume token picks up where it was.
+      #
+      # @param connection [Server::Connection] the connection that closed
+      # @return [Array<ViewerStore::Attachment>] the attachments the connection had
       def disconnect(connection)
         @connections_mutex.synchronize { @connections.delete(connection.viewer_id) }
         @viewers.transient_disconnect(connection.viewer_id).each do |attachment|
@@ -106,6 +158,22 @@ module Lich
         end
       end
 
+      # Reads a component property on a page, resolving viewer-scoped values against a viewer.
+      #
+      # `:value` is mapped to the type's input property (`checked` for toggles and checkboxes,
+      # `selected` for radios). Shared values come from the page's shared store, falling back
+      # to the rendered props.
+      #
+      # @param page [Page] the page the component is on
+      # @param cid [String, #to_s] the component's id
+      # @param property [Symbol, String] the property name, or `:value` for the input value
+      # @param viewer [String, #viewer_id, nil] the viewer whose value to read; defaults to the
+      #   viewer of the callback currently running
+      # @return [Object] the property's value
+      # @raise [SensitiveReadError] when the property is write-only (a password's value)
+      # @raise [AmbiguousViewerError] when a viewer-scoped read has no viewer to resolve against
+      # @raise [UnknownPropertyError] when the component has no such property
+      # @raise [Error] when the cid is not in the page's render
       def read(page, cid, property, viewer: nil)
         component = page_component(page, cid)
         name = component_property(component, property)
@@ -129,6 +197,23 @@ module Lich
         )
       end
 
+      # Validates and writes a component property on a page, then schedules a refresh.
+      #
+      # A table's `expanded:<row>` pseudo-property sets that row's expansion for the viewer.
+      # Viewer-scoped properties go to the viewer's store; shared ones to the page's shared store.
+      #
+      # @param page [Page] the page the component is on
+      # @param cid [String, #to_s] the component's id
+      # @param property [Symbol, String] the property name, `:value`, or `expanded:<row>` on a table
+      # @param value [Object] the new value; validated against the property's shape
+      # @param viewer [String, #viewer_id, nil] the viewer for a viewer-scoped write; defaults to the
+      #   viewer of the callback currently running
+      # @return [nil]
+      # @raise [SensitiveReadError] when the property is sensitive or ephemeral and cannot be set here
+      # @raise [SchemaViolationError] when the value fails validation
+      # @raise [AmbiguousViewerError] when a viewer-scoped write has no viewer to resolve against
+      # @raise [UnknownPropertyError] when the component has no such property or row
+      # @raise [Error] when the cid is not in the page's render
       def write(page, cid, property, value, viewer: nil)
         component = page_component(page, cid)
         return write_row_expansion(page, component, property, value, viewer) if row_expansion?(component, property)
@@ -166,6 +251,9 @@ module Lich
       # render could go out after a newer one and the viewer kept the stale
       # tree.
       # The viewer ids of every live attachment to +page+, in attach order.
+      #
+      # @param page [Page] the page whose viewers to list
+      # @return [Array<String>] the attachment viewer ids
       def viewer_ids(page)
         @viewers.attachments_for(page).map(&:viewer_id)
       end
@@ -175,6 +263,11 @@ module Lich
       # viewer keeps its attachment; this is how an owner declines a viewer
       # it will not serve (a shim page refusing a second viewer, D26).
       # Returns false when the viewer was not attached.
+      #
+      # @param page [Page] the page to detach the viewer from
+      # @param viewer_id [String] the attachment's viewer id (as in {#viewer_ids})
+      # @param reason [Symbol] the `page_closed` reason sent to the viewer
+      # @return [Boolean] true when an attachment was closed, false when the viewer was not attached
       def close_attachment(page, viewer_id, reason:)
         attachment = @viewers.attachment_for_viewer(page, viewer_id)
         connection = @connections_mutex.synchronize { @connections[attachment.connection_id] }
@@ -185,6 +278,14 @@ module Lich
         false
       end
 
+      # Re-renders a page and delivers the new render to every live attachment.
+      #
+      # Runs under the page's refresh lock so deliveries cannot go out of generation order.
+      #
+      # @param page [Page] the page to re-render
+      # @return [Integer] the generation of the render that was delivered
+      # @raise [Error] when the render references an image source that is not served, or a popup
+      #   page that is not registered
       def refresh(page)
         page_refresh_lock(page).synchronize do
           page.bind_runtime(self)
@@ -200,18 +301,33 @@ module Lich
         end
       end
 
+      # Returns the mutex that serialises renders and deliveries for one page, creating it on first use.
+      #
+      # @param page [Page] the page the lock belongs to
+      # @return [Mutex] the page's refresh lock
       def page_refresh_lock(page)
         @refresh_mutex.synchronize { (@page_locks ||= {}.compare_by_identity)[page] ||= Mutex.new }
       end
 
+      # Drops a page's refresh lock once the page is gone.
+      #
       # A page's refresh lock outlives nothing: @refresh_state is already
       # dropped when a page goes quiet, but the lock was kept for the life of
       # the process, so every page a long session ever opened stayed reachable
       # through it. Released where the page's other per-page state is.
+      #
+      # @param page [Page] the page whose lock to release
+      # @return [Mutex, nil] the removed lock, or nil when none existed
       def release_page_refresh_lock(page)
         @refresh_mutex.synchronize { @page_locks&.delete(page) }
       end
 
+      # Tears down everything an owner holds: its callback queue, its pages, and their viewers.
+      #
+      # Every attached viewer is told `page_closed` with reason `:owner`.
+      #
+      # @param owner [Object] the owning script or object whose pages were registered
+      # @return [Array<Page>] the pages that were closed
       def terminate_owner(owner)
         pages = @registry.pages_for(owner)
         @dispatcher.shutdown_owner(owner)
@@ -228,6 +344,11 @@ module Lich
         pages
       end
 
+      # Unregisters one page, closing every viewer's attachment to it.
+      #
+      # @param page [Page] the page to close
+      # @param reason [Symbol] the `page_closed` reason sent to its viewers
+      # @return [Page, nil] the page, or nil when it was not registered
       def close_page(page, reason: :owner)
         address = @registry.address_for(page)
         @viewers.attachments_for(page).each do |attachment|
@@ -248,8 +369,14 @@ module Lich
       # reading used to hold shutdown for as long as the write did; the
       # write is bounded now (Server::Connection::WRITE_TIMEOUT) and so is
       # this, in case anything else ever parks one.
+      #
+      # @return [Float] seconds {#shutdown} waits for all refresh threads together
       SHUTDOWN_BUDGET = 5.0
 
+      # Stops the dispatcher and joins or kills every outstanding refresh thread within the budget.
+      #
+      # @param budget [Numeric] seconds to wait for the refresh threads, all together
+      # @return [Array<Thread>] the refresh threads that were outstanding
       def shutdown(budget: SHUTDOWN_BUDGET)
         @dispatcher.shutdown
         threads = @refresh_mutex.synchronize { @refresh_state.values.filter_map { |state| state[:thread] } }
@@ -263,6 +390,7 @@ module Lich
 
       private
 
+      # Attaches the connection to the addressed page and delivers its first render under the page lock.
       def attach(connection, message)
         @connections_mutex.synchronize { @connections[connection.viewer_id] = connection }
         page = fetch_page(message[:page])
@@ -287,6 +415,7 @@ module Lich
         :attached
       end
 
+      # Fires close (reason user) and detach for the attachment, then drops it.
       def detach(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
@@ -301,6 +430,7 @@ module Lich
         :detached
       end
 
+      # Validates a component event, snapshots its submission, and enqueues the bound callback.
       def event(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
@@ -364,6 +494,7 @@ module Lich
         raise Protocol::Refusal.new(:overflow, 'viewer event queue overflow')
       end
 
+      # Validates the submitted values in the terminal component's scope and wraps them as a Submission.
       def build_submission(attachment, terminal, message)
         scope = attachment.render.submissions.fetch(terminal.cid, [])
         raw_values = message.fetch(:submission, [])
@@ -392,6 +523,7 @@ module Lich
         scrub_sensitive_raw!(components, raw_values) if defined?(components) && components
       end
 
+      # Zeroes the raw strings of sensitive submissions once they have been copied out.
       def scrub_sensitive_raw!(components, raw_values)
         components.each_with_index do |component, index|
           next unless sensitive?(component)
@@ -421,6 +553,7 @@ module Lich
         raise StaleGeneration.new(:stale_generation, 'stale generation')
       end
 
+      # Sends the attachment's delivered render, with its bindings and submission scopes, to the connection.
       def send_render(connection, attachment)
         bindings = attachment.render.bindings.keys.group_by(&:first).transform_values do |pairs|
           pairs.map(&:last).map(&:to_s)
@@ -435,6 +568,7 @@ module Lich
         )
       end
 
+      # The component with that cid in the attachment's delivered render, or a component_id refusal.
       def find_component!(attachment, cid)
         component = attachment.render.tree.each.find { |candidate| candidate.cid == cid }
         return component if component
@@ -442,6 +576,7 @@ module Lich
         raise Protocol::Refusal.new(:component_id, 'component is not registered for delivered page')
       end
 
+      # The viewer's serialised tree, with composite popup page ids rewritten to server addresses.
       def serialize_for_client(attachment)
         tree = @viewers.serialize(attachment)
         rewrite_popup_addresses(tree, attachment.page.owner)
@@ -457,6 +592,7 @@ module Lich
         component
       end
 
+      # Whether a component's value must never leave the browser except through a submission.
       def sensitive?(component)
         component.type == :password_input || component.props[:sensitive] == true
       end
@@ -472,6 +608,7 @@ module Lich
         schema && schema[:lifecycle] && !schema[:terminal]
       end
 
+      # A printable name for an owner, for error attribution and logs.
       def owner_label(owner)
         return owner.webui_owner_id if owner.respond_to?(:webui_owner_id)
         return owner.name if owner.respond_to?(:name) && owner.name
@@ -479,6 +616,7 @@ module Lich
         "#{owner.class}:#{owner.object_id}"
       end
 
+      # The component with that cid in the page's last (or a fresh) render.
       def page_component(page, cid)
         render = page.last_render || page.render
         component = render.tree.each.find { |candidate| candidate.cid == cid.to_s }
@@ -487,6 +625,7 @@ module Lich
         raise Error.new('component is not registered', owner: owner_label(page.owner), page_id: page.id, cid: cid)
       end
 
+      # Renders the page and refuses image sources that are neither inline nor served, and unregistered popups.
       def validated_render(page)
         render = page.render
         record_presentation_degradations(page, render)
@@ -539,6 +678,7 @@ module Lich
         source.is_a?(String) && INLINE_IMAGE.match?(source)
       end
 
+      # Records which requested presentation properties the host cannot honour, for degradations.
       def record_presentation_degradations(page, render)
         requested = render.facilities[:presentation] || {}
         supported = presentation_support(page)
@@ -557,12 +697,14 @@ module Lich
         @degradation_mutex.synchronize { @degradations[page] = refusals.freeze }
       end
 
+      # The registered page at a server address, or a page_gone refusal.
       def fetch_page(address)
         @registry.fetch_address(address)
       rescue Error
         raise Protocol::Refusal.new(:page_gone, 'page is no longer registered', page_id: address)
       end
 
+      # The connection's attachment to the addressed page, or a page_gone / viewer_gone refusal.
       def fetch_attachment(connection, address)
         fetch_page(address)
         @viewers.fetch(connection_id: connection.viewer_id, address: address)
@@ -572,6 +714,7 @@ module Lich
         raise Protocol::Refusal.new(:viewer_gone, 'viewer is no longer attached', page_id: address)
       end
 
+      # Enqueues the page's lifecycle callback for the event, if one is bound.
       def enqueue_lifecycle(attachment, event, payload = {})
         lifecycle_job(attachment, event, payload)&.call
       end
@@ -598,6 +741,7 @@ module Lich
         end
       end
 
+      # Maps `:value` to the type's input property name; other names pass through as symbols.
       def component_property(component, property)
         key = property.to_sym
         return key unless key == :value
@@ -619,6 +763,7 @@ module Lich
         component.type == :table && property.to_s.start_with?('expanded:')
       end
 
+      # Sets a table row's expansion for the viewer; the row must exist.
       def write_row_expansion(page, component, property, value, viewer)
         name = property.to_s
         row = name.delete_prefix('expanded:')
@@ -635,6 +780,7 @@ module Lich
         nil
       end
 
+      # The scope a property is held in, from the schema; KeyError for a name the type lacks.
       def property_scope(component, name)
         schema = Contract.schema(component.type)
         return :sensitive_write_only if name == :value && sensitive?(component)
@@ -646,6 +792,7 @@ module Lich
         raise KeyError, name
       end
 
+      # The attachment for an explicit viewer, or the viewer of the running callback.
       def contextual_attachment(page, component, viewer)
         viewer_id = viewer || @dispatcher.current_context&.viewer_id
         unless viewer_id
@@ -658,6 +805,7 @@ module Lich
         @viewers.attachment_for_viewer(page, viewer_id.respond_to?(:viewer_id) ? viewer_id.viewer_id : viewer_id.to_s)
       end
 
+      # Starts a refresh thread for the page, or marks the running one dirty so it goes round again.
       def schedule_refresh(page)
         @refresh_mutex.synchronize do
           state = (@refresh_state[page] ||= { dirty: false, thread: nil })
@@ -669,6 +817,7 @@ module Lich
         end
       end
 
+      # Refreshes the page until no write has marked it dirty during the last pass.
       def refresh_loop(page, state)
         loop do
           refresh(page)
@@ -685,6 +834,7 @@ module Lich
         @refresh_mutex.synchronize { @refresh_state.delete(page) }
       end
 
+      # Hands a line to the logger; a logger that raises is ignored.
       def log(level, message)
         @logger.call(level, message)
       rescue StandardError

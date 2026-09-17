@@ -388,9 +388,9 @@ module Lich
         # Validates and filters character data, transforming from authentication response
         # format (symbol keys) to storage format (symbol keys with validation)
         #
-        # @param auth_data [Array] Array of character hashes from authentication
+        # @param auth_data [Array<Hash{Symbol => Object}>] Array of character hashes from authentication
         # @param frontend [String] Selected frontend for all characters
-        # @return [Array] Array of character data hashes formatted for storage
+        # @return [Array<Hash{Symbol => Object}>] Array of character data hashes formatted for storage
         def self.convert_auth_data_to_characters(auth_data, frontend = 'stormfront')
           characters = []
           return characters unless auth_data.is_a?(Array)
@@ -416,7 +416,7 @@ module Lich
         # Gets all accounts
         #
         # @param data_dir [String] Directory containing entry data
-        # @return [Array] Array of account usernames
+        # @return [Array<String>] Array of account usernames
         def self.get_accounts(data_dir)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
@@ -436,7 +436,7 @@ module Lich
         # This method is used by AccountManagerUI.populate_accounts_view
         #
         # @param data_dir [String] Directory containing entry data
-        # @return [Hash] Hash of accounts with their characters
+        # @return [Hash{String => Array<Hash{Symbol => Object}>}] account name to its characters
         def self.get_all_accounts(data_dir)
           yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 

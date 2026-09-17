@@ -17,6 +17,12 @@ require_relative '../common/frontend'
 # honestly, which is what every other host keeps doing.
 module Lich
   module WebUI
+    # Finds a browser's OS window and applies keep-above and opacity to it through user32.
+    #
+    # Everything here degrades to "unavailable" off native Windows, or when
+    # the user32 bindings failed to load: {.available?} answers false,
+    # {.support} is empty, and the appliers return false without touching
+    # anything. See the file comment for why only Windows is supported.
     module WindowPresentation
       HWND_TOPMOST   = -1
       HWND_NOTOPMOST = -2
@@ -36,26 +42,48 @@ module Lich
       # quarter of a second. The budget is deliberately far larger, because
       # the thread waiting is idle and a cold start is slower.
       DISCOVERY_TIMEOUT = 15.0
+      # Seconds between polls while looking for the window.
       DISCOVERY_INTERVAL = 0.1
 
       class << self
         # Test seams, mirroring Session.browser_open. Setting win32 replaces
         # the user32 facade wholesale, so the applier can be driven with no
         # real window anywhere.
+        #
+        # @!attribute [w] win32
+        #   @return [Module, Object] the user32 facade
+        # @!attribute [w] thread_factory
+        #   @return [#call] builds the discovery thread from a block
+        # @!attribute [w] sleeper
+        #   @return [#call] sleeps for the given seconds
+        # @!attribute [w] available_override
+        #   @return [Boolean, nil] forces {available?}'s answer; nil restores the real one
         attr_writer :win32, :thread_factory, :sleeper, :available_override
 
+        # The user32 facade: the bindings defined at the bottom of this file, when they loaded.
+        #
+        # @return [Module, Object, nil] nil where the bindings are absent
         def win32
           @win32 ||= (defined?(::WinPresentation) ? ::WinPresentation : nil)
         end
 
+        # Builds the discovery thread from a block.
+        #
+        # @return [#call] `Thread.new` unless a spec replaced it
         def thread_factory
           @thread_factory ||= ->(&block) { Thread.new(&block) }
         end
 
+        # Sleeps between discovery polls.
+        #
+        # @return [#call] `Kernel#sleep` unless a spec replaced it
         def sleeper
           @sleeper ||= ->(seconds) { sleep(seconds) }
         end
 
+        # Restores every test seam to its default.
+        #
+        # @return [void]
         def reset_seams!
           @win32 = nil
           @thread_factory = nil
@@ -63,8 +91,12 @@ module Lich
           @available_override = nil
         end
 
+        # Whether this host can present windows at all.
+        #
         # The predicate comes first, so nothing Windows-shaped is even named
         # on a host that has none of it.
+        #
+        # @return [Boolean]
         def available?
           return @available_override unless @available_override.nil?
           return false unless Lich::Common::Frontend.native_windows_runtime?
@@ -75,6 +107,8 @@ module Lich
         # What this host can actually honour, merged over the contract's own
         # support table. Empty when there is nothing to add, so the existing
         # degradation record stays exactly as it was.
+        #
+        # @return [Hash{Symbol => Boolean}] `always_on_top` and `opacity` when available, otherwise empty
         def support
           return {} unless available?
 
@@ -89,6 +123,9 @@ module Lich
         # translucent. The shim always spawns with a private profile
         # directory (Session#open_browser always passes on_exit, which makes
         # BrowserLauncher create one), so the honest case is exactly one.
+        #
+        # @param pid [Integer] the browser's process id
+        # @return [Fiddle::Pointer, nil] the window handle, or nil when there is not exactly one
         def find_window(pid)
           return nil unless available?
 
@@ -100,6 +137,9 @@ module Lich
         # already running and the spawned process exits, so its pid owns no
         # window; the window's title is the page's own, which the page chose
         # and knows.
+        #
+        # @param prefix [String] the start of the window title
+        # @return [Fiddle::Pointer, nil] the window handle, or nil when there is not exactly one
         def find_window_by_title(prefix)
           return nil unless available?
 
@@ -107,6 +147,12 @@ module Lich
         end
 
         # As discover, by title prefix instead of pid.
+        #
+        # @param prefix [String] the start of the window title
+        # @param timeout [Numeric] seconds to keep looking
+        # @yield [hwnd] on the search thread, once, when the search ends
+        # @yieldparam hwnd [Fiddle::Pointer, nil] the window handle, or nil when none was found in time
+        # @return [Thread, nil] the search thread, or nil when presentation is unavailable
         def discover_by_title(prefix, timeout: DISCOVERY_TIMEOUT, &on_found)
           return nil unless available?
 
@@ -126,6 +172,13 @@ module Lich
         # where it was -- a no-op reporting success, which is the one outcome
         # worse than degrading honestly. Removing it for real needs the window
         # created frameless, which is a launch-time decision.
+        #
+        # @param hwnd [Fiddle::Pointer, Integer, nil] the window handle
+        # @param always_on_top [Boolean] whether the window stays above others
+        # @param opacity [Float, nil] 0.0 to 1.0; nil means opaque
+        # @param borderless [Boolean] accepted and ignored, as explained above
+        # @return [Boolean] whether the state was applied; false when unavailable, without a handle,
+        #   or when a user32 call raised
         # rubocop:disable Lint/UnusedMethodArgument -- borderless is part of
         # the facility's shape and callers still pass it; it is accepted and
         # deliberately ignored rather than silently dropped from the API.
@@ -141,6 +194,10 @@ module Lich
         end
         # rubocop:enable Lint/UnusedMethodArgument
 
+        # Whether a window handle still names a window.
+        #
+        # @param hwnd [Fiddle::Pointer, Integer, nil] the window handle
+        # @return [Boolean] false when unavailable, without a handle, or when the call raised
         def alive?(hwnd)
           return false unless available? && hwnd
 
@@ -166,6 +223,14 @@ module Lich
         # a moment later, was never looked for again (review 2026-09-17 (b),
         # F7). A window that was there before the open cannot be the one it
         # opened.
+        #
+        # @param pid [Integer] the browser's process id
+        # @param timeout [Numeric] seconds to keep looking
+        # @param title [String, nil] the page's window title, or a prefix of it, to fall back on
+        # @param exclude [Array<Integer, Fiddle::Pointer>] window handles that must never be adopted
+        # @yield [hwnd] on the search thread, once, when the search ends
+        # @yieldparam hwnd [Fiddle::Pointer, nil] the window handle, or nil when none was found in time
+        # @return [Thread, nil] the search thread, or nil when presentation is unavailable
         def discover(pid, timeout: DISCOVERY_TIMEOUT, title: nil, exclude: [], &on_found)
           return nil unless available?
 
@@ -183,6 +248,9 @@ module Lich
         # +prefix+, as integers, enumerated once on the calling thread. Taken
         # before a page's browser is opened, it is what discover must not
         # adopt for that page.
+        #
+        # @param prefix [String] the start of the window title
+        # @return [Array<Integer>] the window handles; empty when unavailable or when enumeration raised
         def existing_windows(prefix)
           return [] unless available?
 
@@ -283,6 +351,7 @@ module Lich
           win32.SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA)
         end
 
+        # Whether a window is a visible, unowned, top-level Chromium window of the pid and title asked for.
         def window_matches?(hwnd, pid, title = nil)
           return false if win32.IsWindowVisible(hwnd).zero?
           return false if pid && owning_pid(hwnd) != pid

@@ -6,13 +6,38 @@ require_relative 'page'
 module Lich
   module WebUI
     # Owns modal registration and the response/timeout/termination race.
+    #
+    # A modal is a throwaway {Page} holding one dialog component. The
+    # coordinator registers it, arms the ways it can end -- a button, the
+    # viewer closing it, every viewer leaving, a timeout, the owner being
+    # torn down -- and resolves the {Future} exactly once, whichever wins,
+    # then unregisters the page.
     class ModalCoordinator
+      # A modal that has been raised and not yet answered.
+      #
+      # @!attribute [r] owner
+      #   @return [Object] the script or core object that raised it
+      # @!attribute [r] page
+      #   @return [Page] the page holding the dialog
+      # @!attribute [r] future
+      #   @return [Future] the completion
+      # @!attribute [r] timer
+      #   @return [Thread, nil] the timeout thread, when a timeout was given
       Pending = Data.define(:owner, :page, :future, :timer)
       # How long a modal whose only viewer's socket dropped waits for that
       # viewer to come back before the answer is "dismissed". A viewer that
       # closed the window says so explicitly and is not made to wait.
       DISMISS_GRACE = 5.0
 
+      # Builds a coordinator.
+      #
+      # @param registry [Registry] where modal pages are registered
+      # @param runtime [Runtime] binds and closes the modal pages
+      # @param viewers_present [#call] answers whether any browser is connected
+      # @param pages_changed [#call] called after a modal page is added or removed
+      # @param logger [#call, nil] receives `(level, message)`; silent when nil
+      # @param dismiss_grace [Numeric] seconds to wait for a dropped viewer, {DISMISS_GRACE} by default
+      # @return [ModalCoordinator] the coordinator
       def initialize(registry:, runtime:, viewers_present:, pages_changed:, logger: nil, dismiss_grace: DISMISS_GRACE)
         @registry = registry
         @runtime = runtime
@@ -29,6 +54,27 @@ module Lich
         @mutex = Mutex.new
       end
 
+      # Raises a modal dialog and returns its completion.
+      #
+      # With no viewer connected the future resolves at once according to
+      # +no_viewer+ (`'default'` answers with +default_button+; `'wait'` keeps
+      # the dialog up for the next viewer; anything else resolves with
+      # `:no_viewer`), and no page is registered unless waiting.
+      #
+      # @param owner [Object] the script or core object raising the dialog
+      # @param id [String] the page id for the dialog
+      # @param title [String] the dialog title
+      # @param buttons [Array] the dialog's buttons, as the `dialog` schema takes them
+      # @param no_viewer [String, Symbol] what to do with nobody connected: `'default'`, `'wait'`, or other
+      # @param body [String, nil] the dialog's message
+      # @param default_button [String, nil] the button answered when nobody can press one
+      # @param timeout [Numeric, nil] seconds before the future resolves with `:timeout`
+      # @param credential [Boolean] whether the dialog collects a secret; such a dialog may not wait
+      # @yield optional body content, evaluated against the dialog's {TreeBuilder}
+      # @return [Future] resolves with the button pressed, or a reason: `:timeout`, `:dismissed`,
+      #   `:no_viewer`, `:terminated`, `:error`
+      # @raise [ArgumentError] when a credential dialog asks to wait for a viewer
+      # @raise [SchemaViolationError] when the dialog properties fail validation
       def open(owner:, id:, title:, buttons:, no_viewer:, body: nil, default_button: nil,
                timeout: nil, credential: false, &content)
         raise ArgumentError, 'credential modals cannot wait for a viewer' if credential && no_viewer.to_s == 'wait'
@@ -84,6 +130,10 @@ module Lich
         raise
       end
 
+      # Cancels every pending modal an owner raised.
+      #
+      # @param owner [Object] the owner being torn down
+      # @return [Integer] how many modals were cancelled
       def terminate_owner(owner)
         futures = @mutex.synchronize do
           @pending.values.select { |pending| pending.owner.equal?(owner) }.map(&:future)
@@ -92,12 +142,16 @@ module Lich
         futures.length
       end
 
+      # How many modals are up and unanswered.
+      #
+      # @return [Integer]
       def pending_count
         @mutex.synchronize { @pending.length }
       end
 
       private
 
+      # Resolves a modal nobody is connected to see, per its no_viewer policy.
       def resolve_absent_viewer(future, props)
         if props[:no_viewer] == 'default'
           future.resolve(button: props[:default_button], reason: :no_viewer)
@@ -107,6 +161,7 @@ module Lich
         future
       end
 
+      # Drops a page that was registered before open failed.
       def forget_registered(page)
         return unless page
 
@@ -116,6 +171,7 @@ module Lich
         @logger.call(:warning, "WebUI modal unregister failed=#{error.class}")
       end
 
+      # A viewer attached to the modal's page; a pending dismissal is cancelled.
       def viewer_arrived(future)
         @mutex.synchronize do
           @attached[future] += 1
@@ -146,6 +202,7 @@ module Lich
         nil
       end
 
+      # The future resolved: stop the timer, close the page, and tell the launcher.
       def complete(future, result)
         pending = @mutex.synchronize do
           @dismissals.delete(future)

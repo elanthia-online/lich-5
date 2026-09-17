@@ -20,11 +20,19 @@ module Lich
     # and persist the result, which keeps the reload-before-write decision with
     # the caller that knows whether it is racing another Lich.
     module FrontendEditor
+      # Characters a scalar field may not contain; see {.optional_scalar}.
       CONTROL_CHARACTERS = /[\x00-\x1f\x7f]/
 
       class << self
         # Every registered frontend, built-ins first in catalog order, with the
         # configuration and detection status each currently has.
+        #
+        # @param settings [#current] the frontends.yml document source
+        # @param frontend [#built_in_frontends, #display_name] the frontend catalog
+        # @param locator [#resolve] executable discovery
+        # @return [Array<Hash{Symbol => String}>] one row per frontend with :id, :label, :type
+        #   ('Built-in' or 'Custom'), :status ('Configured', 'Detected' or 'Unavailable'),
+        #   :launch (executable or command) and :arguments (shell-joined)
         def rows(settings: FrontendSettings, frontend: Frontend, locator: FrontendLocator)
           document = settings.current
           builtins = document.fetch('builtins', {})
@@ -34,11 +42,22 @@ module Lich
 
         # Whether the id belongs to Lich's own catalog. A built-in may carry
         # launch overrides but cannot be deleted or renamed.
+        #
+        # @param frontend_id [String, Symbol] frontend identifier
+        # @param frontend [#built_in_frontends] the frontend catalog
+        # @return [Boolean]
         def built_in?(frontend_id, frontend: Frontend)
           frontend.built_in_frontends.include?(frontend_id.to_s)
         end
 
         # The persisted settings for one frontend, shaped for an editor.
+        #
+        # @param frontend_id [String, Symbol] frontend identifier
+        # @param settings [#current] the frontends.yml document source
+        # @param frontend [#built_in_frontends, #display_name, #definition_for] the frontend catalog
+        # @param locator [#resolve] executable discovery, consulted for a built-in's detected path
+        # @return [Hash{Symbol => Object}] :id, :label, :built_in, :command, :detected_command,
+        #   :directory, :arguments (shell-joined String) and :capabilities (Array<String>)
         def editor_fields(frontend_id, settings: FrontendSettings, frontend: Frontend, locator: FrontendLocator)
           id = frontend_id.to_s
           document = settings.current
@@ -52,8 +71,12 @@ module Lich
         # Applies an edit to the document and returns the new builtins/custom
         # pair plus the id touched. Writes nothing.
         #
+        # @param document [Hash{String => Hash}] the current frontends.yml document ('builtins', 'custom')
         # @param fields [Hash] :id, :label, :command, :directory, :arguments
         #   (the raw shell-quoted string), :capabilities
+        # @param creating [Boolean] whether the fields describe a new custom frontend
+        # @param frontend [#built_in_frontends, #registered_frontends] the frontend catalog
+        # @return [Array(Hash, Hash, String)] the new builtins, the new custom definitions, and the id
         # @raise [ArgumentError] with a message meant for the player
         def apply(document, fields, creating:, frontend: Frontend)
           builtins = document.fetch('builtins', {}).dup
@@ -75,7 +98,13 @@ module Lich
           [builtins, custom, id]
         end
 
-        # Removes a custom frontend from the document.
+        # Removes a custom frontend from the document. Writes nothing.
+        #
+        # @param document [Hash{String => Hash}] the current frontends.yml document ('builtins', 'custom')
+        # @param frontend_id [String, Symbol] identifier of the custom frontend
+        # @param frontend [#built_in_frontends] the frontend catalog
+        # @return [Array(Hash, Hash)] the unchanged builtins and the custom definitions without the id
+        # @raise [ArgumentError] when the id is a built-in or no such custom frontend exists
         def remove(document, frontend_id, frontend: Frontend)
           id = frontend_id.to_s
           raise ArgumentError, 'Built-in frontends cannot be deleted.' if built_in?(id, frontend: frontend)
@@ -88,6 +117,11 @@ module Lich
         end
 
         # Parses the shell-quoted argument string an editor field carries.
+        #
+        # @param raw [String, nil] shell-quoted arguments, for example `--flag "two words"`
+        # @return [Array<String>] the validated argument list
+        # @raise [ArgumentError] when the quoting is malformed or an argument is rejected by
+        #   FrontendSettings.validate_arguments
         def parse_arguments(raw)
           FrontendSettings.validate_arguments(Shellwords.split(raw.to_s))
         rescue ArgumentError => error
@@ -97,6 +131,12 @@ module Lich
         end
 
         # A bounded printable scalar, or nil when blank.
+        #
+        # @param name [String] field name used in the error message
+        # @param value [String, nil] raw field value
+        # @return [String, nil] the stripped text, or nil when blank
+        # @raise [ArgumentError] when the text exceeds FrontendSettings::MAX_SCALAR_BYTES or contains
+        #   control characters
         def optional_scalar(name, value)
           text = value.to_s.strip
           return nil if text.empty?
@@ -106,10 +146,23 @@ module Lich
           text
         end
 
+        # A bounded printable scalar that may not be blank.
+        #
+        # @param name [String] field name used in the error message
+        # @param value [String, nil] raw field value
+        # @return [String] the stripped text
+        # @raise [ArgumentError] when blank, or for the same reasons as {.optional_scalar}
         def required_scalar(name, value)
           optional_scalar(name, value) || raise(ArgumentError, "#{name} is required.")
         end
 
+        # Normalises and checks the identifier for a new custom frontend.
+        #
+        # @param raw_id [String, nil] identifier as typed
+        # @param frontend [#registered_frontends] the frontend catalog
+        # @return [String] the stripped, downcased id
+        # @raise [ArgumentError] when the id does not match FrontendSettings::CUSTOM_ID_PATTERN or is
+        #   already registered
         def validate_new_id(raw_id, frontend: Frontend)
           id = raw_id.to_s.strip.downcase
           unless id.match?(FrontendSettings::CUSTOM_ID_PATTERN)

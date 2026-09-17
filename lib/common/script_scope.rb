@@ -45,6 +45,13 @@ module Lich
       # including this module, so a script helper can never shadow a method
       # its superclass defines.
       module Nesting
+        # Wires a newly defined nested module or class into ScriptScope.
+        #
+        # Runs for every constant defined on a module that extends {Nesting}; anything defined
+        # before {.activate!} (or that is not a Module) is passed straight to +super+.
+        #
+        # @param name [Symbol] the constant just defined
+        # @return [void]
         def const_added(name)
           return super unless ScriptScope.adopt_nested_constants?
 
@@ -72,12 +79,21 @@ module Lich
       # That is the right order -- the script wrote both -- and it is pinned
       # in spec/lib/common/script_scope_spec.rb.
       module InheritedHelpers
+        # Forwards a call the superclass chain does not answer to the script's top-level helpers.
+        #
+        # @param name [Symbol] the method the script called
+        # @param args [Array<Object>] its arguments
+        # @return [Object] whatever the helper returns, or +super+'s result when no helper matches
+        # @raise [NoMethodError] from +super+ when neither the ancestors nor ScriptScope answer
         def method_missing(name, *args, &block)
           return ScriptScope.public_send(name, *args, &block) if ScriptScope.respond_to?(name)
 
           super
         end
 
+        # @param name [Symbol] the method being asked about
+        # @param include_private [Boolean] whether private methods count
+        # @return [Boolean] true when a script helper of that name exists, else +super+'s answer
         def respond_to_missing?(name, include_private = false)
           ScriptScope.respond_to?(name) || super
         end
@@ -85,6 +101,7 @@ module Lich
 
       singleton_class.include(Nesting)
 
+      # Glob that finds every plugin's entry file under lib/common/script_scope/<name>/boot.rb.
       PLUGIN_GLOB = File.join(__dir__, 'script_scope', '*', 'boot.rb').freeze
 
       @active = false
@@ -112,7 +129,7 @@ module Lich
       # A fresh binding whose constant lookup starts in this module. Created by
       # a method call so every script gets its own local-variable table.
       #
-      # @return [Binding]
+      # @return [Binding] a new binding whose self is this module
       def self.script_binding
         Proc.new {}.binding
       end

@@ -6,15 +6,37 @@ require_relative 'validator'
 module Lich
   module WebUI
     # Declarative render builder. Variable collections are explicit so keyed identity is enforceable.
+    #
+    # A page's render block runs against one of these. Each contract type is
+    # a method (`button(...)`, `text_input(...)`), each facility too
+    # (`focus(...)`, `accelerators(...)`); nesting a block nests components.
+    # {#build} validates the whole drafted tree and materializes it into
+    # frozen {Component}s.
     class TreeBuilder
+      # A component under construction, before validation of its children.
       Draft = Struct.new(:type, :cid, :props, :children, :slot, :placement, keyword_init: true)
+      # The component types the `focus` facility may name.
       FOCUSABLE_TYPES = %i[
         button toggle checkbox radio text_input password_input textarea number_input slider select
         table dialog composite
       ].freeze
 
+      # @!attribute [r] bindings
+      #   @return [Hash{Array(String, Symbol) => #call}] event callbacks keyed by `[cid, event]`
+      # @!attribute [r] submissions
+      #   @return [Hash{String => Array<String>}] input cids each terminal submits, keyed by terminal cid
+      # @!attribute [r] facilities
+      #   @return [Hash{Symbol => Object}] validated page facilities
       attr_reader :bindings, :submissions, :facilities
 
+      # Starts a tree with an empty page root.
+      #
+      # @param owner [Object] the page's owner, for error attribution
+      # @param page_id [String] the page id
+      # @param title [String] the page title
+      # @param root_props [Hash{Symbol => Object}] other root page properties
+      # @param validator [Validator] validates components, facilities and placements
+      # @return [TreeBuilder]
       def initialize(owner:, page_id:, title:, root_props: {}, validator: Validator.new)
         @owner = owner
         @page_id = page_id
@@ -31,6 +53,25 @@ module Lich
         @facilities = {}
       end
 
+      # Adds a component under the current parent; the typed methods forward here.
+      #
+      # @param type [Symbol, String] the contract component type
+      # @param key [String, Symbol, Integer, nil] the author key; required inside a {#collection}
+      # @param slot [String, Symbol, Integer, nil] the named slot this child fills in its parent
+      # @param placement [Hash{Symbol, String => Object}] parent-defined placement properties
+      # @param on [Hash{Symbol, String => #call}] event callbacks keyed by event name
+      # @param submit [Array, Object, nil] the input components (or cids) this terminal submits
+      # @param props [Hash{Symbol => Object}] the component's properties
+      # @yield nested inside the new component; child calls attach to it
+      # @return [Draft] the drafted component
+      # @raise [UnknownTypeError] when the type is not in the contract
+      # @raise [IdentityError] when the identity collides or a key is missing inside a collection
+      # @raise [UnknownEventError] when +on+ names an event the type does not emit, or binds a
+      #   value-bearing change on a sensitive input
+      # @raise [SchemaViolationError] when the props fail validation or +submit+ is given on a
+      #   non-terminal component
+      # @raise [ArgumentError] when +on+ is not a Hash, a callback is not callable, or +slot+ or
+      #   +placement+ has the wrong type
       def component(type, key: nil, slot: nil, placement: {}, on: {}, submit: nil, **props, &block)
         normalized_type = Contract.normalize_type(type)
         Contract.schema(normalized_type)
@@ -69,12 +110,27 @@ module Lich
         @stack.pop if block && @stack.last.equal?(draft)
       end
 
+      # @!macro [attach] typed_component
+      #   @!method $1(**props, &block)
+      #     Adds a `$1` component; see {#component}.
+      #     @param props [Hash{Symbol => Object}] the component's properties and the `key:`, `slot:`,
+      #       `placement:`, `on:` and `submit:` options {#component} takes
+      #     @return [Draft] the drafted component
       (Contract::TYPES - [:page]).each do |type|
         define_method(type) do |**props, &block|
           component(type, **props, &block)
         end
       end
 
+      # Marks the children added inside the block as a variable collection, so each needs a key.
+      #
+      # @param items [#each] the items to iterate
+      # @yield [item, index] once per item, inside the current parent
+      # @yieldparam item [Object] the item
+      # @yieldparam index [Integer] its position
+      # @return [nil]
+      # @raise [ArgumentError] when no block is given or +items+ is not enumerable
+      # @raise [SchemaViolationError] when the collection exceeds the children bound
       def collection(items)
         raise ArgumentError, 'collection requires a block' unless block_given?
         raise ArgumentError, 'collection items must be enumerable' unless items.respond_to?(:each)
@@ -98,6 +154,13 @@ module Lich
         nil
       end
 
+      # Sets a page facility; the named facility methods forward here.
+      #
+      # @param name [Symbol, String] the facility name
+      # @param value [Object] its value, as the contract defines it
+      # @return [nil]
+      # @raise [ArgumentError] when the name is not an identifier
+      # @raise [SchemaViolationError] when the value fails validation
       def facility(name, value)
         key = normalize_name(name)
         @facilities[key] = @validator.validate_facility!(
@@ -106,10 +169,20 @@ module Lich
         nil
       end
 
+      # @!macro [attach] named_facility
+      #   @!method $1(value)
+      #     Sets the `$1` facility; see {#facility}.
+      #     @param value [Object] the facility value
+      #     @return [nil]
       Contract::FACILITIES.each_key do |name|
         define_method(name) { |value| facility(name, value) }
       end
 
+      # Validates the whole tree and materializes it.
+      #
+      # @return [Component] the frozen root component
+      # @raise [SchemaViolationError] when the root props, a child rule, a bound, a submission scope, an
+      #   accelerator, or the focus target is invalid
       def build
         root_props = @validator.validate_component!(
           :page, @root.props, owner: owner_label, page_id: @page_id, cid: @root.cid

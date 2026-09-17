@@ -10,18 +10,40 @@ require_relative 'validator'
 module Lich
   module WebUI
     # Imperative, versioned port used by the bounded script compatibility shim.
+    #
+    # Where a native page is declared by a render block, the adapter lets a caller build
+    # the same tree one operation at a time: {#create} a node and receive an opaque
+    # handle, {#set} its properties, {#attach} it under a parent, {#bind} callbacks, and
+    # {#destroy} it. Every operation validates against the {Contract} through the
+    # {Validator}, marks the affected page root dirty, and the private `flush!` turns the
+    # dirty roots into {Page} renders through the service. A subclass (the GTK shim)
+    # extends what a render carries through the traversal hooks without walking the tree
+    # itself.
     class Adapter
+      # @return [Array<Symbol>] the operations the port exposes
       OPERATIONS = %i[create get set attach detach bind unbind destroy modal schema].freeze
 
+      # An opaque token naming one node. It carries nothing a caller can read.
       class Handle
+        # @return [String] a fixed description that reveals nothing about the node
         def inspect = '#<Lich::WebUI::Adapter::Handle opaque>'
         alias to_s inspect
       end
       private_constant :Handle
 
+      # The adapter's own record of a node: its type, validated props, child handles, parent
+      # handle, named slot, event to binding id, and the Page once the root has rendered.
       Node = Struct.new(:type, :props, :children, :parent, :slot, :bindings, :page, keyword_init: true)
       private_constant :Node
 
+      # Creates an adapter for one owner over the WebUI service.
+      #
+      # @param owner [Object] the script or object the pages are registered under
+      # @param service [Service] provides the registry, the runtime, refresh and modals
+      # @param viewer [String, nil] the viewer whose viewer-scoped values {#get} and {#set} address;
+      #   nil leaves viewer-scoped access refused
+      # @param validator [Validator] checks every property write
+      # @return [Adapter] the new adapter
       def initialize(owner:, service:, viewer: nil, validator: Validator.new)
         @owner = owner
         @service = service
@@ -41,6 +63,16 @@ module Lich
         @mutex = Monitor.new
       end
 
+      # Creates a detached node of a contract type and returns its handle.
+      #
+      # A `page` node is marked dirty at once so it renders on the next flush.
+      #
+      # @param type [Symbol, String] the component type
+      # @param props [Hash{Symbol, String => Object}] the node's initial properties
+      # @return [Handle] the opaque handle naming the node
+      # @raise [ArgumentError] when props is not a Hash or a key is not a contract name
+      # @raise [UnknownTypeError] when the type is not a contract type
+      # @raise [SchemaViolationError] when the properties fail validation
       def create(type, props)
         normalized = Contract.normalize_type(type)
         schema(normalized)
@@ -65,6 +97,19 @@ module Lich
         raise attributed(error, handle)
       end
 
+      # Reads a node property from the adapter's server-held state.
+      #
+      # Viewer-scoped properties come from this adapter's viewer's values, falling back to
+      # the node's props. `:value` resolves to the type's value shape when it is not a
+      # declared property.
+      #
+      # @param handle [Handle] the node
+      # @param property [Symbol, String] the property name
+      # @return [Object] a deep copy of the value
+      # @raise [Error] when the handle is unknown or destroyed
+      # @raise [UnknownPropertyError] when the type has no such property
+      # @raise [SensitiveReadError] when the property is write-only
+      # @raise [AmbiguousViewerError] when the property is viewer-scoped and the adapter has no viewer
       def get(handle, property)
         @mutex.synchronize do
           node = node!(handle)
@@ -81,6 +126,20 @@ module Lich
         end
       end
 
+      # Validates and writes one node property, marking the node's root dirty.
+      #
+      # Viewer-scoped properties are stored per viewer; shared ones re-validate the whole
+      # property set with the new value merged in, and re-assign child slots when the
+      # type names its children.
+      #
+      # @param handle [Handle] the node
+      # @param property [Symbol, String] the property name
+      # @param value [Object] the new value
+      # @return [nil]
+      # @raise [Error] when the handle is unknown or destroyed
+      # @raise [UnknownPropertyError] when the type has no such property
+      # @raise [SchemaViolationError] when the property is sensitive or ephemeral, or the value is invalid
+      # @raise [AmbiguousViewerError] when the property is viewer-scoped and the adapter has no viewer
       def set(handle, property, value)
         @mutex.synchronize do
           node = node!(handle)
@@ -115,6 +174,15 @@ module Lich
         raise attributed(error, handle, property)
       end
 
+      # Inserts a child under a parent, at the end or at an index.
+      #
+      # @param parent [Handle] the node to attach under
+      # @param child [Handle] the node to attach; must currently have no parent
+      # @param index [Integer, nil] the position among the parent's children; nil appends
+      # @return [nil]
+      # @raise [Error] when a handle is unknown or destroyed, the child already has a parent, the
+      #   parent accepts no children or is already full, the attach would form a cycle, or the
+      #   index is out of range
       def attach(parent, child, index = nil)
         @mutex.synchronize do
           parent_node = node!(parent)
@@ -138,6 +206,12 @@ module Lich
         raise attributed_error('child index is out of range', parent, :index)
       end
 
+      # Removes a child from its parent without destroying it.
+      #
+      # @param parent [Handle] the node the child is under
+      # @param child [Handle] the node to remove
+      # @return [nil]
+      # @raise [Error] when a handle is unknown or destroyed, or the child is not under the parent
       def detach(parent, child)
         @mutex.synchronize do
           parent_node = node!(parent)
@@ -154,6 +228,19 @@ module Lich
         nil
       end
 
+      # Binds a callback to one of the node's events, replacing any earlier binding for that event.
+      #
+      # A page root accepts the lifecycle events ({Contract::PAGE_LIFECYCLE_EVENTS}); every other
+      # type accepts the events its schema lists.
+      #
+      # @param handle [Handle] the node
+      # @param event [Symbol, String] the event name
+      # @param callable [#call] receives the {Runtime::EventContext} when the event fires
+      # @return [String] the binding id, for {#unbind}
+      # @raise [ArgumentError] when the callable does not respond to call or the event is not a
+      #   contract name
+      # @raise [Error] when the handle is unknown or destroyed
+      # @raise [UnknownEventError] when the type has no such event
       def bind(handle, event, callable)
         raise ArgumentError, 'callback must respond to call' unless callable.respond_to?(:call)
 
@@ -179,6 +266,11 @@ module Lich
         end
       end
 
+      # Removes a binding by id.
+      #
+      # @param binding_id [String, #to_s] an id returned by {#bind}
+      # @return [nil]
+      # @raise [Error] when the id is not a live binding
       def unbind(binding_id)
         @mutex.synchronize do
           handle, event, = @bindings.delete(binding_id.to_s) || raise(
@@ -194,6 +286,14 @@ module Lich
         nil
       end
 
+      # Destroys a node and its whole subtree, detaching it from its parent first.
+      #
+      # Destroying a rendered page root closes the page through the runtime. The handle
+      # stays known as destroyed, so a later use is refused as such rather than as unknown.
+      #
+      # @param handle [Handle] the node to destroy
+      # @return [nil]
+      # @raise [Error] when the handle is unknown or already destroyed
       def destroy(handle)
         @mutex.synchronize do
           raise attributed_error('handle is already destroyed', handle) if @destroyed.key?(handle)
@@ -215,6 +315,13 @@ module Lich
         nil
       end
 
+      # Opens a modal dialog through the service on the owner's behalf.
+      #
+      # @param props [Hash{Symbol, String => Object}] the modal's options as the service's `modal`
+      #   takes them; an `id` is minted when none is given
+      # @return [Object] whatever the service's modal call returns
+      # @raise [ArgumentError] when props is not a Hash
+      # @raise [Error] any failure from the service, re-raised with adapter attribution
       def modal(props)
         raise ArgumentError, 'props must be a Hash' unless props.is_a?(Hash)
 
@@ -225,6 +332,11 @@ module Lich
         raise attributed(error, nil, :modal)
       end
 
+      # Looks up a contract type's schema, attributing an unknown type to this adapter.
+      #
+      # @param type [Symbol, String] the component type
+      # @return [Hash{Symbol => Object}] the schema from {Contract.schema}
+      # @raise [UnknownTypeError] when the type is not a contract type
       def schema(type)
         Contract.schema(type)
       rescue UnknownTypeError => error
@@ -266,6 +378,7 @@ module Lich
         nil
       end
 
+      # Registers a Page for a page root the first time it is flushed.
       def ensure_page!(root)
         return root.page if root.page
         raise attributed_error('only page roots can be rendered') unless root.type == :page
@@ -332,6 +445,7 @@ module Lich
       # Runs once every component in the pass has a draft, and so a cid.
       def render_completed(_builder, _drafts); end
 
+      # The node's props with this adapter's viewer's viewer-scoped values overlaid.
       def effective_props(node, handle)
         Contract.schema(node.type)[:properties].each_with_object(node.props.dup) do |(name, definition), result|
           next unless definition[:scope] == :viewer && @viewer
@@ -341,10 +455,12 @@ module Lich
         end
       end
 
+      # Event name to callable for a node's bindings.
       def callbacks_for(node)
         node.bindings.to_h { |event, binding_id| [event, @bindings.fetch(binding_id).last] }
       end
 
+      # Validates one property in the context of the node's others and returns its normalised value.
       def validate_property(node, handle, name, value)
         @validator.validate_component!(
           node.type, node.props.merge(name => value), owner: owner_label,
@@ -352,6 +468,7 @@ module Lich
         ).fetch(name)
       end
 
+      # The normalised name and definition of a property, treating `:value` as the type's value shape.
       def property!(node, handle, property)
         name = normalize_name(property)
         component_schema = Contract.schema(node.type)
@@ -367,16 +484,19 @@ module Lich
         )
       end
 
+      # Whether the property is write-only: sensitive scope, or the value of a sensitive input.
       def sensitive_property?(node, name, definition)
         definition[:scope] == :sensitive_write_only ||
           (name == :value && (node.type == :password_input || node.props[:sensitive] == true))
       end
 
+      # This adapter's viewer's value for the property, or the node's prop when none was set.
       def viewer_value(node, handle, name)
         viewer = viewer!
         deep_copy(@viewer_values.fetch([viewer, handle, name], node.props[name]))
       end
 
+      # The adapter's viewer, or an AmbiguousViewerError when it was created without one.
       def viewer!
         return @viewer if @viewer
 
@@ -384,6 +504,7 @@ module Lich
         raise AmbiguousViewerError.new(message, owner: owner_label, page_id: adapter_page_id)
       end
 
+      # Recomputes each child's slot name from its position, for types with named children.
       def assign_child_slots!(parent)
         rule = Contract.schema(parent.type)[:children]
         parent.children.each_with_index do |child_handle, index|
@@ -399,6 +520,7 @@ module Lich
         end
       end
 
+      # Refuses an attach to a named-children parent that already has every slot filled.
       def validate_child_capacity!(handle, node)
         rule = Contract.schema(node.type)[:children]
         return unless rule.is_a?(Hash)
@@ -411,10 +533,12 @@ module Lich
         raise attributed_error('component has too many children', handle) if node.children.length >= expected
       end
 
+      # Whether the node's type places children in named slots.
       def named_children?(node)
         Contract.schema(node.type)[:children].is_a?(Hash)
       end
 
+      # The node for a handle; an attributed error for a destroyed or unknown one.
       def node!(handle)
         return @nodes.fetch(handle) if @nodes.key?(handle)
         raise attributed_error('handle is already destroyed', handle) if @destroyed.key?(handle)
@@ -422,6 +546,7 @@ module Lich
         raise attributed_error('unknown handle', handle)
       end
 
+      # Forgets a node and its subtree: bindings, viewer values, and the handle map.
       def destroy_node!(handle)
         node = @nodes.delete(handle)
         @handles_by_node.delete(node)
@@ -431,33 +556,40 @@ module Lich
         @destroyed[handle] = true
       end
 
+      # Closes a rendered page through the runtime with reason owner.
       def close_page(page)
         @service.runtime.close_page(page, reason: :owner)
       end
 
+      # The topmost ancestor of a node.
       def root_for(node)
         current = node
         current = node!(current.parent) while current.parent
         current
       end
 
+      # Marks a root as needing a render on the next flush.
       def dirty!(root)
         @dirty_roots[root] = true
       end
 
+      # The handle for a node, or nil once the node is destroyed.
       def handle_for(node)
         @handles_by_node[node]
       end
 
+      # The page id a root renders under, or a placeholder for errors before any root exists.
       def adapter_page_id(root = nil)
         suffix = root ? handle_for(root).object_id.to_s(36) : 'unrendered'
         "adapter-#{suffix}"
       end
 
+      # The cid a handle is attributed by in errors.
       def handle_label(handle)
         handle ? "opaque-#{handle.object_id.to_s(36)}" : 'adapter'
       end
 
+      # A printable name for the owner, for error attribution.
       def owner_label
         return @owner.webui_owner_id if @owner.respond_to?(:webui_owner_id)
         return @owner.name if @owner.respond_to?(:name) && @owner.name
@@ -465,6 +597,7 @@ module Lich
         "#{@owner.class}:#{@owner.object_id}"
       end
 
+      # Re-raises an error as an attributed Error of the same class, unless it is already attributed.
       def attributed(error, handle = nil, field = nil)
         return error if error.is_a?(Error) && error.owner
 
@@ -475,6 +608,7 @@ module Lich
         )
       end
 
+      # A new Error attributed to this adapter, and to a handle and field when given.
       def attributed_error(message, handle = nil, field = nil)
         Error.new(
           message, owner: owner_label, page_id: adapter_page_id,
@@ -482,10 +616,12 @@ module Lich
         )
       end
 
+      # A copy of the hash with every key normalised to a contract name symbol.
       def symbolize(hash)
         hash.to_h { |key, value| [normalize_name(key), value] }
       end
 
+      # A symbol for a symbol or identifier-shaped string; ArgumentError for anything else.
       def normalize_name(value)
         return value if value.is_a?(Symbol)
         return value.to_sym if value.is_a?(String) && value.match?(Contract::IDENTIFIER)
@@ -493,6 +629,7 @@ module Lich
         raise ArgumentError, "invalid contract name #{value.inspect}"
       end
 
+      # A structural copy: hashes, arrays and strings are duplicated, everything else shared.
       def deep_copy(value)
         case value
         when Hash then value.to_h { |key, item| [key, deep_copy(item)] }

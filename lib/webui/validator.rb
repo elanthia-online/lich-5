@@ -6,9 +6,28 @@ require_relative 'contract'
 module Lich
   module WebUI
     # Validates component properties, event payloads, facilities, and cross-field invariants.
+    #
+    # The validator interprets the shape hashes {Contract} declares: every public method
+    # normalises its input against the relevant schema, returns the frozen, defaulted
+    # result, and raises an attributed {Error} naming the owner, page, cid and field on
+    # any violation. The private `validate_*!` methods hold the invariants a single shape
+    # cannot express (a select's `value` must be one of its `options`, a table's `parent`
+    # links must not cycle, and so on).
     class Validator
+      # The attribution every error carries: who owns the page, which page, which component.
       Context = Data.define(:owner, :page_id, :cid)
 
+      # Validates a component's full property set against its type's schema.
+      #
+      # @param type [Symbol, String] the component type
+      # @param props [Hash{Symbol, String => Object}] the properties as supplied by the author
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page the component belongs to
+      # @param cid [String] the component's id
+      # @return [Hash{Symbol => Object}] the frozen, normalised properties with defaults filled in
+      # @raise [UnknownTypeError] when the type is not a contract type
+      # @raise [UnknownPropertyError] when a property is not in the schema
+      # @raise [SchemaViolationError] when a value fails its shape or a cross-field invariant
       def validate_component!(type, props, owner:, page_id:, cid:)
         normalized_type = Contract.normalize_type(type)
         schema = Contract.schema(normalized_type)
@@ -18,6 +37,21 @@ module Lich
         normalized.freeze
       end
 
+      # Validates a client-sent event payload against the component's event schema and state.
+      #
+      # @param type [Symbol, String] the component type
+      # @param event_name [Symbol, String] the event name
+      # @param payload [Hash{Symbol, String => Object}, nil] the payload the client sent; nil or
+      #   `{}` for an event that carries none
+      # @param props [Hash{Symbol => Object}] the component's current properties, for invariants
+      #   such as option membership and range
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page the component belongs to
+      # @param cid [String] the component's id
+      # @return [Hash{Symbol => Object}] the frozen, normalised payload (empty for payload-less events)
+      # @raise [UnknownTypeError] when the type is not a contract type
+      # @raise [UnknownEventError] when the type has no such event
+      # @raise [SchemaViolationError] when the payload fails its shape or an event invariant
       def validate_event!(type, event_name, payload, props:, owner:, page_id:, cid:)
         normalized_type = Contract.normalize_type(type)
         schema = Contract.schema(normalized_type)
@@ -44,6 +78,16 @@ module Lich
         validated
       end
 
+      # Validates a page facility value (see {Contract::FACILITIES}).
+      #
+      # @param name [Symbol, String] the facility name
+      # @param value [Object] the value to check against the facility's shape
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page declaring the facility
+      # @param cid [String, nil] a component id for attribution, when one applies
+      # @return [Object] the frozen, normalised value
+      # @raise [UnknownPropertyError] when no facility has that name
+      # @raise [SchemaViolationError] when the value fails the facility's shape
       def validate_facility!(name, value, owner:, page_id:, cid: nil)
         key = normalize_name(name)
         facility = Contract::FACILITIES[key]
@@ -55,6 +99,18 @@ module Lich
         validate_shape(facility.fetch(:shape), value, context, name.to_s)
       end
 
+      # Validates a submitted input value against the component's value shape and its live bounds.
+      #
+      # @param type [Symbol, String] the component type; must be one that carries a value
+      # @param value [Object] the value the viewer submitted
+      # @param props [Hash{Symbol => Object}] the component's current properties (options,
+      #   min/max, max_length)
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page the component belongs to
+      # @param cid [String] the component's id
+      # @return [Object] the frozen, normalised value
+      # @raise [UnknownTypeError] when the type is not a contract type
+      # @raise [SchemaViolationError] when the type carries no value or the value is out of shape or range
       def validate_input_value!(type, value, props:, owner:, page_id:, cid:)
         normalized_type = Contract.normalize_type(type)
         schema = Contract.schema(normalized_type)
@@ -67,10 +123,36 @@ module Lich
         validated
       end
 
+      # Validates one child placement property (a parent's `child_properties` entry) for a component.
+      #
+      # @param name [Symbol, String] the placement property name, used in the error path
+      # @param shape [Hash{Symbol => Object}] the shape from the parent's `child_properties`
+      # @param value [Object] the placement value
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page the component belongs to
+      # @param cid [String] the child component's id
+      # @return [Object] the frozen, normalised value
+      # @raise [SchemaViolationError] when the value fails the shape
       def validate_placement!(name, shape, value, owner:, page_id:, cid:)
         validate_shape(shape, value, Context.new(owner, page_id, cid), "placement.#{name}")
       end
 
+      # Validates a single property write in the context of the component's other properties.
+      #
+      # The whole property set is re-validated with the new value merged in, so cross-field
+      # invariants still hold, and only the requested property's normalised value is returned.
+      #
+      # @param type [Symbol, String] the component type
+      # @param name [Symbol, String] the property name
+      # @param value [Object] the new value
+      # @param props [Hash{Symbol => Object}] the component's current properties
+      # @param owner [String] label of the owning script, for error attribution
+      # @param page_id [String] id of the page the component belongs to
+      # @param cid [String] the component's id
+      # @return [Object] the frozen, normalised value of `name`
+      # @raise [UnknownTypeError] when the type is not a contract type
+      # @raise [UnknownPropertyError] when the type has no such property
+      # @raise [SchemaViolationError] when the merged property set fails validation
       def validate_property!(type, name, value, props:, owner:, page_id:, cid:)
         normalized_type = Contract.normalize_type(type)
         key = normalize_name(name)
@@ -88,6 +170,7 @@ module Lich
 
       private
 
+      # Normalises a property hash against its definitions: unknown keys, required keys, defaults, forced values.
       def validate_properties(definitions, props, context)
         violation!('properties must be a Hash', context, :properties) unless props.is_a?(Hash)
 
@@ -112,6 +195,7 @@ module Lich
         end
       end
 
+      # Dispatches on a shape's `:kind` to the matching checker; `path` names the value in errors.
       def validate_shape(shape, value, context, path)
         case shape.fetch(:kind)
         when :string
@@ -211,6 +295,7 @@ module Lich
         end.freeze
       end
 
+      # Returns the first variant's result that accepts the value, or fails with every variant's reason.
       def validate_union(shape, value, context, path)
         failures = shape.fetch(:variants).filter_map do |variant|
           begin
@@ -222,6 +307,7 @@ module Lich
         violation!("matches no permitted shape: #{failures.join(' | ')}", context, path)
       end
 
+      # A table column's cell editor: nil, or a record whose fields depend on its `type`.
       def validate_editor(value, context, path)
         return nil if value.nil?
         violation!('must be a Hash or nil', context, path) unless value.is_a?(Hash)
@@ -259,6 +345,7 @@ module Lich
         result
       end
 
+      # A table row's cells: column key (an identifier) to editor scalar.
       def validate_cell_map(value, context, path)
         violation!('must be a Hash', context, path) unless value.is_a?(Hash)
 
@@ -276,6 +363,7 @@ module Lich
         value.is_a?(String) ? value.dup.freeze : value
       end
 
+      # Per-type cross-field invariants, run after the property shapes have passed.
       def validate_component_invariants!(type, props, context)
         validate_sensitive!(type, props, context)
         case type
@@ -467,6 +555,7 @@ module Lich
         end
       end
 
+      # Per-event invariants that need the component's live properties (row and option membership, enablement).
       def validate_event_invariants!(type, event_name, payload, props, context)
         normalized_props = props.transform_keys { |key| normalize_name(key) }
         case [type, event_name]
@@ -520,6 +609,7 @@ module Lich
         end
       end
 
+      # Bounds on a submitted value that only the component's properties know (options, length, range).
       def validate_dynamic_input_value!(type, value, props, context)
         normalized_props = props.transform_keys { |key| normalize_name(key) }
         case type
@@ -594,6 +684,7 @@ module Lich
         violation!('region does not exist or is not activatable', context, event_name) unless layer && (layer[:activates] || layer['activates'])
       end
 
+      # Symbolises identifier-shaped keys, refusing non-name keys and duplicates.
       def normalize_hash_keys(hash, context)
         hash.each_with_object({}) do |(key, value), normalized|
           name = normalize_name(key)
@@ -603,6 +694,7 @@ module Lich
         end
       end
 
+      # A symbol for a symbol or identifier-shaped string; nil for anything else.
       def normalize_name(name)
         return name if name.is_a?(Symbol)
         return name.to_sym if name.is_a?(String) && name.match?(Contract::IDENTIFIER)
@@ -610,6 +702,7 @@ module Lich
         nil
       end
 
+      # Raises a SchemaViolationError attributed to the context and field.
       def violation!(message, context, field)
         raise SchemaViolationError.new(message, **error_context(context, field))
       end

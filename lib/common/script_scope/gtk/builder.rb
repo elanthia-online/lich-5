@@ -14,7 +14,11 @@ module Lich
         #
         # The parser targets what those files use - see the census in
         # docs/webui-gtk-shim-plan.md - and logs anything else once.
+        #
+        # Differences from ruby-gtk3: only the classes in {CLASSES} are built (an unknown class is
+        # skipped and logged), and +connect_signals+ wires handlers through the shim's signal table.
         class Builder
+          # GtkBuilder class attribute => the shim widget class name it constructs.
           CLASSES = {
             'GtkWindow' => :Window, 'GtkDialog' => :Dialog,
             'GtkBox' => :Box, 'GtkHBox' => :HBox, 'GtkVBox' => :VBox,
@@ -36,8 +40,10 @@ module Lich
           # Properties that reference another object by id.
           REFERENCE_PROPERTIES = %w[adjustment model buffer].freeze
 
+          # @return [Array<Object>] every object built so far, in document order, with or without an id
           attr_reader :objects
 
+          # An empty builder; call {#add_from_string} or {#add_from_file} to populate it.
           def initialize
             @objects = []
             @by_id = {}
@@ -45,6 +51,11 @@ module Lich
             @pending_references = [] # [object, property, id]
           end
 
+          # Builds every top-level <object> in a GtkBuilder XML document and resolves id references.
+          #
+          # @param xml [String, #to_s] the GtkBuilder XML
+          # @return [self]
+          # @raise [ArgumentError] when the document's root is not <interface>
           def add_from_string(xml)
             document = REXML::Document.new(xml.to_s)
             interface = document.root
@@ -55,19 +66,36 @@ module Lich
             self
           end
 
+          # Reads a GtkBuilder XML file and builds it as {#add_from_string} does.
+          #
+          # @param path [String] the file to read
+          # @return [self]
+          # @raise [ArgumentError] when the document's root is not <interface>
           def add_from_file(path)
             add_from_string(File.read(path))
           end
 
+          # Looks an object up by the id the XML gave it. Also reachable as +builder[id]+.
+          #
+          # @param id [String, Symbol, #to_s] the object's id attribute
+          # @return [Object, nil] the built object, or nil when no object has that id
           def get_object(id)
             @by_id[id.to_s]
           end
           alias [] get_object
 
-          # Wires every <signal> in the XML. With a block, yields the handler
+          # Wires every <signal> in the XML.
+          #
+          # With a block, yields the handler
           # name and expects a callable back (the scripts use
           # `method(handler)`); without one, looks the method up on self.
           # Handler arity is honored the way ruby-gnome does it.
+          #
+          # @yield [handler_name] once per declared signal, when a block is given
+          # @yieldparam handler_name [String] the handler attribute from the XML
+          # @yieldreturn [#call] the handler; anything that does not respond to +call+ is skipped
+          # @return [self]
+          # @raise [NameError] without a block, when self has no method of a handler's name
           def connect_signals
             @signals.each do |(object, signal, handler_name)|
               callable = block_given? ? yield(handler_name) : method(handler_name)
@@ -78,6 +106,12 @@ module Lich
             self
           end
 
+          # Same as {#connect_signals}; ruby-gtk3 offers both names.
+          #
+          # @yield [handler_name] once per declared signal, when a block is given
+          # @yieldparam handler_name [String] the handler attribute from the XML
+          # @yieldreturn [#call] the handler
+          # @return [self]
           def connect_signals_full(&block)
             connect_signals(&block)
           end
@@ -147,6 +181,7 @@ module Lich
             nil
           end
 
+          # Properties the constructor already consumed, per class, so they are not applied again.
           HANDLED_AT_CONSTRUCTION = {
             Box: %w[orientation spacing], ListStore: %w[], TreeStore: %w[],
             Adjustment: %w[value lower upper step-increment page-increment page-size],

@@ -65,6 +65,7 @@ module Lich
 
         class << self
           # Check if Credential Manager is available
+          #
           # @return [Boolean] true if Credential Manager is accessible
           def available?
             return false unless OS.windows?
@@ -79,6 +80,7 @@ module Lich
           end
 
           # Store a generic credential (password) in Credential Manager
+          #
           # @param target_name [String] Target/service name (e.g., 'lich5.master_password')
           # @param username [String] Username associated with credential
           # @param password [String] Password/secret to store
@@ -135,6 +137,7 @@ module Lich
           end
 
           # Retrieve a generic credential from Credential Manager
+          #
           # @param target_name [String] Target/service name to retrieve
           # @return [String, nil] Retrieved password/secret, or nil if not found
           def retrieve_credential(target_name)
@@ -176,6 +179,7 @@ module Lich
           end
 
           # Delete a credential from Credential Manager
+          #
           # @param target_name [String] Target/service name to delete
           # @return [Boolean] true if credential deleted successfully
           def delete_credential(target_name)

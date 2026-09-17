@@ -26,12 +26,20 @@ module Lich
     # frontend stays selectable even when its executable cannot be found, so
     # the player can still choose it and fix the path afterwards.
     module FrontendChoices
+      # One selectable frontend: its canonical id, the label shown in a picker
+      # (display name plus state), its discovery state (:configured, :detected
+      # or :unavailable) and the bare display name.
       Choice = Struct.new(:id, :label, :state, :display_name, keyword_init: true) do
         # Whether the frontend can actually be launched right now.
+        #
+        # @return [Boolean] false only when the state is :unavailable
         def available?
           state != :unavailable
         end
 
+        # The choice as a plain hash with the state stringified, for a contract payload.
+        #
+        # @return [Hash{Symbol => String}] :id, :label, :state and :display_name
         def to_h
           { id: id, label: label, state: state.to_s, display_name: display_name }
         end
@@ -51,11 +59,21 @@ module Lich
         end
 
         # The same list as plain hashes, for a contract that carries options.
+        #
+        # @param keywords [Hash] passed through to {.all} (refresh:, locator:, frontend:)
+        # @return [Array<Hash{Symbol => String}>] one {Choice#to_h} per choice
         def options(**keywords)
           all(**keywords).map(&:to_h)
         end
 
         # Whether +frontend_id+ is one the player may select.
+        #
+        # The id is canonicalised through Frontend.canonical_name first, so an alias
+        # of a selectable frontend is selectable too.
+        #
+        # @param frontend_id [String, Symbol, nil] frontend identifier or alias
+        # @param keywords [Hash] passed through to {.all} (refresh:, locator:, frontend:)
+        # @return [Boolean] false for a blank id or one not in the catalog
         def selectable?(frontend_id, **keywords)
           return false if frontend_id.to_s.strip.empty?
 
