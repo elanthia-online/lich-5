@@ -8,8 +8,8 @@ require_relative '../../../lib/webui/sensitive_value'
 RSpec.describe 'WebUI contract foundation' do
   let(:contract) { Lich::WebUI::Contract }
 
-  it 'publishes exactly the locked 2.17.0 vocabulary' do
-    expect(contract::VERSION).to eq('2.17.0')
+  it 'publishes exactly the locked 2.18.0 vocabulary' do
+    expect(contract::VERSION).to eq('2.18.0')
     expect(contract::TYPES).to contain_exactly(
       :page, :group, :stack, :columns, :grid, :tabs, :expander, :split, :overlay, :scroll, :divider,
       :text, :markdown, :log, :progress, :image, :button, :toggle, :checkbox, :radio, :text_input,
@@ -38,12 +38,16 @@ RSpec.describe 'WebUI contract foundation' do
     expect { contract.negotiate!('3.0.0') }.to raise_error(Lich::WebUI::VersionError, /unsupported contract major/)
   end
 
+  # 2.18 (D17): a password may say that it changed, so a script can drive a
+  # strength meter, but the event carries nothing -- the value stays
+  # write-only and reaches the script through a submission alone.
   it 'makes password values sensitive-write-only with no value-bearing change event' do
     schema = contract.schema(:password_input)
 
     expect(schema[:sensitive]).to be(true)
     expect(schema[:value_scope]).to eq(:sensitive_write_only)
-    expect(schema[:events].keys).to eq([:submit])
+    expect(schema[:events].keys).to eq([:change, :submit])
+    expect(schema[:events][:change][:payload]).to be_nil
     expect(schema[:properties].fetch(:sensitive)).to include(forced: true, default: true)
   end
 

@@ -185,6 +185,30 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(carrier).to be_consumed
   end
 
+  # 2.18 (D17): a strength meter needs to know the password changed without
+  # ever seeing it. The event reaches the script with an empty payload, no
+  # submission, and empties nothing on screen.
+  it 'delivers a payload-free password change to its binding without clearing the field' do
+    callbacks = Queue.new
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'login', title: 'Login') do
+      password_input(key: 'password', on: { change: ->(event) { callbacks << event } })
+    end)
+    address, render = attach(first_connection, page)
+    password_cid = render.dig('tree', 'children', 0, 'cid')
+
+    result = runtime.handle(first_connection, {
+      type: 'event', page: address, cid: password_cid, event: 'change',
+      generation: render['generation'], payload: {},
+    })
+    event = Timeout.timeout(2) { callbacks.pop }
+
+    expect(result).to eq(:queued)
+    expect(event.event).to eq(:change)
+    expect(event.payload).to eq({})
+    expect(event.submission.cids).to be_empty
+    expect(first_connection.sent.map { |sent| sent['type'] }).not_to include('clear_sensitive')
+  end
+
   it 'discards a sensitive submission when the enqueue itself overflows' do
     # The carrier is normally zeroed by an `ensure` inside the enqueued
     # block. When enqueue raises OverflowError the block is never stored, so

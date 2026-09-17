@@ -496,6 +496,10 @@ module Lich
 
       def validate_input_event!(type, event_name, payload, props, context)
         return unless event_name == :change
+        # 2.18: a password's change carries no payload, so there is nothing to
+        # check and nothing disclosed. Any other sensitive control's change
+        # would carry the value, and stays refused.
+        return if type == :password_input
         violation!('sensitive components cannot emit change', context, event_name) if props[:sensitive] == true
 
         value = payload[:value]

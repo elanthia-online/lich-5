@@ -29,7 +29,8 @@ RSpec.describe Lich::WebUI::Contract do
 
     expect(schema[:sensitive]).to be true
     expect(schema[:value_scope]).to eq(:sensitive_write_only)
-    expect(schema[:events].keys).to eq([:submit])
+    expect(schema[:events].keys).to eq([:change, :submit])
+    expect(schema[:events][:change][:payload]).to be_nil
     expect(schema[:properties][:sensitive]).to include(default: true, forced: true)
   end
 

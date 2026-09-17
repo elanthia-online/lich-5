@@ -6,7 +6,7 @@ module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
     module Contract
-      VERSION = '2.17.0'
+      VERSION = '2.18.0'
       MAJOR_VERSION = 2
 
       TYPES = %i[
@@ -397,7 +397,11 @@ module Lich
             label: property(SHORT), placeholder: property(SHORT),
             max_length: property(integer(min: 1, max: 8192)),
             revealable: property(BOOL, default: false, scope: :ephemeral_client),
-          }, children: :none, events: { submit: event(nil, terminal: true) },
+          }, children: :none,
+          # 2.18: `change` says only that the value changed -- it carries
+          # nothing, so a script can drive a strength meter without the
+          # password ever leaving the browser except through a submission.
+          events: { change: event(nil), submit: event(nil, terminal: true) },
           value: string(:input_text), value_scope: :sensitive_write_only, sensitive: true,
         },
         textarea: {

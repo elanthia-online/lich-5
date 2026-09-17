@@ -1,6 +1,6 @@
 {
   "envelope_version": 1,
-  "contract_version": "2.17.0",
+  "contract_version": "2.18.0",
   "contract_major": 2,
   "types": [
     "page",
@@ -4762,6 +4762,12 @@
       },
       "children": "none",
       "events": {
+        "change": {
+          "payload": null,
+          "terminal": false,
+          "lifecycle": false,
+          "structural": false
+        },
         "submit": {
           "payload": null,
           "terminal": true,

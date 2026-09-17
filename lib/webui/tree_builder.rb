@@ -145,7 +145,9 @@ module Lich
               owner: owner_label, page_id: @page_id, cid: draft.cid, field: event_name
             )
           end
-          if draft.props[:sensitive] == true && event_key == :change
+          # 2.18: a password's change carries no payload, so binding it
+          # discloses nothing; a sensitive text_input's change would.
+          if draft.props[:sensitive] == true && event_key == :change && allowed.fetch(event_key)[:payload]
             raise UnknownEventError.new(
               'sensitive components cannot bind value-bearing change events',
               owner: owner_label, page_id: @page_id, cid: draft.cid, field: event_name

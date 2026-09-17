@@ -132,6 +132,23 @@ RSpec.describe Lich::WebUI::Validator do
     end.to raise_error(Lich::WebUI::SchemaViolationError, /within min and max/)
   end
 
+  # 2.18 (D17): a password's `change` says only that the value changed. It is
+  # the one change event with no payload, and the one sensitive control
+  # allowed to emit change at all -- a text_input marked sensitive still may
+  # not, because its change would carry the value.
+  it 'accepts a payload-free change on a password, and nothing more', security_id: 'sec-sensitive-change' do
+    props = validator.validate_component!(:password_input, {}, **context)
+
+    expect(validator.validate_event!(:password_input, :change, {}, props: props, **context)).to eq({})
+    expect(validator.validate_event!(:password_input, :change, nil, props: props, **context)).to eq({})
+    expect { validator.validate_event!(:password_input, :change, { value: 'hunter2' }, props: props, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /accepts no payload/)
+
+    sensitive = validator.validate_component!(:text_input, { value: '', sensitive: true }, **context)
+    expect { validator.validate_event!(:text_input, :change, { value: 'x' }, props: sensitive, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /sensitive components cannot emit change/)
+  end
+
   it 'refuses an event that is not registered for the component type', security_id: 'sec-event-type' do
     props = validator.validate_component!(:button, { label: 'Go' }, **context)
 
