@@ -47,6 +47,31 @@ RSpec.describe Lich::WebUI::Page do
       .to raise_error(Lich::WebUI::IdentityError, /author key required.*page=nested-items/)
   end
 
+  it 'keeps menus to items and items to a single submenu' do
+    bad_menu = described_class.new(owner: owner, id: 'menu-text', title: 'Menu') do
+      menu(key: 'm') { text(key: 't', content: 'x') }
+    end
+    expect { bad_menu.render }.to raise_error(Lich::WebUI::SchemaViolationError, /menu children must be menu_item/)
+
+    two_submenus = described_class.new(owner: owner, id: 'menu-two', title: 'Menu') do
+      menu(key: 'm') do
+        menu_item(key: 'i', label: 'Scale') do
+          menu(key: 'a')
+          menu(key: 'b')
+        end
+      end
+    end
+    expect { two_submenus.render }.to raise_error(Lich::WebUI::SchemaViolationError, /at most one submenu/)
+
+    good = described_class.new(owner: owner, id: 'menu-ok', title: 'Menu') do
+      menu(key: 'm') do
+        menu_item(key: 'i', label: 'Scale') { menu(key: 'a') { menu_item(key: 'r', label: '50 %', kind: 'radio', group: 'g') } }
+        menu_item(key: 's', kind: 'separator')
+      end
+    end
+    expect(good.render.tree.children.first.children.map { |item| item.props[:kind] }).to eq(%w[normal separator])
+  end
+
   it 'allows page state accessors from an author render block without deadlocking' do
     page = nil
     page = described_class.new(owner: owner, id: 'stateful', title: 'Stateful') do

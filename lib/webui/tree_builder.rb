@@ -233,11 +233,23 @@ module Lich
           validate_named_children!(draft, child_rule)
         end
         child_violation!(draft, 'page cannot be nested') if draft.children.any? { |child| child.type == :page }
+        validate_menu_children!(draft)
         if draft.type == :grid && draft.props[:cells] && draft.children.length > draft.props[:cells]
           child_violation!(draft, 'grid children exceed declared cells')
         end
         validate_child_placements!(draft)
         draft.children.each { |child| validate_children!(child, depth: depth + 1) }
+      end
+
+      # A menu holds items; an item holds at most one submenu.
+      def validate_menu_children!(draft)
+        case draft.type
+        when :menu
+          child_violation!(draft, 'menu children must be menu_item') if draft.children.any? { |child| child.type != :menu_item }
+        when :menu_item
+          child_violation!(draft, 'menu_item children must be menu') if draft.children.any? { |child| child.type != :menu }
+          child_violation!(draft, 'menu_item holds at most one submenu') if draft.children.length > 1
+        end
       end
 
       def validate_named_children!(draft, rule)

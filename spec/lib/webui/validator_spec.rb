@@ -71,6 +71,33 @@ RSpec.describe Lich::WebUI::Validator do
     expect { validator.validate_component!(:composite, composite, **context) }.not_to raise_error
   end
 
+  it 'accepts the Pango markup subset on text and refuses anything else', security_id: 'sec-escaping' do
+    accepted = '<b>Town</b> <span color="#ff0000" size="12000" font_desc="Courier Bold 9">x</span> &amp; <tt>y</tt>'
+    expect(validator.validate_component!(:text, { content: 'x', markup: accepted }, **context)[:markup]).to eq(accepted)
+
+    {
+      '<script>x</script>'                     => /tag script is not allowed/,
+      '<b onclick="x">x</b>'                   => /only allowed on span/,
+      '<span style="italic" href="x">x</span>' => /attribute href is not allowed/,
+      '<span color="url(x)">x</span>'          => /color has an invalid value/,
+      '<span font_desc="a; b">x</span>'        => /font_desc has an invalid value/,
+      '<b>unclosed'                            => /not well-formed/,
+    }.each do |markup, message|
+      expect { validator.validate_component!(:text, { content: 'x', markup: markup }, **context) }
+        .to raise_error(Lich::WebUI::SchemaViolationError, message)
+    end
+  end
+
+  it 'requires a label on every menu item but a separator, and a group only on radios' do
+    expect { validator.validate_component!(:menu_item, { kind: 'separator' }, **context) }.not_to raise_error
+    expect { validator.validate_component!(:menu_item, { kind: 'check' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /missing required property label/)
+    expect { validator.validate_component!(:menu_item, { kind: 'separator', label: 'x' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /separator carries no label/)
+    expect { validator.validate_component!(:menu_item, { kind: 'check', label: 'x', group: 'g' }, **context) }
+      .to raise_error(Lich::WebUI::SchemaViolationError, /group applies to radio items only/)
+  end
+
   it 'enforces boundary values without clamping' do
     expect { validator.validate_component!(:stack, { gap: 64 }, **context) }.not_to raise_error
     expect { validator.validate_component!(:stack, { gap: 65 }, **context) }

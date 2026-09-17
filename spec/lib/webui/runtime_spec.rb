@@ -449,6 +449,27 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(render.dig('tree', 'children', 0, 'props')).to include('src' => '', 'alt' => 'no image')
   end
 
+  # Composite layers used to be an image-only affair: every layer was a PNG
+  # and each was rasterised, PNG-encoded and shipped inline under a size
+  # cap. Shapes are data; they reference nothing and need no source check.
+  it 'accepts a composite of drawn shapes, which reference no served resource' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'marks', title: 'Marks') do
+      composite(key: 'surface', width: 100, height: 100, layers: [
+                  { kind: 'ellipse', x: 10, y: 10, w: 20, h: 20, stroke: { r: 255, g: 0, b: 0, a: 0.8 }, stroke_width: 3 },
+                  { kind: 'rect', x: 40, y: 40, w: 30, h: 20, stroke: { tone: 'danger' } },
+                  { kind: 'line', x1: 0, y1: 0, x2: 99, y2: 99, stroke: { r: 0, g: 200, b: 0, a: 1.0 }, stroke_width: 2 },
+                  { kind: 'line', x1: 99, y1: 0, x2: 0, y2: 99, stroke: { r: 0, g: 200, b: 0, a: 1.0 }, stroke_width: 2 },
+                ])
+    end)
+
+    expect(runtime.handle(first_connection, {
+      type: 'attach', page: registry.address_for(page), version: '2.5.0',
+    })).to eq(:attached)
+    layers = first_connection.sent.last.dig('tree', 'children', 0, 'props', 'layers')
+    expect(layers.map { |layer| layer['kind'] }).to eq(%w[ellipse rect line line])
+    expect(layers.first).to include('stroke_width' => 3, 'opacity' => 1.0)
+  end
+
   it 'still refuses a data URI that is not a base64 image' do
     [
       'data:text/html;base64,PHNjcmlwdD4=',

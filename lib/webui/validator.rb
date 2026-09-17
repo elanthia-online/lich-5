@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'rexml/document'
 require_relative 'contract'
 
 module Lich
@@ -288,7 +289,61 @@ module Lich
         when :table then validate_table!(props, context)
         when :dialog then validate_dialog!(props, context)
         when :composite then validate_composite!(props, context)
+        when :text then validate_markup!(props, context)
+        when :menu_item then validate_menu_item!(props, context)
         end
+      end
+
+      # A menu item is either a separator (no label) or a labelled item.
+      def validate_menu_item!(props, context)
+        if props[:kind] == 'separator'
+          violation!('separator carries no label', context, :label) if props.key?(:label)
+        elsif !props.key?(:label)
+          violation!('missing required property label', context, :label)
+        end
+        violation!('group applies to radio items only', context, :group) if props.key?(:group) && props[:kind] != 'radio'
+      end
+
+      # Parses `markup` as XML and refuses anything outside the Pango subset
+      # the contract names, so the client can build nodes from the parse.
+      def validate_markup!(props, context)
+        markup = props[:markup]
+        return unless markup
+
+        document = begin
+          REXML::Document.new("<m>#{markup}</m>")
+        rescue REXML::ParseException
+          violation!('markup is not well-formed', context, :markup)
+        end
+        validate_markup_element!(document.root, context)
+      end
+
+      def validate_markup_element!(element, context)
+        element.each_element do |child|
+          unless Contract::MARKUP_TAGS.include?(child.name)
+            violation!("markup tag #{child.name} is not allowed", context, :markup)
+          end
+          child.attributes.each do |name, value|
+            validate_markup_attribute!(child.name, name, value, context)
+          end
+          validate_markup_element!(child, context)
+        end
+      end
+
+      def validate_markup_attribute!(tag, name, value, context)
+        violation!("markup attribute #{name} is only allowed on span", context, :markup) unless tag == 'span'
+        unless Contract::MARKUP_SPAN_ATTRIBUTES.include?(name)
+          violation!("markup attribute #{name} is not allowed", context, :markup)
+        end
+        valid = case name
+                when 'foreground', 'color', 'fgcolor', 'background', 'bgcolor' then value.match?(Contract::MARKUP_COLOR)
+                when 'size' then Contract::MARKUP_SIZES.include?(value) || value.match?(/\A\d{1,7}\z/)
+                when 'weight' then Contract::MARKUP_WEIGHTS.include?(value) || value.match?(/\A\d{3}\z/)
+                when 'style' then Contract::MARKUP_STYLES.include?(value)
+                when 'underline' then Contract::MARKUP_UNDERLINES.include?(value)
+                else value.length <= 128 && !value.match?(/[;{}<>]/)
+                end
+        violation!("markup attribute #{name} has an invalid value", context, :markup) unless valid
       end
 
       def validate_sensitive!(type, props, context)
@@ -430,6 +485,8 @@ module Lich
           validate_region_event!(payload, normalized_props, context, event_name)
         when [:composite, :surface_activate]
           violation!('surface events are not enabled', context, event_name) unless normalized_props[:surface_events]
+        when [:page, :key]
+          violation!('key events are not enabled', context, event_name) unless normalized_props[:key_events]
         when [:dialog, :response]
           ids = normalized_props[:buttons].map { |button| (button[:id] || button['id']).to_s }
           violation!('response button does not exist', context, event_name) unless ids.include?(payload[:button])
