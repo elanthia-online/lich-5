@@ -167,4 +167,26 @@ RSpec.describe Lich::WebUI::Server do
     socket&.close
     server&.stop
   end
+
+  # Runtime#refresh writes on the thread that asked for it -- in the shim, a
+  # script's own session thread -- and a browser that stopped reading left
+  # that thread in IO#write with no deadline. The write is bounded now.
+  it 'declares a connection dead instead of blocking forever on a peer that stops reading' do
+    listener = TCPServer.new('127.0.0.1', 0)
+    client = TCPSocket.new('127.0.0.1', listener.addr[1])
+    accepted = listener.accept # never read from: the peer's buffers fill
+    connection = Lich::WebUI::Server::Connection.new(client, write_timeout: 0.2)
+    payload = 'x' * (1024 * 1024)
+
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    results = Array.new(64) { connection.send_text(payload) }
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+    expect(results).to include(false)
+    expect(results.drop_while { |ok| ok }).to all(be(false))
+    expect(connection).not_to be_alive
+    expect(elapsed).to be < 5.0
+  ensure
+    [client, accepted, listener].each { |io| io&.close }
+  end
 end

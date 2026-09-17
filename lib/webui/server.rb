@@ -147,12 +147,20 @@ module Lich
 
       # Authenticated WebSocket connection. The viewer id is generated server-side.
       class Connection
+        # How long a write may wait for the peer to drain its socket before the
+        # connection is declared dead. Runtime#refresh writes synchronously on
+        # whatever thread asked for it -- in the shim that is a script's own
+        # session thread -- so a browser that stopped reading (a suspended
+        # laptop, a frozen tab) used to park that script forever.
+        WRITE_TIMEOUT = 10.0
+
         attr_reader :socket, :viewer_id
 
-        def initialize(socket)
+        def initialize(socket, write_timeout: WRITE_TIMEOUT)
           @socket = socket
           @viewer_id = "viewer-#{SecureRandom.hex(16)}"
           @write_mutex = Mutex.new
+          @write_timeout = write_timeout
           @alive = true
         end
 
@@ -180,11 +188,33 @@ module Lich
         def write(bytes)
           return false unless @alive
 
-          @write_mutex.synchronize { @socket.write(bytes) }
-          true
+          @write_mutex.synchronize { write_within_timeout(bytes) }
         rescue IOError, SystemCallError
           @alive = false
           false
+        end
+
+        # Writes without ever blocking longer than the timeout: a full send
+        # buffer waits on select, and a peer that does not drain it within the
+        # budget makes the connection dead rather than the writer stuck.
+        def write_within_timeout(bytes)
+          remaining = bytes.b
+          until remaining.empty?
+            written = begin
+              @socket.write_nonblock(remaining, exception: false)
+            rescue IO::WaitWritable
+              :wait_writable
+            end
+            if written == :wait_writable
+              unless IO.select(nil, [@socket], nil, @write_timeout)
+                @alive = false
+                return false
+              end
+              next
+            end
+            remaining = remaining.byteslice(written, remaining.bytesize - written)
+          end
+          true
         end
       end
 

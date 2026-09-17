@@ -479,6 +479,25 @@ RSpec.describe Lich::WebUI::Runtime do
       runtime.instance_variable_get(:@page_locks)
     end
 
+    # A refresh thread parked in a write to a browser that stopped reading
+    # held shutdown for as long as the write did; the join is budgeted now.
+    it 'shuts down within its budget even when a refresh thread never returns' do
+      page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'stuck', title: 'Stuck') do
+        text(content: 'stuck')
+      end)
+      parked = Thread.new { sleep }
+      sleep 0.01 until parked.status == 'sleep'
+      runtime.instance_variable_get(:@refresh_state)[page] = { dirty: false, thread: parked }
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      runtime.shutdown(budget: 0.2)
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+      expect(elapsed).to be < 2.0
+      expect(parked.join(1)).not_to be_nil
+      expect(parked).not_to be_alive
+    end
+
     it 'releases the refresh lock of a closed page' do
       page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'closing', title: 'Closing') do
         text(content: 'bye')

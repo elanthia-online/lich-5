@@ -221,10 +221,22 @@ module Lich
         nil
       end
 
-      def shutdown
+      # How long shutdown waits for the refresh threads, all together. A
+      # refresh thread blocked in a socket write to a browser that stopped
+      # reading used to hold shutdown for as long as the write did; the
+      # write is bounded now (Server::Connection::WRITE_TIMEOUT) and so is
+      # this, in case anything else ever parks one.
+      SHUTDOWN_BUDGET = 5.0
+
+      def shutdown(budget: SHUTDOWN_BUDGET)
         @dispatcher.shutdown
         threads = @refresh_mutex.synchronize { @refresh_state.values.filter_map { |state| state[:thread] } }
-        threads.each(&:join)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + budget
+        threads.each do |thread|
+          remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          thread.join([remaining, 0].max)
+          thread.kill if thread.alive?
+        end
       end
 
       private
