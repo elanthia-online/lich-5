@@ -97,13 +97,13 @@ RSpec.describe Lich::Common::WebUILauncher::Catalog, 'real entry-store integrati
       custom_launch: 'custom.exe %1', custom_launch_dir: nil,
     })
     before = catalog.entries.select { |entry| entry.char_name == 'Aldor' }
-                    .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
+                            .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
     expect(before.keys).to contain_exactly(['stormfront', nil], ['wizard', nil], ['stormfront', 'custom.exe %1'])
     expect(before.values).to all(match(/\Aentry-[0-9a-f]{12}\z/)), 'no entry needs an ordinal'
 
     expect(catalog.remove_entry(before.fetch(['stormfront', nil]))).to be(true)
     after = catalog.entries.select { |entry| entry.char_name == 'Aldor' }
-                   .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
+                           .to_h { |entry| [[entry.frontend, entry.custom_launch], entry.key] }
     expect(after.fetch(['wizard', nil])).to eq(before.fetch(['wizard', nil]))
     expect(after.fetch(['stormfront', 'custom.exe %1'])).to eq(before.fetch(['stormfront', 'custom.exe %1']))
     expect { catalog.credential(before.fetch(['stormfront', nil])) }.to raise_error(KeyError)
