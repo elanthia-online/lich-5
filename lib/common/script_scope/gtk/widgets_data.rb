@@ -651,6 +651,41 @@ module Lich
             insert(end_iter, string)
           end
 
+          # Pango markup into a plain-text buffer: the tags are stripped and
+          # the entities unescaped, so the words arrive and the styling is
+          # reported once (armor's legend is bold headings over monospace).
+          def insert_markup(iter, markup, _length = -1)
+            Gtk.log_unsupported('Gtk::TextBuffer', 'insert_markup', note: 'markup styling is not rendered')
+            insert(iter, self.class.markup_to_text(markup))
+          end
+
+          def self.markup_to_text(markup)
+            markup.to_s.gsub(/<[^>]*>/, '')
+                  .gsub('&lt;', '<').gsub('&gt;', '>').gsub('&quot;', '"').gsub('&apos;', "'").gsub('&amp;', '&')
+          end
+
+          def delete_mark(_mark) = nil
+
+          # Everything else a script asks a buffer for degrades the way a
+          # widget does: reported once through the ledger, a setter answers
+          # self so a chain continues, anything else answers nil. A buffer
+          # is not a Widget, so it used to raise NoMethodError and kill the
+          # script.
+          def method_missing(name, *args, &block)
+            return super if Widget::PROTOCOL_METHODS.include?(name)
+
+            Gtk.log_unsupported('Gtk::TextBuffer', name)
+            return self if name.end_with?('=') || name.start_with?('set_')
+
+            nil
+          end
+
+          def respond_to_missing?(name, include_private = false)
+            return super if Widget::PROTOCOL_METHODS.include?(name)
+
+            name.end_with?('=') || name.start_with?('set_') || super
+          end
+
           def delete(from, to)
             start = from.respond_to?(:offset) ? from.offset : 0
             stop = to.respond_to?(:offset) ? to.offset : @text.length

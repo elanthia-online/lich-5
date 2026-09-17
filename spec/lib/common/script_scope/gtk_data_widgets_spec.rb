@@ -313,6 +313,22 @@ RSpec.describe 'GTK compatibility shim: data widgets' do
       expect(report.fetch('Gtk::TextBuffer#apply_tag')).to include(count: 2)
     end
 
+    it 'inserts markup as its text, and degrades any other buffer call instead of raising' do
+      buffer = gtk::TextBuffer.new
+      buffer.text = ''
+      buffer.insert_markup(buffer.start_iter, "<b>Legend</b>\n<span foreground=\"red\">A &amp; B</span> &lt;x&gt;")
+      expect(buffer.text).to eq("Legend\nA & B <x>")
+
+      expect(buffer.frobnicate(1)).to be_nil
+      expect(buffer.set_frobnicate(1)).to be(buffer)
+      expect(buffer.delete_mark(:mark)).to be_nil
+      expect(buffer).not_to respond_to(:frobnicate)
+      expect(buffer).to respond_to(:set_frobnicate)
+      expect { 100 - buffer }.to raise_error(TypeError)
+      report = gtk.unsupported_report.values.first || {}
+      expect(report.keys).to include('Gtk::TextBuffer#insert_markup', 'Gtk::TextBuffer#frobnicate')
+    end
+
     it 'creates a tag into its own table and inserts tagged text as plain text' do
       buffer = gtk::TextBuffer.new
       created = buffer.create_tag('bold', 'weight' => 700)
