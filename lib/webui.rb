@@ -68,7 +68,19 @@ module Lich
       def service
         INITIALIZATION_MUTEX.synchronize do
           @registry ||= Registry.new
-          @service ||= Service.new(registry: @registry, port: Options.port)
+          @service ||= Service.new(registry: @registry, port: Options.port, logger: logger)
+        end
+      end
+
+      # Where the service, runtime and dispatcher write: the Lich log. The
+      # service used to be built without a logger, so everything they
+      # recorded -- a handler that raised, a refused write, a timed-out
+      # socket -- went to a proc that did nothing.
+      #
+      # @return [Proc] receives `(level, message)`
+      def logger
+        @logger ||= lambda do |level, message|
+          Lich.log("#{level}: webui: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
         end
       end
 

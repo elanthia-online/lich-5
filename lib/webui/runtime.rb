@@ -34,22 +34,26 @@ module Lich
 
       # Creates a runtime over a page registry and its collaborators.
       #
+      # +dispatcher+ defaults to one that logs where the runtime does; a
+      # Dispatcher.new default here had no logger, so what its owner threads
+      # rescued went nowhere whatever the service was given.
+      #
       # @param registry [Registry] where pages and their addresses are looked up
-      # @param dispatcher [Dispatcher] runs callbacks on per-owner threads
+      # @param dispatcher [Dispatcher, nil] runs callbacks on per-owner threads; nil builds one sharing +logger+
       # @param viewers [ViewerStore] holds attachments and viewer-scoped state
       # @param validator [Validator] checks event payloads, submissions and property writes
       # @param file_service [FileService, nil] resolves image sources to served files; nil refuses all
       #   non-inline sources
       # @param logger [#call, nil] receives `(level, message)`; nil discards
       # @return [Runtime] the new runtime
-      def initialize(registry:, dispatcher: Dispatcher.new, viewers: ViewerStore.new,
+      def initialize(registry:, dispatcher: nil, viewers: ViewerStore.new,
                      validator: Validator.new, file_service: nil, logger: nil)
         @registry = registry
-        @dispatcher = dispatcher
+        @logger = logger || proc { |_level, _message| }
+        @dispatcher = dispatcher || Dispatcher.new(logger: @logger)
         @viewers = viewers
         @validator = validator
         @file_service = file_service
-        @logger = logger || proc { |_level, _message| }
         @connections = {}
         @connections_mutex = Mutex.new
         @refresh_mutex = Mutex.new
