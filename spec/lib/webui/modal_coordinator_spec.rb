@@ -47,6 +47,72 @@ RSpec.describe Lich::WebUI::ModalCoordinator do
     expect(registry.size).to be_zero
   end
 
+  # Review 2026-09-17, R6: a MessageDialog whose window the viewer closed
+  # waited its full hour, because nothing about the modal page's lifecycle
+  # touched its Future. Driven through the real runtime: attach a viewer,
+  # then detach at the delivered generation, which is what closing the
+  # window sends.
+  describe 'dismissal' do
+    let(:connection_class) do
+      Struct.new(:sent, :viewer_id) do
+        def send_text(text) = sent << JSON.parse(text)
+        def alive? = true
+      end
+    end
+
+    def real_runtime
+      Lich::WebUI::Runtime.new(registry: registry, file_service: Lich::WebUI::FileService.new(application_roots: []))
+    end
+
+    def attach(runtime, page, viewer)
+      connection = connection_class.new([], viewer)
+      address = registry.address_for(page)
+      result = runtime.handle(connection, type: 'attach', page: address, version: Lich::WebUI::Contract::VERSION)
+      raise "attach was #{result.inspect}" unless result == :attached
+
+      [connection, address]
+    end
+
+    it 'resolves the future as dismissed when the viewer closes the window' do
+      runtime = real_runtime
+      modal = described_class.new(registry: registry, runtime: runtime, viewers_present: -> { true }, pages_changed: pages_changed)
+      future = modal.open(owner: owner, id: 'ask', title: 'Ask', buttons: buttons, no_viewer: :wait)
+      page = registry.fetch(owner, 'ask')
+      connection, address = attach(runtime, page, 'viewer-1')
+      generation = connection.sent.find { |m| m['type'] == 'render' }['generation']
+
+      expect(future).not_to be_resolved
+      runtime.handle(connection, type: 'detach', page: address, generation: generation)
+      expect(future.await(timeout: 2)).to have_attributes(button: nil, reason: :dismissed)
+      expect(modal.pending_count).to eq(0)
+    ensure
+      runtime&.shutdown
+    end
+
+    it 'gives a dropped socket a grace, dismisses when nobody comes back, and not when someone does' do
+      runtime = real_runtime
+      modal = described_class.new(registry: registry, runtime: runtime, viewers_present: -> { true },
+                                  pages_changed: pages_changed, dismiss_grace: 0.2)
+      future = modal.open(owner: owner, id: 'drop', title: 'Drop', buttons: buttons, no_viewer: :wait)
+      page = registry.fetch(owner, 'drop')
+      connection, = attach(runtime, page, 'viewer-1')
+      runtime.disconnect(connection)
+      sleep 0.05
+      expect(future).not_to be_resolved, 'the grace has not passed'
+      attach(runtime, page, 'viewer-2')
+      sleep 0.3
+      expect(future).not_to be_resolved, 'a viewer came back within the grace'
+
+      other = modal.open(owner: owner, id: 'gone', title: 'Gone', buttons: buttons, no_viewer: :wait)
+      gone_page = registry.fetch(owner, 'gone')
+      gone_connection, = attach(runtime, gone_page, 'viewer-3')
+      runtime.disconnect(gone_connection)
+      expect(other.await(timeout: 2)).to have_attributes(button: nil, reason: :dismissed)
+    ensure
+      runtime&.shutdown
+    end
+  end
+
   it 'makes response win atomically over timeout and removes the modal page' do
     modal = coordinator(viewers_present: true)
     allow(runtime).to receive(:close_page) do |page, **|
