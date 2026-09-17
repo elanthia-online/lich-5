@@ -80,8 +80,13 @@ module Lich
               @argv_options[:gui] = false
             when /^--gui$/i
               @argv_options[:gui] = true
-            when /^--webui-dev$/i
-              @argv_options[:webui_dev] = true
+            # The launcher choice itself is resolved by Lich.launcher, which
+            # reads ARGV directly because init.rb needs the answer before this
+            # parser runs; these entries only keep the switches recognised.
+            when /^--webui(?:-dev)?$/i
+              @argv_options[:launcher] = :webui
+            when /^--gtk$/i
+              @argv_options[:launcher] = :gtk
             when /^--game=(.+)$/i
               @argv_options[:game] = $1
             when /^--auth-provider=(eaccess|web)$/i

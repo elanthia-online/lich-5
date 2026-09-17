@@ -414,7 +414,19 @@ rescue LoadError => sqlite_load_error
   end
 end
 
-unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
+# The launcher choice is made once, here, before anything reads it: the
+# flag, then the persisted setting, then the default. With the WebUI as the
+# launcher the gtk3 gem is not loaded at all; a script's Gtk resolves to the
+# compatibility scope instead (see main.rb), and core never names the
+# toolkit. That is what lets a machine without GTK run Lich.
+require File.join(LIB_DIR, 'common', 'launcher_choice.rb')
+if ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
+  HAVE_GTK = false
+  @early_gtk_error = 'info: GTK disabled by command-line option'
+elsif Lich.launcher == :webui
+  HAVE_GTK = false
+  @early_gtk_error = 'info: GTK not loaded; the launcher is the WebUI'
+else
   begin
     require 'gtk3'
     HAVE_GTK = true
@@ -448,9 +460,6 @@ unless ARGV.any? { |arg| arg.match?(/^--no-(?:gtk|gui)$/i) }
       exit 1
     end
   end
-else
-  HAVE_GTK = false
-  @early_gtk_error = 'info: GTK disabled by command-line option'
 end
 
 unless File.exist?(LICH_DIR)
