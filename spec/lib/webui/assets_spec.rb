@@ -443,6 +443,19 @@ RSpec.describe 'WebUI browser assets' do
     expect(javascript).to include('tr.tabIndex = component.props.disabled === true ? -1 : 0;')
   end
 
+  # A stray comment terminator in app.css once left prose outside any
+  # comment; the browser skipped the malformed rule that followed -- the
+  # measuring rule -- and every window opened at the size of the screen.
+  # Nothing in the suite parses the stylesheet, so this does the minimum.
+  it 'ships a stylesheet with balanced comments and braces' do
+    css = File.read(File.join(Lich::WebUI::Service::ASSETS_DIR, 'app.css'))
+    stripped = css.gsub(%r{/\*.*?\*/}m, '')
+    expect(stripped).not_to include('*/')
+    expect(stripped).not_to include('/*')
+    expect(stripped.count('{')).to eq(stripped.count('}'))
+    expect(stripped.lines.grep(/\A\s*[^{}\s@.#:\[\]a-zA-Z*,>+~-]/)).to eq([])
+  end
+
   # GTK's rule for a window: the default size is honoured unless the
   # content is larger. The harness cannot measure content in jsdom, so the
   # arithmetic is pinned here; the harness pins the geometry-only path.

@@ -87,7 +87,7 @@ body:has(.webui-page.bare) { overflow: hidden; }
    overflow is hidden for the flex layout above, so the page scrolls instead. */
 .webui-page.bare { overflow: auto; }
 /* While the client measures a page's natural size (fitWindow): laid out as
-   an inline block so it neither stretches to the viewport nor scrolls. */
+   an inline block so it neither stretches to the viewport nor scrolls.
    `!important` because the bare-page rules above are written with :has(),
    whose specificity (an id plus two classes) beats this selector's; without
    it #pages stayed a viewport-high flex column and every window measured
