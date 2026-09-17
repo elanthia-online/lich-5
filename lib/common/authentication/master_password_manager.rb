@@ -15,11 +15,21 @@ module Lich
       # CRITICAL: Validation test uses 100k iterations (one-time)
       #           Runtime decryption uses 10k iterations (via PasswordCipher)
       module MasterPasswordManager
+        # Service name the master password is stored under in the OS keychain.
         KEYCHAIN_SERVICE = 'lich5.master_password'
+        # PBKDF2 iterations for the validation test (one-time, deliberately slow).
         VALIDATION_ITERATIONS = 100_000
+        # Derived key length in bytes for the validation test.
         VALIDATION_KEY_LENGTH = 32
+        # Fixed prefix combined with the random per-test salt.
         VALIDATION_SALT_PREFIX = 'lich5-master-password-validation-v1'
 
+        # Whether this platform has a keychain Lich can store the master password in.
+        #
+        # macOS uses the `security` CLI, Linux `secret-tool`, and Windows the
+        # Credential Manager via {WindowsCredentialManager}.
+        #
+        # @return [Boolean] false on an unsupported platform or when the backend is missing
         def self.keychain_available?
           if OS.mac?
             macos_keychain_available?
@@ -32,6 +42,11 @@ module Lich
           end
         end
 
+        # Stores the master password in the OS keychain, replacing any existing entry.
+        #
+        # @param master_password [String] the master password to store
+        # @return [Boolean] true when stored; false when no keychain is available or the
+        #   backend fails (the failure is logged)
         def self.store_master_password(master_password)
           return false unless keychain_available?
 
@@ -49,6 +64,10 @@ module Lich
           false
         end
 
+        # Reads the master password back from the OS keychain.
+        #
+        # @return [String, nil] the stored password, or nil when no keychain is available,
+        #   nothing is stored, or the backend fails (the failure is logged)
         def self.retrieve_master_password
           return nil unless keychain_available?
 
@@ -66,6 +85,15 @@ module Lich
           nil
         end
 
+        # Builds the validation test stored in the saved-login file for a new master password.
+        #
+        # The test is a SHA-256 digest of a PBKDF2 key derived with {VALIDATION_ITERATIONS}
+        # iterations over a fresh random salt; it lets a later entry be checked without
+        # storing the password itself.
+        #
+        # @param master_password [String] the master password to derive the test from
+        # @return [Hash{String => Object}] 'validation_salt' and 'validation_hash' (both Base64) and
+        #   'validation_version' (Integer, currently 1)
         def self.create_validation_test(master_password)
           random_salt = SecureRandom.random_bytes(16)
           full_salt = VALIDATION_SALT_PREFIX + random_salt
@@ -84,6 +112,12 @@ module Lich
           }
         end
 
+        # Checks an entered master password against a stored validation test.
+        #
+        # @param entered_password [String] the password to check
+        # @param validation_test [Hash{String => Object}, nil] a test from {.create_validation_test}
+        # @return [Boolean] true when the password reproduces the stored hash; false for a
+        #   malformed test, a mismatch, or a decoding error (the error is logged)
         def self.validate_master_password(entered_password, validation_test)
           return false unless validation_test.is_a?(Hash)
           return false unless validation_test['validation_salt'] && validation_test['validation_hash']
@@ -106,6 +140,10 @@ module Lich
           end
         end
 
+        # Removes the master password from the OS keychain.
+        #
+        # @return [Boolean] the backend's result; false when no keychain is available or the
+        #   backend fails (the failure is logged)
         def self.delete_master_password
           return false unless keychain_available?
 

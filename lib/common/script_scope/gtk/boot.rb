@@ -21,6 +21,8 @@ module Lich
   module Common
     module ScriptScope
       module Gtk
+        # Checks that every name in OWN_DEFINITIONS resolved to a real class once all slices loaded.
+        #
         # OWN_DEFINITIONS keeps const_missing from stubbing a class a later
         # slice file defines, but the list is hand-maintained and the cost
         # of forgetting a name was silent: the real class was shadowed by an
@@ -30,6 +32,10 @@ module Lich
         # The list is declared inside `class << self`, so it lives on the
         # singleton class; a bare OWN_DEFINITIONS here would go through
         # const_missing and come back as a symbol.
+        #
+        # @param names [Array<Symbol>] the constant names to verify; defaults to OWN_DEFINITIONS
+        # @return [nil]
+        # @raise [LoadError] when a name is undefined or still resolves to a generated stub
         def self.verify_own_definitions!(names = singleton_class::OWN_DEFINITIONS)
           names.each do |name|
             raise LoadError, "Gtk::#{name} is in OWN_DEFINITIONS but is not defined after boot" unless const_defined?(name, false)

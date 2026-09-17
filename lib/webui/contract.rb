@@ -5,10 +5,22 @@ require_relative 'errors'
 module Lich
   module WebUI
     # Machine-readable authority for SPEC-WEBUI-CONTRACT 2.5.0 SS10 and SS14.
+    #
+    # Every component type, attribute, event, facility and bound the WebUI
+    # contract names is declared here as data. The shape helpers ({.scalar},
+    # {.string}, {.record}, ...) build the small schema hashes the
+    # {Validator} interprets; {.schemas} assembles the per-type tables from
+    # the base definitions, the attribute applicability list and the
+    # per-type extras (table, composite, pointer and lifecycle events).
+    # Nothing here is behaviour: the module is the single place the server,
+    # the validator and the browser client agree on what is permitted.
     module Contract
+      # @return [String] the contract version this server speaks, in `major.minor.patch` form
       VERSION = '2.19.0'
+      # @return [Integer] the contract major a client must match to be admitted by {.negotiate!}
       MAJOR_VERSION = 2
 
+      # @return [Array<Symbol>] every component type, in the order structure, display, input, then the rest
       TYPES = %i[
         page group stack columns grid tabs expander split overlay scroll divider
         text markdown log progress image
@@ -17,16 +29,25 @@ module Lich
         menu menu_item
       ].freeze
 
+      # @return [Array<Symbol>] the layout types (page through divider)
       STRUCTURE_TYPES = TYPES.first(11).freeze
+      # @return [Array<Symbol>] the read-only display types (text through image)
       DISPLAY_TYPES = TYPES.slice(11, 5).freeze
+      # @return [Array<Symbol>] the viewer-operable input types (button through nav)
       INPUT_TYPES = TYPES.slice(16, 11).freeze
 
+      # @return [Array<String>] permitted values of the `tone` attribute
       TONES = %w[neutral positive caution danger].freeze
+      # @return [Array<String>] permitted values of the `emphasis` attribute
       EMPHASES = %w[normal strong subtle].freeze
+      # @return [Array<String>] permitted values of the `align` attribute
       ALIGNS = %w[start center end stretch].freeze
+      # @return [Regexp] the syntax of a contract identifier (keys, ids, event and property names)
       IDENTIFIER = /\A[A-Za-z0-9_.:-]{1,128}\z/
+      # @return [Regexp] the syntax of a component id: identifiers joined by `/`
       CID_PATTERN = /\A[A-Za-z0-9_.:-]+(?:\/[A-Za-z0-9_.:-]+)*\z/
 
+      # @return [Hash{Symbol => Integer, Range}] the named size and range limits the validator enforces
       BOUNDS = {
         identifier: 128,
         short_text: 512,
@@ -49,46 +70,104 @@ module Lich
 
       module_function
 
+      # Builds the base shape hash every other shape helper wraps.
+      #
+      # @param kind [Symbol] the shape kind the validator dispatches on (`:string`, `:record`, ...)
+      # @param constraints [Hash{Symbol => Object}] kind-specific constraints merged into the shape
+      # @return [Hash{Symbol => Object}] a shape hash with `:kind` and the constraints
       def scalar(kind, **constraints)
         { kind: kind, **constraints }
       end
 
+      # Builds a string shape, optionally capped by a named {BOUNDS} entry.
+      #
+      # @param bound [Symbol, nil] a {BOUNDS} key giving the maximum length, or nil for no cap
+      # @param constraints [Hash{Symbol => Object}] extra constraints such as `pattern:`
+      # @return [Hash{Symbol => Object}] a `:string` shape
       def string(bound = nil, **constraints)
         scalar(:string, **({ bound: bound }.compact), **constraints)
       end
 
+      # Builds an integer shape with optional inclusive limits.
+      #
+      # @param min [Integer, nil] the smallest permitted value
+      # @param max [Integer, nil] the largest permitted value
+      # @param constraints [Hash{Symbol => Object}] extra constraints such as `max_property:`
+      # @return [Hash{Symbol => Object}] an `:integer` shape
       def integer(min: nil, max: nil, **constraints)
         scalar(:integer, **({ min: min, max: max }.compact), **constraints)
       end
 
+      # Builds a finite numeric shape with optional inclusive limits.
+      #
+      # @param min [Numeric, nil] the smallest permitted value
+      # @param max [Numeric, nil] the largest permitted value
+      # @return [Hash{Symbol => Object}] a `:number` shape
       def number(min: nil, max: nil)
         scalar(:number, finite: true, **({ min: min, max: max }.compact))
       end
 
+      # Builds an enumeration shape whose permitted values are stored as strings.
+      #
+      # @param values [Array<Symbol, String, Array>] the permitted values; nested arrays are flattened
+      # @return [Hash{Symbol => Object}] an `:enum` shape
       def enum(*values)
         scalar(:enum, values: values.flatten.map(&:to_s))
       end
 
+      # Builds an array shape whose items share one shape.
+      #
+      # @param items [Hash{Symbol => Object}] the shape every item must satisfy
+      # @param min [Integer] the fewest items permitted
+      # @param max [Integer, nil] the most items permitted, or nil for no cap
+      # @return [Hash{Symbol => Object}] an `:array` shape
       def array(items, min: 0, max: nil)
         scalar(:array, items: items, min: min, **({ max: max }.compact))
       end
 
+      # Builds a record shape from named fields, given either as a hash or as keywords.
+      #
+      # @param fields [Hash{Symbol => Hash}, nil] field name to {.property} definition
+      # @param allow_extra [Boolean] whether fields outside the definition are tolerated
+      # @param field_keywords [Hash{Symbol => Hash}] the fields as keywords, when `fields` is nil
+      # @return [Hash{Symbol => Object}] a `:record` shape
+      # @raise [ArgumentError] when fields are given both positionally and as keywords
       def record(fields = nil, allow_extra: false, **field_keywords)
         raise ArgumentError, 'record fields supplied twice' if fields && !field_keywords.empty?
 
         scalar(:record, fields: fields || field_keywords, allow_extra: allow_extra)
       end
 
+      # Builds a union shape satisfied by the first variant the value matches.
+      #
+      # @param variants [Array<Hash{Symbol => Object}>] the candidate shapes, tried in order
+      # @return [Hash{Symbol => Object}] a `:union` shape
       def union(*variants)
         scalar(:union, variants: variants)
       end
 
+      # Builds a property definition: a shape plus how the property is held and defaulted.
+      #
+      # @param shape [Hash{Symbol => Object}] the shape the value must satisfy
+      # @param required [Boolean] whether the property must be supplied
+      # @param scope [Symbol] who owns the value: `:shared`, `:viewer`, `:transient`,
+      #   `:ephemeral_client` or `:sensitive_write_only`
+      # @param default [Object] the value used when the property is absent; omitted when not given
+      # @return [Hash{Symbol => Object}] a property definition with `:shape`, `:required`, `:scope`
+      #   and, when supplied, `:default`
       def property(shape, required: false, scope: :shared, default: :__none__)
         result = { shape: shape, required: required, scope: scope }
         result[:default] = default unless default == :__none__
         result
       end
 
+      # Builds an event definition: its payload shape and its dispatch flags.
+      #
+      # @param payload [Hash{Symbol => Object}, nil] the payload shape, or nil when the event carries none
+      # @param terminal [Boolean] whether the event completes an interaction and is never coalesced
+      # @param lifecycle [Boolean] whether the event is a page lifecycle event rather than a control event
+      # @param structural [Boolean] whether the event changes what the viewer sees (tabs, expansion)
+      # @return [Hash{Symbol => Object}] an event definition
       def event(payload = nil, terminal: false, lifecycle: false, structural: false)
         { payload: payload, terminal: terminal, lifecycle: lifecycle, structural: structural }
       end
@@ -113,6 +192,7 @@ module Lich
         variant: property(enum(:default, :primary, :danger), default: 'default')
       ).freeze
 
+      # @return [Hash{Symbol => Array<Symbol>}] for each type, the {ATTRIBUTE_SCHEMAS} keys it accepts
       ATTRIBUTE_APPLICABILITY = {
         page: %i[key width height key_events],
         group: %i[key tooltip hidden align margin width height tone context_menu],
@@ -148,6 +228,7 @@ module Lich
         menu_item: %i[key tooltip disabled hidden],
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] the common attributes, as {.property} definitions
       ATTRIBUTE_SCHEMAS = {
         key: property(IDENT),
         tooltip: property(SHORT),
@@ -207,12 +288,16 @@ module Lich
       MARKUP_UNDERLINES = %w[none single double low error].freeze
       MARKUP_COLOR = /\A(?:#\h{3}|#\h{6}|[a-z]{3,20})\z/i
 
+      # @return [Hash{Symbol => Hash}] the accessibility properties every type accepts
       ACCESSIBILITY_SCHEMAS = {
         a11y_label: property(SHORT),
         a11y_description: property(BODY),
         a11y_role: property(IDENT),
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] per-type base definitions: `:properties`, `:children`
+      #   (`:none`, `:many` or a named-slot rule), `:events`, `:value` and optional extras,
+      #   before {.schemas} merges the attributes and the table/composite tables in
       BASE_SCHEMAS = {
         page: {
           properties: {
@@ -509,6 +594,7 @@ module Lich
         cells: property(scalar(:cell_map), required: true)
       ).freeze
 
+      # @return [Hash{Symbol => Hash}] the properties merged into the `table` schema
       TABLE_PROPERTIES = {
         columns: property(array(TABLE_COLUMN, min: 1, max: BOUNDS[:table_columns]), required: true),
         rows: property(array(TABLE_ROW, max: BOUNDS[:table_rows]), required: true),
@@ -525,6 +611,7 @@ module Lich
         max_height: property(GEOMETRY),
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] the events merged into the `table` schema
       TABLE_EVENTS = {
         row_activate: event(record(row: property(IDENT, required: true)), terminal: true),
         selection_change: event(record(rows: property(array(IDENT, max: BOUNDS[:table_rows]), required: true)), structural: true),
@@ -607,6 +694,7 @@ module Lich
         })
       ).freeze
 
+      # @return [Hash{Symbol => Hash}] the properties merged into the `composite` schema
       COMPOSITE_PROPERTIES = {
         width: property(GEOMETRY, required: true), height: property(GEOMETRY, required: true),
         scale: property(number(min: 0.1, max: 8.0), default: 1.0),
@@ -618,6 +706,7 @@ module Lich
         layers: property(array(COMPOSITE_LAYER, max: BOUNDS[:collection]), required: true),
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] the events merged into the `composite` schema
       COMPOSITE_EVENTS = {
         region_activate: event(record(region: property(IDENT, required: true)), terminal: true),
         surface_activate: event(record(
@@ -647,6 +736,8 @@ module Lich
                             )),
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] page facilities (accelerators, geometry, notify, focus,
+      #   announce, presentation), each with its `:shape` and `:scope`
       FACILITIES = {
         accelerators: {
           shape: array(record(
@@ -680,6 +771,7 @@ module Lich
         },
       }.freeze
 
+      # @return [Hash{Symbol => Hash}] the lifecycle events merged into the `page` schema
       PAGE_LIFECYCLE_EVENTS = {
         close: event(record(reason: property(enum(:user, :owner, :timeout), required: true)), terminal: true, lifecycle: true),
         attach: event(nil, lifecycle: true),
@@ -699,6 +791,15 @@ module Lich
                    ), lifecycle: true),
       }.freeze
 
+      # Assembles and memoises the complete, deep-frozen schema table for every component type.
+      #
+      # Each type starts from its {BASE_SCHEMAS} entry and gains: page lifecycle events (page),
+      # table properties and events (table), the attributes {ATTRIBUTE_APPLICABILITY} grants it,
+      # composite properties and events (composite), pointer events ({POINTER_TYPES}) and the
+      # accessibility properties. A password input's `sensitive` attribute is forced true.
+      #
+      # @return [Hash{Symbol => Hash}] type to schema, each with `:properties`, `:children`,
+      #   `:events`, `:value` and, where declared, `:value_scope`, `:child_properties`, `:special`
       def schemas
         @schemas ||= begin
           schemas = {}
@@ -726,6 +827,11 @@ module Lich
         end
       end
 
+      # Looks up the schema for one component type.
+      #
+      # @param type [Symbol, String] the component type, as a symbol or an identifier string
+      # @return [Hash{Symbol => Object}] the type's entry in {.schemas}
+      # @raise [UnknownTypeError] when the type is not in {TYPES}
       def schema(type)
         normalized = normalize_type(type)
         schemas.fetch(normalized)
@@ -733,6 +839,10 @@ module Lich
         raise UnknownTypeError, "unknown component type #{type.inspect}"
       end
 
+      # Converts a type name to the symbol the schema tables are keyed by.
+      #
+      # @param type [Symbol, String, Object] a symbol, an identifier-shaped string, or anything else
+      # @return [Symbol, Object] the symbol form, or the input unchanged when it cannot be a type name
       def normalize_type(type)
         return type if type.is_a?(Symbol)
         return type.to_sym if type.is_a?(String) && type.match?(IDENTIFIER)
@@ -740,6 +850,11 @@ module Lich
         type
       end
 
+      # Checks a client's contract version against this server's and returns the server's.
+      #
+      # @param client_version [String, #to_s] the version the client announced, `major.minor.patch`
+      # @return [String] {VERSION}, the version the server speaks
+      # @raise [VersionError] when the version has no integer major or the major differs from {MAJOR_VERSION}
       def negotiate!(client_version)
         version = client_version.to_s
         major = Integer(version.split('.').first, exception: false)
@@ -749,6 +864,10 @@ module Lich
         VERSION
       end
 
+      # Freezes a value and, for hashes and arrays, everything nested inside it.
+      #
+      # @param value [Object] the value to freeze in place
+      # @return [Object] the same value, frozen
       def deep_freeze(value)
         case value
         when Hash
@@ -759,6 +878,10 @@ module Lich
         value.freeze
       end
 
+      # Copies a value and, for hashes and arrays, everything nested inside it; other objects are shared.
+      #
+      # @param value [Object] the value to copy
+      # @return [Object] an unfrozen structural copy
       def deep_dup(value)
         case value
         when Hash

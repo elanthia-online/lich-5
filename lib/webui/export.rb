@@ -59,6 +59,8 @@ module Lich
         }
       end
 
+      # The payload rendered as a text file.
+      #
       # @return [String] pretty JSON, newline-terminated so the file is a
       #   well-formed text file and diffs cleanly.
       def to_json_text
@@ -84,6 +86,9 @@ module Lich
       # guess which strings were once symbols. Ranges appear in BOUNDS
       # (`geometry`, `timeout`) and become `{"min":...,"max":...}` so a client
       # reads bounds uniformly rather than parsing "a..b".
+      #
+      # @param value [Object] any contract value: Hash, Array, Symbol, Range, Regexp, or a scalar
+      # @return [Object] the same shape with symbols as strings, ranges as min/max hashes, regexps as source
       def stringify(value)
         case value
         when Hash

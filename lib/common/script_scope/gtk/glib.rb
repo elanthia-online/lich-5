@@ -5,14 +5,21 @@ require_relative 'session'
 module Lich
   module Common
     module ScriptScope
-      # GLib as far as scripts use it: timeouts, idles and source removal,
-      # each running its block on the owning script's session thread.
+      # Stand-in for the +GLib+ module of ruby-glib2, as far as scripts use it: timeouts, idles
+      # and source removal, each running its block on the owning script's session thread.
+      #
+      # Unlike GLib there is no main loop; every source is its own Ruby thread, and its block
+      # is run through the session's +sync+ so it never touches widgets off the session thread.
       module GLib
         @sources = {}
         @sources_mutex = Mutex.new
         @source_id = 0
 
         class << self
+          # Records a source thread and hands back its id.
+          #
+          # @param thread [Thread] the thread that drives the source
+          # @return [Integer] the new source id
           def register_source(thread)
             @sources_mutex.synchronize do
               id = (@source_id += 1)
@@ -21,6 +28,10 @@ module Lich
             end
           end
 
+          # Forgets a source and kills its thread.
+          #
+          # @param id [Integer] a source id from {.spawn_source}
+          # @return [Boolean] true when a source with that id was registered
           def remove_source(id)
             thread = @sources_mutex.synchronize { @sources.delete(id) }
             thread&.kill
@@ -38,6 +49,12 @@ module Lich
           # skipped the removal, and left a dead entry in @sources forever.
           # The thread now waits on a queue for its own id, so it cannot get
           # to the ensure with anything but a registered one.
+          #
+          # @param interval [Numeric] seconds to sleep before each run
+          # @param session [Gtk::Session] the session whose thread runs the block
+          # @yield each pass, on the session thread
+          # @yieldreturn [Boolean] true to run again after another interval, false to stop
+          # @return [Integer] the source id, for {Source.remove}
           def spawn_source(interval, session, &block)
             ready = Queue.new
             thread = Thread.new do
@@ -57,18 +74,32 @@ module Lich
           end
         end
 
+        # Stand-in for +GLib::Timeout+.
         module Timeout
           # Repeats +block+ every +interval+ ms on the session thread until it
           # returns false, like GLib::Timeout.add.
+          #
+          # @param interval [Numeric] milliseconds between runs
+          # @yield each pass, on the session thread
+          # @yieldreturn [Boolean] true to keep repeating, false to stop
+          # @return [Integer] the source id, for {Source.remove}
           def self.add(interval, &block)
             GLib.spawn_source(interval.to_f / 1000.0, Gtk::Session.current, &block)
           end
 
+          # Like {.add}, with the interval in seconds.
+          #
+          # @param interval [Numeric] seconds between runs
+          # @yield each pass, on the session thread
+          # @yieldreturn [Boolean] true to keep repeating, false to stop
+          # @return [Integer] the source id, for {Source.remove}
           def self.add_seconds(interval, &block)
             add(interval.to_f * 1000, &block)
           end
         end
 
+        # Stand-in for +GLib::Idle+. There is no idle state to wait for, so an idle is a short
+        # timeout.
         module Idle
           # Runs on the session thread, repeating while +block+ returns true.
           #
@@ -82,12 +113,22 @@ module Lich
           # that still yields the thread: one source, cancellable, no spin.
           IDLE_INTERVAL = 0.01
 
+          # Runs +block+ on the session thread after {IDLE_INTERVAL}, repeating while it answers true.
+          #
+          # @yield each pass, on the session thread
+          # @yieldreturn [Boolean] true to keep repeating, false to stop
+          # @return [Integer] the source id, for {Source.remove}
           def self.add(&block)
             GLib.spawn_source(IDLE_INTERVAL, Gtk::Session.current, &block)
           end
         end
 
+        # Stand-in for +GLib::Source+.
         module Source
+          # Stops a timeout or idle source.
+          #
+          # @param id [Integer] the id returned by {Timeout.add}, {Timeout.add_seconds} or {Idle.add}
+          # @return [Boolean] true when a source with that id existed
           def self.remove(id)
             GLib.remove_source(id)
           end

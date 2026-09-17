@@ -17,9 +17,15 @@ module Lich
         @dropped = {}
 
         class << self
+          # Logs a widget the contract refused to render, once per widget.
+          #
           # A widget the contract refused. Unlike an unsupported method, this
           # costs a cell, so it is never deduplicated and it names the key so
           # the widget can be found in the rendered tree.
+          #
+          # @param child [Gtk::Widget] the widget that was dropped from its parent's node
+          # @param error [Exception] what the contract raised
+          # @return [void]
           def log_render_failure(child, error)
             label = child.respond_to?(:key) ? child.key : nil
             # Deduplicated per widget, not per class: every dropped cell is
@@ -41,6 +47,12 @@ module Lich
           # all silently lost the excess, which turns a script bug into a
           # rendering mystery. Deduped like the others so a commit loop does
           # not flood the log.
+          #
+          # @param klass [String] the widget class name, as {Gtk::Widget#short_class_name} gives it
+          # @param property [String, Symbol] the property that was clamped
+          # @param requested [Object] the value the script asked for
+          # @param applied [Object] the value the contract was given instead
+          # @return [void]
           def log_clamped(klass, property, requested, applied)
             script, first = record_unsupported("#{klass}.#{property}", "#{requested} exceeds what the contract carries; using #{applied}")
             return unless first
@@ -50,6 +62,12 @@ module Lich
             Lich.log("warning: #{message}") if defined?(Lich) && Lich.respond_to?(:log)
           end
 
+          # Records a GTK API the shim does not implement and logs it the first time a script hits it.
+          #
+          # @param klass [String] the class the call was made on
+          # @param method [String, Symbol] the method or constant name
+          # @param note [String, nil] extra detail kept in the ledger and shown in the log line
+          # @return [void]
           def log_unsupported(klass, method, note: nil)
             key = "#{klass}##{method}"
             script, first = record_unsupported(key, note)
@@ -60,6 +78,7 @@ module Lich
           end
 
           # The ledger of what scripts asked for and did not get, per script.
+          #
           # Deduplicated per script and API, not per API alone: a warning
           # logged once for the whole process said nothing about the second
           # script to hit the same gap, and "no warnings on the next run" was
@@ -74,6 +93,9 @@ module Lich
           end
 
           # One line per script that hit something, for the log at shutdown.
+          #
+          # @param script [String, #to_s] the script name the ledger is keyed by
+          # @return [String, nil] the summary line, or nil when that script hit nothing
           def unsupported_summary(script)
             entries = @unsupported[script.to_s]
             return nil if entries.nil? || entries.empty?
@@ -82,23 +104,36 @@ module Lich
             "webui-gtk-shim: script=#{script} unsupported: #{listed}"
           end
 
+          # Empties the whole ledger. For specs.
+          #
+          # @return [void]
           def reset_unsupported!
             @unsupported = {}
           end
 
-          # Drops one script's entries. The ledger is keyed by script name
+          # Drops one script's entries.
+          #
+          # The ledger is keyed by script name
           # and lives for the process, so without this a script run, exited
           # and run again never got its first-hit notice the second time --
           # once per class per process, when the notice is meant per run.
           # A session calls this at shutdown, after it has logged the
           # summary line built from these entries.
+          #
+          # @param script [String, #to_s] the script name
+          # @return [nil]
           def forget_unsupported(script)
             @unsupported.delete(script.to_s)
             nil
           end
 
+          # Counts one hit of +key+ for the current script.
+          #
+          # @param key [String] the ledger key, such as "Klass#method"
+          # @param note [String, nil] detail kept with the first hit
           # @return [Array(String, Boolean)] the script name and whether this
           #   is the first time that script hit this API
+          # @api private
           def record_unsupported(key, note)
             script = Session.current_script&.name
             entries = (@unsupported[script.to_s] ||= {})
@@ -113,10 +148,15 @@ module Lich
           end
           private :record_unsupported
 
+          # Builds a stub class for a widget the shim does not implement.
+          #
           # A widget class the shim does not implement yet. It renders as an
           # empty box and accepts every call, so a script that builds one
           # loses that part of its window instead of dying at load. Scripts
           # reach these through Gtk.const_missing, never by name here.
+          #
+          # @param name [Symbol, String] the GTK class name, used for the stub's +name+
+          # @return [Class] a Container subclass answering +webui_stub?+ with true
           def unimplemented_widget(name)
             klass = Class.new(Container) do
               # GTK constructors take arguments and a stub's did not, so a
@@ -124,32 +164,58 @@ module Lich
               # box this is meant to degrade to -- Gtk::TargetEntry.new(target,
               # flags, info) killed ewaggle's whole window. Accept anything and
               # keep it, since a value object like TargetEntry is read back.
+              #
+              # @param args [Array<Object>] whatever the script passed; kept as {#stub_args}
+              # @param options [Hash{Symbol => Object}] keyword arguments; kept as {#stub_options}
               def initialize(*args, **options)
                 super()
                 @stub_args = args
                 @stub_options = options
               end
 
-              attr_reader :stub_args, :stub_options
+              # @return [Array<Object>] the positional arguments the script constructed this with
+              attr_reader :stub_args
+              # @return [Hash{Symbol => Object}] the keyword arguments the script constructed this with
+              attr_reader :stub_options
 
+              # @return [Symbol] :stack, the contract node an empty box renders as
               def node_type
                 :stack
               end
 
+              # @return [Hash{Symbol => Object}] the stack's props
               def node_props
                 { gap: 0 }
               end
 
+              # Adds a child, ignoring the coordinates.
+              #
               # Absolute-positioning containers (Layout, Fixed) take the
               # coordinates and ignore them; the child still renders.
+              #
+              # @param child [Gtk::Widget] the widget to add
+              # @param _x [Integer, nil] ignored
+              # @param _y [Integer, nil] ignored
+              # @return [self]
               def put(child, _x = nil, _y = nil)
                 add(child)
               end
 
+              # Accepted and ignored.
+              #
+              # @param _child [Gtk::Widget] ignored
+              # @param _x [Integer, nil] ignored
+              # @param _y [Integer, nil] ignored
+              # @return [self]
               def move(_child, _x = nil, _y = nil)
                 self
               end
 
+              # Accepted and ignored.
+              #
+              # @param _width [Integer, nil] ignored
+              # @param _height [Integer, nil] ignored
+              # @return [self]
               def set_size(_width = nil, _height = nil)
                 self
               end
@@ -177,6 +243,7 @@ module Lich
           # `warning:` line in a debug file, indistinguishable from the
           # harmless kind. A stubbed widget now says so where the player
           # will see it.
+          #
           # Names this shim defines in files loaded after this one. Stubbing
           # any of them would be silently permanent -- const_missing
           # const_sets its answer, so the stub shadows the real class for the
@@ -190,6 +257,12 @@ module Lich
           # stubbed-widget notice and a ledger entry, not a shadowed class.
           OWN_DEFINITIONS = %i[Paned HPaned VPaned Overlay ListBox ListBoxRow ProgressBar TextTag TextTagTable].freeze
 
+          # Degrades a Gtk constant the shim does not define, defines it, and logs the gap once.
+          #
+          # @param name [Symbol] the missing constant
+          # @return [Class, Module, Symbol] a stub widget class, an inert enum namespace, or the
+          #   downcased symbol for an enum member
+          # @raise [NameError] when the name is in OWN_DEFINITIONS, meaning boot.rb has not finished
           def const_missing(name)
             if OWN_DEFINITIONS.include?(name)
               raise NameError, "Gtk::#{name} is defined by the shim but not loaded yet; " \
@@ -220,6 +293,8 @@ module Lich
             const_set(name, value)
           end
 
+          # Whether a constant name reads as a class rather than an enum member.
+          #
           # A class name rather than an enum member. CamelCase is the usual
           # tell, but GTK also ships acronym-led names -- UIManager,
           # IMContext, RGBA -- and requiring a lowercase second letter sent
@@ -228,6 +303,9 @@ module Lich
           # Symbol, which is the uncaught crash this whole path exists to
           # prevent. An enum MEMBER is the thing being distinguished, and
           # those are SCREAMING_SNAKE_CASE, so the test is "not all caps".
+          #
+          # @param name [Symbol, String] the constant name
+          # @return [Boolean] true when it starts with a capital and is not all caps
           def class_name?(name)
             text = name.to_s
             text.match?(/\A[A-Z]/) && !text.match?(/\A[A-Z0-9_]+\z/)
@@ -248,13 +326,22 @@ module Lich
           # loses that part of its window more quietly than a stub would.
           NAMESPACE_SUFFIXES = /(?:Flags|Type|Types|Mode|Modes|Action|Actions|Mask|State|Direction|Priority|Options|Defaults|Style|Policy|Position|Order|Level|Role|Hint|Format|Class|Kind|Target)\z/
 
+          # Whether a constant name matches {NAMESPACE_SUFFIXES}.
+          #
+          # @param name [Symbol, String] the constant name
+          # @return [Boolean]
           def namespace_name?(name)
             name.to_s.match?(NAMESPACE_SUFFIXES)
           end
 
+          # Builds an inert module for a flags or enum namespace.
+          #
           # A stand-in for a constant namespace: any member answers as the
           # symbol it was named, the way Gdk's fallback does, so `A::B` never
           # raises and the value is inert wherever the script passes it.
+          #
+          # @param name [Symbol, String] the namespace name, used for the module's +name+
+          # @return [Module] a module answering +webui_stub?+ with true
           def enum_namespace(name)
             namespace = Module.new do
               def self.const_missing(member)
@@ -266,9 +353,14 @@ module Lich
             namespace
           end
 
+          # Tells the script, and the log, that a widget class it named renders as an empty box.
+          #
           # Told once per widget class per session, to the script's own
           # output as well as the log: an empty box on screen is otherwise
           # indistinguishable from a layout bug.
+          #
+          # @param name [Symbol, String] the GTK class name
+          # @return [nil]
           def report_stubbed_widget(name)
             script, first = record_unsupported("Gtk::#{name}", 'not implemented; renders as an empty box')
             return unless first

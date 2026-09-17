@@ -8,23 +8,36 @@ module Lich
       # Persists validated outer-window geometry for the Chrome/Edge app shell.
       # A valid GTK launcher geometry is used once as a migration fallback.
       class WindowGeometryStore
+        # File the WebUI launcher's own geometry is kept in, under the data directory.
         FILE_NAME = 'webui_launcher_geometry.yml'
+        # The GTK launcher's settings file, read only when {FILE_NAME} is absent.
         LEGACY_FILE_NAME = 'login_gui_settings.yml'
+        # Geometry used when neither file yields a valid one.
         DEFAULT = { width: 840, height: 680, position: nil }.freeze
         MIN_WIDTH = 480
         MIN_HEIGHT = 360
         MAX_DIMENSION = 16_384
         POSITION_RANGE = (-65_536..65_536)
 
+        # @param data_dir [String] directory the geometry files live in
+        # @return [WindowGeometryStore]
         def initialize(data_dir:)
           @data_dir = data_dir
         end
 
+        # Reads the saved geometry, falling back to the GTK file and then to {DEFAULT}.
+        #
+        # @return [Hash{Symbol => Object}] :width, :height and :position (an [x, y] pair or nil)
         def load
           read_geometry(File.join(@data_dir, FILE_NAME)) ||
             read_geometry(File.join(@data_dir, LEGACY_FILE_NAME)) || DEFAULT.dup
         end
 
+        # Validates the geometry and writes it to {FILE_NAME} with owner-only permissions.
+        #
+        # @param geometry [Hash, Object] candidate geometry, symbol or string keyed; see {#validate}
+        # @return [Hash{Symbol => Object}, false] the validated geometry that was written, or false when
+        #   the geometry is invalid or the write fails (the failure is logged)
         def save(geometry)
           validated = validate(geometry)
           return false unless validated
@@ -38,6 +51,13 @@ module Lich
           false
         end
 
+        # Normalises a geometry to symbol keys and integer values, refusing anything out of bounds.
+        #
+        # Width and height must be Integers within {MIN_WIDTH}/{MIN_HEIGHT} and {MAX_DIMENSION};
+        # a position must be nil or a two-Integer array within {POSITION_RANGE}.
+        #
+        # @param geometry [Hash, Object] candidate geometry, symbol or string keyed
+        # @return [Hash{Symbol => Object}, nil] :width, :height and :position, or nil when invalid
         def validate(geometry)
           return unless geometry.is_a?(Hash)
 

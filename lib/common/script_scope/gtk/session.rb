@@ -7,22 +7,41 @@ module Lich
   module Common
     module ScriptScope
       module Gtk
+        # A runtime event context wrapped with the sensitive values it carried, delegating everything else
+        # to the wrapped context.
+        #
         # An event context plus the plaintext taken from its submission scope
         # before the runtime discarded it. Everything else is the runtime's own
         # context, so a widget that does not care about submitted values reads
         # it exactly as before.
         class CarriedEvent
+          # @return [Hash{String => Object}] plaintext by cid, taken from the submission scope
           attr_reader :submitted
 
+          # Wraps a context with its carried values.
+          #
+          # @param context [Object] the runtime event context
+          # @param submitted [Hash{String => Object}] plaintext by cid
+          # @return [CarriedEvent] a new wrapper
           def initialize(context, submitted)
             @context = context
             @submitted = submitted
           end
 
+          # Answers for whatever the wrapped context answers.
+          #
+          # @param name [Symbol] method name
+          # @param include_private [Boolean] passed through
+          # @return [Boolean]
           def respond_to_missing?(name, include_private = false)
             @context.respond_to?(name, include_private) || super
           end
 
+          # Forwards to the wrapped context.
+          #
+          # @param name [Symbol] method name
+          # @return [Object] the context's answer
+          # @raise [NoMethodError] when the context does not answer it either
           def method_missing(name, ...)
             return @context.public_send(name, ...) if @context.respond_to?(name)
 
@@ -30,11 +49,16 @@ module Lich
           end
         end
 
+        # The WebUI adapter the GTK shim renders through.
+        #
         # Adapter with the two extensions the shim needs: an explicit commit,
         # and viewer-scoped properties written as shared state. The shim
         # widget is the single source of truth for a value; per-viewer
         # divergence is pushed to attached viewers by Session#viewer_write.
         class ShimAdapter < Lich::WebUI::Adapter
+          # Creates the adapter with empty placement, presentation and submission tables.
+          #
+          # @return [ShimAdapter] a new adapter
           def initialize(...)
             super
             @placements = {}.compare_by_identity
@@ -42,18 +66,29 @@ module Lich
             @submissions = {}.compare_by_identity
           end
 
+          # Registers a page root's presentation reader.
+          #
           # Registers the block that reports a page root's facilities
           # (presentation, geometry) as a Hash of facility name => value.
           # Keyed by the opaque handle, since that is the only identity the
           # adapter and the widget share.
+          #
+          # @param handle [Object] the page root's opaque node handle
+          # @yieldreturn [Hash{Symbol => Object}, nil] facility name => value
+          # @return [nil]
           def presentation_source(handle, &block)
             @mutex.synchronize { @presentation_sources[handle] = block }
             nil
           end
 
+          # Marks a node's page dirty so a presentation change is rendered.
+          #
           # Facilities live beside the tree rather than on a node, so a
           # presentation change alters no props and would otherwise never
           # mark the page dirty.
+          #
+          # @param handle [Object] any node handle on the page; an unknown handle is ignored
+          # @return [nil]
           def refresh_facilities(handle)
             @mutex.synchronize do
               node = @nodes[handle]
@@ -62,18 +97,32 @@ module Lich
             nil
           end
 
+          # Renders every dirty page now.
+          #
+          # @return [Array<Lich::WebUI::Page>] the pages refreshed
           def commit
             flush!
           end
 
+          # The page a node belongs to.
+          #
+          # @param handle [Object] node handle
+          # @return [Lich::WebUI::Page, nil] nil for an unknown handle or a node not yet on a page
           def page_for(handle)
             @mutex.synchronize { @nodes[handle]&.page }
           end
 
+          # Applies several property changes to a node as one validated update.
+          #
           # Applies several property changes as one validated update. A nil
           # value removes the property. Needed because the contract validates
           # properties against each other (a select's value must be one of
           # its options), so changing them one at a time can never pass.
+          #
+          # @param handle [Object] node handle
+          # @param changes [Hash{Symbol, String => Object, nil}] property => new value, nil to remove
+          # @return [nil]
+          # @raise [Lich::WebUI::SchemaViolationError] when the merged props fail the contract, attributed to the handle
           def update(handle, changes)
             @mutex.synchronize do
               node = node!(handle)
@@ -90,8 +139,14 @@ module Lich
             raise attributed(error, handle)
           end
 
+          # Records a child's placement in its parent's node.
+          #
           # Child placement (grid span/row_span) travels beside the node; the
           # base adapter has no slot for it.
+          #
+          # @param handle [Object] node handle
+          # @param placement [Hash, #to_h] placement keys such as `span` and `row_span`
+          # @return [nil]
           def set_placement(handle, placement)
             @mutex.synchronize do
               node = node!(handle)
@@ -101,6 +156,8 @@ module Lich
             nil
           end
 
+          # Declares the inputs whose values a terminal's event must carry.
+          #
           # The inputs whose values a terminal's event must carry. A password's
           # value is sensitive and write-only, so it never travels as a
           # property or an event payload -- the contract's only channel for it
@@ -108,6 +165,10 @@ module Lich
           # holds opaque handles and cids are minted by the tree builder, so
           # the scope is stored as handles here and resolved during the render
           # pass that knows both.
+          #
+          # @param handle [Object] the terminal's node handle
+          # @param input_handles [Array<Object>, Object] handles of the inputs in scope
+          # @return [nil]
           def set_submission(handle, input_handles)
             @mutex.synchronize do
               node = node!(handle)
@@ -117,6 +178,14 @@ module Lich
             nil
           end
 
+          # Sets one property; a viewer-scoped property is written into the shared props (validated in place) rather
+          # than through the base adapter, and an unknown node or a shared property falls through to it.
+          #
+          # @param handle [Object] node handle
+          # @param property [Symbol, String] property name
+          # @param value [Object] new value
+          # @return [nil]
+          # @raise [Lich::WebUI::SchemaViolationError] when the value fails the contract
           def set(handle, property, value)
             node = @mutex.synchronize { @nodes[handle] }
             return super unless node
@@ -151,6 +220,7 @@ module Lich
           # Handles are opaque by design, so the adapter cannot walk back to
           # the widget; the window supplies its own presentation through
           # +presentation_source+, which Session sets when it renders.
+          # @api private
           def declare_facilities(builder, node)
             return unless node.type == :page
 
@@ -171,6 +241,7 @@ module Lich
           # a widget destroyed or detached since the declaration -- drops
           # that input rather than failing the whole page on a cid the
           # builder never saw.
+          # @api private
           def render_completed(builder, drafts)
             @submissions.each do |handle, input_handles|
               terminal = drafts[handle]
@@ -195,6 +266,8 @@ module Lich
           end
         end
 
+        # The per-script session behind the shim; it stands in for the GTK main loop and main thread.
+        #
         # One per owning script: the emulated GTK main thread, the adapter
         # that renders its widgets, the viewers looking at its pages, and the
         # browser windows it opened.
@@ -204,10 +277,14 @@ module Lich
         # That is the concurrency model GTK scripts were written against.
         # WebUI dispatcher callbacks only enqueue here and return.
         class Session
+          # Thread-local key naming the session a thread belongs to.
           THREAD_KEY = :lich_webui_gtk_shim_session
+          # Seconds a contract modal waits for an answer before it times out.
           MODAL_TIMEOUT = 3600
+          # Browser window geometry used when a window asks for none.
           DEFAULT_WINDOW = { width: 640, height: 480 }.freeze
 
+          # Owner of the shared session used by widgets created outside any script; it has no exit hook.
           NullOwner = Struct.new(:name) do
             def at_exit(&_block)
               false
@@ -220,25 +297,41 @@ module Lich
 
           class << self
             # Test seam: replace the browser launcher.
+            #
+            # @return [#call, nil] a launcher taking `(url, geometry:, on_start:)`, or nil for the default
             attr_accessor :browser_open
 
+            # Default detach grace in seconds.
+            #
             # How long a detached viewer has to come back before its window
             # counts as closed: the client dials back on a 250ms backoff
             # capped at 5s, so a live browser is back well inside it.
             DETACH_GRACE = 5.0
+            # @return [Float] detach grace in seconds (test seam)
             attr_writer :detach_grace
 
+            # Seconds a detached viewer has to come back before its window counts as closed.
+            #
+            # @return [Float]
             def detach_grace
               @detach_grace || DETACH_GRACE
             end
 
+            # The session for the calling context.
+            #
             # Session for the calling context: the one whose thread we are on,
             # else the one owned by the current script, else a shared session
             # for widgets created outside any script.
+            #
+            # @return [Session]
             def current
               Thread.current[THREAD_KEY] || self.for(current_script)
             end
 
+            # The session owned by a script, created on first use; nil selects the shared session.
+            #
+            # @param owner [Object, nil] the owning script (anything with `name` and `at_exit`), or nil
+            # @return [Session]
             def for(owner)
               @registry_mutex.synchronize do
                 # The shared owner is memoised under the same lock that makes
@@ -250,14 +343,24 @@ module Lich
               end
             end
 
+            # Forgets the session owned by a script.
+            #
+            # @param owner [Object] the owning script
+            # @return [Session, nil] the session forgotten, if any
             def release(owner)
               @registry_mutex.synchronize { @sessions.delete(owner) }
             end
 
+            # Every registered session.
+            #
+            # @return [Array<Session>]
             def sessions
               @registry_mutex.synchronize { @sessions.values.dup }
             end
 
+            # The running Lich script, when there is one.
+            #
+            # @return [Object, nil] `Script.current`, or nil outside Lich or on error
             def current_script
               return nil unless defined?(::Script) && ::Script.respond_to?(:current)
 
@@ -266,6 +369,8 @@ module Lich
               nil
             end
 
+            # Starts the WebUI service if it is not running.
+            #
             # Starts the WebUI service from a thread in the default group.
             #
             # A session thread belongs to its script's thread group, and Lich
@@ -273,6 +378,10 @@ module Lich
             # creates inherit the group of whoever called +start+, so a server
             # started from a session thread would lose its accept loop with the
             # first script to use it and could never rebind its port.
+            #
+            # @param service [Lich::WebUI::Service] the service
+            # @return [Lich::WebUI::Service] the service
+            # @raise [Exception] whatever `service.start` raised on the starting thread
             def start_service(service)
               return service if service.server.running?
               return service.start if Thread.current.group.equal?(ThreadGroup::Default)
@@ -298,8 +407,15 @@ module Lich
             end
           end
 
+          # @return [Object] the owning script, or a {NullOwner} for the shared session
           attr_reader :owner
 
+          # Creates a session; its thread starts with the first job.
+          #
+          # @param owner [Object] the owning script
+          # @param service [Lich::WebUI::Service, nil] the service to render through, defaulting to
+          #   `Lich::WebUI.service`
+          # @return [Session] a new session
           def initialize(owner, service: nil)
             @owner = owner
             @service = service
@@ -322,14 +438,23 @@ module Lich
             @closed = false
           end
 
+          # The WebUI service, resolved on first use.
+          #
+          # @return [Lich::WebUI::Service]
           def service
             @service ||= Lich::WebUI.service
           end
 
+          # The adapter this session renders through, created on first use.
+          #
+          # @return [ShimAdapter]
           def adapter
             @adapter ||= ShimAdapter.new(owner: @owner, service: service)
           end
 
+          # A name for the owner, for logs and the ledger.
+          #
+          # @return [String] the owner's name, else its class and object id
           def owner_label
             return @owner.name if @owner.respond_to?(:name) && @owner.name
 
@@ -338,11 +463,18 @@ module Lich
 
           # ---- the emulated GTK thread ------------------------------------
 
+          # Queues a job for the session thread, starting the thread if needed.
+          #
           # Queues +block+ for the session thread. True when it was taken;
           # nil for a closed session, which takes no more work: timers and
           # lifecycle callbacks fire after shutdown, and ensure_thread would
           # start a fresh session thread just to run them -- a callback
           # executing with the session closed and every window already gone.
+          #
+          # @param job [#call, nil] the job; taken from the block when nil
+          # @yield the job body, run on the session thread
+          # @return [true, nil] true when queued, nil for a closed session
+          # @raise [ArgumentError] when neither a job nor a block is given
           def enqueue(job = nil, &block)
             job ||= block
             raise ArgumentError, 'block required' unless job
@@ -362,30 +494,51 @@ module Lich
             true
           end
 
+          # A job that answers its caller through a queue.
+          #
           # A synchronous job: the caller waits on +done+ for its answer,
           # so it must always get one. The session thread answers it by
           # running it; a session thread that ends with it still queued
           # answers it with a refusal (review 2026-09-17 (b), F1).
           class SyncJob
+            # Creates a job.
+            #
+            # @param block [#call] the work
+            # @param done [Queue] receives `[:ok, value]` or `[:error, exception]`
+            # @return [SyncJob] a new job
             def initialize(block, done)
               @block = block
               @done = done
             end
 
+            # Runs the work and answers with its value or its exception.
+            #
+            # @return [void]
             def call
               @done << [:ok, @block.call]
             rescue Exception => error # rubocop:disable Lint/RescueException
               @done << [:error, error]
             end
 
+            # Answers with an error without running the work.
+            #
+            # @param error [Exception] the refusal
+            # @return [void]
             def reject(error)
               @done << [:error, error]
             end
           end
 
+          # Runs a block on the session thread and returns its value.
+          #
           # Runs +block+ on the session thread and waits for it. Never call
           # from the session thread itself (that would deadlock); it is for
           # specs and for script threads that need a synchronous round trip.
+          #
+          # @yield the work, run on the session thread
+          # @return [Object] the block's value
+          # @raise [Lich::WebUI::Error] when the session has been shut down
+          # @raise [Exception] whatever the block raised
           def sync(&block)
             return block.call if on_session_thread?
 
@@ -401,10 +554,15 @@ module Lich
             value
           end
 
+          # Whether the calling thread is this session's thread.
+          #
+          # @return [Boolean]
           def on_session_thread?
             Thread.current[THREAD_KEY].equal?(self)
           end
 
+          # Runs one batch of queued jobs from a nested loop.
+          #
           # Runs the queued jobs as one batch, then commits once. This is a
           # nested main loop: GTK's gtk_dialog_run blocks its caller on the
           # main thread while still servicing events, and Dialog#run does the
@@ -412,6 +570,9 @@ module Lich
           # false when nothing was waiting within +timeout+ seconds, so the
           # caller can re-check its own exit condition. A :stop is put back
           # for run_loop.
+          #
+          # @param timeout [Numeric] seconds to wait for a job
+          # @return [Boolean] true when a batch ran, false on timeout or a pending :stop
           def pump(timeout = 0.05)
             job = @queue.pop(timeout: timeout)
             return false if job.nil?
@@ -424,15 +585,21 @@ module Lich
             true
           end
 
+          # Asks for a render after the current batch.
+          #
           # Asks for a render after the current batch (D3). A script thread
           # that pokes a widget used to enqueue a full commit per write, and
           # every job ended in another; twenty label writes re-rendered every
           # window forty times. The job here does nothing -- the batch it
           # joins commits once when it is drained.
+          #
+          # @return [true, nil] nil for a closed session
           def request_commit
             enqueue { nil }
           end
 
+          # Upper bound on jobs per batch.
+          #
           # How many jobs one batch may take before it commits. A flood of
           # events (a held key, a busy timer) still renders between batches
           # rather than starving the viewer until the queue is empty.
@@ -441,6 +608,7 @@ module Lich
           # Runs +first+ and every job already queued behind it, up to
           # BATCH_LIMIT, then commits once (D3). A :stop found mid-batch is
           # put back for run_loop to see after the commit.
+          # @api private
           def run_batch(first)
             job = first
             count = 0
@@ -476,10 +644,18 @@ module Lich
 
           # ---- windows ------------------------------------------------------
 
+          # Adds a window to the session's list, once.
+          #
+          # @param window [Window] the window
+          # @return [void]
           def register_window(window)
             @mutex.synchronize { @windows << window unless @windows.include?(window) }
           end
 
+          # Materializes a window, renders it, binds its lifecycle and opens a browser on its page.
+          #
+          # @param window [Window] the window
+          # @return [Object, nil] the browser launcher's answer, or nil when the window has no page
           def show_window(window)
             register_window(window)
             window.materialize!(adapter)
@@ -491,9 +667,14 @@ module Lich
             open_browser(page, window: window, geometry: window.browser_geometry)
           end
 
+          # Forgets a window and destroys its adapter node.
+          #
           # Closes the page. The browser window is not ours to kill (D1): it
           # is an app window of the user's ordinary browser, and the client
           # drops the page when it hears page_closed.
+          #
+          # @param window [Window] the window
+          # @return [void]
           def close_window(window)
             handle = window.handle
             @mutex.synchronize do
@@ -514,6 +695,9 @@ module Lich
 
           # ---- rendering ---------------------------------------------------
 
+          # Materializes every window, renders, applies queued viewer writes and reports refused presentation.
+          #
+          # @return [void]
           def commit
             windows = @mutex.synchronize { @windows.dup }
             windows.each { |window| window.materialize!(adapter) if window.handle }
@@ -531,6 +715,7 @@ module Lich
           # summary beside every other gap. The render that records it is
           # the one adapter.commit just delivered, so this reads the current
           # answer, not a stale one.
+          # @api private
           def report_degradations(windows)
             windows.each do |window|
               next unless window.handle
@@ -548,6 +733,8 @@ module Lich
           end
           private :report_degradations
 
+          # Queues a viewer-scoped write for the next commit.
+          #
           # Pushes a viewer-scoped value (entry text, checkbox state) to every
           # viewer currently attached to the widget's page, so the browser's
           # own copy of the control does not shadow the script's write.
@@ -560,11 +747,20 @@ module Lich
           # options, and the viewer's retained copy still said the old one:
           # Ruby and the browser disagreeing about what was chosen. Applied
           # after the structure it depends on has rendered, it passes.
+          #
+          # @param window [Window, nil] the widget's window
+          # @param widget [Widget] the widget
+          # @param name [Symbol, String] property name
+          # @param value [Object] the value
+          # @return [nil]
           def viewer_write(window, widget, name, value)
             @mutex.synchronize { @pending_viewer_writes << [window, widget, name, value] }
             nil
           end
 
+          # Applies every queued viewer write.
+          #
+          # @return [nil]
           def flush_viewer_writes
             writes = @mutex.synchronize do
               pending = @pending_viewer_writes
@@ -575,8 +771,14 @@ module Lich
             nil
           end
 
+          # Empties a sensitive input on every viewer.
+          #
           # A programmatic write to a password entry: there is no value to
           # push, so the viewer's field is emptied instead.
+          #
+          # @param window [Window, nil] the widget's window
+          # @param widget [Widget] the sensitive input
+          # @return [nil]
           def viewer_clear_sensitive(window, widget)
             return unless window&.handle
 
@@ -588,6 +790,14 @@ module Lich
             nil
           end
 
+          # Pushes a viewer-scoped value to every viewer attached to the widget's page; a refused value is reported
+          # through the ledger and a lost viewer is forgotten.
+          #
+          # @param window [Window, nil] the widget's window
+          # @param widget [Widget] the widget
+          # @param name [Symbol, String] property name
+          # @param value [Object] the value
+          # @return [void]
           def apply_viewer_write(window, widget, name, value)
             return unless window&.handle
 
@@ -611,6 +821,8 @@ module Lich
             end
           end
 
+          # Queue depth at which the dispatcher hop waits for room.
+          #
           # The dispatcher's queue is bounded and coalesces, but this hop used
           # to move every event straight onto the session's own unbounded
           # queue, so a slow handler left the dispatcher free to drain into it
@@ -622,6 +834,7 @@ module Lich
           # promised, one hop later. A hop that gets no room within HOP_WAIT
           # drops its event and says so, rather than growing without bound.
           HOP_LIMIT = 256
+          # Seconds the dispatcher hop waits for room before dropping an event.
           HOP_WAIT = 5.0
 
           def await_capacity
@@ -635,8 +848,15 @@ module Lich
           end
           private :await_capacity
 
+          # Builds the callback the WebUI dispatcher calls for a window's events.
+          #
           # Wraps a script-facing callback for the WebUI dispatcher: note the
           # viewer, hop onto the session thread, and return immediately.
+          #
+          # @param window [Window] the window the events belong to
+          # @yieldparam context [Object, CarriedEvent] the event context, run on the session thread
+          # @return [Proc] the dispatcher callback
+          # @raise [ArgumentError] when no handler block is given
           def dispatch_proc(window, &handler)
             raise ArgumentError, 'handler block required' unless handler
 
@@ -671,9 +891,14 @@ module Lich
             end
           end
 
+          # Takes the submission scope's values out of an event context.
+          #
           # Plaintext for every sensitive input in the event's submission
           # scope, keyed by cid. Returns nil when there is nothing sensitive to
           # carry, which is the ordinary case.
+          #
+          # @param context [Object] the runtime event context
+          # @return [Hash{String => Object}, nil] plaintext by cid, or nil when there is no submission
           def carried_values(context)
             return nil unless context.respond_to?(:submission)
 
@@ -695,8 +920,16 @@ module Lich
 
           # ---- modals ------------------------------------------------------
 
+          # Opens a contract modal for this owner.
+          #
           # Opens a contract dialog and returns its Future. The caller awaits
           # it; that is the blocking Gtk::MessageDialog#run.
+          #
+          # @param title [String] modal title
+          # @param buttons [Array] the buttons, in contract form
+          # @param body [String, nil] body text
+          # @param default_button [String, nil] id of the default button
+          # @return [Lich::WebUI::Future] resolves with the answer
           def modal(title:, buttons:, body: nil, default_button: nil)
             id = "modal-#{SecureRandom.hex(6)}"
             future = service.modal(
@@ -713,18 +946,26 @@ module Lich
             await_answer(future)
           end
 
+          # Tracks a Future until it resolves so shutdown can cancel it.
+          #
           # The one place a blocking answer is waited for (D15). A
           # MessageDialog's Future comes from the ModalCoordinator; a
           # Dialog#run makes its own. Both are tracked here until they
           # resolve, so shutdown cancels every parked run through the same
           # path -- the shutdown gap (F4) happened because only one of the
           # two waiters was released.
+          #
+          # @param future [Lich::WebUI::Future] the Future to track; a fresh one by default
+          # @return [Lich::WebUI::Future] the same Future
           def await_answer(future = Lich::WebUI::Future.new)
             @mutex.synchronize { @pending_answers << future }
             future.then { @mutex.synchronize { @pending_answers.delete(future) } }
             future
           end
 
+          # Number of blocking answers still awaited.
+          #
+          # @return [Integer]
           def pending_answers
             @mutex.synchronize { @pending_answers.length }
           end
@@ -736,20 +977,30 @@ module Lich
           end
           private :cancel_pending_answers
 
+          # Whether a browser window of this script's own is open.
+          #
           # A window of this script's own is open, so a modal raised now
           # will be shown in it: the client attaches to a sibling modal from
           # the same owner even when the window is scoped to one page.
+          #
+          # @return [Boolean]
           def windows_open?
             return false if service.server.connection_count.zero?
 
             @mutex.synchronize { @browsers.any? }
           end
 
+          # Opens a browser window on a modal's page.
+          #
           # A modal with no window of the script's own to show in gets one.
           # It opens like every other shim window (D1): nothing watches its
           # process, so a modal whose window is closed unanswered waits for
           # its timeout or for the owner to terminate, exactly as a modal
           # raised in an existing window does.
+          #
+          # @param id [String] the modal id
+          # @param _future [Lich::WebUI::Future] unused
+          # @return [Object, nil] the browser launcher's answer, or nil when the page could not be opened
           def open_modal_window(id, _future)
             page = service.registry.fetch(@owner, id)
             open_browser(page, geometry: { width: 460, height: 240 })
@@ -759,6 +1010,9 @@ module Lich
 
           # ---- teardown ----------------------------------------------------
 
+          # Ends the session: cancels waiting answers, closes windows, stops the thread and summarises the ledger.
+          #
+          # @return [void]
           def shutdown
             @thread_mutex.synchronize do
               return if @closed
@@ -799,6 +1053,7 @@ module Lich
 
           # Under @thread_mutex: starts the session thread unless one is
           # alive or the session is closed.
+          # @api private
           def ensure_thread_locked
             return if @closed || @thread&.alive?
 
@@ -815,6 +1070,7 @@ module Lich
           # one raised in a callback, and the loop goes on. It ends at :stop,
           # and then answers every synchronous job still queued with a
           # refusal, so no caller is left waiting on a thread that is gone.
+          # @api private
           def run_loop
             loop do
               job = @queue.pop
@@ -878,6 +1134,7 @@ module Lich
           # presentation lookup (keep_above, opacity) needs to find the
           # window; where the pid is not the window's, that lookup finds
           # nothing and the presentation degrades through the ledger.
+          # @api private
           def open_browser(page, window: nil, geometry: nil)
             self.class.start_service(service)
             url = service.launch_url(page: page)
@@ -900,6 +1157,7 @@ module Lich
           # Under --webui-no-browser a script window is a URL the player
           # opens where their browser is. It goes to the game window through
           # Messaging when a session has one, and always to the log.
+          # @api private
           def announce_launch_url(page, url)
             title = page.respond_to?(:title) ? page.title : page.to_s
             message = "WebUI window #{title.inspect} is ready; open it at #{url}"
@@ -923,6 +1181,7 @@ module Lich
           # The search runs on its own thread: it takes about a quarter of a
           # second, and the session thread is the one every script handler and
           # timer runs on.
+          # @api private
           def watch_window_presentation(window, pid)
             return unless Lich::WebUI::WindowPresentation.available?
 
@@ -944,6 +1203,8 @@ module Lich
             apply_window_presentation(window)
           end
 
+          # Applies a window's presentation (keep-above, opacity, borderless) to its OS window, once known.
+          #
           # Applies the window's presentation, resolving what the facility
           # leaves unsaid. Window#presentation omits a property that is false
           # and returns nil once nothing is set, so a script turning keep-above
@@ -951,6 +1212,9 @@ module Lich
           # here are what absence means, which is what makes a toggle revert.
           # Public: a Window calls this when its presentation changes, which
           # can happen long after the window opened (map's opacity menu).
+          #
+          # @param window [Window] the window
+          # @return [void]
           public def apply_window_presentation(window)
             hwnd = @mutex.synchronize { @window_handles[window] }
             return unless hwnd
@@ -976,6 +1240,7 @@ module Lich
           # callbacks arrive through the dispatcher and two viewers' can run
           # in either order, so each one asks whether it is the earliest
           # live attachment rather than whether anyone else is there.
+          # @api private
           def admit_viewer(page, viewer_id)
             return unless page && viewer_id
 
@@ -1006,6 +1271,7 @@ module Lich
           # closed used to run on, never told. The window counts as closed
           # when no viewer has come back within the grace (the client's
           # maximum reconnect backoff), the same rule the launcher applies.
+          # @api private
           def viewer_detached(window, page, viewer_id)
             forget_viewer(page, viewer_id)
             token = Object.new
@@ -1047,6 +1313,7 @@ module Lich
           # or the Ruby core. Prefers the running script's own name, which is
           # how Lich labels evaled frames, and still accepts a real ".lic"
           # path for a script loaded from disk.
+          # @api private
           def script_origin(backtrace)
             name = owner_label.to_s
             unless name.empty?
@@ -1057,6 +1324,7 @@ module Lich
           end
 
           # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+          # @api private
           def script_frame(frame)
             file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
             base = file.to_s.split(%r{[\\/]}).last

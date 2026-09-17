@@ -10,7 +10,14 @@ module Lich
   module Common
     class WebUILauncher
       # Reads and mutates launcher data without retaining decrypted credentials.
+      #
+      # The WebUI launcher's view of the saved-login store (entry.yaml, or the
+      # legacy entry.dat until it is converted). Every read hands back password-free
+      # {Entry} values; the one method that produces a plaintext password,
+      # {#credential}, wraps it in a Lich::WebUI::SensitiveValue. All access is
+      # serialised on an internal mutex.
       class Catalog
+        # Launcher settings the catalog persists, mapped to the Lich writer for each.
         SETTING_WRITERS = {
           dark_theme: :track_dark_mode=,
           tab_layout: :track_layout_state=,
@@ -18,15 +25,25 @@ module Lich
           persistent: :track_persistent_launcher_mode=,
         }.freeze
 
+        # Raised when enhanced encryption is in effect and no master password is in the
+        # keychain or supplied by the caller.
         class MasterPasswordRequired < StandardError; end
 
+        # One saved character, without its password. `key` is the stable identity
+        # derived from account, character, game, frontend and custom launch.
         Entry = Data.define(
           :key, :user_id, :char_name, :game_code, :game_name, :frontend,
           :custom_launch, :custom_launch_dir, :favorite, :favorite_order
         )
 
+        # @return [String] directory the saved-login files live in
         attr_reader :data_dir
 
+        # @param data_dir [String] directory the saved-login files live in
+        # @param entry_store [Module] the entry.yaml codec (Authentication::EntryStore in production)
+        # @param master_password_manager [Module] keychain access
+        #   (Authentication::MasterPasswordManager in production)
+        # @return [Catalog]
         def initialize(data_dir:, entry_store: Authentication::EntryStore,
                        master_password_manager: Authentication::MasterPasswordManager)
           @data_dir = data_dir
@@ -35,6 +52,11 @@ module Lich
           @mutex = Mutex.new
         end
 
+        # Every saved character, favorites first, with no password attached.
+        #
+        # @param autosort [Boolean] true sorts by game, account and character after the favorites;
+        #   false keeps saved order (favorites by their favorite_order)
+        # @return [Array<Entry>]
         def entries(autosort: false)
           @mutex.synchronize do
             source_entries.map do |entry|
@@ -48,6 +70,9 @@ module Lich
           end
         end
 
+        # The account names in the store, including accounts with no characters.
+        #
+        # @return [Array<String>] upper-cased account names
         def accounts
           @mutex.synchronize do
             file = @entry_store.yaml_file_path(data_dir)
@@ -57,29 +82,57 @@ module Lich
           end
         end
 
+        # Persists one launcher setting through the matching Lich writer.
+        #
+        # @param setting [Symbol] a key of {SETTING_WRITERS}
+        # @param value [Boolean] the new value
+        # @return [Boolean] true
+        # @raise [KeyError] when the setting is not one the catalog persists
         def update_launcher_setting(setting, value)
           Lich.public_send(SETTING_WRITERS.fetch(setting), value)
           true
         end
 
+        # Whether only the legacy entry.dat exists and should be migrated to entry.yaml.
+        #
+        # @return [Boolean]
         def legacy_conversion_needed?
           !File.exist?(@entry_store.yaml_file_path(data_dir)) && File.exist?(File.join(data_dir, 'entry.dat'))
         end
 
+        # The store's password encryption mode.
+        #
+        # @return [Symbol] :plaintext, :standard or :enhanced
         def encryption_mode
           @mutex.synchronize { yaml_data.fetch('encryption_mode', 'plaintext').to_sym }
         end
 
+        # The master password validation test stored with the file, if any.
+        #
+        # @return [Hash{String => Object}, nil] as built by MasterPasswordManager.create_validation_test
         def validation_test
           @mutex.synchronize { yaml_data['master_password_validation_test'] }
         end
 
+        # Whether an OS keychain is available, which enhanced encryption requires.
+        #
+        # @return [Boolean]
         def enhanced_encryption_available?
           @master_password_manager.keychain_available?
         end
 
+        # Decrypts one entry's account password into a server-origin sensitive carrier.
+        #
         # The returned carrier is the first plaintext representation produced by
         # this boundary and never enters launcher state or a page tree.
+        #
+        # @param entry_key [String] the {Entry#key} to look up
+        # @param master_password [String, nil] master password for enhanced mode; when nil it is
+        #   read from the keychain
+        # @return [Lich::WebUI::SensitiveValue] the plaintext password, consumable once
+        # @raise [KeyError] when no entry has that key
+        # @raise [MasterPasswordRequired] when enhanced mode is in effect and no master password is
+        #   supplied or stored
         def credential(entry_key, master_password: nil)
           @mutex.synchronize do
             metadata = entries_without_lock.find { |entry| entry[:key] == entry_key }
@@ -99,6 +152,11 @@ module Lich
           end
         end
 
+        # Checks a master password against the stored validation test and, when it
+        # passes, stores it in the keychain for later reads.
+        #
+        # @param password [String] the master password to check
+        # @return [Boolean] true when the password is accepted
         def validate_master_password(password)
           test = validation_test
           return false unless @master_password_manager.validate_master_password(password, test)
@@ -107,6 +165,15 @@ module Lich
           true
         end
 
+        # Saves the entry a Manual Entry play produced: the account password is
+        # (re)encrypted and the character is added or updated in place.
+        #
+        # @param entry [Hash{Symbol => Object}] :user_id, :char_name, :game_code, :frontend, and
+        #   optionally :game_name, :custom_launch, :custom_launch_dir
+        # @param password [String] the account password to store
+        # @return [String, nil] the {Entry#key} of the entry written, or nil when the write failed
+        # @raise [MasterPasswordRequired] when enhanced mode is in effect and no master password is
+        #   in the keychain
         def upsert_manual_entry(entry, password)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -151,6 +218,17 @@ module Lich
           end
         end
 
+        # Adds an account, or replaces its password, and appends any characters not
+        # already saved for that frontend.
+        #
+        # @param account [String] account name, upper-cased for storage
+        # @param password [String] the account password to store
+        # @param characters [Array<Hash{Symbol => Object}>] :char_name, :game_code and optionally
+        #   :game_name, as returned by authentication
+        # @param frontend [String] frontend identifier saved on every new character
+        # @return [Boolean] whether the file was written
+        # @raise [MasterPasswordRequired] when enhanced mode is in effect and no master password is
+        #   in the keychain
         def add_or_update_account(account, password, characters, frontend:)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -181,6 +259,10 @@ module Lich
           end
         end
 
+        # Removes an account and every character saved under it.
+        #
+        # @param account [String] account name, matched case-insensitively
+        # @return [Boolean] false when no such account exists or the write failed
         def remove_account(account)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -189,6 +271,13 @@ module Lich
           end
         end
 
+        # Adds a character to an existing account.
+        #
+        # @param account [String] account name, matched case-insensitively
+        # @param character [Hash{Symbol => Object}] :char_name, :game_code, :game_name, :frontend and
+        #   optionally :custom_launch, :custom_launch_dir
+        # @return [Boolean] false when the account is unknown, the character (same name, game,
+        #   frontend and custom launch) is already saved, or the write failed
         def add_character(account, character)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -216,6 +305,12 @@ module Lich
           end
         end
 
+        # Rewrites a saved character's fields in place, keeping its favorite status.
+        #
+        # @param entry_key [String] the {Entry#key} of the character to edit
+        # @param character [Hash{Symbol => Object}] :char_name, :game_code, :game_name, :frontend and
+        #   optionally :custom_launch, :custom_launch_dir
+        # @return [Boolean] false when the key does not resolve or the write failed
         def update_character(entry_key, character)
           @mutex.synchronize do
             metadata = entries_without_lock.find { |entry| entry[:key] == entry_key }
@@ -238,6 +333,13 @@ module Lich
           end
         end
 
+        # Replaces an account's password after checking the current one.
+        #
+        # @param account [String] account name, matched case-insensitively
+        # @param current_password [String] the password on file
+        # @param new_password [String] the replacement
+        # @return [Boolean] false when the account is unknown, the current password does not match,
+        #   or the write failed
         def change_account_password(account, current_password, new_password)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -261,6 +363,10 @@ module Lich
           end
         end
 
+        # Removes one saved character; the account and its password stay.
+        #
+        # @param entry_key [String] the {Entry#key} to remove
+        # @return [Boolean] false when the key does not resolve or the write failed
         def remove_entry(entry_key)
           @mutex.synchronize do
             metadata = entries_without_lock.find { |entry| entry[:key] == entry_key }
@@ -279,16 +385,36 @@ module Lich
           end
         end
 
+        # Flips an entry's favorite status.
+        #
+        # @param entry_key [String] the {Entry#key} to change
+        # @return [Boolean, nil] the new favorite status; false also when the key does not resolve,
+        #   nil when the write failed
         def toggle_favorite(entry_key)
           update_favorite(entry_key) { |current| !current }
         end
 
         # Makes the entry a favorite, or not, whatever it was: what a box
         # labelled "favorite" on a save asks for. Answers as toggle_favorite.
+        #
+        # @param entry_key [String] the {Entry#key} to change
+        # @param wanted [Boolean] whether the entry should be a favorite
+        # @return [Boolean, nil] as {#toggle_favorite}
         def set_favorite(entry_key, wanted)
           update_favorite(entry_key) { |_current| wanted ? true : false }
         end
 
+        # Sets an entry's favorite status from a block and renumbers favorite order.
+        #
+        # A new favorite is appended to the order; an unfavorited entry is dropped
+        # from it and the remaining favorites are renumbered from 1.
+        #
+        # @param entry_key [String] the {Entry#key} to change
+        # @yield [current] decides the new status
+        # @yieldparam current [Boolean] whether the entry is a favorite now
+        # @yieldreturn [Boolean] whether it should be one
+        # @return [Boolean, nil] the resulting status; false also when the key does not resolve,
+        #   nil when the write failed
         def update_favorite(entry_key)
           @mutex.synchronize do
             metadata = entries_without_lock.find { |entry| entry[:key] == entry_key }
@@ -315,16 +441,35 @@ module Lich
           end
         end
 
+        # Re-encrypts every stored password under a new mode, via the entry store.
+        #
+        # @param mode [Symbol, String] :plaintext, :standard or :enhanced
+        # @param master_password [String, nil] required for :enhanced
+        # @return [Boolean] whether the entry store reported success
         def change_encryption_mode(mode, master_password: nil)
           @entry_store.change_encryption_mode(data_dir, mode.to_sym, master_password)
         end
 
+        # Converts the legacy entry.dat into entry.yaml, via the entry store.
+        #
+        # @param mode [Symbol, String] encryption mode for the new file
+        # @param master_password [String, nil] required for :enhanced
+        # @return [Boolean] whether the entry store reported success
         def migrate_legacy(mode, master_password: nil)
           @entry_store.migrate_from_legacy(
             data_dir, encryption_mode: mode.to_sym, master_password: master_password
           )
         end
 
+        # Replaces the master password: every account password is re-encrypted, a new
+        # validation test is stored, and the keychain is updated.
+        #
+        # When the file write fails the keychain is restored to the current password.
+        #
+        # @param current_password [String] the master password in effect
+        # @param new_password [String] its replacement
+        # @return [Boolean] false unless the mode is :enhanced, the current password validates, the
+        #   keychain accepts the new one, and the file is written
         def change_master_password(current_password, new_password)
           @mutex.synchronize do
             data = writable_yaml_data
@@ -425,6 +570,7 @@ module Lich
         # removing the first moved the second onto its key (review
         # 2026-09-17, R8). Frontend and custom launch are in the digest now;
         # an ordinal remains only for entries identical in every field.
+        # @api private
         def stable_key(user_id, char_name, game_code, frontend, custom_launch, taken)
           digest = OpenSSL::Digest::SHA256.hexdigest(
             [user_id, char_name, game_code, frontend, custom_launch].map(&:to_s).join("\0")

@@ -5,28 +5,87 @@ require_relative 'errors'
 module Lich
   module WebUI
     # One bounded, ordered UI callback thread per owner.
+    #
+    # Every event a viewer raises against an owner's pages is queued here and
+    # run, in order, on that owner's own thread, so a script's callbacks never
+    # run concurrently with each other and a slow one cannot stall another
+    # owner. The queue is bounded per viewer and per page; coalescable events
+    # (a slider dragging) fold into their predecessor and are the first to go
+    # when the bound is hit.
     class Dispatcher
+      # Most queued events one viewer may have outstanding for an owner.
       VIEWER_LIMIT = 256
+      # Most queued events one page may have outstanding for an owner.
       PAGE_LIMIT = 1024
+      # Seconds a shutdown waits for the owner's thread to finish its current callback.
       SHUTDOWN_JOIN_TIMEOUT = 2
+      # Thread-variable key under which a running callback finds its {Context}.
       THREAD_CONTEXT_KEY = :lich_webui_dispatch_context
 
+      # A queued callback and what it is about.
+      #
+      # @!attribute [r] owner
+      #   @return [Object] the owner whose thread runs it
+      # @!attribute [r] page_id
+      #   @return [String] the page
+      # @!attribute [r] viewer_id
+      #   @return [String, nil] the viewer that raised it
+      # @!attribute [r] cid
+      #   @return [String, nil] the component
+      # @!attribute [r] event
+      #   @return [Symbol, String] the event name
+      # @!attribute [r] coalescable
+      #   @return [Boolean] whether a later event of the same kind may replace it
+      # @!attribute [r] callable
+      #   @return [Proc] the callback
       Event = Data.define(:owner, :page_id, :viewer_id, :cid, :event, :coalescable, :callable)
+      # What a running callback can learn about the event it is handling; see {#current_context}.
+      #
+      # @!attribute [r] owner
+      #   @return [Object] the owner
+      # @!attribute [r] page_id
+      #   @return [String] the page
+      # @!attribute [r] viewer_id
+      #   @return [String, nil] the viewer
+      # @!attribute [r] cid
+      #   @return [String, nil] the component
+      # @!attribute [r] event
+      #   @return [Symbol, String] the event name
       Context = Data.define(:owner, :page_id, :viewer_id, :cid, :event)
 
+      # The queue bound was hit and nothing coalescable could be evicted.
       class OverflowError < Error; end
+      # A callback tried to block waiting on the page it is a callback for.
       class ReentryError < Error; end
+      # An enqueue for an owner that has been shut down.
       class TerminatedError < Error; end
 
+      # The queue, thread, and lock for one owner.
       class OwnerState
+        # @!attribute running
+        #   @return [Boolean] false once the owner is shut down
+        # @!attribute current
+        #   @return [Event, nil] the event being run right now
         attr_accessor :running, :current
+        # @return [Thread, nil] the owner's callback thread
         attr_accessor :thread
         # The last failure reported for this owner, so an identical one that
         # follows it is not reported again in full. One string per owner,
         # dropped with the owner.
+        #
+        # @return [String, nil] the last reported failure line
         attr_accessor :last_failure
+        # @!attribute [r] events
+        #   @return [Array<Event>] the queue
+        # @!attribute [r] mutex
+        #   @return [Mutex] guards the queue and flags
+        # @!attribute [r] condition
+        #   @return [ConditionVariable] signalled when the queue changes
         attr_reader :events, :mutex, :condition
 
+        # Builds a running state with an empty queue and no thread yet.
+        #
+        # @return [OwnerState]
         def initialize
           @events = []
           @mutex = Mutex.new
@@ -38,10 +97,13 @@ module Lich
         end
       end
 
-      # @param logger [#call, nil] receives `(level, message)`; nil discards
-      # @param thread_factory [#call, nil] builds an owner's thread from a block; nil uses Thread.new
+      # Builds a dispatcher with no owners.
+      #
+      # @param logger [#call, nil] receives `(level, message)`; silent when nil
+      # @param thread_factory [#call, nil] builds an owner's thread from a block; `Thread.new` by default
       # @param notifier [#call, nil] receives `(owner, message)` when a callback raises; nil uses
       #   {#notify_script}, which tells a script owner through its own output
+      # @return [Dispatcher] the dispatcher
       def initialize(logger: nil, thread_factory: nil, notifier: nil)
         @logger = logger || proc { |_level, _message| }
         @thread_factory = thread_factory || ->(&block) { Thread.new(&block) }
@@ -57,6 +119,20 @@ module Lich
         @mutex = Mutex.new
       end
 
+      # Queues a callback on the owner's thread, starting the thread on first use.
+      #
+      # @param owner [Object] the owner whose thread runs the callback
+      # @param page_id [String] the page the event concerns
+      # @param viewer_id [String, nil] the viewer that raised it
+      # @param cid [String, nil] the component it concerns
+      # @param event [Symbol, String] the event name
+      # @param coalescable [Boolean] whether a later event of the same kind may replace this one
+      # @yield the callback, run later on the owner's thread
+      # @return [Symbol] `:queued`, or `:coalesced` when it replaced the previous queued event
+      # @raise [ArgumentError] when the owner or block is missing
+      # @raise [TerminatedError] when the owner has been shut down
+      # @raise [Error] when the owner's state is no longer running
+      # @raise [OverflowError] when the queue is full and nothing can be evicted
       def enqueue(owner:, page_id:, viewer_id:, cid:, event:, coalescable:, &callable)
         raise ArgumentError, 'owner is required' unless owner
         raise ArgumentError, 'callback block is required' unless callable
@@ -79,6 +155,10 @@ module Lich
         :queued
       end
 
+      # Stops an owner's thread, dropping its queued events, and refuses it from then on.
+      #
+      # @param owner [Object] the owner
+      # @return [Boolean] whether the owner had a thread to stop
       def shutdown_owner(owner)
         # Marked terminal before the state goes, under the same lock enqueue
         # checks it under, so no enqueue can slip in between and revive it.
@@ -100,6 +180,9 @@ module Lich
         true
       end
 
+      # Shuts every owner down.
+      #
+      # @return [void]
       def shutdown
         owners = @mutex.synchronize { @owners.keys }
         owners.each { |owner| shutdown_owner(owner) }
@@ -109,6 +192,10 @@ module Lich
       # Whether the caller is the page's own callback only changes the
       # message, so a script author can tell a deadlock they nearly wrote
       # from a wait they simply cannot have.
+      #
+      # @param page_id [String] the page the caller wanted to wait on
+      # @return [void] never returns
+      # @raise [ReentryError] always
       def await(page_id)
         context = Thread.current.thread_variable_get(THREAD_CONTEXT_KEY)
         message = +'synchronous event waits are refused'
@@ -116,6 +203,9 @@ module Lich
         raise ReentryError.new(message, page_id: page_id)
       end
 
+      # The event the calling thread is handling, if it is a dispatcher thread mid-callback.
+      #
+      # @return [Context, nil]
       def current_context
         Thread.current.thread_variable_get(THREAD_CONTEXT_KEY)
       end
@@ -126,6 +216,7 @@ module Lich
       # same lock, for an owner that has been shut down: creating a state for
       # one would start a new worker beside whatever its old one is still
       # finishing.
+      # @api private
       def owner_state(owner, page_id: nil, cid: nil)
         @mutex.synchronize do
           if @terminated.key?(owner)
@@ -140,6 +231,8 @@ module Lich
         end
       end
 
+      # The owner thread's loop: take the next event, run it with its context set, until shut down.
+      # @api private
       def run_owner(state)
         loop do
           queued = state.mutex.synchronize do
@@ -162,6 +255,8 @@ module Lich
         end
       end
 
+      # Replaces the last queued event with this one when both are the same coalescable event.
+      # @api private
       def coalesce_last!(events, queued)
         last = events.last
         return false unless last&.coalescable
@@ -177,6 +272,7 @@ module Lich
       # Both counts are taken once and then kept current as events are
       # evicted; recounting the queue on every pass made a full eviction
       # walk quadratic in the queue length.
+      # @api private
       def enforce_bounds!(events, queued)
         viewers = events.count { |event| event.viewer_id == queued.viewer_id }
         pages = events.count { |event| event.page_id == queued.page_id }
@@ -216,6 +312,7 @@ module Lich
       # events, and the player has read the message once. A different
       # failure in between is reported in full again, so a second distinct
       # error is never hidden behind the first.
+      # @api private
       def report_failure(state, queued, error)
         label = owner_label(queued.owner)
         backtrace = Array(error.backtrace)
@@ -237,6 +334,7 @@ module Lich
       # The default notifier: a script owner hears about the error in its
       # own output, through Lich's `respond`, the way a script error does.
       # Any other owner (the launcher) has the log.
+      # @api private
       def notify_script(owner, message)
         return unless defined?(::Script) && owner.is_a?(::Script)
         return unless respond_to?(:respond, true)
@@ -247,6 +345,7 @@ module Lich
       # The first backtrace frame inside the owner's script. Lich evals a
       # script under its bare name, so its frames read "map:2466" rather
       # than ".../map.lic:2466"; both spellings are matched.
+      # @api private
       def script_origin(backtrace, name)
         unless name.to_s.empty?
           named = backtrace.find { |frame| frame.match?(/(\A|[\\\/])#{Regexp.escape(name.to_s)}(\.lic)?:\d+/) }
@@ -256,6 +355,7 @@ module Lich
       end
 
       # ".../scripts/map.lic:2462:in 'block'" -> "map.lic:2462".
+      # @api private
       def script_frame(frame)
         file, line, = frame.split(':in ').first.to_s.rpartition(':').values_at(0, 2)
         base = file.to_s.split(%r{[\\/]}).last
