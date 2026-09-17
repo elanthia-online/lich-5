@@ -134,7 +134,7 @@ RSpec.describe 'WebUI browser assets' do
   it 'replays the payload and submission the event was sent with, not the current controls' do
     expect(javascript).to include('submission: message.submission')
     expect(javascript).to include('if (submission !== undefined) message.submission = submission;')
-    expect(javascript).to include('emit(page, component, retry.event, retry.payload, retry.attempt + 1, retry.submission);')
+    expect(javascript).to include('emit(page, component, retry.event, retry.payload, retry.attempt + 1, retry.submission, retry.scope);')
   end
 
   # The server answers a stale event with the refusal first and then the
