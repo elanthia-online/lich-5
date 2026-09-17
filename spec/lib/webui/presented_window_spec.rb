@@ -70,7 +70,7 @@ RSpec.describe Lich::WebUI::PresentedWindow do
   end
 
   it 'is what Lich::WebUI.open returns when a presentation is given' do
-    allow(Lich::WebUI::BrowserLauncher).to receive(:open) { |_url, geometry: nil, on_start: nil, **| on_start&.call(9); true }
+    allow(Lich::WebUI::BrowserLauncher).to receive(:open) { |_url, on_start: nil, **| on_start&.call(9); true }
     allow(Lich::WebUI::WindowPresentation).to receive(:discover).and_yield(5)
     allow(Lich::WebUI).to receive(:launch_url).and_return('http://127.0.0.1:1/')
 
