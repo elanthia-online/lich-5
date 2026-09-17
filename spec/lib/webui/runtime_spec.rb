@@ -411,6 +411,35 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(3.times.map { lifecycle.pop }).to eq(expected)
   end
 
+  # Review 2026-09-17 (b), F3: detach queued close and then built the detach
+  # context, but the close callback may already have run -- a modal's close
+  # resolves its Future and the completion closes the page, which clears
+  # the attachment's render -- and building the second context then raised
+  # on a nil render. Both contexts are captured before either is dispatched.
+  it 'still delivers the detach callback when the close callback closed the page first' do
+    immediate = Class.new do
+      def enqueue(**_options) = yield
+      def shutdown; end
+    end.new
+    prompt = described_class.new(registry: registry, dispatcher: immediate, viewers: viewers)
+    lifecycle = []
+    page = registry.register(Lich::WebUI::Page.new(
+      owner: owner, id: 'modal', title: 'Modal', on: {
+        close: ->(context) { lifecycle << context.event; prompt.close_page(context.page) },
+        detach: ->(context) { lifecycle << context.event },
+      }
+    ) {})
+    address = registry.address_for(page)
+    prompt.handle(first_connection, { type: 'attach', page: address })
+    render = first_connection.sent.last
+
+    expect do
+      prompt.handle(first_connection, { type: 'detach', page: address, generation: render['generation'] })
+    end.not_to raise_error
+    expect(lifecycle).to eq(%i[close detach])
+    expect(registry.size).to be_zero
+  end
+
   it 'refuses events after disconnect and after page removal with distinct reasons' do
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'races', title: 'Races') do
       button(key: 'go', label: 'Go', on: { activate: proc {} })

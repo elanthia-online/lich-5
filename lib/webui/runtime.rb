@@ -288,8 +288,13 @@ module Lich
       def detach(connection, message)
         attachment = fetch_attachment(connection, message[:page])
         stale!(connection, attachment, message) unless message[:generation] == attachment.delivered_generation
-        enqueue_lifecycle(attachment, :close, reason: :user)
-        enqueue_lifecycle(attachment, :detach)
+        # Both contexts are built before either callback can run. The close
+        # callback may resolve a modal, whose completion closes the page and
+        # clears this attachment's render; a detach context built after that
+        # read the render of nothing and the detach callback was lost
+        # (review 2026-09-17 (b), F3).
+        jobs = [lifecycle_job(attachment, :close, reason: :user), lifecycle_job(attachment, :detach)]
+        jobs.each { |job| job&.call }
         @viewers.close(connection_id: connection.viewer_id, address: message[:page])
         :detached
       end
@@ -566,17 +571,29 @@ module Lich
       end
 
       def enqueue_lifecycle(attachment, event, payload = {})
-        callback = attachment.page.lifecycle_bindings[event]
-        return unless callback
+        lifecycle_job(attachment, event, payload)&.call
+      end
 
-        component = attachment.render.tree
+      # The enqueue of a lifecycle callback, with its context captured now
+      # and the dispatch deferred to the call: a caller that queues two
+      # callbacks captures both before running either.
+      def lifecycle_job(attachment, event, payload = {})
+        callback = attachment.page.lifecycle_bindings[event]
+        render = attachment.render
+        return unless callback && render
+
+        component = render.tree
         context = EventContext.new(
           attachment.viewer_id, attachment.page, component, event, payload.freeze, nil
         )
-        @dispatcher.enqueue(
-          owner: attachment.page.owner, page_id: attachment.page.id,
-          viewer_id: attachment.viewer_id, cid: component.cid, event: event, coalescable: false
-        ) { callback.call(context) }
+        page = attachment.page
+        viewer_id = attachment.viewer_id
+        lambda do
+          @dispatcher.enqueue(
+            owner: page.owner, page_id: page.id, viewer_id: viewer_id,
+            cid: component.cid, event: event, coalescable: false
+          ) { callback.call(context) }
+        end
       end
 
       def component_property(component, property)
