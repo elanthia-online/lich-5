@@ -66,6 +66,23 @@ RSpec.describe Lich::WebUI::Runtime do
     expect(callback.component.cid).to eq(button_cid)
   end
 
+  # D26: an owner may decline one viewer without closing the page for the
+  # others. The declined viewer hears page_closed; the rest keep their
+  # attachments and their renders.
+  it 'closes one viewer attachment on request and leaves the others attached' do
+    page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'solo', title: 'Solo') { text(content: 'x') })
+    attach(first_connection, page)
+    attach(second_connection, page)
+    first_id, second_id = runtime.viewer_ids(page)
+
+    expect(runtime.close_attachment(page, second_id, reason: :refused)).to be(true)
+
+    expect(runtime.viewer_ids(page)).to eq([first_id])
+    expect(second_connection.sent.last).to include('type' => 'page_closed', 'reason' => 'refused')
+    expect(first_connection.sent.map { |message| message['type'] }).not_to include('page_closed')
+    expect(runtime.close_attachment(page, second_id, reason: :refused)).to be(false)
+  end
+
   it 'reports presentation support and records refused requests as declared degradations' do
     page = registry.register(Lich::WebUI::Page.new(owner: owner, id: 'presentation', title: 'Presentation') do
       presentation(always_on_top: true, borderless: true, opacity: 0.8, scrollbars: false)

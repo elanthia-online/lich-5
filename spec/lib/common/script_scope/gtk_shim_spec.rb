@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'timeout'
 require_relative '../../../spec_helper'
 require 'webui'
 require 'common/script_scope'
@@ -272,6 +273,88 @@ RSpec.describe 'GTK compatibility shim (slice one)' do
       expect(service.registry.pages_for(owner)).to be_empty
       expect(opened).to eq([opened.first])
       expect(gtk::Session).not_to respond_to(:browser_kill)
+    end
+  end
+
+  # D26 (ledger part 2): ScrolledWindow keeps one scroll extent per widget,
+  # written by whichever viewer reported last, so a shim page open in two
+  # browsers has two viewers overwriting one state. Single-viewer per shim
+  # window is the supported case: a second attach is refused -- the
+  # newcomer, because the first viewer is the window the script opened --
+  # and told so with page_closed. A viewer that left makes room again.
+  describe 'a second viewer on a shim page (D26)' do
+    let(:connection_class) do
+      Class.new do
+        attr_reader :viewer_id
+
+        def initialize(viewer_id)
+          @viewer_id = viewer_id
+          @sent = []
+          @mutex = Mutex.new
+        end
+
+        def send_text(payload)
+          @mutex.synchronize { @sent << JSON.parse(payload) }
+          true
+        end
+
+        def sent = @mutex.synchronize { @sent.dup }
+        def alive? = true
+      end
+    end
+
+    def attach(connection)
+      address = service.registry.address_for(page)
+      service.runtime.handle(connection, type: 'attach', page: address, version: Lich::WebUI::Contract::VERSION)
+      address
+    end
+
+    def closed_message(connection)
+      connection.sent.find { |message| message['type'] == 'page_closed' }
+    end
+
+    def settle
+      Timeout.timeout(3) { sleep 0.02 until yield }
+    end
+
+    # The attach lifecycle reaches the session through the dispatcher, so
+    # "attached" is when the session has admitted the viewer.
+    def admitted
+      settle { session.send(:viewers_for, page).length == 1 }
+    end
+
+    before { build_vars_window }
+
+    it 'refuses the newcomer and keeps the first viewer' do
+      first = connection_class.new('conn-first')
+      second = connection_class.new('conn-second')
+      attach(first)
+      admitted
+
+      attach(second)
+      settle { closed_message(second) }
+
+      expect(closed_message(second)).to include('reason' => 'refused')
+      expect(closed_message(first)).to be_nil
+      expect(service.runtime.viewer_ids(page).length).to eq(1)
+      expect(session.send(:viewers_for, page).length).to eq(1)
+    end
+
+    it 'admits a new viewer once the first has detached' do
+      first = connection_class.new('conn-first')
+      address = attach(first)
+      admitted
+      generation = first.sent.last['generation']
+      service.runtime.handle(first, type: 'detach', page: address, generation: generation)
+      settle { service.runtime.viewer_ids(page).empty? }
+
+      second = connection_class.new('conn-second')
+      attach(second)
+      settle { service.runtime.viewer_ids(page).length == 1 }
+      session.sync {}
+
+      expect(closed_message(second)).to be_nil
+      expect(service.runtime.viewer_ids(page).length).to eq(1)
     end
   end
 

@@ -802,7 +802,7 @@ module Lich
             handle = window.handle
             return if window.lifecycle_bound?
 
-            adapter.bind(handle, :attach, proc { |context| note_viewer(page, context.viewer_id) })
+            adapter.bind(handle, :attach, proc { |context| admit_viewer(page, context.viewer_id) })
             adapter.bind(handle, :detach, proc { |context| forget_viewer(page, context.viewer_id) })
             adapter.bind(handle, :close, proc { |_context| enqueue { window.viewer_closed } })
             # 2.14: a window that connected key-press-event receives keys on the
@@ -893,6 +893,30 @@ module Lich
               opacity: requested[:opacity] || 1.0,
               borderless: requested[:borderless] ? true : false
             )
+          end
+
+          # A shim window is single-viewer (D26): ScrolledWindow keeps one
+          # scroll extent per widget, written by whichever viewer reported
+          # last, so two browsers on one page would overwrite each other.
+          # The newcomer is the one refused -- the first viewer is the window
+          # the script opened -- and it is told why with page_closed. A
+          # viewer that has detached (or whose reconnect window has lapsed)
+          # no longer counts, so reopening a closed window is admitted.
+          #
+          # Decided by attach order, not by who asked first: the attach
+          # callbacks arrive through the dispatcher and two viewers' can run
+          # in either order, so each one asks whether it is the earliest
+          # live attachment rather than whether anyone else is there.
+          def admit_viewer(page, viewer_id)
+            return unless page && viewer_id
+
+            live = service.runtime.viewer_ids(page)
+            if live.empty? || live.first == viewer_id.to_s
+              note_viewer(page, viewer_id)
+            else
+              service.runtime.close_attachment(page, viewer_id.to_s, reason: :refused)
+              log(:warning, "webui-gtk-shim: refused a second viewer on #{page.id}; a shim window is single-viewer")
+            end
           end
 
           def note_viewer(page, viewer_id)
