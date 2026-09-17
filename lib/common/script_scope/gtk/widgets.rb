@@ -2092,10 +2092,12 @@ module Lich
             set_default_size(width, height)
           end
 
-          def set_size_request(width, height)
-            set_default_size(width, height) if @default_width.nil? && @default_height.nil?
-            super
-          end
+          # A window's size request is Widget's: a minimum, not a size, since
+          # GTK grows a window past it to fit the content. It used to stand
+          # in for a default size when the script gave none, which would have
+          # made bigshot's 450x25 request the window's size once the client
+          # honoured geometry; the client's content measurement is what
+          # GTK's natural size is.
 
           def set_icon(_icon)
             self
@@ -2170,19 +2172,37 @@ module Lich
             handle = super
             if handle && !@presentation_registered && adapter.respond_to?(:presentation_source)
               window = self
-              adapter.presentation_source(handle) { window.presentation }
+              adapter.presentation_source(handle) { window.page_facilities }
               @presentation_registered = true
             end
-            # Presentation is a facility, not a prop, so the base materialize
-            # sees nothing to update when only opacity moved.
-            if handle && @synced_presentation != presentation
-              @synced_presentation = presentation
+            # Facilities live beside the tree, not in a prop, so the base
+            # materialize sees nothing to update when only opacity moved.
+            if handle && @synced_presentation != page_facilities
+              @synced_presentation = page_facilities
               adapter.refresh_facilities(handle) if adapter.respond_to?(:refresh_facilities)
               # keep_above and opacity belong to the OS window, which the page
               # cannot reach; the session carries them there if this host can.
               @session.apply_window_presentation(self)
             end
             handle
+          end
+
+          # Every facility this window declares on its page, by name; nil
+          # values are not declared.
+          def page_facilities
+            { presentation: presentation, geometry: geometry_facility }.compact
+          end
+
+          # The `geometry` facility: the window size a script asked for with
+          # set_default_size, which the client makes the browser window's
+          # size on the page's first render (--window-size is ignored once
+          # Chrome is running). A size request is a minimum, not a size, so
+          # it is left to the client's content measurement. An axis the
+          # script did not set is 0: "the content's".
+          def geometry_facility
+            return nil unless @default_width || @default_height
+
+            { width: @default_width || 0, height: @default_height || 0 }
           end
 
           # What the `presentation` facility should say, or nil when the

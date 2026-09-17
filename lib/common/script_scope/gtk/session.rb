@@ -42,9 +42,10 @@ module Lich
             @submissions = {}.compare_by_identity
           end
 
-          # Registers the block that reports a page root's presentation
-          # facility. Keyed by the opaque handle, since that is the only
-          # identity the adapter and the widget share.
+          # Registers the block that reports a page root's facilities
+          # (presentation, geometry) as a Hash of facility name => value.
+          # Keyed by the opaque handle, since that is the only identity the
+          # adapter and the widget share.
           def presentation_source(handle, &block)
             @mutex.synchronize { @presentation_sources[handle] = block }
             nil
@@ -153,8 +154,10 @@ module Lich
           def declare_facilities(builder, node)
             return unless node.type == :page
 
-            presentation = @presentation_sources[handle_for(node)]&.call
-            builder.facility(:presentation, presentation) if presentation
+            facilities = @presentation_sources[handle_for(node)]&.call
+            return unless facilities
+
+            facilities.each { |name, value| builder.facility(name, value) if value }
           end
 
           def child_placement(handle)

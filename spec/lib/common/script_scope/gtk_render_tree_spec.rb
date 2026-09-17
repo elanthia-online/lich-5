@@ -91,7 +91,8 @@ RSpec.describe 'GTK compatibility shim: the rendered tree' do
   it 'covers every hook the shim relies on' do
     actual = JSON.parse(normalized_render(build_window))
 
-    expect(actual['facilities']).to eq('presentation' => { 'always_on_top' => true })
+    expect(actual['facilities']).to eq('presentation' => { 'always_on_top' => true },
+                                       'geometry'     => { 'width' => 500, 'height' => 400 })
     expect(actual['submissions']).not_to be_empty
     placements = []
     walk = ->(node) { placements << node['placement'] if node['placement']; node['children'].to_a.each(&walk) }

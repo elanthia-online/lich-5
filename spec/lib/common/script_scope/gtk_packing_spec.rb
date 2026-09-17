@@ -306,6 +306,23 @@ RSpec.describe 'GTK compatibility shim (slice four: box packing)' do
         .to eq(always_on_top: true, borderless: true, opacity: 0.6)
     end
 
+    # --window-size is ignored once Chrome is running, so the size a script
+    # asked for has to reach the client as the `geometry` facility, which
+    # sizes the window on the page's first render. A size request is only a
+    # minimum and is left to the client's content measurement.
+    it 'carries set_default_size as the geometry facility, and a size request as nothing' do
+      sized = shown_window { |win| win.set_default_size(700, 500) }
+      expect(session.adapter.page_for(sized.handle).last_render.facilities[:geometry])
+        .to eq(width: 700, height: 500)
+
+      half = shown_window { |win| win.set_default_size(640, -1) }
+      expect(session.adapter.page_for(half.handle).last_render.facilities[:geometry])
+        .to eq(width: 640, height: 0)
+
+      requested = shown_window { |win| win.set_size_request(450, 25) }
+      expect(session.adapter.page_for(requested.handle).last_render.facilities).not_to have_key(:geometry)
+    end
+
     # Window#presentation omits a property that is false and returns nil once
     # nothing is set, so a script turning keep-above off never arrives as a
     # value -- only as an absence. Applying what the facility contains would

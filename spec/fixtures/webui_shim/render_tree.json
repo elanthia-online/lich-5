@@ -196,6 +196,10 @@
   "facilities": {
     "presentation": {
       "always_on_top": true
+    },
+    "geometry": {
+      "width": 500,
+      "height": 400
     }
   },
   "submissions": {
