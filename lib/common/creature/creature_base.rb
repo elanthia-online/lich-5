@@ -12,13 +12,14 @@
 #
 # Both games receive the same structured, id-keyed creature feed:
 #
-#   <crtrStatus exist="..." hostile="1" .../>
+#   <crtrStatus exist="357970513" health="260" maxhealth="260" challenging="1"/>
 #
 # a full snapshot of a creature's transient combat status and classification
 # flags. The flag vocabulary is identical across the two games (see
 # {CRTR_STATUS_FLAGS} and {CRTR_CLASSIFICATION_FLAGS}), so status/flag
-# reconciliation, the registry, the room roster and target filtering all live
-# here and are mixed into each game's concrete `CreatureInstance`.
+# reconciliation, exact server-health storage, the registry, the room roster
+# and target filtering all live here and are mixed into each game's concrete
+# `CreatureInstance`.
 #
 # Game-specific concerns stay out of this file:
 #   * GemStone: bestiary templates, UCS (Unarmed Combat System) tracking,
@@ -532,7 +533,43 @@ module Lich
           @status = []
           @status_timestamps = {}
           @crtr_flags = {}
+          @server_health = nil
+          @server_max_health = nil
           @last_seen_at = Time.now
+        end
+
+        # Exact current health from the latest `<crtrStatus health="...">`
+        # snapshot. Unlike GemStone's `current_hp`, this is server supplied and
+        # may be negative when damage carries a creature below zero. It is nil
+        # until reported, and becomes nil again when a complete snapshot omits
+        # or malforms the attribute.
+        #
+        # @return [Integer, nil]
+        def server_health
+          @server_health
+        end
+
+        # Exact maximum health from the latest
+        # `<crtrStatus maxhealth="...">` snapshot. This is independent of
+        # GemStone's template/fallback-based `max_hp`. It is nil until reported,
+        # and becomes nil again when a complete snapshot omits or malforms the
+        # attribute.
+        #
+        # @return [Integer, nil]
+        def server_max_health
+          @server_max_health
+        end
+
+        # Exact server-health percentage from the latest `<crtrStatus>`
+        # snapshot. The result is not clamped, so negative health produces a
+        # negative percentage. Returns nil when either exact value is absent or
+        # when `server_max_health` is zero.
+        #
+        # @return [Float, nil]
+        def server_health_percent
+          return nil if @server_health.nil? || @server_max_health.nil? || @server_max_health.zero?
+
+          ((@server_health.to_f / @server_max_health) * 100).round(1)
         end
 
         # When the feed last showed this creature (registration, room-object
@@ -646,6 +683,11 @@ module Lich
         # @return [void]
         def sync_crtr_status(attrs)
           touch_seen
+          # crtrStatus is a complete snapshot. Missing (or malformed) exact HP
+          # attributes clear the previous values instead of leaving stale data.
+          @server_health = strict_crtr_integer(attrs['health'])
+          @server_max_health = strict_crtr_integer(attrs['maxhealth'])
+
           # Scoped to CRTR_STATUS_FLAGS on purpose: @status has two writers,
           # this feed and the combat parser reading messaging. The feed is a
           # full snapshot only of the states it reports, so it owns removal
@@ -706,6 +748,20 @@ module Lich
         end
 
         private
+
+        # Parses a complete base-10 integer without the partial coercion that
+        # String#to_i permits (for example, "12hp" must not become 12).
+        # Malformed server values are treated as unavailable for this snapshot.
+        #
+        # @param value [String, nil]
+        # @return [Integer, nil]
+        def strict_crtr_integer(value)
+          return nil unless value.is_a?(String) && value.match?(/\A[+-]?\d+\z/)
+
+          Integer(value, 10)
+        rescue ArgumentError, TypeError
+          nil
+        end
 
         # Normalizes the configured creature debug level.
         #

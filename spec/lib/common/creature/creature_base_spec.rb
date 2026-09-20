@@ -148,6 +148,73 @@ RSpec.describe Lich::Common::CreatureBase do
   end
 
   describe '#sync_crtr_status' do
+    it 'stores exact positive health values and calculates their percentage' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.sync_crtr_status('health' => '75', 'maxhealth' => '120')
+
+      expect(creature.server_health).to eq(75)
+      expect(creature.server_max_health).to eq(120)
+      expect(creature.server_health_percent).to eq(62.5)
+    end
+
+    it 'preserves negative health without clamping it to zero' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.sync_crtr_status('health' => '-16', 'maxhealth' => '120')
+
+      expect(creature.server_health).to eq(-16)
+      expect(creature.server_health_percent).to eq(-13.3)
+    end
+
+    it 'preserves legitimate zero values and returns no percentage for a zero maximum' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.sync_crtr_status('health' => '0', 'maxhealth' => '0')
+
+      expect(creature.server_health).to eq(0)
+      expect(creature.server_max_health).to eq(0)
+      expect(creature.server_health_percent).to be_nil
+    end
+
+    it 'replaces exact health values on every subsequent snapshot' do
+      creature = SampleCreature.register('kobold', 1)
+      creature.sync_crtr_status('health' => '75', 'maxhealth' => '120')
+
+      creature.sync_crtr_status('health' => '44', 'maxhealth' => '100')
+
+      expect(creature.server_health).to eq(44)
+      expect(creature.server_max_health).to eq(100)
+      expect(creature.server_health_percent).to eq(44.0)
+    end
+
+    it 'clears exact health values when a complete snapshot omits them' do
+      creature = SampleCreature.register('kobold', 1)
+      creature.sync_crtr_status('health' => '75', 'maxhealth' => '120')
+
+      creature.sync_crtr_status('hostile' => '1')
+
+      expect(creature.server_health).to be_nil
+      expect(creature.server_max_health).to be_nil
+      expect(creature.server_health_percent).to be_nil
+    end
+
+    it 'rejects anything other than complete signed or unsigned decimal integers' do
+      creature = SampleCreature.register('kobold', 1)
+
+      creature.sync_crtr_status('health' => '75hp', 'maxhealth' => '120.0')
+
+      expect(creature.server_health).to be_nil
+      expect(creature.server_max_health).to be_nil
+      expect(creature.server_health_percent).to be_nil
+
+      creature.sync_crtr_status('health' => ' 75 ', 'maxhealth' => '1_20')
+
+      expect(creature.server_health).to be_nil
+      expect(creature.server_max_health).to be_nil
+      expect(creature.server_health_percent).to be_nil
+    end
+
     it 'maps XML flag spellings onto the canonical status vocabulary' do
       creature = SampleCreature.register('kobold', 1)
 
