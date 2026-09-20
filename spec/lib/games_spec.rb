@@ -160,6 +160,16 @@ RSpec.describe Lich::GameBase do
       expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
     end
 
+    it 'treats a WebSocket framing violation as a recognized fatal disruption without retry' do
+      error = Lich::Common::WebSocket::Frame::ProtocolError.new('reserved bits set (16)')
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log)
+        .with('info: server_thread: Lich::Common::WebSocket::Frame::ProtocolError: reserved bits set (16)')
+      expect(Lich).to have_received(:log).with('info: WebSocket protocol error - will not retry')
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:websocket_protocol_error)
+    end
+
     describe 'bounded parser queue' do
       before do
         Lich::Common::ShutdownCoordinator.reset!

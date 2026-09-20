@@ -115,22 +115,25 @@ account used throughout this testing. Both came back with unambiguous, real game
 
 **DragonRealms (`DR`, host `dr.simutronics.net` -> `hydra.play.net`):**
 ```
-<playerID id='562844'/>
+<playerID id='REDACTED'/>
 <settingsInfo  client="1.0.1.28" major="258" crc='2639179868' instance='DR'/>
 Welcome to DragonRealms (R) v2.00
-<app char="Raiyen" game="DR" title="[DR: Raiyen] Wrayth"/>
+<app char="TestChar" game="DR" title="[DR: TestChar] Wrayth"/>
 ... inventory, stream windows, etc.
 ```
 
 **GemStone IV (`GS3` in EAccess / `GS4` at the web layer, host `storm.gs4.game.play.net` ->
 `chimera.play.net`):**
 ```
-<playerID id='1069569'/>
+<playerID id='REDACTED'/>
 <settingsInfo  client="1.0.1.28" major="934" crc='634887039' instance='GS4'/>
 Welcome to GemStone IV (R) v5.10
 <compDef id='room desc'>Lanterns illuminate the cobbled streets of the market ... (Solhaven, North Market)
 ... inventory, room contents, exits, etc.
 ```
+
+(Player IDs and the character name above are redacted -- the original live probes returned real,
+account-identifying values here; the structure and every other field are exactly as received.)
 
 This confirms both remap branches (`hydra.play.net` and `chimera.play.net`) end-to-end, not just
 the DR-family branch, and confirms the transport carries real, correctly-framed game XML both

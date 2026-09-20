@@ -174,11 +174,11 @@ module Lich
               @fragment = nil
               [Message.new(opcode, payload)]
             when OPCODE_TEXT, OPCODE_BINARY
+              raise ProtocolError, "new data frame while a fragmented message is already in progress" if @fragment
+
               if frame.fin
                 [Message.new(frame.opcode, frame.payload)]
               else
-                raise ProtocolError, "new data frame while a fragmented message is already in progress" if @fragment
-
                 @fragment = [frame.opcode, frame.payload.dup]
                 []
               end

@@ -116,6 +116,17 @@ RSpec.describe Lich::Common::WebSocket::Frame do
       expect(messages.first.payload).to eq('Hello, world!')
     end
 
+    it 'raises if a complete (fin) data frame arrives while a fragmented message is in progress' do
+      # Regression: the @fragment guard used to run only in the non-fin
+      # (continuation-starting) branch, so a *complete* data frame here
+      # bypassed it entirely -- silently emitting a message out of order
+      # ahead of the still-open fragmented one instead of raising.
+      start = unmasked_server_frame('start of message', opcode: described_class::OPCODE_TEXT, fin: false)
+      intruder = unmasked_server_frame('unrelated complete message', opcode: described_class::OPCODE_TEXT, fin: true)
+      expect { reader.feed(start + intruder) }
+        .to raise_error(described_class::ProtocolError, /fragmented message is already in progress/)
+    end
+
     it 'surfaces a ping as a control message' do
       messages = reader.feed(unmasked_server_frame('', opcode: described_class::OPCODE_PING))
       expect(messages.first.opcode).to eq(described_class::OPCODE_PING)

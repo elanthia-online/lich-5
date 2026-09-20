@@ -1204,6 +1204,13 @@ module Lich
             # Connection errors are fatal
             shutdown_log.info("connection error - will not retry")
             return false
+          when Lich::Common::WebSocket::Frame::ProtocolError
+            # A framing violation leaves the offending bytes stuck at the
+            # front of Stream's internal buffer (raised before they're
+            # consumed), so every retry would just hit the same error again
+            # on the same bytes -- not a transient condition.
+            shutdown_log.info("WebSocket protocol error - will not retry")
+            return false
           when GameStreamDesyncError
             shutdown_log.info("game stream desync detected - will not retry")
             return false
@@ -1237,6 +1244,8 @@ module Lich
             :connection_aborted
           when OpenSSL::SSL::SSLError
             :connection_tls_error
+          when Lich::Common::WebSocket::Frame::ProtocolError
+            :websocket_protocol_error
           when GameStreamDesyncError
             :game_stream_desync
           when ServerQueueOverflow
@@ -1275,6 +1284,7 @@ module Lich
             error.is_a?(Errno::EPIPE) ||
             error.is_a?(Errno::ECONNABORTED) ||
             error.is_a?(OpenSSL::SSL::SSLError) ||
+            error.is_a?(Lich::Common::WebSocket::Frame::ProtocolError) ||
             error.is_a?(GameStreamDesyncError)
         end
 
