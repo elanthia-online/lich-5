@@ -544,13 +544,13 @@ reconnect_if_wanted = proc {
     gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
-      Game.open_with_timeout(gamehost, gameport)
+      Game.open_with_timeout(gamehost, gameport, transport: @argv_options[:game_transport] || :direct)
     rescue
       Lich.log "error: #{$!}"
       gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
-        Game.open_with_timeout(gamehost, gameport)
+        Game.open_with_timeout(gamehost, gameport, transport: @argv_options[:game_transport] || :direct)
       rescue
         Lich.log "error: #{$!}"
         $_CLIENT_.close rescue nil
@@ -588,7 +588,7 @@ reconnect_if_wanted = proc {
         # report_on_exception off: a failed Game.open is surfaced by the join below
         # (which re-raises it), not by an auto-printed thread warning.
         Thread.current.report_on_exception = false
-        Game.open(@argv_options[:game_host], @argv_options[:game_port])
+        Game.open(@argv_options[:game_host], @argv_options[:game_port], transport: @argv_options[:game_transport] || :direct)
       }
       # join(30) returns nil on timeout, the thread on success, and re-raises if
       # Game.open errored (e.g. connection refused) -- so a failed connect reaches
@@ -665,7 +665,7 @@ reconnect_if_wanted = proc {
         begin
           include Lich::Gemstone if @argv_options[:game_host] =~ /gs/i
           include Lich::DragonRealms if @argv_options[:game_host] =~ /dr/i
-          Game.open(@argv_options[:game_host], @argv_options[:game_port])
+          Game.open(@argv_options[:game_host], @argv_options[:game_port], transport: @argv_options[:game_transport] || :direct)
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"

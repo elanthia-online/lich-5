@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require 'openssl'
 require_relative 'common/shutdown_log'
+require_relative 'common/game_transport'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -439,50 +441,27 @@ module Lich
           @game_instance = GameInstanceFactory.create(game_type)
         end
 
-        # Opens the TCP connection to the game server and starts the socket's
+        # Opens the connection to the game server and starts the socket's
         # wrap and main reader threads.
         #
         # @param host [String] game server hostname
         # @param port [Integer] game server port
-        # @return [TCPSocket] the connected, configured game socket
+        # @param transport [Symbol] Lich::Common::GameTransport::DIRECT (default,
+        #   a raw TCP socket -- the connection method Lich has always used) or
+        #   ::WEBSOCKET (opt-in; the browser WebSocket-to-TCP shim over TLS on
+        #   443 -- see Genie5#356 phase 2). Socket-level tuning (keepalive,
+        #   linger, timeouts, TCP_NODELAY) is applied for both.
+        # @param transport_opts [Hash] forwarded to
+        #   Lich::Common::GameTransport.open (WEBSOCKET-only knobs: shim_port,
+        #   path, origin, subprotocol, user_agent, extra_headers, connect_timeout)
+        # @return [TCPSocket, Lich::Common::WebSocket::Stream] the connected,
+        #   configured game socket
         # @note Connection errors propagate to the caller. Use
         #   {.open_with_timeout} to bound how long the connect may block.
         # @see .open_with_timeout
-        def open(host, port)
+        def open(host, port, transport: Lich::Common::GameTransport::DIRECT, **transport_opts)
           @remote_eof = false
-          @socket = TCPSocket.open(host, port)
-
-          # Configure socket with error handling
-          # More forgiving settings for Windows reliability under network stress
-          begin
-            SocketConfigurator.configure(@socket,
-                                         keepalive: {
-                                           enable: true,
-                                           idle: 30,       # 30s idle before first keepalive; defensive against L3/L4 idle reapers (best-effort, see SocketConfigurator)
-                                           interval: 30    # 30 seconds between keepalive probes
-                                         },
-                                         linger: {
-                                           enable: true,
-                                           timeout: 5      # Wait 5 seconds for data to send on close
-                                         },
-                                         timeout: {
-                                           recv: 30,       # 30 second receive timeout (increased from 10)
-                                           send: 30        # 30 second send timeout (increased from 10)
-                                         },
-                                         buffer_size: {
-                                           recv: 32768,    # 32KB receive buffer (reduced from 65536)
-                                           send: 32768     # 32KB send buffer (reduced from 65536)
-                                         },
-                                         tcp_nodelay: true, # Disable Nagle's algorithm for low latency
-                                         tcp_maxrt: 10)     # Windows: max 10 retransmissions before giving up
-
-            Lich.log("Socket configured successfully for #{host}:#{port}") if ARGV.include?("--debug")
-          rescue StandardError => e
-            # Log the error but continue - socket may still work with default settings
-            log_error("Socket configuration error (continuing with defaults)", e)
-            Lich.log("WARNING: Socket running with default OS settings - may be less reliable under network stress")
-          end
-
+          @socket = Lich::Common::GameTransport.open(host, port, mode: transport, **transport_opts)
           @socket.sync = true
 
           start_wrap_thread
@@ -498,17 +477,19 @@ module Lich
         # @param host [String] game server hostname
         # @param port [Integer] game server port
         # @param timeout [Integer, Float] seconds to wait for the connect to complete
+        # @param transport [Symbol] see {.open}
+        # @param transport_opts [Hash] see {.open}
         # @return [void]
         # @raise [RuntimeError] if the connect does not complete within +timeout+
         # @raise [StandardError] re-raises whatever {.open} raises
         #   (e.g. Errno::ECONNREFUSED) so the caller's rescue runs
         # @see .open
-        def open_with_timeout(host, port, timeout = 30)
+        def open_with_timeout(host, port, timeout = 30, transport: Lich::Common::GameTransport::DIRECT, **transport_opts)
           connect_thread = Thread.new {
             # report_on_exception off: a failed open is surfaced by the join below
             # (which re-raises it), not by an auto-printed thread warning.
             Thread.current.report_on_exception = false
-            self.open(host, port)
+            self.open(host, port, transport: transport, **transport_opts)
           }
           # join returns nil on timeout, the thread on success, and re-raises the
           # thread's exception on failure -- so a Game.open that errors (e.g.
@@ -667,7 +648,7 @@ module Lich
             begin
               @socket.puts(command)
               true
-            rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError => e
+            rescue Errno::EPIPE, Errno::ECONNRESET, Errno::ECONNABORTED, IOError, OpenSSL::SSL::SSLError => e
               Lich.log "error: _puts: #{e}\n\t#{e.backtrace.first}"
               nil
             end
@@ -854,7 +835,7 @@ module Lich
                   # Small sleep before retry
                   sleep 0.1
                   retry
-                rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED => conn_error
+                rescue Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED, OpenSSL::SSL::SSLError => conn_error
                   # Connection was reset/broken - these are fatal
                   shutdown_log.info("connection error: #{conn_error.class} - #{conn_error.message}")
                   raise conn_error
@@ -918,13 +899,20 @@ module Lich
         # Reads one game-server line after an explicit readiness wait.
         #
         # Ruby does not reliably surface SO_RCVTIMEO through TCPSocket#gets on
-        # every supported platform. Waiting with IO.select makes the reader's
-        # no-data timeout deterministic while preserving gets-based EOF handling.
+        # every supported platform. Waiting on #wait_readable first makes the
+        # reader's no-data timeout deterministic while preserving gets-based
+        # EOF handling. #wait_readable rather than a bare IO.select call so
+        # this works unchanged whether @socket is a direct TCPSocket (where
+        # it's equivalent to IO.select on a single descriptor -- both trigger
+        # on EOF too) or a Lich::Common::WebSocket::Stream (WEBSOCKET
+        # transport), whose #wait_readable also reports readiness for a line
+        # already sitting fully decoded in its buffer -- something a select
+        # on the raw, TLS-wrapped socket underneath it cannot see.
         #
         # @param read_timeout [Numeric] seconds to wait for game socket data
         # @return [String, nil, Object] a server line, nil for EOF, or READ_TIMEOUT
         def read_server_string(read_timeout: READ_TIMEOUT_SECONDS)
-          return READ_TIMEOUT unless IO.select([@socket], nil, nil, read_timeout)
+          return READ_TIMEOUT unless @socket.wait_readable(read_timeout)
 
           @socket.gets
         end
@@ -1212,7 +1200,7 @@ module Lich
             # reader loop has exhausted its consecutive-timeout threshold.
             shutdown_log.info("game timeout - will not retry")
             return false
-          when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED
+          when Errno::ECONNRESET, Errno::EPIPE, Errno::ECONNABORTED, OpenSSL::SSL::SSLError
             # Connection errors are fatal
             shutdown_log.info("connection error - will not retry")
             return false
@@ -1247,6 +1235,8 @@ module Lich
             :connection_pipe
           when Errno::ECONNABORTED
             :connection_aborted
+          when OpenSSL::SSL::SSLError
+            :connection_tls_error
           when GameStreamDesyncError
             :game_stream_desync
           when ServerQueueOverflow
@@ -1284,6 +1274,7 @@ module Lich
             error.is_a?(Errno::ECONNRESET) ||
             error.is_a?(Errno::EPIPE) ||
             error.is_a?(Errno::ECONNABORTED) ||
+            error.is_a?(OpenSSL::SSL::SSLError) ||
             error.is_a?(GameStreamDesyncError)
         end
 

@@ -75,7 +75,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return(nil)
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(nil)
       allow(socket).to receive(:gets)
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to equal(Lich::GameBase::Game::READ_TIMEOUT)
@@ -86,7 +86,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(socket)
       allow(socket).to receive(:gets).and_return("<prompt/>\r\n")
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to eq("<prompt/>\r\n")
@@ -96,7 +96,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(socket)
       allow(socket).to receive(:gets).and_return(nil)
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
