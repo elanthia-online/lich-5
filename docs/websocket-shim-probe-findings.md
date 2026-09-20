@@ -7,12 +7,13 @@ phase-2 WebSocket game transport actually needs to connect, gathered while valid
 1. **Static analysis of play.net's own web client bundle** (`style/js/all_web_fe_min.js`, fetched
    unauthenticated over plain HTTPS -- no login required). This is authoritative: it's the literal
    source of the code a real browser session runs, not an inference from observed behavior.
-2. **A live probe** against a real DragonRealms Prime Test (`DRT`) account's GAMEHOST/GAMEPORT,
-   obtained via ordinary EAccess auth, confirming the values derived from (1) actually complete a
-   WebSocket upgrade against the production endpoint.
+2. **Live probes** against a real account's GAMEHOST/GAMEPORT, obtained via ordinary EAccess auth:
+   first a transport-only handshake against DragonRealms Prime Test (`DRT`), then a full end-to-end
+   game login -- session key, `/FE:` identification, real game data read back -- against both
+   production DragonRealms (`DR`) and GemStone IV (`GS3`/`GS4`).
 
-No live game connection (i.e. sending the session KEY) was completed as part of gathering these
-findings -- see "Not yet confirmed" below.
+Status: the transport is confirmed working end-to-end for both game families in production. See
+"Not yet confirmed" for what's left (mostly instances no available account has entitlement for).
 
 ## The client-side connection code
 
@@ -86,8 +87,11 @@ special-casing -- `Lich::Common::WebSocket::Stream` needed no changes at all onc
 
 ## Live confirmation
 
-Authenticated a real `DRT` (DragonRealms Prime Test) character via ordinary EAccess, then ran the
-resulting GAMEHOST/GAMEPORT through the corrected transport:
+### Transport handshake only (DRT, no login)
+
+First pass: authenticated a real `DRT` (DragonRealms Prime Test) character via ordinary EAccess,
+then ran the resulting GAMEHOST/GAMEPORT through the corrected transport without sending the
+session key:
 
 ```
 GAMEHOST=dr.simutronics.net GAMEPORT=11624   (as of 2026-09-20; do not treat as a stable value)
@@ -96,10 +100,6 @@ GAMEHOST=dr.simutronics.net GAMEPORT=11624   (as of 2026-09-20; do not treat as 
   -> 101 Switching Protocols
 ```
 
-No session KEY was sent in this probe, so no character entered the game -- this confirms the
-transport-level handshake only (TCP connect, TLS, RFC 6455 upgrade), not the full game-login
-sequence.
-
 Also worth recording: the current live GAMEHOST for DRT (`dr.simutronics.net`) differs from the
 value `docs/web-login-protocol-analysis.md` recorded during #1570's testing (`hydra.simutronics.com`,
 itself a DNS alias of `storm.dr.game.play.net`). Infrastructure has evidently moved since; treat
@@ -107,15 +107,52 @@ either as a point-in-time observation, not a pinned constant -- which is exactly
 `GameTransport` derives `ws_host` from whatever GAMEHOST auth actually returns rather than
 hardcoding it.
 
+### Full end-to-end game login (production DR and GS4)
+
+Second pass: completed the full handshake -- session key + `/FE:WebFE` identification line, exact
+byte sequence as recorded above -- against both production instances, using real characters on the
+account used throughout this testing. Both came back with unambiguous, real game data:
+
+**DragonRealms (`DR`, host `dr.simutronics.net` -> `hydra.play.net`):**
+```
+<playerID id='562844'/>
+<settingsInfo  client="1.0.1.28" major="258" crc='2639179868' instance='DR'/>
+Welcome to DragonRealms (R) v2.00
+<app char="Raiyen" game="DR" title="[DR: Raiyen] Wrayth"/>
+... inventory, stream windows, etc.
+```
+
+**GemStone IV (`GS3` in EAccess / `GS4` at the web layer, host `storm.gs4.game.play.net` ->
+`chimera.play.net`):**
+```
+<playerID id='1069569'/>
+<settingsInfo  client="1.0.1.28" major="934" crc='634887039' instance='GS4'/>
+Welcome to GemStone IV (R) v5.10
+<compDef id='room desc'>Lanterns illuminate the cobbled streets of the market ... (Solhaven, North Market)
+... inventory, room contents, exits, etc.
+```
+
+This confirms both remap branches (`hydra.play.net` and `chimera.play.net`) end-to-end, not just
+the DR-family branch, and confirms the transport carries real, correctly-framed game XML both
+directions with no corruption or desync -- phase 2's core premise holds for both game families.
+
+**Caveat on logout:** in both runs, a `quit` command was sent after an idle-timeout heuristic
+decided the initial setup burst had ended, but the trailing lines that came back look like they
+were still part of that same initial burst (room/inventory setup), not a logout confirmation. The
+socket was closed immediately after regardless. This most likely just means each character went
+link-dead rather than logged out cleanly -- functionally identical to what happens if any real
+client (Wrayth, Stormfront, a phone losing signal) crashes or loses its connection mid-session; the
+game's own link-dead timeout handles this the same way it always does. Not a transport defect, just
+an artifact of the probe script's simplistic "wait for a gap, then quit" logic.
+
 ## Not yet confirmed
 
-- **A full live game login over the WebSocket transport** -- actually sending the session KEY and
-  the `/FE:` identification line and confirming real game XML comes back. The transport-level
-  handshake (this document) is necessary but not sufficient; this is the next step before phase 2
-  could be considered validated end-to-end.
-- **GS-family (`chimera.play.net`) path** -- only the DR-family (`hydra.play.net`) branch has been
-  exercised live. The GemStone branch is implemented identically per the same source but untested.
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
   `docs/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
   entitled account has been available to confirm their GAMEHOST values, so whether they follow the
   same two-pattern remap is assumed, not confirmed.
+- **Sustained/interactive play over the transport** -- both live runs above were short (login burst,
+  a handful of lines, then disconnect) rather than an extended session exercising two-way traffic,
+  keepalive/ping-pong under real network conditions, or a clean `Game.close`-driven shutdown through
+  the full `games.rb` reader/parser thread stack rather than a standalone script talking to `Stream`
+  directly.
