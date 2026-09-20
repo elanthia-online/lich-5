@@ -101,6 +101,7 @@ module Lich
       def self.open_direct(host, port)
         socket = TCPSocket.open(host, port)
         configure_socket(socket, host)
+        Lich.log "info: connected via direct TCP transport (#{host}:#{port})"
         socket
       end
 
@@ -125,7 +126,7 @@ module Lich
                               user_agent: DEFAULT_USER_AGENT,
                               extra_headers: {},
                               connect_timeout: 10)
-        Lich::Common::WebSocket::Stream.connect(
+        stream = Lich::Common::WebSocket::Stream.connect(
           host: ws_host,
           port: shim_port,
           path: path,
@@ -135,6 +136,13 @@ module Lich
           extra_headers: extra_headers,
           connect_timeout: connect_timeout
         ) { |raw_socket| configure_socket(raw_socket, ws_host) }
+
+        remap_note = ws_host == host ? "" : " (remapped from GAMEHOST #{host})"
+        Lich.log "info: connected via WebSocket transport (wss://#{ws_host}:#{shim_port}#{path}#{remap_note})"
+        stream
+      rescue Lich::Common::WebSocket::Stream::ConnectionError => e
+        Lich.log "warn: WebSocket transport connect failed (wss://#{ws_host}:#{shim_port}#{path}): #{e.message}"
+        raise
       end
 
       # Applies the same keepalive/linger/timeout/buffer tuning to +socket+

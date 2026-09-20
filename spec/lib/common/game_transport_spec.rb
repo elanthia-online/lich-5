@@ -54,8 +54,19 @@ RSpec.describe Lich::Common::GameTransport do
     end
   end
 
+  describe '.open_direct' do
+    it 'connects, configures the socket, logs the transport used, and returns the socket' do
+      socket = double('socket')
+      allow(TCPSocket).to receive(:open).with('host', 1234).and_return(socket)
+      allow(described_class).to receive(:configure_socket)
+      expect(Lich).to receive(:log).with('info: connected via direct TCP transport (host:1234)')
+
+      expect(described_class.open_direct('host', 1234)).to eq(socket)
+    end
+  end
+
   describe '.open_websocket' do
-    it "derives the shim path from the game port and remaps GAMEHOST to the WebSocket transport's real host" do
+    it "derives the shim path from the game port, remaps GAMEHOST to the WebSocket transport's real host, and logs which transport connected" do
       expect(Lich::Common::WebSocket::Stream).to receive(:connect) do |**kwargs, &block|
         expect(kwargs[:host]).to eq('hydra.play.net') # remapped from storm.dr.game.play.net
         expect(kwargs[:port]).to eq(443)
@@ -66,12 +77,23 @@ RSpec.describe Lich::Common::GameTransport do
         :ws_stream
       end
       allow(described_class).to receive(:configure_socket)
+      expect(Lich).to receive(:log)
+        .with('info: connected via WebSocket transport (wss://hydra.play.net:443/shim/10024 ' \
+              '(remapped from GAMEHOST storm.dr.game.play.net))')
 
       result = described_class.open_websocket('storm.dr.game.play.net', 10_024)
       expect(result).to eq(:ws_stream)
     end
 
+    it 'omits the remap note when ws_host matches the literal GAMEHOST' do
+      allow(Lich::Common::WebSocket::Stream).to receive(:connect).and_return(:ws_stream)
+      expect(Lich).to receive(:log).with('info: connected via WebSocket transport (wss://host:443/shim/10024)')
+
+      described_class.open_websocket('host', 10_024, ws_host: 'host')
+    end
+
     it 'lets callers override ws_host/path/origin/subprotocol for live probing' do
+      allow(Lich).to receive(:log)
       expect(Lich::Common::WebSocket::Stream).to receive(:connect) do |**kwargs|
         expect(kwargs[:host]).to eq('custom.example.com')
         expect(kwargs[:path]).to eq('/custom-shim/10024')
@@ -81,6 +103,16 @@ RSpec.describe Lich::Common::GameTransport do
 
       described_class.open_websocket('host', 10_024, ws_host: 'custom.example.com',
                                                        path: '/custom-shim/10024', subprotocol: nil)
+    end
+
+    it 'logs a warning and re-raises when the WebSocket connect fails' do
+      error = Lich::Common::WebSocket::Stream::ConnectionError.new('boom')
+      allow(Lich::Common::WebSocket::Stream).to receive(:connect).and_raise(error)
+      expect(Lich).to receive(:log)
+        .with('warn: WebSocket transport connect failed (wss://hydra.play.net:443/shim/10024): boom')
+
+      expect { described_class.open_websocket('storm.dr.game.play.net', 10_024) }
+        .to raise_error(Lich::Common::WebSocket::Stream::ConnectionError, 'boom')
     end
   end
 
