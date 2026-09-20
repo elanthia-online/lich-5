@@ -145,6 +145,27 @@ client (Wrayth, Stormfront, a phone losing signal) crashes or loses its connecti
 game's own link-dead timeout handles this the same way it always does. Not a transport defect, just
 an artifact of the probe script's simplistic "wait for a gap, then quit" logic.
 
+## Automatic fallback
+
+Once the transport itself was confirmed working end-to-end for both game families (above),
+`GameTransport`'s `DIRECT` mode was updated to automatically retry over `WEBSOCKET` on a
+connectivity-class failure (`Errno::ETIMEDOUT`/`ECONNREFUSED`/`EHOSTUNREACH`/`ENETUNREACH`/
+`SocketError`) -- the actual "firewall silently drops the game port, 443 is still open" scenario
+this whole feature exists for. This mirrors `Authenticator.authenticate`'s EAccess -> WebLogin
+fallback from #1570 exactly: try the normal path first, fall back only on transport-level
+unreachability (not on errors the other transport would hit identically), log which one actually
+connected. Also required bounding `open_direct`'s TCP connect with an explicit timeout
+(`Socket.tcp(..., connect_timeout: 10)` in place of a bare `TCPSocket.open`) -- a silently-blocked
+port otherwise hits the OS's default SYN-retry timeout (60s+ on Linux) before the fallback ever
+gets a chance to run, for the same reason `EAccess::CONNECT_TIMEOUT` exists.
+
+This fallback logic is covered by full mocked-error unit coverage (one example per error class in
+the list above, plus a negative case confirming an unrelated error does *not* trigger it) but has
+not been exercised against an actual firewalled port live -- doing that would mean deliberately
+blocking outbound traffic to a real game port from a test network, which hasn't been done. The
+WebSocket path it falls back *to* has, independently, already been confirmed live end-to-end
+(above), so the only untested piece is the trigger condition itself, not the destination.
+
 ## Not yet confirmed
 
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
