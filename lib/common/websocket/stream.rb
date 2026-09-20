@@ -26,7 +26,15 @@ module Lich
         # Opens a TCP connection, wraps it in TLS, performs the WebSocket
         # opening handshake, and returns a ready-to-use Stream.
         #
-        # @param host [String] hostname to connect to and to validate the TLS cert / SNI against
+        # @param host [String] hostname to dial, present via SNI, verify the
+        #   TLS certificate against, and send as the handshake's Host header
+        #   -- all four uses share the one value, exactly like a browser's
+        #   `new WebSocket(url)` derives all of them from the URL's host.
+        #   Callers that need a different hostname than the raw GAMEHOST
+        #   (see {Lich::Common::GameTransport}, which knows the real client
+        #   dials a fixed per-family host rather than the literal GAMEHOST)
+        #   are expected to resolve that before calling here, not pass the
+        #   unresolved GAMEHOST and expect this method to compensate.
         # @param port [Integer] TCP port to connect to (443 for the shim)
         # @param path [String] request path, e.g. "/shim/1234"
         # @param origin [String, nil] Origin header for the handshake
@@ -39,8 +47,8 @@ module Lich
         #   apply {Lich::Common::SocketConfigurator} before TLS/WS overhead begins
         # @return [Stream]
         # @raise [ConnectionError] on a TCP/TLS failure or handshake rejection
-        def self.connect(host:, port:, path:, origin: nil, subprotocol: nil, user_agent: nil,
-                         extra_headers: {}, connect_timeout: 10)
+        def self.connect(host:, port:, path:, origin: nil, subprotocol: nil,
+                         user_agent: nil, extra_headers: {}, connect_timeout: 10)
           raw_socket = Socket.tcp(host, port, connect_timeout: connect_timeout)
           yield raw_socket if block_given?
 

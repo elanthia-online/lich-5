@@ -32,12 +32,35 @@ RSpec.describe Lich::Common::GameTransport do
     end
   end
 
+  describe '.websocket_host_for' do
+    it 'remaps a GemStone-family GAMEHOST to chimera.play.net' do
+      expect(described_class.websocket_host_for('storm.gs4.game.play.net')).to eq('chimera.play.net')
+      expect(described_class.websocket_host_for('chimera.simutronics.com')).to eq('chimera.play.net')
+    end
+
+    it 'remaps a DragonRealms-family GAMEHOST to hydra.play.net' do
+      expect(described_class.websocket_host_for('dr.simutronics.net')).to eq('hydra.play.net')
+      expect(described_class.websocket_host_for('storm.dr.game.play.net')).to eq('hydra.play.net')
+      expect(described_class.websocket_host_for('hydra.simutronics.com')).to eq('hydra.play.net')
+    end
+
+    it 'checks the GemStone pattern first, matching the source order' do
+      # a hypothetical host matching both patterns should resolve as GemStone-family
+      expect(described_class.websocket_host_for('gsdr.example.com')).to eq('chimera.play.net')
+    end
+
+    it 'leaves an unrecognized GAMEHOST unchanged' do
+      expect(described_class.websocket_host_for('unknown.example.com')).to eq('unknown.example.com')
+    end
+  end
+
   describe '.open_websocket' do
-    it 'derives the shim path from the game port and defaults the shim TCP port to 443' do
+    it "derives the shim path from the game port and remaps GAMEHOST to the WebSocket transport's real host" do
       expect(Lich::Common::WebSocket::Stream).to receive(:connect) do |**kwargs, &block|
+        expect(kwargs[:host]).to eq('hydra.play.net') # remapped from storm.dr.game.play.net
         expect(kwargs[:port]).to eq(443)
         expect(kwargs[:path]).to eq('/shim/10024')
-        expect(kwargs[:origin]).to eq('https://storm.dr.game.play.net')
+        expect(kwargs[:origin]).to eq('https://hydra.play.net')
         expect(kwargs[:subprotocol]).to eq(described_class::DEFAULT_SUBPROTOCOL)
         block.call(double('raw_socket')) # exercise the configure_socket hook without a real socket
         :ws_stream
@@ -48,14 +71,16 @@ RSpec.describe Lich::Common::GameTransport do
       expect(result).to eq(:ws_stream)
     end
 
-    it 'lets callers override the shim path/origin/subprotocol for live probing' do
+    it 'lets callers override ws_host/path/origin/subprotocol for live probing' do
       expect(Lich::Common::WebSocket::Stream).to receive(:connect) do |**kwargs|
+        expect(kwargs[:host]).to eq('custom.example.com')
         expect(kwargs[:path]).to eq('/custom-shim/10024')
         expect(kwargs[:subprotocol]).to be_nil
         :ws_stream
       end
 
-      described_class.open_websocket('host', 10_024, path: '/custom-shim/10024', subprotocol: nil)
+      described_class.open_websocket('host', 10_024, ws_host: 'custom.example.com',
+                                                       path: '/custom-shim/10024', subprotocol: nil)
     end
   end
 

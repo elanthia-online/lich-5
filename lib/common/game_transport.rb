@@ -34,18 +34,47 @@ module Lich
       # Raised by {.open} for any +mode+ other than {DIRECT} or {WEBSOCKET}.
       class UnknownModeError < ArgumentError; end
 
-      # Defaults for the WebSocket shim path/headers -- unconfirmed against
-      # the live endpoint (see Genie5#356's own "open questions" about
-      # whether it accepts a non-browser Origin/subprotocol at all). Named
-      # constants rather than buried literals so that once someone probes
-      # the real shim, fixing these is a one-line change instead of a hunt
-      # through {.open_websocket}.
+      # Defaults for the WebSocket shim path/headers. Confirmed live against
+      # play.net's own web client (`style/js/all_web_fe_min.js`,
+      # `SimuSocket.tryWebSocket`) -- see docs/websocket-shim-probe-findings.md
+      # for the full writeup and how these were pulled directly from that
+      # bundle rather than guessed.
       DEFAULT_SHIM_PORT        = 443
       DEFAULT_SHIM_PATH_FORMAT = "/shim/%<port>d"
       DEFAULT_ORIGIN_FORMAT    = "https://%<host>s"
       DEFAULT_SUBPROTOCOL      = "websocket_shim-protocol"
       DEFAULT_USER_AGENT       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " \
                                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+      # The real web client does not open its WebSocket against the literal
+      # GAMEHOST -- `DynamicData.actualHost` in `all_web_fe_min.js` remaps it
+      # to one of two fixed hostnames by matching a pattern against GAMEHOST,
+      # in this order (first match wins, mirroring the source's own
+      # if/elsif-equivalent ternary chain):
+      #
+      #   GAMEHOST =~ /gs|chimera/i  -> "chimera.play.net"  (GemStone family)
+      #   GAMEHOST =~ /dr|hydra/i    -> "hydra.play.net"    (DragonRealms family)
+      #   otherwise                  -> GAMEHOST unchanged (dead in practice --
+      #                                 every known instance matches one of the above)
+      #
+      # This isn't a workaround for a TLS quirk -- it's what the shim actually
+      # expects to be dialed at. It also happens to explain the TLS hostname
+      # mismatch a naive literal-GAMEHOST connect hits: hydra.play.net and
+      # chimera.play.net are both covered by the shared edge certificate's
+      # *.play.net SAN; the raw GAMEHOST (e.g. dr.simutronics.net, a .net
+      # name) is not. See docs/websocket-shim-probe-findings.md.
+      WEBSOCKET_HOST_OVERRIDES = [
+        [/gs|chimera/i, "chimera.play.net"],
+        [/dr|hydra/i,   "hydra.play.net"]
+      ].freeze
+
+      # @param gamehost [String] the literal GAMEHOST from auth
+      # @return [String] the hostname to actually dial/verify/Host-header for
+      #   the WebSocket transport -- see {WEBSOCKET_HOST_OVERRIDES}
+      def self.websocket_host_for(gamehost)
+        _pattern, override = WEBSOCKET_HOST_OVERRIDES.find { |pattern, _| gamehost.match?(pattern) }
+        override || gamehost
+      end
 
       # @param host [String] game server hostname (GAMEHOST)
       # @param port [Integer] game server port (GAMEPORT) -- the real
@@ -77,8 +106,11 @@ module Lich
 
       # @api private
       # @param shim_port [Integer] TCP port to dial for the shim (443)
+      # @param ws_host [String] hostname to actually dial/verify/Host-header;
+      #   defaults to {.websocket_host_for}'s remap of +host+ (the literal
+      #   GAMEHOST) -- override only to bypass that remap deliberately
       # @param path [String] shim request path; defaults to "/shim/{port}"
-      # @param origin [String] Origin header; defaults to "https://{host}"
+      # @param origin [String] Origin header; defaults to "https://{ws_host}"
       # @param subprotocol [String, nil] Sec-WebSocket-Protocol to request;
       #   pass nil to omit it entirely while probing the shim's requirements
       # @param user_agent [String, nil]
@@ -86,14 +118,15 @@ module Lich
       # @param connect_timeout [Numeric]
       def self.open_websocket(host, port,
                               shim_port: DEFAULT_SHIM_PORT,
+                              ws_host: websocket_host_for(host),
                               path: format(DEFAULT_SHIM_PATH_FORMAT, port: port),
-                              origin: format(DEFAULT_ORIGIN_FORMAT, host: host),
+                              origin: format(DEFAULT_ORIGIN_FORMAT, host: ws_host),
                               subprotocol: DEFAULT_SUBPROTOCOL,
                               user_agent: DEFAULT_USER_AGENT,
                               extra_headers: {},
                               connect_timeout: 10)
         Lich::Common::WebSocket::Stream.connect(
-          host: host,
+          host: ws_host,
           port: shim_port,
           path: path,
           origin: origin,
@@ -101,7 +134,7 @@ module Lich
           user_agent: user_agent,
           extra_headers: extra_headers,
           connect_timeout: connect_timeout
-        ) { |raw_socket| configure_socket(raw_socket, host) }
+        ) { |raw_socket| configure_socket(raw_socket, ws_host) }
       end
 
       # Applies the same keepalive/linger/timeout/buffer tuning to +socket+
