@@ -204,7 +204,7 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       expect(stream.gets).to eq("after\n")
 
       pong_frames = io.written.map { |bytes| unmask_client_frame(bytes) }
-                      .select { |opcode, _| opcode == Frame::OPCODE_PONG }
+                              .select { |opcode, _| opcode == Frame::OPCODE_PONG }
       expect(pong_frames.size).to eq(1)
       expect(pong_frames.first.last).to eq('ping-token')
     end
@@ -218,7 +218,7 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       expect(stream.gets).to be_nil
 
       close_frames = io.written.map { |bytes| unmask_client_frame(bytes) }
-                       .select { |opcode, _| opcode == Frame::OPCODE_CLOSE }
+                               .select { |opcode, _| opcode == Frame::OPCODE_CLOSE }
       expect(close_frames.size).to eq(1)
     end
   end
