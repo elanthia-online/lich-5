@@ -791,6 +791,7 @@ module Lich
       def unload_weapon(name)
         result = DRC.bput("unload my #{name}", *DRCI::UNLOAD_WEAPON_SUCCESS_PATTERNS, *DRCI::UNLOAD_WEAPON_FAILURE_PATTERNS)
         waitrt? # wait out the unload roundtime so the ammo/hand state has settled before we act on it
+        return if result&.match?(/As you release the string.* fades and disappears/)
 
         ammo_match = result&.match(/^(?:Your .*?\b(?<ammo>[\w]+)\b fall.* from your .* to your feet\.)$/)
         ground_match = result&.match?(/As you release the string/) ? result.match(/the (?<ammo>\w+) tumbles/) : nil
