@@ -26,6 +26,11 @@ RSpec.describe Lich::Common::GameTransport do
       expect(described_class.open('host', 1234, mode: described_class::DIRECT)).to eq(:direct_socket)
     end
 
+    it 'dispatches :direct to .open_direct, forwarding extra options for a possible fallback' do
+      allow(described_class).to receive(:open_direct).with('host', 1234, subprotocol: nil).and_return(:direct_socket)
+      expect(described_class.open('host', 1234, mode: described_class::DIRECT, subprotocol: nil)).to eq(:direct_socket)
+    end
+
     it 'dispatches :websocket to .open_websocket, forwarding extra options' do
       allow(described_class).to receive(:open_websocket).with('host', 1234, subprotocol: nil).and_return(:ws_stream)
       expect(described_class.open('host', 1234, mode: described_class::WEBSOCKET, subprotocol: nil)).to eq(:ws_stream)
@@ -55,13 +60,46 @@ RSpec.describe Lich::Common::GameTransport do
   end
 
   describe '.open_direct' do
-    it 'connects, configures the socket, logs the transport used, and returns the socket' do
+    it 'connects with a bounded timeout, configures the socket, logs the transport used, and returns the socket' do
       socket = double('socket')
-      allow(TCPSocket).to receive(:open).with('host', 1234).and_return(socket)
+      expect(Socket).to receive(:tcp).with('host', 1234, connect_timeout: described_class::DIRECT_CONNECT_TIMEOUT)
+                                     .and_return(socket)
       allow(described_class).to receive(:configure_socket)
       expect(Lich).to receive(:log).with('info: connected via direct TCP transport (host:1234)')
 
       expect(described_class.open_direct('host', 1234)).to eq(socket)
+    end
+
+    described_class::DIRECT_CONNECTIVITY_ERRORS.each do |error_class|
+      it "falls back to .open_websocket on #{error_class}" do
+        # Errno::* classes prepend their own system message to whatever's
+        # passed in (e.g. "Connection timed out - unreachable"); build the
+        # expectation the same way rather than assume a bare passthrough.
+        expected_message = error_class.new('unreachable').message
+        allow(Socket).to receive(:tcp).and_raise(error_class, 'unreachable')
+        expect(described_class).to receive(:open_websocket).with('host', 1234, fallback: true).and_return(:ws_stream)
+        expect(Lich).to receive(:log)
+          .with("warn: direct TCP transport unreachable (host:1234, #{error_class}: #{expected_message}); " \
+                'falling back to WebSocket transport')
+
+        expect(described_class.open_direct('host', 1234)).to eq(:ws_stream)
+      end
+    end
+
+    it 'does not fall back on an error unrelated to reachability' do
+      allow(Socket).to receive(:tcp).and_raise(StandardError, 'something else entirely')
+      expect(described_class).not_to receive(:open_websocket)
+
+      expect { described_class.open_direct('host', 1234) }.to raise_error(StandardError, 'something else entirely')
+    end
+
+    it 'forwards extra options to .open_websocket on fallback' do
+      allow(Socket).to receive(:tcp).and_raise(Errno::ETIMEDOUT, 'timed out')
+      allow(Lich).to receive(:log)
+      expect(described_class).to receive(:open_websocket)
+        .with('host', 1234, fallback: true, subprotocol: nil).and_return(:ws_stream)
+
+      described_class.open_direct('host', 1234, subprotocol: nil)
     end
   end
 
@@ -103,6 +141,15 @@ RSpec.describe Lich::Common::GameTransport do
 
       described_class.open_websocket('host', 10_024, ws_host: 'custom.example.com',
                                                        path: '/custom-shim/10024', subprotocol: nil)
+    end
+
+    it 'annotates the log line when called as a fallback from direct TCP' do
+      allow(Lich::Common::WebSocket::Stream).to receive(:connect).and_return(:ws_stream)
+      expect(Lich).to receive(:log)
+        .with('info: connected via WebSocket transport (wss://hydra.play.net:443/shim/10024 ' \
+              '(remapped from GAMEHOST storm.dr.game.play.net) (fallback from direct TCP))')
+
+      described_class.open_websocket('storm.dr.game.play.net', 10_024, fallback: true)
     end
 
     it 'logs a warning and re-raises when the WebSocket connect fails' do
