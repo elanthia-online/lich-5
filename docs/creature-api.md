@@ -1,18 +1,19 @@
-# Creature server-health API
+# Creature health API
 
 GemStone began supplying exact `health` and `maxhealth` attributes in
-`<crtrStatus>` snapshots in September 2026. Runtime creature instances expose
-the latest exact values through a server-specific API that remains independent
-of Lich's established inferred-HP behavior:
+`<crtrStatus>` snapshots in September 2026. Lich feeds usable values into the
+existing creature HP API so scripts do not need a second, parallel set of
+methods:
 
-- `creature.server_health` — exact current server value as an `Integer`,
-  including zero and negative overkill values; `nil` when unavailable.
-- `creature.server_max_health` — exact maximum server value as an `Integer`,
-  including zero; `nil` when unavailable.
-- `creature.server_health_percent` — `server_health / server_max_health * 100`,
-  rounded to one decimal place. It is `nil` when either value is unavailable or
-  `server_max_health` is zero. The result is not clamped, so negative health
-  produces a negative percentage.
+- `creature.health` is the exact current value from the latest snapshot. It is
+  an `Integer`, including zero and negative overkill values, or `nil` when the
+  latest snapshot did not provide a valid value.
+- `creature.max_health` is the exact maximum from the latest snapshot. It is an
+  `Integer`, including zero, or `nil` when unavailable.
+- `creature.current_hp`, `creature.max_hp`, and `creature.hp_percent` prefer the
+  snapshot values when both are valid integers and `max_health` is positive.
+  `current_hp` retains its established non-negative contract, so a negative
+  exact `health` is exposed as zero through `current_hp`.
 
 ## Captured feed examples
 
@@ -36,21 +37,39 @@ values:
 <crtrStatus exist="356889321" health="0" maxhealth="0" inferior="1"/>
 ```
 
-For these examples, `server_health` returns `260`, `-16`, and `0`, respectively.
-The toucan's `server_health_percent` is `nil` because its maximum is zero.
+For the burgee, `health` returns `-16`, while `current_hp` returns `0`. For the
+toucan, `health` and `max_health` both retain the exact zero values, but the
+positive-maximum gate keeps the existing inferred HP pathway active. A `0/0`
+entity is therefore not considered dead or removed from target selection solely
+because of those values.
 
 ## Snapshot and parsing behavior
 
 `crtrStatus` is treated as a complete snapshot. Each received tag replaces both
-server-health values. An absent or malformed attribute clears its corresponding
+exact health values. An absent or malformed attribute clears its corresponding
 value to `nil` rather than retaining data that is no longer the latest exact
 server value. Parsing accepts only complete signed or unsigned decimal integers;
 values such as `75hp`, `120.0`, `1_20`, or a whitespace-padded number become
 `nil` without raising an exception.
 
 If no new `crtrStatus` tag arrives at all, Lich has no event from which to infer
-that a prior value should be cleared. The values therefore represent the latest
+that a prior value should be cleared. The fields therefore represent the latest
 received snapshot, not a time-based guarantee of freshness.
+
+## Fallback behavior
+
+When either exact value is unavailable or `max_health` is zero, `max_hp`,
+`current_hp`, and `hp_percent` fall back to the established template/default and
+observed-damage model. The damage tracker continues accumulating combat-message
+damage while server health is authoritative; it is not stopped, reset, or
+rewritten by snapshots.
+
+This means a transition to fallback can produce a different number from the
+last exact server reading. That is intentional: retaining the last reading
+would present stale data as current, while recalibrating `damage_taken` from a
+snapshot could double-count a hit because status and combat messages arrive as
+separate feed events. If valid attributes return later, the existing HP methods
+immediately prefer them again.
 
 ## Observed feed behavior
 
@@ -67,20 +86,5 @@ health data. The observations were:
 
 This supports treating the pair as part of the complete snapshot once enabled.
 Clearing on a future omission also gives a safe failure mode if GemStone rolls
-back or disables the attributes: callers receive `nil`, not stale data presented
-as an exact current value.
-
-## Backward compatibility
-
-The server-health API does not replace or feed Lich's existing fields and
-inferred HP methods:
-
-- `health` and `health=` retain their pre-existing behavior and storage.
-- `max_hp` comes from creature templates or the combat-tracker fallback.
-- `current_hp` subtracts observed combat damage from `max_hp` and clamps at zero.
-- `hp_percent`, `low_hp?`, `dead?`, Coup de Grace checks, and target selection
-  continue to use the inferred values and structured status flags.
-
-Consequently, an entity reporting `health="0" maxhealth="0"` is not considered
-dead or removed from target selection solely because of the server-health data.
-Scripts may opt into the exact values without changing existing combat behavior.
+back or disables the attributes: scripts use the continuously maintained
+inferred pathway instead of a stale value.

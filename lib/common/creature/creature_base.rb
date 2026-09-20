@@ -533,43 +533,30 @@ module Lich
           @status = []
           @status_timestamps = {}
           @crtr_flags = {}
-          @server_health = nil
-          @server_max_health = nil
+          @health = nil
+          @max_health = nil
           @last_seen_at = Time.now
         end
 
         # Exact current health from the latest `<crtrStatus health="...">`
-        # snapshot. Unlike GemStone's `current_hp`, this is server supplied and
-        # may be negative when damage carries a creature below zero. It is nil
-        # until reported, and becomes nil again when a complete snapshot omits
-        # or malforms the attribute.
+        # snapshot. It may be negative when damage carries a creature below
+        # zero. It is nil until reported, and becomes nil again when a complete
+        # snapshot omits or malforms the attribute.
         #
         # @return [Integer, nil]
-        def server_health
-          @server_health
+        def health
+          @health
         end
 
         # Exact maximum health from the latest
-        # `<crtrStatus maxhealth="...">` snapshot. This is independent of
-        # GemStone's template/fallback-based `max_hp`. It is nil until reported,
-        # and becomes nil again when a complete snapshot omits or malforms the
+        # `<crtrStatus maxhealth="...">` snapshot. It may be zero for entities
+        # that do not participate in combat. It is nil until reported, and
+        # becomes nil again when a complete snapshot omits or malforms the
         # attribute.
         #
         # @return [Integer, nil]
-        def server_max_health
-          @server_max_health
-        end
-
-        # Exact server-health percentage from the latest `<crtrStatus>`
-        # snapshot. The result is not clamped, so negative health produces a
-        # negative percentage. Returns nil when either exact value is absent or
-        # when `server_max_health` is zero.
-        #
-        # @return [Float, nil]
-        def server_health_percent
-          return nil if @server_health.nil? || @server_max_health.nil? || @server_max_health.zero?
-
-          ((@server_health.to_f / @server_max_health) * 100).round(1)
+        def max_health
+          @max_health
         end
 
         # When the feed last showed this creature (registration, room-object
@@ -685,8 +672,8 @@ module Lich
           touch_seen
           # crtrStatus is a complete snapshot. Missing (or malformed) exact HP
           # attributes clear the previous values instead of leaving stale data.
-          @server_health = strict_crtr_integer(attrs['health'])
-          @server_max_health = strict_crtr_integer(attrs['maxhealth'])
+          @health = strict_crtr_integer(attrs['health'])
+          @max_health = strict_crtr_integer(attrs['maxhealth'])
 
           # Scoped to CRTR_STATUS_FLAGS on purpose: @status has two writers,
           # this feed and the combat parser reading messaging. The feed is a

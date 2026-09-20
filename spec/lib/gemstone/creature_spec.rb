@@ -396,25 +396,68 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
       expect(creature.crtr_flag?(:mini_boss)).to be false
     end
 
-    it 'keeps exact server health separate from legacy health and inferred behavior' do
-      creature = described_class.register('black-necked hooded toucan', 6)
+    it 'routes a usable server pair through the existing HP API' do
+      creature = described_class.register('test creature', 6)
 
-      creature.health = 42
+      creature.sync_crtr_status('hostile' => '1', 'health' => '75', 'maxhealth' => '120')
+
+      expect(creature.health).to eq(75)
+      expect(creature.max_health).to eq(120)
+      expect(creature.current_hp).to eq(75)
+      expect(creature.max_hp).to eq(120)
+      expect(creature.hp_percent).to eq(62.5)
+      expect(creature.essential_data).to include(
+        health: 75,
+        max_health: 120,
+        current_hp: 75,
+        max_hp: 120,
+        hp_percent: 62.5
+      )
+    end
+
+    it 'preserves negative exact health while keeping current_hp non-negative' do
+      creature = described_class.register('test creature', 7)
+
+      creature.sync_crtr_status('hostile' => '1', 'health' => '-16', 'maxhealth' => '340')
+
+      expect(creature.health).to eq(-16)
+      expect(creature.max_health).to eq(340)
+      expect(creature.current_hp).to eq(0)
+      expect(creature.hp_percent).to eq(0.0)
+      expect(creature.dead?).to be true
+    end
+
+    it 'gates legitimate zero/zero entities onto inferred HP without marking them dead' do
+      creature = described_class.register('black-necked hooded toucan', 8)
+
       creature.sync_crtr_status('inferior' => '1', 'health' => '0', 'maxhealth' => '0')
 
-      expect(creature.health).to eq(42)
-      expect(creature.server_health).to eq(0)
-      expect(creature.server_max_health).to eq(0)
-      expect(creature.server_health_percent).to be_nil
+      expect(creature.health).to eq(0)
+      expect(creature.max_health).to eq(0)
       expect(creature.current_hp).to eq(creature.max_hp)
+      expect(creature.max_hp).to be_positive
       expect(creature.dead?).to be false
       expect(creature.valid_target?).to be true
-      expect(creature.essential_data).to include(
-        health: 42,
-        server_health: 0,
-        server_max_health: 0,
-        server_health_percent: nil
-      )
+    end
+
+    it 'keeps inferred damage running in parallel and uses it when server health disappears' do
+      creature = described_class.register('test creature', 9)
+      creature.add_damage(25)
+
+      creature.sync_crtr_status('hostile' => '1', 'health' => '75', 'maxhealth' => '120')
+      creature.add_damage(10)
+
+      expect(creature.damage_taken).to eq(35)
+      expect(creature.current_hp).to eq(75)
+      expect(creature.max_hp).to eq(120)
+
+      creature.sync_crtr_status('hostile' => '1')
+
+      expect(creature.health).to be_nil
+      expect(creature.max_health).to be_nil
+      expect(creature.max_hp).to eq(400)
+      expect(creature.current_hp).to eq(365)
+      expect(creature.hp_percent).to eq(91.3)
     end
   end
 
