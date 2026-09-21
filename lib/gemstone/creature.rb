@@ -578,15 +578,15 @@ module Lich
         inferred_max_hp
       end
 
-      # Calculate current HP. The public contract remains non-negative even
-      # when the server reports overkill as a negative exact health value.
+      # Calculate current HP, preserving overkill as a negative value from
+      # either the server or the inferred damage model.
       def current_hp
-        return [@health, 0].max if authoritative_health?
+        return @health if authoritative_health?
 
-        [inferred_max_hp - @damage_taken, 0].max
+        inferred_max_hp - @damage_taken
       end
 
-      # Calculate HP percentage (0-100)
+      # Calculate HP percentage, preserving negative overkill.
       def hp_percent
         maximum = max_hp
         return nil unless maximum && maximum > 0
@@ -618,9 +618,9 @@ module Lich
         current_hp <= threshold
       end
 
-      # Check if creature is dead (0 HP)
+      # Check if creature is dead (zero or negative HP)
       def dead?
-        current_hp == 0
+        current_hp <= 0
       end
 
       # Checks whether this creature should be considered attackable.

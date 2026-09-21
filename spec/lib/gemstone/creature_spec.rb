@@ -415,16 +415,17 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
       )
     end
 
-    it 'preserves negative exact health while keeping current_hp non-negative' do
+    it 'preserves negative exact health through current_hp and hp_percent' do
       creature = described_class.register('test creature', 7)
 
       creature.sync_crtr_status('hostile' => '1', 'health' => '-16', 'maxhealth' => '340')
 
       expect(creature.health).to eq(-16)
       expect(creature.max_health).to eq(340)
-      expect(creature.current_hp).to eq(0)
-      expect(creature.hp_percent).to eq(0.0)
+      expect(creature.current_hp).to eq(-16)
+      expect(creature.hp_percent).to eq(-4.7)
       expect(creature.dead?).to be true
+      expect(creature.valid_target?).to be false
     end
 
     it 'gates legitimate zero/zero entities onto inferred HP without marking them dead' do
@@ -458,6 +459,17 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
       expect(creature.max_hp).to eq(400)
       expect(creature.current_hp).to eq(365)
       expect(creature.hp_percent).to eq(91.3)
+    end
+
+    it 'preserves negative inferred HP and percentage while treating it as dead' do
+      creature = described_class.register('test creature', 10)
+      creature.add_damage(425)
+
+      expect(creature.max_hp).to eq(400)
+      expect(creature.current_hp).to eq(-25)
+      expect(creature.hp_percent).to eq(-6.3)
+      expect(creature.dead?).to be true
+      expect(creature.valid_target?).to be false
     end
   end
 

@@ -12,8 +12,8 @@ methods:
   `Integer`, including zero, or `nil` when unavailable.
 - `creature.current_hp`, `creature.max_hp`, and `creature.hp_percent` prefer the
   snapshot values when both are valid integers and `max_health` is positive.
-  `current_hp` retains its established non-negative contract, so a negative
-  exact `health` is exposed as zero through `current_hp`.
+  `current_hp` and `hp_percent` preserve negative overkill values rather than
+  clamping them to zero.
 
 ## Captured feed examples
 
@@ -37,8 +37,9 @@ values:
 <crtrStatus exist="356889321" health="0" maxhealth="0" inferior="1"/>
 ```
 
-For the burgee, `health` returns `-16`, while `current_hp` returns `0`. For the
-toucan, `health` and `max_health` both retain the exact zero values, but the
+For the burgee, both `health` and `current_hp` return `-16`, and `hp_percent`
+returns approximately `-4.7`. `dead?` treats zero or negative HP as dead. For
+the toucan, `health` and `max_health` both retain the exact zero values, but the
 positive-maximum gate keeps the existing inferred HP pathway active. A `0/0`
 entity is therefore not considered dead or removed from target selection solely
 because of those values.
@@ -62,7 +63,9 @@ When either exact value is unavailable or `max_health` is zero, `max_hp`,
 `current_hp`, and `hp_percent` fall back to the established template/default and
 observed-damage model. The damage tracker continues accumulating combat-message
 damage while server health is authoritative; it is not stopped, reset, or
-rewritten by snapshots.
+rewritten by snapshots. Inferred overkill is also preserved: if observed damage
+exceeds the inferred maximum, `current_hp` and `hp_percent` become negative and
+`dead?` remains true because it checks for zero or less.
 
 This means a transition to fallback can produce a different number from the
 last exact server reading. That is intentional: retaining the last reading

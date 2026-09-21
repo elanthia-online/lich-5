@@ -67,9 +67,10 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
     nymph = Lich::Gemstone::Creature[607736]
     expect(nymph.health).to eq(-16)
     expect(nymph.max_health).to eq(120)
-    expect(nymph.current_hp).to eq(0)
+    expect(nymph.current_hp).to eq(-16)
     expect(nymph.max_hp).to eq(120)
-    expect(nymph.hp_percent).to eq(0.0)
+    expect(nymph.hp_percent).to eq(-13.3)
+    expect(nymph.dead?).to be true
   end
 
   it 'preserves zero/zero and then clears both values when the next snapshot omits them' do
