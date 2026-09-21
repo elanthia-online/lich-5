@@ -45,7 +45,14 @@ module Lich
         # @param user_agent [String, nil]
         # @param extra_headers [Hash] additional/overriding headers, applied last
         # @return [String] the full request, including the trailing blank line
+        # @raise [ArgumentError] if +path+ or any header value contains a CR or LF --
+        #   none of the current callers can trigger this (host is remapped to a fixed
+        #   *.play.net literal, everything else is a static default), but interpolating
+        #   unvalidated values into raw request/header lines is request-smuggling-shaped
+        #   regardless of how trusted today's callers happen to be
         def self.request(host:, path:, key:, origin: nil, subprotocol: nil, user_agent: nil, extra_headers: {})
+          reject_crlf!("request path", path)
+
           headers = {
             "Host"                  => host,
             "Upgrade"               => "websocket",
@@ -57,11 +64,20 @@ module Lich
           headers["Sec-WebSocket-Protocol"] = subprotocol if subprotocol
           headers["User-Agent"] = user_agent if user_agent
           headers.merge!(extra_headers)
+          headers.each { |name, value| reject_crlf!("#{name} header", value) }
 
           lines = ["GET #{path} HTTP/1.1"]
           headers.each { |name, value| lines << "#{name}: #{value}" }
           "#{lines.join("\r\n")}\r\n\r\n"
         end
+
+        # @api private
+        def self.reject_crlf!(label, value)
+          return unless value.to_s.match?(/[\r\n]/)
+
+          raise ArgumentError, "invalid #{label} (contains CR/LF): #{value.inspect}"
+        end
+        private_class_method :reject_crlf!
 
         # Parses and validates the server's handshake response.
         #

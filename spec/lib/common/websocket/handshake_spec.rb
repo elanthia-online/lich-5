@@ -48,6 +48,22 @@ RSpec.describe Lich::Common::WebSocket::Handshake do
       expect(request).to include("Host: override\r\n")
       expect(request).not_to include("Host: h\r\n")
     end
+
+    it 'rejects a CRLF in the request path' do
+      expect { described_class.request(host: 'h', path: "/p\r\nX-Injected: yes", key: 'k') }
+        .to raise_error(ArgumentError, /request path/)
+    end
+
+    it 'rejects a CRLF in a header value (host)' do
+      expect { described_class.request(host: "h\r\nX-Injected: yes", path: '/p', key: 'k') }
+        .to raise_error(ArgumentError, /Host header/)
+    end
+
+    it 'rejects a CRLF in a header value (extra_headers)' do
+      expect {
+        described_class.request(host: 'h', path: '/p', key: 'k', extra_headers: { 'X-Custom' => "v\r\nX-Injected: yes" })
+      }.to raise_error(ArgumentError, /X-Custom header/)
+    end
   end
 
   describe '.validate_response' do

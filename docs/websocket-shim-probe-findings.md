@@ -169,6 +169,35 @@ blocking outbound traffic to a real game port from a test network, which hasn't 
 WebSocket path it falls back *to* has, independently, already been confirmed live end-to-end
 (above), so the only untested piece is the trigger condition itself, not the destination.
 
+## Reviewed trade-offs (accepted, not defects)
+
+Two behavioral points [MahtraDR's review](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5263085048)
+raised as Minor, with a deliberate disposition on each rather than a code change:
+
+- **The `DIRECT` -> `WEBSOCKET` fallback is not gated behind `--game-transport`, so it changes
+  default-path behavior for every user, not just those who opt in.** Specifically: `open_direct`'s
+  TCP connect is now bounded at 10s (`DIRECT_CONNECT_TIMEOUT`), so a previously-working-but-slow
+  (>10s) direct connect now fails over to WebSocket instead of eventually succeeding; and
+  `DIRECT_CONNECTIVITY_ERRORS` includes `SocketError`/`ECONNREFUSED`, so a non-play.net game host
+  (a private/local proxy, say) that fails DNS or refuses the port now also dials
+  `wss://<host>:443/shim/<port>` before the real error surfaces -- extra latency and a confusing
+  endpoint on that failure path, though it still fails cleanly. **Accepted as intentional** --
+  mirrors the `Authenticator` EAccess -> WebLogin precedent's own "silent fallback, default
+  behavior" shape on purpose, not by sliding it in unnoticed. Flagged here explicitly so it's a
+  recorded decision rather than an implicit one.
+- **`Stream#wait_readable` has line-oriented timeout semantics that a raw socket's `wait_readable`/
+  `IO.select` doesn't.** A direct socket reports readable as soon as *any* bytes arrive; `Stream`
+  reports readable only once a full `"\n"`-terminated line is buffered (or EOF). Consequence: a
+  newline-less fragment that stalls counts toward `consecutive_timeouts` on the WebSocket path,
+  where the direct path would instead sit blocked inside `gets` with no application-level timeout
+  at all (bounded only by the OS's unreliable `SO_RCVTIMEO`, per the existing comment on
+  `read_server_string`) -- arguably the *worse* failure mode of the two, since it's an unbounded
+  hang rather than a detected, counted timeout. **Not changed**: making `Stream#wait_readable`
+  match the direct path's "ready on any bytes" semantics exactly would trade a clean, bounded
+  timeout for a potential indefinite hang, which is a downgrade, not a fix. Real game XML is
+  newline-terminated and arrives promptly in practice, so this is unlikely to bite -- but it's
+  exactly the kind of thing "sustained/interactive play" testing (below) should watch for.
+
 ## Not yet confirmed
 
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
