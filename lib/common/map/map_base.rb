@@ -551,6 +551,21 @@ module Lich
           (tag_index[tag_name] || []).dup
         end
 
+        # Rooms bordering a set of rooms: every room an exit of the set
+        # leads to that is not itself in the set (bigshot's perimeter
+        # list). Only the set's own wayto is read, so the cost is the size
+        # of the set, not of the map. A room with a one-way edge INTO the
+        # set and none back is not a boundary: wayto is player movement,
+        # and a room you cannot step out to is not an edge you can hold.
+        # Ids the map does not know contribute nothing.
+        # @param ids [Enumerable<Integer>] the room ids inside the set
+        # @return [Array<Integer>] bordering room ids, unique and sorted
+        def boundary_rooms_for(ids)
+          inside = ids.to_a
+          outside = inside.flat_map { |id| (self[id]&.wayto || {}).keys.map(&:to_i) }
+          (outside - inside).uniq.sort
+        end
+
         # Drop the tag memo. Call after mutating any room's tags in place.
         # @return [nil]
         def reset_tag_index

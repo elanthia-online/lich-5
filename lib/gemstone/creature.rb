@@ -206,29 +206,12 @@ module Lich
         end
       end
 
-      # Rooms bordering the creature's rooms: connected by an edge - in
-      # either direction - to a room the creature is found in, without
-      # being one themselves (bigshot's perimeter list). The reverse-edge
-      # pass scans the map once; the result is memoized.
+      # Rooms bordering the creature's rooms: every room an exit of the
+      # creature's rooms leads to that is not one of them (bigshot's
+      # perimeter list). The walk is Map.boundary_rooms_for, which works
+      # over any set of rooms; the result is memoized here.
       def boundary_rooms
-        @boundary_rooms ||= begin
-          inside = {}
-          rooms.each { |id| inside[id] = true }
-          border = {}
-          inside.each_key do |id|
-            room = Lich::Common::Map[id] or next
-            (room.wayto || {}).each_key do |dest|
-              d = dest.to_i
-              border[d] = true unless inside[d]
-            end
-          end
-          Lich::Common::Map.list.compact.each do |room|
-            next if inside[room.id] || border[room.id]
-
-            border[room.id] = true if (room.wayto || {}).keys.any? { |dest| inside[dest.to_i] }
-          end
-          border.keys.sort
-        end
+        @boundary_rooms ||= Lich::Common::Map.boundary_rooms_for(rooms)
       end
 
       # Returns whether the bestiary template says the creature has blood.
