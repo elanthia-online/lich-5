@@ -509,6 +509,200 @@ RSpec.describe Lich::Common::XMLParser do
     end
   end
 
+  describe 'server_time_offset (prompt-driven clock sync)' do
+    # <prompt time="..."> is whole-second precision, so a single sample of
+    # (now - server_time) equals offset_true + latency + frac, with latency
+    # (network/queue delay) and frac (the 0..1s truncation remainder) both
+    # >= 0 - the raw sample is never smaller than the truth. These specs
+    # drive the parser's clocks via scripted Time.now / CLOCK_MONOTONIC so
+    # the min-filter, staleness-expiry, and clock-step-guard logic are all
+    # exercised deterministically.
+    #
+    # `parser` is a memoized `subject`, built lazily on first reference. It's
+    # forced here, before any example stubs Time.now, so construction always
+    # sees the real clock - otherwise the first `feed_prompt` in each example
+    # would construct it under the *stubbed* clock, silently changing what
+    # `@server_time` (and the offset math relative to it) starts from.
+    before { parser }
+
+    def feed_prompt(local_time, server_time, monotonic_time: local_time)
+      allow(Time).to receive(:now).and_return(Time.at(local_time))
+      allow(Process).to receive(:clock_gettime).and_return(monotonic_time)
+      parser.tag_start('prompt', { 'time' => server_time.to_s })
+      parser.tag_end('prompt')
+    end
+
+    it 'does not update the offset on repeated prompts within the same server second' do
+      feed_prompt(100.0, 1000) # bootstrap, offset = 100.0 - 1000 = -900.0
+      first_offset = parser.server_time_offset
+
+      feed_prompt(100.4, 1000) # same second: candidate -899.6 is worse, rejected
+
+      expect(parser.server_time_offset).to eq(first_offset)
+    end
+
+    it 'adopts a rollover sample when it improves on the current estimate' do
+      feed_prompt(100.0, 1000) # bootstrap, offset = -900.0
+      feed_prompt(100.9, 1001) # candidate = 100.9 - 1001 = -900.1, better, accepted
+
+      expect(parser.server_time_offset).to eq(-900.1)
+    end
+
+    it 'rejects a worse rollover sample even though it is a legitimate later reading' do
+      feed_prompt(100.0, 1000) # bootstrap, offset = -900.0
+      feed_prompt(100.1, 1001) # candidate -900.9, better, accepted
+      best_offset = parser.server_time_offset
+
+      # A genuine rollover (server_time advances) whose own candidate is
+      # worse - because more wall time passed than server time did - is
+      # still rejected outright, well within the staleness window.
+      feed_prompt(103.0, 1002) # candidate = 103.0 - 1002 = -899.0, worse
+
+      expect(parser.server_time_offset).to eq(best_offset)
+    end
+
+    it 'regression: a queue-drained batch (near-zero parse gap) cannot out-rank a later, marginally-better sample from a normal gap' do
+      # The bug this guards against: an earlier version of this filter kept
+      # whichever sample was *parsed* closest in time to the previous one
+      # (an inter-prompt "bound"), on the theory that a tight gap meant low
+      # latency. It doesn't - a backlog drains back-to-back with a near-zero
+      # gap between samples regardless of how long each one waited in queue,
+      # so that heuristic could lock in the worst sample in the batch and
+      # then reject every better, normally-paced sample for up to
+      # SERVER_TIME_OFFSET_STALE_SECONDS purely because its gap was larger.
+      # The current filter has no notion of "gap" at all, so it can't
+      # regress this way: only the candidate's own value decides.
+      feed_prompt(100.0, 1000)    # bootstrap
+      feed_prompt(100.0001, 1001) # batch sample: 0.1ms parse gap
+      batch_offset = parser.server_time_offset
+
+      feed_prompt(102.0, 1003) # ordinary ~2s gap, only marginally better
+
+      expect(parser.server_time_offset).to be < batch_offset
+      expect(parser.server_time_offset).to eq(102.0 - 1003)
+    end
+
+    it 'holds a worse candidate just under the staleness window, but accepts it just over' do
+      stale_seconds = described_class::SERVER_TIME_OFFSET_STALE_SECONDS
+
+      feed_prompt(100.0, 1000) # bootstrap, offset = -900.0
+      feed_prompt(100.1, 1001) # candidate -900.9, better, accepted
+      good_offset = parser.server_time_offset
+
+      # Same server second throughout (candidate only ever gets worse as wall
+      # time passes with no rollover), clocks in sync (no step): held right up
+      # to, but not past, the staleness window.
+      feed_prompt(100.1 + stale_seconds - 1, 1001)
+      expect(parser.server_time_offset).to eq(good_offset)
+
+      # One second past the window since the held estimate was set (100.1):
+      # this candidate is accepted even though it is worse in absolute terms,
+      # because the held estimate can no longer be trusted.
+      feed_prompt(100.1 + stale_seconds + 1, 1002)
+      expect(parser.server_time_offset).to eq((100.1 + stale_seconds + 1) - 1002)
+    end
+
+    it 'ignores wall/monotonic drift just under the clock-step threshold' do
+      step_seconds = described_class::SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS
+
+      feed_prompt(100.0, 1000, monotonic_time: 100.0) # bootstrap, offset = -900.0
+      feed_prompt(100.1, 1001, monotonic_time: 100.1) # candidate -900.9, better, accepted
+      good_offset = parser.server_time_offset
+
+      # Wall and monotonic drift apart by just under the threshold, computed
+      # from the actual wall_elapsed since the held estimate was set (100.1)
+      # rather than a hand-picked literal - not a clock step, so this (worse)
+      # candidate is judged on its own merits and rejected.
+      wall_time = 103.0
+      wall_elapsed = wall_time - 100.1
+      mono_time = 100.1 + (wall_elapsed - (step_seconds - 0.01))
+      feed_prompt(wall_time, 1002, monotonic_time: mono_time)
+
+      expect(parser.server_time_offset).to eq(good_offset)
+    end
+
+    it 'treats a forward wall/monotonic drift just over the clock-step threshold as a step' do
+      step_seconds = described_class::SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS
+
+      feed_prompt(100.0, 1000, monotonic_time: 100.0) # bootstrap, offset = -900.0
+      feed_prompt(100.1, 1001, monotonic_time: 100.1) # candidate -900.9, better, accepted
+      good_offset = parser.server_time_offset
+
+      # Wall races ahead of monotonic by just over the threshold - the guard
+      # fires and this (worse) candidate is accepted anyway, rather than
+      # being judged (and rejected) on its own merits.
+      wall_time = 103.0
+      wall_elapsed = wall_time - 100.1
+      mono_time = 100.1 + (wall_elapsed - (step_seconds + 0.01))
+      feed_prompt(wall_time, 1002, monotonic_time: mono_time)
+
+      expect(parser.server_time_offset).not_to eq(good_offset)
+      expect(parser.server_time_offset).to eq(wall_time - 1002)
+    end
+
+    it 'treats a backward wall/monotonic drift just over the clock-step threshold as a step too (.abs, not just forward)' do
+      step_seconds = described_class::SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS
+
+      feed_prompt(200.0, 1003, monotonic_time: 200.0) # bootstrap
+      feed_prompt(200.1, 1004, monotonic_time: 200.1) # candidate accepted
+      baseline = parser.server_time_offset
+
+      # Monotonic races ahead of wall instead (the drift is negative) - the
+      # guard takes .abs, so this direction must trip it exactly the same as
+      # the forward case. server_time stays at 1004 (no rollover) so this
+      # candidate (200.2 - 1004 = -803.8) is genuinely worse than the held
+      # -803.9: acceptance depends entirely on the guard firing, not on the
+      # candidate winning the min filter on its own merits.
+      wall_time = 200.2
+      wall_elapsed = wall_time - 200.1
+      mono_time = 200.1 + (wall_elapsed + (step_seconds + 0.01))
+      feed_prompt(wall_time, 1004, monotonic_time: mono_time)
+
+      expect(parser.server_time_offset).not_to eq(baseline)
+      expect(parser.server_time_offset).to eq(wall_time - 1004)
+    end
+  end
+
+  describe '#prompt_ingress_clocks (socket-read-thread timestamp integration)' do
+    # This spec file never requires games.rb, but another spec file run
+    # earlier in the same process might have (Ruby constants are
+    # process-global and `require` doesn't undo that) - hide_const forces the
+    # "Game not loaded" branch deterministically either way. It's a no-op
+    # when the constant genuinely isn't defined. What's under test here is
+    # xmlparser's own fallback logic, not games.rb's threading, so these
+    # examples stub Game directly rather than pull in the real socket/thread
+    # machinery.
+    it 'falls back to parse-time clocks when Game is not loaded' do
+      hide_const('Game')
+
+      now, mono_now = parser.prompt_ingress_clocks
+
+      expect(now).to be_within(1).of(Time.now.to_f)
+      expect(mono_now).to be_within(1).of(Process.clock_gettime(Process::CLOCK_MONOTONIC))
+    end
+
+    it 'derives wall-clock ingress time from Game.current_ingress_time when available' do
+      ingress_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC) - 5.0 # captured "5s ago"
+      stub_const('Game', Class.new { define_singleton_method(:current_ingress_time) { ingress_mono } })
+
+      now, mono_now = parser.prompt_ingress_clocks
+
+      expect(mono_now).to eq(ingress_mono)
+      expect(now).to be_within(0.05).of(Time.now.to_f - 5.0)
+    end
+
+    it 'falls back to parse-time clocks when Game.current_ingress_time returns nil' do
+      # e.g. called from a thread other than Game's own parser thread - see
+      # the guard in Game.current_ingress_time (games.rb).
+      stub_const('Game', Class.new { define_singleton_method(:current_ingress_time) { nil } })
+
+      now, mono_now = parser.prompt_ingress_clocks
+
+      expect(now).to be_within(1).of(Time.now.to_f)
+      expect(mono_now).to be_within(1).of(Process.clock_gettime(Process::CLOCK_MONOTONIC))
+    end
+  end
+
   # DragonRealms only: an item taken into a hand is no longer worn or in a
   # container, so the <right>/<left> handler drops any stale placement of it.
   # GemStone is unaffected (its own inv stream is authoritative), which these
