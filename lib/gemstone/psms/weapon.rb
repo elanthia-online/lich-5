@@ -155,7 +155,8 @@ module Lich
           :short_name => "thrash",
           :type       => :assault,
           :cost       => { stamina: 15 },
-          :regex      => /You rush .+, raising your .+ high to deliver a sound thrashing\!/
+          :regex      => /You rush .+, raising your .+ high to deliver a sound thrashing\!/,
+          :buff       => "Forceful Blows"
         },
         "twin_hammerfists" => {
           :short_name => "twinhammer",
@@ -185,221 +186,77 @@ module Lich
         }
       }
 
-      # Returns a summary array of weapon techniques and metadata.
-      #
-      # @return [Array<Hash>] Each hash contains :long_name, :short_name, :cost
-      def self.weapon_lookups
-        @@weapon_techniques.map do |long_name, psm|
-          {
-            long_name: long_name,
-            short_name: psm[:short_name],
-            cost: psm[:cost]
-          }
-        end
+      extend PSMS::Technique
+      techniques @@weapon_techniques, type: "Weapon", verb: "weapon"
+
+      # Lines that end any assault besides its own :assault_rx: other assault
+      # endings, an interrupted assault, and assault-specific refusals.
+      ASSAULT_ENDINGS = Regexp.union(
+        /You complete your assault/,
+        /With a final, explosive breath/,
+        /recentering yourself for the fight/,
+        /Upon firing your last (?:arrow|bolt)/,
+        /Distracted, you hesitate/,
+        /may not be activated within 60 seconds of a Multi-Strike\./,
+        /can not be used with attack as the attack type/,
+      )
+
+      # @param name [String] the technique name
+      # @return [Boolean] whether the technique is an assault (several strikes over several seconds)
+      def Weapon.assault?(name)
+        technique(name)[:type] == :assault
       end
 
-      # Looks up the rank known of a weapon technique.
+      # Uses a Weapon technique if it is available. An assault takes no FORCERT
+      # and returns when it ends, not when it starts.
       #
-      # @param name [String] The name of the weapon technique
-      # @return [Integer] The rank of the technique, or 0 if unknown
-      # @example
-      #   Weapon["volley"] => 2
-      #   Weapon["volley"] => 0 # if not known
-      def Weapon.[](name)
-        return PSMS.assess(name, 'Weapon')
+      # @see PSMS::Technique#use
+      def Weapon.use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
+        return super unless assault?(name)
+        return unless available?(name, target: target, ignore_cooldown: ignore_cooldown)
+
+        waitrt?
+        waitcastrt?
+        PSMS.dispatch(command(name, target), results_regex(name, results_of_interest: results_of_interest), timeout: 12)
       end
 
-      # Determines if the character knows an weapon technique at all, and
-      # optionally if the character knows it at the specified rank.
+      # The command {Weapon.use} sends; an assault never takes FORCERT.
       #
-      # @param name [String] The name of the weapon technique
-      # @param min_rank [Integer] Optionally, the minimum rank to test against (default: 1, so known)
-      # @return [Boolean] True if the technique is known at or above the given rank
-      # @example
-      #   Weapon.known?("volley") => true # if any number of ranks is known
-      #   Weapon.known?("volley", min_rank: 2) => false # if only rank 1 is known
-      def Weapon.known?(name, min_rank: 1)
-        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
-        Weapon[name] >= min_rank
+      # @see PSMS::Technique#command
+      def Weapon.command(name, target = "", forcert_count: 0)
+        super(name, target, forcert_count: assault?(name) ? 0 : forcert_count)
       end
 
-      # Determines if an Weapon technique is affordable, and optionally tests
-      # affordability with a given number of FORCERTs having been used (including the current one).
+      # The lines {Weapon.use} waits on; an assault waits on its ending instead
+      # of its opening line and roundtime.
       #
-      # @param name [String] The name of the Weapon technique
-      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this execution (default: 0)
-      # @return [Boolean] True if the technique can be used with available FORCERTs
-      # @example
-      #   Weapon.affordable?("Weapon_blessing") => true # if enough skill and stamina
-      #   Weapon.affordable?("Weapon_blessing", forcert_count: 1) => false  # if not enough skill or stamina
-      def Weapon.affordable?(name, forcert_count: 0)
-        return true if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
-        return PSMS.assess(name, 'Weapon', true, forcert_count: forcert_count)
+      # @see PSMS::Technique#results_regex
+      def Weapon.results_regex(name, results_of_interest: nil)
+        return super unless assault?(name)
+
+        PSMS.results_regex(name, technique(name)[:assault_rx], ASSAULT_ENDINGS, results_of_interest: results_of_interest)
       end
 
-      # Determines if an Weapon technique is available to use right now by testing:
-      # - if the technique is known
-      # - if the technique is affordable
-      # - if the technique is not on cooldown
-      # - if the character is not overexerted
-      # - if the character is capable of performing the number of FORCERTs specified
-      #
-      # @param name [String] The name of the Weapon technique
-      # @param min_rank [Integer] Optionally, the minimum rank to check (default: 1)
-      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used (default: 0)
-      # @return [Boolean] True if the technique is known, affordable, and not on cooldown or
-      # blocked by overexertion
-      # @example
-      #   Weapon.available?("Weapon_blessing") => true # if known, affordable, not on cooldown, and not overexerted
-      def Weapon.available?(name, min_rank: 1, forcert_count: 0)
-        return false unless Weapon.known?(name, min_rank: min_rank)
-        return false unless Weapon.affordable?(name, forcert_count: forcert_count)
-        if @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :area_of_effect && Effects::Buffs.active?("Glorious Momentum")
-          return false unless PSMS.available?(name, true)
-        elsif @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:type] == :assault && Effects::Buffs.active?("Ardor of the Scourge")
-          return false unless PSMS.available?(name, true)
-        else
-          return false unless PSMS.available?(name)
-        end
-        return true
+      # @api private
+      # Area of effect techniques are free under Glorious Momentum.
+      def Weapon.free?(psm)
+        psm[:type] == :area_of_effect && PSMS.effect_active?(Effects::Buffs, "Glorious Momentum")
       end
 
-      # DEPRECATED: Use {#buff_active?} instead.
-      # Checks whether a technique's buff is currently active.
-      #
-      # @param name [String] Technique name
-      # @return [Boolean] True if the buff is active
+      # @api private
+      # Glorious Momentum lifts the cooldown on area of effect techniques, and
+      # Ardor of the Scourge on assaults.
+      def Weapon.cooldown_ignored?(psm, ignore_cooldown)
+        super ||
+          (psm[:type] == :area_of_effect && PSMS.effect_active?(Effects::Buffs, "Glorious Momentum")) ||
+          (psm[:type] == :assault && PSMS.effect_active?(Effects::Buffs, "Ardor of the Scourge"))
+      end
+
+      # DEPRECATED: Use {Weapon.buff_active?} instead.
       def Weapon.active?(name)
-        ## DEPRECATED ##
         Lich.deprecated("Weapon.active?", "Weapon.buff_active?", caller[0], fe_log: false)
         buff_active?(name)
       end
-
-      # Checks whether the technique's buff is currently active.
-      #
-      # @param name [String] The technique's name
-      # @return [Boolean] True if buff is already active
-      def Weapon.buff_active?(name)
-        buff = @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff]
-        return false if buff.nil?
-        Effects::Buffs.active?(@@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:buff])
-      end
-
-      # Attempts to use a Weapon technique, optionally on a target.
-      #
-      # @param name [String] The name of the Weapon technique
-      # @param target [String, Integer, GameObj] The target of the technique (optional).  If unspecified, the technique will be used on the character.
-      # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
-      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
-      # @return [String, nil] The result of the regex match, or nil if unavailable
-      # @example
-      #   Weapon.use("Weapon_blessing") # attempt to use Weapon blessing on self
-      #   Weapon.use("Weapon_blessing", "Dissonance") # attempt to use Weapon blessing on Dissonance
-      def Weapon.use(name, target = "", results_of_interest: nil, forcert_count: 0)
-        return unless Weapon.available?(name, forcert_count: forcert_count)
-
-        technique = @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])
-        in_cooldown_regex = /^#{name} is still in cooldown\./i
-
-        usage_result = nil
-        if technique.key?(:assault_rx)
-          # assault-style techniques take no FORCERT and settle their own roundtime
-          usage_cmd = Weapon.command(name, target)
-          results_regex = Weapon.results_regex(name, results_of_interest: results_of_interest)
-          break_out = Time.now() + 12
-          loop {
-            usage_result = dothistimeout(usage_cmd, 10, results_regex)
-            if usage_result =~ /\.\.\.wait/i
-              waitrt?
-              next
-            end
-            break if usage_result.eql?(false)
-            break if usage_result =~ technique[:assault_rx]
-            break if usage_result =~ /^#{name} what\?$/i
-            break if usage_result =~ in_cooldown_regex
-            break if Time.now() > break_out
-            sleep 0.25
-          }
-        else
-          usage_cmd = Weapon.command(name, target, forcert_count: forcert_count)
-          results_regex = Weapon.results_regex(name, results_of_interest: results_of_interest)
-
-          # with forcert we don't want to wait for rt, but we need to otherwise
-          unless forcert_count > 0
-            waitrt?
-            waitcastrt?
-          end
-
-          usage_result = dothistimeout(usage_cmd, 5, results_regex)
-          if usage_result == "You don't seem to be able to move to do that."
-            100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-            usage_result = dothistimeout(usage_cmd, 5, results_regex)
-          end
-        end
-
-        usage_result
-      end
-
-      # The command {Weapon.use} sends for a technique, without sending it. A
-      # technique without a usage word is sent by its normalized name, and an
-      # assault-style technique never takes FORCERT.
-      #
-      # @param name [String] The name of the Weapon technique
-      # @param target [String, Integer, GameObj] The target (optional)
-      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0); ignored for assaults
-      # @return [String] e.g. "weapon twinhammer #12345"
-      def Weapon.command(name, target = "", forcert_count: 0)
-        name_normalized = PSMS.name_normal(name)
-        technique = @@weapon_techniques.fetch(PSMS.find_name(name_normalized, "Weapon")[:long_name])
-        usage = technique.key?(:usage) ? technique[:usage] : name_normalized
-        forcert_count = 0 if technique.key?(:assault_rx)
-        PSMS.command("weapon", usage, target, forcert_count: forcert_count)
-      end
-
-      # Every line that answers the technique's command: the regex {Weapon.use}
-      # waits on. Assault-style techniques answer with their assault line
-      # instead of a result line and roundtime.
-      #
-      # @param name [String] The name of the Weapon technique
-      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
-      # @return [Regexp]
-      def Weapon.results_regex(name, results_of_interest: nil)
-        technique = @@weapon_techniques.fetch(PSMS.find_name(PSMS.name_normal(name), "Weapon")[:long_name])
-        if technique.key?(:assault_rx)
-          PSMS.results_regex(name, technique[:assault_rx], results_of_interest: results_of_interest)
-        else
-          PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
-        end
-      end
-
-      # Returns the "success" regex associated with a given Weapon technique name.
-      # This regex is used to match the expected output when the technique is successfully *attempted*.
-      # It does not necessarily indicate that the technique was successful in its effect, or even
-      # that the technique was executed at all.
-      #
-      # @param name [String] The technique name
-      # @return [Regexp] The regex used to match technique success or effects
-      # @example
-      #   Weapon.regexp("Weapon_blessing") => /As \w+ prays? over \w+(?:'s)? [\w\s]+, you sense that (?:the Arkati's|a) blessing will be granted against magical attacks\./i
-      def Weapon.regexp(name)
-        @@weapon_techniques.fetch(PSMS.find_name(name, "Weapon")[:long_name])[:regex]
-      end
-
-      # Defines dynamic getter methods for both long and short names of each Weapon technique.
-      #
-      # @note This block dynamically defines methods like `Weapon.blessing` and `Weapon.Weapon_blessing`
-      # @example
-      #   Weapon.blessing # returns the rank of Weapon_blessing based on the short name
-      #   Weapon.Weapon_blessing # returns the rank of Weapon_blessing based on the long name
-      Weapon.weapon_lookups.each { |weapon|
-        self.define_singleton_method(weapon[:short_name]) do
-          Weapon[weapon[:short_name]]
-        end
-
-        self.define_singleton_method(weapon[:long_name]) do
-          Weapon[weapon[:short_name]]
-        end
-      }
     end
   end
 end

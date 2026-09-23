@@ -33,7 +33,8 @@ module Lich
           :cost       => { stamina: 10 },
           :regex      => Regexp.union(/You charge towards .+ and attempt to grasp .+ in a ferocious bearhug!/,
                                       /.+ manages to fend off your grasp!/),
-          :usage      => "bearhug"
+          :usage      => "bearhug",
+          :buff       => /^Enh\. Strength \(\+(?:10|20)\)$/
         },
         "berserk"                => {
           :short_name => "berserk",
@@ -57,13 +58,15 @@ module Lich
           :usage      => "bullrush"
         },
         "burst_of_swiftness"     => {
-          :short_name          => "burst",
-          :type                => :buff,
-          :cost                => { stamina: (Lich::Util.normalize_lookup('Cooldowns', 'burst_of_swiftness') ? 60 : 30) },
-          :regex               => Regexp.union(/You prepare yourself to move swiftly at a moment's notice\./,
-                                               /You prepare yourself to move swiftly at a moment's notice, overcoming the fatigue from your previous exertion\./),
-          :usage               => "burst",
-          "ignorable_cooldown" => true
+          :short_name         => "burst",
+          :type               => :buff,
+          :cost               => { stamina: 30 },
+          :cooldown_cost      => { stamina: 60 },
+          :buff               => /^Enh\. Dexterity/,
+          :regex              => Regexp.union(/You prepare yourself to move swiftly at a moment's notice\./,
+                                              /You prepare yourself to move swiftly at a moment's notice, overcoming the fatigue from your previous exertion\./),
+          :usage              => "burst",
+          :ignorable_cooldown => true
         },
         "cheapshots"             => {
           :short_name => "cheapshots",
@@ -110,7 +113,8 @@ module Lich
                                       /As .+ shows signs of weakness, you seize the opportunity to launch a mortal blow!/,
                                       /Seeing your chance, you lunge toward .+ with its death your only goal!/,
                                       /As .+ falters, you surge forward with murderous intent!/),
-          :usage      => "coupdegrace"
+          :usage      => "coupdegrace",
+          :buff       => /^Empowered \(\+\d+\)$/
         },
         "crowd_press"            => {
           :short_name => "cpress",
@@ -254,7 +258,8 @@ module Lich
                                       /You need to have your other hand clear to garrote something\./,
                                       /You need to be holding a garrote\./,
                                       /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./,),
-          :usage      => "garrote"
+          :usage      => "garrote",
+          :buff       => "Enh. Agility (+10)"
         },
         "grapple_specialization" => {
           :short_name => "grapplespec",
@@ -571,12 +576,14 @@ module Lich
           :usage      => "sunder"
         },
         "surge_of_strength"      => {
-          :short_name          => "surge",
-          :type                => :buff,
-          :cost                => { stamina: Lich::Util.normalize_lookup('Cooldowns', 'surge_of_strength') ? 60 : 30 },
-          :regex               => /You focus deep within yourself, searching for untapped sources of strength\./,
-          :usage               => "surge",
-          "ignorable_cooldown" => true
+          :short_name         => "surge",
+          :type               => :buff,
+          :cost               => { stamina: 30 },
+          :cooldown_cost      => { stamina: 60 },
+          :buff               => /^Enh\. Strength/,
+          :regex              => /You focus deep within yourself, searching for untapped sources of strength\./,
+          :usage              => "surge",
+          :ignorable_cooldown => true
         },
         "sweep"                  => {
           :short_name => "sweep",
@@ -587,12 +594,12 @@ module Lich
           :usage      => "sweep"
         },
         "swiftkick"              => {
-          :short_name          => "swiftkick",
-          :type                => :setup,
-          :cost                => { stamina: 7 },
-          :regex               => /You spin around behind .+, attempting a swiftkick!/,
-          :usage               => "swiftkick",
-          "ignorable_cooldown" => true
+          :short_name         => "swiftkick",
+          :type               => :setup,
+          :cost               => { stamina: 7 },
+          :regex              => /You spin around behind .+, attempting a swiftkick!/,
+          :usage              => "swiftkick",
+          :ignorable_cooldown => true
         },
         "tackle"                 => {
           :short_name => "tackle",
@@ -674,176 +681,22 @@ module Lich
         }
       }
 
-      # Returns a simplified lookup of all CMANs with their long name, short name, and cost.
-      #
-      # @return [Array<Hash>] An array of CMAN metadata hashes
-      def self.cman_lookups
-        @@combat_mans.map do |long_name, psm|
-          {
-            long_name: long_name,
-            short_name: psm[:short_name],
-            cost: psm[:cost]
-          }
-        end
-      end
+      extend PSMS::Technique
+      techniques @@combat_mans, type: "CMan", verb: "cman"
 
-      # Looks up the rank known of a combat maneuver.
+      # Whether a target is low enough for Coup de Grace at the character's
+      # trained rank, from the creature's tracked HP and statuses.
       #
-      # @param name [String] The name of the combat maneuver
-      # @return [Integer] The rank of the maneuver, or 0 if unknown
+      # @param target [GameObj, Integer, String, CreatureInstance] the target
+      # @return [Boolean, nil] nil when there is no tracked creature for the target
       # @example
-      #   CMan["tackle"] => 2
-      #   CMan["tackle"] => 0 # if not known
-      def CMan.[](name)
-        return PSMS.assess(name, 'CMan')
+      #   CMan.use("coupdegrace", npc) if CMan.coup_ready?(npc)
+      def CMan.coup_ready?(target)
+        creature = target.is_a?(CreatureInstance) ? target : Creature[target.respond_to?(:id) ? target.id : target]
+        return nil if creature.nil?
+
+        creature.coup_eligible?(CMan["coupdegrace"])
       end
-
-      # Determines if the character knows a combat maneuver at all, and
-      # optionally if the character knows it at the specified rank.
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param min_rank [Integer] Optionally, the minimum rank to test against (default: 1, so known)
-      # @return [Boolean] True if the maneuver is known at or above the given rank
-      # @example
-      #   CMan.known?("tackle") => true # if any number of ranks is known
-      #   CMan.known?("tackle", min_rank: 2) => false # if only rank 1 is known
-      def CMan.known?(name, min_rank: 1)
-        min_rank = 1 unless min_rank >= 1 # in case a 0 or below is passed
-        CMan[name] >= min_rank
-      end
-
-      # Determines if an combat maneuver is affordable, and optionally tests
-      # affordability with a given number of FORCERTs having been used (including the current one).
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used, including for this execution (default: 0)
-      # @return [Boolean] True if the maneuver can be used with available FORCERTs
-      # @example
-      #   CMan.affordable?("tackle") => true # if enough skill and stamina
-      #   CMan.affordable?("tackle", forcert_count: 1) => false  # if not enough skill or stamina
-      def CMan.affordable?(name, forcert_count: 0)
-        return PSMS.assess(name, 'CMan', true, forcert_count: forcert_count)
-      end
-
-      # Checks whether the maneuver's buff is currently active.
-      #
-      # @param name [String] The maneuver's name
-      # @return [Boolean] True if buff is already active
-      def CMan.buff_active?(name)
-        return unless @@combat_mans.fetch(PSMS.find_name(name, "CMan")[:long_name]).key?(:buff)
-        Effects::Buffs.active?(@@combat_mans.fetch(PSMS.find_name(name, "CMan")[:long_name])[:buff])
-      end
-
-      # Determines if an combat maneuver is available to use right now by testing:
-      # - if the maneuver is known
-      # - if the maneuver is affordable
-      # - if the maneuver is not on cooldown
-      # - if the character is not overexerted
-      # - if the character is capable of performing the number of FORCERTs specified
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param min_rank [Integer] Optionally, the minimum rank to check (default: 1)
-      # @param forcert_count [Integer] Optionally, the count of FORCERTs being used (default: 0)
-      # @return [Boolean] True if the maneuver is known, affordable, and not on cooldown or
-      # blocked by overexertion
-      # @example
-      #   CMan.available?("tackle") => true # if known, affordable, not on cooldown, and not overexerted
-      def CMan.available?(name, ignore_cooldown: false, min_rank: 1, forcert_count: 0)
-        return false unless CMan.known?(name, min_rank: min_rank)
-        return false unless CMan.affordable?(name, forcert_count: forcert_count)
-        if @@combat_mans.fetch(PSMS.find_name(name, "CMan")[:long_name])[:ignorable_cooldown] && ignore_cooldown
-          return PSMS.available?(name, ignore_cooldown)
-        else
-          return PSMS.available?(name)
-        end
-      end
-
-      # Attempts to use a combat maneuver, optionally on a target.
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param target [String, Integer, GameObj] The target of the maneuver (optional).  If unspecified, the technique will be used on the character.
-      # @param results_of_interest [Regexp, nil] Additional regex to capture from result (optional)
-      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
-      # @return [String, nil] The result of the regex match, or nil if unavailable
-      # @example
-      #   CMan.use("tackle") # attempt to use armor blessing on self
-      #   CMan.use("tackle", "Dissonance") # attempt to use armor blessing on Dissonance
-      def CMan.use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
-        return unless CMan.available?(name, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
-
-        usage_cmd = CMan.command(name, target, forcert_count: forcert_count)
-        return if usage_cmd.nil?
-
-        results_regex = CMan.results_regex(name, results_of_interest: results_of_interest)
-
-        # with forcert we don't want to wait for rt, but we need to otherwise
-        unless forcert_count > 0
-          waitrt?
-          waitcastrt?
-        end
-
-        usage_result = dothistimeout usage_cmd, 5, results_regex
-        if usage_result == "You don't seem to be able to move to do that."
-          100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-          usage_result = dothistimeout usage_cmd, 5, results_regex
-        end
-
-        usage_result
-      end
-
-      # The command {CMan.use} sends for a maneuver, without sending it.
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param target [String, Integer, GameObj] The target (optional)
-      # @param forcert_count [Integer] Number of FORCERTs to use (default: 0)
-      # @return [String, nil] e.g. "cman bullrush #12345", nil when the maneuver has no usage
-      # @example
-      #   CMan.command("bullrush", GameObj.targets.first) => "cman bullrush #12345"
-      def CMan.command(name, target = "", forcert_count: 0)
-        technique = @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])
-        return nil if technique[:usage].nil?
-
-        PSMS.command("cman", technique[:usage], target, forcert_count: forcert_count)
-      end
-
-      # Every line that answers the maneuver's command: the regex {CMan.use} waits on.
-      #
-      # @param name [String] The name of the combat maneuver
-      # @param results_of_interest [Regexp, nil] Additional lines to match (optional)
-      # @return [Regexp]
-      def CMan.results_regex(name, results_of_interest: nil)
-        technique = @@combat_mans.fetch(PSMS.find_name(PSMS.name_normal(name), "CMan")[:long_name])
-        PSMS.results_regex(name, technique[:regex], /^Roundtime: [0-9]+ sec\.$/, results_of_interest: results_of_interest)
-      end
-
-      # Returns the "success" regex associated with a given combat maneuver name.
-      # This regex is used to match the expected output when the maneuver is successfully *attempted*.
-      # It does not necessarily indicate that the maneuver was successful in its effect, or even
-      # that the maneuver was executed at all.
-      #
-      # @param name [String] The maneuver name
-      # @return [Regexp] The regex used to match maneuver success or effects
-      # @example
-      #   CMan.regexp("tackle") => /You hurl yourself at .+!/
-      def CMan.regexp(name)
-        @@combat_mans.fetch(PSMS.find_name(name, "CMan")[:long_name])[:regex]
-      end
-
-      # Defines dynamic getter methods for both long and short names of each combat maneuver.
-      #
-      # @note This block dynamically defines methods like `CMan.blessing` and `CMan.tackle`
-      # @example
-      #   CMan.tackle # returns the rank of tackle based on the short name
-      #   CMan.tackle # returns the rank of tackle based on the long name
-      CMan.cman_lookups.each { |cman|
-        self.define_singleton_method(cman[:short_name]) do
-          CMan[cman[:short_name]]
-        end
-
-        self.define_singleton_method(cman[:long_name]) do
-          CMan[cman[:short_name]]
-        end
-      }
     end
   end
 end
