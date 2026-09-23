@@ -75,7 +75,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return(nil)
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(nil)
       allow(socket).to receive(:gets)
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to equal(Lich::GameBase::Game::READ_TIMEOUT)
@@ -86,7 +86,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(socket)
       allow(socket).to receive(:gets).and_return("<prompt/>\r\n")
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to eq("<prompt/>\r\n")
@@ -96,7 +96,7 @@ RSpec.describe Lich::GameBase do
       socket = instance_double(TCPSocket)
       described_class.instance_variable_set(:@socket, socket)
 
-      allow(IO).to receive(:select).with([socket], nil, nil, 0.01).and_return([[socket], [], []])
+      allow(socket).to receive(:wait_readable).with(0.01).and_return(socket)
       allow(socket).to receive(:gets).and_return(nil)
 
       expect(described_class.read_server_string(read_timeout: 0.01)).to be_nil
@@ -158,6 +158,16 @@ RSpec.describe Lich::GameBase do
       expect(described_class.handle_thread_error(error)).to be(false)
       expect(Lich).to have_received(:log).with('info: server_thread: GameStreamDesyncError: Missing end tag')
       expect(Lich).to have_received(:log).with('info: game stream desync detected - will not retry')
+    end
+
+    it 'treats a WebSocket framing violation as a recognized fatal disruption without retry' do
+      error = Lich::Common::WebSocket::Frame::ProtocolError.new('reserved bits set (16)')
+
+      expect(described_class.handle_thread_error(error)).to be(false)
+      expect(Lich).to have_received(:log)
+        .with('info: server_thread: Lich::Common::WebSocket::Frame::ProtocolError: reserved bits set (16)')
+      expect(Lich).to have_received(:log).with('info: WebSocket protocol error - will not retry')
+      expect(described_class.shutdown_reason_for_thread_exit(error)).to eq(:websocket_protocol_error)
     end
 
     describe 'bounded parser queue' do
