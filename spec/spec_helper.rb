@@ -1897,6 +1897,16 @@ end unless defined?(StringProc)
 # -----------------------------------------------------------------------------
 # Lich::Util - Utility functions
 # -----------------------------------------------------------------------------
+# Several individual spec files define their own guarded (`unless respond_to?`)
+# install_gem_requirements stand-in for whatever production file they load, and
+# which one wins depended on file load order - the root cause of #1542. Since
+# spec_helper.rb is required first by nearly every spec file, defining a safe,
+# working version here means those per-file stand-ins normally never even get a
+# chance to win the race. Every gem any of them request (ffi, os, kramdown) is
+# already in the Gemfile, so a plain require satisfies the real intent without
+# the live-install path of lib/util/util.rb's implementation.
+require 'os'
+
 module Lich
   module Util
     class << self
@@ -1906,6 +1916,24 @@ module Lich
 
       def quiet_command_xml(*_args, **_kwargs)
         []
+      end
+
+      def install_gem_requirements(gems_to_install, **_kwargs)
+        # Mirrors the real impl's should_require semantics (lib/util/util.rb) rather
+        # than requiring unconditionally: textstripper.rb passes 'kramdown' => false
+        # and does its own require + rescue right after, so requiring it here too
+        # would just be redundant, not wrong - but a future false-valued call for a
+        # gem nothing requires afterward should stay a no-op, not force a require.
+        # Rescue LoadError (this only satisfies gems already in the Gemfile; it isn't
+        # a stand-in for the real gem-install path) so a spec-load-time failure here
+        # reads as "gem not requirable in this stub" instead of a raw LoadError.
+        gems_to_install.each do |gem_name, should_require|
+          require gem_name if should_require
+        end
+        true
+      rescue LoadError => e
+        raise LoadError, "#{e.message} (spec_helper.rb's install_gem_requirements stub only " \
+                          'requires already-bundled gems - add a real stub for anything else)'
       end
     end
   end
