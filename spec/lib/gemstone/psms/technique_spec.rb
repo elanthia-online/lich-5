@@ -1,50 +1,18 @@
 # frozen_string_literal: true
 
-require_relative '../../../spec_helper'
-
-load_spell_data
-
-require 'util/util'
-require 'gemstone/psms'
-require 'gemstone/overwatch'
-require 'gemstone/infomon'
-require 'gemstone/creature'
-require 'attributes/skills'
-
-Skills = Lich::Gemstone::Skills unless defined?(Skills)
-
-module Kernel
-  def dothistimeout(_action, _timeout, _success_line); end unless method_defined?(:dothistimeout)
-end
-
-# The spec GameObj keeps its id but does not read it back; production does.
-class PsmTechniqueTarget < GameObj
-  attr_reader :id
-end
+require_relative 'psm_spec_helper'
 
 # Shared technique behaviour every PSM category gets from PSMS::Technique.
 RSpec.describe Lich::Gemstone::PSMS::Technique do
+  include_context 'psm game state'
+
   let(:cman) { Lich::Gemstone::CMan }
   let(:weapon) { Lich::Gemstone::Weapon }
   let(:warcry) { Lich::Gemstone::Warcry }
-  let(:orc) { PsmTechniqueTarget.new('12345', 'orc', 'an orc') }
-
-  def effects(kind, *names)
-    XMLData.save_dialogs(kind, names.to_h { |n| [n, Time.now.to_f + 600] })
-  end
-
-  def ranks(ranks)
-    Lich::Gemstone::Infomon.setup!
-    ranks.each { |key, rank| Lich::Gemstone::Infomon.set(key, rank) }
-    Lich::Gemstone::Infomon.flush
-  end
 
   before do
     ranks('cman.burst' => 1, 'cman.surge' => 1, 'cman.bullrush' => 1, 'cman.coupdegrace' => 2,
-          'weapon.thrash' => 1, 'skill.multi_opponent_combat' => 0)
-    XMLData.stamina = 100
-    %w[Buffs Debuffs Cooldowns].each { |kind| effects(kind) }
-    allow(Script).to receive(:current).and_return(double('Script', name: 'test_script'))
+          'weapon.thrash' => 1)
   end
 
   describe 'cooldowns' do
