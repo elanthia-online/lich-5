@@ -71,8 +71,8 @@ module Lich
           :short_name => "flurry",
           :type       => :assault,
           :cost       => { stamina: 15 },
-          :regex      => /You rotate your wrist, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
-          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+\!/,
+          :regex      => /You rotate your wrists?, your .+ executing a casual spin to establish your flow as you advance upon .+\!/,
+          :assault_rx => /The mesmerizing sway of body and blade glides to its inevitable end with one final twirl of your .+[.!]/,
           :buff       => "Slashing Strikes"
         },
         "fury"             => {
@@ -162,7 +162,7 @@ module Lich
           :short_name => "twinhammer",
           :type       => :setup,
           :cost       => { stamina: 7 },
-          :regex      => /You raise your hands high, lace them together and bring them crashing down towards the .+\!/,
+          :regex      => /You raise your hands high, lace them together and bring them crashing down towards .+\!/,
           :usage      => "twinhammer"
         },
         "volley"           => {
@@ -175,7 +175,8 @@ module Lich
           :short_name => "wblade",
           :type       => :area_of_effect,
           :cost       => { stamina: 20 },
-          :regex      => /With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
+          :regex      => Regexp.union(/With a broad flourish, you sweep your .+ into a whirling display of keen-edged menace\!/,
+                                      /With a broad flourish, you weave your .+ into a whirling display of coordination and menace\!/),
           :usage      => "wblade"
         },
         "whirlwind"        => {

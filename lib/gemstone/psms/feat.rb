@@ -238,7 +238,7 @@ module Lich
           :type       => :attack,
           :cost       => { stamina: 20 },
           :regex      => Regexp.union(/Silent Strike can not be used with fire as the attack type\./,
-                                      /You quickly leap from hiding to attack\!/),
+                                      /You quickly leap from hiding to (?:deliver your )?attack\!/),
           :usage      => "silentstrike"
         },
         "vanish"                    => {

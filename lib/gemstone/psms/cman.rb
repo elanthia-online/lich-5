@@ -54,7 +54,7 @@ module Lich
           :short_name => "bullrush",
           :type       => :area_of_effect,
           :cost       => { stamina: 14 },
-          :regex      => /You dip your shoulder and rush towards an .+!/,
+          :regex      => /You dip your shoulder and rush towards .+!/,
           :usage      => "bullrush"
         },
         "burst_of_swiftness"     => {
@@ -135,6 +135,8 @@ module Lich
           :type       => :setup,
           :cost       => { stamina: 14 },
           :regex      => Regexp.union(/You spring from hiding and attempt to slit .+ throat with your .+!/,
+                                      /You spring from hiding and attempt to cut .+'s throat!/,
+                                      /You spring from hiding and attempt to grasp .+ by the chin while slitting .+ throat with your .+!/,
                                       /For this to work, you'll need to take your target by surprise. Try hiding first\./,
                                       /You need to be holding a weapon in your right hand in order to use cutthroat\./,
                                       /The .+ is too cumbersome to use with cutthroat\./),
@@ -152,7 +154,7 @@ module Lich
           :type       => :setup,
           :cost       => { stamina: 7 },
           :regex      => Regexp.union(/You swing your .+ at .+!/,
-                                      /Choosing your opening, you attempt to disarm .+ with your empty hand!/,
+                                      /Choosing your opening, you attempt to disarm .+ with your .+!/,
                                       /You haven\'t learned how to disarm without a weapon!/,),
           :usage      => "disarm"
         },
@@ -254,7 +256,7 @@ module Lich
           :short_name => "garrote",
           :type       => :concentration,
           :cost       => { stamina: 10 },
-          :regex      => Regexp.union(/You fling your garrote around .+? neck and snap it taut\.  Success!/,
+          :regex      => Regexp.union(/You fling your .+? around .+? neck and snap it taut\./,
                                       /You need to have your other hand clear to garrote something\./,
                                       /You need to be holding a garrote\./,
                                       /You attempt to slip the garrote around .+? neck, but it catches the movement and dodges away just in time\./,),
