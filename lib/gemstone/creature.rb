@@ -731,7 +731,13 @@ module Lich
       end
 
       # Register a new creature
+      #
+      # A known id arriving under a different name is a recycled id: start a
+      # fresh instance so the previous creature's reported or inferred flags,
+      # statuses and damage don't carry over to it.
       def self.register(name, id, noun = nil)
+        existing = CreatureInstance[id]
+        CreatureInstance.forget(id) if existing && name && existing.name && existing.name != name
         CreatureInstance.register(name, id, noun)
       end
 
