@@ -194,6 +194,18 @@ reconnect_if_wanted = proc {
 
   ## GUI starts here
 
+  elsif @argv_options[:webui_dev]
+    require File.join(LIB_DIR, 'common', 'webui_launcher.rb')
+    webui_launcher = Lich::Common::WebUILauncher.new(
+      data_dir: DATA_DIR,
+      on_launch: proc {},
+      dark_theme: Lich.track_dark_mode,
+      tab_layout: Lich.track_layout_state,
+      autosort: Lich.track_autosort_state,
+      persistent: Lich.track_persistent_launcher_mode
+    )
+    @launch_data = webui_launcher.start.await_launch
+    next unless @launch_data
   elsif defined?(Gtk) and (ARGV.empty? or @argv_options[:gui])
     require File.join(LIB_DIR, 'common', 'gui_login.rb')
     gui_login
