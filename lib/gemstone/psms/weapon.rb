@@ -189,6 +189,8 @@ module Lich
 
       extend PSMS::Technique
       techniques @@weapon_techniques, type: "Weapon", verb: "weapon"
+      free_under "Glorious Momentum", type: :area_of_effect
+      free_under "Ardor of the Scourge", type: :assault, affects: :cooldown
 
       # Lines that end any assault besides its own :assault_rx: other assault
       # endings, an interrupted assault, and assault-specific refusals.
@@ -236,21 +238,6 @@ module Lich
         return super unless assault?(name)
 
         PSMS.results_regex(name, technique(name)[:assault_rx], ASSAULT_ENDINGS, results_of_interest: results_of_interest)
-      end
-
-      # @api private
-      # Area of effect techniques are free under Glorious Momentum.
-      def Weapon.free?(psm)
-        psm[:type] == :area_of_effect && PSMS.effect_active?(Effects::Buffs, "Glorious Momentum")
-      end
-
-      # @api private
-      # Glorious Momentum lifts the cooldown on area of effect techniques, and
-      # Ardor of the Scourge on assaults.
-      def Weapon.cooldown_ignored?(psm, ignore_cooldown)
-        super ||
-          (psm[:type] == :area_of_effect && PSMS.effect_active?(Effects::Buffs, "Glorious Momentum")) ||
-          (psm[:type] == :assault && PSMS.effect_active?(Effects::Buffs, "Ardor of the Scourge"))
       end
 
       # DEPRECATED: Use {Weapon.buff_active?} instead.

@@ -258,12 +258,7 @@ module Lich
 
       extend PSMS::Technique
       techniques @@shield_techniques, type: "Shield", verb: "shield"
-
-      # @api private
-      # Area of effect techniques are free under Glorious Momentum.
-      def Shield.free?(psm)
-        psm[:type] == :area_of_effect && PSMS.effect_active?(Effects::Buffs, "Glorious Momentum")
-      end
+      free_under "Glorious Momentum", type: :area_of_effect, affects: :cost
     end
   end
 end

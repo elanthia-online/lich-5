@@ -94,7 +94,7 @@ module Lich
         # @param forcert_count [Integer] FORCERTs used, including this one
         # @return [Boolean] whether the character can pay for the technique
         def affordable?(name, target: "", forcert_count: 0)
-          return true if free?(technique(name))
+          return true if waived?(technique(name), :cost)
 
           PSMS.cost_affordable?(cost(name, target: target), forcert_count: forcert_count)
         end
@@ -180,16 +180,19 @@ module Lich
           technique(name)[:regex]
         end
 
-        # @api private
-        # Whether the technique costs nothing right now. Overridden by categories with free uses.
-        def free?(_psm)
-          false
-        end
-
-        # @api private
-        # Whether the cooldown check is skipped. Overridden by categories with more cases.
-        def cooldown_ignored?(psm, ignore_cooldown)
-          ignore_cooldown && psm[:ignorable_cooldown] == true
+        # Declares a buff under which the category's techniques (or only those
+        # of one type) cost nothing and/or skip their cooldown check. Cost and
+        # cooldown are separate, since a buff can waive one without the other.
+        #
+        # @param buff [String, Regexp] the Effects::Buffs entry
+        # @param type [Symbol, nil] limit to techniques of this :type; nil for all
+        # @param affects [Symbol, Array<Symbol>] :cost, :cooldown, or both
+        # @return [void]
+        # @example
+        #   free_under "Glorious Momentum", type: :area_of_effect
+        #   free_under "Ardor of the Scourge", type: :assault, affects: :cooldown
+        def free_under(buff, type: nil, affects: %i[cost cooldown])
+          (@free_conditions ||= []) << { buff: buff, type: type, affects: Array(affects) }
         end
 
         # @api private
@@ -199,6 +202,21 @@ module Lich
         end
 
         private
+
+        # Whether the cooldown check is skipped: on request for techniques that
+        # allow it, or under a {#free_under} buff.
+        def cooldown_ignored?(psm, ignore_cooldown)
+          (ignore_cooldown && psm[:ignorable_cooldown] == true) || waived?(psm, :cooldown)
+        end
+
+        # Whether an active {#free_under} buff waives +aspect+ (:cost or :cooldown) for the technique.
+        def waived?(psm, aspect)
+          (@free_conditions || []).any? do |c|
+            c[:affects].include?(aspect) &&
+              (c[:type].nil? || psm[:type] == c[:type]) &&
+              PSMS.effect_active?(Effects::Buffs, c[:buff])
+          end
+        end
 
         # @return [Array(String, Hash)] the technique's long name and table entry
         def find(name)

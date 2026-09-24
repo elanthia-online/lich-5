@@ -161,6 +161,12 @@ RSpec.describe Lich::Gemstone::Weapon do
       effects('Buffs', 'Ardor of the Scourge')
       expect(weapon.available?('flurry')).to be(true)
     end
+
+    it 'does not make assaults free under Ardor of the Scourge' do
+      XMLData.stamina = 1
+      effects('Buffs', 'Ardor of the Scourge')
+      expect(weapon.affordable?('flurry')).to be(false)
+    end
   end
 
   describe 'reactions' do
