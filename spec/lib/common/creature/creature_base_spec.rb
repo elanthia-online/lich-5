@@ -217,6 +217,27 @@ RSpec.describe Lich::Common::CreatureBase do
     end
   end
 
+  describe '#ever_hostile?' do
+    it 'is false for a creature the feed has never called hostile' do
+      creature = SampleCreature.register('kobold', 1)
+      expect(creature.ever_hostile?).to be false
+
+      creature.sync_crtr_status('sympathetic' => '1')
+      expect(creature.ever_hostile?).to be false
+    end
+
+    # Sympathy (1120) replaces hostile with sympathetic in the next snapshot.
+    it 'stays true after a later tag drops hostile' do
+      creature = SampleCreature.register('kobold', 1)
+      creature.sync_crtr_status('hostile' => '1', 'inferior' => '1')
+
+      creature.sync_crtr_status('sympathetic' => '1', 'inferior' => '1')
+
+      expect(creature.crtr_flag?(:hostile)).to be false
+      expect(creature.ever_hostile?).to be true
+    end
+  end
+
   describe '#flag_active?' do
     it 'matches either a status or a classification flag' do
       creature = SampleCreature.register('kobold', 1)
@@ -348,6 +369,48 @@ RSpec.describe Lich::Common::CreatureBase do
       dead.sync_crtr_status('hostile' => '1', 'dead' => '1')
 
       expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'keeps targeting a creature flipped from hostile to sympathetic' do
+      creature = SampleCreature.register('nymph', 1)
+      creature.sync_crtr_status('hostile' => '1')
+      creature.sync_crtr_status('sympathetic' => '1')
+
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+    end
+
+    it 'does not target a creature that was only ever sympathetic' do
+      SampleCreature.register('nymph', 1).sync_crtr_status('sympathetic' => '1')
+
+      expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'does not target a once-hostile sympathetic creature that is dead' do
+      creature = SampleCreature.register('nymph', 1)
+      creature.sync_crtr_status('hostile' => '1')
+      creature.sync_crtr_status('sympathetic' => '1', 'dead' => '1')
+
+      expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'picks up a first-seen-sympathetic creature once hostile reasserts' do
+      creature = SampleCreature.register('nymph', 1)
+      creature.sync_crtr_status('sympathetic' => '1')
+      expect(SampleCreature.targets).to eq([])
+
+      creature.sync_crtr_status('hostile' => '1') # Sympathy expired
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+
+      creature.sync_crtr_status('sympathetic' => '1') # recast
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+    end
+
+    it 'keeps an explicit :hostile filter literal for a flipped creature' do
+      creature = SampleCreature.register('nymph', 1)
+      creature.sync_crtr_status('hostile' => '1')
+      creature.sync_crtr_status('sympathetic' => '1')
+
+      expect(SampleCreature.targets(:hostile)).to eq([])
     end
 
     it 'AND-filters targets on a named flag, honouring not_ negation' do
