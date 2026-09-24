@@ -177,4 +177,51 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
     end
   end
+  # Live GST capture: a mount sends no <crtrStatus> of its own until first
+  # harmed; only its rider's tag arrives, carrying rider="1".
+  describe 'ridden mounts with no <crtrStatus> of their own' do
+    let(:rider_line) do
+      %(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" health="900" maxhealth="900" hostile="1" ascended="1" rider="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/> and an <a exist="435609879" noun="lyre">ornate ruic lyre</a> with shimmering silver strings.</compDef>)
+    end
+
+    it 'infers the mount as a hostile mount from its rider, without claiming a real tag' do
+      feed(rider_line)
+
+      mount = Lich::Gemstone::Creature[436656696]
+      expect(mount).not_to be_nil
+      expect(mount.crtr_flag?(:mount)).to be true
+      expect(mount.crtr_flag?(:hostile)).to be true
+      expect(mount.crtr_flags?).to be false
+      expect(Lich::Gemstone::Creature.targets.map(&:id)).to contain_exactly(436658124, 436656696)
+    end
+
+    it 'lets the first real <crtrStatus> for the mount win over the inference' do
+      feed(rider_line)
+      feed(%(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" hostile="1" rider="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding<crtrStatus exist="436656696" hostile="0" mount="1"/> <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/>.</compDef>))
+
+      mount = Lich::Gemstone::Creature[436656696]
+      expect(mount.crtr_flags?).to be true
+      expect(mount.crtr_flag?(:hostile)).to be false
+    end
+
+    it 'does not infer a mount unless the game flagged the preceding creature rider="1"' do
+      feed(%(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" hostile="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/>.</compDef>))
+
+      expect(Lich::Gemstone::Creature[436656696]).to be_nil
+    end
+
+    it 'falls back to the target dropdown for a creature the feed has said nothing about' do
+      stub_const('XMLData', double(current_target_ids: ['614999'], game: 'GSIV'))
+      feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614999" noun="ooze">gelatinous ooze</a><popBold/>.</component>))
+
+      expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([614999])
+    end
+
+    it 'trusts a real hostile="0" over the target dropdown' do
+      stub_const('XMLData', double(current_target_ids: ['999001'], game: 'GSIV'))
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="999001" hostile="0"/><b> <pushBold/>a <a exist="999001" noun="rabbit">field rabbit</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::Creature.targets).to be_empty
+    end
+  end
 end

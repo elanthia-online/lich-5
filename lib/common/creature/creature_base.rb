@@ -442,7 +442,7 @@ module Lich
         def targets(*filters)
           candidates = room_roster
                        .filter_map { |id| self[id] }
-                       .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
+                       .select { |c| c.valid_target? && (c.crtr_flag?(:hostile) || unreported_target?(c)) }
           apply_filters(candidates, filters)
         end
 
@@ -471,6 +471,16 @@ module Lich
         end
 
         private
+
+        # Whether the feed has said nothing about a creature the client's
+        # target dropdown lists - the pre-`<crtrStatus>` hostility signal
+        # (GameObj.targets). A fresh mount sends no tag until first harmed.
+        #
+        # @param creature [Object] registry instance.
+        # @return [Boolean]
+        def unreported_target?(creature)
+          !creature.crtr_flags? && XMLData.current_target_ids.include?(creature.id.to_s)
+        end
 
         # Applies status/classification filters to a candidate list.
         #
@@ -532,6 +542,7 @@ module Lich
           @status = []
           @status_timestamps = {}
           @crtr_flags = {}
+          @inferred_crtr_flags = {}
           @last_seen_at = Time.now
         end
 
@@ -678,7 +689,20 @@ module Lich
         # @param key [String, Symbol] classification key, e.g. `:hostile`.
         # @return [Boolean]
         def crtr_flag?(key)
-          @crtr_flags[key.to_sym] || false
+          flags = crtr_flags? ? @crtr_flags : @inferred_crtr_flags
+          flags[key.to_sym] || false
+        end
+
+        # Stands in classification flags for a creature the feed has not
+        # reported on yet (see {#crtr_flags?}), e.g. a mount inferred from its
+        # rider's `rider="1"` tag. Consulted by {#crtr_flag?} only until the
+        # first real `<crtrStatus>` arrives, which then wins outright.
+        # {#crtr_flags?} stays false, so callers can still tell the two apart.
+        #
+        # @param flags [Hash{Symbol=>Boolean}] classification key => value.
+        # @return [void]
+        def infer_crtr_flags(flags)
+          @inferred_crtr_flags.merge!(flags)
         end
 
         # Whether any `<crtrStatus>` classification has been seen for this

@@ -67,6 +67,11 @@ module Lich
         @next_level_text = String.new
         @current_target_ids = Array.new
         @pending_crtr_status = Hash.new
+        # GemStone mount inference: the last room-objs creature registered, and
+        # (once "who is riding" follows a rider="1" creature) the rider whose
+        # mount is the next bold creature link. See the room-objs text branch.
+        @last_room_creature = nil
+        @mount_rider = nil
         # DragonRealms stream-order name backfill: bold room-objs names and the
         # <crtrStatus> batch ids are both captured in order, then paired at the
         # following <prompt> - but only when their counts match exactly (an
@@ -222,6 +227,7 @@ module Lich
         # could misapply to an unrelated creature that later reuses the same
         # exist id (ids are recycled - see Creature.targets' notes).
         @pending_crtr_status.clear
+        @last_room_creature = @mount_rider = nil
         # A reset mid-fragment invalidates the room-objs<->crtrStatus pairing, so
         # drop any captured names and collected ids.
         @dr_room_npc_names = []
@@ -413,6 +419,7 @@ module Lich
             # that room - don't let it survive to misapply if the id gets
             # reused elsewhere.
             @pending_crtr_status.clear
+            @last_room_creature = @mount_rider = nil
             @check_obvious_hiding = true
             # The <nav rm='NNNN'/> tag is the authoritative room UID for every game, including
             # DragonRealms, which now emits it on every arrival (a plain <nav/> with no rm
@@ -458,6 +465,7 @@ module Lich
               # this component; clearing here gives that batch a clean snapshot.
               Lich::DragonRealms::Creature.clear_room if defined?(Lich::DragonRealms::Creature)
               @pending_crtr_status.clear
+              @last_room_creature = @mount_rider = nil
               # Start a fresh room-objs<->crtrStatus pairing for this refresh: the
               # bold names captured below and the crtrStatus ids that follow are
               # zipped at the next <prompt>, gated on equal counts.
@@ -1077,11 +1085,19 @@ module Lich
                       dr_creature = Lich::DragonRealms::Creature.register(text_string, @obj_exist, @obj_noun)
                       dr_creature&.apply_room_name(text_string)
                     end
-                  elsif XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist)
-                    creature = Creature.register(text_string, @obj_exist, @obj_noun)
-                    if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
-                      creature.sync_crtr_status(pending_flags)
+                  else
+                    creature = nil
+                    if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider
+                      creature = Creature.register(text_string, @obj_exist, @obj_noun)
+                      if creature && (pending_flags = @pending_crtr_status.delete(@obj_exist))
+                        creature.sync_crtr_status(pending_flags)
+                      end
                     end
+                    # A ridden mount sends no <crtrStatus> until first harmed,
+                    # so stand in its flags from the rider's tag until it does.
+                    creature&.infer_crtr_flags(mount: true, hostile: @mount_rider.crtr_flag?(:hostile)) if @mount_rider
+                    @mount_rider = nil
+                    @last_room_creature = creature
                   end
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
@@ -1093,6 +1109,10 @@ module Lich
                 # Only bold runs are names; the non-bold "(dead)"/"(immobile)"
                 # status runs fall through to the annotation branch below.
                 @dr_room_npc_names << text_string
+              elsif text_string =~ /\bwho is riding\b/
+                # GemStone: "<rider> who is riding <mount>". Only trusted when
+                # the game itself flagged the preceding creature rider="1".
+                @mount_rider = @last_room_creature if @last_room_creature&.crtr_flag?(:rider)
               elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
                 # @last_npc is nil in DragonRealms here (DR room-objs bold names
                 # carry no <a> tag, so the new_npc branch above never runs and
