@@ -27,6 +27,7 @@
 
 require "ostruct"
 
+require_relative('./psms/technique.rb')
 require_relative('./psms/armor.rb')
 require_relative('./psms/cman.rb')
 require_relative('./psms/feat.rb')
@@ -101,48 +102,95 @@ module Lich
       def self.assess(name, type, costcheck = false, forcert_count: 0)
         return false unless forcert_count <= max_forcert_count
         name = self.name_normal(name)
-        seek_psm = self.find_name(name, type)
-        # this logs then raises an exception to stop (kill) the offending script
-        if seek_psm.nil?
-          Lich.log("error: PSMS request: #{$!}\n\t")
-          raise ArgumentError, "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}.", (caller.find { |call| call =~ /^#{Script.current.name}/ })
-        end
-        # otherwise process request
-        case costcheck
-        when true
-          base_cost = seek_psm[:cost]
-          base_cost.each do |cost_type, cost_amount|
-            if forcert_count > 0
-              return false unless (cost_amount + (cost_amount * ((25 + (10.0 * forcert_count)) / 100))).truncate < XMLData.public_send(cost_type)
-            else
-              return false unless cost_amount < XMLData.public_send(cost_type)
-            end
-          end
-          return true
+        seek_psm = self.find_name(name, type) || invalid_technique!(name, type)
+        if costcheck
+          category = Object.const_get("Lich::Gemstone::#{type}")
+          cost_affordable?(category.respond_to?(:cost) ? category.cost(name) : seek_psm[:cost], forcert_count: forcert_count)
         else
           Infomon.get("#{type.downcase}.#{seek_psm[:short_name]}")
         end
       end
 
+      # Logs and raises for a technique name that is not in its category, which
+      # stops (kills) the offending script.
+      #
+      # @param name [String] the normalized technique name
+      # @param type [String] the category ("CMan", "Shield", ...)
+      # @raise [ArgumentError] always
+      def self.invalid_technique!(name, type)
+        Lich.log("error: PSMS request: invalid #{type} skill #{name}\n\t")
+        raise ArgumentError, "Aborting script - The referenced #{type} skill #{name} is invalid.\r\nCheck your PSM category (Armor, CMan, Feat, Shield, Warcry, Weapon) and your spelling of #{name}.", (caller.find { |call| call =~ /^#{Script.current.name}/ })
+      end
+
+      # Whether current stamina (or other resource) covers a cost, with the
+      # FORCERT surcharge of 25% plus 10% per FORCERT when any are used.
+      #
+      # @param cost [Hash] e.g. { stamina: 20 }, keyed by XMLData resource
+      # @param forcert_count [Integer] FORCERTs used, including this one
+      # @return [Boolean]
+      def self.cost_affordable?(cost, forcert_count: 0)
+        return false unless forcert_count <= max_forcert_count
+
+        cost.all? do |cost_type, cost_amount|
+          cost_amount = (cost_amount + (cost_amount * ((25 + (10.0 * forcert_count)) / 100))).truncate if forcert_count > 0
+          cost_amount < XMLData.public_send(cost_type)
+        end
+      end
+
       # Determines if a given PSM skill is available for use (not in cooldown, and not overexerted).
       #
-      # This method checks if the skill is not listed in the cooldowns or debuffs (specifically "Overexerted").
-      # It uses the `Lich::Util.normalize_lookup` method to check for the skill's presence in these lists.
-      #
       # @param name [String] The name of the PSM skill to check.
+      # @param ignore_cooldown [Boolean] Skip the cooldown check (default: false)
       # @return [Boolean] True if the skill is available (not in cooldown or overexerted), false otherwise.
       #
       # @example Check if a combat maneuver is available
-      #   PSMS.available?("bullrush")
+      #   PSMS.available?("bull_rush")
       #   # => true (if not in cooldown or overexerted)
-      #
-      # @example Check if a shield technique is available
-      #   PSMS.available?("bulwark")
-      #   # => false (if in cooldown or overexerted)
       def self.available?(name, ignore_cooldown = false)
-        return false if Lich::Util.normalize_lookup('Debuffs', 'Overexerted')
-        return false if Lich::Util.normalize_lookup('Cooldowns', name) unless ignore_cooldown
+        return false if effect_active?(Effects::Debuffs, 'Overexerted')
+        return false if !ignore_cooldown && effect_active?(Effects::Cooldowns, name)
         return true
+      end
+
+      # Whether an unexpired effect is listed in an Effects registry. A String
+      # matches regardless of case, spacing, underscores, colons and apostrophes
+      # ("seanettes_shout" matches "Seanette's Shout"); a Regexp matches any entry.
+      #
+      # @param registry [Effects::Registry] Effects::Buffs, Effects::Cooldowns, ...
+      # @param effect [String, Symbol, Regexp] the effect name or pattern
+      # @return [Boolean]
+      def self.effect_active?(registry, effect)
+        now = Time.now.to_f
+        wanted = effect.is_a?(Regexp) ? effect : name_normal(effect)
+        registry.to_h.any? do |key, expiry|
+          next false unless expiry.to_f > now
+
+          wanted.is_a?(Regexp) ? wanted.match?(key.to_s) : name_normal(key) == wanted
+        end
+      end
+
+      # Whether a technique target names a single creature or character, as
+      # opposed to none (the character, or the room) or ALL.
+      #
+      # @param target [String, Integer, GameObj, nil]
+      # @return [Boolean]
+      def self.single_target?(target)
+        return true if target.is_a?(GameObj) || target.is_a?(Integer)
+
+        !target.to_s.strip.empty? && !target.to_s.strip.casecmp?('all')
+      end
+
+      # Whether MSTRIKE can be used right now: enough Multi Opponent Combat
+      # training (5 ranks open, 30 focused), not overexerted, and enough stamina
+      # for its cost while it is in recovery.
+      #
+      # @param focused [Boolean] a focused (single target) strike, else open
+      # @return [Boolean]
+      def self.mstrike_available?(focused: false)
+        return false if Skills.multi_opponent_combat < (focused ? 30 : 5)
+        return false if effect_active?(Effects::Debuffs, 'Overexerted')
+
+        cost_affordable?({ stamina: QStrike.mstrike_cost(focused: focused) })
       end
 
       # Determines whether the character is eligible to perform the given number of forced roundtime (forcert) rounds.
@@ -257,10 +305,41 @@ module Lich
       # @param results_of_interest [Regexp, nil] extra lines the caller wants to see
       # @return [Regexp]
       def self.results_regex(name, *patterns, results_of_interest: nil)
-        parts = [FAILURES_REGEXES, /^#{name} what\?$/i, /^#{name} is still in cooldown\./i]
+        parts = [FAILURES_REGEXES, WAIT_REGEX, /^#{name} what\?$/i, /^#{name} is still in cooldown\./i]
         parts.concat(patterns.compact)
         parts << results_of_interest if results_of_interest.is_a?(Regexp)
         Regexp.union(*parts)
+      end
+
+      # The roundtime line most techniques answer with.
+      ROUNDTIME_REGEX = /^Roundtime: [0-9]+ sec\.$/
+
+      # The refusal for a command sent while still in roundtime.
+      WAIT_REGEX = /^(?:\.\.\.w|W)ait \d+ sec(?:onds?)?\.$/
+
+      # Sends a technique command and waits for its answer, sending it again
+      # after a "...wait" (roundtime the client had not seen yet) or once the
+      # character recovers from "You don't seem to be able to move to do that."
+      #
+      # @param usage_cmd [String] the command, e.g. from {PSMS.command}
+      # @param results_regex [Regexp] the lines that answer it, e.g. from {PSMS.results_regex}
+      # @param timeout [Numeric] seconds to wait for each answer
+      # @param attempts [Integer] the most times to send the command
+      # @return [String, false] the answering line, or false on timeout
+      def self.dispatch(usage_cmd, results_regex, timeout: 5, attempts: 3)
+        usage_result = false
+        attempts.times do
+          usage_result = dothistimeout(usage_cmd, timeout, results_regex)
+          if usage_result == "You don't seem to be able to move to do that."
+            100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
+          elsif usage_result.is_a?(String) && WAIT_REGEX.match?(usage_result)
+            waitrt?
+            waitcastrt?
+          else
+            break
+          end
+        end
+        usage_result
       end
     end
   end
