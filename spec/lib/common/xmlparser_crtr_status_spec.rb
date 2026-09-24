@@ -210,6 +210,26 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(Lich::Gemstone::Creature[436656696]).to be_nil
     end
 
+    it 'does not carry flags over to a different creature that reuses a known id' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="436656696" hostile="0"/><b> <pushBold/>a <a exist="436656696" noun="rabbit">field rabbit</a><popBold/></b>.</component>))
+      feed(%(<nav rm='7355'/>))
+      feed(rider_line)
+
+      mount = Lich::Gemstone::Creature[436656696]
+      expect(mount.name).to eq('heavily armored battle mastodon')
+      expect(mount.crtr_flags?).to be false
+      expect(mount.crtr_flag?(:hostile)).to be true
+    end
+
+    it 'keeps reported flags across an ordinary refresh of the same creature' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1" stunned="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b> (stunned).</component>))
+      first = Lich::Gemstone::Creature[607736]
+      feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/>.</component>))
+
+      expect(Lich::Gemstone::Creature[607736]).to equal(first)
+      expect(first.crtr_flag?(:hostile)).to be true
+    end
+
     it 'falls back to the target dropdown for a creature the feed has said nothing about' do
       stub_const('XMLData', double(current_target_ids: ['614999'], game: 'GSIV'))
       feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614999" noun="ooze">gelatinous ooze</a><popBold/>.</component>))

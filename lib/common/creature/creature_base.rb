@@ -281,6 +281,14 @@ module Lich
           instances[id.to_i]
         end
 
+        # Drops one instance from the registry (room roster untouched).
+        #
+        # @param id [Integer, String] server creature id.
+        # @return [Object, nil] the removed instance.
+        def forget(id)
+          instances.delete(id.to_i)
+        end
+
         # @return [Array<Object>] every registered instance.
         def all
           instances.values
