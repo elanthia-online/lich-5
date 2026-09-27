@@ -118,11 +118,11 @@ module Lich
           [long_name, name.to_s].uniq.all? { |n| PSMS.available?(n, ignore) }
         end
 
-        # @param name [String, Symbol] the technique name
         # A pattern +:buff+ matches the stat buff whatever granted it: surge is
         # active under bearhug's "Enh. Strength (+20)", burst under barrage's
         # "Enh. Dexterity (+10)", coup de grace under shout's "Empowered (+20)".
         #
+        # @param name [String, Symbol] the technique name
         # @return [Boolean] whether the buff the technique grants (or the same stat buff) is active
         def buff_active?(name)
           buff = technique(name)[:buff]

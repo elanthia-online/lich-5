@@ -202,6 +202,10 @@ module Lich
         /Distracted, you hesitate/,
         /may not be activated within 60 seconds of a Multi-Strike\./,
         /can not be used with attack as the attack type/,
+        # the assault never started (bigshot's cmd_assault stops on these)
+        /too injured|already dead|little bit late|could not find/i,
+        /You don't seem to be able to move your legs to do that/,
+        /You feel a fair amount more durable\./,
       )
 
       # @param name [String] the technique name

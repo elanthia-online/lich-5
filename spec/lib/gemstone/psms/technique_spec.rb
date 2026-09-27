@@ -144,6 +144,13 @@ RSpec.describe Lich::Gemstone::PSMS::Technique do
       expect(sent).to eq(['cman bullrush #12345'] * 2)
     end
 
+    it 'sends once more after the restricting force dissolves' do
+      sent = game_replies(stuck, 'You dip your shoulder and rush towards an orc!')
+      allow(Lich::Gemstone::PSMS).to receive(:clear).and_return(['The restricting force that envelops you dissolves away.'])
+      expect(cman.use('bullrush', orc)).to eq('You dip your shoulder and rush towards an orc!')
+      expect(sent.size).to eq(2)
+    end
+
     it 'does not send again if control never returns' do
       sent = game_replies(stuck, 'never sent')
       allow(Lich::Gemstone::PSMS).to receive(:clear).and_return([])
@@ -186,6 +193,21 @@ RSpec.describe Lich::Gemstone::PSMS::Technique do
       ranks('skill.multi_opponent_combat' => 30)
       effects('Debuffs', 'Overexerted')
       expect(Lich::Gemstone::PSMS.mstrike_available?).to be(false)
+    end
+
+    it 'is free, even at 0 stamina, outside its recovery period' do
+      ranks('skill.multi_opponent_combat' => 50)
+      XMLData.stamina = 0
+      expect(Lich::Gemstone::PSMS.mstrike_available?).to be(true)
+    end
+
+    it 'needs more stamina than its cost while recovering' do
+      ranks('skill.multi_opponent_combat' => 50)
+      allow(Lich::Gemstone::QStrike).to receive(:mstrike_cost).and_return(25)
+      XMLData.stamina = 0
+      expect(Lich::Gemstone::PSMS.mstrike_available?).to be(false)
+      XMLData.stamina = 26
+      expect(Lich::Gemstone::PSMS.mstrike_available?).to be(true)
     end
   end
 end

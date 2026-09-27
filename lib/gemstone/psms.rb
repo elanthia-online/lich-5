@@ -192,7 +192,8 @@ module Lich
         return false if Skills.multi_opponent_combat < (focused ? 30 : 5)
         return false if effect_active?(Effects::Debuffs, 'Overexerted')
 
-        cost_affordable?({ stamina: QStrike.mstrike_cost(focused: focused) })
+        cost = QStrike.mstrike_cost(focused: focused)
+        cost.zero? || cost_affordable?({ stamina: cost })
       end
 
       # Determines whether the character is eligible to perform the given number of forced roundtime (forcert) rounds.
@@ -316,11 +317,15 @@ module Lich
       # The roundtime line most techniques answer with.
       ROUNDTIME_REGEX = /^Roundtime: [0-9]+ sec\.$/
 
+      # The lines that end "You don't seem to be able to move to do that."
+      RECOVERED_REGEX = /^(?:You regain control of your senses!|The restricting force that envelops you dissolves away\.)$/
+
       # Sends a technique command and waits for its answer. dothistimeout
       # itself waits out and re-sends after "...wait N seconds." (roundtime the
       # client had not seen yet), so {PSMS.results_regex} leaves that line out.
       # After "You don't seem to be able to move to do that." the command is
-      # sent once more, and only if the character regains control within 10s.
+      # sent once more, and only if the character regains control within 10s
+      # (either {RECOVERED_REGEX} line).
       #
       # @param usage_cmd [String] the command, e.g. from {PSMS.command}
       # @param results_regex [Regexp] the lines that answer it, e.g. from {PSMS.results_regex}
@@ -332,7 +337,7 @@ module Lich
 
         recovered = false
         100.times do
-          break if (recovered = clear.any? { |line| line =~ /^You regain control of your senses!$/ })
+          break if (recovered = clear.any? { |line| line =~ RECOVERED_REGEX })
 
           sleep 0.1
         end

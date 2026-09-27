@@ -114,6 +114,12 @@ RSpec.describe Lich::Gemstone::Weapon do
       expect(regex).to match('Barrage may not be activated within 60 seconds of a Multi-Strike.')
     end
 
+    it "stop at once when the assault never starts (bigshot's cmd_assault lines)" do
+      regex = weapon.results_regex('flurry')
+      ['The kobold is already dead.', 'You could not find that target.', "You're a little bit late.",
+       "You don't seem to be able to move your legs to do that."].each { |line| expect(regex).to match(line) }
+    end
+
     it 'never take FORCERT' do
       expect(weapon.command('pummel', orc, forcert_count: 2)).to eq('weapon pummel #12345')
     end
