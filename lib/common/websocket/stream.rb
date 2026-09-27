@@ -42,7 +42,7 @@ module Lich
         # @param user_agent [String, nil] User-Agent header for the handshake
         # @param extra_headers [Hash] extra handshake headers
         # @param connect_timeout [Numeric] seconds to bound the TCP connect
-        # @yield [TCPSocket] the raw, not-yet-TLS-wrapped socket, immediately
+        # @yield [Socket] the raw, not-yet-TLS-wrapped socket, immediately
         #   after connect -- the hook {Lich::Common::GameTransport} uses to
         #   apply {Lich::Common::SocketConfigurator} before TLS/WS overhead begins
         # @return [Stream]
@@ -114,6 +114,7 @@ module Lich
           @write_mutex = Mutex.new
           @closed = false
           @eof = false
+          @pending_error = nil
           ingest(@reader.feed(prefill)) unless prefill.empty?
         end
 
@@ -134,13 +135,20 @@ module Lich
         # its trailing newline, matching IO#gets), or returns nil at EOF.
         # A final, non-newline-terminated fragment left over at EOF is
         # returned once, then subsequent calls return nil -- also matching
-        # IO#gets.
+        # IO#gets. A framing violation defers the same way EOF does: any
+        # lines it decoded before hitting the violation are returned first,
+        # one #gets call at a time, and only once the buffer is drained does
+        # the stashed error actually raise -- so a caller salvages the last,
+        # most explanatory lines before the connection is torn down instead
+        # of losing them to the exception that unwound past them.
         #
         # @return [String, nil]
+        # @raise [Frame::ProtocolError] once any salvaged lines are drained
         def gets
           loop do
             line = extract_line!
             return line if line
+            raise @pending_error if @pending_error
             return flush_remaining! if @eof
 
             pump_until_readable!
@@ -148,13 +156,14 @@ module Lich
         end
 
         # @param timeout [Numeric, nil] seconds to wait; nil blocks indefinitely
-        # @return [Boolean] true once a #gets call can return without blocking on the network
+        # @return [Boolean] true once a #gets call can return (with a line
+        #   or by raising @pending_error) without blocking on the network
         def wait_readable(timeout = nil)
-          return true if line_ready? || @eof
+          return true if line_ready? || @eof || @pending_error
 
           deadline = timeout ? monotonic_now + timeout : nil
           loop do
-            return true if line_ready? || @eof
+            return true if line_ready? || @eof || @pending_error
 
             remaining = deadline ? deadline - monotonic_now : nil
             return false if deadline && remaining <= 0
@@ -218,7 +227,7 @@ module Lich
         # has run, then reports whether that made a line available.
         def pump_until_readable!
           loop do
-            return if line_ready? || @eof
+            return if line_ready? || @eof || @pending_error
 
             return if pump_once(nil)
           end
@@ -228,14 +237,15 @@ module Lich
         # OpenSSL already has undelivered plaintext buffered -- see #pump!)
         # and pumps it into the frame reader once.
         #
-        # @return [Boolean] true if a line became ready or EOF was reached
+        # @return [Boolean] true if a line became ready, EOF was reached, or
+        #   a framing violation left a pending error to raise once drained
         def pump_once(timeout)
           unless @io.pending.positive?
             ready = @io.wait_readable(timeout)
             return false if ready.nil?
           end
           pump!
-          line_ready? || @eof
+          line_ready? || @eof || @pending_error
         end
 
         # Drains everything currently available -- both freshly-arrived raw
@@ -253,6 +263,16 @@ module Lich
             ingest(@reader.feed(chunk))
             break unless @io.pending.positive?
           end
+        rescue Frame::ProtocolError => e
+          # A framing violation is fatal (see games.rb's classification of
+          # it), but whatever this exact #feed call had already decoded
+          # before hitting it is often the last data explaining why.
+          # Ingest it and stash the error rather than raising immediately --
+          # #gets returns those salvaged lines first, one at a time, and
+          # only raises this once the buffer they landed in is drained
+          # (mirrors how @eof is deferred the same way).
+          ingest(e.decoded_messages)
+          @pending_error = e
         rescue IOError # covers EOFError, a subclass, too
           # A *local* close (Stream#close / Game.close racing the reader
           # thread) raises "stream closed in another thread" here too, and
@@ -268,12 +288,14 @@ module Lich
           # not as an IOError -- confirmed against a real TLS loopback.
           # Treat that specific case like any other unexpected disconnect
           # (EOF), not a certificate/protocol failure; anything else from
-          # OpenSSL is a real TLS problem and stays fatal.
+          # OpenSSL is a real TLS problem and stays fatal. (Note: a
+          # non-blocking WaitReadable/WaitWritable condition would also
+          # land here, since OpenSSL::SSL::SSLErrorWaitReadable/Writable are
+          # SSLError subclasses -- moot in practice, since #readpartial on
+          # this always-blocking socket never raises one.)
           raise unless e.message.include?("unexpected eof while reading")
 
           @eof = true
-        rescue IO::WaitReadable
-          nil # spurious wakeup mid-TLS-record; caller's loop will wait again
         end
 
         def ingest(messages)

@@ -454,7 +454,7 @@ module Lich
         # @param transport_opts [Hash] forwarded to
         #   Lich::Common::GameTransport.open (WEBSOCKET-only knobs: shim_port,
         #   path, origin, subprotocol, user_agent, extra_headers, connect_timeout)
-        # @return [TCPSocket, Lich::Common::WebSocket::Stream] the connected,
+        # @return [Socket, Lich::Common::WebSocket::Stream] the connected,
         #   configured game socket
         # @note Connection errors propagate to the caller. Use
         #   {.open_with_timeout} to bound how long the connect may block.
@@ -902,7 +902,7 @@ module Lich
         # every supported platform. Waiting on #wait_readable first makes the
         # reader's no-data timeout deterministic while preserving gets-based
         # EOF handling. #wait_readable rather than a bare IO.select call so
-        # this works unchanged whether @socket is a direct TCPSocket (where
+        # this works unchanged whether @socket is a direct-mode Socket (where
         # it's equivalent to IO.select on a single descriptor -- both trigger
         # on EOF too) or a Lich::Common::WebSocket::Stream (WEBSOCKET
         # transport), whose #wait_readable also reports readiness for a line

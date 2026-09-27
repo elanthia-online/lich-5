@@ -130,6 +130,19 @@ RSpec.describe Lich::Common::GameTransport do
 
       described_class.open_direct('host', 1234, subprotocol: nil)
     end
+
+    it 'names both failures when the WebSocket fallback also fails, instead of only the WebSocket one' do
+      allow(Socket).to receive(:tcp).and_raise(Errno::ECONNREFUSED, 'direct refused')
+      allow(Lich).to receive(:log)
+      ws_error = Lich::Common::WebSocket::Stream::ConnectionError.new('Errno::ECONNREFUSED: ws refused')
+      allow(described_class).to receive(:open_websocket).and_raise(ws_error)
+
+      expect { described_class.open_direct('host', 1234) }.to raise_error(
+        Lich::Common::WebSocket::Stream::ConnectionError,
+        'direct host:1234 unreachable (Errno::ECONNREFUSED: Connection refused - direct refused); ' \
+        'WebSocket fallback also failed (Errno::ECONNREFUSED: ws refused)'
+      ) { |error| expect(error.cause).to eq(ws_error) }
+    end
   end
 
   describe '.open_websocket' do

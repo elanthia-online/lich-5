@@ -117,7 +117,7 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       # skips-rescue-runs-ensure half (a stalled connect/handshake killed by
       # open_with_timeout's watchdog) needs a real thread and socket to
       # exercise meaningfully and was verified that way in review, not here.
-      raw_socket = instance_double(TCPSocket, close: nil, closed?: false)
+      raw_socket = instance_double(Socket, close: nil, closed?: false)
       allow(Socket).to receive(:tcp).and_return(raw_socket)
       allow(described_class).to receive(:wrap_tls).and_raise(OpenSSL::SSL::SSLError, 'handshake failed')
 
@@ -127,7 +127,7 @@ RSpec.describe Lich::Common::WebSocket::Stream do
     end
 
     it 'does not close the raw socket once connected successfully' do
-      raw_socket = instance_double(TCPSocket, close: nil, closed?: false)
+      raw_socket = instance_double(Socket, close: nil, closed?: false)
       allow(Socket).to receive(:tcp).and_return(raw_socket)
       ssl_socket = FakeSSLSocket.new
       allow(described_class).to receive(:wrap_tls).and_return(ssl_socket)
@@ -287,6 +287,22 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       close_frames = io.written.map { |bytes| unmask_client_frame(bytes) }
                                .select { |opcode, _| opcode == Frame::OPCODE_CLOSE }
       expect(close_frames.size).to eq(1)
+    end
+  end
+
+  describe 'a protocol violation arriving after a valid frame in the same read' do
+    it 'still surfaces the valid line before raising, instead of discarding it' do
+      # Regression: Frame::Reader#feed used to lose messages it had already
+      # decoded earlier in the same call when a later frame in that call
+      # raised ProtocolError -- often the last, most explanatory line before
+      # a forced disconnect.
+      io = FakeSSLSocket.new(chunk_size: 4096) # deliver both frames in one #readpartial
+      io.feed(server_frame("last words\n"))
+      io.feed([0xC1, 0x00].pack('C*')) # reserved bit set -- fatal
+      stream = described_class.new(io)
+
+      expect(stream.gets).to eq("last words\n")
+      expect { stream.gets }.to raise_error(Frame::ProtocolError, /reserved/)
     end
   end
 

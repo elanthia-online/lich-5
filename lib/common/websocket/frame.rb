@@ -45,7 +45,20 @@ module Lich
         # unsupported opcode, an oversized/fragmented control frame, a
         # continuation frame with no message in progress, or -- per RFC 6455
         # 5.1 -- a masked frame arriving from the server.
-        class ProtocolError < StandardError; end
+        class ProtocolError < StandardError
+          # @return [Array<Message>] messages {Reader#feed} had already
+          #   decoded from this same call's bytes before hitting the
+          #   violation -- often the last data a caller will see before the
+          #   connection is torn down, so worth handing back rather than
+          #   discarding along with the raised error. Empty unless the
+          #   Reader that raised this populated it.
+          attr_accessor :decoded_messages
+
+          def initialize(message = nil)
+            super
+            @decoded_messages = []
+          end
+        end
 
         # Builds a single, unfragmented, masked client-to-server frame.
         # Client frames MUST be masked (RFC 6455 5.1); the mask key is
@@ -117,6 +130,9 @@ module Lich
               messages.concat(handle_frame(frame))
             end
             messages
+          rescue ProtocolError => e
+            e.decoded_messages = messages
+            raise
           end
 
           private

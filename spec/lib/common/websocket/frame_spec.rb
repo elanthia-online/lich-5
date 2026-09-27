@@ -143,6 +143,31 @@ RSpec.describe Lich::Common::WebSocket::Frame do
       expect { reader.feed(bad) }.to raise_error(described_class::ProtocolError, /reserved/)
     end
 
+    it 'preserves messages already decoded earlier in the same feed call on the raised error' do
+      # Regression: messages was a local, discarded along with the raised
+      # exception -- a valid frame decoded just before a later, invalid one
+      # in the same #feed call used to vanish instead of reaching the caller.
+      good = unmasked_server_frame('hi')
+      bad = [0xC1, 0x00].pack('C*') # reserved bit set
+
+      begin
+        reader.feed(good + bad)
+        raise 'expected ProtocolError'
+      rescue described_class::ProtocolError => e
+        expect(e.decoded_messages.map(&:payload)).to eq(['hi'])
+      end
+    end
+
+    it 'defaults decoded_messages to empty when nothing was salvageable' do
+      masked = described_class.encode('spoofed', opcode: described_class::OPCODE_TEXT)
+      begin
+        reader.feed(masked)
+        raise 'expected ProtocolError'
+      rescue described_class::ProtocolError => e
+        expect(e.decoded_messages).to eq([])
+      end
+    end
+
     it 'raises on an oversized control frame' do
       bad = unmasked_server_frame('x' * 126, opcode: described_class::OPCODE_PING)
       expect { reader.feed(bad) }.to raise_error(described_class::ProtocolError, /too large/)

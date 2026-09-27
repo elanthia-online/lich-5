@@ -21,12 +21,12 @@ module Lich
     #   relays whatever bytes the client sends, so nothing above the
     #   transport layer needs to change -- only how the bytes get there.
     #   Confirmed live end-to-end against both production DragonRealms and
-    #   GemStone IV, driven by a standalone script sending the web client's
-    #   own "<c>{key}\n<c>/FE:WebFE .../XML" handshake -- see
-    #   docs/websocket-shim-probe-findings.md. Lich's frontends send a plain
-    #   "{key}\n/FE:WRAYTH .../XML" (no "<c>" prefix, a different /FE: value)
-    #   over the raw path today; that exact sequence has not itself been
-    #   driven over this transport live.
+    #   GemStone IV: first via a standalone script sending the web client's
+    #   own "<c>{key}\n<c>/FE:WebFE .../XML" handshake, then via a real Lich
+    #   session -- whose frontend sends a plain "{key}\n/FE:WRAYTH .../XML"
+    #   (no "<c>" prefix, a different /FE: value) -- played for an extended,
+    #   interactive session and shut down cleanly. See
+    #   docs/websocket-shim-probe-findings.md (pass 3) for the full writeup.
     #
     # @see Lich::Common::WebSocket::Stream
     module GameTransport
@@ -147,7 +147,7 @@ module Lich
       # @param mode [Symbol] {DIRECT} or {WEBSOCKET}
       # @param opts [Hash] forwarded to {.open_websocket} -- either directly
       #   (+mode: WEBSOCKET+) or if {DIRECT} falls back to it
-      # @return [TCPSocket, Lich::Common::WebSocket::Stream] a connected,
+      # @return [Socket, Lich::Common::WebSocket::Stream] a connected,
       #   configured, drop-in-compatible game socket -- #puts, #gets,
       #   #wait_readable, #close, #closed?, #sync=
       # @raise [UnknownModeError]
@@ -178,7 +178,17 @@ module Lich
 
         Lich.log "warn: direct TCP transport unreachable (#{host}:#{port}, #{e.class}: #{e.message}); " \
                  "falling back to WebSocket transport"
-        open_websocket(host, port, fallback: true, **websocket_opts)
+        begin
+          open_websocket(host, port, fallback: true, **websocket_opts)
+        rescue Lich::Common::WebSocket::Stream::ConnectionError => ws_error
+          # Left alone, only ws_error would reach the caller -- naming port
+          # 443 and the WebSocket host, not the game host:port that actually
+          # failed. Whoever reads this (a log, a console error, a bug
+          # report) needs the real failure, not just where the fallback
+          # gave up.
+          raise ws_error.class, "direct #{host}:#{port} unreachable (#{e.class}: #{e.message}); " \
+                                 "WebSocket fallback also failed (#{ws_error.message})"
+        end
       end
 
       # @api private

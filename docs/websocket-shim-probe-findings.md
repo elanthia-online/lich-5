@@ -265,12 +265,78 @@ raised as Minor, with a deliberate disposition on each rather than a code change
   timeout-related issues, though that's one session's worth of favorable network conditions, not a
   guarantee against the theoretical worst case described above.
 
+## Self-review findings (pre-upstream)
+
+A self-review pass, run against `6b324d5` after three prior review rounds, found nothing above
+Minor -- two Minor fixes, three Nits, and three open questions probed for concrete data rather than
+left as pure speculation:
+
+- **Double-failure error message named only the WebSocket endpoint.** When both `DIRECT` and the
+  `WEBSOCKET` fallback failed, the exception reaching the caller (and printed to the console/log by
+  every `Game.open`/`open_with_timeout` call site) was the WebSocket one -- `Errno::ECONNREFUSED ...
+  127.0.0.1:443`, naming a host and port the user never typed, with the actual game-port failure
+  visible only in an earlier `warn:` log line. Fixed: `open_direct` now catches the fallback's
+  `ConnectionError` and re-raises one message naming both failures (`direct host:port unreachable
+  (...); WebSocket fallback also failed (...)`), with the original exception preserved as `.cause`.
+- **Module doc still claimed Lich's own handshake had never run over the transport,** left over
+  from before pass 3 (above) confirmed exactly that. Corrected.
+- **`Frame::Reader#feed` discarded already-decoded messages when a later frame in the same call was
+  invalid** -- `messages` was a local, thrown away along with the raised `ProtocolError`. Since the
+  error is fatal regardless, the practical cost was losing the last lines before a forced shutdown --
+  usually the ones most likely to explain why. Fixed with a deferred-error pattern mirroring how EOF
+  already works: `ProtocolError` now carries whatever it had already decoded
+  (`#decoded_messages`), `Stream#pump!` ingests those into the line buffer and stashes the error
+  instead of raising immediately, and `#gets` returns the salvaged lines first (one per call, same
+  as any other queued lines) before finally raising the stashed error once the buffer drains.
+- **A dead `rescue IO::WaitReadable` clause in `Stream#pump!`.** Verified two ways: `#readpartial` on
+  this always-blocking `SSLSocket` never raises a WaitReadable-shaped error in the first place
+  (non-blocking APIs would, blocking ones absorb the retry internally), and even if it somehow did,
+  `OpenSSL::SSL::SSLErrorWaitReadable` is an `SSLError` subclass, so the `rescue OpenSSL::SSL::SSLError`
+  clause listed first would catch it before this one ever could. Removed; the SSLError rescue's
+  comment now notes why this case is moot rather than leaving a misleading dead branch.
+- **`@return [TCPSocket, ...]` was inaccurate for direct mode.** `Socket.tcp` (used since the
+  automatic-fallback work) returns a `Socket`, not a `TCPSocket` -- `Socket.tcp(...).is_a?(TCPSocket)`
+  is `false`. Nothing in lich-5 calls a `TCPSocket`/`IPSocket`-only method on the game socket, so this
+  was doc-only; corrected the YARD tags (and the matching test doubles) to `Socket`.
+
+**Open questions probed for data, not left purely speculative:**
+
+- **Does the shim send its own keepalive ping while idle?** No -- `all_web_fe_min.js` contains
+  exactly two `setInterval` calls (`GameBuffer.process`, mouse-move tracking), neither touching the
+  socket, and neither "ping" nor "keepalive" appears anywhere in the bundle. The web client relies
+  entirely on the server's own ping/pong (which `Stream` already answers) or simply isn't exposed to
+  an idle-timeout problem in practice (a browser tab has other background traffic keeping the
+  connection non-idle even without an app-level ping). This doesn't settle whether an edge/load
+  balancer actually *drops* a quiet WebSocket connection after some idle window -- pass 3's session
+  was "extended, interactive," which kept the connection busy throughout, not idle. **Still open:**
+  leaving a `--game-transport=websocket` session genuinely idle (no commands, no scripts) for
+  10+ minutes and seeing whether it survives.
+- **What happens when the shim's backend (the actual game process) is unreachable, simulating an
+  outage?** Tested directly: `GameTransport.open_websocket("dr.simutronics.net", 1)` -- port 1,
+  nothing listening -- **the WS upgrade still succeeds** (`101 Switching Protocols`). The connection
+  then goes silent: no close frame, no EOF, not even after sending a bogus key/`/FE:` handshake and
+  waiting 15+ seconds total. The shim evidently doesn't verify the backend is reachable before
+  completing the upgrade. Consequence: during a real game-server outage, a user with the automatic
+  fallback enabled would see `DIRECT` fail fast (`ECONNREFUSED`/timeout), then the `WEBSOCKET`
+  fallback silently "succeed" and hang -- recovered only by the existing
+  `MAX_CONSECUTIVE_READ_TIMEOUTS` mechanism in `games.rb` (3 x `READ_TIMEOUT_SECONDS`, ~5 minutes),
+  reported as `:game_timeout`, not the `:game_eof` one might expect. Not a new bug -- that recovery
+  path already exists for any "connected but dead" scenario -- but a real, now-confirmed, several-
+  -minutes-long user-visible delay specific to an outage-during-fallback that's worth knowing about
+  rather than guessing at.
+- **Does the shim reject a text frame containing an invalid UTF-8 byte** (RFC 6455 §8.1: an endpoint
+  receiving invalid UTF-8 in a TEXT frame must close with code 1007), given `Stream#puts` always
+  sends opcode TEXT and a command could contain a raw Latin-1/CP1252 byte from a script or frontend?
+  **Not yet tested** -- this needs a live authenticated session to send an actual in-game command
+  through, unlike the two questions above.
+
 ## Not yet confirmed
 
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
   `docs/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
   entitled account has been available to confirm their GAMEHOST values, so whether they follow the
   same two-pattern remap is assumed, not confirmed.
+- **Whether the shim tolerates an invalid-UTF-8 byte in a TEXT frame** -- see above.
 
 ~~Sustained/interactive play, a clean `Game.close`-driven shutdown, and Lich's own (un-prefixed)
 handshake bytes~~ -- all confirmed by pass 3 above (a real Lich session over
