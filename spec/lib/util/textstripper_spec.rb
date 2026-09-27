@@ -1,15 +1,8 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
-
-# TextStripper's load-time block calls Lich::Util.install_gem_requirements and
-# requires kramdown (already in the bundle). Stub the installer so loading the
-# file in specs does not try to install gems.
-module Lich
-  module Util
-    def self.install_gem_requirements(*_args, **_kwargs); end
-  end
-end
+require 'os'
+require 'ffi'
 
 require 'util/textstripper'
 
