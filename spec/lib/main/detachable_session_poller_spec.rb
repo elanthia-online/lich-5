@@ -64,5 +64,14 @@ RSpec.describe Lich::Main::DetachableSessionPoller do
       expect(result).to be_nil
       expect(calls).to eq(shutdown_after + 1)
     end
+
+    it 'lets a StopIteration from name_source propagate instead of silently ending the loop' do
+      expect do
+        described_class.wait_for_name(
+          name_source: source('', ''), # exhausted before a name or shutdown ends the poll
+          shutdown_requested: -> { false }
+        )
+      end.to raise_error(StopIteration)
+    end
   end
 end

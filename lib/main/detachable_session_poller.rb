@@ -22,14 +22,16 @@ module Lich
       # @return [String, nil] the first non-blank, stripped name seen, or nil if
       #   shutdown was requested first
       def self.wait_for_name(name_source:, shutdown_requested:, interval: DEFAULT_INTERVAL)
-        loop do
-          return nil if shutdown_requested.call
-
+        # `until`, not Kernel#loop: loop silently rescues StopIteration and
+        # returns whatever it was carrying, which would violate the
+        # [String, nil] contract here if name_source ever raised one.
+        until shutdown_requested.call
           candidate = name_source.call
           return candidate.strip if candidate.is_a?(String) && !candidate.strip.empty?
 
           sleep(interval)
         end
+        nil
       end
     end
   end

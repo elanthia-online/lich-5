@@ -918,9 +918,9 @@ reconnect_if_wanted = proc {
 
               if resolved_char_name.nil?
                 # Reuses the same --login / Account.character / XMLData.name ladder
-                # session_name above was resolved from, so both writers of the
-                # session file (this and Frontend.create_session_file's other call
-                # site) agree on where a name comes from. The placeholder fallback
+                # session_name above was resolved from (the GUI single-launch path's
+                # own create_session_file call at line ~502 only checks
+                # Account.character, not this full ladder). The placeholder fallback
                 # means none of those three had an answer yet -- not a real name --
                 # so the poller below takes over.
                 resolved_char_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
