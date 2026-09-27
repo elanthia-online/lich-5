@@ -297,6 +297,23 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(creature.crtr_flag?(:hostile)).to be false
       expect(creature.ever_hostile?).to be true
     end
+
+    # The latch lives on the instance, so eviction is its only reset.
+    it 'starts false again once housekeeping evicts the registry entry' do
+      old = SampleCreature.register('nymph', 1)
+      old.sync_crtr_status('hostile' => '1')
+      old.instance_variable_set(:@last_seen_at, Time.now - 3600)
+      SampleCreature.clear_room
+      SampleCreature.clear_room # second refresh: out of the previous roster's shelter too
+      expect(SampleCreature.cleanup_old(600)).to eq(1)
+
+      fresh = SampleCreature.register('nymph', 1)
+      fresh.sync_crtr_status('sympathetic' => '1')
+
+      expect(fresh).not_to equal(old)
+      expect(fresh.ever_hostile?).to be false
+      expect(SampleCreature.targets).to eq([])
+    end
   end
 
   describe '#flag_active?' do

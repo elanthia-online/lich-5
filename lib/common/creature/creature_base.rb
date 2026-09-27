@@ -442,6 +442,9 @@ module Lich
         # {InstanceMethods#ever_hostile?}. Pass `:not_sympathetic` to leave
         # such creatures alone (e.g. to respect a group empath's Sympathy).
         #
+        # Server ids are recycled: a reused id gets the existing instance,
+        # `ever_hostile?` included, until housekeeping evicts it.
+        #
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
         def targets(*filters)
