@@ -126,6 +126,18 @@ RSpec.describe Lich::Gemstone::PSMS::Technique do
       expect(Lich::Gemstone::PSMS.available?('berserk')).to be(false)
     end
 
+    it "reads a snapshot, so the game thread can add effects mid-check" do
+      # to_h is the parser's live Hash; adding a key to a Hash while it is being
+      # iterated raises, in the thread doing the adding
+      live = {}
+      late_arrival = Object.new
+      late_arrival.define_singleton_method(:to_s) { live['Late Effect'] = Time.now.to_f + 600; 'late arrival' }
+      live[late_arrival] = Time.now.to_f + 600
+      registry = double('Effects registry', to_h: live)
+      expect(Lich::Gemstone::PSMS.effect_active?(registry, 'nothing listed')).to be(false)
+      expect(live).to have_key('Late Effect')
+    end
+
     it 'finds an effect by its id' do
       expect(Lich::Gemstone::PSMS.effect_active?(Effects::Cooldowns, 211)).to be(true)
       expect(Lich::Gemstone::PSMS.effect_active?(Effects::Cooldowns, 212)).to be(false)

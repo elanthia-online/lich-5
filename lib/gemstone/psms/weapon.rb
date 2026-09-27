@@ -196,7 +196,7 @@ module Lich
       # endings, an interrupted assault, and assault-specific refusals.
       ASSAULT_ENDINGS = Regexp.union(
         /You complete your assault/,
-        /With a final, explosive breath/,
+        /^With a final, explosive breath, you /,
         /recentering yourself for the fight/,
         /Upon firing your last (?:arrow|bolt)/,
         /Distracted, you hesitate/,
@@ -219,6 +219,11 @@ module Lich
         technique(name)[:type] == :assault
       end
 
+      # How long to wait for an assault's ending. There is no captured timing for
+      # a max-rank assault, so this keeps the ~20s the old send-and-retry loop
+      # could wait; stopping early would return mid-assault.
+      ASSAULT_TIMEOUT = 20
+
       # Uses a Weapon technique if it is available. An assault takes no FORCERT
       # and returns when it ends, not when it starts.
       #
@@ -229,7 +234,7 @@ module Lich
 
         waitrt?
         waitcastrt?
-        PSMS.dispatch(command(name, target), results_regex(name, results_of_interest: results_of_interest), timeout: 12)
+        PSMS.dispatch(command(name, target), results_regex(name, results_of_interest: results_of_interest), timeout: ASSAULT_TIMEOUT)
       end
 
       # The command {Weapon.use} sends; an assault never takes FORCERT.

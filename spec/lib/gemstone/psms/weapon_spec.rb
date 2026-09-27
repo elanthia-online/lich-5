@@ -129,6 +129,11 @@ RSpec.describe Lich::Gemstone::Weapon do
        'Aelric arrives a little bit late to the fight.'].each { |line| expect(regex).not_to match(line) }
     end
 
+    it "do not end on another character's thrash ending" do
+      # a bystander's view of the first-person line in effect-list.xml and combat's assault defs
+      expect(weapon.results_regex('thrash')).not_to match('With a final, explosive breath, Trog pulls his katana back to a ready position.')
+    end
+
     it "do not end on Fury's constitution buff, which follows its own assault line" do
       expect(weapon.results_regex('fury')).not_to match('You feel a fair amount more durable.')
     end
@@ -144,9 +149,9 @@ RSpec.describe Lich::Gemstone::Weapon do
       expect(sent).to eq(['weapon thrash #12345'])
     end
 
-    it 'wait up to 12 seconds for the ending' do
+    it 'wait up to 20 seconds for the ending' do
       ranks('weapon.pummel' => 1)
-      expect(Lich::Gemstone::PSMS).to receive(:dothistimeout).with('weapon pummel #12345', 12, anything).and_return(endings['pummel'].first)
+      expect(Lich::Gemstone::PSMS).to receive(:dothistimeout).with('weapon pummel #12345', 20, anything).and_return(endings['pummel'].first)
       expect(weapon.use('pummel', orc)).to eq(endings['pummel'].first)
     end
 
