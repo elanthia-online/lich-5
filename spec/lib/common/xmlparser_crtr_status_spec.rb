@@ -227,13 +227,15 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       %(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" health="900" maxhealth="900" hostile="1" ascended="1" rider="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/> and an <a exist="435609879" noun="lyre">ornate ruic lyre</a> with shimmering silver strings.</compDef>)
     end
 
-    it 'infers the mount as a hostile mount from its rider, without claiming a real tag' do
+    it 'infers the mount from its rider, without claiming a real tag' do
+      stub_const('XMLData', double(current_target_ids: %w[436656696 436658124], game: 'GSIV'))
       feed(rider_line)
 
       mount = Lich::Gemstone::Creature[436656696]
       expect(mount).not_to be_nil
       expect(mount.crtr_flag?(:mount)).to be true
-      expect(mount.crtr_flag?(:hostile)).to be true
+      # Hostility is not inferred; the dropdown fallback targets it instead.
+      expect(mount.crtr_flag?(:hostile)).to be false
       expect(mount.crtr_flags?).to be false
       expect(Lich::Gemstone::Creature.targets.map(&:id)).to contain_exactly(436658124, 436656696)
     end
@@ -245,6 +247,22 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       mount = Lich::Gemstone::Creature[436656696]
       expect(mount.crtr_flags?).to be true
       expect(mount.crtr_flag?(:hostile)).to be false
+    end
+
+    it 'still applies a rider status annotation in the same text run as "who is riding"' do
+      allow(Lich::Common::GameObj).to receive(:new_npc).and_call_original
+      feed(%(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" hostile="1" rider="1" dead="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> (dead) who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/>.</compDef>))
+
+      expect(Lich::Common::GameObj['436658124'].status).to eq('dead')
+      expect(Lich::Gemstone::Creature[436656696].crtr_flag?(:mount)).to be true
+    end
+
+    it 'drops the inferred mount flag once the mount is no longer ridden' do
+      stub_const('XMLData', double(current_target_ids: ['436656696'], game: 'GSIV'))
+      feed(rider_line)
+      feed(%(<compDef id='room objs'>  You also see <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/>.</compDef>))
+
+      expect(Lich::Gemstone::Creature[436656696].crtr_flag?(:mount)).to be false
     end
 
     it 'does not infer a mount unless the game flagged the preceding creature rider="1"' do
@@ -261,7 +279,7 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       mount = Lich::Gemstone::Creature[436656696]
       expect(mount.name).to eq('heavily armored battle mastodon')
       expect(mount.crtr_flags?).to be false
-      expect(mount.crtr_flag?(:hostile)).to be true
+      expect(mount.crtr_flag?(:mount)).to be true
     end
 
     it 'keeps reported flags across an ordinary refresh of the same creature' do

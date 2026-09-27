@@ -759,7 +759,9 @@ module Lich
       # statuses and damage don't carry over to it.
       def self.register(name, id, noun = nil)
         existing = CreatureInstance[id]
-        CreatureInstance.forget(id) if existing && name && existing.name && existing.name != name
+        if existing && name && existing.name && existing.name != name && CreatureInstance.auto_register?
+          CreatureInstance.forget(id)
+        end
         CreatureInstance.register(name, id, noun)
       end
 

@@ -444,7 +444,9 @@ module Lich
         # and `<crtrStatus>` events), not from any client last-selected-target
         # control, which can go stale after movement or death. `valid_target?`
         # (supplied by the game class) removes decoys/dead appendages and
-        # `crtr_flag?(:hostile)` supplies structured hostility.
+        # `crtr_flag?(:hostile)` supplies structured hostility. A creature the
+        # feed has sent no `<crtrStatus>` for at all (see {#crtr_flags?}, e.g. a
+        # fresh mount) counts when the client's target dropdown lists it.
         #
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
@@ -718,7 +720,10 @@ module Lich
           report_crtr_snapshot(attrs) if %i[all active].include?(debug_level)
         end
 
-        # Checks a classification flag captured from `<crtrStatus>`.
+        # Checks a classification flag captured from `<crtrStatus>`, or, until
+        # the first real tag arrives, one inferred by the parser (see
+        # {#infer_crtr_flags}). Callers that need the server's own word should
+        # check {#crtr_flags?} first.
         #
         # Unlike template tri-state facts, live XML flags are always-sent
         # booleans, so an unknown or unseen flag is false, not nil.
@@ -736,10 +741,12 @@ module Lich
         # first real `<crtrStatus>` arrives, which then wins outright.
         # {#crtr_flags?} stays false, so callers can still tell the two apart.
         #
+        # Replaces, not merges: each call is the full current inference.
+        #
         # @param flags [Hash{Symbol=>Boolean}] classification key => value.
         # @return [void]
         def infer_crtr_flags(flags)
-          @inferred_crtr_flags.merge!(flags)
+          @inferred_crtr_flags = flags.dup
         end
 
         # Whether any `<crtrStatus>` classification has been seen for this

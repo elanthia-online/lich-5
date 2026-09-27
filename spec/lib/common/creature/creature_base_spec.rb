@@ -278,6 +278,28 @@ RSpec.describe Lich::Common::CreatureBase do
     end
   end
 
+  describe '#infer_crtr_flags' do
+    it 'answers crtr_flag? until a real tag arrives, without setting crtr_flags?' do
+      creature = SampleCreature.register('mastodon', 1)
+      creature.infer_crtr_flags(mount: true)
+
+      expect(creature.crtr_flag?(:mount)).to be true
+      expect(creature.crtr_flags?).to be false
+
+      creature.sync_crtr_status('hostile' => '1')
+      expect(creature.crtr_flag?(:mount)).to be false
+      expect(creature.crtr_flags?).to be true
+    end
+
+    it 'replaces the previous inference rather than merging into it' do
+      creature = SampleCreature.register('mastodon', 1)
+      creature.infer_crtr_flags(mount: true)
+      creature.infer_crtr_flags({})
+
+      expect(creature.crtr_flag?(:mount)).to be false
+    end
+  end
+
   describe '#flag_active?' do
     it 'matches either a status or a classification flag' do
       creature = SampleCreature.register('kobold', 1)
@@ -433,6 +455,22 @@ RSpec.describe Lich::Common::CreatureBase do
       SampleCreature.register('corpse', 1).sync_crtr_status('hostile' => '1', 'dead' => '1')
 
       expect(SampleCreature.in_room(:dead).map(&:id)).to eq([1])
+    end
+
+    it 'targets an unreported creature only while the dropdown lists it and the feed is silent' do
+      SampleCreature.register('mastodon', 1)
+      stub_const('XMLData', double(current_target_ids: ['1']))
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+
+      SampleCreature[1].sync_crtr_status('hostile' => '0')
+      expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'does not target an unreported creature the dropdown does not list' do
+      SampleCreature.register('mastodon', 1)
+      stub_const('XMLData', double(current_target_ids: []))
+
+      expect(SampleCreature.targets).to eq([])
     end
 
     it 'sources room membership from the roster, not the registry alone' do

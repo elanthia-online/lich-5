@@ -1206,7 +1206,10 @@ module Lich
                     end
                     # A ridden mount sends no <crtrStatus> until first harmed,
                     # so stand in its flags from the rider's tag until it does.
-                    creature&.infer_crtr_flags(mount: true, hostile: @mount_rider.crtr_flag?(:hostile)) if @mount_rider
+                    # Hostility is left to the target dropdown (see
+                    # Creature.targets). Re-inferred on every refresh, so a
+                    # mount whose rider has left loses the flag.
+                    creature&.infer_crtr_flags(@mount_rider ? { mount: true } : {})
                     @mount_rider = nil
                     @last_room_creature = creature
                   end
@@ -1220,16 +1223,19 @@ module Lich
                 # Only bold runs are names; the non-bold "(dead)"/"(immobile)"
                 # status runs fall through to the annotation branch below.
                 @dr_room_npc_names << text_string
-              elsif text_string =~ /\bwho is riding\b/
-                # GemStone: "<rider> who is riding <mount>". Only trusted when
-                # the game itself flagged the preceding creature rider="1".
-                @mount_rider = @last_room_creature if @last_room_creature&.crtr_flag?(:rider)
               elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
                 # @last_npc is nil in DragonRealms here (DR room-objs bold names
                 # carry no <a> tag, so the new_npc branch above never runs and
                 # never sets it), so the &. keeps this a safe no-op in DR while
                 # still annotating the last GemStone npc.
                 @last_npc&.status = $1
+              end
+              # GemStone: "<rider> who is riding <mount>". Its own check, not a
+              # link in the chain above, so a rider's "(dead)"/"(stunned)"
+              # annotation in the same text run still reaches @last_npc. Only
+              # trusted when the game itself flagged the rider rider="1".
+              if !@active_tags.include?('a') && text_string =~ /\bwho is riding\b/ && @last_room_creature&.crtr_flag?(:rider)
+                @mount_rider = @last_room_creature
               end
             elsif @active_ids.include?('room players')
               if @active_tags.include?('a')
