@@ -553,37 +553,28 @@ module Lich
         @damage_taken += amount.to_i
       end
 
-      # Get maximum HP from template, with fallback
+      # Get maximum HP, preferring a usable value from the latest crtrStatus
+      # snapshot and otherwise using the established inferred fallback.
       def max_hp
-        # Try template first
-        hp = template&.max_hp
-        return hp if hp && hp > 0
+        return @max_health if authoritative_health?
 
-        # Fall back to combat tracker setting if available
-        begin
-          if defined?(Lich::Gemstone::Combat::Tracker) &&
-             Lich::Gemstone::Combat::Tracker.respond_to?(:fallback_hp)
-            fallback = Lich::Gemstone::Combat::Tracker.fallback_hp
-            return fallback if fallback && fallback > 0
-          end
-        rescue
-          # Ignore errors accessing tracker
-        end
-
-        # Last resort: hardcoded fallback
-        400
+        inferred_max_hp
       end
 
-      # Calculate current HP (max_hp - damage_taken)
+      # Calculate current HP, preserving overkill as a negative value from
+      # either the server or the inferred damage model.
       def current_hp
-        return nil unless max_hp
-        [max_hp - @damage_taken, 0].max
+        return @health if authoritative_health?
+
+        inferred_max_hp - @damage_taken
       end
 
-      # Calculate HP percentage (0-100)
+      # Calculate HP percentage, preserving negative overkill.
       def hp_percent
-        return nil unless max_hp && max_hp > 0
-        ((current_hp.to_f / max_hp) * 100).round(1)
+        maximum = max_hp
+        return nil unless maximum && maximum > 0
+
+        ((current_hp.to_f / maximum) * 100).round(1)
       end
 
       # Check if creature is below HP threshold
@@ -610,9 +601,9 @@ module Lich
         current_hp <= threshold
       end
 
-      # Check if creature is dead (0 HP)
+      # Check if creature is dead (zero or negative HP)
       def dead?
-        current_hp == 0
+        current_hp <= 0
       end
 
       # Checks whether this creature should be considered attackable.
@@ -657,6 +648,7 @@ module Lich
           status: @status,
           injuries: @injuries,
           health: @health,
+          max_health: max_health,
           damage_taken: @damage_taken,
           max_hp: max_hp,
           current_hp: current_hp,
@@ -673,6 +665,36 @@ module Lich
       end
 
       private
+
+      # A positive maximum distinguishes combat health from legitimate 0/0
+      # values emitted for noncombat entities. Both values must be present so a
+      # malformed or partial snapshot falls back cleanly.
+      def authoritative_health?
+        @health.is_a?(Integer) && @max_health.is_a?(Integer) && @max_health.positive?
+      end
+
+      # Original template/damage-model maximum. This remains live underneath
+      # the server-backed API so an omitted, invalid, or 0/0 snapshot can fall
+      # back without retaining stale server data.
+      def inferred_max_hp
+        # Try template first
+        hp = template&.max_hp
+        return hp if hp && hp > 0
+
+        # Fall back to combat tracker setting if available
+        begin
+          if defined?(Lich::Gemstone::Combat::Tracker) &&
+             Lich::Gemstone::Combat::Tracker.respond_to?(:fallback_hp)
+            fallback = Lich::Gemstone::Combat::Tracker.fallback_hp
+            return fallback if fallback && fallback > 0
+          end
+        rescue
+          # Ignore errors accessing tracker
+        end
+
+        # Last resort: hardcoded fallback
+        400
+      end
 
       # Whether a crit-derived stun estimate is still meaningful.
       #
