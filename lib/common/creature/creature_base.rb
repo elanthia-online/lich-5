@@ -486,11 +486,16 @@ module Lich
         # Whether the feed has said nothing about a creature the client's
         # target dropdown lists - the pre-`<crtrStatus>` hostility signal
         # (GameObj.targets). A fresh mount sends no tag until first harmed.
+        # Like GameObj.targets, skips anything the room text shows dead/gone:
+        # the dropdown is sticky and keeps listing corpses.
         #
         # @param creature [Object] registry instance.
         # @return [Boolean]
         def unreported_target?(creature)
-          !creature.crtr_flags? && XMLData.current_target_ids.include?(creature.id.to_s)
+          return false if creature.crtr_flags?
+          return false unless XMLData.current_target_ids.include?(creature.id.to_s)
+
+          GameObj[creature.id.to_s]&.status.to_s !~ /dead|gone/i
         end
 
         # Applies status/classification filters to a candidate list.

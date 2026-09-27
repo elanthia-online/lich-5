@@ -298,6 +298,20 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([614999])
     end
 
+    it 'does not target an untagged creature the room shows as dead, even if the dropdown lists it' do
+      allow(Lich::Common::GameObj).to receive(:new_npc).and_call_original
+      stub_const('XMLData', double(current_target_ids: ['614998'], game: 'GSIV'))
+      feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614998" noun="ooze">gelatinous ooze</a><popBold/> that appears dead.</component>))
+
+      expect(Lich::Gemstone::Creature.targets).to be_empty
+    end
+
+    it 'does not let a non-bold link after "who is riding" arm the next bold creature' do
+      feed(%(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" hostile="1" rider="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding a <a exist="436656696" noun="mastodon">battle mastodon</a> and <pushBold/>a <a exist="614997" noun="kobold">kobold</a><popBold/>.</compDef>))
+
+      expect(Lich::Gemstone::Creature[614997]).to be_nil
+    end
+
     it 'trusts a real hostile="0" over the target dropdown' do
       stub_const('XMLData', double(current_target_ids: ['999001'], game: 'GSIV'))
       feed(%(<component id='room objs'>  You notice<crtrStatus exist="999001" hostile="0"/><b> <pushBold/>a <a exist="999001" noun="rabbit">field rabbit</a><popBold/></b>.</component>))

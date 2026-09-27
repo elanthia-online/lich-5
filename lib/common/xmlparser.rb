@@ -1215,6 +1215,9 @@ module Lich
                   end
                 else
                   GameObj.new_loot(@obj_exist, @obj_noun, text_string)
+                  # The mount link always directly follows "who is riding";
+                  # a non-bold one must not arm the next bold creature.
+                  @mount_rider = nil
                 end
               elsif @bold && XMLData.game =~ /^DR/
                 # DragonRealms room-objs bold NPC names carry no <a> tag. Capture

@@ -619,7 +619,7 @@ RSpec.describe Lich::Gemstone::Creature do
       expect(described_class.targets.map(&:id)).to eq([1])
     end
 
-    it 'ignores current_target_ids entirely - it is a sticky last-selected-target dropdown, not a presence signal' do
+    it 'does not treat current_target_ids as a presence signal - it is a sticky last-selected-target dropdown' do
       # Confirmed via a live capture: the server only resends dDBTarget when
       # the target *list* changes, not when the current target leaves or
       # dies - it stayed pointed at a departed creature's id through a dozen
