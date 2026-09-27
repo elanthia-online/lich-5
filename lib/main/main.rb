@@ -84,8 +84,9 @@ reconnect_if_wanted = proc {
   # Detachable listener stdout notices (connect/disconnect); the disconnect
   # notice is emitted from handle_detachable_client in global_defs at runtime.
   require File.join(LIB_DIR, 'main', 'detachable_client_notice.rb')
-  # Launch-data character-name resolution for the detachable session file.
-  require File.join(LIB_DIR, 'main', 'detachable_session_name.rb')
+  # Waits for XMLData.name so the detachable session file gets a name when
+  # --sal was used without --login.
+  require File.join(LIB_DIR, 'main', 'detachable_session_poller.rb')
 
   # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
   # kills scripts and runs their before_dying hooks inline (any of which can
@@ -919,14 +920,16 @@ reconnect_if_wanted = proc {
                 # Reuses the same --login / Account.character / XMLData.name ladder
                 # session_name above was resolved from, so both writers of the
                 # session file (this and Frontend.create_session_file's other call
-                # site) agree on where a name comes from. The "pid-<pid>" fallback
-                # means none of those three had an answer yet -- not a real name.
+                # site) agree on where a name comes from. The placeholder fallback
+                # means none of those three had an answer yet -- not a real name --
+                # so the poller below takes over.
                 resolved_char_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
                   argv: ARGV,
                   account_character: (Lich::Common::Account.character rescue nil)
                 )
-                resolved_char_name = nil if resolved_char_name == "pid-#{Process.pid}"
-                resolved_char_name ||= Lich::Main::DetachableSessionName.from_launch_data(@launch_data)
+                if resolved_char_name == Lich::InternalAPI::ActiveSessions::Lifecycle.default_session_name
+                  resolved_char_name = nil
+                end
               end
 
               if resolved_char_name
@@ -940,23 +943,11 @@ reconnect_if_wanted = proc {
                 listener_port = $_DETACHABLE_LISTENER_[:port]
                 name_poll_thread = Thread.new do
                   begin
-                    name_from_stream = nil
-                    # Up to 5 minutes: a bare --sal connect is usually followed by
-                    # XMLData.name within seconds, but nothing here guarantees that
-                    # (an interactive character-select menu, a slow connect), and
-                    # the shutdown check below means waiting doesn't cost anything.
-                    1_500.times do
-                      break if Lich::Common::ShutdownCoordinator.requested?
-
-                      candidate = XMLData.name
-                      if candidate.is_a?(String) && !candidate.strip.empty?
-                        name_from_stream = candidate.strip
-                        break
-                      end
-                      sleep(0.2)
-                    end
-
-                    if name_from_stream && !Lich::Common::ShutdownCoordinator.requested?
+                    name_from_stream = Lich::Main::DetachableSessionPoller.wait_for_name(
+                      name_source: -> { XMLData.name },
+                      shutdown_requested: -> { Lich::Common::ShutdownCoordinator.requested? }
+                    )
+                    if name_from_stream
                       # Verbatim, like the account_character/XMLData.name tiers
                       # resolve_session_name uses above -- this is server-authoritative,
                       # not user-typed, so it isn't .capitalize'd the way --login is.
