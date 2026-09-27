@@ -36,6 +36,10 @@ class FakeSSLSocket
   end
 
   def readpartial(_maxlen)
+    # Mirrors a real SSLSocket: reading after *we* closed it locally (a
+    # racing Stream#close/Game.close) raises IOError, distinct from a
+    # remote EOF -- see Stream#pump!'s @io.closed? check.
+    raise IOError, 'stream closed in another thread' if @closed
     raise OpenSSL::SSL::SSLError, @ssl_error if @incoming.empty? && @ssl_error
     raise EOFError if @incoming.empty? && @eof
     raise IO::EAGAINWaitReadable if @incoming.empty?
@@ -50,7 +54,7 @@ class FakeSSLSocket
   end
 
   def wait_readable(_timeout = nil)
-    return true if @eof || @ssl_error
+    return true if @closed || @eof || @ssl_error
     return nil if @incoming.empty?
 
     true
@@ -105,6 +109,35 @@ RSpec.describe Lich::Common::WebSocket::Stream do
     key = bytes.byteslice(offset, 4)
     payload = Frame.apply_mask(bytes.byteslice(offset + 4, len), key)
     [opcode, payload]
+  end
+
+  describe '.connect' do
+    it 'closes the raw socket on a failed connect instead of leaking it' do
+      # Covers the "close on failure" half of the fix; the Thread#kill-
+      # skips-rescue-runs-ensure half (a stalled connect/handshake killed by
+      # open_with_timeout's watchdog) needs a real thread and socket to
+      # exercise meaningfully and was verified that way in review, not here.
+      raw_socket = instance_double(TCPSocket, close: nil, closed?: false)
+      allow(Socket).to receive(:tcp).and_return(raw_socket)
+      allow(described_class).to receive(:wrap_tls).and_raise(OpenSSL::SSL::SSLError, 'handshake failed')
+
+      expect { described_class.connect(host: 'host', port: 443, path: '/shim/1') }
+        .to raise_error(described_class::ConnectionError)
+      expect(raw_socket).to have_received(:close)
+    end
+
+    it 'does not close the raw socket once connected successfully' do
+      raw_socket = instance_double(TCPSocket, close: nil, closed?: false)
+      allow(Socket).to receive(:tcp).and_return(raw_socket)
+      ssl_socket = FakeSSLSocket.new
+      allow(described_class).to receive(:wrap_tls).and_return(ssl_socket)
+      allow(described_class).to receive(:read_handshake_response).and_return(['HTTP/1.1 101 x', ''.b])
+      allow(Lich::Common::WebSocket::Handshake).to receive(:validate_response)
+
+      described_class.connect(host: 'host', port: 443, path: '/shim/1')
+
+      expect(raw_socket).not_to have_received(:close)
+    end
   end
 
   describe '#gets' do
@@ -165,6 +198,18 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       io.signal_ssl_error!('certificate verify failed')
       stream = described_class.new(io)
       expect { stream.gets }.to raise_error(OpenSSL::SSL::SSLError, 'certificate verify failed')
+    end
+
+    it 're-raises IOError from a local close instead of treating it as a remote EOF' do
+      # A racing Stream#close (or Game.close) closing the same socket the
+      # reader thread is blocked on raises "stream closed in another
+      # thread" -- @io.closed? is how #pump! tells that apart from the
+      # remote end actually hanging up (which leaves @io open).
+      io = FakeSSLSocket.new
+      stream = described_class.new(io)
+      io.close
+
+      expect { stream.gets }.to raise_error(IOError, 'stream closed in another thread')
     end
   end
 

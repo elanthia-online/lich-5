@@ -49,6 +49,7 @@ module Lich
         # @raise [ConnectionError] on a TCP/TLS failure or handshake rejection
         def self.connect(host:, port:, path:, origin: nil, subprotocol: nil,
                          user_agent: nil, extra_headers: {}, connect_timeout: 10)
+          connected = false
           raw_socket = Socket.tcp(host, port, connect_timeout: connect_timeout)
           yield raw_socket if block_given?
 
@@ -61,10 +62,15 @@ module Lich
           header_block, remainder = read_handshake_response(ssl_socket)
           Handshake.validate_response(header_block, key: key, subprotocol: subprotocol)
 
+          connected = true
           new(ssl_socket, prefill: remainder)
         rescue StandardError => e
-          raw_socket&.close rescue nil
           raise ConnectionError, "#{e.class}: #{e.message}"
+        ensure
+          # rescue alone misses a stalled connect/handshake killed via
+          # Thread#kill (open_with_timeout's connect-timeout watchdog) --
+          # Thread#kill skips rescue but still runs ensure.
+          raw_socket.close if raw_socket && !connected && !raw_socket.closed?
         end
 
         # @api private
@@ -248,6 +254,13 @@ module Lich
             break unless @io.pending.positive?
           end
         rescue IOError # covers EOFError, a subclass, too
+          # A *local* close (Stream#close / Game.close racing the reader
+          # thread) raises "stream closed in another thread" here too, and
+          # would otherwise be indistinguishable from the remote hanging up
+          # -- @io.closed? is only true when we closed it ourselves; a
+          # remote drop, close_notify, or WS Close all leave it open.
+          raise if @io.closed?
+
           @eof = true
         rescue OpenSSL::SSL::SSLError => e
           # A peer that drops the raw TCP connection without a TLS
