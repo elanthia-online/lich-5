@@ -114,10 +114,22 @@ RSpec.describe Lich::Gemstone::Weapon do
       expect(regex).to match('Barrage may not be activated within 60 seconds of a Multi-Strike.')
     end
 
-    it "stop at once when the assault never starts (bigshot's cmd_assault lines)" do
+    it 'stop at once when the assault never starts' do
       regex = weapon.results_regex('flurry')
-      ['The kobold is already dead.', 'You could not find that target.', "You're a little bit late.",
-       "You don't seem to be able to move your legs to do that."].each { |line| expect(regex).to match(line) }
+      # the game's refusals, as scripts/mechfire.lic and combat's :already_dead outcome match them
+      ['I could not find what you were referring to.', 'A kobold is quite dead already.',
+       'You are too injured to fire that!'].each { |line| expect(regex).to match(line) }
+    end
+
+    it 'do not end on room speech that mentions a refusal' do
+      regex = weapon.results_regex('flurry')
+      ['Aelric says, "Leave that one, it\'s already dead."', 'You ask, "... I could not find it."',
+       'Aelric exclaims, "You\'re too injured to fight!"', 'Aelric whispers, "Sorry, a little bit late..."',
+       'Aelric says, "A kobold is quite dead already."'].each { |line| expect(regex).not_to match(line) }
+    end
+
+    it "do not end on Fury's constitution buff, which follows its own assault line" do
+      expect(weapon.results_regex('fury')).not_to match('You feel a fair amount more durable.')
     end
 
     it 'never take FORCERT' do

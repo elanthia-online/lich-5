@@ -202,10 +202,14 @@ module Lich
         /Distracted, you hesitate/,
         /may not be activated within 60 seconds of a Multi-Strike\./,
         /can not be used with attack as the attack type/,
-        # the assault never started (bigshot's cmd_assault stops on these)
-        /too injured|already dead|little bit late|could not find/i,
-        /You don't seem to be able to move your legs to do that/,
-        /You feel a fair amount more durable\./,
+        # The assault never started. Anchored to the game's own sentences so
+        # room speech ('Aelric says, "it's already dead."') can't end the wait.
+        /^I could not find what you were referring to\.$/,
+        /^.+ is quite dead already\.$/,
+        /^You are too injured to /,
+        /^You don't seem to be able to move your legs to do that/,
+        # bigshot's phrase, no captured sentence yet: any line without a quote
+        /^[^"]*little bit late[^"]*$/,
       )
 
       # @param name [String] the technique name
