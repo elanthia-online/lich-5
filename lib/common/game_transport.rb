@@ -17,12 +17,16 @@ module Lich
     #   Authenticator.authenticate's EAccess -> WebLogin fallback from #1570.
     # - {WEBSOCKET} (also selectable explicitly) -- the game host's browser
     #   WebSocket-to-TCP shim, reached over TLS on port 443. See
-    #   https://github.com/GenieClient/Genie5/issues/356 (phase 2): once
-    #   connected, the shim speaks the same "<c>{key}\n<c>/FE:.../XML"
-    #   handshake a native client sends over raw TCP, so nothing above the
+    #   https://github.com/GenieClient/Genie5/issues/356 (phase 2): the shim
+    #   relays whatever bytes the client sends, so nothing above the
     #   transport layer needs to change -- only how the bytes get there.
     #   Confirmed live end-to-end against both production DragonRealms and
-    #   GemStone IV -- see docs/websocket-shim-probe-findings.md.
+    #   GemStone IV, driven by a standalone script sending the web client's
+    #   own "<c>{key}\n<c>/FE:WebFE .../XML" handshake -- see
+    #   docs/websocket-shim-probe-findings.md. Lich's frontends send a plain
+    #   "{key}\n/FE:WRAYTH .../XML" (no "<c>" prefix, a different /FE: value)
+    #   over the raw path today; that exact sequence has not itself been
+    #   driven over this transport live.
     #
     # @see Lich::Common::WebSocket::Stream
     module GameTransport
@@ -47,13 +51,39 @@ module Lich
       # back would just delay the real error). Mirrors
       # Authenticator.authenticate's EAccess -> WebLogin fallback: only
       # falls back on transport-level unreachability.
+      #
+      # IO::TimeoutError is in this list, not just Errno::ETIMEDOUT:
+      # Socket.tcp's fast-fallback connector (Ruby 3.4+) raises
+      # IO::TimeoutError -- an IOError, not an Errno class -- for a connect
+      # timeout against a hostname (a bare IP literal still raises
+      # Errno::ETIMEDOUT). Since GAMEHOST is always a hostname, this is the
+      # exception a blocked-port firewall actually produces.
       DIRECT_CONNECTIVITY_ERRORS = [
         Errno::ETIMEDOUT,
         Errno::ECONNREFUSED,
         Errno::EHOSTUNREACH,
         Errno::ENETUNREACH,
+        IO::TimeoutError,
         SocketError
       ].freeze
+
+      # The same fast-fallback connector can also raise a bare
+      # SystemCallError -- not the matching Errno subclass -- carrying only
+      # the raw platform errno, observed on Windows for a refused port (WSA
+      # 10061) where Errno::ECONNREFUSED above never matches. These are the
+      # WSA codes for the four Errno classes in DIRECT_CONNECTIVITY_ERRORS:
+      # WSAENETUNREACH, WSAETIMEDOUT, WSAECONNREFUSED, WSAEHOSTUNREACH.
+      WINDOWS_CONNECTIVITY_ERRNOS = [10_051, 10_060, 10_061, 10_065].freeze
+
+      # @return [Boolean] whether +error+ is one {.open_direct} should fall
+      #   back to {WEBSOCKET} for -- either a class in
+      #   {DIRECT_CONNECTIVITY_ERRORS} or a bare {SystemCallError} carrying
+      #   one of {WINDOWS_CONNECTIVITY_ERRNOS} (see its comment)
+      def self.direct_connectivity_error?(error)
+        return true if DIRECT_CONNECTIVITY_ERRORS.any? { |klass| error.is_a?(klass) }
+
+        error.is_a?(SystemCallError) && WINDOWS_CONNECTIVITY_ERRNOS.include?(error.errno)
+      end
 
       # Defaults for the WebSocket shim path/headers. Confirmed live against
       # play.net's own web client (`style/js/all_web_fe_min.js`,
@@ -130,7 +160,9 @@ module Lich
         configure_socket(socket, host)
         Lich.log "info: connected via direct TCP transport (#{host}:#{port})"
         socket
-      rescue *DIRECT_CONNECTIVITY_ERRORS => e
+      rescue SystemCallError, IO::TimeoutError, SocketError => e
+        raise unless direct_connectivity_error?(e)
+
         Lich.log "warn: direct TCP transport unreachable (#{host}:#{port}, #{e.class}: #{e.message}); " \
                  "falling back to WebSocket transport"
         open_websocket(host, port, fallback: true, **websocket_opts)

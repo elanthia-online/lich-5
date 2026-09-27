@@ -249,6 +249,16 @@ module Lich
           end
         rescue IOError # covers EOFError, a subclass, too
           @eof = true
+        rescue OpenSSL::SSL::SSLError => e
+          # A peer that drops the raw TCP connection without a TLS
+          # close_notify (let alone a WebSocket Close frame) surfaces here,
+          # not as an IOError -- confirmed against a real TLS loopback.
+          # Treat that specific case like any other unexpected disconnect
+          # (EOF), not a certificate/protocol failure; anything else from
+          # OpenSSL is a real TLS problem and stays fatal.
+          raise unless e.message.include?("unexpected eof while reading")
+
+          @eof = true
         rescue IO::WaitReadable
           nil # spurious wakeup mid-TLS-record; caller's loop will wait again
         end

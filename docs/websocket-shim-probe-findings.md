@@ -209,3 +209,10 @@ raised as Minor, with a deliberate disposition on each rather than a code change
   keepalive/ping-pong under real network conditions, or a clean `Game.close`-driven shutdown through
   the full `games.rb` reader/parser thread stack rather than a standalone script talking to `Stream`
   directly.
+- **Lich's own handshake bytes over this transport.** The live runs above used the *web client's*
+  handshake -- `<c>{key}\r\n<c>/FE:WebFE /VERSION:...\r\n` -- sent by a standalone probe script, not
+  by Lich itself. A real Lich session's frontend sends a plain `{key}\n/FE:WRAYTH /VERSION:...\n` (no
+  `<c>` prefix, a different `/FE:` identifier) relayed through `games.rb`, and that exact byte
+  sequence has not itself gone over the shim live. The shim is expected to just relay bytes either
+  way (confirmed: `commonSend`'s regular in-game traffic uses the same un-prefixed shape the `<c>`
+  lines don't), but this specific combination is unverified.

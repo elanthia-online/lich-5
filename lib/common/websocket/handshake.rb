@@ -45,11 +45,11 @@ module Lich
         # @param user_agent [String, nil]
         # @param extra_headers [Hash] additional/overriding headers, applied last
         # @return [String] the full request, including the trailing blank line
-        # @raise [ArgumentError] if +path+ or any header value contains a CR or LF --
-        #   none of the current callers can trigger this (host is remapped to a fixed
-        #   *.play.net literal, everything else is a static default), but interpolating
-        #   unvalidated values into raw request/header lines is request-smuggling-shaped
-        #   regardless of how trusted today's callers happen to be
+        # @raise [ArgumentError] if +path+, a header name, or a header value contains a
+        #   CR or LF -- none of the current callers can trigger this (host is remapped
+        #   to a fixed *.play.net literal, everything else is a static default), but
+        #   interpolating unvalidated values into raw request/header lines is
+        #   request-smuggling-shaped regardless of how trusted today's callers happen to be
         def self.request(host:, path:, key:, origin: nil, subprotocol: nil, user_agent: nil, extra_headers: {})
           reject_crlf!("request path", path)
 
@@ -64,7 +64,10 @@ module Lich
           headers["Sec-WebSocket-Protocol"] = subprotocol if subprotocol
           headers["User-Agent"] = user_agent if user_agent
           headers.merge!(extra_headers)
-          headers.each { |name, value| reject_crlf!("#{name} header", value) }
+          headers.each do |name, value|
+            reject_crlf!("#{name} header name", name)
+            reject_crlf!("#{name} header", value)
+          end
 
           lines = ["GET #{path} HTTP/1.1"]
           headers.each { |name, value| lines << "#{name}: #{value}" }

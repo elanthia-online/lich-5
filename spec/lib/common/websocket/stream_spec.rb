@@ -17,6 +17,7 @@ class FakeSSLSocket
     @written = []
     @closed = false
     @eof = false
+    @ssl_error = nil
     @chunk_size = chunk_size
   end
 
@@ -28,7 +29,14 @@ class FakeSSLSocket
     @eof = true
   end
 
+  # Simulates a raw TCP close surfacing through OpenSSL as an SSLError
+  # instead of an IOError/EOFError -- see Stream#pump!'s handling of it.
+  def signal_ssl_error!(message)
+    @ssl_error = message
+  end
+
   def readpartial(_maxlen)
+    raise OpenSSL::SSL::SSLError, @ssl_error if @incoming.empty? && @ssl_error
     raise EOFError if @incoming.empty? && @eof
     raise IO::EAGAINWaitReadable if @incoming.empty?
 
@@ -42,7 +50,7 @@ class FakeSSLSocket
   end
 
   def wait_readable(_timeout = nil)
-    return true if @eof
+    return true if @eof || @ssl_error
     return nil if @incoming.empty?
 
     true
@@ -143,6 +151,20 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       io.signal_eof!
       stream = described_class.new(io)
       expect(stream.gets).to be_nil
+    end
+
+    it 'treats a raw TCP close surfaced as SSLError("unexpected eof while reading") as EOF' do
+      io = FakeSSLSocket.new
+      io.signal_ssl_error!('unexpected eof while reading')
+      stream = described_class.new(io)
+      expect(stream.gets).to be_nil
+    end
+
+    it 're-raises any other SSLError instead of treating it as EOF' do
+      io = FakeSSLSocket.new
+      io.signal_ssl_error!('certificate verify failed')
+      stream = described_class.new(io)
+      expect { stream.gets }.to raise_error(OpenSSL::SSL::SSLError, 'certificate verify failed')
     end
   end
 

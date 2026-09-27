@@ -12,6 +12,11 @@ module Lich
   end unless respond_to?(:log)
 end
 
+# game_transport -> socketconfigurator references Lich::Util at require time
+# on Windows (Gem.win_platform? branch), so this must load before it -- only
+# reproduces on Windows; Gem.win_platform? is false everywhere else, so this
+# was silently masked in every environment used to develop this file.
+require_relative '../../../lib/util/util'
 require_relative '../../../lib/common/game_transport'
 
 RSpec.describe Lich::Common::GameTransport do
@@ -84,6 +89,27 @@ RSpec.describe Lich::Common::GameTransport do
 
         expect(described_class.open_direct('host', 1234)).to eq(:ws_stream)
       end
+    end
+
+    described_class::WINDOWS_CONNECTIVITY_ERRNOS.each do |errno|
+      it "falls back to .open_websocket on a bare SystemCallError for WSA errno #{errno}" do
+        # Ruby 3.4+'s fast-fallback TCP connector can raise a bare
+        # SystemCallError instead of the matching Errno subclass on
+        # Windows -- SystemCallError.new(msg, errno) mirrors that shape.
+        error = SystemCallError.new('unreachable', errno)
+        allow(Socket).to receive(:tcp).and_raise(error)
+        expect(described_class).to receive(:open_websocket).with('host', 1234, fallback: true).and_return(:ws_stream)
+        allow(Lich).to receive(:log)
+
+        expect(described_class.open_direct('host', 1234)).to eq(:ws_stream)
+      end
+    end
+
+    it 'does not fall back on a bare SystemCallError with an unrelated errno' do
+      allow(Socket).to receive(:tcp).and_raise(SystemCallError.new('permission denied', Errno::EACCES::Errno))
+      expect(described_class).not_to receive(:open_websocket)
+
+      expect { described_class.open_direct('host', 1234) }.to raise_error(SystemCallError)
     end
 
     it 'does not fall back on an error unrelated to reachability' do
