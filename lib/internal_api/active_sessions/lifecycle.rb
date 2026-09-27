@@ -62,8 +62,18 @@ module Lich
           elsif defined?(XMLData) && XMLData.respond_to?(:name) && !XMLData.name.to_s.empty?
             XMLData.name
           else
-            "pid-#{Process.pid}"
+            default_session_name
           end
+        end
+
+        # The placeholder resolve_session_name falls back to when none of
+        # --login, Account.character, or XMLData.name have an answer yet.
+        # Exposed so callers can tell a resolved name apart from this
+        # placeholder without duplicating its format.
+        #
+        # @return [String]
+        def self.default_session_name
+          "pid-#{Process.pid}"
         end
 
         # Resolves the logical runtime role for active sessions reporting.
