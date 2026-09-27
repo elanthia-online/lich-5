@@ -23,7 +23,8 @@ module Lich
       #   - +:regex+ [Regexp] the line(s) that answer the technique's command
       #   - +:usage+ [String, nil, optional] the command word; nil for techniques that
       #     cannot be used; +:short_name+ when absent
-      #   - +:buff+ [String, Regexp, optional] the Effects::Buffs entry the technique grants
+      #   - +:buff+ [String, Regexp, optional] the Effects::Buffs entry the technique grants;
+      #     a Regexp also matches that stat buff when something else granted it
       #   - +:ignorable_cooldown+ [Boolean, optional] whether +ignore_cooldown: true+ applies
       module Technique
         # Registers the category's technique table, and defines a rank getter
@@ -118,7 +119,11 @@ module Lich
         end
 
         # @param name [String, Symbol] the technique name
-        # @return [Boolean] whether the buff the technique grants is active
+        # A pattern +:buff+ matches the stat buff whatever granted it: surge is
+        # active under bearhug's "Enh. Strength (+20)", burst under barrage's
+        # "Enh. Dexterity (+10)", coup de grace under shout's "Empowered (+20)".
+        #
+        # @return [Boolean] whether the buff the technique grants (or the same stat buff) is active
         def buff_active?(name)
           buff = technique(name)[:buff]
           !buff.nil? && PSMS.effect_active?(Effects::Buffs, buff)
@@ -132,7 +137,7 @@ module Lich
         # @param ignore_cooldown [Boolean] skip the cooldown check, for techniques that allow it
         # @param results_of_interest [Regexp, nil] extra lines to return on
         # @param forcert_count [Integer] FORCERTs used, including this one
-        # @return [String, false, nil] the answering line, false on timeout, nil when not used
+        # @return [String, nil] the answering line; nil when not used or on timeout
         def use(name, target = "", ignore_cooldown: false, results_of_interest: nil, forcert_count: 0)
           return unless available?(name, target: target, ignore_cooldown: ignore_cooldown, forcert_count: forcert_count)
 

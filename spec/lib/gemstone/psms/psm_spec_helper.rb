@@ -39,9 +39,11 @@ module PsmSpecHelpers
   end
 
   # Sets the listed effects active (ten minutes left) in an Effects dialog,
-  # replacing whatever it held.
+  # replacing whatever it held. Like the game's XML parser, each effect is
+  # listed under its name and under an Integer id.
   def effects(kind, *names)
-    XMLData.save_dialogs(kind, names.to_h { |n| [n, Time.now.to_f + 600] })
+    expiry = Time.now.to_f + 600
+    XMLData.save_dialogs(kind, names.each_with_index.flat_map { |n, i| [[n, expiry], [9000 + i, expiry]] }.to_h)
   end
 
   # Writes Infomon ranks (e.g. 'cman.bullrush' => 2).
@@ -70,7 +72,7 @@ module PsmSpecHelpers
     sent = []
     allow(Lich::Gemstone::PSMS).to receive(:dothistimeout) do |cmd, _timeout, _regex|
       sent << cmd
-      replies.shift || false
+      replies.shift
     end
     sent
   end
@@ -205,7 +207,8 @@ RSpec.shared_examples 'a PSM technique table' do |category, verb:, shared_short_
       regex = category.results_regex(long_name)
       expect(regex).to match("#{long_name} what?")
       expect(regex).to match("#{long_name} is still in cooldown.")
-      expect(regex).to match('...wait 2 seconds.')
+      # dothistimeout waits out and re-sends after "...wait" itself; matching it here would pre-empt that
+      expect(regex).not_to match('...wait 2 seconds.')
       expect(regex).to match('You are still stunned.')
     end
   end

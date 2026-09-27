@@ -125,11 +125,10 @@ RSpec.describe Lich::Gemstone::Weapon do
       expect(sent).to eq(['weapon thrash #12345'])
     end
 
-    it 'send again after a roundtime refusal' do
+    it 'wait up to 12 seconds for the ending' do
       ranks('weapon.pummel' => 1)
-      sent = game_replies('...wait 1 seconds.', endings['pummel'].first)
+      expect(Lich::Gemstone::PSMS).to receive(:dothistimeout).with('weapon pummel #12345', 12, anything).and_return(endings['pummel'].first)
       expect(weapon.use('pummel', orc)).to eq(endings['pummel'].first)
-      expect(sent.size).to eq(2)
     end
 
     it 'grant their buffs' do

@@ -689,12 +689,12 @@ module Lich
       # Whether a target is low enough for Coup de Grace at the character's
       # trained rank, from the creature's tracked HP and statuses.
       #
-      # @param target [GameObj, Integer, String, CreatureInstance] the target
+      # @param target [GameObj, CreatureInstance, Integer, String] the target, or its id ("12345" or "#12345")
       # @return [Boolean, nil] nil when there is no tracked creature for the target
       # @example
       #   CMan.use("coupdegrace", npc) if CMan.coup_ready?(npc)
       def CMan.coup_ready?(target)
-        creature = target.is_a?(CreatureInstance) ? target : Creature[target.respond_to?(:id) ? target.id : target]
+        creature = target.is_a?(CreatureInstance) ? target : Creature[target.respond_to?(:id) ? target.id : target.to_s.delete_prefix('#')]
         return nil if creature.nil?
 
         creature.coup_eligible?(CMan["coupdegrace"])

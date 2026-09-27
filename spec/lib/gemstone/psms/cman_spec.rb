@@ -159,16 +159,10 @@ RSpec.describe Lich::Gemstone::CMan do
       expect(sent).to eq(['cman bullrush #12345 forcert'])
     end
 
-    it 'returns false when the game does not answer' do
+    it 'returns nil when the game does not answer' do
       sent = game_replies
-      expect(cman.use('bullrush', orc)).to be(false)
+      expect(cman.use('bullrush', orc)).to be_nil
       expect(sent.size).to eq(1)
-    end
-
-    it 'gives up after three roundtime refusals' do
-      sent = game_replies('...wait 1 seconds.', '...wait 1 seconds.', '...wait 1 seconds.', 'never sent')
-      expect(cman.use('bullrush', orc)).to eq('...wait 1 seconds.')
-      expect(sent.size).to eq(3)
     end
 
     it 'does not send an unknown or unaffordable maneuver' do

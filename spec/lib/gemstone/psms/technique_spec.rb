@@ -98,9 +98,9 @@ RSpec.describe Lich::Gemstone::PSMS::Technique do
       expect(regex).not_to match('Roundtime: 5 sec.')
     end
 
-    it 'hears the roundtime refusal' do
-      expect(cman.results_regex('bullrush')).to match('...wait 3 seconds.')
-      expect(cman.results_regex('bullrush')).to match('Wait 1 sec.')
+    it "leaves the roundtime refusal to dothistimeout's own wait-and-resend" do
+      expect(cman.results_regex('bullrush')).not_to match('...wait 3 seconds.')
+      expect(cman.results_regex('bullrush')).not_to match('Wait 1 sec.')
     end
 
     it 'still rejects an unknown technique by name' do
@@ -108,13 +108,47 @@ RSpec.describe Lich::Gemstone::PSMS::Technique do
     end
   end
 
+  describe 'effects listed by Integer id' do
+    # The XML parser lists every Buffs/Debuffs/Cooldowns entry under its name
+    # and its Integer id; neither form may break the name lookups.
+    before do
+      expiry = Time.now.to_f + 600
+      XMLData.save_dialogs('Cooldowns', { 211 => expiry, 'Berserk' => expiry })
+      XMLData.save_dialogs('Buffs', { 1109 => expiry, 'Enh. Strength (+10)' => expiry })
+    end
+
+    it 'still checks availability, cost and buffs by name' do
+      expect(cman.available?('bullrush')).to be(true)
+      expect(cman.cost('burst')).to eq(stamina: 30)
+      expect(cman.buff_active?('surge')).to be(true)
+      expect(warcry.buff_active?('holler')).to be(false)
+      expect(weapon.affordable?('cyclone')).to be(true)
+      expect(Lich::Gemstone::PSMS.available?('berserk')).to be(false)
+    end
+
+    it 'finds an effect by its id' do
+      expect(Lich::Gemstone::PSMS.effect_active?(Effects::Cooldowns, 211)).to be(true)
+      expect(Lich::Gemstone::PSMS.effect_active?(Effects::Cooldowns, 212)).to be(false)
+    end
+  end
+
   describe '.use' do
-    it 'sends again after a roundtime refusal' do
-      replies = ['...wait 2 seconds.', 'You dip your shoulder and rush towards an orc!']
-      sent = []
-      allow(Lich::Gemstone::PSMS).to receive(:dothistimeout) { |cmd, _t, _rx| sent << cmd; replies.shift }
+    let(:stuck) { "You don't seem to be able to move to do that." }
+
+    before { allow(Lich::Gemstone::PSMS).to receive(:sleep) }
+
+    it 'sends once more after regaining control' do
+      sent = game_replies(stuck, 'You dip your shoulder and rush towards an orc!')
+      allow(Lich::Gemstone::PSMS).to receive(:clear).and_return([], ['You regain control of your senses!'])
       expect(cman.use('bullrush', orc)).to eq('You dip your shoulder and rush towards an orc!')
       expect(sent).to eq(['cman bullrush #12345'] * 2)
+    end
+
+    it 'does not send again if control never returns' do
+      sent = game_replies(stuck, 'never sent')
+      allow(Lich::Gemstone::PSMS).to receive(:clear).and_return([])
+      expect(cman.use('bullrush', orc)).to eq(stuck)
+      expect(sent.size).to eq(1)
     end
 
     it 'does not send an unavailable technique' do

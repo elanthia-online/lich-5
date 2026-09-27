@@ -154,18 +154,20 @@ module Lich
 
       # Whether an unexpired effect is listed in an Effects registry. A String
       # matches regardless of case, spacing, underscores, colons and apostrophes
-      # ("seanettes_shout" matches "Seanette's Shout"); a Regexp matches any entry.
+      # ("seanettes_shout" matches "Seanette's Shout"); a Regexp matches any entry;
+      # an Integer matches an effect id. The game's parser lists each effect
+      # under both its name and its Integer id, so keys are compared as text.
       #
       # @param registry [Effects::Registry] Effects::Buffs, Effects::Cooldowns, ...
-      # @param effect [String, Symbol, Regexp] the effect name or pattern
+      # @param effect [String, Symbol, Integer, Regexp] the effect name, id or pattern
       # @return [Boolean]
       def self.effect_active?(registry, effect)
         now = Time.now.to_f
-        wanted = effect.is_a?(Regexp) ? effect : name_normal(effect)
+        wanted = effect.is_a?(Regexp) ? effect : name_normal(effect.to_s)
         registry.to_h.any? do |key, expiry|
           next false unless expiry.to_f > now
 
-          wanted.is_a?(Regexp) ? wanted.match?(key.to_s) : name_normal(key) == wanted
+          wanted.is_a?(Regexp) ? wanted.match?(key.to_s) : name_normal(key.to_s) == wanted
         end
       end
 
@@ -305,7 +307,7 @@ module Lich
       # @param results_of_interest [Regexp, nil] extra lines the caller wants to see
       # @return [Regexp]
       def self.results_regex(name, *patterns, results_of_interest: nil)
-        parts = [FAILURES_REGEXES, WAIT_REGEX, /^#{name} what\?$/i, /^#{name} is still in cooldown\./i]
+        parts = [FAILURES_REGEXES, /^#{name} what\?$/i, /^#{name} is still in cooldown\./i]
         parts.concat(patterns.compact)
         parts << results_of_interest if results_of_interest.is_a?(Regexp)
         Regexp.union(*parts)
@@ -314,32 +316,27 @@ module Lich
       # The roundtime line most techniques answer with.
       ROUNDTIME_REGEX = /^Roundtime: [0-9]+ sec\.$/
 
-      # The refusal for a command sent while still in roundtime.
-      WAIT_REGEX = /^(?:\.\.\.w|W)ait \d+ sec(?:onds?)?\.$/
-
-      # Sends a technique command and waits for its answer, sending it again
-      # after a "...wait" (roundtime the client had not seen yet) or once the
-      # character recovers from "You don't seem to be able to move to do that."
+      # Sends a technique command and waits for its answer. dothistimeout
+      # itself waits out and re-sends after "...wait N seconds." (roundtime the
+      # client had not seen yet), so {PSMS.results_regex} leaves that line out.
+      # After "You don't seem to be able to move to do that." the command is
+      # sent once more, and only if the character regains control within 10s.
       #
       # @param usage_cmd [String] the command, e.g. from {PSMS.command}
       # @param results_regex [Regexp] the lines that answer it, e.g. from {PSMS.results_regex}
-      # @param timeout [Numeric] seconds to wait for each answer
-      # @param attempts [Integer] the most times to send the command
-      # @return [String, false] the answering line, or false on timeout
-      def self.dispatch(usage_cmd, results_regex, timeout: 5, attempts: 3)
-        usage_result = false
-        attempts.times do
-          usage_result = dothistimeout(usage_cmd, timeout, results_regex)
-          if usage_result == "You don't seem to be able to move to do that."
-            100.times { break if clear.any? { |line| line =~ /^You regain control of your senses!$/ }; sleep 0.1 }
-          elsif usage_result.is_a?(String) && WAIT_REGEX.match?(usage_result)
-            waitrt?
-            waitcastrt?
-          else
-            break
-          end
+      # @param timeout [Numeric] seconds to wait for an answer
+      # @return [String, nil] the answering line, or nil on timeout
+      def self.dispatch(usage_cmd, results_regex, timeout: 5)
+        usage_result = dothistimeout(usage_cmd, timeout, results_regex)
+        return usage_result unless usage_result == "You don't seem to be able to move to do that."
+
+        recovered = false
+        100.times do
+          break if (recovered = clear.any? { |line| line =~ /^You regain control of your senses!$/ })
+
+          sleep 0.1
         end
-        usage_result
+        recovered ? dothistimeout(usage_cmd, timeout, results_regex) : usage_result
       end
     end
   end
