@@ -446,14 +446,19 @@ module Lich
         # (supplied by the game class) removes decoys/dead appendages and
         # `crtr_flag?(:hostile)` supplies structured hostility. A creature the
         # feed has sent no `<crtrStatus>` for at all (see {#crtr_flags?}, e.g. a
-        # fresh mount) counts when the client's target dropdown lists it.
+        # fresh mount) counts when GameObj.targets lists it.
         #
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
         def targets(*filters)
-          candidates = room_roster
-                       .filter_map { |id| self[id] }
-                       .select { |c| c.valid_target? && (c.crtr_flag?(:hostile) || unreported_target?(c)) }
+          fallback_ids = nil # only built if an untagged creature is in the room
+          candidates = room_roster.filter_map { |id| self[id] }.select do |c|
+            next false unless c.valid_target?
+            next true if c.crtr_flag?(:hostile)
+            next false if c.crtr_flags?
+
+            (fallback_ids ||= unreported_target_ids).include?(c.id.to_s)
+          end
           apply_filters(candidates, filters)
         end
 
@@ -483,19 +488,15 @@ module Lich
 
         private
 
-        # Whether the feed has said nothing about a creature the client's
-        # target dropdown lists - the pre-`<crtrStatus>` hostility signal
-        # (GameObj.targets). A fresh mount sends no tag until first harmed.
-        # Like GameObj.targets, skips anything the room text shows dead/gone:
-        # the dropdown is sticky and keeps listing corpses.
+        # Ids {#targets} accepts for a creature the feed has sent no
+        # `<crtrStatus>` for (a fresh mount sends none until first harmed): the
+        # pre-`<crtrStatus>` hostility signal, GameObj.targets. Delegating keeps
+        # one exclusion list - the sticky dropdown's dead/gone corpses, animated
+        # decoys, severed appendages - instead of a copy that can drift.
         #
-        # @param creature [Object] registry instance.
-        # @return [Boolean]
-        def unreported_target?(creature)
-          return false if creature.crtr_flags?
-          return false unless XMLData.current_target_ids.include?(creature.id.to_s)
-
-          GameObj[creature.id.to_s]&.status.to_s !~ /dead|gone/i
+        # @return [Array<String>]
+        def unreported_target_ids
+          GameObj.targets.map(&:id)
         end
 
         # Applies status/classification filters to a candidate list.

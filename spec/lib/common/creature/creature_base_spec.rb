@@ -458,20 +458,29 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(SampleCreature.in_room(:dead).map(&:id)).to eq([1])
     end
 
-    it 'targets an unreported creature only while the dropdown lists it and the feed is silent' do
+    it 'targets an unreported creature only while GameObj.targets lists it and the feed is silent' do
       SampleCreature.register('mastodon', 1)
-      stub_const('XMLData', double(current_target_ids: ['1']))
+      allow(Lich::Common::GameObj).to receive(:targets).and_return([double(id: '1')])
       expect(SampleCreature.targets.map(&:id)).to eq([1])
 
       SampleCreature[1].sync_crtr_status('hostile' => '0')
       expect(SampleCreature.targets).to eq([])
     end
 
-    it 'does not target an unreported creature the dropdown does not list' do
+    it 'does not target an unreported creature GameObj.targets excludes' do
+      # e.g. listed in the sticky dropdown but dead/gone, an animated decoy or
+      # a severed appendage - GameObj.targets owns that exclusion list.
       SampleCreature.register('mastodon', 1)
-      stub_const('XMLData', double(current_target_ids: []))
+      allow(Lich::Common::GameObj).to receive(:targets).and_return([])
 
       expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'does not consult GameObj.targets when every creature is tagged' do
+      SampleCreature.register('kobold', 1).sync_crtr_status('hostile' => '1')
+      expect(Lich::Common::GameObj).not_to receive(:targets)
+
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
     end
 
     it 'sources room membership from the roster, not the registry alone' do

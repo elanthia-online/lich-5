@@ -224,6 +224,13 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
   # Live GST capture: a mount sends no <crtrStatus> of its own until first
   # harmed; only its rider's tag arrives, carrying rider="1".
   describe 'ridden mounts with no <crtrStatus> of their own' do
+    # The dropdown fallback delegates to the real GameObj.targets, so these
+    # need real GameObj npc records rather than the stubbed new_npc.
+    before do
+      allow(Lich::Common::GameObj).to receive(:new_npc).and_call_original
+      Lich::Common::GameObj.clear_npcs
+    end
+
     let(:rider_line) do
       %(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" health="900" maxhealth="900" hostile="1" ascended="1" rider="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/> and an <a exist="435609879" noun="lyre">ornate ruic lyre</a> with shimmering silver strings.</compDef>)
     end
@@ -251,7 +258,6 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
     end
 
     it 'still applies a rider status annotation in the same text run as "who is riding"' do
-      allow(Lich::Common::GameObj).to receive(:new_npc).and_call_original
       feed(%(<compDef id='room objs'>  You also see<crtrStatus exist="436658124" hostile="1" rider="1" dead="1"/><b> <pushBold/>a <a exist="436658124" noun="shield-maiden">brawny gigas shield-maiden</a><popBold/></b> (dead) who is riding <pushBold/>a <a exist="436656696" noun="mastodon">heavily armored battle mastodon</a><popBold/>.</compDef>))
 
       expect(Lich::Common::GameObj['436658124'].status).to eq('dead')
@@ -300,7 +306,6 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
     end
 
     it 'does not target an untagged creature the room shows as dead, even if the dropdown lists it' do
-      allow(Lich::Common::GameObj).to receive(:new_npc).and_call_original
       stub_const('XMLData', double(current_target_ids: ['614998'], game: 'GSIV'))
       feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614998" noun="ooze">gelatinous ooze</a><popBold/> that appears dead.</component>))
 
