@@ -26,6 +26,67 @@ module Lich
 
       @@warned_deprecated_spellfront = 0
 
+      # server_time_offset noise model (see accept_server_time_offset_candidate?,
+      # called from the <prompt> handler in tag_start):
+      #
+      # <prompt time="..."> is whole-second precision, so every sample of
+      # (now - server_time) equals offset_true + latency + frac, where latency
+      # (network/queue delay) and frac (the 0..1s truncation remainder) are
+      # both >= 0 - the raw sample is never smaller than the truth. Because
+      # the error only ever inflates the sample, the minimum sample seen
+      # recently is the best available estimate (the classic NTP min-delay
+      # filter): a bigger latency term can only push a candidate up, so a
+      # queue-delayed prompt (the login burst, a script holding the parser
+      # thread busy - see prompt_ingress_clocks, which already removes most of
+      # this) can lose the minimum but never win it.
+      #
+      # Do NOT key acceptance on how close together two prompts were *parsed*
+      # instead of on the candidate's own value: a backlog drains back-to-back
+      # with a near-zero gap between samples regardless of how delayed each
+      # one was, so a parse-time gap measures queue scheduling, not latency,
+      # and can pin exactly the worst sample - see the "queue-drained batch"
+      # regression spec below for the concrete failure this approach produced
+      # when it was tried.
+      #
+      # `now` still isn't RTT-compensated: `latency` above is one-way
+      # (server-to-client) transmission delay, not round-trip time, and
+      # nothing here sends anything to measure it - that would need
+      # round-trip probe commands from core, a separate tradeoff from this
+      # fix. The remaining one-way latency only ever makes the estimate more
+      # conservative (a longer wait), never early.
+      #
+      # How long a held estimate is trusted before a fresh sample is accepted
+      # unconditionally, win or lose. Not derived from any measurement - a
+      # round number chosen to bound how long a stale estimate (e.g. from a
+      # since-resolved network condition, or a *server*-side clock jump, which
+      # nothing here detects) can linger.
+      SERVER_TIME_OFFSET_STALE_SECONDS = 120
+      # If the wall clock (Time.now) and a monotonic clock disagree about how
+      # much time passed since the held estimate was set by more than this,
+      # the wall clock moved discontinuously (NTP step, VM resume, user
+      # changed the clock) and the held estimate is discarded outright rather
+      # than waited out over SERVER_TIME_OFFSET_STALE_SECONDS - which matters
+      # because a *forward* wall-clock step raises offset_true, and the min
+      # filter cannot recover from that on its own (every subsequent candidate
+      # rises by the same step, so it always loses to the stale, now-too-low
+      # held value) until this guard or the staleness window fires.
+      #
+      # `now - mono_now` in prompt_ingress_clocks reduces to Time.now.to_f
+      # minus a CLOCK_MONOTONIC read taken microseconds earlier either way
+      # (the ingress_mono term cancels out algebraically in the ingress
+      # branch), so wall-vs-monotonic drift is measurable here to microsecond
+      # precision, and the only legitimate non-zero source of it is clock
+      # slewing (NTP/chrony correcting drift gradually instead of stepping).
+      # This is deliberately tuned tight rather than to some slew-rate bound:
+      # the two failure directions aren't symmetric. Firing on ordinary slew
+      # just means one prompt is accepted unconditionally - the same thing
+      # every prompt did before this filter existed - so a false positive is
+      # nearly free. Missing a real step is the early-firing bug this guard
+      # exists to close. That asymmetry is why this stays tight even though
+      # some slew daemons (chrony's default max slew rate, for one) can
+      # legitimately exceed it.
+      SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS = 0.25
+
       def initialize
         @buffer = String.new
         # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
@@ -59,6 +120,8 @@ module Lich
         @nerve_tracker_active = 'no'
         @server_time = Time.now.to_i
         @server_time_offset = 0.0
+        @server_time_offset_at = nil
+        @server_time_offset_monotonic_at = nil
         @roundtime_end = 0
         @cast_roundtime_end = 0
         @last_pulse = Time.now.to_i
@@ -390,6 +453,41 @@ module Lich
         @sax_parse_errors << "#{message} (line #{line}, column #{column})"
       end
 
+      # [wall_time, monotonic_time] for the <prompt> handler's clock-sync math.
+      # Prefers Game.current_ingress_time - a monotonic reading the socket
+      # reader thread captured immediately after this string came off the
+      # wire, before it ever waited in the parser queue - over parse-time
+      # Time.now. Queue wait and parser-thread scheduling delay (a busy
+      # script, GC, the synchronous GameLoader.load! on login) are not real
+      # server-to-client latency; folding them in would inflate every
+      # candidate by however long the parser thread happened to be busy.
+      # Falls back to parse time when unavailable: Game may not be loaded at
+      # all (a spec exercising this class in isolation), or this call may not
+      # be happening on Game's own parser thread (current_ingress_time
+      # returns nil for any other caller, by design - see games.rb).
+      def prompt_ingress_clocks
+        ingress_mono = defined?(Game) && Game.respond_to?(:current_ingress_time) ? Game.current_ingress_time : nil
+        return [Time.now.to_f, Process.clock_gettime(Process::CLOCK_MONOTONIC)] unless ingress_mono
+
+        parse_mono = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        [Time.now.to_f - (parse_mono - ingress_mono), ingress_mono]
+      end
+
+      # Whether a new server_time_offset candidate should replace the held
+      # estimate - see the noise-model comment on the constants above for the
+      # reasoning (min-delay filter, staleness expiry, clock-step guard).
+      def accept_server_time_offset_candidate?(candidate, now, mono_now)
+        return true if @server_time_offset_at.nil?
+
+        wall_elapsed = now - @server_time_offset_at
+        return true if wall_elapsed > SERVER_TIME_OFFSET_STALE_SECONDS
+
+        mono_elapsed = mono_now - @server_time_offset_monotonic_at
+        return true if (wall_elapsed - mono_elapsed).abs > SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS
+
+        candidate <= @server_time_offset
+      end
+
       def tag_start(name, attributes)
         # This is called once per element by REXML in games.rb
         # https://ruby-doc.org/stdlib-2.6.1/libdoc/rexml/rdoc/REXML/StreamListener.html
@@ -651,8 +749,21 @@ module Lich
           end
 
           if name == 'prompt'
-            @server_time = attributes['time'].to_i
-            @server_time_offset = (Time.now.to_f - @server_time)
+            now, mono_now = prompt_ingress_clocks
+            new_server_time = attributes['time'].to_i
+
+            # server_time_offset is a converging min-delay estimate of the
+            # true client/server clock offset - see the noise-model comment
+            # on the constants above (SERVER_TIME_OFFSET_STALE_SECONDS et al)
+            # for why a smaller candidate always wins and what can override
+            # a held estimate that isn't smaller.
+            candidate = now - new_server_time
+            if accept_server_time_offset_candidate?(candidate, now, mono_now)
+              @server_time_offset = candidate
+              @server_time_offset_at = now
+              @server_time_offset_monotonic_at = mono_now
+            end
+            @server_time = new_server_time
             $_CLIENT_.puts "\034GSq#{sprintf('%010d', @server_time)}\r\n" if @send_fake_tags
 
             # A prompt terminates the command burst and is the reliable close
