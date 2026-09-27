@@ -1880,6 +1880,7 @@ end unless defined?(StringProc)
 # already in the Gemfile, so a plain require satisfies the real intent without
 # the live-install path of lib/util/util.rb's implementation.
 require 'os'
+require 'ffi'
 
 module Lich
   module Util
@@ -1891,8 +1892,17 @@ module Lich
       def quiet_command_xml(*_args, **_kwargs)
         []
       end
+    end
+  end
+end unless defined?(Lich::Util)
 
-      def install_gem_requirements(gems_to_install, **_kwargs)
+# Guarded on the method, not the module: a spec that opens Lich::Util for some
+# other reason before spec_helper loads (e.g. requiring a lib file that defines
+# Lich::Util itself) would otherwise skip this along with the block above.
+module Lich
+  module Util
+    unless respond_to?(:install_gem_requirements)
+      def self.install_gem_requirements(gems_to_install, **_kwargs)
         # Mirrors the real impl's should_require semantics (lib/util/util.rb) rather
         # than requiring unconditionally: textstripper.rb passes 'kramdown' => false
         # and does its own require + rescue right after, so requiring it here too
@@ -1911,7 +1921,7 @@ module Lich
       end
     end
   end
-end unless defined?(Lich::Util)
+end
 
 # =============================================================================
 # Kernel Helper Methods

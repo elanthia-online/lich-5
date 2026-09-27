@@ -12,9 +12,10 @@ module Lich
       # No PowerShell subprocess calls - direct Win32 API access
       module WindowsCredentialManager
         # Everything FFI-related is Windows-only, so it's guarded together: this keeps
-        # the module inert (no ffi/os requires, no FFI constant references) on load for
-        # every other platform instead of depending on ffi/os already being loaded by
-        # whatever required this file first.
+        # the module inert (no ffi requires, no FFI constant references) on load for
+        # every other platform instead of depending on ffi already being loaded by
+        # whatever required this file first. OS itself must still be defined by the
+        # requirer - master_password_manager.rb requires 'os' before requiring this.
         if OS.windows?
           Lich::Util.install_gem_requirements({ 'ffi' => true })
           extend FFI::Library

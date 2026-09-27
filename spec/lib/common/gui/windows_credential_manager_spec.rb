@@ -4,10 +4,11 @@ require_relative '../../../spec_helper'
 require 'os'
 require 'ffi'
 
-# spec_helper.rb's own Lich::Util stub doesn't define install_gem_requirements, and
-# this file may load without spec/login_spec_helper.rb (which does) ever having run.
-# `os`/`ffi` are already required unconditionally above, so this only needs to satisfy
-# the call - it isn't standing in for the real gem-install behavior.
+# Defense in depth: spec_helper.rb's own install_gem_requirements (added in f3bfc91c)
+# is skipped whenever some other spec opens Lich::Util before spec_helper loads, and
+# this file may load without spec/login_spec_helper.rb (which also defines one) ever
+# having run. `os`/`ffi` are already required unconditionally above, so this only
+# needs to satisfy the call - it isn't standing in for the real gem-install behavior.
 module Lich
   module Util
     def self.install_gem_requirements(*); true; end unless respond_to?(:install_gem_requirements)
