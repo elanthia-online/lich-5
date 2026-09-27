@@ -305,6 +305,18 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([614999])
     end
 
+    it 'targets a fresh mount once room-objs staging is committed, as in production' do
+      # The file-level before stubs begin_room_objs, so the other examples
+      # write npcs straight into the published list; this one goes through
+      # the real staging -> commit_room_objs swap.
+      allow(Lich::Common::GameObj).to receive(:begin_room_objs).and_call_original
+      expect(Lich::Common::GameObj).to receive(:commit_room_objs).and_call_original
+      stub_const('XMLData', double(current_target_ids: %w[436656696 436658124], game: 'GSIV'))
+      feed(rider_line)
+
+      expect(Lich::Gemstone::Creature.targets.map(&:id)).to contain_exactly(436658124, 436656696)
+    end
+
     it 'does not target an untagged creature the room shows as dead, even if the dropdown lists it' do
       stub_const('XMLData', double(current_target_ids: ['614998'], game: 'GSIV'))
       feed(%(<component id='room objs'>  You notice <pushBold/>a <a exist="614998" noun="ooze">gelatinous ooze</a><popBold/> that appears dead.</component>))

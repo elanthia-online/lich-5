@@ -490,9 +490,10 @@ module Lich
 
         # Ids {#targets} accepts for a creature the feed has sent no
         # `<crtrStatus>` for (a fresh mount sends none until first harmed): the
-        # pre-`<crtrStatus>` hostility signal, GameObj.targets. Delegating keeps
-        # one exclusion list - the sticky dropdown's dead/gone corpses, animated
-        # decoys, severed appendages - instead of a copy that can drift.
+        # pre-`<crtrStatus>` hostility signal, GameObj.targets. Delegating
+        # reuses its dead/gone filter (the sticky dropdown keeps listing
+        # corpses), which has no Creature-side equivalent for an untagged
+        # creature. Its decoy/appendage exclusions are also in valid_target?.
         #
         # @return [Array<String>]
         def unreported_target_ids
