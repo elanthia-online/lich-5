@@ -153,7 +153,7 @@ module Lich
       end
 
       # Whether an unexpired effect is listed in an Effects registry. A String
-      # matches regardless of case, spacing, underscores, colons and apostrophes
+      # matches regardless of case, colons and apostrophes, a space and an underscore alike
       # ("seanettes_shout" matches "Seanette's Shout"); a Regexp matches any entry;
       # an Integer matches an effect id. The game's parser lists each effect
       # under both its name and its Integer id, so keys are compared as text.
