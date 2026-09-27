@@ -857,6 +857,33 @@ RSpec.describe Lich::Common::MapBase do
       end
     end
 
+    describe '.boundary_rooms_for' do
+      # 1 <-> 2 <-> 3 are the set; 4 borders 3 both ways; 5 has only a
+      # one-way edge INTO 1 (not a boundary: the set cannot step out to
+      # it); 6 borders nothing in the set; 7 is unmapped.
+      before do
+        test_class.test_list[1] = test_class.new(1, wayto: { '2' => 'e' })
+        test_class.test_list[2] = test_class.new(2, wayto: { '1' => 'w', '3' => 'e' })
+        test_class.test_list[3] = test_class.new(3, wayto: { '2' => 'w', '4' => 'out' })
+        test_class.test_list[4] = test_class.new(4, wayto: { '3' => 'in' })
+        test_class.test_list[5] = test_class.new(5, wayto: { '1' => 'go gate' })
+        test_class.test_list[6] = test_class.new(6, wayto: { '5' => 'n' })
+      end
+
+      it 'returns the rooms the set exits into, excluding the set and rooms with only an edge in' do
+        expect(test_class.boundary_rooms_for([1, 2, 3])).to eq([4])
+      end
+
+      it 'accepts any enumerable of ids, ignores ids the map lacks, and returns a sorted unique list' do
+        test_class.test_list[3].wayto['4b'] = 'also out'
+        expect(test_class.boundary_rooms_for(Set[3, 7, 1])).to eq([2, 4])
+      end
+
+      it 'is empty for an empty set' do
+        expect(test_class.boundary_rooms_for([])).to eq([])
+      end
+    end
+
     describe '.uids_add and .ids_from_uid' do
       it 'adds and retrieves uid mappings' do
         test_class.uids_add(100, 5)

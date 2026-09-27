@@ -129,6 +129,7 @@ RSpec.describe Lich::Gemstone::CreatureTemplate do
       allow(map).to receive(:ids_from_uid) { |u| rooms.key?(u - 100) ? [u - 100] : [] }
       allow(map).to receive(:[]) { |id| rooms[id] }
       allow(map).to receive(:list).and_return(rooms.values)
+      allow(map).to receive(:boundary_rooms_for).with([1, 2, 3]).and_return([4])
       map
     end
 
@@ -149,8 +150,12 @@ RSpec.describe Lich::Gemstone::CreatureTemplate do
       expect(template.rooms_by_area).to eq('Strip' => [1, 3], 'Middle' => [2], 'Unmapped' => [])
     end
 
-    it "returns bordering rooms from edges in either direction, excluding the creature's own rooms" do
-      expect(template.boundary_rooms).to eq([4, 5])
+    # The walk itself is Map.boundary_rooms_for (map_base_spec); the template
+    # hands it the creature's rooms and memoizes the answer.
+    it 'asks the map for the boundary of its rooms, once' do
+      expect(template.boundary_rooms).to eq([4])
+      expect(template.boundary_rooms).to eq([4])
+      expect(fake_map).to have_received(:boundary_rooms_for).once
     end
   end
 
@@ -394,6 +399,82 @@ RSpec.describe Lich::Gemstone::CreatureInstance do
 
       expect(creature.crtr_flag?(:ascension_boss)).to be true
       expect(creature.crtr_flag?(:mini_boss)).to be false
+    end
+
+    it 'routes a usable server pair through the existing HP API' do
+      creature = described_class.register('test creature', 6)
+
+      creature.sync_crtr_status('hostile' => '1', 'health' => '75', 'maxhealth' => '120')
+
+      expect(creature.health).to eq(75)
+      expect(creature.max_health).to eq(120)
+      expect(creature.current_hp).to eq(75)
+      expect(creature.max_hp).to eq(120)
+      expect(creature.hp_percent).to eq(62.5)
+      expect(creature.essential_data).to include(
+        health: 75,
+        max_health: 120,
+        current_hp: 75,
+        max_hp: 120,
+        hp_percent: 62.5
+      )
+    end
+
+    it 'preserves negative exact health through current_hp and hp_percent' do
+      creature = described_class.register('test creature', 7)
+
+      creature.sync_crtr_status('hostile' => '1', 'health' => '-16', 'maxhealth' => '340')
+
+      expect(creature.health).to eq(-16)
+      expect(creature.max_health).to eq(340)
+      expect(creature.current_hp).to eq(-16)
+      expect(creature.hp_percent).to eq(-4.7)
+      expect(creature.dead?).to be true
+      expect(creature.valid_target?).to be false
+    end
+
+    it 'gates legitimate zero/zero entities onto inferred HP without marking them dead' do
+      creature = described_class.register('black-necked hooded toucan', 8)
+
+      creature.sync_crtr_status('inferior' => '1', 'health' => '0', 'maxhealth' => '0')
+
+      expect(creature.health).to eq(0)
+      expect(creature.max_health).to eq(0)
+      expect(creature.current_hp).to eq(creature.max_hp)
+      expect(creature.max_hp).to be_positive
+      expect(creature.dead?).to be false
+      expect(creature.valid_target?).to be true
+    end
+
+    it 'keeps inferred damage running in parallel and uses it when server health disappears' do
+      creature = described_class.register('test creature', 9)
+      creature.add_damage(25)
+
+      creature.sync_crtr_status('hostile' => '1', 'health' => '75', 'maxhealth' => '120')
+      creature.add_damage(10)
+
+      expect(creature.damage_taken).to eq(35)
+      expect(creature.current_hp).to eq(75)
+      expect(creature.max_hp).to eq(120)
+
+      creature.sync_crtr_status('hostile' => '1')
+
+      expect(creature.health).to be_nil
+      expect(creature.max_health).to be_nil
+      expect(creature.max_hp).to eq(400)
+      expect(creature.current_hp).to eq(365)
+      expect(creature.hp_percent).to eq(91.3)
+    end
+
+    it 'preserves negative inferred HP and percentage while treating it as dead' do
+      creature = described_class.register('test creature', 10)
+      creature.add_damage(425)
+
+      expect(creature.max_hp).to eq(400)
+      expect(creature.current_hp).to eq(-25)
+      expect(creature.hp_percent).to eq(-6.3)
+      expect(creature.dead?).to be true
+      expect(creature.valid_target?).to be false
     end
   end
 

@@ -475,7 +475,7 @@ module Lich
       UNLOAD_WEAPON_SUCCESS_PATTERNS = [
         /^(?:<dialogData.*?<\/dialogData>)?You unload/,
         /^Your .* fall.*to your feet\.$/,
-        /As you release the string/,
+        /As you release the string(.* fades and disappears)?/,
         /^(?:<dialogData.*?<\/dialogData>)?You .* unloading/
       ].freeze
 
