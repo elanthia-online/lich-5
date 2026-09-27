@@ -53,7 +53,7 @@ module Lich
 
         # A technique's table entry.
         #
-        # @param name [String, Symbol] long or short name, in any case or spacing
+        # @param name [String, Symbol] long or short name, in any case, with spaces or underscores
         # @return [Hash]
         # @raise [ArgumentError] if the name is not a technique in this category
         def technique(name)
@@ -120,7 +120,8 @@ module Lich
 
         # A pattern +:buff+ matches the stat buff whatever granted it: surge is
         # active under bearhug's "Enh. Strength (+20)", burst under barrage's
-        # "Enh. Dexterity (+10)", coup de grace under shout's "Empowered (+20)".
+        # "Enh. Dexterity (+10)", coup de grace under shout's "Empowered (+20)",
+        # and the other way round (bearhug under a matching surge buff).
         #
         # @param name [String, Symbol] the technique name
         # @return [Boolean] whether the buff the technique grants (or the same stat buff) is active
