@@ -10,10 +10,12 @@ phase-2 WebSocket game transport actually needs to connect, gathered while valid
 2. **Live probes** against a real account's GAMEHOST/GAMEPORT, obtained via ordinary EAccess auth:
    first a transport-only handshake against DragonRealms Prime Test (`DRT`), then a full end-to-end
    game login -- session key, `/FE:` identification, real game data read back -- against both
-   production DragonRealms (`DR`) and GemStone IV (`GS3`/`GS4`).
+   production DragonRealms (`DR`) and GemStone IV (`GS3`/`GS4`), and finally a real Lich session
+   (extended, interactive play plus a clean shutdown) over `--game-transport=websocket`.
 
-Status: the transport is confirmed working end-to-end for both game families in production. See
-"Not yet confirmed" for what's left (mostly instances no available account has entitlement for).
+Status: the transport is confirmed working end-to-end for both game families in production,
+including through a real Lich session. See "Not yet confirmed" for what's left (mostly instances no
+available account has entitlement for).
 
 ## The client-side connection code
 
@@ -139,14 +141,41 @@ This confirms both remap branches (`hydra.play.net` and `chimera.play.net`) end-
 the DR-family branch, and confirms the transport carries real, correctly-framed game XML both
 directions with no corruption or desync -- phase 2's core premise holds for both game families.
 
-**Caveat on logout:** in both runs, a `quit` command was sent after an idle-timeout heuristic
-decided the initial setup burst had ended, but the trailing lines that came back look like they
-were still part of that same initial burst (room/inventory setup), not a logout confirmation. The
-socket was closed immediately after regardless. This most likely just means each character went
-link-dead rather than logged out cleanly -- functionally identical to what happens if any real
-client (Wrayth, Stormfront, a phone losing signal) crashes or loses its connection mid-session; the
-game's own link-dead timeout handles this the same way it always does. Not a transport defect, just
-an artifact of the probe script's simplistic "wait for a gap, then quit" logic.
+**Caveat on logout (passes 1-2 only, see pass 3 below):** in both runs, a `quit` command was sent
+after an idle-timeout heuristic decided the initial setup burst had ended, but the trailing lines
+that came back look like they were still part of that same initial burst (room/inventory setup),
+not a logout confirmation. The socket was closed immediately after regardless. This most likely
+just meant each character went link-dead rather than logged out cleanly -- functionally identical
+to what happens if any real client (Wrayth, Stormfront, a phone losing signal) crashes or loses its
+connection mid-session; the game's own link-dead timeout handles this the same way it always does.
+Not a transport defect, just an artifact of the probe script's simplistic "wait for a gap, then
+quit" logic.
+
+### Pass 3 -- a real Lich session over `--game-transport=websocket`
+
+Passes 1-2 above used a standalone script driving the *web client's* exact handshake bytes
+(`<c>{key}\r\n<c>/FE:WebFE ...`), not Lich itself -- leaving Lich's own, differently-shaped
+handshake (a plain, unprefixed `{key}\n/FE:WRAYTH ...` relayed by a real frontend through
+`games.rb`) as the single biggest open question, explicitly flagged by both
+[Nisugi's review](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5331566128)
+and [MahtraDR's round-2 review](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5331758741)
+("Settles it: one `--game-transport=websocket` login through a real Lich session").
+
+That test has now been run: a real Lich session launched with `--game-transport=websocket`
+connected cleanly (`Lich.log` confirmed the WebSocket transport was used), played for an extended,
+interactive session with real back-and-forth gameplay, and shut down cleanly afterward with no
+issues. This confirms:
+
+- The shim relays bytes as expected regardless of which client's exact handshake format is used --
+  the `<c>`-prefixed shape used in passes 1-2 was a web-client-specific detail, not something the
+  shim requires.
+- The transport holds up under sustained, real interactive play, not just a short login burst.
+- `Game.close`/the reader-thread stack shuts down over this transport with no issues -- the "went
+  link-dead instead of a clean logout" caveat above was specific to the passes-1-2 probe script's
+  simplistic shutdown, not a transport limitation.
+
+This closes out the three biggest previously-open items (Lich's own handshake bytes, sustained
+play, and clean shutdown) from "Not yet confirmed" below.
 
 ## Automatic fallback
 
@@ -195,8 +224,10 @@ raised as Minor, with a deliberate disposition on each rather than a code change
   hang rather than a detected, counted timeout. **Not changed**: making `Stream#wait_readable`
   match the direct path's "ready on any bytes" semantics exactly would trade a clean, bounded
   timeout for a potential indefinite hang, which is a downgrade, not a fix. Real game XML is
-  newline-terminated and arrives promptly in practice, so this is unlikely to bite -- but it's
-  exactly the kind of thing "sustained/interactive play" testing (below) should watch for.
+  newline-terminated and arrives promptly in practice, so this is unlikely to bite -- and an
+  extended, interactive real Lich session over this transport (pass 3, above) turned up no
+  timeout-related issues, though that's one session's worth of favorable network conditions, not a
+  guarantee against the theoretical worst case described above.
 
 ## Not yet confirmed
 
@@ -204,15 +235,7 @@ raised as Minor, with a deliberate disposition on each rather than a code change
   `docs/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
   entitled account has been available to confirm their GAMEHOST values, so whether they follow the
   same two-pattern remap is assumed, not confirmed.
-- **Sustained/interactive play over the transport** -- both live runs above were short (login burst,
-  a handful of lines, then disconnect) rather than an extended session exercising two-way traffic,
-  keepalive/ping-pong under real network conditions, or a clean `Game.close`-driven shutdown through
-  the full `games.rb` reader/parser thread stack rather than a standalone script talking to `Stream`
-  directly.
-- **Lich's own handshake bytes over this transport.** The live runs above used the *web client's*
-  handshake -- `<c>{key}\r\n<c>/FE:WebFE /VERSION:...\r\n` -- sent by a standalone probe script, not
-  by Lich itself. A real Lich session's frontend sends a plain `{key}\n/FE:WRAYTH /VERSION:...\n` (no
-  `<c>` prefix, a different `/FE:` identifier) relayed through `games.rb`, and that exact byte
-  sequence has not itself gone over the shim live. The shim is expected to just relay bytes either
-  way (confirmed: `commonSend`'s regular in-game traffic uses the same un-prefixed shape the `<c>`
-  lines don't), but this specific combination is unverified.
+
+~~Sustained/interactive play, a clean `Game.close`-driven shutdown, and Lich's own (un-prefixed)
+handshake bytes~~ -- all confirmed by pass 3 above (a real Lich session over
+`--game-transport=websocket`).
