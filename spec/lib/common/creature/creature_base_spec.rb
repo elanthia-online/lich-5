@@ -2,6 +2,7 @@
 
 require_relative '../../../spec_helper'
 require 'common/creature/creature_base'
+require 'common/gameobj'
 
 # Exercises the game-agnostic Lich::Common::CreatureBase mixin directly, through
 # a minimal host class that stands in for a real game's CreatureInstance. The

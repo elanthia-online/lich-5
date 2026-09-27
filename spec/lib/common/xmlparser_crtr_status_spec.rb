@@ -9,6 +9,7 @@ require_relative '../../spec_helper'
 require 'ox'
 require 'gemstone/creature'
 require 'common/xmlparser'
+require 'common/gameobj'
 
 # Bare `Creature`/`GameObj` references inside XMLParser resolve through this,
 # same as production (lib/main/main.rb includes Lich::Gemstone the same way).
