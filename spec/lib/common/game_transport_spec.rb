@@ -106,7 +106,10 @@ RSpec.describe Lich::Common::GameTransport do
     end
 
     it 'does not fall back on a bare SystemCallError with an unrelated errno' do
-      allow(Socket).to receive(:tcp).and_raise(SystemCallError.new('permission denied', Errno::EACCES::Errno))
+      # EMFILE (out of file descriptors): a resource-exhaustion error a
+      # WebSocket attempt -- another socket -- would likely hit again
+      # immediately, unlike EACCES/EPERM (now in DIRECT_CONNECTIVITY_ERRORS).
+      allow(Socket).to receive(:tcp).and_raise(SystemCallError.new('too many open files', Errno::EMFILE::Errno))
       expect(described_class).not_to receive(:open_websocket)
 
       expect { described_class.open_direct('host', 1234) }.to raise_error(SystemCallError)

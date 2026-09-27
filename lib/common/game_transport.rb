@@ -58,11 +58,23 @@ module Lich
       # timeout against a hostname (a bare IP literal still raises
       # Errno::ETIMEDOUT). Since GAMEHOST is always a hostname, this is the
       # exception a blocked-port firewall actually produces.
+      #
+      # EACCES/EPERM are POSIX connect(2)'s documented errors for "a local
+      # firewall rule forbids this connection" -- deliberately included, not
+      # just a leftover reachability code: Lich is normally run by the same
+      # person the local block (if any) belongs to, most often their own
+      # Windows Firewall, VPN client, or a work laptop's MDM policy getting
+      # in the way of their own tool, not a third party's restriction this
+      # transport should respect blindly. A local block that genuinely is
+      # someone else's deliberate policy still fails, just after a slightly
+      # slower detour through the WebSocket attempt.
       DIRECT_CONNECTIVITY_ERRORS = [
         Errno::ETIMEDOUT,
         Errno::ECONNREFUSED,
         Errno::EHOSTUNREACH,
         Errno::ENETUNREACH,
+        Errno::EACCES,
+        Errno::EPERM,
         IO::TimeoutError,
         SocketError
       ].freeze
@@ -71,9 +83,10 @@ module Lich
       # SystemCallError -- not the matching Errno subclass -- carrying only
       # the raw platform errno, observed on Windows for a refused port (WSA
       # 10061) where Errno::ECONNREFUSED above never matches. These are the
-      # WSA codes for the four Errno classes in DIRECT_CONNECTIVITY_ERRORS:
-      # WSAENETUNREACH, WSAETIMEDOUT, WSAECONNREFUSED, WSAEHOSTUNREACH.
-      WINDOWS_CONNECTIVITY_ERRNOS = [10_051, 10_060, 10_061, 10_065].freeze
+      # WSA codes for the classes in DIRECT_CONNECTIVITY_ERRORS: WSAENETUNREACH,
+      # WSAETIMEDOUT, WSAECONNREFUSED, WSAEHOSTUNREACH, WSAEACCES (Windows
+      # Firewall blocking the connection).
+      WINDOWS_CONNECTIVITY_ERRNOS = [10_051, 10_060, 10_061, 10_065, 10_013].freeze
 
       # @return [Boolean] whether +error+ is one {.open_direct} should fall
       #   back to {WEBSOCKET} for -- either a class in

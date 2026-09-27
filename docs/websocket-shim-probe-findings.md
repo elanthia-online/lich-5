@@ -181,22 +181,58 @@ play, and clean shutdown) from "Not yet confirmed" below.
 
 Once the transport itself was confirmed working end-to-end for both game families (above),
 `GameTransport`'s `DIRECT` mode was updated to automatically retry over `WEBSOCKET` on a
-connectivity-class failure (`Errno::ETIMEDOUT`/`ECONNREFUSED`/`EHOSTUNREACH`/`ENETUNREACH`/
-`SocketError`) -- the actual "firewall silently drops the game port, 443 is still open" scenario
-this whole feature exists for. This mirrors `Authenticator.authenticate`'s EAccess -> WebLogin
-fallback from #1570 exactly: try the normal path first, fall back only on transport-level
+connectivity-class failure -- the actual "firewall silently drops the game port, 443 is still open"
+scenario this whole feature exists for. This mirrors `Authenticator.authenticate`'s EAccess ->
+WebLogin fallback from #1570 exactly: try the normal path first, fall back only on transport-level
 unreachability (not on errors the other transport would hit identically), log which one actually
 connected. Also required bounding `open_direct`'s TCP connect with an explicit timeout
 (`Socket.tcp(..., connect_timeout: 10)` in place of a bare `TCPSocket.open`) -- a silently-blocked
 port otherwise hits the OS's default SYN-retry timeout (60s+ on Linux) before the fallback ever
 gets a chance to run, for the same reason `EAccess::CONNECT_TIMEOUT` exists.
 
-This fallback logic is covered by full mocked-error unit coverage (one example per error class in
-the list above, plus a negative case confirming an unrelated error does *not* trigger it) but has
-not been exercised against an actual firewalled port live -- doing that would mean deliberately
-blocking outbound traffic to a real game port from a test network, which hasn't been done. The
-WebSocket path it falls back *to* has, independently, already been confirmed live end-to-end
-(above), so the only untested piece is the trigger condition itself, not the destination.
+**The first cut of the error list was wrong**, caught by
+[Nisugi's review](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5331566128)
+with a real Windows repro: on Ruby 3.4+, `Socket.tcp`'s fast-fallback connector raises
+`IO::TimeoutError` (an `IOError`, not `Errno::ETIMEDOUT`) for a connect timeout against a
+*hostname* -- which GAMEHOST always is -- and on Windows can raise a bare `SystemCallError`
+carrying only the raw WSA errno instead of the matching `Errno` subclass. Un-fixed, the fallback
+simply didn't fire for the exact firewall-drops-the-port scenario this feature exists for.
+
+The current list, `GameTransport::DIRECT_CONNECTIVITY_ERRORS`:
+
+| Condition | Errno class | Windows WSA code (bare `SystemCallError`) |
+|---|---|---|
+| Connection timed out | `Errno::ETIMEDOUT` | 10060 |
+| Connection refused | `Errno::ECONNREFUSED` | 10061 |
+| Host unreachable | `Errno::EHOSTUNREACH` | 10065 |
+| Network unreachable | `Errno::ENETUNREACH` | 10051 |
+| Local firewall/policy block | `Errno::EACCES` / `Errno::EPERM` | 10013 (`WSAEACCES`) |
+
+...plus `IO::TimeoutError` (the fast-fallback connector's actual timeout exception, see above) and
+`SocketError` (DNS resolution failure). `GameTransport.direct_connectivity_error?` matches either a
+class in this list directly, or a bare `SystemCallError` whose `#errno` is one of the WSA codes
+above -- covering the case where Ruby doesn't map the platform errno to the matching subclass.
+
+**`EACCES`/`EPERM` (a local firewall/policy block) were added deliberately, not just carried over
+as a leftover reachability code.** POSIX documents both as `connect(2)`'s errors for "a local
+firewall rule forbids this connection" -- Windows Defender Firewall and Linux `iptables OUTPUT`
+rules both surface this way. Whether a local block should be routed around by an automatic fallback
+was raised as an open product question in
+[MahtraDR's round-2 review](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5331758741)
+("a local block may be deliberate"). Decided: yes -- Lich is normally run by the same person the
+local block (if any) belongs to, so it's far more often their own Windows Firewall, VPN client, or a
+work laptop's MDM policy getting in the way of their own tool than a third party's restriction this
+transport should respect blindly. A local block that genuinely is someone else's deliberate policy
+still fails, just after a slightly slower detour through the WebSocket attempt first.
+
+This fallback logic is covered by full mocked-error unit coverage (one example per error class and
+per Windows WSA code, plus a negative case confirming an unrelated error -- `EMFILE`, out of file
+descriptors, deliberately *not* treated as a connectivity error since a WebSocket attempt would
+likely hit the same resource exhaustion immediately -- does *not* trigger it) but has not been
+exercised against an actual firewalled port live -- doing that would mean deliberately blocking
+outbound traffic to a real game port from a test network, which hasn't been done. The WebSocket path
+it falls back *to* has, independently, already been confirmed live end-to-end (above), so the only
+untested piece is the trigger condition itself, not the destination.
 
 ## Reviewed trade-offs (accepted, not defects)
 
