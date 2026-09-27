@@ -125,7 +125,8 @@ RSpec.describe Lich::Gemstone::Weapon do
       regex = weapon.results_regex('flurry')
       ['Aelric says, "Leave that one, it\'s already dead."', 'You ask, "... I could not find it."',
        'Aelric exclaims, "You\'re too injured to fight!"', 'Aelric whispers, "Sorry, a little bit late..."',
-       'Aelric says, "A kobold is quite dead already."'].each { |line| expect(regex).not_to match(line) }
+       'Aelric says, "A kobold is quite dead already."',
+       'Aelric arrives a little bit late to the fight.'].each { |line| expect(regex).not_to match(line) }
     end
 
     it "do not end on Fury's constitution buff, which follows its own assault line" do
