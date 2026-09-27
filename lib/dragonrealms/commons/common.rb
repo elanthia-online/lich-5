@@ -290,6 +290,12 @@ module Lich
         end
 
         text = result.match(/looking for .* and see (.*)\.$/).to_a[1]
+        unless text
+          reason = result.empty? ? 'No response' : 'Unrecognized response'
+          Lich::Messaging.msg("bold", "DRC: #{reason} to 'rummage /#{parameter} my #{container}', treating container as empty.")
+          return []
+        end
+
         case parameter
         when 'B'
           box_list_to_adj_and_noun(text)

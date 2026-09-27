@@ -851,6 +851,46 @@ RSpec.describe Lich::DragonRealms::DRC do
       allow(described_class).to receive(:bput).and_return('looking for gems and see a ruby and an emerald.')
       expect(described_class.rummage('G', 'backpack')).to eq(%w[ruby emerald])
     end
+
+    # At runtime lich.rbw loads lib/common/class_exts/nilclass.rb, whose
+    # NilClass#strip lets the parsers turn nil into [] anyway; this suite does
+    # not load it. Asserting the parsers are never reached pins the guard
+    # itself, so the result does not depend on which nil the process has.
+    context 'when the reply has no parseable list' do
+      before do
+        allow(described_class).to receive(:list_to_array).and_call_original
+        allow(described_class).to receive(:box_list_to_adj_and_noun).and_call_original
+      end
+
+      %w[G B SC].each do |parameter|
+        it "returns empty array without parsing when bput times out with #{parameter} parameter" do
+          allow(described_class).to receive(:bput).and_return('')
+          expect(described_class.rummage(parameter, 'backpack')).to eq([])
+          expect(described_class).not_to have_received(:list_to_array)
+          expect(described_class).not_to have_received(:box_list_to_adj_and_noun)
+        end
+      end
+
+      it 'returns empty array without parsing when the list line lacks its closing period' do
+        allow(described_class).to receive(:bput).and_return('looking for gems and see a ruby')
+        expect(described_class.rummage('G', 'backpack')).to eq([])
+        expect(described_class).not_to have_received(:list_to_array)
+      end
+
+      it 'reports no response when bput times out' do
+        allow(described_class).to receive(:bput).and_return('')
+        described_class.rummage('G', 'backpack')
+        expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+          .to include("No response to 'rummage /G my backpack', treating container as empty.")
+      end
+
+      it 'reports an unrecognized response when a reply matched but could not be parsed' do
+        allow(described_class).to receive(:bput).and_return('looking for gems and see a ruby')
+        described_class.rummage('G', 'backpack')
+        expect(Lich::Messaging.messages.map { |m| m[:message] }.join)
+          .to include("Unrecognized response to 'rummage /G my backpack', treating container as empty.")
+      end
+    end
   end
 
   describe '.get_skins / .get_gems / .get_materials' do
