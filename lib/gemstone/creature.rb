@@ -729,7 +729,9 @@ module Lich
         CreatureInstance[id]
       end
 
-      # Returns attackable hostile creatures currently in the room.
+      # Returns attackable hostile creatures currently in the room, including
+      # once-hostile creatures now `sympathetic` (Sympathy 1120). Pass
+      # `:not_sympathetic` to exclude those.
       #
       # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
       # @return [Array<CreatureInstance>]

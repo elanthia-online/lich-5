@@ -439,7 +439,8 @@ module Lich
         # `crtr_flag?(:hostile)` supplies structured hostility. A creature
         # that was hostile and is now `sympathetic` (Sympathy 1120 swaps one
         # for the other mid-fight) is still a target; see
-        # {InstanceMethods#ever_hostile?}.
+        # {InstanceMethods#ever_hostile?}. Pass `:not_sympathetic` to leave
+        # such creatures alone (e.g. to respect a group empath's Sympathy).
         #
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
@@ -723,7 +724,11 @@ module Lich
         # snapshot even though the creature is still in the fight, so
         # `crtr_flag?(:hostile)` - the literal live value - drops it. This
         # remembers the earlier assertion for the life of the registry entry.
-        # No expiry is needed: `hostile` reasserts once Sympathy drops.
+        #
+        # It never un-latches, so it is not an attack gate by itself: pair it
+        # with a live `crtr_flag?(:sympathetic)`, as {ClassMethods#targets}
+        # does. Only the Sympathy (1120) hostile -> sympathetic path has been
+        # observed in a capture.
         #
         # @return [Boolean]
         def ever_hostile?
