@@ -324,11 +324,16 @@ left as pure speculation:
   path already exists for any "connected but dead" scenario -- but a real, now-confirmed, several-
   -minutes-long user-visible delay specific to an outage-during-fallback that's worth knowing about
   rather than guessing at.
-- **Does the shim reject a text frame containing an invalid UTF-8 byte** (RFC 6455 §8.1: an endpoint
-  receiving invalid UTF-8 in a TEXT frame must close with code 1007), given `Stream#puts` always
-  sends opcode TEXT and a command could contain a raw Latin-1/CP1252 byte from a script or frontend?
-  **Not yet tested** -- this needs a live authenticated session to send an actual in-game command
-  through, unlike the two questions above.
+- **Does the shim reject a text frame containing an invalid UTF-8 byte?** (RFC 6455 §8.1: an
+  endpoint receiving invalid UTF-8 in a TEXT frame must close with code 1007, and `Stream#puts`
+  always sends opcode TEXT with no client-side validation, so a raw Latin-1/CP1252 byte from a
+  script or frontend would go out as-is.) **Tested live:** a real `--game-transport=websocket`
+  session sent `look` with a raw `\xE9` byte (a Latin-1 accented e, invalid as a standalone UTF-8
+  sequence) appended via a throwaway script. The connection survived -- no close, no protocol error,
+  play continued normally afterward. The shim does not enforce RFC 6455's UTF-8 requirement, at
+  least not strictly enough to trip on a single invalid byte inside an otherwise-ordinary command.
+  This closes the last of the three self-review open questions; the other two (idle survival,
+  outage behavior) are covered above.
 
 ## MahtraDR round-3/round-4 delta reviews (pre-upstream)
 
@@ -362,7 +367,10 @@ shapes.
   `docs/web-login-protocol-analysis.md` already notes for these instances at the auth layer; no
   entitled account has been available to confirm their GAMEHOST values, so whether they follow the
   same two-pattern remap is assumed, not confirmed.
-- **Whether the shim tolerates an invalid-UTF-8 byte in a TEXT frame** -- see above.
+- **Idle-connection survival against a live server** -- see "Automatic fallback"/self-review
+  findings above; the client-side keepalive question was answered (there is none in play.net's own
+  web client), but whether an edge/load balancer drops a genuinely idle WebSocket session is still
+  untested.
 
 ~~Sustained/interactive play, a clean `Game.close`-driven shutdown, and Lich's own (un-prefixed)
 handshake bytes~~ -- all confirmed by pass 3 above (a real Lich session over
