@@ -24,7 +24,10 @@ RSpec.describe Lich::Gemstone::Effects::Registry do
       resume.pop
     end
     reader = Thread.new { scan.call(pause) }
-    inside.pop
+    unless inside.pop(timeout: 5)
+      reader.kill
+      raise 'the scan never reached its pause point'
+    end
     begin
       XMLData.dialogs['Buffs']['Surge of Strength'] = Time.now + 60
       nil
@@ -57,7 +60,7 @@ RSpec.describe Lich::Gemstone::Effects::Registry do
     end
 
     it 'a Regexp expiration lookup does not break the add' do
-      expect(add_effect_during_scan { |pause| pausing_key(pause); registry.expiration(/no such effect/) rescue nil }).to be_nil
+      expect(add_effect_during_scan { |pause| pausing_key(pause); registry.expiration(/no such effect/) }).to be_nil
     end
   end
 
@@ -82,6 +85,17 @@ RSpec.describe Lich::Gemstone::Effects::Registry do
     it 'is false for an expired effect' do
       XMLData.dialogs['Buffs']['Old'] = Time.now - 1
       expect(registry.active?('Old')).to be(false)
+    end
+
+    # Specs do not load Lich's NilClass patch, so this also checks that a
+    # Regexp with no match does not depend on it.
+    it 'is false for a Regexp that matches nothing' do
+      expect(registry.expiration(/no such effect/)).to eq(0)
+      expect(registry.active?(/no such effect/)).to be(false)
+    end
+
+    it 'is true for a Regexp that matches an active effect' do
+      expect(registry.active?(/^Bers/)).to be(true)
     end
   end
 end

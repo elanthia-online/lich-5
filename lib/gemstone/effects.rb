@@ -24,7 +24,7 @@ module Lich
 
         def expiration(effect)
           if effect.is_a?(Regexp)
-            to_h.find { |k, _v| k.to_s =~ effect }[1] || 0
+            (to_h.find { |k, _v| k.to_s =~ effect } || [nil, 0])[1]
           else
             # a single lookup does not iterate, so it can read the live Hash
             live.fetch(effect, 0)
