@@ -62,8 +62,14 @@ module Lich
           header_block, remainder = read_handshake_response(ssl_socket)
           Handshake.validate_response(header_block, key: key, subprotocol: subprotocol)
 
+          stream = new(ssl_socket, prefill: remainder)
+          # Deliberately after new, not before: initialize feeds +remainder+
+          # through the frame reader, which can itself raise (a malformed
+          # frame arriving in the same TLS read as the 101) -- setting this
+          # any earlier would make the ensure below think the connect
+          # succeeded and skip closing raw_socket on exactly that failure.
           connected = true
-          new(ssl_socket, prefill: remainder)
+          stream
         rescue StandardError => e
           raise ConnectionError, "#{e.class}: #{e.message}"
         ensure
@@ -148,7 +154,18 @@ module Lich
           loop do
             line = extract_line!
             return line if line
-            raise @pending_error if @pending_error
+
+            if @pending_error
+              # A newline-less tail decoded before the violation is exactly
+              # the kind of data #decoded_messages exists to preserve --
+              # flush it the same way EOF does before finally raising, so
+              # the deferred error doesn't defeat that as its very last step.
+              tail = flush_remaining!
+              return tail if tail
+
+              raise @pending_error
+            end
+
             return flush_remaining! if @eof
 
             pump_until_readable!

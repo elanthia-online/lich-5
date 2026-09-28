@@ -138,6 +138,24 @@ RSpec.describe Lich::Common::WebSocket::Stream do
 
       expect(raw_socket).not_to have_received(:close)
     end
+
+    it 'closes the raw socket when a malformed frame in the same read as the 101 makes .new raise' do
+      # Regression: `connected = true` used to run before `new`, so a
+      # ProtocolError raised while feeding a bad prefill through the frame
+      # reader (inside #initialize) left the ensure block believing the
+      # connect had succeeded, leaking raw_socket.
+      raw_socket = instance_double(Socket, close: nil, closed?: false)
+      allow(Socket).to receive(:tcp).and_return(raw_socket)
+      ssl_socket = FakeSSLSocket.new
+      allow(described_class).to receive(:wrap_tls).and_return(ssl_socket)
+      bad_frame = [0xC1, 0x00].pack('C*') # reserved bit set
+      allow(described_class).to receive(:read_handshake_response).and_return(['HTTP/1.1 101 x', bad_frame])
+      allow(Lich::Common::WebSocket::Handshake).to receive(:validate_response)
+
+      expect { described_class.connect(host: 'host', port: 443, path: '/shim/1') }
+        .to raise_error(described_class::ConnectionError)
+      expect(raw_socket).to have_received(:close)
+    end
   end
 
   describe '#gets' do
@@ -302,6 +320,21 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       stream = described_class.new(io)
 
       expect(stream.gets).to eq("last words\n")
+      expect { stream.gets }.to raise_error(Frame::ProtocolError, /reserved/)
+    end
+
+    it 'still surfaces a trailing newline-less tail before raising, the same way EOF does' do
+      # Regression: #gets checked @pending_error before flush_remaining!, so
+      # a non-newline-terminated tail decoded just before the violation was
+      # discarded instead of returned once (matching how the @eof branch
+      # already flushes a leftover tail via #flush_remaining!).
+      io = FakeSSLSocket.new(chunk_size: 4096)
+      io.feed(server_frame("last words\ntail-no-newline"))
+      io.feed([0xC1, 0x00].pack('C*')) # reserved bit set -- fatal
+      stream = described_class.new(io)
+
+      expect(stream.gets).to eq("last words\n")
+      expect(stream.gets).to eq('tail-no-newline')
       expect { stream.gets }.to raise_error(Frame::ProtocolError, /reserved/)
     end
   end
