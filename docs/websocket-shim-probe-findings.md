@@ -330,6 +330,32 @@ left as pure speculation:
   **Not yet tested** -- this needs a live authenticated session to send an actual in-game command
   through, unlike the two questions above.
 
+## MahtraDR round-3/round-4 delta reviews (pre-upstream)
+
+Two further real-socket-verified nits, each carrying a repro and an already-verified fix, found in
+[round 3](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5332654144) (against
+the EACCES/EPERM commit) and [round 4](https://github.com/elanthia-online/lich-5/pull/1664#pullrequestreview-5332860264)
+(against the self-review commit):
+
+- **`Stream.connect` set `connected = true` before `new(ssl_socket, prefill: remainder)`.**
+  `#initialize` feeds `prefill` through the frame reader, which can itself raise -- a malformed
+  frame arriving in the same TLS read as the `101` response raises `ProtocolError` from inside
+  `new`. With `connected` already `true` by that point, the `ensure` block believed the connect had
+  succeeded and skipped closing `raw_socket`, reopening (in a narrower form -- it needs a
+  misbehaving server, not just a slow one) the exact leak the `Thread#kill` fix was written to
+  close. Fixed: `stream = new(...); connected = true; stream`, so `connected` only flips once
+  construction has actually finished.
+- **The deferred-error path in `#gets` dropped a trailing newline-less tail.** It checked
+  `@pending_error` before checking for a leftover, non-newline-terminated fragment in
+  `@line_buffer` -- unlike the `@eof` branch immediately below it, which already flushes that
+  leftover via `#flush_remaining!` first. Since the whole point of deferring the error is to
+  preserve the last data before a forced disconnect, silently losing the very last (possibly
+  incomplete) line undercut that. Fixed: flush a leftover tail first if one exists, and only raise
+  once the buffer is actually empty.
+
+Both fixes match the reviewer's own verified proposals exactly, confirmed against their given repro
+shapes.
+
 ## Not yet confirmed
 
 - **DRX (Platinum) / DRF (Fallen) / GSX (Platinum, retired)** -- inherits the same gap
