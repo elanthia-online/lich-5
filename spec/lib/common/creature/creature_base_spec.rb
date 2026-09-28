@@ -298,6 +298,23 @@ RSpec.describe Lich::Common::CreatureBase do
       expect(creature.ever_hostile?).to be true
     end
 
+    # Accepted trade-off: re-registering a live id keeps the instance and its
+    # latch. That keeps a Sympathy'd creature you walk away from and return to
+    # targeted, but a same-name creature reusing a recycled id before eviction
+    # inherits it too (GS's name-change forget in #1669 only covers a new name).
+    it 'keeps the latch when a known id re-enters the room under the same name' do
+      old = SampleCreature.register('nymph', 1)
+      old.sync_crtr_status('hostile' => '1')
+      SampleCreature.clear_room
+
+      again = SampleCreature.register('nymph', 1)
+      again.sync_crtr_status('sympathetic' => '1')
+
+      expect(again).to equal(old)
+      expect(again.ever_hostile?).to be true
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+    end
+
     # The latch lives on the instance, so eviction is its only reset.
     it 'starts false again once housekeeping evicts the registry entry' do
       old = SampleCreature.register('nymph', 1)
