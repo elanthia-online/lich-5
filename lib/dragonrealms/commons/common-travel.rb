@@ -79,12 +79,15 @@ module Lich
 
       # Visit a merchant and sell an item.
       # Usually to sell junk at pawn shops.
+      #
+      # The item is referenced through {DRCI.item_ref}, like the DRCI verbs: a
+      # noun gets "my ", while "my sword" and "#<id>" are sent unchanged.
       def sell_item(room, item)
         return false unless DRCI.in_hands?(item)
 
         walk_to(room)
 
-        case DRC.bput("sell my #{item}", *SELL_SUCCESS_PATTERNS, *SELL_FAILURE_PATTERNS)
+        case DRC.bput("sell #{DRCI.item_ref(item)}", *SELL_SUCCESS_PATTERNS, *SELL_FAILURE_PATTERNS)
         when *SELL_SUCCESS_PATTERNS
           true
         when *SELL_FAILURE_PATTERNS

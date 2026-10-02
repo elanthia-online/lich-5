@@ -4,6 +4,8 @@ require_relative '../../../spec_helper'
 
 # Load production code
 require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-travel.rb')
+# sell_item builds its command with the real DRCI.item_ref.
+require File.join(LIB_DIR, 'dragonrealms', 'commons', 'common-items.rb')
 
 DRCT = Lich::DragonRealms::DRCT unless defined?(DRCT)
 
@@ -97,6 +99,30 @@ RSpec.describe DRCT do
       allow(DRCI).to receive(:in_hands?).with('sword').and_return(true)
       allow(DRC).to receive(:bput).and_return('I only deal in pelts')
       expect(described_class.sell_item(100, 'sword')).to eq(false)
+    end
+
+    # The SELL command is built with DRCI.item_ref, so it matches what every
+    # DRCI verb sends for the same reference.
+    describe 'the SELL command' do
+      def sold_command(item)
+        allow(DRCI).to receive(:in_hands?).with(item).and_return(true)
+        sent = nil
+        allow(DRC).to receive(:bput) { |cmd, *| sent = cmd; 'hands you 50 kronars' }
+        described_class.sell_item(100, item)
+        sent
+      end
+
+      it 'prefixes a bare noun with "my"' do
+        expect(sold_command('sword')).to eq('sell my sword')
+      end
+
+      it 'does not double an existing "my"' do
+        expect(sold_command('my sword')).to eq('sell my sword')
+      end
+
+      it 'sends a #<id> reference without "my" (the game does not parse "my #<id>")' do
+        expect(sold_command('#5001')).to eq('sell #5001')
+      end
     end
   end
 
