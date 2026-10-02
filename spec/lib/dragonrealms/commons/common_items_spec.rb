@@ -305,6 +305,47 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
+  # "#<id>" references (what DRCI's own item_ref passes through) name one exact
+  # item. They contain no noun, so they are matched by the GameObj hand id --
+  # never by name, which would also match a same-noun item.
+  describe '#in_hand? with a #<id> reference' do
+    let(:empty) { double('empty hand', id: nil, name: 'Empty') }
+
+    before do
+      allow(GameObj).to receive(:right_hand).and_return(double('right', id: '5001', name: 'encyclopedic almanac'))
+      allow(GameObj).to receive(:left_hand).and_return(empty)
+      allow(DRC).to receive(:right_hand).and_return('encyclopedic almanac')
+      allow(DRC).to receive(:left_hand).and_return(nil)
+    end
+
+    it 'is true for the id held in the named hand' do
+      expect(described_class.in_hand?('#5001', 'right')).to be true
+      expect(described_class.in_hand?('#5001', 'either')).to be true
+      expect(described_class.in_hands?('#5001')).to be true
+    end
+
+    it 'is false for the other hand' do
+      expect(described_class.in_hand?('#5001', 'left')).to be false
+    end
+
+    it 'is false for a different id, even when a same-noun item is held' do
+      expect(described_class.in_hands?('#5002')).to be false
+    end
+
+    it 'never matches an empty hand (placeholder with a nil id)' do
+      allow(GameObj).to receive(:right_hand).and_return(empty)
+      expect(described_class.in_hands?('#5001')).to be false
+    end
+
+    it 'requires the id in both hands for "both"' do
+      expect(described_class.in_hand?('#5001', 'both')).to be false
+    end
+
+    it 'treats a "#" followed by non-digits as ordinary item text' do
+      expect(described_class.in_hand?('#almanac', 'right')).to be false
+    end
+  end
+
   describe '#in_hand?' do
     before do
       allow(DRC).to receive(:left_hand).and_return('sword')
@@ -687,6 +728,75 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(described_class).not_to receive(:get_item_from_eddy_portal?)
 
         expect(described_class.get_item_unsafe('sword', 'pack')).to be false
+      end
+    end
+
+    # -----------------------------------------------------------------
+    # "#<id>" references: DRC.get_noun('#5001') is nil, so verifying by noun
+    # reported every id GET as a failure -- and from a portal, re-sent the GET
+    # through the eddy fallback for an item already in hand.
+    # -----------------------------------------------------------------
+    context 'with a #<id> reference' do
+      let(:empty) { double('empty hand', id: nil, name: 'Empty') }
+
+      before do
+        allow(GameObj).to receive(:left_hand).and_return(empty)
+        allow(GameObj).to receive(:right_hand).and_return(empty)
+      end
+
+      def hold_right(id)
+        allow(GameObj).to receive(:right_hand).and_return(double('right', id: id, name: 'encyclopedic almanac'))
+        allow(DRC).to receive(:right_hand).and_return('encyclopedic almanac')
+      end
+
+      it 'returns true once that id is in hand' do
+        allow(DRC).to receive(:bput) { hold_right('5001') && 'You get an encyclopedic almanac from inside your portal.' }
+
+        expect(described_class.get_item_unsafe('#5001', 'my portal')).to be true
+      end
+
+      it 'does not re-send the GET through the eddy fallback when it already worked' do
+        allow(DRC).to receive(:bput) { hold_right('5001') && 'You get an encyclopedic almanac from inside your portal.' }
+        expect(described_class).not_to receive(:get_item_from_eddy_portal?)
+
+        described_class.get_item_unsafe('#5001', 'my portal')
+      end
+
+      it 'returns true when the id arrives after XML feed lag' do
+        stub_bput('You get an encyclopedic almanac.')
+        checks = 0
+        allow(GameObj).to receive(:right_hand) do
+          checks += 1
+          checks >= 6 ? double('right', id: '5001', name: 'encyclopedic almanac') : empty
+        end
+
+        expect(described_class.get_item_unsafe('#5001', 'my pack')).to be true
+      end
+
+      it 'returns false when a different item (same noun) lands in hand' do
+        allow(DRC).to receive(:bput) { hold_right('5002') && 'You get an encyclopedic almanac.' }
+
+        expect(described_class.get_item_unsafe('#5001', 'my pack')).to be false
+      end
+
+      it 'returns false and still tries the eddy fallback when nothing arrived from a portal' do
+        stub_bput('What were you referring to?')
+        expect(described_class).to receive(:get_item_from_eddy_portal?).with('#5001', 'my portal').and_return(false)
+
+        expect(described_class.get_item_unsafe('#5001', 'my portal')).to be false
+      end
+
+      it 'works through the public get_item? (item_ref keeps the #)' do
+        expect(DRC).to receive(:bput).with('get #5001 from my pack', any_args) { hold_right('5001') && 'You get it.' }
+
+        expect(described_class.get_item?('#5001', 'pack')).to be true
+      end
+
+      it 'lets get_item_if_not_held? see the id already in hand without a GET' do
+        hold_right('5001')
+        expect(DRC).not_to receive(:bput)
+
+        expect(described_class.get_item_if_not_held?('#5001')).to be true
       end
     end
   end

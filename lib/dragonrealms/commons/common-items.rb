@@ -53,6 +53,10 @@ module Lich
         "my #{value}"
       end
 
+      # A "#<id>" item reference (the GameObj id syntax {item_ref} passes
+      # through). Captures the id.
+      ITEM_ID_REF_PATTERN = /\A#(\d+)\z/.freeze
+
       ## How to add new trash receptacles https://github.com/elanthia-online/dr-scripts/wiki/Adding-new-trash-receptacles
       # Default trash-receptacle nouns. Players extend this at runtime via the
       # +custom_trash_storage+ setting; see {trash_storage} and
@@ -882,10 +886,12 @@ module Lich
 
       # Checks if an item is in one or more hands.
       #
-      # Accepts a string noun or a {DRC::Item} object. Strings are
-      # converted to Item objects for regex matching against hand contents.
+      # Accepts a string noun, a +"#<id>"+ reference, or a {DRC::Item}
+      # object. Strings are converted to Item objects for regex matching
+      # against hand contents; a +"#<id>"+ reference has no noun to match, so
+      # it is compared with the GameObj hand ids instead (exact item only).
       #
-      # @param item [String, DRC::Item] item noun or Item object
+      # @param item [String, DRC::Item] item noun, "#<id>", or Item object
       # @param which_hand [String] "left", "right", "either", or "both"
       # @return [Boolean] true if item is in the specified hand(s)
       #
@@ -894,8 +900,15 @@ module Lich
       #
       # @example Check specific hand
       #   DRCI.in_hand?("shield", "left")
+      #
+      # @example Check for one exact item by id
+      #   DRCI.in_hand?("#41234567")
       def in_hand?(item, which_hand = 'either')
         return false unless item
+
+        if item.is_a?(String) && (id = item[ITEM_ID_REF_PATTERN, 1])
+          return id_in_hand?(id, which_hand)
+        end
 
         item = DRC::Item.from_text(item) if item.is_a?(String)
         case which_hand.downcase
@@ -907,6 +920,27 @@ module Lich
           in_left_hand?(item) || in_right_hand?(item)
         when 'both'
           in_left_hand?(item) && in_right_hand?(item)
+        else
+          Lich::Messaging.msg("bold", "DRCI: Unknown hand: #{which_hand}. Valid options are: left, right, either, both")
+          false
+        end
+      end
+
+      # Whether the item with this GameObj id is in the given hand(s). An empty
+      # hand is a placeholder with a nil id, so it never matches.
+      #
+      # @param id [String] item id, without the leading "#"
+      # @param which_hand [String] "left", "right", "either", or "both"
+      # @return [Boolean]
+      # @api private
+      def id_in_hand?(id, which_hand)
+        left = GameObj.left_hand&.id.to_s == id
+        right = GameObj.right_hand&.id.to_s == id
+        case which_hand.downcase
+        when 'left' then left
+        when 'right' then right
+        when 'either' then left || right
+        when 'both' then left && right
         else
           Lich::Messaging.msg("bold", "DRCI: Unknown hand: #{which_hand}. Valid options are: left, right, either, both")
           false
@@ -1233,7 +1267,10 @@ module Lich
       # A short polling loop (up to 1 second) accommodates XML feed lag
       # between the text response and the GameObj update.
       #
-      # @param item [String] item name (unqualified)
+      # A +"#<id>"+ reference has no noun ({DRC.get_noun} returns nil), so it
+      # is verified by that exact id being in hand (see {.in_hand?}).
+      #
+      # @param item [String] item name (unqualified) or "#<id>"
       # @param container [String, nil] container name (unqualified), or nil
       # @return [Boolean] true if item was retrieved successfully
       # @api private
@@ -1250,15 +1287,15 @@ module Lich
         from = container
         from = "from #{container}" if container && !(container =~ /^(in|on|under|behind|from) /i)
 
-        noun = DRC.get_noun(item)
+        target = item.to_s.match?(ITEM_ID_REF_PATTERN) ? item : DRC.get_noun(item)
         DRC.bput("get #{item} #{from}", GET_ITEM_FAILURE_PATTERNS, GET_ITEM_SUCCESS_PATTERNS)
 
         10.times do
-          break if in_hands?(noun)
+          break if in_hands?(target)
           sleep 0.1
         end
 
-        return true if in_hands?(noun)
+        return true if in_hands?(target)
         return get_item_from_eddy_portal?(item, container) if container =~ /\bportal\b/i
 
         false
