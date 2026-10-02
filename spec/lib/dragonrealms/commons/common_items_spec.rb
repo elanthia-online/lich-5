@@ -920,6 +920,33 @@ RSpec.describe Lich::DragonRealms::DRCI do
         expect(described_class.lower_item?('sword')).to be false
       end
     end
+
+    # A "#<id>" has no name to match against DRC.left_hand, so the hand must
+    # be picked by id -- otherwise it falls through to 'right' and lowers
+    # whatever else is held there.
+    context 'with a #<id> reference' do
+      before do
+        allow(GameObj).to receive(:left_hand).and_return(double('left', id: '5001', name: 'encyclopedic almanac'))
+        allow(GameObj).to receive(:right_hand).and_return(double('right', id: '6000', name: 'steel sword'))
+        allow(DRC).to receive(:left_hand).and_return('encyclopedic almanac')
+        allow(DRC).to receive(:right_hand).and_return('steel sword')
+      end
+
+      it 'lowers the left hand when the id is held there' do
+        expect(DRC).to receive(:bput).with('lower ground left', any_args).and_return('You lower your almanac to the ground.')
+        expect(described_class.lower_item?('#5001')).to be true
+      end
+
+      it 'lowers the right hand when the id is held there' do
+        expect(DRC).to receive(:bput).with('lower ground right', any_args).and_return('You lower your sword to the ground.')
+        expect(described_class.lower_item?('#6000')).to be true
+      end
+
+      it 'lowers nothing when the id is in neither hand' do
+        expect(DRC).not_to receive(:bput)
+        expect(described_class.lower_item?('#7000')).to be false
+      end
+    end
   end
 
   describe '#lift?' do

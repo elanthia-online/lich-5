@@ -1513,7 +1513,7 @@ module Lich
       #
       # Determines which hand holds the item, then issues LOWER GROUND.
       #
-      # @param item [String] item noun to lower
+      # @param item [String] item noun or "#<id>" to lower
       # @return [Boolean] true if item was lowered successfully, false if not held or failed
       #
       # @example
@@ -1521,8 +1521,7 @@ module Lich
       def lower_item?(item)
         return false unless in_hands?(item)
 
-        item_regex = /\b#{item}\b/
-        hand = (DRC.left_hand =~ item_regex) ? 'left' : 'right'
+        hand = in_left_hand?(item) ? 'left' : 'right'
         case DRC.bput("lower ground #{hand}", *LOWER_SUCCESS_PATTERNS, *LOWER_FAILURE_PATTERNS)
         when *LOWER_SUCCESS_PATTERNS
           true
