@@ -62,9 +62,11 @@ module Lich
         private
 
         # Marshal.dump walks every Hash it serializes. Ruby raises RuntimeError
-        # ("... during iteration") if a Hash changes mid-walk, which has been
-        # seen under concurrent script load on Ruby 4.0.0. The copy only reads
-        # @data, so retrying is safe; unrelated errors propagate unchanged.
+        # ("... during iteration") if a Hash changes mid-walk. A user hit
+        # "hash representation was changed during iteration" here on Ruby 4.0.0;
+        # what changed the Hash is unknown, as nothing writes @data after load.
+        # This is a permanent defense, not tied to a Ruby version. The copy only
+        # reads @data, so retrying is safe; unrelated errors propagate unchanged.
         def deep_copy(obj)
           attempts = 0
           begin
@@ -75,8 +77,19 @@ module Lich
             attempts += 1
             raise if attempts >= DEEP_COPY_ATTEMPTS
 
-            Lich.log("SetupFiles: retrying deep copy of #{self} (attempt #{attempts}): #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+            log_retry("SetupFiles: retrying deep copy of #{self} (attempt #{attempts}): #{e.message}")
+            # Let any thread mid-operation on the Hash finish before retrying.
+            Thread.pass
             retry
+          end
+        end
+
+        # Guarded logging, mirroring SetupFiles#safe_log (private to the outer class).
+        def log_retry(text)
+          if defined?(Lich) && Lich.respond_to?(:log)
+            Lich.log(text)
+          else
+            $stderr.puts(text)
           end
         end
       end

@@ -120,6 +120,46 @@ RSpec.describe Lich::Common::SetupFiles do
         expect(Lich).to have_received(:log).with(/\(attempt 2\)/)
       end
 
+      # Pins the message from the original report, which the flaky helper
+      # cannot produce on current Ruby; guards the matcher against narrowing.
+      it 'retries the reported "hash representation was changed" error' do
+        dumps = 0
+        allow(Marshal).to receive(:dump).and_wrap_original do |original, *args|
+          dumps += 1
+          raise RuntimeError, 'hash representation was changed during iteration' if dumps == 1
+
+          original.call(*args)
+        end
+
+        copy = file_info_with({ setting: 'value' }).data
+
+        expect(copy).to eq({ setting: 'value' })
+        expect(dumps).to eq(2)
+      end
+
+      it 'yields to other threads before each retry' do
+        allow(Thread).to receive(:pass)
+        flaky = FlakyDump.new(2)
+        data = { flaky: flaky }
+        flaky.parent = data
+
+        file_info_with(data).data
+
+        expect(Thread).to have_received(:pass).twice
+      end
+
+      it 'falls back to $stderr for the retry log when Lich.log is unavailable' do
+        allow(Lich).to receive(:respond_to?).and_call_original
+        allow(Lich).to receive(:respond_to?).with(:log).and_return(false)
+        flaky = FlakyDump.new(1)
+        data = { flaky: flaky }
+        flaky.parent = data
+
+        expect { file_info_with(data).data }
+          .to output(/retrying deep copy of \/tmp\/flaky\.yaml \(attempt 1\)/).to_stderr
+        expect(Lich).not_to have_received(:log)
+      end
+
       it 're-raises after DEEP_COPY_ATTEMPTS failed attempts' do
         flaky = FlakyDump.new(Float::INFINITY)
         data = { flaky: flaky }
