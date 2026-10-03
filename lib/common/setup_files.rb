@@ -28,6 +28,9 @@ module Lich
       include MonitorMixin
 
       class FileInfo
+        # Attempts at a deep clone before a transient iteration error propagates.
+        DEEP_COPY_ATTEMPTS = 3
+
         attr_reader :path, :name, :mtime, :digest
 
         def initialize(path:, name:, data:, mtime:, digest: nil)
@@ -40,12 +43,12 @@ module Lich
 
         # Deep clone of data to prevent scripts from mutating cached settings.
         def data
-          Marshal.load(Marshal.dump(@data))
+          deep_copy(@data)
         end
 
         # Efficient deep clone of a single property.
         def peek(property)
-          Marshal.load(Marshal.dump(@data[property.to_sym]))
+          deep_copy(@data[property.to_sym])
         end
 
         def to_s
@@ -54,6 +57,27 @@ module Lich
 
         def inspect
           "#<SetupFiles::FileInfo @name=#{@name}, @path=#{@path}, @mtime=#{@mtime}, @digest=#{@digest}>"
+        end
+
+        private
+
+        # Marshal.dump walks every Hash it serializes. Ruby raises RuntimeError
+        # ("... during iteration") if a Hash changes mid-walk, which has been
+        # seen under concurrent script load on Ruby 4.0.0. The copy only reads
+        # @data, so retrying is safe; unrelated errors propagate unchanged.
+        def deep_copy(obj)
+          attempts = 0
+          begin
+            Marshal.load(Marshal.dump(obj))
+          rescue RuntimeError => e
+            raise unless e.message.include?('during iteration')
+
+            attempts += 1
+            raise if attempts >= DEEP_COPY_ATTEMPTS
+
+            Lich.log("SetupFiles: retrying deep copy of #{self} (attempt #{attempts}): #{e.message}") if defined?(Lich) && Lich.respond_to?(:log)
+            retry
+          end
         end
       end
 

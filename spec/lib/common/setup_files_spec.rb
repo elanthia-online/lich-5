@@ -11,6 +11,31 @@ RSpec.describe Lich::Common::SetupFiles do
   let(:custom_data_dir) { File.join(data_dir, 'custom') }
   let(:setup_files) { described_class.new }
 
+  # Adds a key to `parent` from inside Marshal.dump while `parent` is being
+  # iterated, for its first `fail_times` dumps. Ruby itself raises
+  # "can't add a new key into hash during iteration".
+  let(:flaky_class) do
+    Class.new do
+      attr_reader :dumps
+      attr_accessor :parent
+
+      def initialize(fail_times)
+        @fail_times = fail_times
+        @dumps = 0
+      end
+
+      def _dump(_level)
+        @dumps += 1
+        @parent[:"added_#{@dumps}"] = true if @dumps <= @fail_times
+        ''
+      end
+
+      def self._load(_str)
+        new(0)
+      end
+    end
+  end
+
   before do
     stub_const('SCRIPT_DIR', tmpdir)
     FileUtils.mkdir_p(profiles_dir)
@@ -50,6 +75,95 @@ RSpec.describe Lich::Common::SetupFiles do
     it 'formats to_s as filepath' do
       expect(file_info.to_s).to eq('/tmp/test.yaml')
     end
+
+    describe 'deep copy resilience' do
+      before do
+        stub_const('FlakyDump', flaky_class)
+        allow(Lich).to receive(:log)
+      end
+
+      def file_info_with(data)
+        described_class::FileInfo.new(path: '/tmp', name: 'flaky.yaml', data: data, mtime: Time.now)
+      end
+
+      it 'retries a transient iteration error and returns a full copy' do
+        flaky = FlakyDump.new(1)
+        data = { setting: 'value', flaky: flaky }
+        flaky.parent = data
+
+        copy = file_info_with(data).data
+
+        expect(copy[:setting]).to eq('value')
+        expect(copy[:flaky]).to be_a(FlakyDump)
+        expect(flaky.dumps).to eq(2)
+      end
+
+      it 'retries a transient iteration error in peek' do
+        flaky = FlakyDump.new(2)
+        nested = { key: 'inner', flaky: flaky }
+        flaky.parent = nested
+
+        copy = file_info_with({ nested: nested }).peek(:nested)
+
+        expect(copy[:key]).to eq('inner')
+        expect(flaky.dumps).to eq(3)
+      end
+
+      it 'logs each retry' do
+        flaky = FlakyDump.new(2)
+        data = { flaky: flaky }
+        flaky.parent = data
+
+        file_info_with(data).data
+
+        expect(Lich).to have_received(:log).with(/retrying deep copy of \/tmp\/flaky\.yaml \(attempt 1\): can't add a new key/)
+        expect(Lich).to have_received(:log).with(/\(attempt 2\)/)
+      end
+
+      it 're-raises after DEEP_COPY_ATTEMPTS failed attempts' do
+        flaky = FlakyDump.new(Float::INFINITY)
+        data = { flaky: flaky }
+        flaky.parent = data
+
+        expect { file_info_with(data).data }.to raise_error(RuntimeError, /during iteration/)
+        expect(flaky.dumps).to eq(described_class::FileInfo::DEEP_COPY_ATTEMPTS)
+      end
+
+      it 'does not retry unrelated RuntimeErrors' do
+        calls = 0
+        boom = Class.new do
+          define_method(:_dump) do |_level|
+            calls += 1
+            raise 'boom'
+          end
+        end
+        stub_const('BoomDump', boom)
+
+        expect { file_info_with({ boom: BoomDump.new }).data }.to raise_error(RuntimeError, 'boom')
+        expect(calls).to eq(1)
+        expect(Lich).not_to have_received(:log)
+      end
+
+      it 'does not retry non-RuntimeErrors' do
+        data = { hash: Hash.new { |h, k| h[k] = 0 } }
+
+        expect { file_info_with(data).data }.to raise_error(TypeError, /default proc/)
+        expect(Lich).not_to have_received(:log)
+      end
+
+      it 'leaves the cached data intact after a retry' do
+        flaky = FlakyDump.new(1)
+        data = { setting: 'value', flaky: flaky }
+        flaky.parent = data
+        info = file_info_with(data)
+
+        info.data
+
+        # The failed attempt's insert raised, so no key was added.
+        expect(data.keys).to eq(%i[setting flaky])
+        expect(info.peek(:setting)).to eq('value')
+      end
+    end
   end
 
   describe '#get_settings' do
@@ -73,6 +187,26 @@ RSpec.describe Lich::Common::SetupFiles do
       result = setup_files.get_settings
       expect(result.loot_coins).to eq(true)
     end
+
+    it 'survives a transient iteration error while cloning cached data' do
+      stub_const('FlakyDump', flaky_class)
+      allow(Lich).to receive(:log)
+      flaky = FlakyDump.new(1)
+      allow(setup_files).to receive(:safe_load_yaml).and_wrap_original do |original, filepath|
+        loaded = original.call(filepath)
+        if File.basename(filepath) == 'TestChar-setup.yaml'
+          loaded[:flaky] = flaky
+          flaky.parent = loaded
+        end
+        loaded
+      end
+
+      result = setup_files.get_settings
+
+      expect(result.hometown).to eq('Shard')
+      expect(result.flaky).to be_a(FlakyDump)
+      expect(flaky.dumps).to eq(2)
+    end
   end
 
   describe '#get_data' do
@@ -83,6 +217,25 @@ RSpec.describe Lich::Common::SetupFiles do
     it 'returns data as an OpenStruct' do
       result = setup_files.get_data('spells')
       expect(result).to be_a(OpenStruct)
+    end
+
+    it 'survives a transient iteration error while cloning cached data' do
+      stub_const('FlakyDump', flaky_class)
+      allow(Lich).to receive(:log)
+      flaky = FlakyDump.new(1)
+      allow(setup_files).to receive(:safe_load_yaml).and_wrap_original do |original, filepath|
+        loaded = original.call(filepath)
+        if File.basename(filepath) == 'base-spells.yaml'
+          loaded[:flaky] = flaky
+          flaky.parent = loaded
+        end
+        loaded
+      end
+
+      result = setup_files.get_data('spells')
+
+      expect(result.spell_data).to eq({ 'Shield' => { 'mana' => 3 } })
+      expect(flaky.dumps).to eq(2)
     end
 
     it 'loads data from the correct file' do
