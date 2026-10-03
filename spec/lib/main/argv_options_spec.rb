@@ -111,6 +111,6 @@ RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.handle_sentinel' do
   end
 
   it 'parses --sentinel into the option the side effect reads' do
-    expect(File.read(source_path)).to match(/when \/\^--sentinel\$\/i\s+@argv_options\[:sentinel\] = true/)
+    expect(File.read(source_path)).to match(/^[ \t]*when \/\^--sentinel\$\/i\r?\n[ \t]*@argv_options\[:sentinel\] = true/)
   end
 end
