@@ -611,6 +611,31 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     end
   end
 
+  describe '.resolve_pipe_frontend' do
+    it 'keeps the frontend named on the command line' do
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=stormfront'])).to eq('stormfront')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--stormfront'])).to eq('stormfront')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--saga'])).to eq('saga')
+    end
+
+    it 'resolves an alias to its canonical frontend' do
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=wrayth'])).to eq('stormfront')
+    end
+
+    it 'preserves a registered custom frontend' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=vellum'])).to eq('vellum')
+    end
+
+    it 'stays unknown without a frontend flag or with an unregistered one' do
+      expect(described_class.resolve_pipe_frontend(['-g', '127.0.0.1:4000', '--pipe', '--no-gtk', '--gemstone'])).to eq('unknown')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=nosuchclient'])).to eq('unknown')
+    end
+  end
+
   describe '.format_launch_flag' do
     it 'returns nil for empty game code' do
       expect(described_class.format_launch_flag('')).to be_nil

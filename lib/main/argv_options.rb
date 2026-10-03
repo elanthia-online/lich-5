@@ -102,6 +102,9 @@ module Lich
               @argv_options[:save] = true
             when /^--pipe$/i
               @argv_options[:pipe] = true
+            when /^--sentinel$/i
+              @argv_options[:sentinel] = true
+              Lich::Common::Frontend.sentinel_requested = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i

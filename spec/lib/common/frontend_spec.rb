@@ -903,6 +903,38 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.supports_sentinel?' do
+    around do |example|
+      original = $frontend
+      example.run
+      $frontend = original
+      frontend.sentinel_requested = false
+    end
+
+    it 'follows the frontend capability by default' do
+      expect(frontend.supports_sentinel?('saga')).to be true
+      expect(frontend.supports_sentinel?('stormfront')).to be false
+      $frontend = 'stormfront'
+      expect(frontend.supports_sentinel?).to be false
+    end
+
+    it 'is true for the running frontend once --sentinel requested it' do
+      $frontend = 'stormfront'
+      frontend.sentinel_requested = true
+
+      expect(frontend.supports_sentinel?).to be true
+      expect(frontend.supports_sentinel?('wrayth')).to be true
+    end
+
+    it 'still answers from the catalog for other frontends' do
+      $frontend = 'stormfront'
+      frontend.sentinel_requested = true
+
+      expect(frontend.supports_sentinel?('wizard')).to be false
+      expect(frontend.supports_sentinel?('saga')).to be true
+    end
+  end
+
   describe '.supports_room_window?' do
     it 'returns true for frontends with room_window capability' do
       expect(frontend.supports_room_window?('wrayth')).to be true
