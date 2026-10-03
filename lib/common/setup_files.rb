@@ -77,19 +77,10 @@ module Lich
             attempts += 1
             raise if attempts >= DEEP_COPY_ATTEMPTS
 
-            log_retry("SetupFiles: retrying deep copy of #{self} (attempt #{attempts}): #{e.message}")
+            SetupFiles.safe_log("SetupFiles: retrying deep copy of #{self} (attempt #{attempts}): #{e.message}")
             # Let any thread mid-operation on the Hash finish before retrying.
             Thread.pass
             retry
-          end
-        end
-
-        # Guarded logging, mirroring SetupFiles#safe_log (private to the outer class).
-        def log_retry(text)
-          if defined?(Lich) && Lich.respond_to?(:log)
-            Lich.log(text)
-          else
-            $stderr.puts(text)
           end
         end
       end
@@ -163,6 +154,19 @@ module Lich
       def reload
         reload_profiles(character_suffixes_to_filenames(['setup']))
         reload_data
+      end
+
+      # Guarded logging -- safe to call before Lich.log is defined. Public and
+      # class-level so FileInfo can share it.
+      #
+      # @param text [String] log message
+      # @return [void]
+      def self.safe_log(text)
+        if defined?(Lich) && Lich.respond_to?(:log)
+          Lich.log(text)
+        else
+          $stderr.puts(text)
+        end
       end
 
       private
@@ -380,12 +384,9 @@ module Lich
       #
       # @param text [String] log message
       # @return [void]
+      # @see SetupFiles.safe_log
       def safe_log(text)
-        if defined?(Lich) && Lich.respond_to?(:log)
-          Lich.log(text)
-        else
-          $stderr.puts(text)
-        end
+        self.class.safe_log(text)
       end
     end
   end
