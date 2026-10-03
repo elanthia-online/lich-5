@@ -81,3 +81,36 @@ RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.handle_hosts_dir' do
     end
   end
 end
+
+RSpec.describe 'Lich::Main::ArgvOptions::SideEffects.handle_sentinel' do
+  source_path = File.expand_path('../../../lib/main/argv_options.rb', __dir__)
+
+  harness_class = Class.new do
+    source = File.read(source_path)
+    method_body = source[/^(?<ind>[ \t]*)def self\.handle_sentinel\(argv_options\).*?^\k<ind>end$/m]
+    raise 'could not extract handle_sentinel from argv_options.rb' unless method_body
+
+    module_eval(method_body.sub('def self.handle_sentinel', 'def handle_sentinel'))
+  end
+
+  let(:harness) { harness_class.new }
+  let(:frontend) { Module.new { singleton_class.send(:attr_accessor, :sentinel_requested) } }
+
+  before { stub_const('Lich::Common::Frontend', frontend) }
+
+  it 'requests the origin sentinel when --sentinel was parsed' do
+    harness.handle_sentinel({ sentinel: true })
+
+    expect(frontend.sentinel_requested).to be true
+  end
+
+  it 'leaves the sentinel alone without the flag' do
+    harness.handle_sentinel({})
+
+    expect(frontend.sentinel_requested).to be_nil
+  end
+
+  it 'parses --sentinel into the option the side effect reads' do
+    expect(File.read(source_path)).to match(/^[ \t]*when \/\^--sentinel\$\/i\r?\n[ \t]*@argv_options\[:sentinel\] = true/)
+  end
+end
