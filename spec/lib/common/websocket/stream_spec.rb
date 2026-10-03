@@ -60,7 +60,14 @@ class FakeSSLSocket
     true
   end
 
+  # Makes every subsequent #write fail, like a peer that has already reset.
+  def fail_writes!(error)
+    @write_error = error
+  end
+
   def write(bytes)
+    raise @write_error if @write_error
+
     @written << bytes
     bytes.bytesize
   end
@@ -317,6 +324,18 @@ RSpec.describe Lich::Common::WebSocket::Stream do
       io = FakeSSLSocket.new(chunk_size: 4096) # deliver both frames in one #readpartial
       io.feed(server_frame("last words\n"))
       io.feed([0xC1, 0x00].pack('C*')) # reserved bit set -- fatal
+      stream = described_class.new(io)
+
+      expect(stream.gets).to eq("last words\n")
+      expect { stream.gets }.to raise_error(Frame::ProtocolError, /reserved/)
+    end
+
+    it 'keeps the ProtocolError as the failure when answering a salvaged ping fails to write' do
+      io = FakeSSLSocket.new(chunk_size: 4096)
+      io.feed(server_frame("last words\n"))
+      io.feed(server_frame('hb', opcode: Frame::OPCODE_PING))
+      io.feed([0xC1, 0x00].pack('C*')) # reserved bit set -- fatal
+      io.fail_writes!(Errno::EPIPE.new)
       stream = described_class.new(io)
 
       expect(stream.gets).to eq("last words\n")

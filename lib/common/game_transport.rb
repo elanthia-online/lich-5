@@ -170,7 +170,13 @@ module Lich
       #   direct connect fails and a fallback is attempted
       def self.open_direct(host, port, **websocket_opts)
         socket = Socket.tcp(host, port, connect_timeout: DIRECT_CONNECT_TIMEOUT)
-        configure_socket(socket, host)
+        configured = false
+        begin
+          configure_socket(socket, host)
+          configured = true
+        ensure
+          socket.close unless configured
+        end
         Lich.log "info: connected via direct TCP transport (#{host}:#{port})"
         socket
       rescue SystemCallError, IO::TimeoutError, SocketError => e

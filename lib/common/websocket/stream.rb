@@ -288,7 +288,15 @@ module Lich
           # #gets returns those salvaged lines first, one at a time, and
           # only raises this once the buffer they landed in is drained
           # (mirrors how @eof is deferred the same way).
-          ingest(e.decoded_messages)
+          begin
+            ingest(e.decoded_messages)
+          rescue IOError, SystemCallError, OpenSSL::SSL::SSLError
+            # ingest can answer a salvaged ping with a pong; a failed write
+            # there is a symptom of the same dying connection and must not
+            # replace the ProtocolError, which is the root cause (and the
+            # shutdown reason games.rb records).
+            nil
+          end
           @pending_error = e
         rescue IOError # covers EOFError, a subclass, too
           # A *local* close (Stream#close / Game.close racing the reader

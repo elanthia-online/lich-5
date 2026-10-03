@@ -75,6 +75,15 @@ RSpec.describe Lich::Common::GameTransport do
       expect(described_class.open_direct('host', 1234)).to eq(socket)
     end
 
+    it 'closes the connected socket if configure_socket raises, instead of leaking it' do
+      socket = double('socket')
+      allow(Socket).to receive(:tcp).and_return(socket)
+      allow(described_class).to receive(:configure_socket).and_raise(Errno::EINVAL, 'bad option')
+      expect(socket).to receive(:close)
+
+      expect { described_class.open_direct('host', 1234) }.to raise_error(Errno::EINVAL)
+    end
+
     described_class::DIRECT_CONNECTIVITY_ERRORS.each do |error_class|
       it "falls back to .open_websocket on #{error_class}" do
         # Errno::* classes prepend their own system message to whatever's
@@ -136,10 +145,13 @@ RSpec.describe Lich::Common::GameTransport do
       allow(Lich).to receive(:log)
       ws_error = Lich::Common::WebSocket::Stream::ConnectionError.new('Errno::ECONNREFUSED: ws refused')
       allow(described_class).to receive(:open_websocket).and_raise(ws_error)
+      # strerror text is platform-specific (POSIX "Connection refused" vs
+      # Windows "No connection could be made ..."); build it the same way.
+      direct_message = Errno::ECONNREFUSED.new('direct refused').message
 
       expect { described_class.open_direct('host', 1234) }.to raise_error(
         Lich::Common::WebSocket::Stream::ConnectionError,
-        'direct host:1234 unreachable (Errno::ECONNREFUSED: Connection refused - direct refused); ' \
+        "direct host:1234 unreachable (Errno::ECONNREFUSED: #{direct_message}); " \
         'WebSocket fallback also failed (Errno::ECONNREFUSED: ws refused)'
       ) { |error| expect(error.cause).to eq(ws_error) }
     end
