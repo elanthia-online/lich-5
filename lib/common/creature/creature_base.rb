@@ -436,14 +436,21 @@ module Lich
         # and `<crtrStatus>` events), not from any client last-selected-target
         # control, which can go stale after movement or death. `valid_target?`
         # (supplied by the game class) removes decoys/dead appendages and
-        # `crtr_flag?(:hostile)` supplies structured hostility.
+        # `crtr_flag?(:hostile)` supplies structured hostility. A creature
+        # that was hostile and is now `sympathetic` (Sympathy 1120 swaps one
+        # for the other mid-fight) is still a target; see
+        # {InstanceMethods#ever_hostile?}. Pass `:not_sympathetic` to leave
+        # such creatures alone (e.g. to respect a group empath's Sympathy).
+        #
+        # Server ids are recycled: a reused id gets the existing instance,
+        # `ever_hostile?` included, until housekeeping evicts it.
         #
         # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
         # @return [Array<Object>]
         def targets(*filters)
           candidates = room_roster
                        .filter_map { |id| self[id] }
-                       .select { |c| c.valid_target? && c.crtr_flag?(:hostile) }
+                       .select { |c| c.valid_target? && (c.crtr_flag?(:hostile) || (c.crtr_flag?(:sympathetic) && c.ever_hostile?)) }
           apply_filters(candidates, filters)
         end
 
@@ -533,6 +540,7 @@ module Lich
           @status = []
           @status_timestamps = {}
           @crtr_flags = {}
+          @ever_hostile = false
           @health = nil
           @max_health = nil
           @last_seen_at = Time.now
@@ -695,6 +703,9 @@ module Lich
             debug_log("~flag: #{key}=#{new_value}") if debug_level == :changes && @crtr_flags[key] != new_value
             @crtr_flags[key] = new_value
           end
+          # Sticky: Sympathy (1120) swaps hostile for sympathetic in the next
+          # snapshot while the creature is still in the fight. See #ever_hostile?.
+          @ever_hostile = true if @crtr_flags[:hostile]
 
           report_crtr_snapshot(attrs) if %i[all active].include?(debug_level)
         end
@@ -708,6 +719,23 @@ module Lich
         # @return [Boolean]
         def crtr_flag?(key)
           @crtr_flags[key.to_sym] || false
+        end
+
+        # Whether `<crtrStatus>` has ever asserted this creature hostile.
+        #
+        # Sympathy (1120) replaces `hostile` with `sympathetic` in the next
+        # snapshot even though the creature is still in the fight, so
+        # `crtr_flag?(:hostile)` - the literal live value - drops it. This
+        # remembers the earlier assertion for the life of the registry entry.
+        #
+        # It never un-latches, so it is not an attack gate by itself: pair it
+        # with a live `crtr_flag?(:sympathetic)`, as {ClassMethods#targets}
+        # does. Only the Sympathy (1120) hostile -> sympathetic path has been
+        # observed in a capture.
+        #
+        # @return [Boolean]
+        def ever_hostile?
+          @ever_hostile || false
         end
 
         # Whether any `<crtrStatus>` classification has been seen for this
