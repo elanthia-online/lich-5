@@ -116,9 +116,10 @@ RSpec.describe Lich::Gemstone::Weapon do
 
     it 'stop at once when the assault never starts' do
       regex = weapon.results_regex('flurry')
-      # the game's refusals, as scripts/mechfire.lic and combat's :already_dead outcome match them
+      # the game's refusals, as scripts/mechfire.lic, bigshot's dead-target check
+      # and combat's :already_dead outcome match them
       ['I could not find what you were referring to.', 'A kobold is quite dead already.',
-       'You are too injured to fire that!'].each { |line| expect(regex).to match(line) }
+       'You are too injured to fire that!', "A little bit late for that don't you think?"].each { |line| expect(regex).to match(line) }
     end
 
     it 'do not end on room speech that mentions a refusal' do

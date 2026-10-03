@@ -208,9 +208,7 @@ module Lich
         /^.+ is quite dead already\.$/,
         /^You are too injured to /,
         /^You don't seem to be able to move your legs to do that/,
-        # bigshot's phrase, no captured sentence yet: only a second-person line
-        # with no quote, so neither speech nor others' narration can match
-        /^You[^"]*little bit late[^"]*$/,
+        /^A little bit late for that don't you think\?$/,
       )
 
       # @param name [String] the technique name

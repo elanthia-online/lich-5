@@ -164,8 +164,8 @@ module Lich
       def self.effect_active?(registry, effect)
         now = Time.now.to_f
         wanted = effect.is_a?(Regexp) ? effect : name_normal(effect.to_s)
-        # Iterate a snapshot: to_h is the parser's live Hash, and the game
-        # thread adding a key mid-iteration would raise in the parser.
+        # Iterate a snapshot: to_h is the parser's live Hash, which the game
+        # thread clears and refills; adding a key mid-iteration raises in the parser.
         registry.to_h.dup.any? do |key, expiry|
           next false unless expiry.to_f > now
 
