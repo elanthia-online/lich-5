@@ -54,6 +54,20 @@ RSpec.describe Lich::Common::ShutdownCoordinator do
     expect(described_class).not_to be_orderly_user_exit
   end
 
+  it 'accepts connection_tls_error (used by the WebSocket transport) as connection loss' do
+    described_class.request(reason: :connection_tls_error, source: :game_reader)
+
+    expect(described_class).to be_connection_loss
+    expect(described_class).not_to be_orderly_user_exit
+  end
+
+  it 'accepts websocket_protocol_error as connection loss' do
+    described_class.request(reason: :websocket_protocol_error, source: :game_reader)
+
+    expect(described_class).to be_connection_loss
+    expect(described_class).not_to be_orderly_user_exit
+  end
+
   it 'logs the first shutdown request with reason and source' do
     described_class.request(reason: :game_timeout, source: :game_reader, detail: Errno::ETIMEDOUT)
 

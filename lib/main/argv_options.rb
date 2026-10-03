@@ -84,6 +84,10 @@ module Lich
               @argv_options[:game] = $1
             when /^--auth-provider=(eaccess|web)$/i
               @argv_options[:auth_provider] = $1.downcase.to_sym
+            when /^--game-transport=(direct|websocket)$/i
+              # :websocket is opt-in only (Genie5#356 phase 2) -- direct TCP
+              # to the game port remains the default; see Lich::Common::GameTransport.
+              @argv_options[:game_transport] = $1.downcase.to_sym
             when /^--account=(.+)$/i
               @argv_options[:account] = $1
             when /^--password=(.+)$/i
