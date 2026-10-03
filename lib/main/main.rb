@@ -400,7 +400,7 @@ reconnect_if_wanted = proc {
       # stdin supplies what a front-end would send (including the initial login
       # key); processed server output is written to stdout. EOF on stdin marks
       # the client dead (PipeIO#closed?) and triggers the normal shutdown path.
-      Frontend.client = Lich::Common::Authentication::LoginHelpers.resolve_pipe_frontend(ARGV)
+      Frontend.client = 'unknown'
       $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
       Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     elsif Frontend.client.eql?('suks')

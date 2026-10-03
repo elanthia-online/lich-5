@@ -252,7 +252,7 @@ module Lich
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
-            Name the client reading it with a frontend flag (--frontend=NAME, --stormfront);
+            With -g HOST:PORT, name the client reading it with a frontend flag (--frontend=NAME, --stormfront);
             without one the frontend is unknown and script output is not XML-escaped.
             --sentinel prefixes each line forwarded from the game with the origin marker
             (0x1F) for a client that strips it, whichever frontend it identifies as.

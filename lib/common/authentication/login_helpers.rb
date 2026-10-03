@@ -55,7 +55,7 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend headless reconnect reconnected save
-          genie frostbite wrayth saga suks pipe sentinel
+          genie frostbite wrayth saga suks sentinel
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
@@ -600,7 +600,7 @@ module Lich
           'profanity'
         end
 
-        # Resolves the frontend identity for a `--pipe` launch.
+        # Resolves the frontend identity for a `--pipe -g HOST:PORT` launch.
         #
         # Whatever reads stdout is the client, so an explicit frontend flag
         # names it and `respond` escapes and wraps script output the way that

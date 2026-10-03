@@ -104,7 +104,6 @@ module Lich
               @argv_options[:pipe] = true
             when /^--sentinel$/i
               @argv_options[:sentinel] = true
-              Lich::Common::Frontend.sentinel_requested = true
             when /^--wine(?:\-prefix)?=.+$/i
               nil # already used when defining the Wine module
             when /\.sal$|Gse\.~xt$/i
@@ -145,8 +144,15 @@ module Lich
           handle_hosts_dir(argv_options)
           handle_bind_address(argv_options)
           handle_detachable_client(argv_options)
+          handle_sentinel(argv_options)
           handle_sal_launch(argv_options)
           argv_options
+        end
+
+        # --sentinel: the running session gets the origin marker whichever
+        # frontend it identifies as.
+        def self.handle_sentinel(argv_options)
+          Lich::Common::Frontend.sentinel_requested = true if argv_options[:sentinel]
         end
 
         # Surface a message on both channels every bind handler uses.

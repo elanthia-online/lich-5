@@ -549,6 +549,10 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
         .to eq(['GS3', :__unset, :__unset])
     end
 
+    it 'does not read --sentinel as a game instance' do
+      expect(described_class.resolve_login_args(['--login', 'Tsetem', '--sentinel'])).to eq([:__unset, :__unset, :__unset])
+    end
+
     it 'does not report an invalid game code as a resolved instance' do
       allow(Lich).to receive(:log)
 
