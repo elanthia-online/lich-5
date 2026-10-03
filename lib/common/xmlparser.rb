@@ -249,7 +249,9 @@ module Lich
       def active_spells
         z = {}
         XMLData.dialogs.sort.each do |a, b|
-          b.each do |k, v|
+          # b is the live Hash the parser writes; iterate a copy so a new
+          # effect arriving mid-scan cannot raise in the parser thread
+          b.dup.each do |k, v|
             case a
             when /Active Spells|Buffs/
               z.merge!(k => v) if k.instance_of?(String)

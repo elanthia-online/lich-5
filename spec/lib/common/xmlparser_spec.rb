@@ -900,4 +900,64 @@ RSpec.describe Lich::Common::XMLParser do
       end
     end
   end
+
+  # active_spells iterates the effect dialogs the parser writes. Adding a key to
+  # a Hash while another thread iterates it raises in the thread doing the
+  # adding, so a scan over the live Hash would make the parser raise when a new
+  # effect arrives; tag_start rescues that, logs it and resets, and the effect is
+  # lost. ActiveSpell's watcher thread calls active_spells when the parser
+  # signals an effects update, which is when new effects are arriving.
+  describe '#active_spells while the parser adds an effect' do
+    def feed(parser, fragment)
+      REXML::Document.parse_stream("<root>#{fragment}</root>", parser)
+    end
+
+    def feed_cooldown(parser, id, text)
+      feed(parser, %(<dialogData id='Cooldowns'><progressBar id='#{id}' text='#{text}' time='0:01:00'/></dialogData>))
+    end
+
+    before do
+      # at runtime XMLData is the parser instance, so active_spells reads the
+      # same Hashes the parser writes
+      stub_const('XMLData', parser)
+      stub_const('ActiveSpell', double('ActiveSpell', request_update: nil))
+      feed_cooldown(parser, '1', 'Surge')
+    end
+
+    it 'keeps an effect that arrives while the scan is paused mid-iteration' do
+      inside = Queue.new
+      resume = Queue.new
+      paused = false
+      # a Cooldowns key whose to_s pauses the scan (active_spells calls
+      # k.to_s on every Cooldowns key)
+      key = Object.new
+      key.define_singleton_method(:to_s) do
+        unless paused
+          paused = true
+          inside << true
+          resume.pop
+        end
+        'pausing key'
+      end
+      parser.dialogs['Cooldowns'][key] = Time.now + 60
+
+      reader = Thread.new { parser.active_spells }
+      unless inside.pop(timeout: 5)
+        reader.kill
+        raise 'active_spells never reached its pause point'
+      end
+      begin
+        feed_cooldown(parser, '2', 'Berserk')
+      ensure
+        resume << true
+        reader.join
+      end
+
+      expect(parser.dialogs['Cooldowns']).to include('Berserk')
+    end
+
+    it 'reports the effects it saw' do
+      expect(parser.active_spells).to include('Surge Cooldown')
+    end
+  end
 end

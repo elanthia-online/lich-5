@@ -8,8 +8,14 @@ module Lich
           @dialog = dialog
         end
 
+        # A snapshot of the dialog's effects. The XML parser thread writes the
+        # live Hash, and adding a key to a Hash while another thread iterates
+        # it raises in the thread doing the adding: the parser, not the script.
+        # Iterating a copy keeps a script's scan from breaking the parser.
+        #
+        # @return [Hash{String, Integer => Time}] effect name or id => expiry
         def to_h
-          XMLData.dialogs.fetch(@dialog, {})
+          live.dup
         end
 
         def each()
@@ -18,9 +24,10 @@ module Lich
 
         def expiration(effect)
           if effect.is_a?(Regexp)
-            to_h.find { |k, _v| k.to_s =~ effect }[1] || 0
+            (to_h.find { |k, _v| k.to_s =~ effect } || [nil, 0])[1]
           else
-            to_h.fetch(effect, 0)
+            # a single lookup does not iterate, so it can read the live Hash
+            live.fetch(effect, 0)
           end
         end
 
@@ -34,6 +41,13 @@ module Lich
           else
             expiration(effect)
           end
+        end
+
+        private
+
+        # The parser's own Hash for this dialog. Never iterate it; see {#to_h}.
+        def live
+          XMLData.dialogs.fetch(@dialog, {})
         end
       end
 
