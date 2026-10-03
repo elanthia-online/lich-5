@@ -84,6 +84,9 @@ reconnect_if_wanted = proc {
   # Detachable listener stdout notices (connect/disconnect); the disconnect
   # notice is emitted from handle_detachable_client in global_defs at runtime.
   require File.join(LIB_DIR, 'main', 'detachable_client_notice.rb')
+  # Waits for XMLData.name so the detachable session file gets a name when
+  # --sal was used without --login.
+  require File.join(LIB_DIR, 'main', 'detachable_session_poller.rb')
 
   # Arms the shutdown watchdog before the user-initiated ("...exit") drain, which
   # kills scripts and runs their before_dying hooks inline (any of which can
@@ -222,6 +225,8 @@ reconnect_if_wanted = proc {
       exit
     end
   end
+
+  game_transport = @argv_options[:game_transport] || :direct
 
   if @launch_data
     if @launch_data.find { |opt| opt =~ /GAMECODE=DR/ }
@@ -544,13 +549,13 @@ reconnect_if_wanted = proc {
     gamehost, gameport = Lich.fix_game_host_port(gamehost, gameport)
     Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
     begin
-      Game.open_with_timeout(gamehost, gameport)
+      Game.open_with_timeout(gamehost, gameport, transport: game_transport)
     rescue
       Lich.log "error: #{$!}"
       gamehost, gameport = Lich.break_game_host_port(gamehost, gameport)
       Lich.log "info: connecting to game server (#{gamehost}:#{gameport})"
       begin
-        Game.open_with_timeout(gamehost, gameport)
+        Game.open_with_timeout(gamehost, gameport, transport: game_transport)
       rescue
         Lich.log "error: #{$!}"
         $_CLIENT_.close rescue nil
@@ -588,7 +593,7 @@ reconnect_if_wanted = proc {
         # report_on_exception off: a failed Game.open is surfaced by the join below
         # (which re-raises it), not by an auto-printed thread warning.
         Thread.current.report_on_exception = false
-        Game.open(@argv_options[:game_host], @argv_options[:game_port])
+        Game.open(@argv_options[:game_host], @argv_options[:game_port], transport: game_transport)
       }
       # join(30) returns nil on timeout, the thread on success, and re-raises if
       # Game.open errored (e.g. connection refused) -- so a failed connect reaches
@@ -665,7 +670,7 @@ reconnect_if_wanted = proc {
         begin
           include Lich::Gemstone if @argv_options[:game_host] =~ /gs/i
           include Lich::DragonRealms if @argv_options[:game_host] =~ /dr/i
-          Game.open(@argv_options[:game_host], @argv_options[:game_port])
+          Game.open(@argv_options[:game_host], @argv_options[:game_port], transport: game_transport)
         rescue
           Lich.log "error: #{$!}"
           $stdout.puts "error: #{$!}"
@@ -897,6 +902,8 @@ reconnect_if_wanted = proc {
   unless @argv_options[:detachable_client_port].nil?
     detachable_client_thread = Thread.new {
       server = nil
+      resolved_char_name = nil
+      name_poll_thread = nil
       begin
         loop {
           begin
@@ -910,16 +917,51 @@ reconnect_if_wanted = proc {
                 host: server.local_address.ip_address,
                 port: server.local_address.ip_port
               }
-              login_idx = ARGV.index('--login')
-              char_name = if !login_idx.nil? && ARGV[login_idx + 1]
-                            ARGV[login_idx + 1].capitalize
-                          end
 
-              begin
-                Frontend.create_session_file(char_name, $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port]) if char_name
-              rescue => e
-                Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+              if resolved_char_name.nil?
+                # Reuses the same --login / Account.character / XMLData.name ladder
+                # session_name above was resolved from (the GUI single-launch path's
+                # own create_session_file call at line ~502 only checks
+                # Account.character, not this full ladder). The placeholder fallback
+                # means none of those three had an answer yet -- not a real name --
+                # so the poller below takes over.
+                resolved_char_name = Lich::InternalAPI::ActiveSessions::Lifecycle.resolve_session_name(
+                  argv: ARGV,
+                  account_character: (Lich::Common::Account.character rescue nil)
+                )
+                if resolved_char_name == Lich::InternalAPI::ActiveSessions::Lifecycle.default_session_name
+                  resolved_char_name = nil
+                end
               end
+
+              if resolved_char_name
+                begin
+                  Frontend.create_session_file(resolved_char_name, $_DETACHABLE_LISTENER_[:host], $_DETACHABLE_LISTENER_[:port])
+                rescue => e
+                  Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                end
+              elsif name_poll_thread.nil? || !name_poll_thread.alive?
+                listener_host = $_DETACHABLE_LISTENER_[:host]
+                listener_port = $_DETACHABLE_LISTENER_[:port]
+                name_poll_thread = Thread.new do
+                  begin
+                    name_from_stream = Lich::Main::DetachableSessionPoller.wait_for_name(
+                      name_source: -> { XMLData.name },
+                      shutdown_requested: -> { Lich::Common::ShutdownCoordinator.requested? }
+                    )
+                    if name_from_stream
+                      # Verbatim, like the account_character/XMLData.name tiers
+                      # resolve_session_name uses above -- this is server-authoritative,
+                      # not user-typed, so it isn't .capitalize'd the way --login is.
+                      resolved_char_name = name_from_stream
+                      Frontend.create_session_file(resolved_char_name, listener_host, listener_port)
+                    end
+                  rescue => e
+                    Lich.log "warning: failed to create session file: #{e}\n\t#{e.backtrace.join("\n\t")}"
+                  end
+                end
+              end
+
               detachable_listener_connected(detachable_client_count.positive?)
 
               listen_address = Lich::Main::DetachableClientNotice.address(
@@ -943,12 +985,27 @@ reconnect_if_wanted = proc {
             Lich.log "error: detachable_client_thread (accept): #{e}\n\t#{e.backtrace.join("\n\t")}"
             server.close rescue nil
             server = nil
+            # The poller (if any) captured this listener's host/port; kill and join it
+            # so a stale write can't land after the replacement listener comes up, and
+            # so the alive? guard above lets a fresh poller spawn against the new one.
+            name_poll_thread&.kill
+            name_poll_thread&.join(1)
+            name_poll_thread = nil
             Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener
             sleep 5
           end
           break if Lich::Common::ShutdownCoordinator.orderly_user_exit?
         }
       ensure
+        # Stop the name-resolution poller before cleaning up so it can't wake up
+        # after cleanup runs and write a session file nothing will ever remove.
+        # kill alone doesn't wait for the thread to actually unwind, so join it
+        # too -- otherwise cleanup below can race an in-progress session-file write.
+        # Bounded: this runs inside the watchdog-armed shutdown window, and the
+        # poller only ever sleeps in short (0.2s) increments, so it should unwind
+        # almost immediately -- but nothing here should be able to hang teardown.
+        name_poll_thread&.kill
+        name_poll_thread&.join(1)
         server.close rescue nil
         $_DETACHABLE_LISTENER_ = nil
         Lich::InternalAPI::ActiveSessions::Lifecycle.clear_listener

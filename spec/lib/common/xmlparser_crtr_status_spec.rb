@@ -165,6 +165,17 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
       expect(Lich::Gemstone::Creature.targets(:not_prone).map(&:name)).to eq(['sea nymph'])
     end
 
+    # Captured pair from elanthia-online/scripts#2478: Sympathy (1120) swaps
+    # hostile for sympathetic on the same exist id mid-fight.
+    it 'keeps targeting a creature the feed flips from hostile to sympathetic' do
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" hostile="1" inferior="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+      feed(%(<component id='room objs'>  You notice<crtrStatus exist="607736" sympathetic="1" inferior="1"/><b> <pushBold/>a <a exist="607736" noun="nymph">sea nymph</a><popBold/></b>.</component>))
+
+      expect(Lich::Gemstone::Creature.targets.map(&:id)).to eq([607736])
+      expect(Lich::Gemstone::Creature.targets(:hostile)).to eq([])
+      expect(Lich::Gemstone::Creature.targets(:not_sympathetic)).to eq([])
+    end
+
     it 'marks an already-known creature back into the roster when it reappears after a clear_room' do
       # Regression: crtrStatus used to sync flags directly on an already-known
       # creature and skip Creature.register entirely for that case, since

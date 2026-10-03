@@ -21,6 +21,8 @@ module Lich
         :connection_reset,
         :connection_pipe,
         :connection_aborted,
+        :connection_tls_error,
+        :websocket_protocol_error,
         :game_stream_desync,
         :unrecoverable_game_thread_error,
       ].freeze
@@ -33,6 +35,8 @@ module Lich
         :connection_reset,
         :connection_pipe,
         :connection_aborted,
+        :connection_tls_error,
+        :websocket_protocol_error,
         :game_stream_desync,
         :unrecoverable_game_thread_error,
       ].freeze
