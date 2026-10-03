@@ -2,6 +2,7 @@
 
 require_relative '../../../spec_helper'
 require 'common/creature/creature_base'
+require 'common/gameobj'
 
 # Exercises the game-agnostic Lich::Common::CreatureBase mixin directly, through
 # a minimal host class that stands in for a real game's CreatureInstance. The
@@ -278,6 +279,28 @@ RSpec.describe Lich::Common::CreatureBase do
     end
   end
 
+  describe '#infer_crtr_flags' do
+    it 'answers crtr_flag? until a real tag arrives, without setting crtr_flags?' do
+      creature = SampleCreature.register('mastodon', 1)
+      creature.infer_crtr_flags(mount: true)
+
+      expect(creature.crtr_flag?(:mount)).to be true
+      expect(creature.crtr_flags?).to be false
+
+      creature.sync_crtr_status('hostile' => '1')
+      expect(creature.crtr_flag?(:mount)).to be false
+      expect(creature.crtr_flags?).to be true
+    end
+
+    it 'replaces the previous inference rather than merging into it' do
+      creature = SampleCreature.register('mastodon', 1)
+      creature.infer_crtr_flags(mount: true)
+      creature.infer_crtr_flags({})
+
+      expect(creature.crtr_flag?(:mount)).to be false
+    end
+  end
+
   describe '#ever_hostile?' do
     it 'is false for a creature the feed has never called hostile' do
       creature = SampleCreature.register('kobold', 1)
@@ -549,6 +572,31 @@ RSpec.describe Lich::Common::CreatureBase do
       SampleCreature.register('corpse', 1).sync_crtr_status('hostile' => '1', 'dead' => '1')
 
       expect(SampleCreature.in_room(:dead).map(&:id)).to eq([1])
+    end
+
+    it 'targets an unreported creature only while GameObj.targets lists it and the feed is silent' do
+      SampleCreature.register('mastodon', 1)
+      allow(Lich::Common::GameObj).to receive(:targets).and_return([double(id: '1')])
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
+
+      SampleCreature[1].sync_crtr_status('hostile' => '0')
+      expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'does not target an unreported creature GameObj.targets excludes' do
+      # e.g. listed in the sticky dropdown but dead/gone, an animated decoy or
+      # a severed appendage - GameObj.targets owns that exclusion list.
+      SampleCreature.register('mastodon', 1)
+      allow(Lich::Common::GameObj).to receive(:targets).and_return([])
+
+      expect(SampleCreature.targets).to eq([])
+    end
+
+    it 'does not consult GameObj.targets when every creature is tagged' do
+      SampleCreature.register('kobold', 1).sync_crtr_status('hostile' => '1')
+      expect(Lich::Common::GameObj).not_to receive(:targets)
+
+      expect(SampleCreature.targets.map(&:id)).to eq([1])
     end
 
     it 'sources room membership from the roster, not the registry alone' do

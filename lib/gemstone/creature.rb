@@ -755,7 +755,22 @@ module Lich
       end
 
       # Register a new creature
+      #
+      # A known id arriving under a different name is a recycled id: start a
+      # fresh instance so the previous creature's reported or inferred flags,
+      # statuses and damage don't carry over to it. Skipped when
+      # auto-registration is off, since no replacement would be created.
+      #
+      # @param name [String, nil] creature name from the room-objs link.
+      # @param id [Integer, String] server creature id.
+      # @param noun [String, nil] creature noun.
+      # @return [CreatureInstance, nil] the registered instance, or nil when
+      #   auto-registration is disabled or the registry is full.
       def self.register(name, id, noun = nil)
+        existing = CreatureInstance[id]
+        if existing && name && existing.name && existing.name != name && CreatureInstance.auto_register?
+          CreatureInstance.forget(id)
+        end
         CreatureInstance.register(name, id, noun)
       end
 
