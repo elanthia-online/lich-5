@@ -1303,6 +1303,88 @@ RSpec.describe Lich::DragonRealms::DRCA do
   end
 
   # ----------------------------------------------
+  # do_buffs day/night filter
+  # ----------------------------------------------
+  describe '.do_buffs' do
+    let(:waggle_set) do
+      {
+        'Bless'      => { 'abbrev' => 'bless' },
+        'Night Ward' => { 'abbrev' => 'nw', 'night' => true },
+        'Day Ward'   => { 'abbrev' => 'dw', 'day' => true }
+      }
+    end
+    let(:settings) { OpenStruct.new(waggle_sets: { 'outdoors' => waggle_set }, waggle_force_cambrinth: false) }
+    let(:cast_names) { [] }
+    let(:night) { { 'day' => false, 'night' => true } }
+    let(:day) { { 'day' => true, 'night' => false } }
+
+    before(:each) do
+      DRStats.guild = 'Cleric'
+      allow(DRCA).to receive(:cast_spells) { |spells, *_| cast_names.concat(spells.keys) }
+    end
+
+    after(:each) { UserVars.sun = nil }
+
+    it 'skips day spells at night' do
+      UserVars.sun = night
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless', 'Night Ward'])
+    end
+
+    it 'skips day spells at night when the set has no night spell' do
+      UserVars.sun = night
+      waggle_set.delete('Night Ward')
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless'])
+    end
+
+    it 'skips night spells by day' do
+      UserVars.sun = day
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless', 'Day Ward'])
+    end
+
+    it 'casts every spell when the set has no day or night spells' do
+      UserVars.sun = night
+      waggle_set.delete('Night Ward')
+      waggle_set.delete('Day Ward')
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless'])
+    end
+
+    it "leaves the caller's waggle set untouched" do
+      UserVars.sun = day
+      waggle_set.freeze
+      expect { DRCA.do_buffs(settings, 'outdoors') }.not_to raise_error
+      expect(settings.waggle_sets['outdoors'].keys).to eq(['Bless', 'Night Ward', 'Day Ward'])
+    end
+
+    it 'casts night spells at night after a daytime call on the same settings' do
+      UserVars.sun = day
+      DRCA.do_buffs(settings, 'outdoors')
+      cast_names.clear
+      UserVars.sun = night
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless', 'Night Ward'])
+    end
+
+    it 'discerns only the auto-mana spells that are in season' do
+      UserVars.sun = night
+      waggle_set['Night Ward']['use_auto_mana'] = true
+      waggle_set['Day Ward']['use_auto_mana'] = true
+      discerned = []
+      allow(DRCA).to receive(:check_discern) { |spell, _settings| discerned << spell['abbrev'] }
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(discerned).to eq(['nw'])
+    end
+
+    it 'does nothing for an unknown set' do
+      expect(DRCA).not_to receive(:cast_spells)
+      expect(DRCA.do_buffs(settings, 'missing')).to be_nil
+    end
+  end
+
+  # ----------------------------------------------
   # check_discern cambrinth cache
   # ----------------------------------------------
   describe '.check_discern cambrinth cache' do
