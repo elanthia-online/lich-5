@@ -205,10 +205,14 @@ module Lich
         /^What were you/
       ].freeze
 
+      # The game's reply when the item is already tied: counts as success, but
+      # {.tie_item_result} reports it as +:already_tied+.
+      TIE_ITEM_ALREADY_TIED_PATTERN = /has already been tied off/.freeze
+
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .*tie/,
         /^You attach/,
-        /has already been tied off/
+        TIE_ITEM_ALREADY_TIED_PATTERN
       ].freeze
 
       # The game's reply when asked to tie off an empty container: nothing is
@@ -1366,7 +1370,7 @@ module Lich
       def tie_item_result(item, container = nil)
         place = container ? "to #{item_ref(container)}" : nil
         case DRC.bput("tie #{item_ref(item)} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_EMPTY_PATTERN, TIE_ITEM_FAILURE_PATTERNS)
-        when /has already been tied off/
+        when TIE_ITEM_ALREADY_TIED_PATTERN
           :already_tied
         when *TIE_ITEM_SUCCESS_PATTERNS
           :tied
@@ -1963,9 +1967,12 @@ module Lich
         tie_item?("#{gem_pouch_adjective} #{gem_pouch_noun}")
       end
 
+      # Warns only on a real failure: an empty pouch can't be tied off, and
+      # stays silent as it always has.
+      #
       # @deprecated Use {.tie_gem_pouch?} instead for boolean return value.
       def tie_gem_pouch(gem_pouch_adjective, gem_pouch_noun)
-        unless tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+        if tie_item_result("#{gem_pouch_adjective} #{gem_pouch_noun}") == :failed
           Lich::Messaging.msg("bold", "DRCI: Failed to tie #{gem_pouch_adjective} #{gem_pouch_noun}.")
         end
       end

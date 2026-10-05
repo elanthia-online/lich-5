@@ -1592,14 +1592,6 @@ RSpec.describe Lich::DragonRealms::DRCI do
     end
   end
 
-  describe '#tie_gem_pouch' do
-    it 'delegates to tie_gem_pouch? (deprecated method)' do
-      allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
-      expect(described_class).to receive(:tie_gem_pouch?).with('leather', 'pouch')
-      described_class.tie_gem_pouch('leather', 'pouch')
-    end
-  end
-
   describe '#get_item_safe' do
     it 'delegates to get_item_safe?' do
       expect(described_class).to receive(:get_item_safe?).with('sword', 'pack').and_return(true)
@@ -1716,6 +1708,7 @@ RSpec.describe Lich::DragonRealms::DRCI do
       it 'includes already tied pattern' do
         patterns = described_class::TIE_ITEM_SUCCESS_PATTERNS
         expect(patterns.any? { |p| 'has already been tied off'.match?(p) }).to be true
+        expect(patterns).to include(described_class::TIE_ITEM_ALREADY_TIED_PATTERN)
       end
 
       it 'does not count the empty-pouch reply as a successful tie' do
@@ -1837,24 +1830,26 @@ RSpec.describe Lich::DragonRealms::DRCI do
     let(:adj) { 'soft' }
     let(:noun) { 'pouch' }
 
-    context 'when tie succeeds' do
-      it 'does not log error message' do
-        allow(described_class).to receive(:tie_gem_pouch?).and_return(true)
-        expect(Lich::Messaging).not_to receive(:msg)
+    {
+      'You tie up the soft pouch.'                => false,
+      'The soft pouch has already been tied off.' => false,
+      "Tie it off when it's empty?  Why?"         => false,
+      'Tie what?'                                 => true,
+      ''                                          => true
+    }.each do |reply, warns|
+      it "#{warns ? 'logs' : 'does not log'} an error for #{reply.empty? ? 'no reply (timeout)' : reply.inspect}" do
+        stub_bput(reply)
+        if warns
+          expect(Lich::Messaging).to receive(:msg).with('bold', /Failed to tie soft pouch/)
+        else
+          expect(Lich::Messaging).not_to receive(:msg)
+        end
         described_class.tie_gem_pouch(adj, noun)
       end
     end
 
-    context 'when tie fails' do
-      it 'logs error message' do
-        allow(described_class).to receive(:tie_gem_pouch?).and_return(false)
-        expect(Lich::Messaging).to receive(:msg).with('bold', /Failed to tie soft pouch/)
-        described_class.tie_gem_pouch(adj, noun)
-      end
-    end
-
-    it 'delegates to tie_gem_pouch?' do
-      expect(described_class).to receive(:tie_gem_pouch?).with(adj, noun).and_return(true)
+    it 'ties the pouch by adjective and noun' do
+      expect(DRC).to receive(:bput).with('tie my soft pouch ', any_args).and_return('You tie up the soft pouch.')
       described_class.tie_gem_pouch(adj, noun)
     end
   end
