@@ -548,8 +548,24 @@ module Lich
         has_capability?(fe, :room_window)
       end
 
+      # The running session also gets the sentinel when --sentinel asked for
+      # it, so a client can identify as another frontend (stormfront, for the
+      # scripts that test for it) and still receive the origin marker.
       def self.supports_sentinel?(fe = $frontend)
+        return true if sentinel_requested? && canonical_name(fe) == canonical_name($frontend)
+
         has_capability?(fe, :sentinel)
+      end
+
+      # Whether --sentinel was passed for this session.
+      # @return [Boolean]
+      def self.sentinel_requested?
+        @sentinel_requested == true
+      end
+
+      # @param value [Boolean]
+      def self.sentinel_requested=(value)
+        @sentinel_requested = value == true
       end
 
       # Build the <playerID> re-emit tag for a detachable client (e.g. Saga).

@@ -1539,6 +1539,7 @@ RSpec.describe Lich::GameBase::Game do
       $_CLIENT_.close rescue nil
       $_CLIENT_ = nil
       $frontend = nil
+      Frontend.sentinel_requested = false
       DownstreamHook.remove('spec_quiet_hook')
     end
 
@@ -1566,6 +1567,15 @@ RSpec.describe Lich::GameBase::Game do
       described_class.send(:process_downstream_hooks, bundled_end_chunk)
 
       eventually { expect(@raw_socket).to have_received(:write).with(%(<output class=""/>\n)) }
+    end
+
+    it 'sentinel-prefixes for a frontend without the capability once --sentinel requested it' do
+      $frontend = 'stormfront'
+      Frontend.sentinel_requested = true
+
+      described_class.send(:process_downstream_hooks, %(You see nothing unusual.\n))
+
+      eventually { expect(@raw_socket).to have_received(:write).with(%(\x1FYou see nothing unusual.\n)) }
     end
   end
 end

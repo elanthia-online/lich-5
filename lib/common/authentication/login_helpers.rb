@@ -55,7 +55,7 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend headless reconnect reconnected save
-          genie frostbite wrayth saga suks
+          genie frostbite wrayth saga suks sentinel
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
@@ -598,6 +598,23 @@ module Lich
           return requested_frontend unless requested_frontend == :__unset
 
           'profanity'
+        end
+
+        # Resolves the frontend identity for a `--pipe -g HOST:PORT` launch.
+        #
+        # Whatever reads stdout is the client, so an explicit frontend flag
+        # names it and `respond` escapes and wraps script output the way that
+        # frontend expects. With no flag the identity stays 'unknown', which
+        # keeps the stream untouched for consumers that are not frontends
+        # (the benchmark harness).
+        #
+        # @param argv [Array<String>] command line arguments
+        # @return [String] frontend identity for Frontend.client
+        def self.resolve_pipe_frontend(argv)
+          requested_frontend = resolve_frontend_arg(argv)
+          return 'unknown' if requested_frontend == :__unset
+
+          requested_frontend
         end
 
         # Formats the game instance launch flag for Lich based on version.

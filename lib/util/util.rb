@@ -120,8 +120,9 @@ module Lich
     # pipeline is newline/CRLF-terminated as part of the game server's
     # line-oriented stream framing; a bare, unterminated tag is not a shape
     # of line this pipeline produced before this method existed. For
-    # sentinel-supporting frontends (currently only Saga -- see
-    # Frontend::ORIGIN_SENTINEL and Game#prefix_origin_sentinel), every
+    # sentinel-supporting sessions (Saga, or any frontend run with
+    # --sentinel -- see Frontend::ORIGIN_SENTINEL and
+    # Game#prefix_origin_sentinel), every
     # forwarded line gets a leading origin-marker byte that the client is
     # expected to consume as routing metadata and strip before display. That
     # worked here once the segment was given the same line termination as
