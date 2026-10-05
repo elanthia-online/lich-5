@@ -657,34 +657,25 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
-  # --- client_version / client_string ------------------------
+  # --- client_string ------------------------------------------
 
   describe '.client_string' do
-    after { frontend.client_version = nil }
-
-    it 'defaults client_version to nil' do
-      expect(frontend.client_version).to be_nil
-    end
-
-    it 'is byte-identical to CLIENT_STRING when no version is set' do
+    it 'is byte-identical to CLIENT_STRING when no version is given' do
       expect(frontend.client_string).to eq(frontend::CLIENT_STRING)
-      expect(frontend.client_string.bytes).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'.bytes)
+      expect(frontend.client_string(nil).bytes).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'.bytes)
     end
 
-    it 'replaces only the /VERSION: value when a version is set' do
-      frontend.client_version = 'saga-0.10.2'
-      expect(frontend.client_string).to eq('/FE:WRAYTH /VERSION:saga-0.10.2 /P:WIN_UNKNOWN /XML')
+    it 'replaces only the /VERSION: value when a version is given' do
+      expect(frontend.client_string('saga-0.10.2')).to eq('/FE:WRAYTH /VERSION:saga-0.10.2 /P:WIN_UNKNOWN /XML')
     end
 
-    it 'leaves the CLIENT_STRING constant unchanged when a version is set' do
-      frontend.client_version = 'saga-0.10.2'
-      frontend.client_string
+    it 'leaves the CLIENT_STRING constant unchanged' do
+      frontend.client_string('saga-0.10.2')
       expect(frontend::CLIENT_STRING).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML')
     end
 
     it 'treats the version literally (no regex backreference expansion)' do
-      frontend.client_version = '1\\0'
-      expect(frontend.client_string).to eq('/FE:WRAYTH /VERSION:1\\0 /P:WIN_UNKNOWN /XML')
+      expect(frontend.client_string('1\\0')).to eq('/FE:WRAYTH /VERSION:1\\0 /P:WIN_UNKNOWN /XML')
     end
   end
 

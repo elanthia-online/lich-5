@@ -19,11 +19,12 @@ LIB_MAIN_DIR = File.expand_path('../../../lib/main', __dir__) unless defined?(LI
 RSpec.describe '--fe-version' do
   around do |example|
     original_argv = ARGV.dup
+    original_frontend = $frontend # the real --saga branch assigns it
     begin
       example.run
     ensure
       ARGV.replace(original_argv)
-      Lich::Common::Frontend.client_version = nil
+      $frontend = original_frontend
     end
   end
 
@@ -44,7 +45,9 @@ RSpec.describe '--fe-version' do
     define_method(:parser) { parser }
 
     it 'stores a valid value' do
-      expect(parse('--fe-version=saga-0.10.2')[:fe_version]).to eq('saga-0.10.2')
+      opts = nil
+      expect { opts = parse('--fe-version=saga-0.10.2') }.not_to output.to_stdout
+      expect(opts[:fe_version]).to eq('saga-0.10.2')
     end
 
     it 'accepts every allowed character class and the 32-char maximum' do
@@ -74,15 +77,17 @@ RSpec.describe '--fe-version' do
       'over 32 chars'     => 'x' * 33,
       'other punctuation' => 'saga;1',
     }.each do |label, value|
-      it "rejects a value with #{label}" do
-        expect(parse("--fe-version=#{value}")).not_to have_key(:fe_version)
+      it "rejects a value with #{label} and warns" do
+        opts = nil
+        expect { opts = parse("--fe-version=#{value}") }.to output(/warning: ignoring invalid --fe-version/).to_stdout
+        expect(opts).not_to have_key(:fe_version)
       end
     end
   end
 
   describe '--without-frontend handshake (main.rb)' do
     main_source = File.read(File.join(LIB_MAIN_DIR, 'main.rb'))
-    headless_block = main_source[/^  if ARGV\.include\?\('--without-frontend'\)\n    Frontend\.client_version.*?\n    \}\n(?=  else\n)/m]
+    headless_block = main_source[/^  if ARGV\.include\?\('--without-frontend'\)\n    Thread\.new \{.*?\n    \}\n(?=  else\n)/m]
     raise 'could not extract the --without-frontend handshake from main.rb' unless headless_block
 
     harness_class = Class.new do
@@ -143,11 +148,6 @@ RSpec.describe '--fe-version' do
       client_thread = main_source[/client_thread = Thread\.new \{.*?inv_off_proc/m]
       expect(client_thread.scan('Frontend.send_handshake(Frontend::CLIENT_STRING)').size).to eq(2)
       expect(client_thread).to match(/launcher_cmd\.to_s =~ \/mudlet\/.*?client_string = Frontend::CLIENT_STRING/m)
-    end
-
-    it 'keeps CLIENT_STRING itself unchanged while a version is set' do
-      Lich::Common::Frontend.client_version = 'saga-0.10.2'
-      expect(Lich::Common::Frontend::CLIENT_STRING).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML')
     end
   end
 end

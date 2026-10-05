@@ -700,7 +700,6 @@ reconnect_if_wanted = proc {
   undef :exit!
 
   if ARGV.include?('--without-frontend')
-    Frontend.client_version = @argv_options[:fe_version]
     Thread.new {
       #
       # send the login key
@@ -710,7 +709,7 @@ reconnect_if_wanted = proc {
       #
       # send version string
       #
-      client_string = Frontend.client_string
+      client_string = Frontend.client_string(@argv_options[:fe_version])
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #

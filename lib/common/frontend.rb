@@ -579,21 +579,12 @@ module Lich
         $frontend = value
       end
 
-      # Frontend version supplied by the launcher (--fe-version); nil when absent.
-      def self.client_version
-        @client_version
-      end
+      # CLIENT_STRING with its /VERSION: value replaced by version (--fe-version).
+      # Returns CLIENT_STRING unchanged when version is nil.
+      def self.client_string(version = nil)
+        return CLIENT_STRING if version.nil?
 
-      def self.client_version=(value)
-        @client_version = value
-      end
-
-      # CLIENT_STRING with its /VERSION: value replaced by client_version.
-      # Returns CLIENT_STRING unchanged when no version is set.
-      def self.client_string
-        return CLIENT_STRING if @client_version.nil?
-
-        CLIENT_STRING.sub(%r{/VERSION:\S+}) { "/VERSION:#{@client_version}" }
+        CLIENT_STRING.sub(%r{/VERSION:\S+}) { "/VERSION:#{version}" }
       end
 
       # Send version string, ready signals, and setup commands to the game server.
