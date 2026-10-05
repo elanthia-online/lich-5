@@ -466,9 +466,9 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--headless'])).to eq(:__unset)
     end
 
-    it 'ignores runtime transport and bind options when resolving instance' do
+    it 'ignores runtime transport, bind, and debug options when resolving instance' do
       %w[--auth-provider=web --bind-address=lan --game-transport=direct --host=example.com:4900
-         --pipe --no-wine --no-gtk].each do |arg|
+         --pipe --no-wine --no-gtk --debug].each do |arg|
         expect(described_class.resolve_instance(['--login', 'Tsetem', arg])).to eq(:__unset), arg
       end
       expect(described_class.resolve_instance(['--GS3', '--bind-address=lan'])).to eq('GS3')
