@@ -17,14 +17,21 @@ module Lich
     # Non-waiting callers (game reader/parser and client threads) return at
     # once and their writer runs on the gate thread.
     #
+    # The window starts at MAX_WINDOW and only learns down: the first
+    # "type ahead N" refusal sets it to N+1. Learning up would need repeated
+    # over-cap probes, each costing a refused command; starting high costs at
+    # most one refusal per connection on low-cap accounts.
+    #
     # Deliberately no roundtime hold and no resend: the cap is pure queue flow
     # control, and resending a command another sender's overflow got rejected
     # would double-execute it.
     class UpstreamGate
-      DEFAULT_WINDOW = 2
       MAX_WINDOW = 4
+      DEFAULT_WINDOW = MAX_WINDOW
       EXPIRY_SECONDS = 2.0
-      TYPEAHEAD_REJECT = /Sorry, you may only type ahead (\d+) command/
+      # Anchored (past any leading tags) so room speech quoting the line
+      # cannot resize the window.
+      TYPEAHEAD_REJECT = /\A(?:<[^>]*>|&gt;|\s)*Sorry, you may only type ahead (\d+) command/
 
       Entry = Struct.new(:writer, :exempt, :wait, :state, :sent_at)
 
@@ -129,18 +136,27 @@ module Lich
                 @cond.wait(@lock) until entry.state == :done || @stopped
                 @queue.shift
               else
-                @queue.shift
+                # Stays queue head while writing so a concurrent submit queues
+                # behind it instead of racing it to the socket.
                 @lock.unlock
                 begin
                   write(entry)
                 ensure
                   @lock.lock
+                  @queue.shift
                 end
               end
             else
               @cond.wait(@lock, next_wakeup)
             end
           end
+        end
+      rescue Exception => e # rubocop:disable Lint/RescueException
+        # A dead gate must not park every script's put: fall back to pass-through.
+        Lich.log "error: upstream gate stopped: #{e.class}: #{e.message}" if defined?(Lich.log)
+        @lock.synchronize do
+          @stopped = true
+          @cond.broadcast
         end
       end
 
@@ -194,8 +210,9 @@ module Lich
 
       def expire
         cutoff = now - @expiry
-        # ponytail: unsolicited prompts (combat, arrivals) also retire slots, so
-        # heavy spam can over-release by one; fput/move's refusal retry covers it.
+        # ponytail: every unsolicited prompt (combat, arrivals) retires a slot
+        # early, so prompt spam leaks one over-cap command per stray prompt
+        # until the window drains; fput/move's refusal retry covers it.
         @in_flight.reject! { |e| e.sent_at < cutoff }
       end
 

@@ -13,8 +13,12 @@ RSpec.describe Lich::Common::UpstreamGate do
 
   after { gate.stop }
 
+  let(:refusal) { "Sorry, you may only type ahead 1 command.\r\n" }
+
+  # Primed, with the window learned down to 2 by a refusal.
   def primed_gate
     gate.observe(prompt)
+    gate.observe(refusal)
     gate
   end
 
@@ -29,7 +33,20 @@ RSpec.describe Lich::Common::UpstreamGate do
     out
   end
 
-  # Wait for the gate thread to release whatever it is going to.
+  # Wait (up to 1s) for the expected sends, then briefly for any extra the
+  # gate wrongly released, so assertions don't hinge on a fixed sleep.
+  def expect_sent(expected)
+    got = []
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 1
+    while got.size < expected.size && (left = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)).positive?
+      item = sent.pop(timeout: left)
+      got << item unless item.nil?
+    end
+    settle
+    expect(got + drain).to eq(expected)
+  end
+
+  # Give the gate thread a moment to act (or to wrongly act).
   def settle
     sleep 0.05
   end
@@ -56,31 +73,64 @@ RSpec.describe Lich::Common::UpstreamGate do
   it 'holds commands beyond the window and releases one per prompt, in order' do
     primed_gate
     %w[n e s w up].each { |c| send_async(c) }
-    settle
-    expect(drain).to eq(%w[n e])
+    expect_sent(%w[n e])
 
     gate.observe(prompt)
-    settle
-    expect(drain).to eq(%w[s])
+    expect_sent(%w[s])
 
     2.times { gate.observe(prompt) }
-    settle
-    expect(drain).to eq(%w[w up])
+    expect_sent(%w[w up])
   end
 
   it 'lets exempt commands through without counting them, in queue order' do
     primed_gate
     ['n', 'e', 's', '_injury 2', 'w'].each { |c| send_async(c) }
-    settle
-    expect(drain).to eq(%w[n e])
+    expect_sent(%w[n e])
 
     gate.observe(prompt)
-    settle
-    expect(drain).to eq(['s', '_injury 2'])
+    expect_sent(['s', '_injury 2'])
 
     gate.observe(prompt)
+    expect_sent(%w[w])
+  end
+
+  it 'starts at the max window and learns down from a refusal' do
+    gate.observe(prompt)
+    expect(gate.window).to eq(described_class::MAX_WINDOW)
+    gate.observe(refusal)
+    expect(gate.window).to eq(2)
+  end
+
+  it 'ignores room speech quoting the refusal' do
+    gate.observe(%(<preset id="speech">Bob says</preset>, "Sorry, you may only type ahead 0 commands."\r\n))
+    expect(gate.window).to eq(described_class::MAX_WINDOW)
+  end
+
+  it 'matches a refusal behind leading tags' do
+    gate.observe(%(<prompt time="1">&gt;</prompt>Sorry, you may only type ahead 1 command.\r\n))
+    expect(gate.window).to eq(2)
+  end
+
+  it 'keeps a gate-thread write ahead of later sends' do
+    primed_gate
+    2.times { |i| send_async("x#{i}") }
+    latch = Queue.new
+    gate.submit('held', wait: false) { latch.pop; sent << 'held'; true }
+    gate.observe(prompt) # gate thread starts writing 'held', blocks on latch
     settle
-    expect(drain).to eq(%w[w])
+    send_async('_flag X 0') # exempt: always has a slot
+    latch << true
+    expect_sent(['x0', 'x1', 'held', '_flag X 0'])
+  end
+
+  it 'passes commands through instead of parking scripts if the gate thread dies' do
+    primed_gate
+    2.times { |i| send_async("x#{i}") }
+    gate.submit('boom', wait: false) { raise Exception, 'boom' } # rubocop:disable Lint/RaiseException
+    gate.observe(prompt)
+    settle
+    t = Thread.new { gate.submit('look', wait: true) { sent << :look; true } }
+    expect(t.join(1)&.value).to be(true)
   end
 
   it 'sizes the window from the server typeahead refusal, capped at 4' do
@@ -99,10 +149,8 @@ RSpec.describe Lich::Common::UpstreamGate do
     it 'releases a command whose predecessor never drew a prompt' do
       primed_gate
       %w[a b c].each { |c| send_async(c) }
-      settle
-      expect(drain).to eq(%w[a b])
-      sleep 0.2
-      expect(drain).to eq(%w[c])
+      expect_sent(%w[a b])
+      expect_sent(%w[c])
     end
   end
 
@@ -140,16 +188,14 @@ RSpec.describe Lich::Common::UpstreamGate do
     t.join(1)
     send_async('after')
     gate.observe(prompt)
-    settle
-    expect(drain).to eq(%w[x0 x1 after])
+    expect_sent(%w[x0 x1 after])
   end
 
   it 'releases the slot and re-raises when a waiting writer raises' do
     primed_gate
     expect { gate.submit('bad', wait: true) { raise ArgumentError, 'guard' } }.to raise_error(ArgumentError)
     %w[a b].each { |c| send_async(c) }
-    settle
-    expect(drain).to eq(%w[a b])
+    expect_sent(%w[a b])
   end
 
   it 'releases waiting callers when stopped' do
