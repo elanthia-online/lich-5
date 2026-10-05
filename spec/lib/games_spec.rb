@@ -1388,6 +1388,45 @@ RSpec.describe Lich::GameBase::Game do
         expect(Lich).to have_received(:log).exactly(3).times
       end
     end
+
+    context 'with the upstream gate active' do
+      let(:gate) { instance_double(Lich::Common::UpstreamGate) }
+      let(:script) { double('script') }
+
+      before do
+        require 'common/upstream_gate'
+        allow(mock_socket).to receive(:puts)
+        allow(gate).to receive(:submit) { |_cmd, **, &writer| writer.call }
+        described_class.instance_variable_set(:@upstream_gate, gate)
+      end
+
+      after { described_class.instance_variable_set(:@upstream_gate, nil) }
+
+      it 'makes script threads wait for their turn' do
+        allow(Script).to receive(:current_without_pause).and_return(script)
+        expect(described_class.send(:_puts, 'north')).to be(true)
+        expect(gate).to have_received(:submit).with('north', wait: true)
+        expect(mock_socket).to have_received(:puts).with('north')
+      end
+
+      it 'never makes non-script threads wait' do
+        allow(Script).to receive(:current_without_pause).and_return(nil)
+        described_class.send(:_puts, 'north')
+        expect(gate).to have_received(:submit).with('north', wait: false)
+      end
+
+      it 'never makes the game reader thread wait' do
+        allow(Script).to receive(:current_without_pause).and_return(script)
+        go = Queue.new
+        reader = Thread.new { go.pop; described_class.send(:_puts, 'north') }
+        described_class.instance_variable_set(:@reader_thread, reader)
+        go << true
+        reader.join
+        expect(gate).to have_received(:submit).with('north', wait: false)
+      ensure
+        described_class.instance_variable_set(:@reader_thread, nil)
+      end
+    end
   end
 
   describe '.send_to_client' do
