@@ -1348,6 +1348,22 @@ RSpec.describe Lich::DragonRealms::DRCA do
       UserVars.sun = night
       waggle_set.delete('Night Ward')
       waggle_set.delete('Day Ward')
+      waggle_set['Ease Burden'] = { 'abbrev' => 'eb' }
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless', 'Ease Burden'])
+    end
+
+    # Matches combat-trainer. Before, day spells were cast in this state only
+    # when the set had no night spell.
+    it 'skips day and night spells when moonwatch has not set the sun data' do
+      UserVars.sun = {}
+      DRCA.do_buffs(settings, 'outdoors')
+      expect(cast_names).to eq(['Bless'])
+    end
+
+    it 'skips day spells without sun data when the set has no night spell' do
+      UserVars.sun = {}
+      waggle_set.delete('Night Ward')
       DRCA.do_buffs(settings, 'outdoors')
       expect(cast_names).to eq(['Bless'])
     end
