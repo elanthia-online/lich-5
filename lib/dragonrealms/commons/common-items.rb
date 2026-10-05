@@ -208,9 +208,12 @@ module Lich
       TIE_ITEM_SUCCESS_PATTERNS = [
         /^You .*tie/,
         /^You attach/,
-        /has already been tied off/,
-        /Tie it off when it's empty\?/
+        /has already been tied off/
       ].freeze
+
+      # The game's reply when asked to tie off an empty container: nothing is
+      # tied (see {.tie_item_result}).
+      TIE_ITEM_EMPTY_PATTERN = /Tie it off when it's empty\?/.freeze
 
       TIE_ITEM_FAILURE_PATTERNS = [
         /^There's no more free ties/,
@@ -1332,21 +1335,45 @@ module Lich
 
       # Ties an item, optionally to a specific container.
       #
+      # True only when the item is tied afterwards (tied now, or already tied).
+      # An empty container can't be tied off, so that reply is false; use
+      # {.tie_item_result} to tell it apart from a failure.
+      #
       # @param item [String] item noun to tie
       # @param container [String, nil] container to tie to, or nil for default
-      # @return [Boolean] true if item was tied successfully
+      # @return [Boolean] true if item is tied
       #
       # @example Tie to belt
       #   DRCI.tie_item?("pouch", "belt")
       #
+      # @see .tie_item_result
       # @see .untie_item? Inverse operation
       def tie_item?(item, container = nil)
+        %i[tied already_tied].include?(tie_item_result(item, container))
+      end
+
+      # Ties an item and reports what happened.
+      #
+      # @param item [String] item noun to tie
+      # @param container [String, nil] container to tie to, or nil for default
+      # @return [Symbol] +:tied+, +:already_tied+, +:empty+ (an empty container
+      #   can't be tied off -- nothing was tied), or +:failed+ (including no reply)
+      #
+      # @example
+      #   DRCI.tie_item_result("pouch") #=> :empty
+      #
+      # @see .tie_item?
+      def tie_item_result(item, container = nil)
         place = container ? "to #{item_ref(container)}" : nil
-        case DRC.bput("tie #{item_ref(item)} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_FAILURE_PATTERNS)
+        case DRC.bput("tie #{item_ref(item)} #{place}", TIE_ITEM_SUCCESS_PATTERNS, TIE_ITEM_EMPTY_PATTERN, TIE_ITEM_FAILURE_PATTERNS)
+        when /has already been tied off/
+          :already_tied
         when *TIE_ITEM_SUCCESS_PATTERNS
-          true
+          :tied
+        when TIE_ITEM_EMPTY_PATTERN
+          :empty
         else
-          false
+          :failed
         end
       end
 
@@ -2000,7 +2027,9 @@ module Lich
           return false
         end
 
-        if should_tie_gem_pouches && !tie_gem_pouch?(gem_pouch_adjective, gem_pouch_noun)
+        # A fresh pouch is usually empty, and an empty pouch can't be tied off
+        # yet -- that is expected, not a failure.
+        if should_tie_gem_pouches && tie_item_result(pouch) == :failed
           Lich::Messaging.msg("bold", "DRCI: Could not tie new pouch.")
           # Not a fatal error - pouch is worn, just not tied
         end
