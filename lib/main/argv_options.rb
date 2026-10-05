@@ -96,6 +96,10 @@ module Lich
               @argv_options[:character] = $1
             when /^--frontend=(.+)$/i
               @argv_options[:frontend] = $1
+            when /\A--fe-version=([A-Za-z0-9._+-]{1,32})\z/i
+              # \A..\z, not ^..$: the value is written onto the game socket, so an
+              # embedded newline must not let a valid first line slip through.
+              @argv_options[:fe_version] = $1
             when /^--frontend-command=(.+)$/i
               @argv_options[:frontend_command] = $1
             when /^--save$/i
