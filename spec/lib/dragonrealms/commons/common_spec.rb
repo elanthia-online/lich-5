@@ -1265,7 +1265,6 @@ RSpec.describe Lich::DragonRealms::DRC do
         UserVars.song = 'scales'
         UserVars.climbing_song = 'rondo'
         UserVars.instrument = 'lute'
-        UserVars.climbing_instrument = 'zills'
       end
 
       it 'keeps both songs when alternating performance and climbing' do
@@ -1287,27 +1286,23 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(UserVars.song).to eq('scales halt')
         expect(UserVars.instrument).to eq('flute')
         expect(UserVars.climbing_song).to eq('rondo')
-        expect(UserVars.climbing_instrument).to eq('zills')
       end
 
-      it 'resets only the climbing song when the climbing instrument changes' do
+      it 'keeps both songs when the climbing instrument changes' do
         settings.worn_instrument = 'bells'
         described_class.play_song?(settings, song_list, true, true, true)
 
-        expect(UserVars.climbing_song).to eq('scales halt')
-        expect(UserVars.climbing_instrument).to eq('bells')
+        expect(UserVars.climbing_song).to eq('rondo')
         expect(UserVars.song).to eq('scales')
         expect(UserVars.instrument).to eq('lute')
+        expect(described_class).to have_received(:bput).with('play rondo on my bells', any_args)
       end
 
-      it 'keeps a climbing song stored before the climbing instrument was tracked' do
-        UserVars.climbing_instrument = nil
-        UserVars.instrument = 'zills'
+      it 'keeps the climbing song when no instrument has been recorded yet' do
+        UserVars.instrument = nil
         described_class.play_song?(settings, song_list, true, true, true)
 
         expect(UserVars.climbing_song).to eq('rondo')
-        expect(UserVars.climbing_instrument).to eq('zills')
-        expect(UserVars.instrument).to eq('zills')
       end
 
       it 'does not seed an empty climbing song from a performance call' do
