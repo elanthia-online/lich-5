@@ -726,19 +726,13 @@ module Lich
       def play_song?(settings, song_list, worn = true, skip_clean = false, climbing = false, skip_tuning = false)
         instrument = worn ? settings.worn_instrument : settings.instrument
 
-        if UserVars.instrument.nil?
-          Lich::Messaging.msg("plain", "DRC: No previous instrument setting detected. Cleaning stored song data.")
-          UserVars.song = nil
-          UserVars.climbing_song = nil
-          UserVars.instrument = instrument
-        elsif UserVars.instrument != instrument
-          Lich::Messaging.msg("plain", "DRC: New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
-          UserVars.song = nil
-          UserVars.climbing_song = nil
-          UserVars.instrument = instrument
+        if climbing
+          reset_climbing_song_for_instrument(instrument)
+          UserVars.climbing_song = song_list.first.first unless UserVars.climbing_song
+        else
+          reset_song_for_instrument(instrument)
+          UserVars.song = song_list.first.first unless UserVars.song
         end
-        UserVars.song = song_list.first.first unless UserVars.song
-        UserVars.climbing_song = song_list.first.first unless UserVars.climbing_song
         song_to_play = climbing ? UserVars.climbing_song : UserVars.song
         play_command = "play #{song_to_play}"
         if instrument
@@ -800,6 +794,29 @@ module Lich
         else
           false
         end
+      end
+
+      # Performance and climbing songs are tracked against separate instruments:
+      # a climbing rope needs a worn instrument while performance may use a held
+      # one, and alternating between them must not wipe the other mode's song.
+      def reset_song_for_instrument(instrument)
+        if UserVars.instrument.nil?
+          Lich::Messaging.msg("plain", "DRC: No previous instrument setting detected. Cleaning stored song data.")
+          UserVars.song = nil
+        elsif UserVars.instrument != instrument
+          Lich::Messaging.msg("plain", "DRC: New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
+          UserVars.song = nil
+        end
+        UserVars.instrument = instrument
+      end
+
+      def reset_climbing_song_for_instrument(instrument)
+        # Climbing songs stored before the climbing instrument was tracked are kept.
+        if UserVars.climbing_instrument && UserVars.climbing_instrument != instrument
+          Lich::Messaging.msg("plain", "DRC: New climbing instrument #{instrument} detected; old instrument: #{UserVars.climbing_instrument}. Resetting stored climbing song.")
+          UserVars.climbing_song = nil
+        end
+        UserVars.climbing_instrument = instrument
       end
 
       def stop_playing

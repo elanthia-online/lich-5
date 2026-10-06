@@ -1256,6 +1256,74 @@ RSpec.describe Lich::DragonRealms::DRC do
     end
 
     # Avoid recursion-prone tests - focus on non-recursive paths
+
+    context 'with a held performance instrument and a worn climbing instrument' do
+      let(:settings) { OpenStruct.new(worn_instrument: 'zills', instrument: 'lute', cleaning_cloth: 'cloth') }
+      let(:song_list) { { 'scales halt' => 'scales', 'scales' => 'scales', 'rondo' => 'rondo' } }
+
+      before do
+        UserVars.song = 'scales'
+        UserVars.climbing_song = 'rondo'
+        UserVars.instrument = 'lute'
+        UserVars.climbing_instrument = 'zills'
+      end
+
+      it 'keeps both songs when alternating performance and climbing' do
+        described_class.play_song?(settings, song_list, false)
+        described_class.play_song?(settings, song_list, true, true, true)
+        described_class.play_song?(settings, song_list, false)
+        described_class.play_song?(settings, song_list, true, true, true)
+
+        expect(UserVars.song).to eq('scales')
+        expect(UserVars.climbing_song).to eq('rondo')
+        expect(described_class).to have_received(:bput).with('play scales on my lute', any_args).twice
+        expect(described_class).to have_received(:bput).with('play rondo on my zills', any_args).twice
+      end
+
+      it 'resets only the performance song when the performance instrument changes' do
+        settings.instrument = 'flute'
+        described_class.play_song?(settings, song_list, false)
+
+        expect(UserVars.song).to eq('scales halt')
+        expect(UserVars.instrument).to eq('flute')
+        expect(UserVars.climbing_song).to eq('rondo')
+        expect(UserVars.climbing_instrument).to eq('zills')
+      end
+
+      it 'resets only the climbing song when the climbing instrument changes' do
+        settings.worn_instrument = 'bells'
+        described_class.play_song?(settings, song_list, true, true, true)
+
+        expect(UserVars.climbing_song).to eq('scales halt')
+        expect(UserVars.climbing_instrument).to eq('bells')
+        expect(UserVars.song).to eq('scales')
+        expect(UserVars.instrument).to eq('lute')
+      end
+
+      it 'keeps a climbing song stored before the climbing instrument was tracked' do
+        UserVars.climbing_instrument = nil
+        UserVars.instrument = 'zills'
+        described_class.play_song?(settings, song_list, true, true, true)
+
+        expect(UserVars.climbing_song).to eq('rondo')
+        expect(UserVars.climbing_instrument).to eq('zills')
+        expect(UserVars.instrument).to eq('zills')
+      end
+
+      it 'does not seed an empty climbing song from a performance call' do
+        UserVars.climbing_song = nil
+        described_class.play_song?(settings, song_list, false)
+
+        expect(UserVars.climbing_song).to be_nil
+      end
+
+      it 'does not seed an empty performance song from a climbing call' do
+        UserVars.song = nil
+        described_class.play_song?(settings, song_list, true, true, true)
+
+        expect(UserVars.song).to be_nil
+      end
+    end
   end
 
   describe '.clean_instrument' do
