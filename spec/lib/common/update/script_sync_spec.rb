@@ -156,9 +156,66 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       }
       stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'broken' => config })
       allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(nil)
 
       expect { sync.sync_repo('broken') }.not_to raise_error
       expect(Lich::Util::Update::StatusReporter).not_to have_received(:render_sync_summary)
+      expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
+        /GitHub check failed\. No scripts have been updated this run\. This is a temporary error/
+      )
+    end
+  end
+
+  describe '#sync_all_repos when GitHub fails' do
+    let(:printed) { [] }
+
+    def repo(api_url)
+      { api_url: api_url, raw_base_url: 'https://raw.example.com', tracking_mode: :all,
+        script_pattern: /^[^\/]+\.lic$/, game_filter: nil, subdirs: {} }
+    end
+
+    before do
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', {
+        'first'  => repo('https://api.example.com/first'),
+        'second' => repo('https://api.example.com/second')
+      })
+      allow(client).to receive(:http_get).and_return(nil)
+    end
+
+    it 'stops after the first GitHub-wide failure and prints exactly one message' do
+      allow(Lich::Util::Update::CustomRepos).to receive(:all).and_return({})
+      allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :unavailable, status: 401))
+
+      sync.sync_all_repos
+
+      expect(client).to have_received(:fetch_github_json).once
+      expect(printed).to eq(['[lich5-update: GitHub check failed. No scripts have been updated this run. This is a temporary error that should resolve itself by your next login.]'])
+    end
+
+    it 'keeps going after a repo-specific 404 and names that repo' do
+      allow(Lich::Util::Update::CustomRepos).to receive(:all).and_return({})
+      allow(client).to receive(:fetch_github_json).with('https://api.example.com/first').and_return(nil)
+      allow(client).to receive(:fetch_github_json).with('https://api.example.com/second').and_return({ 'tree' => [] })
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :not_found, status: 404))
+
+      sync.sync_all_repos
+
+      expect(client).to have_received(:fetch_github_json).twice
+      expect(printed.first).to include('(first not found)', 'No scripts were updated from first.')
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).once
+    end
+
+    it 'also stops before custom repos once GitHub is down' do
+      allow(Lich::Util::Update::CustomRepos).to receive(:all).and_return({ 'me/repo' => {} })
+      allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :network))
+
+      sync.sync_all_repos
+
+      expect(client).to have_received(:fetch_github_json).once
+      expect(printed.length).to eq(1)
     end
   end
 

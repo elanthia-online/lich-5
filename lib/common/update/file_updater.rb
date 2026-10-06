@@ -63,7 +63,7 @@ module Lich
           tree_data = @client.fetch_github_json(config[:api_url])
           unless tree_data && tree_data['tree']
             name = config[:display_name] || repo_key
-            StatusReporter.respond_mono("[lich5-update: Failed to fetch repository tree for #{name}.]")
+            StatusReporter.respond_github_failure(@client.last_error, "#{filename} was not updated.", subject: name)
             return
           end
 
@@ -103,7 +103,7 @@ module Lich
             FileWriter.safe_write(File.join(location, filename), content)
             StatusReporter.respond_mono("[lich5-update: #{filename} has been updated from #{name}.]")
           else
-            StatusReporter.respond_mono("[lich5-update: Failed to download #{filename} from #{name}.]")
+            StatusReporter.respond_github_failure(@client.last_error, "#{filename} was not updated.", subject: filename)
           end
         end
 
@@ -136,7 +136,11 @@ module Lich
             when "beta"
               ref = @resolver.resolve_channel_ref(:beta)
               if ref.nil?
-                respond 'No viable beta found. Aborting beta update.'
+                if @resolver.last_error
+                  StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
+                else
+                  respond 'No viable beta found. Aborting beta update.'
+                end
                 return
               end
               remote_repo = "https://raw.githubusercontent.com/#{GITHUB_REPO}/#{ref}/lib"

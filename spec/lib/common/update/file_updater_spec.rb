@@ -57,11 +57,12 @@ RSpec.describe Lich::Util::Update::FileUpdater do
   describe '#update_file_from_repo when GitHub tree API fails' do
     it 'bails early with an error message and does not attempt download' do
       allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :unavailable, status: 502))
 
       updater.update_file_from_repo('data', 'gs-scripts', 'effect-list.xml')
 
       expect(Lich::Util::Update::StatusReporter).to have_received(:respond_mono).with(
-        /Failed to fetch repository tree/
+        /GitHub check failed\. effect-list\.xml was not updated\. This is a temporary error/
       )
     end
   end
@@ -162,6 +163,32 @@ RSpec.describe Lich::Util::Update::FileUpdater do
 
         created_dirs.each { |dir| FileUtils.remove_entry(dir) }
       end
+    end
+  end
+
+  describe '#update_file beta library when no beta ref resolves' do
+    let(:printed) { [] }
+
+    before do
+      allow(updater).to receive(:respond) { |msg = ''| printed << msg }
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+      allow(resolver).to receive(:resolve_channel_ref).with(:beta).and_return(nil)
+    end
+
+    it 'reports a GitHub failure instead of claiming no beta exists' do
+      allow(resolver).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :network))
+
+      updater.update_file('library', 'foo.rb', 'beta')
+
+      expect(printed).to eq(['[lich5-update: GitHub check failed. No beta update was installed. This is a temporary error that should resolve itself by your next login.]'])
+    end
+
+    it 'still says no viable beta when GitHub answered' do
+      allow(resolver).to receive(:last_error).and_return(nil)
+
+      updater.update_file('library', 'foo.rb', 'beta')
+
+      expect(printed).to eq(['No viable beta found. Aborting beta update.'])
     end
   end
 end

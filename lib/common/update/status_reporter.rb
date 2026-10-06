@@ -25,6 +25,26 @@ module Lich
           end
         end
 
+        # Reports a failed GitHub request as one message stating what was not
+        # done and whether the user needs to act.
+        #
+        # @param error [FetchError, nil] the client's last_error (nil = unclassified)
+        # @param consequence [String] what did not happen, e.g. "No scripts have been updated this run."
+        # @param subject [String, nil] what was being fetched, named in the not-found message
+        # @return [void]
+        def self.respond_github_failure(error, consequence, subject: nil)
+          message = case error&.kind
+                    when :rate_limited
+                      reset = error.reset_at ? ", resets at #{error.reset_at.strftime('%H:%M')}" : ''
+                      "GitHub check failed (rate limit reached#{reset}). #{consequence} This is temporary and will clear once the limit resets."
+                    when :not_found
+                      "GitHub check failed (#{subject || 'repository'} not found). #{consequence} Check that the repository and branch exist."
+                    else
+                      "GitHub check failed. #{consequence} This is a temporary error that should resolve itself by your next login."
+                    end
+          respond_mono("[lich5-update: #{message}]")
+        end
+
         # Renders sync results as Terminal::Table.
         #
         # @param repo_name [String] repository display name

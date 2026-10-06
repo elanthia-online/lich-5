@@ -18,18 +18,21 @@ module Lich
         end
 
         # Syncs all registered repositories (built-in + custom) for current game.
+        # Stops at the first GitHub-wide failure: the remaining repos would
+        # fail the same way, and one message is enough.
         #
         # @return [void]
         def sync_all_repos
-          SCRIPT_REPOS.each_key { |repo_key| sync_repo(repo_key) }
-          CustomRepos.all.each_key { |repo_key| sync_repo(repo_key) }
+          (SCRIPT_REPOS.keys + CustomRepos.all.keys).each do |repo_key|
+            break if sync_repo(repo_key) == :github_unavailable
+          end
         end
 
         # Syncs a single repository by key (built-in or custom).
         #
         # @param repo_key [String] repository key from SCRIPT_REPOS or custom repo
         # @param force [Boolean] skip SHA check and download all (default: false)
-        # @return [void]
+        # @return [Symbol, nil] :github_unavailable when GitHub itself failed, else nil
         def sync_repo(repo_key, force: false)
           config = SCRIPT_REPOS[repo_key]
           unless config
@@ -48,14 +51,19 @@ module Lich
             return
           end
 
+          name = config[:display_name] || repo_key
           tree_data = @client.fetch_github_json(config[:api_url])
           unless tree_data && tree_data['tree']
-            respond "[lich5-update: Failed to fetch tree for #{repo_key}.]"
-            return
+            error = @client.last_error
+            if error&.kind == :not_found
+              StatusReporter.respond_github_failure(error, "No scripts were updated from #{name}.", subject: name)
+              return nil
+            end
+            StatusReporter.respond_github_failure(error, 'No scripts have been updated this run.')
+            return :github_unavailable
           end
           tree = tree_data['tree']
 
-          name = config[:display_name] || repo_key
           syncable = filter_syncable_scripts(tree, config, repo_key)
           StatusReporter.respond_mono("[lich5-update: Syncing #{name} (#{syncable.length} scripts)...]")
 
@@ -94,6 +102,7 @@ module Lich
           end
 
           StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other)
+          nil
         end
 
         # Syncs a subdirectory (profiles, data) from repository.
