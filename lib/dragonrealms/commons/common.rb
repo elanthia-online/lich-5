@@ -726,19 +726,14 @@ module Lich
       def play_song?(settings, song_list, worn = true, skip_clean = false, climbing = false, skip_tuning = false)
         instrument = worn ? settings.worn_instrument : settings.instrument
 
-        if UserVars.instrument.nil?
-          Lich::Messaging.msg("plain", "DRC: No previous instrument setting detected. Cleaning stored song data.")
-          UserVars.song = nil
-          UserVars.climbing_song = nil
-          UserVars.instrument = instrument
-        elsif UserVars.instrument != instrument
-          Lich::Messaging.msg("plain", "DRC: New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
-          UserVars.song = nil
-          UserVars.climbing_song = nil
-          UserVars.instrument = instrument
+        # The climbing caller re-picks its song when the climbing instrument
+        # changes; resetting it here would play the easiest song instead.
+        if climbing
+          UserVars.climbing_song = song_list.first.first unless UserVars.climbing_song
+        else
+          reset_song_for_instrument(instrument)
+          UserVars.song = song_list.first.first unless UserVars.song
         end
-        UserVars.song = song_list.first.first unless UserVars.song
-        UserVars.climbing_song = song_list.first.first unless UserVars.climbing_song
         song_to_play = climbing ? UserVars.climbing_song : UserVars.song
         play_command = "play #{song_to_play}"
         if instrument
@@ -800,6 +795,17 @@ module Lich
         else
           false
         end
+      end
+
+      def reset_song_for_instrument(instrument)
+        if UserVars.instrument.nil?
+          Lich::Messaging.msg("plain", "DRC: No previous instrument setting detected. Cleaning stored song data.")
+          UserVars.song = nil
+        elsif UserVars.instrument != instrument
+          Lich::Messaging.msg("plain", "DRC: New instrument #{instrument} detected; old instrument: #{UserVars.instrument}. Resetting stored song data.")
+          UserVars.song = nil
+        end
+        UserVars.instrument = instrument
       end
 
       def stop_playing
