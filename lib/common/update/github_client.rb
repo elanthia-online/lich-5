@@ -18,23 +18,25 @@ module Lich
       # Classified reason the most recent GitHubClient request failed.
       #
       # kind is one of:
-      #   :unavailable  - 5xx, unexpected status, or a 401 on a request sent without a token
-      #   :rate_limited - 403/429 rate limiting; reset_at is set when GitHub reports it
+      #   :unavailable  - 5xx, 401, 408, or another unexpected status
+      #   :rate_limited - 429, or a 403 carrying rate-limit signals; reset_at is set when GitHub reports it
       #   :not_found    - 404 (usually a misconfigured custom repo or branch)
+      #   :rejected     - any other 4xx, e.g. 403 access denied or 409 empty repository
       #   :network      - connection, DNS, TLS, or timeout failure
       #   :bad_response - body could not be parsed or lacked the expected data
       FetchError = Struct.new(:kind, :status, :reset_at, keyword_init: true) do
         # GitHub-wide failures affect every repository, so a multi-repo sync
         # should stop instead of reporting the same outage once per repo.
+        # 404 and other refusals are about one repository, so the sync carries on.
         #
         # @return [Boolean]
         def global?
-          kind != :not_found
+          !%i[not_found rejected].include?(kind)
         end
       end
 
       class GitHubClient
-        attr_reader :http_cache, :last_error
+        attr_reader :http_cache
 
         # @param cache_ttl [Integer] cache TTL in seconds (default: 60)
         def initialize(cache_ttl: 60)
@@ -42,7 +44,16 @@ module Lich
           @cache_ttl = cache_ttl
           @github_token = nil
           @github_token_loaded = false
-          @last_error = nil
+          @last_error_key = :"lich5_update_last_error_#{object_id}"
+        end
+
+        # Why the calling thread's most recent request failed, or nil if it
+        # succeeded. Kept per thread: the client is shared, and the login sync
+        # runs on its own thread while the user may run lich5-update.
+        #
+        # @return [FetchError, nil]
+        def last_error
+          Thread.current[@last_error_key]
         end
 
         # Fetches and parses JSON from GitHub API with caching.
@@ -53,7 +64,7 @@ module Lich
           now = Time.now.to_i
           entry = @http_cache[url]
           if entry && (now - entry[:ts] < @cache_ttl)
-            @last_error = nil
+            self.last_error = nil
             return entry[:data]
           end
           begin
@@ -65,7 +76,7 @@ module Lich
             data
           rescue => e
             debug_log("could not parse response from #{url}: #{e.message}")
-            @last_error = FetchError.new(kind: :bad_response)
+            self.last_error = FetchError.new(kind: :bad_response)
             nil
           end
         end
@@ -80,7 +91,7 @@ module Lich
         # @param auth [Boolean] whether to include token auth (default: true)
         # @return [String, nil] response body or nil on error
         def http_get(url, auth: true)
-          @last_error = nil
+          self.last_error = nil
           uri = URI.parse(url)
           token = auth ? github_token : nil
           response = perform_get(uri, token)
@@ -94,11 +105,11 @@ module Lich
           return response.body if response.code == '200'
 
           debug_log("HTTP #{response.code} fetching #{uri.path}")
-          @last_error = classify(response)
+          self.last_error = classify(response)
           nil
         rescue => e
           debug_log("network error fetching #{url}: #{e.class}: #{e.message}")
-          @last_error = FetchError.new(kind: :network)
+          self.last_error = FetchError.new(kind: :network)
           nil
         end
 
@@ -123,6 +134,12 @@ module Lich
 
         private
 
+        # @param error [FetchError, nil]
+        # @return [void]
+        def last_error=(error)
+          Thread.current[@last_error_key] = error
+        end
+
         # @param uri [URI::Generic] target URI
         # @param token [String, nil] Authorization header value, or nil for anonymous
         # @return [Net::HTTPResponse]
@@ -142,14 +159,26 @@ module Lich
         # @return [FetchError]
         def classify(response)
           status = response.code.to_i
-          case status
-          when 404
-            FetchError.new(kind: :not_found, status: status)
-          when 403, 429
+          if status == 429 || (status == 403 && rate_limited?(response))
             FetchError.new(kind: :rate_limited, status: status, reset_at: rate_limit_reset(response))
+          elsif status == 404
+            FetchError.new(kind: :not_found, status: status)
+          elsif (400..499).cover?(status) && ![401, 408].include?(status)
+            FetchError.new(kind: :rejected, status: status)
           else
             FetchError.new(kind: :unavailable, status: status)
           end
+        end
+
+        # GitHub's 403 means a rate limit only with one of these signals; a
+        # secondary limit can arrive with neither header, only the message.
+        #
+        # @param response [Net::HTTPResponse]
+        # @return [Boolean]
+        def rate_limited?(response)
+          response['x-ratelimit-remaining'] == '0' ||
+            !response['retry-after'].to_s.empty? ||
+            response.body.to_s.match?(/rate limit/i)
         end
 
         # Reads when a rate limit lifts, from x-ratelimit-reset (epoch seconds)
@@ -170,7 +199,7 @@ module Lich
         # @return [void]
         def token_rejected
           @github_token = nil
-          respond "[lich5-update: GitHub rejected the token in #{File.join(DATA_DIR, 'githubtoken.txt')}, so updates used anonymous access. Replace or delete that file to stop this message.]"
+          respond "[lich5-update: GitHub rejected the token in #{File.join(DATA_DIR, 'githubtoken.txt')}, so updates used anonymous access. If this keeps happening, replace or delete that file.]"
         end
 
         # @param msg [String]

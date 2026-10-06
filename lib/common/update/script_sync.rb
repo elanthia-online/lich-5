@@ -23,8 +23,12 @@ module Lich
         #
         # @return [void]
         def sync_all_repos
+          synced = false
           (SCRIPT_REPOS.keys + CustomRepos.all.keys).each do |repo_key|
-            break if sync_repo(repo_key) == :github_unavailable
+            result = sync_repo(repo_key, after_synced_repo: synced)
+            break if result == :github_unavailable
+
+            synced ||= result == :synced
           end
         end
 
@@ -32,8 +36,11 @@ module Lich
         #
         # @param repo_key [String] repository key from SCRIPT_REPOS or custom repo
         # @param force [Boolean] skip SHA check and download all (default: false)
-        # @return [Symbol, nil] :github_unavailable when GitHub itself failed, else nil
-        def sync_repo(repo_key, force: false)
+        # @param after_synced_repo [Boolean] an earlier repo already synced this run,
+        #   so a GitHub failure must not claim nothing was updated (default: false)
+        # @return [Symbol, nil] :synced, :github_unavailable when GitHub itself
+        #   failed, or nil when the repo was skipped
+        def sync_repo(repo_key, force: false, after_synced_repo: false)
           config = SCRIPT_REPOS[repo_key]
           unless config
             # Check custom repos
@@ -55,11 +62,12 @@ module Lich
           tree_data = @client.fetch_github_json(config[:api_url])
           unless tree_data && tree_data['tree']
             error = @client.last_error
-            if error&.kind == :not_found
+            if error && !error.global?
               StatusReporter.respond_github_failure(error, "No scripts were updated from #{name}.", subject: name)
               return nil
             end
-            StatusReporter.respond_github_failure(error, 'No scripts have been updated this run.')
+            consequence = after_synced_repo ? 'No further scripts have been updated this run.' : 'No scripts have been updated this run.'
+            StatusReporter.respond_github_failure(error, consequence)
             return :github_unavailable
           end
           tree = tree_data['tree']
@@ -102,7 +110,7 @@ module Lich
           end
 
           StatusReporter.render_sync_summary(name, syncable.length, downloaded_scripts, downloaded_other, config[:subdirs]&.keys || [], failed_scripts, failed_other)
-          nil
+          :synced
         end
 
         # Syncs a subdirectory (profiles, data) from repository.

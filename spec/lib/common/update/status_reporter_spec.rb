@@ -49,6 +49,13 @@ RSpec.describe Lich::Util::Update::StatusReporter do
       expect(printed.first).not_to include('temporary')
     end
 
+    it 'names the subject on a refusal and does not call it temporary' do
+      described_class.respond_github_failure(fetch_error.new(kind: :rejected, status: 409), 'X.', subject: 'me/repo')
+
+      expect(printed.first).to include('(GitHub refused access to me/repo)', 'Check that the repository and branch exist and are public')
+      expect(printed.first).not_to include('temporary')
+    end
+
     it 'never exposes HTTP codes, API paths, or method names' do
       described_class.respond_github_failure(fetch_error.new(kind: :unavailable, status: 401), 'X.')
 

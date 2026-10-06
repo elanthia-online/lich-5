@@ -137,7 +137,7 @@ RSpec.describe Lich::Util::Update::GitHubClient do
 
       expect(sent).to eq(['Bearer ghp_stale', nil, nil])
       expect(printed.length).to eq(1)
-      expect(printed.first).to include('rejected the token', 'githubtoken.txt', 'Replace or delete')
+      expect(printed.first).to include('rejected the token', 'githubtoken.txt', 'If this keeps happening, replace or delete')
     end
 
     it 'reports the anonymous retry result when both attempts fail, without the token notice' do
@@ -184,12 +184,37 @@ RSpec.describe Lich::Util::Update::GitHubClient do
       expect(client.last_error.reset_at).to be_within(5).of(Time.now + 60)
     end
 
-    it 'leaves reset_at nil on a 403 without rate-limit headers' do
-      serve(response(403, headers: { 'x-ratelimit-remaining' => '12', 'x-ratelimit-reset' => '1' }))
+    it 'treats a 403 without rate-limit signals as a repo-specific refusal, not a rate limit' do
+      serve(response(403, body: '{"message":"Resource not accessible by personal access token"}',
+                          headers: { 'x-ratelimit-remaining' => '12', 'x-ratelimit-reset' => '1' }))
+
+      client.http_get(url)
+      expect(client.last_error.kind).to eq(:rejected)
+      expect(client.last_error.global?).to be(false)
+    end
+
+    it 'treats a 403 secondary rate limit without headers as a rate limit, from the body' do
+      serve(response(403, body: '{"message":"You have exceeded a secondary rate limit."}'))
 
       client.http_get(url)
       expect(client.last_error.kind).to eq(:rate_limited)
       expect(client.last_error.reset_at).to be_nil
+    end
+
+    it 'treats a 409 (empty repository) as repo-specific' do
+      serve(response(409, body: '{"message":"Git Repository is empty."}'))
+
+      client.http_get(url)
+      expect(client.last_error.kind).to eq(:rejected)
+      expect(client.last_error.global?).to be(false)
+    end
+
+    it 'keeps 5xx, 401, network and rate limits GitHub-wide' do
+      fetch_error = Lich::Util::Update::FetchError
+      expect(fetch_error.new(kind: :unavailable, status: 500).global?).to be(true)
+      expect(fetch_error.new(kind: :unavailable, status: 401).global?).to be(true)
+      expect(fetch_error.new(kind: :network).global?).to be(true)
+      expect(fetch_error.new(kind: :rate_limited, status: 429).global?).to be(true)
     end
 
     it 'classifies a 404 as not_found, which is not GitHub-wide' do
@@ -207,6 +232,24 @@ RSpec.describe Lich::Util::Update::GitHubClient do
       expect(client.last_error.kind).to eq(:network)
       expect(printed).to be_empty
       expect(logged.join).to include('Net::OpenTimeout')
+    end
+
+    it 'keeps each thread\'s last_error separate on a shared client' do
+      serve(response(404), response(200, body: 'ok'))
+      failed = Queue.new
+      read = Queue.new
+
+      login_sync = Thread.new do
+        client.http_get(url)
+        failed << true
+        read.pop
+        client.last_error
+      end
+      failed.pop
+      Thread.new { client.http_get(url) }.join # e.g. --announce on the game thread succeeds
+      read << true
+
+      expect(login_sync.value&.kind).to eq(:not_found)
     end
 
     it 'clears last_error after a later success' do

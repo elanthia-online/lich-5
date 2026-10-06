@@ -39,6 +39,8 @@ module Lich
                       "GitHub check failed (rate limit reached#{reset}). #{consequence} This is temporary and will clear once the limit resets."
                     when :not_found
                       "GitHub check failed (#{subject || 'repository'} not found). #{consequence} Check that the repository and branch exist."
+                    when :rejected
+                      "GitHub check failed (GitHub refused access to #{subject || 'the repository'}). #{consequence} Check that the repository and branch exist and are public."
                     else
                       "GitHub check failed. #{consequence} This is a temporary error that should resolve itself by your next login."
                     end

@@ -166,6 +166,22 @@ RSpec.describe Lich::Util::Update::FileUpdater do
     end
   end
 
+  describe '#update_file_from_repo when the raw download fails after the tree listed the file' do
+    it 'does not tell the user to check that the repository exists' do
+      printed = []
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+      tree = { 'tree' => [{ 'path' => 'scripts/foo.lic', 'type' => 'blob', 'sha' => 'abc' }] }
+      allow(client).to receive(:fetch_github_json).and_return(tree)
+      allow(client).to receive(:http_get).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :not_found, status: 404))
+
+      updater.update_file_from_repo('script', 'scripts', 'foo.lic')
+
+      expect(printed.last).to include('foo.lic was not updated.', 'temporary error')
+      expect(printed.last).not_to include('not found')
+    end
+  end
+
   describe '#update_file beta library when no beta ref resolves' do
     let(:printed) { [] }
 

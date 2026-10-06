@@ -103,7 +103,10 @@ module Lich
             FileWriter.safe_write(File.join(location, filename), content)
             StatusReporter.respond_mono("[lich5-update: #{filename} has been updated from #{name}.]")
           else
-            StatusReporter.respond_github_failure(@client.last_error, "#{filename} was not updated.", subject: filename)
+            # The tree just listed this file, so a repo-specific error here is
+            # transient (e.g. raw CDN lag), not a missing repository.
+            error = @client.last_error
+            StatusReporter.respond_github_failure(error&.global? ? error : nil, "#{filename} was not updated.")
           end
         end
 
