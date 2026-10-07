@@ -875,6 +875,8 @@ module Lich
         # @param timeout [Numeric] seconds to wait for the whole exchange (5s
         #   matches the official client)
         # @return [Snapshot, nil] the fresh snapshot, or nil on failure/absence
+        # @raise [ScriptExecutionGuard::Interrupted] when the calling script is
+        #   cancelled during the roundtime wait (nothing has been sent yet)
         # @note MUST run on a script thread. Never call from a Downstream/Upstream
         #   hook proc -- it would block waiting on the parser thread.
         # @example

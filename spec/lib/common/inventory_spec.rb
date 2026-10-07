@@ -977,6 +977,20 @@ RSpec.describe Lich::Common::Inventory do
         expect(described_class.refresh(timeout: 0.2)&.all&.size).to eq(418)
       end
 
+      it 'lets a cancellation during the wait propagate, having sent nothing' do
+        require_relative '../../../lib/common/script_execution_guard'
+        interrupted = Lich::Common::ScriptExecutionGuard::Interrupted
+        allow(described_class).to receive(:waitrt?).and_raise(interrupted.new(:killed))
+        allow(Game).to receive(:_puts)
+
+        expect { described_class.refresh(timeout: 0.1) }.to raise_error(interrupted)
+        expect(Game).not_to have_received(:_puts)
+        expect(described_class.instance_variable_get(:@assemblies)).to be_empty
+
+        answer_only_outside_roundtime # the next refresh still works
+        expect(described_class.refresh(timeout: 0.5)&.all&.size).to eq(418)
+      end
+
       it 'does not wait when the feed is known-absent and nothing will be sent' do
         allow(Game).to receive(:_puts) # never answers
         allow(described_class).to receive(:monotonic_now).and_return(1_000.0)
