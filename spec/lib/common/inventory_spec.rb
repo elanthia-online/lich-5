@@ -946,6 +946,62 @@ RSpec.describe Lich::Common::Inventory do
       expect(snapshot.all.size).to eq(418)       # returned object is stable
     end
 
+    # The game answers a request sent in roundtime with "...wait N seconds." and
+    # no feed (live DR 2026-10-06 and 2026-10-08, right after INVENTORY SCROLLS'
+    # RT). Model that: the server answers only once waitrt? has run.
+    context 'when there is roundtime' do
+      def answer_only_outside_roundtime(rt_wait: 0)
+        in_rt = true
+        allow(described_class).to receive(:waitrt?) do
+          sleep rt_wait
+          in_rt = false
+        end
+        allow(Game).to receive(:_puts) do |cmd|
+          next if in_rt
+
+          id = cmd[/_inventory manager (\S+)/, 1]
+          described_class.observe(full_capture.sub(/id='[^']*'/, "id='#{id}'"))
+        end
+      end
+
+      it 'waits it out before sending, so the request is answered' do
+        answer_only_outside_roundtime
+        snapshot = described_class.refresh(timeout: 0.5)
+        expect(described_class).to have_received(:waitrt?).ordered
+        expect(Game).to have_received(:_puts).with(/\A_inventory manager im/).ordered
+        expect(snapshot.all.size).to eq(418)
+      end
+
+      it 'does not count the roundtime wait against the timeout' do
+        answer_only_outside_roundtime(rt_wait: 0.3)
+        expect(described_class.refresh(timeout: 0.2)&.all&.size).to eq(418)
+      end
+
+      it 'lets a cancellation during the wait propagate, having sent nothing' do
+        require_relative '../../../lib/common/script_execution_guard'
+        interrupted = Lich::Common::ScriptExecutionGuard::Interrupted
+        allow(described_class).to receive(:waitrt?).and_raise(interrupted.new(:killed))
+        allow(Game).to receive(:_puts)
+
+        expect { described_class.refresh(timeout: 0.1) }.to raise_error(interrupted)
+        expect(Game).not_to have_received(:_puts)
+        expect(described_class.instance_variable_get(:@assemblies)).to be_empty
+
+        answer_only_outside_roundtime # the next refresh still works
+        expect(described_class.refresh(timeout: 0.5)&.all&.size).to eq(418)
+      end
+
+      it 'does not wait when the feed is known-absent and nothing will be sent' do
+        allow(Game).to receive(:_puts) # never answers
+        allow(described_class).to receive(:monotonic_now).and_return(1_000.0)
+        2.times { described_class.refresh(timeout: 0.1) } # marks absent
+        allow(described_class).to receive(:waitrt?)
+
+        described_class.refresh(timeout: 0.1)
+        expect(described_class).not_to have_received(:waitrt?)
+      end
+    end
+
     it 'returns nil when the response never arrives within the timeout' do
       allow(Game).to receive(:_puts) # no answer
       expect(described_class.refresh(timeout: 0.15)).to be_nil
