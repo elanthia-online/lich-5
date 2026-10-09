@@ -241,6 +241,7 @@ module Lich
             --without-frontend
             --detachable-client=PORT|auto|HOST:PORT
             --pipe
+            --sentinel
             --frontend=NAME
             --frontend-command=CMD
             --fe-version=VALUE
@@ -257,6 +258,10 @@ module Lich
             With --saga, the handshake also identifies as /P:SAGA, and reports
             /VERSION:saga-unknown when --fe-version is not given.
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
+            With -g HOST:PORT, name the client reading it with a frontend flag (--frontend=NAME, --stormfront);
+            without one the frontend is unknown and script output is not XML-escaped.
+            --sentinel prefixes each line forwarded from the game with the origin marker
+            (0x1F) for a client that strips it, whichever frontend it identifies as.
             --bind-address=HOST sets the local address Lich binds its listen sockets to
             (the frontend, --game proxy, and detachable-client listeners).
             Defaults to 127.0.0.1.

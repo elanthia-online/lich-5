@@ -571,7 +571,7 @@ reconnect_if_wanted = proc {
     # stdin/stdout act as the client transport; connect straight to the game
     # server named by -g (SGE/eaccess login already bypassed by -g). stdin
     # supplies the login key + version; processed server output goes to stdout.
-    Frontend.client = 'unknown'
+    Frontend.client = Lich::Common::Authentication::LoginHelpers.resolve_pipe_frontend(ARGV)
     $_CLIENT_ = SynchronizedSocket.new(Lich::Common::PipeIO.new)
     Lich.log 'info: --pipe mode: using stdin/stdout as client transport'
     @argv_options[:game_host], @argv_options[:game_port] = Lich.fix_game_host_port(@argv_options[:game_host], @argv_options[:game_port])

@@ -861,6 +861,11 @@ module Lich
         # {room} {root} {last}+, up to {MAX_CONCURRENT_CONTINUATIONS} in flight) and
         # waits for the finished snapshot or +timeout+.
         #
+        # Roundtime is waited out before the request is sent, and that wait is not
+        # counted against +timeout+: the game answers a request sent in roundtime
+        # with "...wait N seconds." and no feed, a reply that carries no request id
+        # to match and resend on, so the exchange would only time out.
+        #
         # Returns +nil+ on timeout, on a malformed/mismatched response, or when the
         # feed is known-absent (fast-fails without sending, re-probing on a capped
         # exponential backoff). Callers should use the RETURNED object for a
@@ -870,6 +875,8 @@ module Lich
         # @param timeout [Numeric] seconds to wait for the whole exchange (5s
         #   matches the official client)
         # @return [Snapshot, nil] the fresh snapshot, or nil on failure/absence
+        # @raise [ScriptExecutionGuard::Interrupted] when the calling script is
+        #   cancelled during the roundtime wait (nothing has been sent yet)
         # @note MUST run on a script thread. Never call from a Downstream/Upstream
         #   hook proc -- it would block waiting on the parser thread.
         # @example
@@ -879,6 +886,7 @@ module Lich
           return @snapshot unless probe_allowed?
 
           @refresh_mutex.synchronize do
+            waitrt?
             assembly = Assembly.new
             deadline = monotonic_now + timeout
 
