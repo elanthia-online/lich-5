@@ -710,6 +710,7 @@ reconnect_if_wanted = proc {
       # send version string
       #
       client_string = Frontend.client_string(@argv_options[:fe_version])
+      Lich.log "info: sending client string: #{client_string}"
       $_CLIENTBUFFER_.push(client_string.dup)
       Game._puts(client_string)
       #

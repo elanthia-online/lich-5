@@ -151,6 +151,13 @@ RSpec.describe '--fe-version' do
       run({})
       expect(Game.sent[1]).to eq('/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML')
     end
+
+    it 'logs the client string it sends' do
+      $frontend = 'saga'
+      allow(Lich).to receive(:log)
+      run(fe_version: 'saga-0.10.2')
+      expect(Lich).to have_received(:log).with('info: sending client string: /FE:WRAYTH /VERSION:saga-0.10.2 /P:SAGA /XML')
+    end
   end
 
   describe 'other handshake sites (main.rb)' do
