@@ -15,8 +15,10 @@ module Lich
       # Pattern for XML tags
       XML_TAG_PATTERN = /<[^>]+>/.freeze
 
-      # Pattern for game wait/roundtime responses in bput
-      WAIT_RESPONSE_PATTERN = /(?:\.\.\.wait |Wait |\.\.\. wait )(?<seconds>[0-9]+)/.freeze
+      # Pattern for game wait/roundtime responses in bput. Anchored at the end
+      # of the line: the game sometimes appends "...wait N seconds." to the
+      # previous line, and player speech containing "Wait N" ends in a quote.
+      WAIT_RESPONSE_PATTERN = /(?:\.\.\. ?wait|\AWait) (?<seconds>[0-9]+) seconds?\.(?:<[^>]+>)*\s*\z/.freeze
 
       # Collect command response messages
       COLLECT_MESSAGES = [
@@ -139,9 +141,9 @@ module Lich
             next
           when WAIT_RESPONSE_PATTERN
             unless ignore_rt
-              wait_match = response.match(WAIT_RESPONSE_PATTERN)
-              pause(wait_match[:seconds].to_i - 0.5)
-              waitrt?
+              result = wait_out_roundtime(response, matches, log)
+              return result if result
+
               put message
               timer = Time.now
             end
@@ -204,6 +206,48 @@ module Lich
         end
 
         ''
+      end
+
+      # Waits out a "...wait N seconds." refusal before bput sends the command
+      # again, reading the lines that arrive meanwhile. Further wait lines are
+      # skipped, so the command is resent once rather than once per wait line
+      # (they can answer an earlier command or another script's). A line that
+      # matches the caller's patterns means the command was accepted after all.
+      #
+      # @param wait_line [String] the wait line that triggered the hold
+      # @param matches [Array<Regexp>] the caller's patterns
+      # @param log [Array<String>] bput's log of lines seen; appended to
+      # @return [String, nil] the matched text, or nil when bput should resend
+      def wait_out_roundtime(wait_line, matches, log)
+        deadline = Time.now + wait_line.match(WAIT_RESPONSE_PATTERN)[:seconds].to_i - 0.5
+        loop do
+          found = match_held_lines(matches, log)
+          return found if found
+          break if Time.now >= deadline
+
+          pause 0.1
+        end
+        waitrt?
+        match_held_lines(matches, log)
+      end
+
+      # Reads the lines buffered so far, skipping wait lines, and returns the
+      # first text that matches one of the patterns.
+      #
+      # @param matches [Array<Regexp>]
+      # @param log [Array<String>] appended with every line read
+      # @return [String, nil]
+      def match_held_lines(matches, log)
+        while (line = get?)
+          log << line
+          next if line.match?(WAIT_RESPONSE_PATTERN)
+
+          matches.each do |match|
+            result = line.match(match)
+            return result.to_a.first if result
+          end
+        end
+        nil
       end
 
       def verify_script(script_names)
