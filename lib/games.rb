@@ -464,6 +464,9 @@ module Lich
           @socket = Lich::Common::GameTransport.open(host, port, mode: transport, **transport_opts)
           @socket.sync = true
 
+          @upstream_gate&.stop
+          @upstream_gate = (Lich::Common::UpstreamGate.new if Lich::Common::FeatureFlags.enabled?(:upstream_gate))
+
           start_wrap_thread
           start_main_thread
 
@@ -608,6 +611,8 @@ module Lich
         end
 
         def close
+          @upstream_gate&.stop
+          @upstream_gate = nil
           if @socket
             @socket.close rescue nil
             @reader_thread.kill rescue nil
@@ -624,8 +629,13 @@ module Lich
         # _puts callers supply their own prefix. Checks run under the write lock
         # and are charged once here, never again in puts.
         #
+        # When the upstream gate is active, writes are metered through its
+        # prompt-acked window: script threads block until their command is
+        # written; game and client threads queue it and return at once.
+        #
         # @param str [String] the raw command to send upstream
-        # @return [true, nil] true when written; nil on connection error
+        # @return [true, nil] true when written (or queued by a non-script
+        #   thread); nil on connection error
         # @raise [Common::ScriptExecutionGuard::Interrupted] if the calling
         #   script's installed policy rejects the write
         def _puts(str)
@@ -638,6 +648,18 @@ module Lich
              script.respond_to?(:execution_guard_active?) && script.execution_guard_active?
             script.check_execution_guard!(command: str.to_s.dup.freeze)
           end
+          return write_upstream(script, str) unless @upstream_gate
+
+          # The reader thread delivers the prompts that open the window, and the
+          # parser runs hooks inline; blocking either would deadlock.
+          wait = !script.nil? && Thread.current != @reader_thread && Thread.current != @thread
+          @upstream_gate.submit(str, wait: wait) { write_upstream(script, str) }
+        end
+
+        # @param script [Script, nil] the calling script whose guard applies
+        # @param str [String] the raw command to send upstream
+        # @return [true, nil] true when written; nil on connection error
+        def write_upstream(script, str)
           @mutex.synchronize do
             # Recheck the captured owner's current policy here
             # after lock contention; do not retain an earlier permission result.
@@ -796,6 +818,7 @@ module Lich
                   monotonic_received_at = reader_process_started
                   @last_recv = received_at
                   @_buffer.update(server_string) if defined?(TESTING) && TESTING
+                  @upstream_gate&.observe(server_string)
                   hook_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
                   Lich::Common::SocketReadHook.run(
                     server_string,
