@@ -17,6 +17,14 @@ module Lich
           @client = client
         end
 
+        # Why the most recent GitHub lookup failed, so a nil ref can be told
+        # apart from "no beta exists".
+        #
+        # @return [FetchError, nil]
+        def last_error
+          @client.last_error
+        end
+
         # Resolves channel symbol to git ref (tag or branch).
         #
         # @param channel [Symbol, String] :stable, :beta, or 'production'

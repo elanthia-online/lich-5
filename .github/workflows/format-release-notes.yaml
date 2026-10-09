@@ -294,6 +294,7 @@ jobs:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
           VERSION: ${{ steps.seed.outputs.version }}
           CUR_NAME: ${{ steps.seed.outputs.name }}
+          TAG: ${{ steps.seed.outputs.tag }}
         with:
           script: |
             const owner = context.repo.owner;
@@ -303,7 +304,8 @@ jobs:
             const desired = `Lich v${version}`;
             const current = process.env.CUR_NAME || '';
             if (desired && desired !== current) {
-              await github.rest.repos.updateRelease({ owner, repo, release_id, name: desired });
+              // tag_name must be resent: PATCHing a draft without it detaches the tag (-> untagged-<hash>)
+              await github.rest.repos.updateRelease({ owner, repo, release_id, tag_name: process.env.TAG, name: desired });
             }
 
       - name: Update release body
@@ -312,12 +314,13 @@ jobs:
         env:
           RELEASE_ID: ${{ steps.seed.outputs.release_id }}
           FINAL: ${{ steps.transform.outputs.final }}
+          TAG: ${{ steps.seed.outputs.tag }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo  = context.repo.repo;
             const release_id = parseInt(process.env.RELEASE_ID, 10);
-            await github.rest.repos.updateRelease({ owner, repo, release_id, body: process.env.FINAL });
+            await github.rest.repos.updateRelease({ owner, repo, release_id, tag_name: process.env.TAG, body: process.env.FINAL });
 
       - name: Already formatted (noop)
         if: steps.guard.outputs.skip == 'true'

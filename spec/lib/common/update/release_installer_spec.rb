@@ -35,8 +35,22 @@ RSpec.describe Lich::Util::Update::ReleaseInstaller do
   describe '#announce' do
     it 'returns when release preparation does not identify an update version' do
       allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(nil)
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono)
 
       expect { installer.announce }.not_to raise_error
+    end
+
+    it 'reports a failed release check as one plain message' do
+      printed = []
+      allow(client).to receive(:fetch_github_json).and_return(nil)
+      allow(client).to receive(:last_error).and_return(Lich::Util::Update::FetchError.new(kind: :unavailable, status: 401))
+      allow(Lich::Util::Update::StatusReporter).to receive(:respond_mono) { |msg| printed << msg }
+
+      installer.announce
+
+      expect(printed).to eq(['[lich5-update: GitHub check failed. Could not check for a new Lich version; your current installation is unaffected. This is a temporary error that should resolve itself by your next login.]'])
+      expect(messages.join).not_to include('prep_update')
     end
 
     it 'warns about the target Ruby floor and does not invite an incompatible update' do

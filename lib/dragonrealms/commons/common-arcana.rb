@@ -1222,9 +1222,11 @@ module Lich
         elsif DRStats.thief?
           start_khris(spells, settings)
         else
-          spells
-            .select! { |_name, data| data['night'] ? UserVars.sun['night'] : true }
-            .select! { |_name, data| data['day'] ? UserVars.sun['day'] : true }
+          # Non-mutating select: select! returns nil when it removes nothing,
+          # which skipped the day filter, and it deleted out-of-season spells
+          # from the caller's settings.waggle_sets.
+          spells = spells.select { |_name, data| data['night'] ? UserVars.sun['night'] : true }
+                         .select { |_name, data| data['day'] ? UserVars.sun['day'] : true }
 
           spells.values
                 .select { |spell| spell['use_auto_mana'] }

@@ -97,7 +97,7 @@ module Lich
             end
           end
           unless latest.is_a?(Hash)
-            respond "Update notice: could not read latest release payload (prep_update)."
+            StatusReporter.respond_github_failure(@client.last_error, 'Could not check for a new Lich version; your current installation is unaffected.')
             return
           end
 
@@ -178,7 +178,11 @@ module Lich
             if beta_response =~ /accepted/
               ref = @resolver.resolve_channel_ref(:beta)
               if ref.nil?
-                respond 'No viable beta found. Aborting beta update.'
+                if @resolver.last_error
+                  StatusReporter.respond_github_failure(@resolver.last_error, 'No beta update was installed.')
+                else
+                  respond 'No viable beta found. Aborting beta update.'
+                end
                 return
               end
 

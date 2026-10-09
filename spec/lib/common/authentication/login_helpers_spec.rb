@@ -554,6 +554,10 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
         .to eq(['GS3', :__unset, :__unset])
     end
 
+    it 'does not read --sentinel as a game instance' do
+      expect(described_class.resolve_login_args(['--login', 'Tsetem', '--sentinel'])).to eq([:__unset, :__unset, :__unset])
+    end
+
     it 'does not report an invalid game code as a resolved instance' do
       allow(Lich).to receive(:log)
 
@@ -619,6 +623,31 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
     it 'returns unknown when nothing can attach' do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'])).to eq('unknown')
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'])).to eq('unknown')
+    end
+  end
+
+  describe '.resolve_pipe_frontend' do
+    it 'keeps the frontend named on the command line' do
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=stormfront'])).to eq('stormfront')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--stormfront'])).to eq('stormfront')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--saga'])).to eq('saga')
+    end
+
+    it 'resolves an alias to its canonical frontend' do
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=wrayth'])).to eq('stormfront')
+    end
+
+    it 'preserves a registered custom frontend' do
+      allow(Lich::Common::Frontend).to receive(:registered_frontends).and_return(
+        Lich::Common::Frontend.registered_frontends + ['vellum']
+      )
+
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=vellum'])).to eq('vellum')
+    end
+
+    it 'stays unknown without a frontend flag or with an unregistered one' do
+      expect(described_class.resolve_pipe_frontend(['-g', '127.0.0.1:4000', '--pipe', '--no-gtk', '--gemstone'])).to eq('unknown')
+      expect(described_class.resolve_pipe_frontend(['--pipe', '--frontend=nosuchclient'])).to eq('unknown')
     end
   end
 
