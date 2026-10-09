@@ -92,6 +92,14 @@ module Lich
               next
             end
 
+            if config[:check_lich_requirement]
+              required = Lich::Common::Script.required_lich_version_in(content)
+              unless Lich::Common::Script.lich_version_satisfied?(required)
+                StatusReporter.respond_mono("[lich5-update: #{filename} not updated, it requires Lich #{required}+ (you have #{LICH_VERSION}).]")
+                next
+              end
+            end
+
             begin
               FileWriter.safe_write(File.join(dest, filename), content)
               downloaded_scripts << filename

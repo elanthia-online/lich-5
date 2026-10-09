@@ -87,6 +87,16 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
     instance_double(script_class, name: name, file_name: file_name)
   end
 
+  describe '.required_lich_version_in' do
+    it 'parses the requirement from raw source that is not on disk' do
+      expect(script_class.required_lich_version_in(header('required: Lich >= 5.16.0'))).to eq('5.16.0')
+    end
+
+    it 'returns nil when the source declares no requirement' do
+      expect(script_class.required_lich_version_in("echo 'hi'\n")).to be_nil
+    end
+  end
+
   describe '.required_lich_version' do
     it 'parses a "required: Lich >= X.Y.Z" line from a =begin/=end header' do
       add_script('demo', header('  author: someone', '  required: Lich >= 5.15.0', '  version: 1.2.3'))

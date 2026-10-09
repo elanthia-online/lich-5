@@ -265,4 +265,39 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       sync.sync_repo('sha-test')
     end
   end
+
+  describe '#sync_repo with check_lich_requirement' do
+    let(:tree) { { 'tree' => [{ 'path' => 'needy.lic', 'type' => 'blob', 'sha' => 'new' }] } }
+    let(:script) { double('Script', required_lich_version_in: '9.0.0', lich_version_satisfied?: false) }
+
+    before do
+      stub_const('Lich::Common::Script', script)
+      allow(client).to receive(:fetch_github_json).and_return(tree)
+      allow(client).to receive(:http_get).and_return("# required: Lich >= 9.0.0\n")
+    end
+
+    def config(check)
+      {
+        display_name: 'Req', api_url: 'https://api.example.com/tree',
+        raw_base_url: 'https://raw.example.com', tracking_mode: :all,
+        script_pattern: /^[^\/]+\.lic$/, game_filter: nil, subdirs: {},
+        check_lich_requirement: check
+      }
+    end
+
+    it 'does not install a script that needs a newer Lich' do
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'req' => config(true) })
+
+      expect(Lich::Util::Update::FileWriter).not_to receive(:safe_write)
+      expect(Lich::Util::Update::StatusReporter).to receive(:respond_mono).with(/needy\.lic not updated, it requires Lich 9\.0\.0\+/)
+      sync.sync_repo('req')
+    end
+
+    it 'ignores the header when the repo does not opt in' do
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'req' => config(nil) })
+
+      expect(Lich::Util::Update::FileWriter).to receive(:safe_write).with(File.join(tmpdir, 'needy.lic'), anything)
+      sync.sync_repo('req')
+    end
+  end
 end
