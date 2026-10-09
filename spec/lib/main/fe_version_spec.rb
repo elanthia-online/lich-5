@@ -122,18 +122,34 @@ RSpec.describe '--fe-version' do
 
     define_method(:harness_class) { harness_class }
 
+    # Frontend.client reads $frontend (restored by the around hook), the value
+    # main.rb sets from resolve_headless_frontend before this block runs.
     it 'sends the version-substituted client string when --fe-version is set' do
-      run(fe_version: 'saga-0.10.2')
-      expected = '/FE:WRAYTH /VERSION:saga-0.10.2 /P:WIN_UNKNOWN /XML'
+      $frontend = 'wrayth'
+      run(fe_version: 'genie-5.1')
+      expected = '/FE:WRAYTH /VERSION:genie-5.1 /P:WIN_UNKNOWN /XML'
       expect(Game.sent).to eq(['KEY', expected, '<c>', '<c>'])
       expect($_CLIENTBUFFER_).to eq([expected, "<c>\r\n", "<c>\r\n"])
     end
 
     it 'sends the default client string byte-for-byte when --fe-version is absent' do
+      $frontend = 'wrayth'
       run({})
       expected = '/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'
       expect(Game.sent[1].bytes).to eq(expected.bytes)
       expect($_CLIENTBUFFER_.first.bytes).to eq(expected.bytes)
+    end
+
+    it 'identifies Saga as /P:SAGA with the --fe-version value' do
+      $frontend = 'saga'
+      run(fe_version: 'saga-0.10.2')
+      expect(Game.sent[1]).to eq('/FE:WRAYTH /VERSION:saga-0.10.2 /P:SAGA /XML')
+    end
+
+    it 'identifies Saga as saga-unknown when --fe-version is absent' do
+      $frontend = 'saga'
+      run({})
+      expect(Game.sent[1]).to eq('/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML')
     end
   end
 

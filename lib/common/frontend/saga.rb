@@ -17,6 +17,9 @@ saga_lich_launch_environment = {
     launcher_adapter: :environment,
     launcher_status: :supported_cold_start_only,
     launch_notice: 'Saga 0.8.5 environment handoff; cold start only',
+    # Handshake Lich sends for Saga in --without-frontend mode; --fe-version
+    # replaces the /VERSION: value.
+    client_string: '/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML',
     native_launch_only: true,
     # Saga 0.8.5 consumes this environment when it owns process startup. Its
     # single-instance relay currently drops the per-launch host, port, and key.

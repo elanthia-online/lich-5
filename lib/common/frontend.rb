@@ -579,12 +579,14 @@ module Lich
         $frontend = value
       end
 
-      # CLIENT_STRING with its /VERSION: value replaced by version (--fe-version).
-      # Returns CLIENT_STRING unchanged when version is nil.
-      def self.client_string(version = nil)
-        return CLIENT_STRING if version.nil?
+      # Handshake client string for a frontend: its registry :client_string,
+      # else CLIENT_STRING, with the /VERSION: value replaced by version
+      # (--fe-version) when one is given.
+      def self.client_string(version = nil, frontend: client)
+        base = metadata_for(frontend, :client_string) || CLIENT_STRING
+        return base if version.nil?
 
-        CLIENT_STRING.sub(%r{/VERSION:\S+}) { "/VERSION:#{version}" }
+        base.sub(%r{/VERSION:\S+}) { "/VERSION:#{version}" }
       end
 
       # Send version string, ready signals, and setup commands to the game server.

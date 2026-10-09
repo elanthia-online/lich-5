@@ -660,22 +660,44 @@ RSpec.describe Lich::Common::Frontend do
   # --- client_string ------------------------------------------
 
   describe '.client_string' do
-    it 'is byte-identical to CLIENT_STRING when no version is given' do
-      expect(frontend.client_string).to eq(frontend::CLIENT_STRING)
-      expect(frontend.client_string(nil).bytes).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'.bytes)
+    let(:default_string) { '/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML' }
+
+    it 'is byte-identical to CLIENT_STRING for a frontend without an override' do
+      expect(frontend.client_string(frontend: 'wrayth')).to eq(frontend::CLIENT_STRING)
+      expect(frontend.client_string(nil, frontend: 'wrayth').bytes).to eq(default_string.bytes)
+    end
+
+    it 'falls back to CLIENT_STRING for nil or unregistered frontends' do
+      expect(frontend.client_string(frontend: nil)).to eq(default_string)
+      expect(frontend.client_string(frontend: 'unknown')).to eq(default_string)
     end
 
     it 'replaces only the /VERSION: value when a version is given' do
-      expect(frontend.client_string('saga-0.10.2')).to eq('/FE:WRAYTH /VERSION:saga-0.10.2 /P:WIN_UNKNOWN /XML')
+      expect(frontend.client_string('genie-5.1', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:genie-5.1 /P:WIN_UNKNOWN /XML')
     end
 
-    it 'leaves the CLIENT_STRING constant unchanged' do
-      frontend.client_string('saga-0.10.2')
-      expect(frontend::CLIENT_STRING).to eq('/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML')
+    it 'identifies Saga with /P:SAGA and saga-unknown when no version is given' do
+      expect(frontend.client_string(frontend: 'saga')).to eq('/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML')
+    end
+
+    it 'puts the given version into the Saga string' do
+      expect(frontend.client_string('saga-0.10.2', frontend: 'saga')).to eq('/FE:WRAYTH /VERSION:saga-0.10.2 /P:SAGA /XML')
+    end
+
+    it 'defaults frontend to the current client' do
+      allow(frontend).to receive(:client).and_return('saga')
+      expect(frontend.client_string).to eq('/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML')
+    end
+
+    it 'leaves the CLIENT_STRING constant and Saga metadata unchanged' do
+      frontend.client_string('saga-0.10.2', frontend: 'wrayth')
+      frontend.client_string('saga-0.10.2', frontend: 'saga')
+      expect(frontend::CLIENT_STRING).to eq(default_string)
+      expect(frontend.metadata_for('saga', :client_string)).to eq('/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML')
     end
 
     it 'treats the version literally (no regex backreference expansion)' do
-      expect(frontend.client_string('1\\0')).to eq('/FE:WRAYTH /VERSION:1\\0 /P:WIN_UNKNOWN /XML')
+      expect(frontend.client_string('1\\0', frontend: 'wrayth')).to eq('/FE:WRAYTH /VERSION:1\\0 /P:WIN_UNKNOWN /XML')
     end
   end
 
