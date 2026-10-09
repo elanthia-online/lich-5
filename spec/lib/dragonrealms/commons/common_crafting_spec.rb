@@ -292,6 +292,118 @@ describe DRCC do
     end
   end
 
+  describe '.empty_crucible?' do
+    # Reference the modules the way production resolves them, so the stubs hit
+    # the same objects whether or not the real commons are loaded.
+    let(:common) { Lich::DragonRealms::DRC }
+    let(:items) { Lich::DragonRealms::DRCI }
+    let(:sent) { [] }
+    let(:look_replies) { [] }
+    let(:empty) { 'There is nothing in there.' }
+    let(:molten) { 'In the large crucible you see some molten bronze.' }
+    let(:nugget) { 'In the large crucible you see a bronze nugget.' }
+
+    before(:each) do
+      # Same contract as the real DRC.bput: String patterns become /pattern/i and
+      # the matched text (not the whole line) is returned. The last reply repeats.
+      allow(common).to receive(:bput) do |command, *patterns|
+        sent << command
+        next 'You tap a large crucible' if command == 'tap crucible'
+
+        line = look_replies.length > 1 ? look_replies.shift : look_replies.first
+        match = patterns.flatten.lazy.map { |p| line.match(p.is_a?(Regexp) ? p : /#{p}/i) }.find(&:itself)
+        match ? match.to_a.first : ''
+      end
+      allow(DRCC).to receive(:fput) { |command| sent << command }
+      allow(items).to receive(:get_item_unsafe) { |item, container| sent << "get #{item} from #{container}" }
+      allow(items).to receive(:dispose_trash) { |item| sent << "dispose #{item}" }
+    end
+
+    it 'returns true for an empty crucible' do
+      look_replies << empty
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false when there is no crucible' do
+      look_replies << 'I could not find what you were referring to.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'returns false without retrying when the look times out' do
+      look_replies << 'Something unrelated scrolls by.'
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent).to eq(['look in cruc'])
+    end
+
+    it 'tilts molten metal out instead of trying to pick it up' do
+      look_replies.push(molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible', 'look in cruc'])
+    end
+
+    it 'tilts the metal first, then clears the clutter left behind' do
+      look_replies.push('In the large crucible you see some molten bronze and a bronze nugget.', nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'tilt crucible', 'tilt crucible',
+                          'look in cruc', 'get nugget from crucible', 'dispose nugget',
+                          'look in cruc'])
+    end
+
+    it 'gets and disposes of solid clutter' do
+      look_replies.push(nugget, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent).to eq(['look in cruc', 'get nugget from crucible', 'dispose nugget', 'look in cruc'])
+    end
+
+    it 'returns true when the crucible empties on the last allowed pass' do
+      look_replies.push(molten, molten, molten, empty)
+      expect(DRCC.empty_crucible?).to be(true)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages).to be_empty
+    end
+
+    it 'gives up after 3 passes when the molten metal stays' do
+      look_replies << molten
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('tilt crucible')).to eq(6)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(sent.grep(/^get /)).to be_empty
+      expect(Lich::Messaging.messages.last).to include(type: 'bold')
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 tries')
+    end
+
+    it 'gives up after 3 passes when the clutter cannot be removed' do
+      look_replies << nugget
+      expect(DRCC.empty_crucible?).to be(false)
+      expect(sent.count('get nugget from crucible')).to eq(3)
+      expect(sent.count('look in cruc')).to eq(4)
+      expect(Lich::Messaging.messages.last[:message]).to include('still not empty after 3 tries')
+    end
+
+    it 'lets find_empty_crucible move on from a crucible that will not empty' do
+      look_replies << molten
+      travel = Lich::DragonRealms::DRCT
+      allow(DRCC).to receive(:get_data).with('crafting').and_return(
+        'blacksmithing' => { 'Crossing' => { 'crucibles' => [1, 2], 'idle-room' => 3 } }
+      )
+      allow(Lich::DragonRealms::DRRoom).to receive(:pcs).and_return([])
+      allow(Lich::DragonRealms::DRRoom).to receive(:group_members).and_return([])
+      allow(DRCC).to receive(:clean_anvil?)
+      predicate_results = []
+      allow(travel).to receive(:find_sorted_empty_room) do |_rooms, _idle, predicate|
+        predicate_results << predicate.call
+      end
+      DRCC.find_empty_crucible('Crossing')
+
+      expect(predicate_results).to eq([false])
+      expect(sent.first).to eq('tap crucible')
+      expect(sent.count('look in cruc')).to eq(8)
+    end
+  end
+
   describe '.get_crafting_item' do
     before(:each) do
       allow(DRC).to receive(:beep)

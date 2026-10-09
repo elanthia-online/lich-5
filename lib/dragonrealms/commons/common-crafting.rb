@@ -9,7 +9,8 @@ module Lich
       LOOK_CRUCIBLE_NOT_FOUND = '^I could not find'
       LOOK_CRUCIBLE_EMPTY = '^There is nothing in there'
       LOOK_CRUCIBLE_SEE_PATTERN = /^In the .* crucible you see (?<items>.*)\./.freeze
-      LOOK_CRUCIBLE_MOLTEN = 'crucible you see some molten'
+      LOOK_CRUCIBLE_MOLTEN = /crucible you see some molten/.freeze
+      EMPTY_CRUCIBLE_MAX_PASSES = 3
 
       LOOK_ANVIL_NOT_FOUND = '^I could not find'
       LOOK_ANVIL_CLEAN = 'surface looks clean and ready'
@@ -124,7 +125,9 @@ module Lich
 
       SIGIL_COUNT_NOTHING = 'but there is nothing in there like that'
 
-      def empty_crucible?
+      # Tilts out molten metal and clears clutter, then looks again, up to
+      # EMPTY_CRUCIBLE_MAX_PASSES times. Returns false if it is still not empty.
+      def empty_crucible?(pass: 0)
         case result = DRC.bput('look in cruc',
                                LOOK_CRUCIBLE_NOT_FOUND,
                                LOOK_CRUCIBLE_EMPTY,
@@ -133,23 +136,29 @@ module Lich
           true
         when /I could not find/
           false
-        when LOOK_CRUCIBLE_MOLTEN
-          fput('tilt crucible')
-          fput('tilt crucible')
-          return DRCC.empty_crucible?
         when /crucible you see/
-          match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
-          return false unless match
-
-          clutter = match[:items]
-                    .split(/(?:,|and) (?:some|an|a)/)
-                    .map(&:strip)
-          clutter.each do |junk|
-            junk = DRC.get_noun(junk)
-            DRCI.get_item_unsafe(junk, 'crucible')
-            DRCI.dispose_trash(junk)
+          if pass >= EMPTY_CRUCIBLE_MAX_PASSES
+            Lich::Messaging.msg('bold', "DRCC: The crucible is still not empty after #{pass} tries to clear it.")
+            return false
           end
-          return DRCC.empty_crucible?
+
+          if result.match?(LOOK_CRUCIBLE_MOLTEN)
+            fput('tilt crucible')
+            fput('tilt crucible')
+          else
+            match = result.match(LOOK_CRUCIBLE_SEE_PATTERN)
+            return false unless match
+
+            clutter = match[:items]
+                      .split(/(?:,|and) (?:some|an|a)/)
+                      .map(&:strip)
+            clutter.each do |junk|
+              junk = DRC.get_noun(junk)
+              DRCI.get_item_unsafe(junk, 'crucible')
+              DRCI.dispose_trash(junk)
+            end
+          end
+          DRCC.empty_crucible?(pass: pass + 1)
         else
           false
         end
