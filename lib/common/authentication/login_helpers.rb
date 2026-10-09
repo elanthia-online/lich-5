@@ -55,12 +55,13 @@ module Lich
         # CLI flags that should never be interpreted as game-instance selectors.
         NON_INSTANCE_FLAGS = %w[
           login gui no-gui without-frontend headless reconnect reconnected save
-          genie frostbite wrayth saga suks sentinel
+          genie frostbite wrayth saga suks sentinel pipe no-wine no-gtk debug
         ].freeze
 
         # CLI options (key portion before '=') that are non-instance modifiers.
         NON_INSTANCE_OPTION_KEYS = %w[
           start-scripts custom-launch dark-mode headless
+          auth-provider bind-address game-transport host
           home data scripts temp maps logs backup lib
           script-dir data-dir temp-dir
           hosts-dir hosts-file account password character frontend frontend-command
