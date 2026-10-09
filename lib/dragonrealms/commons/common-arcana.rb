@@ -1212,6 +1212,23 @@ module Lich
         crafting_prepare_spell(training_spells[needs_training], settings)
       end
 
+      # Whether a spell's day/night restriction allows casting it now: a
+      # 'night' spell only at night, a 'day' spell only by day, anything else
+      # always. Reads UserVars.sun, which moonwatch keeps current; with no sun
+      # data, day and night spells are both skipped. Scripts that decide
+      # whether to cast or wait on a waggle spell should use this so they agree
+      # with {#do_buffs}.
+      #
+      # @param data [Hash] the spell's waggle data
+      # @return [Boolean] true if the spell can be cast at this time of day
+      def day_night_ok?(data)
+        sun = UserVars.sun || {}
+        return false if data['night'] && !sun['night']
+        return false if data['day'] && !sun['day']
+
+        true
+      end
+
       def do_buffs(settings, set_name)
         return unless settings.waggle_sets[set_name]
 
@@ -1225,8 +1242,7 @@ module Lich
           # Non-mutating select: select! returns nil when it removes nothing,
           # which skipped the day filter, and it deleted out-of-season spells
           # from the caller's settings.waggle_sets.
-          spells = spells.select { |_name, data| data['night'] ? UserVars.sun['night'] : true }
-                         .select { |_name, data| data['day'] ? UserVars.sun['day'] : true }
+          spells = spells.select { |_name, data| day_night_ok?(data) }
 
           spells.values
                 .select { |spell| spell['use_auto_mana'] }

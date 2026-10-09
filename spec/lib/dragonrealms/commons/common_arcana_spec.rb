@@ -1303,6 +1303,67 @@ RSpec.describe Lich::DragonRealms::DRCA do
   end
 
   # ----------------------------------------------
+  # day/night rule shared by do_buffs and dr-scripts
+  # ----------------------------------------------
+  describe '.day_night_ok?' do
+    let(:night) { { 'day' => false, 'night' => true } }
+    let(:day) { { 'day' => true, 'night' => false } }
+
+    after(:each) { UserVars.sun = nil }
+
+    it 'allows a night spell at night' do
+      UserVars.sun = night
+      expect(DRCA.day_night_ok?({ 'night' => true })).to be(true)
+    end
+
+    it 'rejects a night spell by day' do
+      UserVars.sun = day
+      expect(DRCA.day_night_ok?({ 'night' => true })).to be(false)
+    end
+
+    it 'allows a day spell by day' do
+      UserVars.sun = day
+      expect(DRCA.day_night_ok?({ 'day' => true })).to be(true)
+    end
+
+    it 'rejects a day spell at night' do
+      UserVars.sun = night
+      expect(DRCA.day_night_ok?({ 'day' => true })).to be(false)
+    end
+
+    it 'allows an unrestricted spell by day and at night' do
+      UserVars.sun = day
+      expect(DRCA.day_night_ok?({ 'abbrev' => 'bless' })).to be(true)
+      UserVars.sun = night
+      expect(DRCA.day_night_ok?({ 'abbrev' => 'bless' })).to be(true)
+    end
+
+    it 'treats night: false and day: false in yaml as unrestricted' do
+      UserVars.sun = day
+      expect(DRCA.day_night_ok?({ 'night' => false })).to be(true)
+      UserVars.sun = night
+      expect(DRCA.day_night_ok?({ 'day' => false })).to be(true)
+    end
+
+    it 'rejects day and night spells when moonwatch has not set the sun data' do
+      UserVars.sun = {}
+      expect(DRCA.day_night_ok?({ 'night' => true })).to be(false)
+      expect(DRCA.day_night_ok?({ 'day' => true })).to be(false)
+      expect(DRCA.day_night_ok?({ 'abbrev' => 'bless' })).to be(true)
+    end
+
+    # Real Vars returns nil for a var that was never set. The spec_helper stub
+    # turns a nil sun into daytime data, so stub the getter directly. Plain
+    # Ruby here, without Lich's NilClass patch: nil['night'] would raise.
+    it 'rejects day and night spells without raising when UserVars.sun was never set' do
+      allow(UserVars).to receive(:sun).and_return(nil)
+      expect(DRCA.day_night_ok?({ 'night' => true })).to be(false)
+      expect(DRCA.day_night_ok?({ 'day' => true })).to be(false)
+      expect(DRCA.day_night_ok?({ 'abbrev' => 'bless' })).to be(true)
+    end
+  end
+
+  # ----------------------------------------------
   # do_buffs day/night filter
   # ----------------------------------------------
   describe '.do_buffs' do
