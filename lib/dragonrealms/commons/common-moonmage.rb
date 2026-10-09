@@ -391,7 +391,16 @@ module Lich
         data
       end
 
+      # Returns the names in +planets+ that the telescope can see, or nil when
+      # there is no telescope to look through (no settings, or it can't be fetched).
       def find_visible_planets(planets, settings = nil)
+        # Without settings there is no telescope name or storage, so don't send
+        # a bare "get" for a nil item.
+        unless settings
+          Lich::Messaging.msg("bold", "DRCMM: No settings given, so no telescope to find visible planets.")
+          return
+        end
+
         unless get_telescope?(settings.telescope_name, settings.telescope_storage)
           Lich::Messaging.msg("bold", "DRCMM: Could not get telescope to find visible planets.")
           return
@@ -419,7 +428,8 @@ module Lich
 
         planets = get_data('constellations')[:constellations].select { |planet| planet['stats'] }
         planet_names = planets.map { |planet| planet['name'] }
-        visible_planets = find_visible_planets(planet_names, settings)
+        # find_visible_planets returns nil when there is no telescope to look through.
+        visible_planets = find_visible_planets(planet_names, settings) || []
         data['stats'].each do |stat|
           cast_on = planets.map { |planet| planet['name'] if planet['stats'].include?(stat) && visible_planets.include?(planet['name']) }.compact.first
           next unless cast_on
@@ -428,6 +438,8 @@ module Lich
           return data
         end
         Lich::Messaging.msg("bold", "DRCMM: Could not set planet data. Cannot cast #{data['abbrev']}.")
+        # Messaging.msg returns a truthy Array; callers test the result with `if data`.
+        nil
       end
 
       def set_moon_data(data)
