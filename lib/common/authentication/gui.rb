@@ -17,7 +17,8 @@ module Lich
         # Handles button state, error dialogs, and success callback
         #
         # @param button [Gtk::Button] The play button (for state management)
-        # @param login_info [Hash] Character login info (user_id, password, char_name, game_code, frontend)
+        # @param login_info [Hash] Character login info (user_id, password, char_name, game_code, frontend),
+        #   or generator: true to enter the character generator instead of logging in as char_name
         # @param on_success [Proc, nil] Callback with launch_data on successful auth.
         #   If nil, authentication succeeds but launch_data is discarded (no-op).
         # @param on_error [Proc, nil] Optional callback for error handling (default: show dialog)
@@ -30,7 +31,8 @@ module Lich
               account: login_info[:user_id],
               password: login_info[:password],
               character: login_info[:char_name],
-              game_code: login_info[:game_code]
+              game_code: login_info[:game_code],
+              generator: login_info[:generator] || false
             )
 
             # Format launch data for frontend
