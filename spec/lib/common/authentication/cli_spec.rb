@@ -294,7 +294,7 @@ RSpec.describe Lich::Common::Authentication::CLI do
         expect(result).to eq(['GAME=WIZ'])
       end
 
-      it 'defaults frontend to profanity and drops unset custom launch' do
+      it 'defaults a headless launch to profanity and drops unset custom launch' do
         allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
         allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
 
@@ -303,8 +303,55 @@ RSpec.describe Lich::Common::Authentication::CLI do
         ).and_return(['GAME=DR'])
 
         described_class.execute_new_character(
-          'TESTUSER', game_code: 'DR', frontend: :__unset, custom_launch: :__unset, data_dir: data_dir
+          'TESTUSER', game_code: 'DR', frontend: :__unset, custom_launch: :__unset, data_dir: data_dir, headless: true
         )
+      end
+
+      context 'when no frontend is requested and the launch is not headless' do
+        before do
+          allow(Lich::Common::Authentication::EntryStore).to receive(:decrypt_password).and_return('testpass')
+          allow(Lich::Common::Authentication).to receive(:authenticate).and_return({ 'key' => 'abc' })
+        end
+
+        def expect_frontend(frontend)
+          expect(Lich::Common::Authentication::LaunchData).to receive(:prepare)
+            .with({ 'key' => 'abc' }, frontend, nil, nil).and_return(['GAME=DR'])
+        end
+
+        it "uses the frontend most of the account's characters use" do
+          File.write(yaml_file, {
+            'accounts'        => {
+              'TESTUSER' => {
+                'password'   => 'testpass',
+                'characters' => [
+                  { 'char_name' => 'One', 'game_code' => 'DR', 'frontend' => 'wizard' },
+                  { 'char_name' => 'Two', 'game_code' => 'DR', 'frontend' => 'wizard' },
+                  { 'char_name' => 'Three', 'game_code' => 'DR', 'frontend' => 'genie' }
+                ]
+              }
+            },
+            'encryption_mode' => 'plaintext'
+          }.to_yaml)
+          expect_frontend('wizard')
+
+          described_class.execute_new_character('testuser', game_code: 'DR', frontend: :__unset, data_dir: data_dir)
+        end
+
+        it 'uses stormfront for an account with no characters' do
+          File.write(yaml_file, {
+            'accounts'        => { 'TESTUSER' => { 'password' => 'testpass', 'characters' => [] } },
+            'encryption_mode' => 'plaintext'
+          }.to_yaml)
+          expect_frontend('stormfront')
+
+          described_class.execute_new_character('TESTUSER', game_code: 'DR', frontend: nil, data_dir: data_dir)
+        end
+
+        it 'still lets a requested frontend win over a headless launch' do
+          expect_frontend('saga')
+
+          described_class.execute_new_character('TESTUSER', game_code: 'DR', frontend: 'saga', data_dir: data_dir, headless: true)
+        end
       end
     end
 
