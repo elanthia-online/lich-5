@@ -88,7 +88,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       expect(File.exist?(File.join(tmpdir, 'will-succeed.lic'))).to be true
       expect(call_count).to eq(2)
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Test', 2, ['will-succeed.lic'], {}, [], ['will-fail.lic'], {}
+        'Test', 2, ['will-succeed.lic'], {}, [], ['will-fail.lic'], {}, []
       )
     end
   end
@@ -121,7 +121,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       expect(File.exist?(File.join(tmpdir, 'net-ok.lic'))).to be true
       expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
-        'Mixed', 2, ['net-ok.lic'], {}, [], ['net-fail.lic'], {}
+        'Mixed', 2, ['net-ok.lic'], {}, [], ['net-fail.lic'], {}, []
       )
     end
   end
@@ -268,12 +268,24 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
   describe '#sync_repo with check_lich_requirement' do
     let(:tree) { { 'tree' => [{ 'path' => 'needy.lic', 'type' => 'blob', 'sha' => 'new' }] } }
-    let(:script) { double('Script', required_lich_version_in: '9.0.0', lich_version_satisfied?: false) }
+
+    # Load the real Script so the header parser and version check are exercised
+    # through sync_repo; torn down the same way as script_version_gate_spec.rb.
+    before(:context) do
+      require_relative '../../../../lib/common/script'
+    end
+
+    after(:context) do
+      %i[SubScript ExecScript WizardScript Script Scripting TRUSTED_SCRIPT_BINDING].each do |const_name|
+        Lich::Common.send(:remove_const, const_name) if Lich::Common.const_defined?(const_name, false)
+      end
+      $LOADED_FEATURES.delete_if { |path| path.end_with?('/lib/common/script.rb') }
+    end
 
     before do
-      stub_const('Lich::Common::Script', script)
+      stub_const('LICH_VERSION', '5.22.0')
       allow(client).to receive(:fetch_github_json).and_return(tree)
-      allow(client).to receive(:http_get).and_return("# required: Lich >= 9.0.0\n")
+      allow(client).to receive(:http_get).and_return("=begin\n  required: Lich >= 5.23.0\n=end\necho 'hi'\n")
     end
 
     def config(check)
@@ -285,11 +297,21 @@ RSpec.describe Lich::Util::Update::ScriptSync do
       }
     end
 
-    it 'does not install a script that needs a newer Lich' do
+    it 'keeps the local copy and reports the script as needing a newer Lich' do
       stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'req' => config(true) })
 
       expect(Lich::Util::Update::FileWriter).not_to receive(:safe_write)
-      expect(Lich::Util::Update::StatusReporter).to receive(:respond_mono).with(/needy\.lic not updated, it requires Lich 9\.0\.0\+/)
+      sync.sync_repo('req')
+      expect(Lich::Util::Update::StatusReporter).to have_received(:render_sync_summary).with(
+        'Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']]
+      )
+    end
+
+    it 'installs the script once the running Lich meets the requirement' do
+      stub_const('LICH_VERSION', '5.23.0')
+      stub_const('Lich::Util::Update::SCRIPT_REPOS', { 'req' => config(true) })
+
+      expect(Lich::Util::Update::FileWriter).to receive(:safe_write).with(File.join(tmpdir, 'needy.lic'), anything)
       sync.sync_repo('req')
     end
 
@@ -298,6 +320,19 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       expect(Lich::Util::Update::FileWriter).to receive(:safe_write).with(File.join(tmpdir, 'needy.lic'), anything)
       sync.sync_repo('req')
+    end
+  end
+
+  describe Lich::Util::Update::StatusReporter, '.render_sync_summary' do
+    it 'lists a held-back script instead of reporting everything up to date' do
+      allow(described_class).to receive(:render_sync_summary).and_call_original
+      output = nil
+      allow(described_class).to receive(:respond_mono) { |text| output = text }
+
+      described_class.render_sync_summary('Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']])
+
+      expect(output).to include('needy.lic', 'needs Lich 5.23.0+ (kept local copy)', '1 need newer Lich')
+      expect(output).not_to include('all up to date')
     end
   end
 end
