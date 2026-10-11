@@ -247,6 +247,12 @@ RSpec.describe 'Lich::Common::Script Lich version gating' do
       expect(script_class.lich_version_satisfied?('5.15.0')).to be true
     end
 
+    it 'treats a beta build as the release it leads up to' do
+      stub_const('LICH_VERSION', '5.23.0-beta.1')
+      expect(script_class.lich_version_satisfied?('5.23.0')).to be true
+      expect(script_class.lich_version_satisfied?('5.23.1')).to be false
+    end
+
     it 'is false when LICH_VERSION is below the minimum' do
       stub_const('LICH_VERSION', '5.14.9')
       expect(script_class.lich_version_satisfied?('5.15.0')).to be false

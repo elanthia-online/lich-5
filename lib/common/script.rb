@@ -617,12 +617,15 @@ module Lich
       # A missing, blank, or unparseable minimum is treated as "no requirement"
       # and passes, so a malformed +required:+ header can never block a script.
       #
+      # A prerelease build counts as the release it leads up to (5.23.0-beta.1
+      # satisfies 5.23.0), so beta testers can run scripts bumped for that release.
+      #
       # @param minimum [String, nil] the minimum version to require; defaults to the calling script's declared +required:+ floor
       # @return [Boolean] true if +LICH_VERSION+ is at least +minimum+, or if no usable minimum is declared/given
       def Script.lich_version_satisfied?(minimum = required_lich_version)
         required = __to_gem_version(minimum)
         return true if required.nil?
-        Gem::Version.new(LICH_VERSION) >= required
+        Gem::Version.new(LICH_VERSION).release >= required
       end
 
       # Enforces a script's minimum Lich version, terminating it if unmet.
