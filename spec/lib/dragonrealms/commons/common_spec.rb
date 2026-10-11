@@ -79,7 +79,7 @@ RSpec.describe Lich::DragonRealms::DRC do
       expect(match[:seconds]).to eq('3')
     end
 
-    it 'WAIT_RESPONSE_PATTERN matches the singular, glued and tagged forms the game sends' do
+    it 'WAIT_RESPONSE_PATTERN matches the singular, appended and tagged forms the game sends' do
       ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>'].each do |line|
         expect(line).to match(described_class::WAIT_RESPONSE_PATTERN)
       end
@@ -707,11 +707,41 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(sent).to eq(['get my gem from my pouch'] * 2)
       end
 
-      it 'does not resend when its own reply arrives during the hold' do
-        # The wait line answered another command; this one was accepted.
-        game(['...wait 1 seconds.', 'You get a gem from inside your pouch.'])
+      it 'still resends when a broad pattern matches a line during the hold' do
+        # The command was refused, so "Bob waves at you." can't be its reply.
+        game(['...wait 1 seconds.', 'Bob waves at you.'], ['You get a gem from inside your pouch.'])
+        described_class.bput('get my gem from my pouch', 'You', 'What were')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'resends once when two refusals and a broadly matching line are queued during the hold' do
+        game(['...wait 1 seconds.', '...wait 1 seconds.', 'The goblin swings at you.'],
+             ['You get a gem from inside your pouch.'])
+        described_class.bput('get my gem from my pouch', 'You', 'What were')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'reads the lines held during the wait before the reply to the resend' do
+        # The wait line answered another command and this one was accepted:
+        # bput resends anyway, then returns the first reply, as before the hold.
+        game(['...wait 1 seconds.', 'You get a gem from inside your pouch.'], ['What were you referring to?'])
+        expect(described_class.bput('get my gem from my pouch', 'You get', 'What were')).to eq('You get')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'handles a line held during the wait like any other reply' do
+        allow(described_class).to receive(:fix_standing)
+        game(['...wait 1 seconds.', 'You must be standing to do that.'], ['You get a gem from inside your pouch.'])
         expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
-        expect(sent).to eq(['get my gem from my pouch'])
+        expect(described_class).to have_received(:fix_standing).once
+      end
+
+      it 'lists the wait lines it skipped when reporting no match' do
+        game(['...wait 1 seconds.', '...wait 2 seconds.'])
+        expect(described_class.bput('get my gem from my pouch', { 'timeout' => 0 }, 'You get')).to eq('')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+        reported = Lich::Messaging.messages.map { |m| m[:message] }.join("\n")
+        expect(reported).to include('...wait 1 seconds.').and include('...wait 2 seconds.')
       end
 
       it 'resends again when the resend itself is refused' do
@@ -720,7 +750,7 @@ RSpec.describe Lich::DragonRealms::DRC do
         expect(sent).to eq(['get my gem from my pouch'] * 3)
       end
 
-      it 'honours a wait line glued to the end of earlier text' do
+      it 'honors a wait line appended to the end of earlier text' do
         game(["Icy blue frost crackles up a jeol moradu's arms with the ferocity of a blizzard as he...wait 1 seconds."],
              ['You drop a gem.'])
         expect(described_class.bput('drop my gem', 'You drop')).to eq('You drop')

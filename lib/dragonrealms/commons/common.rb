@@ -123,7 +123,8 @@ module Lich
         clear
         put message
         timer = Time.now
-        while (response = get?) || (Time.now - timer < timeout)
+        held = []
+        while (response = (replayed = held.shift) || get?) || (Time.now - timer < timeout)
 
           if response.nil?
             pause 0.1
@@ -131,6 +132,8 @@ module Lich
           end
 
           log += [response]
+          # Wait lines read during the hold were waited out before the resend.
+          next if replayed&.match?(WAIT_RESPONSE_PATTERN)
 
           case response
           when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
@@ -141,9 +144,7 @@ module Lich
             next
           when WAIT_RESPONSE_PATTERN
             unless ignore_rt
-              result = wait_out_roundtime(response, matches, log)
-              return result if result
-
+              held = wait_out_roundtime(response)
               put message
               timer = Time.now
             end
@@ -209,45 +210,38 @@ module Lich
       end
 
       # Waits out a "...wait N seconds." refusal before bput sends the command
-      # again, reading the lines that arrive meanwhile. Further wait lines are
-      # skipped, so the command is resent once rather than once per wait line
-      # (they can answer an earlier command or another script's). A line that
-      # matches the caller's patterns means the command was accepted after all.
+      # again, reading the lines that arrive meanwhile. bput reads them again
+      # after the resend, as it would have without the hold, but skips the wait
+      # lines among them: they arrived before the resend, so they answer an
+      # earlier command or another script's, and the command is resent once
+      # rather than once per wait line. A line that matches the caller's
+      # patterns can't mean the command was accepted: it is just as often
+      # unrelated text matching a broad pattern like 'You'.
       #
       # @param wait_line [String] the wait line that triggered the hold
-      # @param matches [Array<Regexp>] the caller's patterns
-      # @param log [Array<String>] bput's log of lines seen; appended to
-      # @return [String, nil] the matched text, or nil when bput should resend
-      def wait_out_roundtime(wait_line, matches, log)
+      # @return [Array<String>] the lines read during the hold, in order
+      def wait_out_roundtime(wait_line)
+        held = []
         deadline = Time.now + wait_line.match(WAIT_RESPONSE_PATTERN)[:seconds].to_i - 0.5
         loop do
-          found = match_held_lines(matches, log)
-          return found if found
+          read_held_lines(held)
           break if Time.now >= deadline
 
           pause 0.1
         end
         waitrt?
-        match_held_lines(matches, log)
+        read_held_lines(held)
       end
 
-      # Reads the lines buffered so far, skipping wait lines, and returns the
-      # first text that matches one of the patterns.
+      # Appends every line buffered so far to held.
       #
-      # @param matches [Array<Regexp>]
-      # @param log [Array<String>] appended with every line read
-      # @return [String, nil]
-      def match_held_lines(matches, log)
+      # @param held [Array<String>]
+      # @return [Array<String>] held
+      def read_held_lines(held)
         while (line = get?)
-          log << line
-          next if line.match?(WAIT_RESPONSE_PATTERN)
-
-          matches.each do |match|
-            result = line.match(match)
-            return result.to_a.first if result
-          end
+          held << line
         end
-        nil
+        held
       end
 
       def verify_script(script_names)
