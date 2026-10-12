@@ -70,21 +70,43 @@ module Lich
         # @param account [String] account username (already upcased) to scope the count to
         # @return [String, nil] predominant frontend, or nil when the account has none
         def self.predominant_frontend(yaml_file, account)
+          predominant_value(yaml_file, account, 'frontend')
+        end
+
+        # The game most of an account's characters are on, used to preselect the
+        # game in the Create Character dialog.
+        #
+        # @param data_dir [String] directory containing entry.yaml
+        # @param account [String] account key exactly as stored in entry.yaml
+        # @return [String, nil] game code, or nil when the account has no characters
+        def self.predominant_game_code(data_dir, account)
+          predominant_value(EntryStore.yaml_file_path(data_dir), account, 'game_code')
+        end
+
+        # Counts a field across one account's characters and returns the most
+        # common non-empty value.
+        #
+        # @param yaml_file [String] path to entry.yaml
+        # @param account [String] account key exactly as stored in entry.yaml
+        # @param field [String] character field to count
+        # @return [String, nil] most common value, or nil when no character has one
+        # @api private
+        def self.predominant_value(yaml_file, account, field)
           return nil unless File.exist?(yaml_file)
 
           yaml_data = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
           account_data = yaml_data['accounts'] && yaml_data['accounts'][account]
           return nil unless account_data && account_data['characters']
 
-          frontend_counts = Hash.new(0)
+          counts = Hash.new(0)
           account_data['characters'].each do |char|
-            fe = char['frontend']
-            frontend_counts[fe] += 1 if fe && !fe.empty?
+            value = char[field]
+            counts[value] += 1 if value && !value.empty?
           end
 
-          return nil if frontend_counts.empty?
+          return nil if counts.empty?
 
-          frontend_counts.max_by { |_fe, count| count }&.first
+          counts.max_by { |_value, count| count }&.first
         end
 
         # The frontend to use for an account when none was requested: the one most

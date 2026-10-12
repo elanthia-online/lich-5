@@ -322,10 +322,9 @@ module Lich
           account = account.upcase
 
           data_dir = DATA_DIR
-          yaml_file = Lich::Common::Authentication::EntryStore.yaml_file_path(data_dir)
 
           begin
-            selected_frontend = frontend || determine_predominant_frontend(yaml_file, account) || 'stormfront'
+            selected_frontend = frontend || AccountCharacters.default_frontend(data_dir, account)
 
             character_data = {
               char_name: char_name,

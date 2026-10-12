@@ -94,6 +94,47 @@ RSpec.describe Lich::Common::Authentication::AccountCharacters do
     end
   end
 
+  describe '.predominant_game_code' do
+    it "uses the game most of the account's characters are on" do
+      write_entries('DOUG' => { 'password' => 'p', 'characters' => [
+                      character('Alpha', 'GS3', 'wizard'),
+                      character('Beta', 'DR', 'wizard'),
+                      character('Gamma', 'DR', 'wizard')
+                    ] })
+
+      expect(described_class.predominant_game_code(data_dir, 'DOUG')).to eq('DR')
+    end
+
+    it "does not take another account's games" do
+      write_entries(
+        'DOUG'  => { 'password' => 'p', 'characters' => [character('Alpha', 'GS3', 'wizard')] },
+        'OTHER' => { 'password' => 'p', 'characters' => [character('Beta', 'DR', 'wizard'), character('Gamma', 'DR', 'wizard')] }
+      )
+
+      expect(described_class.predominant_game_code(data_dir, 'DOUG')).to eq('GS3')
+    end
+
+    it 'ignores characters with no game code' do
+      write_entries('DOUG' => { 'password' => 'p', 'characters' => [
+                      character('Alpha', '', 'wizard'),
+                      character('Beta', nil, 'wizard'),
+                      character('Gamma', 'DRF', 'wizard')
+                    ] })
+
+      expect(described_class.predominant_game_code(data_dir, 'DOUG')).to eq('DRF')
+    end
+
+    it 'returns nil when the account has no characters' do
+      write_entries('DOUG' => { 'password' => 'p', 'characters' => [] })
+
+      expect(described_class.predominant_game_code(data_dir, 'DOUG')).to be_nil
+    end
+
+    it 'returns nil when entry.yaml does not exist' do
+      expect(described_class.predominant_game_code(data_dir, 'DOUG')).to be_nil
+    end
+  end
+
   describe '.fetch_characters' do
     it 'asks the server for the legacy character list' do
       rows = [{ char_name: 'Alpha', game_code: 'DR', game_name: 'DragonRealms' }]
