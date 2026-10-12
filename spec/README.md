@@ -27,8 +27,9 @@ parallel_rspec -n 4 spec
 
 - Without bundler (global gems), set `PARALLEL_TESTS_EXECUTABLE=rspec` first.
 - **CI failed?** The RSpec job log ends with a line like
-  `TEST_ENV_NUMBER=2 PARALLEL_TEST_GROUPS=4 bundle exec rspec <files> --seed 1234`.
-  Run that line to reproduce the failure exactly.
+  `TEST_ENV_NUMBER=2 PARALLEL_TEST_GROUPS=4 bundle exec rspec --seed 1234 -O .rspec_parallel <files>`.
+  Run that line to reproduce the failure exactly (drop `bundle exec` if you use
+  global gems). It also rewrites `tmp/parallel_runtime_rspec.log`, which is harmless.
 - **Every spec file must pass on its own** (`rspec path/to/file_spec.rb`).
   CI checks this for each spec file a PR changes.
 - **Don't define shared globals in a spec.** Use `spec/support/`:

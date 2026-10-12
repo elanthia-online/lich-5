@@ -75,6 +75,9 @@ module DoClientProbe
       pid = fork do
         requests.close
         replies.close
+        # fd 0 is still the request pipe; give the probe an empty stdin,
+        # as Open3.capture3 did, so a probe that reads it cannot deadlock.
+        $stdin.reopen(File::NULL)
         $stdout.reopen(out.path, 'w')
         $stderr.reopen(err.path, 'w')
         TOPLEVEL_BINDING.eval(source, '-e')
@@ -91,9 +94,15 @@ module DoClientProbe
     return run_in_new_process(source) unless Process.respond_to?(:fork)
 
     @server ||= IO.popen([RbConfig.ruby, "-I#{File.join(ROOT, 'lib')}", '-e', SERVER], 'r+b', chdir: ROOT)
-    Marshal.dump(source, @server)
-    @server.flush
-    Marshal.load(@server)
+    begin
+      Marshal.dump(source, @server)
+      @server.flush
+      Marshal.load(@server)
+    rescue EOFError, Errno::EPIPE
+      stop
+      raise 'do_client probe server exited before replying (did the spec_helper/global_defs ' \
+            'preload fail?). Its error is on stderr earlier in this run.'
+    end
   end
 
   def self.run_in_new_process(source)

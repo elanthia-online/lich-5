@@ -80,8 +80,8 @@ RSpec.configure do |config|
   end
 
   # In GitHub Actions, annotate any example slower than
-  # RSPEC_SLOW_EXAMPLE_SECONDS (default 2s on CI, roughly 1s on a developer
-  # machine) unless it is tagged :slow. Warning only; it never fails the run.
+  # RSPEC_SLOW_EXAMPLE_SECONDS (default 2s; CI runners are slower, so that is
+  # roughly 1s locally) unless it is tagged :slow. Warning only; never fails.
   # RSpec::Core::Time is used because some specs stub Time.now.
   if ENV['GITHUB_ACTIONS'] == 'true'
     slow_limit = Float(ENV.fetch('RSPEC_SLOW_EXAMPLE_SECONDS', '2'))
