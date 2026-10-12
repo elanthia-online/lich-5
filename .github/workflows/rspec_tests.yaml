@@ -44,7 +44,7 @@
 #   push/PR events so required checks remain intact.
 #
 # Parallel run
-# - The suite runs with parallel_tests, one worker per CPU. Workers are
+# - The suite runs with parallel_tests on four workers (-n 4). Workers are
 #   balanced from tmp/parallel_runtime_rspec.log, which each run writes and
 #   actions/cache carries forward (falls back to file size when absent).
 # - One seed is picked per run and passed to every worker, so on failure
@@ -165,7 +165,7 @@ jobs:
         run: |
           seed=$RANDOM
           echo "RSpec seed: $seed"
-          bundle exec parallel_rspec --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
+          bundle exec parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
       - name: Run changed spec files on their own
         if: steps.preflight.outputs.should_test == 'true' && steps.preflight.outputs.changed_specs != ''
         env:
