@@ -95,6 +95,60 @@ RSpec.describe Lich::Common::GUI::CharacterGenerator do
                             'It needs a subscription or trial for that game.'])
   end
 
+  describe '.show_dialog' do
+    let(:widget) { double('Gtk widget').as_null_object }
+    let(:selector) { double('FrontendSelector', widget: widget, on_change: nil, selected_id: 'wizard') }
+    let(:game_selection) { Lich::Common::GUI::GameSelection }
+
+    before do
+      stub_const('Gtk::Dialog', double(new: widget))
+      stub_const('Gtk::Label', double(new: widget))
+      stub_const('Gtk::Box', double(new: widget))
+      stub_const('Gtk::ResponseType', Module.new.tap { |m| m.const_set(:OK, :ok); m.const_set(:CANCEL, :cancel) })
+      allow(widget).to receive(:run).and_return(:cancel)
+      allow(Lich::Common::GUI::Accessibility).to receive(:make_window_accessible)
+      allow(Lich::Common::GUI::FrontendSelector).to receive(:new).and_return(selector)
+      allow(game_selection).to receive(:create_game_selection_combo).and_return(widget)
+      allow(game_selection).to receive(:get_selected_game_code).and_return('DR')
+    end
+
+    def write_characters(characters)
+      File.write(File.join(data_dir, 'entry.yaml'), {
+        'encryption_mode' => 'plaintext',
+        'accounts'        => { 'MYACCOUNT' => { 'password' => 'secret', 'characters' => characters } }
+      }.to_yaml)
+    end
+
+    def show_dialog
+      described_class.show_dialog(parent: nil, data_dir: data_dir, account: 'MYACCOUNT',
+                                  button: button, on_play: on_play, msgbox: msgbox)
+    end
+
+    it "preselects the game most of the account's characters are on" do
+      write_characters([
+                         { 'char_name' => 'Alpha', 'game_code' => 'DR', 'frontend' => 'wizard' },
+                         { 'char_name' => 'Beta', 'game_code' => 'DR', 'frontend' => 'wizard' },
+                         { 'char_name' => 'Gamma', 'game_code' => 'GS3', 'frontend' => 'wizard' }
+                       ])
+
+      show_dialog
+
+      expect(game_selection).to have_received(:create_game_selection_combo).with('DR')
+    end
+
+    it 'leaves the game to the combo default when the account has no characters' do
+      show_dialog
+
+      expect(game_selection).to have_received(:create_game_selection_combo).with(nil)
+    end
+
+    it 'does not launch when the dialog is cancelled' do
+      show_dialog
+
+      expect(auth_gui).not_to have_received(:authenticate_and_launch)
+    end
+  end
+
   it 'passes other authentication errors through with context' do
     allow(auth_gui).to receive(:authenticate_and_launch) do |on_error:, **|
       on_error.call('Error(PASSWORD)')

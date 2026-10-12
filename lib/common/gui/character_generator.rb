@@ -59,7 +59,9 @@ module Lich
 
           game_box = Gtk::Box.new(:horizontal, 5)
           game_box.pack_start(Gtk::Label.new('Game:'), expand: false, fill: false, padding: 0)
-          game_combo = GameSelection.create_game_selection_combo
+          game_combo = GameSelection.create_game_selection_combo(
+            Authentication::AccountCharacters.predominant_game_code(data_dir, account)
+          )
           game_box.pack_start(game_combo, expand: true, fill: true, padding: 0)
           content_area.add(game_box)
 
