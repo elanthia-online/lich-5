@@ -44,7 +44,7 @@ require 'fileutils'
 SPEC_ROOT = File.expand_path(__dir__) unless defined?(SPEC_ROOT)
 LIB_DIR = File.join(SPEC_ROOT, '..', 'lib') unless defined?(LIB_DIR)
 FIXTURE_DIR = File.join(SPEC_ROOT, 'fixtures') unless defined?(FIXTURE_DIR)
-DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR) # Used by settings.rb for database storage
+require_relative 'support/data_dir' # DATA_DIR: used by settings.rb for database storage
 
 # Add lib directory to load path for require statements
 $LOAD_PATH.unshift(LIB_DIR) unless $LOAD_PATH.include?(LIB_DIR)
@@ -53,14 +53,48 @@ $LOAD_PATH.unshift(LIB_DIR) unless $LOAD_PATH.include?(LIB_DIR)
 # RSpec Configuration
 # =============================================================================
 RSpec.configure do |config|
-  # Enable flags like --only-failures and --next-failure
-  config.example_status_persistence_file_path = File.join(SPEC_ROOT, '.rspec_status')
+  # Enable flags like --only-failures and --next-failure. parallel_tests sets
+  # TEST_ENV_NUMBER ('' for the first worker, then '2', '3', ...), so each
+  # worker keeps its own status file instead of overwriting a shared one.
+  config.example_status_persistence_file_path = File.join(SPEC_ROOT, ".rspec_status#{ENV.fetch('TEST_ENV_NUMBER', '')}")
 
   # NOTE: We can't use disable_monkey_patching! because existing specs use bare `describe`
   # and the NilClass extension interferes with RSpec internals
 
   # Enable more verbose output when running a single spec file
   config.default_formatter = 'doc' if config.files_to_run.one?
+
+  # Map.clear and the combat AsyncProcessor shutdown call GC.start (and
+  # GC.compact), and the recorder specs call GC.start in their cleanup. With
+  # the whole suite loaded, each forced collection costs 50-100ms, which added
+  # ~17s to a full run. These specs assert on data, never on reclaimed memory,
+  # so skip the collection here. Windows keeps the real GC: the recorder
+  # cleanup relies on it to release SQLite WAL handles before unlinking.
+  # async_processor_spec sets the same allows itself, so this does not change
+  # what it asserts.
+  unless Gem.win_platform?
+    config.before(:each, file_path: %r{/spec/lib/(common/map|gemstone/combat)/}) do
+      allow(GC).to receive(:start)
+      allow(GC).to receive(:compact)
+    end
+  end
+
+  # In GitHub Actions, annotate any example slower than
+  # RSPEC_SLOW_EXAMPLE_SECONDS (default 2s on CI, roughly 1s on a developer
+  # machine) unless it is tagged :slow. Warning only; it never fails the run.
+  # RSpec::Core::Time is used because some specs stub Time.now.
+  if ENV['GITHUB_ACTIONS'] == 'true'
+    slow_limit = Float(ENV.fetch('RSPEC_SLOW_EXAMPLE_SECONDS', '2'))
+    config.after do |example|
+      elapsed = RSpec::Core::Time.now - example.execution_result.started_at
+      next if elapsed < slow_limit || example.metadata[:slow]
+
+      file = example.metadata[:file_path].delete_prefix('./')
+      text = "Slow example (#{format('%.1f', elapsed)}s): #{example.full_description}. Speed it up or tag it :slow."
+      text = text.gsub('%', '%25').gsub("\r", '%0D').gsub("\n", '%0A')
+      STDOUT.puts "\n::warning file=#{file},line=#{example.metadata[:line_number]}::#{text}"
+    end
+  end
 
   # Reset shared state before each example to ensure test isolation.
   # This prevents state leakage between tests and allows random ordering.
@@ -1124,7 +1158,9 @@ end
 $_DETACHABLE_CLIENT_ ||= nil
 $pause_all_lock ||= Mutex.new
 $safe_pause_lock ||= Mutex.new
-$ORDINALS ||= %w[first second third fourth fifth sixth seventh eighth ninth tenth]
+# Same 20 words as Lich::DragonRealms::ORDINALS (drvariables.rb), so specs see
+# production behaviour whether or not drvariables has been loaded first.
+$ORDINALS ||= %w[first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth].freeze
 
 # =============================================================================
 # Spell Data Loading
@@ -1835,35 +1871,9 @@ Lich::DragonRealms::UserVars = UserVars unless defined?(Lich::DragonRealms::User
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Frontend - Game client detection
+# Frontend - Game client detection (see spec/support/frontend_mock.rb)
 # -----------------------------------------------------------------------------
-module Frontend
-  class << self
-    def wizard?
-      false
-    end
-
-    def stormfront?
-      true
-    end
-
-    def supports_gsl?
-      false
-    end
-
-    def supports_mono?(_fe = nil)
-      false
-    end
-
-    def supports_room_window?(_fe = nil)
-      %w[wrayth stormfront saga].include?(client)
-    end
-
-    def client
-      'profanity'
-    end
-  end
-end unless defined?(Frontend)
+require_relative 'support/frontend_mock'
 
 # -----------------------------------------------------------------------------
 # StringProc - Delayed command execution

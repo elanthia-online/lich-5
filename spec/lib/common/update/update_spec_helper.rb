@@ -10,11 +10,26 @@ require 'terminal-table'
 
 LICH_VERSION = '5.15.1' unless defined?(LICH_VERSION)
 SCRIPT_DIR = Dir.mktmpdir('lich-scripts') unless defined?(SCRIPT_DIR)
-DATA_DIR = Dir.mktmpdir('lich-data') unless defined?(DATA_DIR)
+require_relative '../../../support/data_dir'
 BACKUP_DIR = Dir.mktmpdir('lich-backup') unless defined?(BACKUP_DIR)
 LICH_DIR = Dir.mktmpdir('lich-root') unless defined?(LICH_DIR)
 TEMP_DIR = Dir.mktmpdir('lich-temp') unless defined?(TEMP_DIR)
-LIB_DIR = Dir.mktmpdir('lich-lib') unless defined?(LIB_DIR)
+# LIB_DIR is shared with spec_helper, where it is the real lib/ directory that
+# other specs load source from, so this file must not redefine it for the
+# whole process. The update code copies into and deletes from LIB_DIR, so
+# each update example gets its own throwaway LIB_DIR instead.
+LIB_DIR = File.expand_path('../../../../lib', __dir__) unless defined?(LIB_DIR)
+
+RSpec.configure do |config|
+  config.before(:each, file_path: %r{/spec/lib/common/update/}) do
+    @update_spec_lib_dir = Dir.mktmpdir('lich-lib')
+    stub_const('LIB_DIR', @update_spec_lib_dir)
+  end
+
+  config.after(:each, file_path: %r{/spec/lib/common/update/}) do
+    FileUtils.remove_entry(@update_spec_lib_dir, true) if @update_spec_lib_dir
+  end
+end
 
 unless defined?(UserVars)
   module UserVars

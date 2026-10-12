@@ -4,7 +4,7 @@ require 'rspec'
 require 'ostruct'
 
 # Define the default data directory used by the session adapter.
-DATA_DIR ||= File.expand_path('../../../../spec', __dir__)
+require_relative '../../../support/data_dir'
 
 require_relative '../../../mock_database_adapter'
 require_relative '../../../../lib/common/settings/sessions_settings'

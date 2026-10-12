@@ -78,6 +78,8 @@ GEM
       cairo-gobject (= 4.3.6)
       gobject-introspection (= 4.3.6)
     parallel (2.0.1)
+    parallel_tests (5.8.0)
+      parallel
     parser (3.3.11.1)
       ast (~> 2.4.1)
       racc
@@ -201,6 +203,7 @@ DEPENDENCIES
   os
   ostruct
   ox
+  parallel_tests
   prism
   rake
   rbs
@@ -275,6 +278,7 @@ CHECKSUMS
   ox (2.14.26) sha256=d4a9cb49fb55751631d469623cfb2e7dad7cea89119c93749c1e31a3fb2f4896
   pango (4.3.6) sha256=04ebb355a78b20fac0153d320452b5e2d4c3624ed35ce54c526c90df767cbedc
   parallel (2.0.1) sha256=337782d3e39f4121e67563bf91dd8ece67f48923d90698614773a0ec9a5b2c7d
+  parallel_tests (5.8.0) sha256=181898cbee2ffb1c796274ce31d27f792a421324609bfc7e9b5531d929d91eda
   parser (3.3.11.1) sha256=d17ace7aabe3e72c3cc94043714be27cc6f852f104d81aa284c2281aecc65d54
   pkg-config (1.6.5) sha256=33f9f81c5322983d22b439b8b672f27777b406fea23bfec74ff14bbeb42ec733
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85

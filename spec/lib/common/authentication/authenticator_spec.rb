@@ -9,7 +9,7 @@ require 'tmpdir'
 
 # Define DATA_DIR before requiring eaccess.rb
 # Use Dir.tmpdir which always exists on all platforms
-DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
+require_relative '../../../support/data_dir'
 
 # Mock Lich module before requiring the actual code
 module Lich
@@ -42,15 +42,7 @@ end unless defined?(Lich::Common::Authentication::EAccess)
 # eaccess.rb); Authenticator.authenticate now sets the same state at a
 # provider-neutral boundary so WebLogin gets it too (see "Account state"
 # specs below).
-module Lich
-  module Common
-    module Account
-      class << self
-        attr_accessor :name, :game_code, :character, :subscription, :members
-      end
-    end
-  end
-end unless defined?(Lich::Common::Account)
+require_relative '../../../support/account_stub'
 
 # Require the actual authenticator code
 require_relative '../../../../lib/common/authentication/authenticator'

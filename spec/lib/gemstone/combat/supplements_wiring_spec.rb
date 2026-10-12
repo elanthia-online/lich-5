@@ -7,6 +7,8 @@ require 'gemstone/combat/defs/flares'
 require 'gemstone/combat/defs/statuses'
 require 'gemstone/combat/defs/outcomes'
 require 'gemstone/combat/defs/supplements'
+require 'common/events'
+require 'gemstone/combat/messages'
 require 'gemstone/combat/parser'
 
 # The splice: supplements feed the shipped assembly points, each def module

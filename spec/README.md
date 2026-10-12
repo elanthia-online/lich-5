@@ -18,6 +18,25 @@ rspec --format doc
 rspec --seed 12345
 ```
 
+## Parallel Runs and CI
+
+```bash
+# Whole suite across 4 workers (needs the parallel_tests gem)
+parallel_rspec -n 4 spec
+```
+
+- Without bundler (global gems), set `PARALLEL_TESTS_EXECUTABLE=rspec` first.
+- **CI failed?** The RSpec job log ends with a line like
+  `TEST_ENV_NUMBER=2 PARALLEL_TEST_GROUPS=4 bundle exec rspec <files> --seed 1234`.
+  Run that line to reproduce the failure exactly.
+- **Every spec file must pass on its own** (`rspec path/to/file_spec.rb`).
+  CI checks this for each spec file a PR changes.
+- **Don't define shared globals in a spec.** Use `spec/support/`:
+  `data_dir.rb` (DATA_DIR), `account_stub.rb` (Lich::Common::Account),
+  `frontend_mock.rb` (::Frontend), `lich_sqlite.rb` (SQLite helpers).
+- **Slow examples:** CI warns on any example over 2s. Speed it up, or tag it
+  `:slow` if the time is unavoidable.
+
 ## Directory Structure
 
 Spec files mirror the `lib/` directory structure:
