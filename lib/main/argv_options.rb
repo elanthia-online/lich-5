@@ -27,6 +27,7 @@ module Lich
         def self.execute
           @argv_options = {}
           bad_args = []
+          invalid_fe_version = false
 
           ARGV.each do |arg|
             case arg
@@ -102,9 +103,7 @@ module Lich
               @argv_options[:fe_version] = $1
             when /\A--fe-version=/i
               # Without this, a rejected value would silently send the default /VERSION:.
-              warning = 'warning: ignoring invalid --fe-version (allowed: 1-32 of A-Z a-z 0-9 . _ + -)'
-              $stdout.puts warning
-              Lich.log warning
+              invalid_fe_version = true
             when /^--frontend-command=(.+)$/i
               @argv_options[:frontend_command] = $1
             when /^--save$/i
@@ -125,6 +124,14 @@ module Lich
             else
               bad_args.push(arg)
             end
+          end
+
+          # Warn after the loop so the message names the value actually in effect.
+          if invalid_fe_version
+            warning = 'warning: ignoring invalid --fe-version (allowed: 1-32 of A-Z a-z 0-9 . _ + -); ' \
+                      "using #{@argv_options[:fe_version] || 'the default'}"
+            $stdout.puts warning
+            Lich.log warning
           end
 
           @argv_options

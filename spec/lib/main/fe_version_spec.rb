@@ -66,6 +66,20 @@ RSpec.describe '--fe-version' do
       expect(opts[:frontend]).to eq('genie')
     end
 
+    it 'names the value in effect when an invalid value follows a valid one' do
+      opts = nil
+      expect { opts = parse('--fe-version=a1', '--fe-version=bad!') }.to output(/using a1$/).to_stdout
+      expect(opts[:fe_version]).to eq('a1')
+    end
+
+    it 'names the value in effect when a valid value follows an invalid one' do
+      expect { parse('--fe-version=bad!', '--fe-version=b2') }.to output(/using b2$/).to_stdout
+    end
+
+    it 'says the default is used when no valid value is given' do
+      expect { parse('--fe-version=bad!') }.to output(/using the default$/).to_stdout
+    end
+
     {
       'empty'             => '',
       'space'             => 'saga 0.10.2',
