@@ -16,13 +16,18 @@ module Lich
   end
 end unless defined?(Lich)
 
+# Guard the method, not the module: other files (e.g. util/deep_freeze, loaded
+# via frontend.rb) define Lich::Util without install_gem_requirements, and
+# login_helpers.rb calls it at load time.
 module Lich
   module Util
-    def self.install_gem_requirements(_gems)
-      # no-op for tests
+    unless respond_to?(:install_gem_requirements)
+      def self.install_gem_requirements(_gems)
+        # no-op for tests
+      end
     end
   end
-end unless defined?(Lich::Util)
+end
 
 module Lich
   module Messaging
