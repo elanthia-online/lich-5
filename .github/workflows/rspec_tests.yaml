@@ -49,8 +49,9 @@
 #   actions/cache carries forward (falls back to file size when absent).
 # - One seed is picked per run and passed to every worker, so on failure
 #   --verbose-rerun-command prints a complete local repro: files and --seed.
-# - Changed *_spec.rb files are then run one at a time, so a spec that only
-#   passes because another file loaded first fails in the PR that added it.
+# - A separate job ("Changed spec files on their own") runs each changed
+#   *_spec.rb file alone, in parallel with the suite, so a spec that only passes
+#   because another file loaded first fails in the PR that added it.
 #
 # Maintenance
 # - To adjust what is considered "meta-only", edit the IGNORES array in the
@@ -62,6 +63,10 @@ on:
     branches:
       - main
   pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -142,13 +147,11 @@ jobs:
               const should = nonIgnored.length > 0;
               core.notice(`Preflight: changed files = ${files.length}, non-ignored = ${nonIgnored.length}; should_test=${should}`);
               core.setOutput('should_test', should ? 'true' : 'false');
-              const specs = files
-                .filter(f => f.status !== 'removed' && /^spec\/.+_spec\.rb$/.test(f.name))
-                .map(f => f.name);
-              core.setOutput('changed_specs', specs.join('\n'));
             }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.preflight.outputs.should_test == 'true'
+        with:
+          persist-credentials: false
       - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
@@ -162,14 +165,61 @@ jobs:
           restore-keys: rspec-runtime-
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
+        env:
+          # Four workers share four vCPUs, which inflates example times 2-3x, so
+          # the 2s slow-example warning is noise here. The "Changed spec files on
+          # their own" job runs unloaded at the default 2s and covers the files a
+          # PR changes; 60s here only flags pathological examples.
+          RSPEC_SLOW_EXAMPLE_SECONDS: '60'
         run: |
           seed=$RANDOM
           echo "RSpec seed: $seed"
           bundle exec parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
-      - name: Run changed spec files on their own
-        if: steps.preflight.outputs.should_test == 'true' && steps.preflight.outputs.changed_specs != ''
+      - name: RSpec skipped (docs/meta-only change)
+        if: steps.preflight.outputs.should_test != 'true'
+        run: echo "Preflight determined only ignored paths changed; skipping RSpec."
+
+  changed_specs:
+    # Runs beside the suite rather than after it, so a PR that touches slow spec
+    # files does not add their solo runtime to the "Run tests on Ruby" job.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+    name: Changed spec files on their own
+    steps:
+      - name: List changed spec files
+        id: list
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            let files = [];
+            if (context.eventName === 'pull_request') {
+              files = await github.paginate(github.rest.pulls.listFiles,
+                { owner, repo, pull_number: context.payload.pull_request.number, per_page: 100 });
+            } else if (context.eventName === 'push' && (context.payload.before || '').trim()) {
+              const cmp = await github.rest.repos.compareCommits({ owner, repo, base: context.payload.before, head: context.sha });
+              files = cmp.data.files || [];
+            }
+            const specs = files
+              .filter(f => f.status !== 'removed' && /^spec\/.+_spec\.rb$/.test(f.filename))
+              .map(f => f.filename);
+            core.info(`Changed spec files: ${specs.length}`);
+            core.setOutput('specs', specs.join('\n'));
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.list.outputs.specs != ''
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        if: steps.list.outputs.specs != ''
+        with:
+          bundler-cache: true
+      - name: Run each changed spec file alone
+        if: steps.list.outputs.specs != ''
         env:
-          CHANGED_SPECS: ${{ steps.preflight.outputs.changed_specs }}
+          CHANGED_SPECS: ${{ steps.list.outputs.specs }}
         run: |
           failed=()
           while IFS= read -r spec; do
@@ -184,6 +234,6 @@ jobs:
             done
             exit 1
           fi
-      - name: RSpec skipped (docs/meta-only change)
-        if: steps.preflight.outputs.should_test != 'true'
-        run: echo "Preflight determined only ignored paths changed; skipping RSpec."
+      - name: No changed spec files
+        if: steps.list.outputs.specs == ''
+        run: echo "No *_spec.rb files changed; nothing to run alone."

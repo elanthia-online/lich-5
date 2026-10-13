@@ -5,8 +5,9 @@
 #
 # lib/common/frontend.rb ends with `Frontend = Lich::Common::Frontend unless
 # defined?(Frontend)`, so whichever file loads first decides what ::Frontend
-# is for the rest of the process. spec_helper and login_spec_helper both load
-# this file before any production code, so ::Frontend is always this mock.
+# is for the rest of the process. .rspec and .rspec_parallel require this file
+# before any spec file loads (spec_helper and login_spec_helper also require
+# it), so ::Frontend is always this mock, whichever spec a worker loads first.
 # Code inside Lich::Common still finds the real Lich::Common::Frontend by
 # lexical lookup.
 module Frontend
