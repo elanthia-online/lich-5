@@ -7,6 +7,8 @@ require 'gemstone/combat/defs/flares'
 require 'gemstone/combat/defs/statuses'
 require 'gemstone/combat/defs/outcomes'
 require 'gemstone/combat/defs/supplements'
+require 'common/events'
+require 'gemstone/combat/messages'
 
 # The player-supplied YAML -> Struct compiler. Nothing here is wired into the
 # shipped tables yet; these examples pin the contract the splice step will

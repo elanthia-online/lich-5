@@ -8,7 +8,7 @@ require 'rspec'
 require 'ostruct'
 
 # Define DATA_DIR before loading settings.rb (it uses DATA_DIR for DatabaseAdapter initialization)
-DATA_DIR ||= File.expand_path('../../../../spec', __dir__)
+require_relative '../../../support/data_dir'
 
 # Use direct relative paths to avoid constant conflicts with other specs
 require_relative '../../../mock_database_adapter'

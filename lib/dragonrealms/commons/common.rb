@@ -15,8 +15,10 @@ module Lich
       # Pattern for XML tags
       XML_TAG_PATTERN = /<[^>]+>/.freeze
 
-      # Pattern for game wait/roundtime responses in bput
-      WAIT_RESPONSE_PATTERN = /(?:\.\.\.wait |Wait |\.\.\. wait )(?<seconds>[0-9]+)/.freeze
+      # Pattern for game wait/roundtime responses in bput. Anchored at the end
+      # of the line: the game sometimes appends "...wait N seconds." to the
+      # previous line, and player speech containing "Wait N" ends in a quote.
+      WAIT_RESPONSE_PATTERN = /(?:\.\.\. ?wait|\AWait) (?<seconds>[0-9]+) seconds?\.(?:<[^>]+>)*\s*\z/.freeze
 
       # Collect command response messages
       COLLECT_MESSAGES = [
@@ -121,7 +123,8 @@ module Lich
         clear
         put message
         timer = Time.now
-        while (response = get?) || (Time.now - timer < timeout)
+        held = []
+        while (response = (replayed = held.shift) || get?) || (Time.now - timer < timeout)
 
           if response.nil?
             pause 0.1
@@ -129,6 +132,8 @@ module Lich
           end
 
           log += [response]
+          # Wait lines read during the hold were waited out before the resend.
+          next if replayed&.match?(WAIT_RESPONSE_PATTERN)
 
           case response
           when /^For some strange reason you are unable to do that\.  The world somehow seems frozen in place/
@@ -139,9 +144,7 @@ module Lich
             next
           when WAIT_RESPONSE_PATTERN
             unless ignore_rt
-              wait_match = response.match(WAIT_RESPONSE_PATTERN)
-              pause(wait_match[:seconds].to_i - 0.5)
-              waitrt?
+              held = wait_out_roundtime(response)
               put message
               timer = Time.now
             end
@@ -204,6 +207,41 @@ module Lich
         end
 
         ''
+      end
+
+      # Waits out a "...wait N seconds." refusal before bput sends the command
+      # again, reading the lines that arrive meanwhile. bput reads them again
+      # after the resend, as it would have without the hold, but skips the wait
+      # lines among them: they arrived before the resend, so they answer an
+      # earlier command or another script's, and the command is resent once
+      # rather than once per wait line. A line that matches the caller's
+      # patterns can't mean the command was accepted: it is just as often
+      # unrelated text matching a broad pattern like 'You'.
+      #
+      # @param wait_line [String] the wait line that triggered the hold
+      # @return [Array<String>] the lines read during the hold, in order
+      def wait_out_roundtime(wait_line)
+        held = []
+        deadline = Time.now + wait_line.match(WAIT_RESPONSE_PATTERN)[:seconds].to_i - 0.5
+        loop do
+          read_held_lines(held)
+          break if Time.now >= deadline
+
+          pause 0.1
+        end
+        waitrt?
+        read_held_lines(held)
+      end
+
+      # Appends every line buffered so far to held.
+      #
+      # @param held [Array<String>]
+      # @return [Array<String>] held
+      def read_held_lines(held)
+        while (line = get?)
+          held << line
+        end
+        held
       end
 
       def verify_script(script_names)

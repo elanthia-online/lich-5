@@ -127,6 +127,7 @@ LIB_DIR = File.join(File.expand_path("..", File.dirname(__FILE__)), 'lib') unles
 # These files reference Gtk:: constants at load time; loading them before the mocks
 # exist causes NameError. Individual specs must NOT require these files themselves -
 # they must rely on this ordered load to ensure the mock environment is in place.
+require_relative 'support/frontend_mock'
 require 'common/gui_login'
 require 'common/gui/account_manager'
 require 'common/authentication/entry_store'

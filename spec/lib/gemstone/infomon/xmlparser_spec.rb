@@ -17,6 +17,7 @@
 # original \r\n game stream.
 
 require_relative '../../../spec_helper'
+require 'gemstone/overwatch'
 require 'gemstone/infomon/xmlparser.rb'
 
 DEATH_CORPUS = <<'__DEATH_CORPUS__'.freeze

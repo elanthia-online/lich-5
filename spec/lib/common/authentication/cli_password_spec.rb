@@ -7,7 +7,7 @@ require 'yaml'
 require 'fileutils'
 
 # Define DATA_DIR before requiring source files
-DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
+require_relative '../../../support/data_dir'
 
 # Load login_spec_helper FIRST - it sets up Lich::Util and other mocks
 # before any source files are required

@@ -13,6 +13,7 @@
 #   MockXMLData         - minimal XMLData stub for game/character name resolution
 
 require 'ostruct'
+require_relative 'support/lich_sqlite'
 
 module Lich
   module Common
