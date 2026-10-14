@@ -4,6 +4,7 @@
 # first, let's ignore files we don't want in the zip
 .git*            export-ignore
 .claude*         export-ignore
+.rspec*          export-ignore
 .ruby-version    export-ignore
 Gemfile.lock     export-ignore
 /*.adoc          export-ignore
