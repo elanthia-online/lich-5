@@ -592,6 +592,16 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_headless_frontend(['--saga'], detachable_client: false)).to eq('saga')
     end
 
+    # handle_detachable_client compares these results to 'saga' and 'genie'.
+    it 'resolves the --frontend= forms of Saga and Genie, case-insensitively' do
+      %w[--frontend=saga --frontend=SAGA].each do |arg|
+        expect(described_class.resolve_headless_frontend([arg], detachable_client: true)).to eq('saga'), arg
+      end
+      %w[--frontend=genie --frontend=Genie --genie].each do |arg|
+        expect(described_class.resolve_headless_frontend([arg], detachable_client: true)).to eq('genie'), arg
+      end
+    end
+
     it 'assumes Profanity for a detachable client with no frontend flag' do
       expect(described_class.resolve_headless_frontend(['--login', 'pickasso'], detachable_client: true)).to eq('profanity')
     end
