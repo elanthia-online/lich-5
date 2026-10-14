@@ -462,6 +462,11 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--dark-mode=true'])).to eq(:__unset)
     end
 
+    it 'ignores --fe-version when resolving instance' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--fe-version=saga-0.10.2'])).to eq(:__unset)
+      expect(described_class.resolve_instance(['--GS3', '--fe-version=saga-0.10.2'])).to eq('GS3')
+    end
+
     it 'ignores the public headless alias when resolving instance' do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--headless'])).to eq(:__unset)
     end
@@ -585,6 +590,12 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(
         described_class.resolve_headless_frontend(['--login', 'pickasso', '--genie'], detachable_client: true)
       ).to eq('genie')
+    end
+
+    it 'is not affected by --fe-version' do
+      argv = ['--saga', '--without-frontend', '--detachable-client=8000', '--fe-version=saga-0.10.2']
+      expect(described_class.resolve_headless_frontend(argv, detachable_client: true)).to eq('saga')
+      expect(described_class.resolve_frontend_arg(['--frontend=genie', '--fe-version=genie-5.1'])).to eq('genie')
     end
 
     it 'identifies Saga regardless of the detachable port' do
