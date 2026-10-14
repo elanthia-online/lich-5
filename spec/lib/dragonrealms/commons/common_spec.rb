@@ -74,9 +74,22 @@ RSpec.describe Lich::DragonRealms::DRC do
     it('CANNOT_STAND_PATTERN is frozen') { expect(described_class::CANNOT_STAND_PATTERN).to be_frozen }
 
     it 'WAIT_RESPONSE_PATTERN matches wait responses with seconds capture' do
-      match = "...wait 3".match(described_class::WAIT_RESPONSE_PATTERN)
+      match = "...wait 3 seconds.".match(described_class::WAIT_RESPONSE_PATTERN)
       expect(match).not_to be_nil
       expect(match[:seconds]).to eq('3')
+    end
+
+    it 'WAIT_RESPONSE_PATTERN matches the singular, appended and tagged forms the game sends' do
+      ['...wait 1 second.', 'as he...wait 2 seconds.', '...wait 4 seconds.<popBold/>'].each do |line|
+        expect(line).to match(described_class::WAIT_RESPONSE_PATTERN)
+      end
+    end
+
+    it 'WAIT_RESPONSE_PATTERN ignores player text and other wait messages' do
+      ['Bob says, "Wait 3600."', 'Bob whispers, "...wait 5 seconds."', '[Private]-DR:Bob: "...wait 5 seconds."',
+       'The janitor was recently summoned to this room.  Please wait 299 seconds.'].each do |line|
+        expect(line).not_to match(described_class::WAIT_RESPONSE_PATTERN)
+      end
     end
   end
 
@@ -657,6 +670,105 @@ RSpec.describe Lich::DragonRealms::DRC do
     it 'converts string patterns to case-insensitive regex' do
       allow(described_class).to receive(:get?).and_return('you swing your SWORD')
       expect(described_class.bput('swing sword', 'You swing your sword')).to eq('you swing your SWORD')
+    end
+
+    # A small model of the game stream: each send queues that send's replies,
+    # and get? reads them back in order. clear empties the queue, as the real
+    # clear empties the script's buffer.
+    context 'roundtime (...wait) replies' do
+      let(:buffer) { [] }
+      let(:sent) { [] }
+
+      def game(*replies_per_send)
+        allow(described_class).to receive(:clear) { buffer.clear }
+        allow(described_class).to receive(:put) do |message|
+          sent << message
+          buffer.concat(Array(replies_per_send[sent.size - 1]))
+        end
+        allow(described_class).to receive(:get?) { buffer.shift }
+        # The real pause ends in Kernel.sleep, which raises on a negative interval.
+        allow(described_class).to receive(:pause) do |seconds|
+          raise ArgumentError, 'time interval must not be negative' if seconds.to_f.negative?
+
+          sleep(0.001)
+        end
+      end
+
+      it 'resends once after a real "...wait N seconds." refusal' do
+        game(['...wait 1 seconds.'], ['You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'resends once when a second wait line is already queued during the hold' do
+        # Two refusals queued together: an earlier command's and this one's.
+        game(['...wait 1 seconds.', '...wait 1 seconds.'], ['You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'still resends when a broad pattern matches a line during the hold' do
+        # The command was refused, so "Bob waves at you." can't be its reply.
+        game(['...wait 1 seconds.', 'Bob waves at you.'], ['You get a gem from inside your pouch.'])
+        described_class.bput('get my gem from my pouch', 'You', 'What were')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'resends once when two refusals and a broadly matching line are queued during the hold' do
+        game(['...wait 1 seconds.', '...wait 1 seconds.', 'The goblin swings at you.'],
+             ['You get a gem from inside your pouch.'])
+        described_class.bput('get my gem from my pouch', 'You', 'What were')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'reads the lines held during the wait before the reply to the resend' do
+        # The wait line answered another command and this one was accepted:
+        # bput resends anyway, then returns the first reply, as before the hold.
+        game(['...wait 1 seconds.', 'You get a gem from inside your pouch.'], ['What were you referring to?'])
+        expect(described_class.bput('get my gem from my pouch', 'You get', 'What were')).to eq('You get')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+      end
+
+      it 'handles a line held during the wait like any other reply' do
+        allow(described_class).to receive(:fix_standing)
+        game(['...wait 1 seconds.', 'You must be standing to do that.'], ['You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
+        expect(described_class).to have_received(:fix_standing).once
+      end
+
+      it 'lists the wait lines it skipped when reporting no match' do
+        game(['...wait 1 seconds.', '...wait 2 seconds.'])
+        expect(described_class.bput('get my gem from my pouch', { 'timeout' => 0 }, 'You get')).to eq('')
+        expect(sent).to eq(['get my gem from my pouch'] * 2)
+        reported = Lich::Messaging.messages.map { |m| m[:message] }.join("\n")
+        expect(reported).to include('...wait 1 seconds.').and include('...wait 2 seconds.')
+      end
+
+      it 'resends again when the resend itself is refused' do
+        game(['...wait 1 seconds.'], ['...wait 1 seconds.'], ['You get a gem from inside your pouch.'])
+        expect(described_class.bput('get my gem from my pouch', 'You get')).to eq('You get')
+        expect(sent).to eq(['get my gem from my pouch'] * 3)
+      end
+
+      it 'honors a wait line appended to the end of earlier text' do
+        game(["Icy blue frost crackles up a jeol moradu's arms with the ferocity of a blizzard as he...wait 1 seconds."],
+             ['You drop a gem.'])
+        expect(described_class.bput('drop my gem', 'You drop')).to eq('You drop')
+        expect(sent).to eq(['drop my gem'] * 2)
+      end
+
+      it "ignores another player's speech that mentions a wait" do
+        game(['Bob says, "Wait 3600."', 'You drop a gem.'])
+        expect(described_class).not_to receive(:pause).with(3599.5)
+        expect(described_class.bput('drop my gem', 'You drop')).to eq('You drop')
+        expect(sent).to eq(['drop my gem'])
+      end
+
+      it 'does not crash on speech saying "Wait 0"' do
+        game(['Bob whispers, "Wait 0"', 'You drop a gem.'])
+        expect { described_class.bput('drop my gem', 'You drop') }.not_to raise_error
+        expect(sent).to eq(['drop my gem'])
+      end
     end
   end
 
