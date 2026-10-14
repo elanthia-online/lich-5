@@ -595,6 +595,16 @@ module Lich
         $frontend = value
       end
 
+      # Handshake client string for a frontend: its registry :client_string,
+      # else CLIENT_STRING, with the /VERSION: value replaced by version
+      # (--fe-version) when one is given.
+      def self.client_string(version = nil, frontend: client)
+        base = metadata_for(frontend, :client_string) || CLIENT_STRING
+        return base if version.nil?
+
+        base.sub(%r{/VERSION:\S+}) { "/VERSION:#{version}" }
+      end
+
       # Send version string, ready signals, and setup commands to the game server.
       # Used during login handshake for wizard/avalon/frostbite frontends.
       def self.send_handshake(version_string)

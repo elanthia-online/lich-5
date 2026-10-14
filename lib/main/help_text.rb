@@ -244,6 +244,7 @@ module Lich
             --sentinel
             --frontend=NAME
             --frontend-command=CMD
+            --fe-version=VALUE
             --game=HOST:PORT
             --bind-address=HOST
 
@@ -251,6 +252,11 @@ module Lich
             The GTK GUI starts by default. To suppress it, pass --no-gui or --no-gtk,
             including when using --headless.
             Prefer --headless PORT or --headless auto for new headless launches.
+            --fe-version=VALUE reports the frontend version (e.g. saga-0.10.2) in the
+            /VERSION: field of the game handshake. Only affects --without-frontend;
+            ignored otherwise. VALUE: 1-32 of A-Z a-z 0-9 . _ + -
+            With --saga, the handshake also identifies as /P:SAGA, and reports
+            /VERSION:saga-unknown when --fe-version is not given.
             --pipe uses stdin/stdout as the client transport instead of a front-end socket.
             With -g HOST:PORT, name the client reading it with a frontend flag (--frontend=NAME, --stormfront);
             without one the frontend is unknown and script output is not XML-escaped.
