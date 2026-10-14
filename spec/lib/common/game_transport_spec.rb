@@ -4,7 +4,7 @@ require 'rspec'
 require 'tmpdir'
 require 'stringio'
 
-DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
+require_relative '../../support/data_dir'
 
 module Lich
   def self.log(_message)

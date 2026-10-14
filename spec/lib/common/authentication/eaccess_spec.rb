@@ -9,7 +9,7 @@ require 'tmpdir'
 
 # Mock dependencies before requiring the code
 # Use Dir.tmpdir which always exists on all platforms
-DATA_DIR = Dir.tmpdir unless defined?(DATA_DIR)
+require_relative '../../../support/data_dir'
 
 # Define Lich.log separately
 module Lich
@@ -19,15 +19,7 @@ module Lich
 end unless defined?(Lich)
 
 # Account module must be defined with separate guard
-module Lich
-  module Common
-    module Account
-      class << self
-        attr_accessor :name, :game_code, :character, :subscription, :members
-      end
-    end
-  end
-end unless defined?(Lich::Common::Account)
+require_relative '../../../support/account_stub'
 
 require_relative '../../../../lib/common/authentication/eaccess'
 

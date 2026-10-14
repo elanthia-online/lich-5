@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require_relative '../../../lib/common/limitedarray'
 
 RSpec.describe 'Lich::Common::Script downstream buffer' do
   let(:buffer) { Lich::Common::LimitedArray.new }

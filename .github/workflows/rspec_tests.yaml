@@ -27,6 +27,8 @@
 #     README.adoc
 #     release-please-config.json
 #     release-please-config.prerelease.json
+#     **/*.md        (Markdown anywhere. Other docs/ files are not ignored:
+#                     some specs read data files kept under docs/)
 # - If ANY non-ignored file changed, should_test = true.
 # - If it cannot determine the file list (API edge cases), it defaults to
 #   should_test = true for safety.
@@ -41,6 +43,16 @@
 # - No trigger conditions were changed; the workflow still starts on the same
 #   push/PR events so required checks remain intact.
 #
+# Parallel run
+# - The suite runs with parallel_tests on four workers (-n 4). Workers are
+#   balanced from tmp/parallel_runtime_rspec.log, which each run writes and
+#   actions/cache carries forward (falls back to file size when absent).
+# - One seed is picked per run and passed to every worker, so on failure
+#   --verbose-rerun-command prints a complete local repro: files and --seed.
+# - A separate job ("Changed spec files on their own") runs each changed
+#   *_spec.rb file alone, in parallel with the suite, so a spec that only passes
+#   because another file loaded first fails in the PR that added it.
+#
 # Maintenance
 # - To adjust what is considered "meta-only", edit the IGNORES array in the
 #   preflight script. Be conservative: do not add app code paths here.
@@ -52,6 +64,10 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -59,7 +75,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # The suite normally finishes in well under a minute; cap the job so a hung
+    # The suite normally finishes in under a minute; cap the job so a hung
     # example (see the DRRoom cross-process state leak fixed in spec_helper) fails
     # fast instead of occupying a runner up to GitHub's 6h default.
     timeout-minutes: 15
@@ -87,10 +103,14 @@ jobs:
               'README.adoc',
               'release-please-config.json',
               'release-please-config.prerelease.json',
+              '**/*.md',
             ];
             function isIgnored(path) {
-              // basic /** suffix handling + exact matches
+              // basic /** suffix, **/*.ext anywhere, and exact matches
               return IGNORES.some(p => {
+                if (p.startsWith('**/*.')) {
+                  return path.endsWith(p.slice(4)); // '**/*.md' -> '.md'
+                }
                 if (p.endsWith('/**')) {
                   const base = p.slice(0, -3); // remove /**
                   return path.startsWith(base);
@@ -103,14 +123,14 @@ jobs:
                 github.rest.pulls.listFiles,
                 { owner, repo, pull_number: number, per_page: 100 }
               );
-              return files.map(f => f.filename);
+              return files.map(f => ({ name: f.filename, status: f.status }));
             }
             async function changedFilesForPush() {
               const before = (context.payload.before || '').trim();
               const head   = context.sha;
               if (!before) return null;
               const cmp = await github.rest.repos.compareCommits({ owner, repo, base: before, head });
-              return (cmp.data.files || []).map(f => f.filename);
+              return (cmp.data.files || []).map(f => ({ name: f.filename, status: f.status }));
             }
             let files = null;
             if (ev === 'pull_request') {
@@ -123,20 +143,97 @@ jobs:
               core.notice('Preflight: could not determine changed files; defaulting to run tests.');
               core.setOutput('should_test', 'true');
             } else {
-              const nonIgnored = files.filter(f => !isIgnored(f));
+              const nonIgnored = files.filter(f => !isIgnored(f.name));
               const should = nonIgnored.length > 0;
               core.notice(`Preflight: changed files = ${files.length}, non-ignored = ${nonIgnored.length}; should_test=${should}`);
               core.setOutput('should_test', should ? 'true' : 'false');
             }
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.preflight.outputs.should_test == 'true'
-      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@e81a8fa391b11a595c1b7ed84177cc0fe02faf83 # v1.328.0
         if: steps.preflight.outputs.should_test == 'true'
         with:
           bundler-cache: true
+      - name: Restore spec runtime log
+        if: steps.preflight.outputs.should_test == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: tmp/parallel_runtime_rspec.log
+          key: rspec-runtime-${{ github.run_id }}
+          restore-keys: rspec-runtime-
       - name: Run RSpec tests
         if: steps.preflight.outputs.should_test == 'true'
-        run: bundle exec rspec
+        env:
+          # Four workers share four vCPUs, which inflates example times 2-3x, so
+          # the 2s slow-example warning is noise here. The "Changed spec files on
+          # their own" job runs unloaded at the default 2s and covers the files a
+          # PR changes; 60s here only flags pathological examples.
+          RSPEC_SLOW_EXAMPLE_SECONDS: '60'
+        run: |
+          seed=$RANDOM
+          echo "RSpec seed: $seed"
+          bundle exec parallel_rspec -n 4 --serialize-stdout --verbose-rerun-command -o "--seed $seed" spec
       - name: RSpec skipped (docs/meta-only change)
         if: steps.preflight.outputs.should_test != 'true'
         run: echo "Preflight determined only ignored paths changed; skipping RSpec."
+
+  changed_specs:
+    # Runs beside the suite rather than after it, so a PR that touches slow spec
+    # files does not add their solo runtime to the "Run tests on Ruby" job.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BUNDLE_WITHOUT: 'gtk:vscode:profanity'
+    name: Changed spec files on their own
+    steps:
+      - name: List changed spec files
+        id: list
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            let files = [];
+            if (context.eventName === 'pull_request') {
+              files = await github.paginate(github.rest.pulls.listFiles,
+                { owner, repo, pull_number: context.payload.pull_request.number, per_page: 100 });
+            } else if (context.eventName === 'push' && (context.payload.before || '').trim()) {
+              const cmp = await github.rest.repos.compareCommits({ owner, repo, base: context.payload.before, head: context.sha });
+              files = cmp.data.files || [];
+            }
+            const specs = files
+              .filter(f => f.status !== 'removed' && /^spec\/.+_spec\.rb$/.test(f.filename))
+              .map(f => f.filename);
+            core.info(`Changed spec files: ${specs.length}`);
+            core.setOutput('specs', specs.join('\n'));
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.list.outputs.specs != ''
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+        if: steps.list.outputs.specs != ''
+        with:
+          bundler-cache: true
+      - name: Run each changed spec file alone
+        if: steps.list.outputs.specs != ''
+        env:
+          CHANGED_SPECS: ${{ steps.list.outputs.specs }}
+        run: |
+          failed=()
+          while IFS= read -r spec; do
+            [ -f "$spec" ] || continue
+            echo "::group::$spec"
+            bundle exec rspec "$spec" || failed+=("$spec")
+            echo "::endgroup::"
+          done <<< "$CHANGED_SPECS"
+          if [ ${#failed[@]} -gt 0 ]; then
+            for spec in "${failed[@]}"; do
+              echo "::error file=$spec::Passes in the full suite but fails when run alone. It depends on another spec file loading first; require what it uses directly."
+            done
+            exit 1
+          fi
+      - name: No changed spec files
+        if: steps.list.outputs.specs == ''
+        run: echo "No *_spec.rb files changed; nothing to run alone."

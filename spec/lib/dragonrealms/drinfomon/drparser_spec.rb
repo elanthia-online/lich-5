@@ -25,18 +25,7 @@ module Lich
 end unless defined?(Lich::DragonRealms::DRBanking)
 
 # Stub Account for subscription/account name parsing tests
-module Lich
-  module Common
-    module Account
-      @name = nil
-      @subscription = nil
-
-      class << self
-        attr_accessor :name, :subscription
-      end
-    end
-  end
-end unless defined?(Lich::Common::Account)
+require_relative '../../../support/account_stub'
 
 # Stub UserVars for room parsing (npcs assignment)
 module UserVars

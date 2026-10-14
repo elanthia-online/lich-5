@@ -924,6 +924,7 @@ RSpec.describe 'process_room_display GS/DR parity' do
 
   it 'GS mirrors exits into the room window on a room-window frontend, DR does not' do
     allow(Frontend).to receive(:client).and_return('stormfront')
+    allow(Frontend).to receive(:supports_room_window?).and_return(true)
 
     expect(gs.process_room_display(+'PROMPT')).to include("<pushStream id='room'")
     expect(dr.process_room_display(+'PROMPT')).not_to include("<pushStream id='room'")
@@ -931,6 +932,7 @@ RSpec.describe 'process_room_display GS/DR parity' do
 
   it 'GS does not mirror exits on a non-room-window frontend' do
     allow(Frontend).to receive(:client).and_return('profanity')
+    allow(Frontend).to receive(:supports_room_window?).and_return(false)
 
     expect(gs.process_room_display(+'PROMPT')).not_to include("<pushStream id='room'")
   end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../spec_helper'
+require 'common/watchable'
 
 RSpec.describe Lich::Common::Watchable do
   # Create a test module that extends Watchable

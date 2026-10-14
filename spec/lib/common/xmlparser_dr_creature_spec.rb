@@ -16,6 +16,7 @@
 require_relative '../../spec_helper'
 require 'ox'
 require 'dragonrealms/creature'
+require 'common/gameobj'
 require 'common/xmlparser'
 
 # The room-objs component followed by the standalone <crtrStatus> batch, verbatim

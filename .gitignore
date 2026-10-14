@@ -48,7 +48,8 @@ spec/*.db
 spec/*.db3
 
 # --- Test artifacts ---
-spec/.rspec_status
+spec/.rspec_status*
+/tmp/parallel_runtime_rspec.log
 
 # --- Debug logs ---
 debug-*.log
