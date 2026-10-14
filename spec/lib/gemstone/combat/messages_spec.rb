@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'rspec'
+require_relative '../../../support/data_dir'
 
 # Fine-grained guards, per spec_helper's convention: module reopening is
 # process-global for the rest of the run, so an unguarded definition here

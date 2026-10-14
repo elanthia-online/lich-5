@@ -2,6 +2,7 @@
 
 require 'rspec'
 require 'fileutils'
+require 'tmpdir'
 
 # These tests verify wine.rb behavior using file content analysis
 # and targeted load tests where stubbing works reliably.

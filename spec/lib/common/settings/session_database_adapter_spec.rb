@@ -6,19 +6,8 @@ require 'tmpdir'
 
 # Contract spec for the row-oriented session summary adapter.
 # This verifies DB-level behavior independently from higher-level Settings proxies.
-module Lich
-  DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 5000 unless const_defined?(:DEFAULT_SQLITE_BUSY_TIMEOUT_MS)
-
-  def self.sqlite_busy_timeout_ms
-    DEFAULT_SQLITE_BUSY_TIMEOUT_MS
-  end
-
-  def self.open_sqlite_db(path)
-    db = SQLite3::Database.new(path)
-    db.busy_timeout(sqlite_busy_timeout_ms)
-    db
-  end
-end
+require_relative '../../../support/data_dir'
+require_relative '../../../support/lich_sqlite'
 
 require_relative '../../../../lib/common/settings/session_database_adapter'
 

@@ -87,6 +87,14 @@ jobs:
         with:
           bundler-cache: true
 
+      - name: Restore RuboCop result cache
+        if: steps.preflight.outputs.should_lint == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/rubocop_cache
+          key: rubocop-${{ hashFiles('.rubocop.yml', '.rubocop/**', 'Gemfile.lock') }}-${{ github.run_id }}
+          restore-keys: rubocop-${{ hashFiles('.rubocop.yml', '.rubocop/**', 'Gemfile.lock') }}-
+
       - name: Rubocop
         if: steps.preflight.outputs.should_lint == 'true'
         run: |

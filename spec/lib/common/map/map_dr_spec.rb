@@ -32,8 +32,7 @@ class StringProc
   end
 end unless defined?(StringProc)
 
-# Mock DATA_DIR
-DATA_DIR = '/tmp/lich_test_data' unless defined?(DATA_DIR)
+require_relative '../../../support/data_dir'
 
 # Update XMLData mock for DR
 XMLData = OpenStruct.new(

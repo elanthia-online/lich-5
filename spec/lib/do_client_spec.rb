@@ -39,17 +39,91 @@ UNIFORM_DISPLAY_TOGGLES = {
   'roommono'    => ['display_room_mono',   'Changing Lich to display room information in monospace font to']
 }.freeze
 
+# Runs do_client probes in a child process, never in the RSpec process.
+#
+# Starting Ruby and loading spec_helper and global_defs.rb costs about 100ms,
+# and this file runs about 50 probes. Where fork is available, one server
+# process loads them once and forks a fresh copy of itself for each probe.
+# Every probe therefore still starts from the same untouched state, and
+# nothing a probe defines reaches the next one. Windows has no fork, so it
+# falls back to one new Ruby process per probe.
+module DoClientProbe
+  ROOT = File.expand_path('../..', __dir__)
+  PRELOAD = <<~PRELOAD
+    require './spec/spec_helper'
+    require 'common/detachable_client_registry'
+    require './lib/global_defs'
+  PRELOAD
+
+  # Reads one probe source at a time from the parent. For each, a forked
+  # child sends its stdout/stderr to temp files and evaluates the source as
+  # `ruby -e` would. An uncaught error prints and exits 1, and at_exit
+  # hooks run. The server then returns [stdout, stderr, success].
+  SERVER = <<~SERVER
+    #{PRELOAD}
+    require 'tempfile'
+    requests = $stdin.dup.binmode
+    replies = $stdout.dup.binmode
+    loop do
+      source = begin
+        Marshal.load(requests)
+      rescue EOFError
+        break
+      end
+      out = Tempfile.new('do-client-probe-out')
+      err = Tempfile.new('do-client-probe-err')
+      pid = fork do
+        requests.close
+        replies.close
+        # fd 0 is still the request pipe; give the probe an empty stdin,
+        # as Open3.capture3 did, so a probe that reads it cannot deadlock.
+        $stdin.reopen(File::NULL)
+        $stdout.reopen(out.path, 'w')
+        $stderr.reopen(err.path, 'w')
+        TOPLEVEL_BINDING.eval(source, '-e')
+      end
+      Process.wait(pid)
+      Marshal.dump([File.read(out.path), File.read(err.path), $?.success?], replies)
+      replies.flush
+      out.close!
+      err.close!
+    end
+  SERVER
+
+  def self.run(source)
+    return run_in_new_process(source) unless Process.respond_to?(:fork)
+
+    @server ||= IO.popen([RbConfig.ruby, "-I#{File.join(ROOT, 'lib')}", '-e', SERVER], 'r+b', chdir: ROOT)
+    begin
+      Marshal.dump(source, @server)
+      @server.flush
+      Marshal.load(@server)
+    rescue EOFError, Errno::EPIPE
+      stop
+      raise 'do_client probe server exited before replying (did the spec_helper/global_defs ' \
+            'preload fail?). Its error is on stderr earlier in this run.'
+    end
+  end
+
+  def self.run_in_new_process(source)
+    out, err, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(ROOT, 'lib')}", '-e', PRELOAD + source, chdir: ROOT)
+    [out, err, status.success?]
+  end
+
+  def self.stop
+    return unless @server
+
+    @server.close
+    @server = nil
+  end
+end
+
 RSpec.describe 'do_client command dispatch' do
   # Runs +probe+ after loading global_defs.rb with the game infrastructure
   # stubbed. +game+ sets what XMLData.game reports, which gates 16 of the
   # chain's branches.
   def probe(body, game: 'GSIV')
-    root = File.expand_path('../..', __dir__)
-    source = <<~RUBY
-      require './spec/spec_helper'
-      require 'common/detachable_client_registry'
-      require './lib/global_defs'
-
+    source = <<~PROBE
       $lich_char_regex = /;/
       $clean_lich_char = ';'
       $cmd_prefix = '<c>'
@@ -63,12 +137,14 @@ RSpec.describe 'do_client command dispatch' do
       Script.define_singleton_method(:new_upstream) { |_line| nil }
 
       #{body}
-    RUBY
-    out, err, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
-    raise "probe failed:\n#{err}" unless status.success?
+    PROBE
+    out, err, ok = DoClientProbe.run(source)
+    raise "probe failed:\n#{err}" unless ok
 
     out
   end
+
+  after(:context) { DoClientProbe.stop }
 
   # Most branches only need to know that a named script was looked up. This
   # builds a fake script whose every interesting method announces itself.
