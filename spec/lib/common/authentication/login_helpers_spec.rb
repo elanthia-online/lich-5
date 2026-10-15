@@ -478,6 +478,13 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--home=/tmp/lich', '--data=/tmp/data'])).to eq(:__unset)
     end
 
+    it 'ignores every -dir path option alongside --login' do
+      %w[--script-dir=/x --data-dir=/x --temp-dir=/x --map-dir=/x --log-dir=/x
+         --backup-dir=/x --lib-dir=/x --active-session-dir=/x].each do |arg|
+        expect(described_class.resolve_instance(['--login', 'Tsetem', arg])).to eq(:__unset), arg
+      end
+    end
+
     it 'ignores long-form path modifiers used by legacy CLI options' do
       expect(described_class.resolve_instance(['--script-dir=/tmp/scripts', '--data-dir=/tmp/data', '--temp-dir=/tmp/temp'])).to eq(:__unset)
     end

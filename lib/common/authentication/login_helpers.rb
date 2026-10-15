@@ -63,7 +63,7 @@ module Lich
           start-scripts custom-launch dark-mode headless
           auth-provider bind-address game-transport host
           home data scripts temp maps logs backup lib
-          script-dir data-dir temp-dir
+          script-dir data-dir temp-dir map-dir log-dir backup-dir lib-dir active-session-dir
           hosts-dir hosts-file account password character frontend frontend-command
           detachable-client reconnect-delay game wine wine-prefix
         ].freeze
