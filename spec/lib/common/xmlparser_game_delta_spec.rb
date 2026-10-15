@@ -21,6 +21,22 @@ RSpec.describe Lich::Common::XMLParserDelta do
       expect(described_class.for(nil)).to be(described_class::Default)
       expect(described_class.for('')).to be(described_class::Default)
     end
+
+    # ";hmr xmlparser" greps $LOADED_FEATURES and load()s every match, and
+    # lib/common/xmlparser/game_delta.rb matches. Re-running the file must not
+    # drop the deltas the game files registered when GameLoader required them.
+    it 'keeps every registered delta when game_delta.rb is reloaded (;hmr xmlparser)' do
+      registry = described_class.instance_variable_get(:@registry)
+      saved = registry.dup
+      begin
+        load $LOADED_FEATURES.grep(%r{/xmlparser/game_delta\.rb\z}).first
+        expect(described_class.for('DR')).to be(Lich::DragonRealms::XMLDelta)
+        expect(described_class.for('GSIV')).to be(Lich::Gemstone::XMLDelta)
+      ensure
+        registry.replace(saved)
+        described_class.instance_variable_set(:@registry, registry)
+      end
+    end
   end
 
   describe 'Default#main_subtitle' do
