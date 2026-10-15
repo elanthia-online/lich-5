@@ -42,8 +42,8 @@ XML
 
 # Saga-identity DR stream (Frontend::CLIENT_STRING since #1700), verbatim shape
 # with ids kept: creatures are linked GemStone-style, but the article sits
-# outside the link inside a doubled bold, and the crtrStatus batch follows the
-# component (GemStone sends it before each link).
+# outside the link inside the bold (currently sent doubled), and the crtrStatus
+# batch follows the component (GemStone sends it before each link).
 DR_SAGA_ROOM_OBJS = <<~XML.delete("\n")
   <component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="4001" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), a <a exist="31028" noun="register">deed register</a>, <pushBold/><pushBold/>an <a exist="4002" noun="kobold">old kobold</a><popBold/><popBold/> and some junk.</component>
   <crtrStatus exist="4001" hostile="1" immobile="1"/><crtrStatus exist="4002" hostile="1"/><prompt time="1785273999">R&gt;</prompt>
@@ -294,6 +294,36 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
            '<a exist="4004" noun=" moth">void-black umbral moth</a><popBold/><popBold/>.</component>')
 
       expect(Lich::DragonRealms::Creature[4004].noun).to eq('moth')
+    end
+
+    it 'keeps a "the" article (named NPCs: "the Sentinel X")' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>the " \
+           '<a exist="4005" noun="Varnel">Sentinel Varnel</a><popBold/><popBold/>, a ' \
+           '<a exist="-28812" noun="ladder">ladder to the top of the wall</a>.</component>')
+
+      c = Lich::DragonRealms::Creature[4005]
+      expect(c.name).to eq('the Sentinel Varnel')
+      expect(c.noun).to eq('Varnel')
+    end
+
+    it 'names an article-less linked NPC without carrying the previous room\'s article' do
+      feed(DR_SAGA_ROOM_OBJS)
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>" \
+           '<a exist="4006" noun="Orlan">Mastersmith Orlan</a><popBold/><popBold/> and a ' \
+           '<a exist="31029" noun="sign">large sign</a>.</component>')
+
+      c = Lich::DragonRealms::Creature[4006]
+      expect(c.name).to eq('Mastersmith Orlan')
+      expect(c.noun).to eq('Orlan')
+    end
+
+    # The stream currently doubles the bold; a single bold must work the same.
+    it 'handles the single-bold form of the same line' do
+      feed(DR_SAGA_ROOM_OBJS.gsub('<pushBold/><pushBold/>', '<pushBold/>').gsub('<popBold/><popBold/>', '<popBold/>'))
+
+      expect(Lich::DragonRealms::Creature[4001].name).to eq('a jeol moradu')
+      expect(Lich::DragonRealms::Creature[4002].name).to eq('an old kobold')
+      expect(Lich::DragonRealms::Creature.all.map(&:name)).not_to include('a ', 'an ')
     end
   end
 end
