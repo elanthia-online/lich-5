@@ -65,6 +65,23 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class[99353095].noun).to eq('moradu')
     end
 
+    it 'keeps a given server noun instead of the name\'s last word' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a grizzled hound with a notched ear', 'hound')
+
+      expect(creature.name).to eq('a grizzled hound with a notched ear')
+      expect(creature.noun).to eq('hound')
+    end
+
+    it 'trims a padded server noun and derives from the name when it is blank' do
+      creature = described_class.sync('99353095', 'hostile' => '1')
+      creature.apply_room_name('a void-black umbral moth', ' moth ')
+      expect(creature.noun).to eq('moth')
+
+      creature.apply_room_name('a jeol moradu', '  ')
+      expect(creature.noun).to eq('moradu')
+    end
+
     it 'leaves name and noun nil when no room name is applied' do
       described_class.sync('99353095', 'hostile' => '1')
 
