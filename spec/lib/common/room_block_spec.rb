@@ -101,13 +101,12 @@ RSpec.describe 'reget on Saga-identity <room> blocks' do
   before do
     stub_const('Script', Class.new)
     allow(Script).to receive(:current).and_return(double('script', want_downstream_xml: false))
-    $_SERVERBUFFER_ = [
-      %(<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>A clearing.</description><exists>You also see a <a exist="1" noun="leopard">leopard</a>.</exists><players>Also here: <a exist="-2" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n),
-      %(<prompt time="1">&gt;</prompt>\r\n)
-    ]
+    room = %(<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>A clearing.</description><exists>You also see a <a exist="1" noun="leopard">leopard</a>.</exists><players>Also here: <a exist="-2" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n)
+    prompt = %(<prompt time="1">&gt;</prompt>\r\n)
+    $_SERVERBUFFER_.replace([room, prompt])
   end
 
-  after { $_SERVERBUFFER_ = nil }
+  after { $_SERVERBUFFER_.clear }
 
   it 'returns the legacy room lines a script would match against' do
     lines = reget_host.reget.map(&:strip)
