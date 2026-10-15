@@ -1839,6 +1839,13 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     end
   end
 
+  # The Kernel-level sf_to_wiz lives in global_defs.rb, which specs do not
+  # load; route it to the real converter it delegates to.
+  def stub_wizard_conversion
+    require_relative '../../lib/common/markup'
+    allow(described_class).to receive(:sf_to_wiz) { |line| Lich::Common::Markup.sf_to_wiz(line) }
+  end
+
   before do
     allow(Lich).to receive(:log)
     allow(Lich).to receive(:display_lichid).and_return(false)
@@ -1886,6 +1893,21 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     $frontend = 'wrayth'
     described_class.send(:process_downstream_hooks, +saga_room)
     expect(described_class.instance_variable_get(:@room_number_after_ready)).to be true
+  end
+
+  # Pins the ordering at unit level: sf_to_wiz keys on the legacy layout, so
+  # the rewrite must run before it. (The DR description is the roomDesc
+  # preset, which translate_room leaves as text, as for the DR legacy stream.)
+  it 'gives Wizard its GSL room-name codes' do
+    $frontend = 'wizard'
+    stub_wizard_conversion
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
+        "An Elven burial ground.\r\nObvious paths: north.\r\n"
+      )
+    end
   end
 end
 
