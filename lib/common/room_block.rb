@@ -22,9 +22,10 @@ module Lich
       module_function
 
       # Rewrites a <room> block into the legacy stream's layout, so code written
-      # for the legacy stream (script line matching, room-number display, the
-      # Wizard converter, front ends that do not understand <room>) sees the
-      # same shape in both dialects:
+      # for the legacy stream sees the same shape in both dialects.
+      # Markup.strip_xml and reget run it, so scripts get the legacy room lines;
+      # a client-bound rewrite can run it for front ends that do not understand
+      # <room>:
       #
       #   <style id="roomName" />[Area, Title] (230008)
       #   <style id=""/><preset id='roomDesc'>description</preset>  You also see ...
@@ -35,10 +36,9 @@ module Lich
       # description line is always sent, as in the legacy stream: an empty
       # description drops the roomDesc preset, and the two spaces before the
       # objects stay when there are none. Other parts the game sent empty are
-      # omitted, as the legacy stream omits them. Every complete
-      # block in the string is rewritten (reget joins many server strings); a
-      # string without one (none, or only a block cut off before </room>) is
-      # returned unchanged.
+      # omitted, as the legacy stream omits them. Every complete block in the
+      # string is rewritten (reget joins many server strings); a string without
+      # one (none, or only a block cut off before </room>) is returned unchanged.
       #
       # @param server_string [String]
       # @return [String]
