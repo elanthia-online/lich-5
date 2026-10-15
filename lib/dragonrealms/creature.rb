@@ -298,10 +298,12 @@ module Lich
       # This is the automatic, name-less DragonRealms feed: it produces an
       # id-keyed hostile roster with flags before any `assess` has run.
       #
-      # Name-less on purpose: the stream-order room-objs name is applied
-      # separately via {CreatureInstance#apply_room_name}, batched at the prompt
-      # once the parser has confirmed the bold-name and crtrStatus counts match
-      # (see lib/common/xmlparser.rb). assess later backfills authoritatively.
+      # Name-less on purpose: the room-objs name is applied separately via
+      # {CreatureInstance#apply_room_name}, either from the linked creature
+      # (Saga-identity dialect, registered before this batch arrives) or, in the
+      # legacy dialect, batched at the prompt once the parser has confirmed the
+      # bold-name and crtrStatus counts match (see lib/common/xmlparser.rb).
+      # assess later backfills authoritatively.
       #
       # @param id [Integer, String] server creature id (the tag's `exist`).
       # @param flags [Hash{String=>String}] tag attributes excluding `exist`.
