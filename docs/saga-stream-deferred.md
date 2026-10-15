@@ -24,6 +24,7 @@ This file tracks what the Saga-dialect work has **not** verified or fixed yet. I
 | E9 | IconSTUNNED / IconWEBBED | Saga capture | `stunned?` / `webbed?` | Low: the tag is the same in both dialects | Saga capture while stunned or webbed |
 | E10 | ESP thoughts stream | Saga capture | DR Flags and scripts on thought text | Name-anchored thought Flags break if names are linked | Saga capture with a telepathy source |
 | E11 | GemStone under the Saga identity | GS captures in both dialects | every shared parser path | GS regressions go undetected beyond specs and the legacy `gs_sample` golden | GS captures under both identities. Until then, no GS-observable changes; GS maintainers smoke-test shared-path PRs |
+| E12 | dr-scripts consumers of raw stream text with no capture of the relevant output in either dialect | Captures in both dialects | sorter (`(You are\|He is\|She is) wearing`, LOOK item lists), playermonitor (`WHO`), healme (wound-healed messages), textsubs (name-bearing substitutions) | False positives/negatives if those outputs gained links | A capture of each output in the Saga dialect; open a dr-scripts PR only if it breaks |
 
 ## Parked fixes (known bugs, intentionally not fixed yet)
 
@@ -50,3 +51,15 @@ These claims were made during planning and turned out to be false. They are reco
 | `<right/left exist>` is new in the Saga dialect | Legacy streams already carry it |
 | `<inv id='stow'>` / `clearContainer` are new in the Saga dialect | Legacy streams send them too, as plain text. What's new is the `<a exist>` links inside them, which make the parser create GameObj entries without a resolved stow container |
 | `room_count` double-increments via `popStream id='room'` | 0 room pops across 567 moves; one compass close per nav |
+
+## Series decisions (scope changes made during implementation)
+
+| Planned item | Decision | Evidence |
+|---|---|---|
+| Order-independent `<crtrStatus>` apply | Dropped; only the move into the game deltas shipped | DR's id-first sync already works in either order (Saga goldens show flags on the right ids); GemStone was never observed sending `<crtrStatus>` after the creature link |
+| DR injury radio modes; shared `InjuriesBase` | Blocked | Needs E1 (a Saga `_injury` capture) |
+| `DRStats.position` from indicators | Dropped | `DRStats.position` is combat advantage from the balance line, not posture; the posture predicates (`sitting?`, `kneeling?`, `prone?`, `standing?`) already read `XMLData.indicator` for both games in global_defs.rb |
+| `Flags` in common code | Deferred (product decision) | It would add a new feature to GemStone; DR Flags already match link-stripped lines (DRParser.match_line) |
+| `DRRoom` backed by GameObj/Creature | Deferred until the legacy dialect is gone | Legacy sessions carry no object ids (`gameobj.npcs` is populated in 0% of legacy-fixture prompts), so DRRoom cannot be GameObj-backed while both dialects are live |
+| dr-scripts fixes | status-monitor fixed (elanthia-online/dr-scripts#7664; the open refactor #7402 needs the same change); droughtmans needs none (its `^Obvious` matches stripped lines, restored by the `<room>` parsing); the rest are E12 | Replay goldens and the Saga captures |
+
