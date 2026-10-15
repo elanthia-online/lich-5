@@ -41,6 +41,7 @@ doc/yard/
 !docs/*.md
 !spec/README.md
 !spec/fixtures/README.md
+!spec/fixtures/streams/MANIFEST.md
 !bench/README.md
 
 # --- Test database artifacts ---
