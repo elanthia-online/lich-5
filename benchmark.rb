@@ -12,8 +12,9 @@
 # A single Lich process is booted once per fixture. The loopback server first
 # sends the fixture's header section once (the real server handshake, incl.
 # settingsInfo so Lich initializes as the right game), then performs N timed
-# runs: each run floods the fixture's body block(s) followed by a sentinel, and
-# the elapsed time from "flood begins" to "sentinel seen on stdout" is recorded.
+# runs: each run floods the fixture's body block(s), in chunks (see CHUNK_LINES),
+# followed by a sentinel, and the elapsed time from "flood begins" to "sentinel
+# seen on stdout" is recorded.
 # Booting Lich once per fixture keeps many runs cheap and excludes boot cost
 # from every sample.
 #
@@ -56,6 +57,10 @@ CHUNK_SENTINEL = 'LICH_BENCH_CHUNK_END'
 # sent in chunks of at most this many lines; each chunk ends with
 # CHUNK_SENTINEL and the next is sent only once Lich has echoed it, i.e. once
 # the chunk has been fully parsed. Keep this well under the queue capacity.
+# The measured elapsed includes those N-1 drain-and-echo stalls (the parser
+# sits idle while each echo round-trips), so lines/s understates steady-state
+# throughput. It is not comparable with figures from before the queue was
+# bounded (#1459) or with figures taken at a different CHUNK_LINES.
 CHUNK_LINES = 2_000
 CLOCK = Process::CLOCK_MONOTONIC
 
