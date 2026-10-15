@@ -8,7 +8,10 @@ require 'common/xmlparser'
 # XMLParser#stream_feature? records which stream dialect the session is getting.
 # The Saga identity (Frontend::CLIENT_STRING since #1700) gets object links and
 # the <room> block; front ends that send their own Wrayth handshake get the
-# legacy stream. Fragments are verbatim shapes from DR captures of each dialect.
+# legacy stream. Fragments follow the shapes in the DR captures under
+# spec/fixtures/streams, with ids and text substituted. Two shapes are not in
+# those captures: the URL <a href> line, and the <container> lines, which use
+# GemStone's <container id='stow'> shape.
 RSpec.describe 'Lich::Common::XMLParser stream features' do
   subject(:parser) { Lich::Common::XMLParser.new }
 
