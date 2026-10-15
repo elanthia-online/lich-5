@@ -764,6 +764,33 @@ RSpec.describe Lich::DragonRealms::DRParser do
       end
     end
 
+    describe 'parse error log' do
+      let(:messages) { [] }
+      let(:logs) { [] }
+
+      before do
+        allow(Lich::Messaging).to receive(:msg) { |_type, message| messages << message }
+        allow(Lich).to receive(:log) { |message| logs << message }
+        allow(described_class).to receive(:check_game_shutdown).and_raise(StandardError, 'boom')
+      end
+
+      it 'reports the line as the server sent it, links included, and the matched copy' do
+        server_line = +'<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.'
+        described_class.parse(server_line)
+
+        expect(messages).to include('DRParser: line: <a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.')
+        expect(messages).to include('DRParser: matched as: Brenna drums his fingers.')
+        expect(logs.join).to include('<a exist="-10604318" noun="Brenna">Brenna</a> drums his fingers.', 'matched as: Brenna drums his fingers.')
+      end
+
+      it 'reports a link-free (legacy) line once, as before' do
+        described_class.parse(+'Brenna drums his fingers.')
+
+        expect(messages).to eq(['DRParser: error in parse: boom', 'DRParser: line: Brenna drums his fingers.'])
+        expect(logs.join).not_to include('matched as')
+      end
+    end
+
     describe 'inline exp display' do
       it 'still rewrites the server string the client receives' do
         allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)

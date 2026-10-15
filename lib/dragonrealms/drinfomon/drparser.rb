@@ -742,10 +742,15 @@ module Lich
           # Parse bank transactions passively
           Lich::DragonRealms::DRBanking.parse(line)
         rescue StandardError => e
+          # Report the line as the server sent it (Saga markup is the likeliest
+          # cause), plus the copy the patterns saw when normalization changed it.
+          normalized = line.equal?(server_line) ? nil : line
           Lich::Messaging.msg("bold", "DRParser: error in parse: #{e.message}")
-          Lich::Messaging.msg("bold", "DRParser: line: #{line}")
+          Lich::Messaging.msg("bold", "DRParser: line: #{server_line}")
+          Lich::Messaging.msg("bold", "DRParser: matched as: #{normalized}") if normalized
           Lich.log "error: DRParser.parse: #{e.message}\n\t#{e.backtrace.join("\n\t")}"
-          Lich.log "error: line: #{line}\n\t"
+          Lich.log "error: line: #{server_line}\n\t"
+          Lich.log "error: matched as: #{normalized}\n\t" if normalized
         end
       end
     end
