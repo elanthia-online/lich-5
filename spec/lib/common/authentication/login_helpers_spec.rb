@@ -38,6 +38,7 @@ module GameConfig
 end unless defined?(GameConfig)
 
 require_relative '../../../../lib/common/authentication/login_helpers'
+require_relative '../../../../lib/main/help_text'
 
 RSpec.describe Lich::Common::Authentication::LoginHelpers do
   describe 'constants' do
@@ -482,6 +483,25 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       %w[--script-dir=/x --data-dir=/x --temp-dir=/x --map-dir=/x --log-dir=/x
          --backup-dir=/x --lib-dir=/x --active-session-dir=/x].each do |arg|
         expect(described_class.resolve_instance(['--login', 'Tsetem', arg])).to eq(:__unset), arg
+      end
+    end
+
+    # Derived from the rendered --help text so a newly documented option that is
+    # missing from the ignore lists fails here instead of in a user's --login.
+    it 'accepts every documented option alongside --login' do
+      not_login_options = %w[
+        --help --version --active-sessions --session-info
+        --add-account --add-character --refresh-characters --convert-entries
+        --change-account-password --change-master-password --recover-master-password
+        --change-encryption-mode --game-code --master-password
+        --test --platinum
+      ]
+      help = ([nil] + Lich::Main::HelpText::HELP_TOPICS).map { |topic| Lich::Main::HelpText.render(topic) }.join("\n")
+      options = help.scan(/--[a-z][a-z0-9-]*/).uniq - not_login_options
+
+      expect(options).to include('--login', '--pipe', '--log-dir')
+      options.each do |arg|
+        expect(described_class.resolve_instance(['--login', 'Tsetem', arg])).not_to be_nil, arg
       end
     end
 
