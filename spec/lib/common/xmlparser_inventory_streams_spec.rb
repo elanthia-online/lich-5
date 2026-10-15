@@ -76,6 +76,9 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
 
       expect(parser.stow_container_id).to eq('200000001')
       expect(contents('200000001')).to eq(%w[gem])
+      # The refresh opened under the old id at clearContainer is abandoned, not
+      # published empty: the old container keeps its last known contents.
+      expect(contents('195648378')).to eq(%w[nugget])
     end
 
     it 'deletes the container when its header reports it closed' do
@@ -110,7 +113,10 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
     end
 
     it 'never publishes an INV LIST scrape that is still in flight' do
-      gameobj.new_inv('1', 'cloak', 'a wool cloak') # previously published
+      # A linked list first, so the parser knows the stream links items and the
+      # in-flight guard (not the legacy-dialect check) is what keeps it out.
+      feed(*worn_list(%w[1 cloak cloak])) # previously published
+      expect(parser.stream_feature?(:links)).to be true
       gameobj.begin_inv # an INV LIST scrape owns the worn staging
       gameobj.new_inv('2', 'helm', 'a helm')
       feed(*worn_list(%w[3 mask mask]))
@@ -119,6 +125,20 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
       expect(worn).to eq(%w[cloak]) # still the published list
       gameobj.commit_inv
       expect(worn).to contain_exactly('helm', 'mask')
+    end
+
+    it 'forgets its own worn refresh at a reset, so a later list cannot publish an INV LIST scrape' do
+      feed(*worn_list(%w[1 cloak cloak])) # previously published
+      feed("<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:",
+           '  a <a exist="2" noun="helm">helm</a>') # cut off before its popStream
+      parser.reset # parse-error recovery discards the half-filled refresh
+      gameobj.begin_inv # an INV LIST scrape then owns the worn staging
+      gameobj.new_inv('3', 'boots', 'some boots')
+      feed(*worn_list(%w[4 mask mask]))
+
+      expect(gameobj.inv_refresh_open?).to be true
+      expect(worn).to eq(%w[cloak])
+      gameobj.commit_inv
     end
 
     it 'opens no worn refresh for the legacy plain-text list' do
