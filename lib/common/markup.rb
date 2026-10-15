@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+require File.join(LIB_DIR, 'common', 'room_block.rb')
 
 module Lich
   module Common
@@ -134,6 +135,10 @@ module Lich
         def strip_simple(line)
           return nil if line == "\r\n" # short-circuit empty links
 
+          # The Saga-identity <room> block becomes the legacy layout first, so
+          # scripts get the same room lines (title, description + objects,
+          # players, exits) in both stream dialects.
+          line = RoomBlock.legacy_shape(line)
           line = line.gsub(SUPPRESSED_STREAMS, '')
           line = line.gsub(SPELLS_STREAM, '')
           line = line.gsub(DATA_ELEMENTS, '')

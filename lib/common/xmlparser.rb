@@ -1175,7 +1175,8 @@ module Lich
             end
           end
 
-          if @current_style == 'roomName'
+          if @current_style == 'roomName' || (@active_tags[-1] == 'name' && @active_tags[-2] == 'room')
+            # Legacy roomName style, or the Saga-identity <room><name> child.
             @room_name = text_string.match(/(?<roomname>\[.*?\])/)[:roomname]
           end
 

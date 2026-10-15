@@ -41,6 +41,11 @@ RSpec.describe 'Lich::Common::XMLParser stream features' do
     expect(parser.stream_feature?(:links)).to be false
   end
 
+  it 'takes room_name from the Saga <room><name> child, as from the legacy roomName style' do
+    feed('<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>D.</description></room>')
+    expect(parser.room_name).to eq('[Bosque Deriel, Burial Ground]')
+  end
+
   it 'observes :room_element from the Saga <room> block' do
     feed('<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>')
     expect(parser.stream_features).to eq([:room_element])
