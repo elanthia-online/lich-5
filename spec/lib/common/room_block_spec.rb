@@ -30,7 +30,7 @@ RSpec.describe Lich::Common::RoomBlock do
               '<exists></exists><crtrStatus exist="1" hostile="1"/><players></players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>'
       expect(described_class.legacy_shape(block)).to eq(
         "<style id=\"roomName\" />[Bosque Deriel, Burial Ground] (230007)\r\n" \
-        "<style id=\"\"/><preset id='roomDesc'>An Elven burial ground.</preset>\r\n" \
+        "<style id=\"\"/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n" \
         '<crtrStatus exist="1" hostile="1"/>Obvious paths: <d>north</d>.'
       )
     end
@@ -40,7 +40,7 @@ RSpec.describe Lich::Common::RoomBlock do
               '<players>Also here: Corwin.</players><exits></exits><extra>A sign hangs here.</extra></room>'
       expect(described_class.legacy_shape(block).split("\r\n", -1)).to eq([
                                                                             '<style id="roomName" />[A] (1)',
-                                                                            %(<style id=""/><preset id='roomDesc'>D.</preset>),
+                                                                            %(<style id=""/><preset id='roomDesc'>D.</preset>  ),
                                                                             'Also here: Corwin.',
                                                                             'A sign hangs here.'
                                                                           ])
@@ -50,6 +50,23 @@ RSpec.describe Lich::Common::RoomBlock do
       block = '<room><name>[A] (1)</name><description>D.</description><crtrStatus exist="1" hostile="1"/>' \
               '<players></players><exits></exits><extra></extra></room>'
       expect(described_class.legacy_shape(block).lines.last).to eq('<crtrStatus exist="1" hostile="1"/>')
+    end
+
+    # The legacy description line is <style id=""/>, the roomDesc preset when
+    # there is a description, two spaces, then the objects (dr_legacy_hunt.xml
+    # sends "<style id=""/>  You also see ..." and "<style id=""/>  " with room
+    # descriptions off; ProfanityFE's dr_look_after_players.xml capture sends
+    # "...</preset>  " for a room without objects).
+    {
+      'an empty description'                => ['', 'You also see a rock.', %(<style id=""/>  You also see a rock.)],
+      'an empty description and no objects' => ['', '', %(<style id=""/>  )],
+      'no objects'                          => ['D.', '', %(<style id=""/><preset id='roomDesc'>D.</preset>  )]
+    }.each do |label, (description, exists, line)|
+      it "gives the description line the legacy shape for #{label}" do
+        block = "<room><name>[A] (1)</name><description>#{description}</description><exists>#{exists}</exists>" \
+                '<players></players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>'
+        expect(described_class.legacy_shape(block).split("\r\n", -1)).to eq(['<style id="roomName" />[A] (1)', line, 'Obvious paths: <d>north</d>.'])
+      end
     end
 
     it 'keeps a non-empty extra part as its own line' do
@@ -86,6 +103,15 @@ RSpec.describe Lich::Common::RoomBlock do
                                                                          'Also here: Monster Aldric and Druid Delphine.',
                                                                          'Obvious paths: north, south.'
                                                                        ])
+    end
+
+    it 'gives scripts the legacy lines for a room sent without a description' do
+      block = "<room><name>[Area, Grotto] (1)</name><description></description><exists>You also see <pushBold/>a moradu<popBold/>.</exists>" \
+              "<players></players><exits>Obvious exits: <d>north</d>.</exits><extra></extra></room>\r\n"
+      legacy = ["<style id=\"roomName\" />[Area, Grotto] (1)\r\n",
+                "<style id=\"\"/>  You also see <pushBold/>a moradu<popBold/>.\r\n",
+                "Obvious exits: <d>north</d>.\r\n"].map { |l| Lich::Common::Markup.strip_xml(l) }.join
+      expect(Lich::Common::Markup.strip_xml(block)).to eq(legacy)
     end
   end
 end
