@@ -533,9 +533,10 @@ module Lich
       # <container id='stow' target=...> has been seen (DragonRealms never sends
       # one), take the stow container id from that header, so the header is
       # skipped as the container itself and its items land in its contents
-      # rather than in worn inventory. A stow refresh opened this burst before
-      # the id was known (or under a previous stow container) is reopened under
-      # the right id.
+      # rather than in worn inventory. A stow clearContainer seen this burst
+      # opens its refresh here when the id was not yet known; a refresh it
+      # opened under a previous stow container is abandoned (that container
+      # keeps its published contents) and reopened under the new id.
       def learn_stow_container(exist)
         return if exist.nil? || stream_feature?(:stow_container_tag)
         return unless @active_tags.include?('inv') && @active_ids.include?('stow')
