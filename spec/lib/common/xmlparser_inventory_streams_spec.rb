@@ -102,6 +102,8 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
     end
 
     it 'deletes the container when its header reports it closed' do
+      # Synthetic header: no DR or GS capture has one. DR sent no stow feed at
+      # all when the stow container was closed and reopened.
       feed(stow_refresh('195648378', %w[1 nugget nugget]), prompt)
       feed(%(<clearContainer id="stow"/><inv id='stow'>The <a exist="195648378" noun="pack">pack</a> is closed.</inv>), prompt)
 
