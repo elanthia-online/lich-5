@@ -1,11 +1,13 @@
 # Saga XML stream support: deferred items
 
-Since #1700, Lich identifies as Saga (`/VERSION:saga-… /P:SAGA`) on the handshakes that use `Frontend::CLIENT_STRING`: Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`. Front ends that send their own handshake (Genie, Profanity, Warlock, Wrayth) still get the legacy stream. **Each game therefore has two stream dialects live at once**, and Lich must parse both.
+Since #1700, Lich identifies as Saga (`/VERSION:saga-… /P:SAGA`) on the handshakes that use `Frontend::CLIENT_STRING`: Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`. Front ends that send their own handshake (Genie, Profanity, Warlock, Wrayth) still get the legacy stream. **DragonRealms therefore has two stream dialects live at once**, and Lich must parse both: DR Saga captures carry the `<room>` block and `<a exist>` links in room objects, players and the stow feed, and DR legacy captures carry neither.
+
+For GemStone only one stream is verified. Logs from 15 GS Shattered sessions (2026-10-15, not committed) show `<a exist>` links in room objects, players and the stow feed, `roomName`/`roomDesc` styles, `compDef`/`component` room parts, and no `<room>` element. They don't record the handshake, and `<settingsInfo client="1.0.1.28">` reports the character's stored client-settings record (Lich seeds exactly that value for a character that has none, `gameloader.rb`), so it doesn't identify the handshake either. Whether GemStone answers the Saga identity with a different stream is still open (E11).
 
 This file tracks what the Saga-dialect work has **not** verified or fixed yet. It exists so nothing is dropped silently.
 
 **Rules:**
-- While an item is open, the code paths it touches stay unchanged. The legacy replay goldens and existing specs protect them.
+- While an item is open, this series leaves the code paths it touches unchanged. This is a rule for the Saga-stream PRs, not a freeze on other work. The legacy replay goldens and existing specs protect those paths.
 - Closing an item means: add a capture to `spec/fixtures/streams/`, record its golden, and compare it with the other dialect. Open a fix only if that comparison shows a difference.
 - Every PR touching a related area repeats the relevant items under "Known gaps".
 
@@ -23,7 +25,7 @@ This file tracks what the Saga-dialect work has **not** verified or fixed yet. I
 | E8 | Scar images in the injuries dialog | Captures in both dialects | injuries `<image>` handler (`Scar\d`) | Scars not tracked | Captures in both dialects (overlaps E1) |
 | E9 | IconSTUNNED / IconWEBBED | Saga capture | `stunned?` / `webbed?` | Low: the tag is the same in both dialects | Saga capture while stunned or webbed |
 | E10 | ESP thoughts stream | Saga capture | DR Flags and scripts on thought text | Name-anchored thought Flags break if names are linked | Saga capture with a telepathy source |
-| E11 | GemStone under the Saga identity | GS captures in both dialects | every shared parser path | GS regressions go undetected beyond specs and the legacy `gs_sample` golden | GS captures under both identities. Until then, no GS-observable changes; GS maintainers smoke-test shared-path PRs |
+| E11 | GemStone under the Saga identity | GS captures under a known handshake, in both identities (the 2026-10-15 GS logs show links and no `<room>`, but not which handshake) | every shared parser path | GS regressions go undetected beyond specs and the legacy `gs_sample` golden | GS captures under both identities. Until then, no GS-observable changes; GS maintainers smoke-test shared-path PRs |
 
 ## Parked fixes (known bugs, intentionally not fixed yet)
 
