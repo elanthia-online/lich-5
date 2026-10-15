@@ -7,6 +7,8 @@ require 'ox' # populate_inventory_get parses <d> fragments via Ox (loaded by lic
 require_relative '../../../../lib/dragonrealms/drinfomon/drdefs'
 require_relative '../../../../lib/dragonrealms/drinfomon/drvariables'
 require_relative '../../../../lib/dragonrealms/drinfomon/drskill'
+# The inline exp examples run the real DRExpMonitor formatters.
+require_relative '../../../../lib/dragonrealms/drinfomon/drexpmonitor'
 # The doubly-nested regression below drives the REAL GameObj (no new_inv mock)
 # so it observes the actual container contents. spec_helper installs a
 # lightweight GameObj double; requiring the production file reopens it with the
@@ -777,14 +779,67 @@ RSpec.describe Lich::DragonRealms::DRParser do
       # normalized copy. This synthetic linked line (not a captured shape) makes
       # match_line return a new string, so only a server_line rewrite passes.
       it 'rewrites the server string, not the normalized copy, when the line carries links' do
+        received = nil
         allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)
-        allow(Lich::DragonRealms::DRExpMonitor).to receive(:format_briefexp_off).and_return('REWRITTEN')
+        # Copy the argument at call time: the formatter is handed server_line
+        # itself, which parse then replaces with the formatter's result.
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:format_briefexp_off) do |line, skill, rate|
+          received = [line.dup, skill, rate]
+          'REWRITTEN'
+        end
         server_line = +%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>)
 
         described_class.parse(server_line)
         expect(server_line).to eq('REWRITTEN')
-        expect(Lich::DragonRealms::DRExpMonitor).to have_received(:format_briefexp_off)
-          .with("<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>", 'Athletics', 'enthralled')
+        # The formatter edits the line as sent (links kept); skill and rate come
+        # from the normalized copy.
+        expect(received).to eq([%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>), 'Athletics', 'enthralled'])
+      end
+
+      # Exp components can carry object links and doubled bold under the Saga
+      # identity. The client must get the gained-exp column added to the line
+      # the server sent, links and bold intact, not to the link-stripped copy.
+      # These run the real DRExpMonitor formatters. The lines are synthetic (no
+      # linked exp component has been captured yet).
+      describe 'with the real formatters' do
+        before do
+          described_class.class_variable_set(:@@parsing_exp_mods_output, false)
+          allow(drexpmonitor_class).to receive(:inline_display?).and_return(true)
+          allow(drexpmonitor_class).to receive(:format_briefexp_on).and_call_original
+          allow(drexpmonitor_class).to receive(:format_briefexp_off).and_call_original
+          # The formatters read the class variable directly; spec_helper's
+          # DRExpMonitor.reset! clears it after each example.
+          drexpmonitor_class.class_variable_set(:@@inline_display, true)
+          allow(drskill_class).to receive(:gained_exp).and_return(1.5)
+        end
+
+        it 'keeps the links and doubled bold of a BRIEFEXP OFF line' do
+          server_line = +%(<component id='exp Athletics'><pushBold/><pushBold/>       <a exist="1" noun="Athletics">Athletics</a>: 1552 43% enthralled    0.00   <popBold/><popBold/></component>)
+          normalized = described_class.match_line(server_line).dup
+
+          described_class.parse(server_line)
+          expect(server_line).to include('<a exist="1" noun="Athletics">Athletics</a>', '<pushBold/><pushBold/>', '<popBold/><popBold/>')
+          expect(server_line).to include(' 1.50')
+          expect(described_class.match_line(server_line)).to eq(drexpmonitor_class.format_briefexp_off(normalized, 'Athletics', 'enthralled'))
+        end
+
+        it 'keeps the links of a BRIEFEXP ON line' do
+          server_line = +%(<component id='exp Athletics'><d cmd='skill Athletics'><a exist="1" noun="Athletics">Athletics</a></d>:  1552 43%  [ 2/34]</component>)
+          normalized = described_class.match_line(server_line).dup
+
+          described_class.parse(server_line)
+          expect(server_line).to include('<a exist="1" noun="Athletics">Athletics</a>', '[ 2/34] 1.50')
+          expect(described_class.match_line(server_line)).to eq(drexpmonitor_class.format_briefexp_on(normalized, 'Athletics'))
+        end
+
+        it 'rewrites a link-free (legacy) line exactly as before' do
+          server_line = +"<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>"
+          expected = drexpmonitor_class.format_briefexp_off(server_line.dup, 'Athletics', 'enthralled')
+
+          described_class.parse(server_line)
+          expect(server_line).to eq(expected)
+          expect(server_line).not_to eq("<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>")
+        end
       end
     end
   end
