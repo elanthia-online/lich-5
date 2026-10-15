@@ -9,9 +9,11 @@ module Lich
     module XMLDelta
       extend Lich::Common::XMLParserDelta::Base
 
-      # GemStone subtitles read " - [Town Square] - 1234" when the game shows
-      # room numbers; the number is stripped from the title, and its presence
-      # turns on Lich.display_uid.
+      # GemStone subtitles carry no brackets: " - Town Square, Central - 228"
+      # when the game shows room numbers, " - Town Square, Central" when it does
+      # not. The title is bracketed here ("[Town Square, Central]") and the
+      # number is stripped from it; the number's presence also turns on
+      # Lich.display_uid (a global, not parser state).
       def self.main_subtitle(subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
         if Lich.display_uid == false && subtitle[3..-1] =~ / - \d+$/
           Lich.display_uid = true
