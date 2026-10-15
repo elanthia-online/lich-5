@@ -64,3 +64,21 @@ These claims were made during planning and turned out to be false. They are reco
 | `DRRoom` backed by GameObj/Creature | Deferred until the legacy dialect is gone | Legacy room objects carry no object links: the legacy stream carries ids elsewhere (hand tags, `<crtrStatus>`, the inventory feed) but never an `<a exist>` link in `room objs`, so `gameobj.npcs` is populated in 0% of DR legacy-fixture prompts. DRRoom therefore cannot be GameObj-backed while both dialects are live |
 | dr-scripts fixes | status-monitor fix in elanthia-online/dr-scripts#7664 (the open refactor #7402 needs the same change); sorter's container lists need a fix with no PR yet: sorter reads the raw XML line (`want_downstream_xml`), so a linked item reaches `DRC.list_to_array` as `<a exist=… noun="stack">barghest-bone stack</a>`, `DRC.get_noun` returns nil, and the item sorts as `other` instead of its category (the `You rummage … and see` line in `dr_saga_containers_speech.xml`; in the 2026-10-16 DR Saga logs, 242 of 242 rummage lines and 792 of 796 `In/On the … you see` lines carry links; the fix is to strip `<a …>`/`</a>` before splitting); droughtmans needs none (its `^Obvious` matches stripped lines, restored by the `<room>` parsing); healer's raw-line hook strips every tag itself before matching, and its room scan reads `DRRoom.pcs`, which DRParser fills from the link-stripped line (the Saga goldens show linked names parsed); echo only logs raw lines; the rest are E12 | Replay goldens, the Saga captures and each script's source |
 
+## Stream-shape answers from the maintainer (2026-10-16)
+
+Questions the series' reviews raised about what the game sends, answered by the maintainer. Each answer sets what the code must handle; the PR named in the first column owns it.
+
+| Question | Answer | What it means for the code |
+|---|---|---|
+| Does `<settingsInfo>` arrive mid-session? (#1703) | No | The detected stream features last the whole session |
+| Can `<settingsInfo>` share a line with the main `streamWindow` subtitle? (#1704) | No | Nothing to handle |
+| Do Saga exp components carry `<a exist>` links or doubled bold? (#1702) | Yes | The inline exp rewrite must not hand the client link-stripped text |
+| Can a creature link's `noun=` differ from the last word of its text? (#1705) | Yes | `apply_room_name` must keep the server's noun when the link gives one |
+| Can a Saga players list hold an unlinked player? (#1705) | The maintainer thinks not | Handle it only if a capture shows one |
+| Can a Saga `<name>` lack `[…]`? (#1707) | Yes, in edge cases | `room_name` must not go nil when the legacy-equivalent value is sensible |
+| Can a `<room>` child element repeat? (#1707) | The maintainer thinks not | None repeat in the 53,663 `<room>` blocks of the 2026-10-16 DR Saga logs |
+| Can `<description>` be empty? (#1707) | Possible, not normal | The legacy layout must match what the legacy stream sends for an empty description |
+| Can one `<room>` block be split across lines? (#1707, #1708) | Yes, not normally | #1707 parses a split block; #1708 keeps it from reaching front ends that don't understand `<room>` raw |
+| Can two stow containers arrive in one burst? (#1709) | The maintainer thinks never | Accepted limitation: the code assumes one per burst |
+| Can a stow header arrive without `clearContainer`? (#1709) | Always has it | Nothing to handle |
+
