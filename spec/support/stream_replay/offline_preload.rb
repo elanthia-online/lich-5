@@ -4,18 +4,11 @@
 # lich.rbw. Login normally runs Game.handle_autostart, which on a fresh data
 # dir updates core scripts and always syncs script repos from GitHub. A replay
 # must be offline and deterministic, so once each module is defined this
-# prepends no-op versions of those entry points. Nothing under lib/ changes.
+# prepends no-op versions of those entry points (offline_update.rb). Nothing
+# under lib/ changes. replay_probe.lic reports StreamReplay.offline_problems in
+# its ready marker and the driver refuses to replay if there are any.
 
-module StreamReplay
-  module OfflineUpdate
-    def update_core_data_and_scripts(*) = nil
-    def sync_all_repos(*) = nil
-  end
-
-  module CurrentCore
-    def core_updated_with_lich_version = (defined?(LICH_VERSION) ? LICH_VERSION : super)
-  end
-end
+require_relative 'offline_update'
 
 TracePoint.new(:end) do |tp|
   mod = tp.self
