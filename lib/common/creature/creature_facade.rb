@@ -8,6 +8,10 @@ module Lich
     # registry class with a private `instance_class`, and adds or overrides
     # only what differs for that game.
     #
+    # The methods typed `Object` or `Array` below return instances of the
+    # extending game's `instance_class`: `Lich::Gemstone::CreatureInstance`
+    # or `Lich::DragonRealms::CreatureInstance`.
+    #
     # @example
     #   module Creature
     #     extend Lich::Common::CreatureFacade
