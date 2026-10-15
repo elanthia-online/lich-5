@@ -47,7 +47,7 @@ module Lich
         #   arrival's UID
         # @return [Hash] any of :room_title, :room_id, :show_room_id,
         #   :nav_uid_pending
-        def main_subtitle(_subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
+        def main_subtitle(subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
           { room_title: String.new }
         end
 
