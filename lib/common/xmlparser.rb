@@ -477,16 +477,22 @@ module Lich
 
       # Stream dialect capabilities, observed per session.
       #
-      # The same game can send two dialects at once depending on the client
-      # identity Lich presents: the Saga identity (Frontend::CLIENT_STRING since
-      # #1700) gets object links and the <room> block, while front ends that send
-      # their own Wrayth handshake get the legacy stream. Parser paths that
+      # DragonRealms sends two dialects at once depending on the client identity
+      # Lich presents: the Saga identity (Frontend::CLIENT_STRING since #1700)
+      # gets object links and the <room> block, while front ends that send their
+      # own Wrayth handshake get the legacy stream, which has neither. GemStone's
+      # stream (Wrayth identity) also has object links, but no <room> block, so
+      # a feature says what this session's stream contains, not which game or
+      # identity it is: :links alone does not mean Saga. Parser paths that
       # depend on stream shape, not game semantics, branch on these instead of
       # on the game:
       #
       # - :links              an <a exist=...> object link has been seen
-      # - :room_element       a <room> block has been seen
-      # - :stow_container_tag a <container id='stow' target=...> has been seen
+      # - :room_element       a <room> block has been seen. Not every room
+      #                       arrives as one: a Saga session also gets some
+      #                       moves as the legacy room components.
+      # - :stow_container_tag a <container id='stow' target=...> has been seen.
+      #                       GemStone and the DR Saga stream send it at login.
       #
       # Cleared at login (<settingsInfo>); a mid-stream {#reset} keeps them,
       # since a desync does not change the dialect.
