@@ -17,8 +17,16 @@ RSpec.describe 'Lich::Common::XMLParser GemStone-only module guards' do
   end
 
   before do
-    hide_const('ActiveSpell')
-    hide_const('Gift')
+    # Production resolves the bare constants through `include Lich::Gemstone`
+    # on Object, and other spec files do the same at load time. hide_const on
+    # the bare name cannot remove a constant that is only reachable through an
+    # included module, so hide the namespaced definitions too, then assert the
+    # bare names really are gone (otherwise these examples pass vacuously).
+    %w[ActiveSpell Gift].each do |name|
+      hide_const(name)
+      hide_const("Lich::Gemstone::#{name}")
+      raise "#{name} still resolvable; guard spec would be vacuous" if Object.const_defined?(name)
+    end
     expect(parser).not_to receive(:reset)
   end
 
