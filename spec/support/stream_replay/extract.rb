@@ -19,7 +19,8 @@
 #      character, names in "Also here:" lists, whisper/speech speakers, the group
 #      stream, and any name listed in --scrub-names) is replaced by a stable fake
 #      name, word-bounded, everywhere; account names are replaced by ACCOUNT.
-#      Names in --keep are left alone.
+#      Names are collected from the whole cleaned log, not just the window.
+#      Names in --keep are left alone unless also listed in --scrub-names.
 #
 # The fixture gets a synthetic login header (settingsInfo/app char) so Lich
 # identifies the game and character and autostarts the replay probe.
@@ -54,9 +55,14 @@ module StreamReplay
     end
 
     def call(raw)
-      lines = clean(raw.lines)
-      lines = lines[window(lines)] || []
-      names = collect_names(lines) - @keep
+      cleaned = clean(raw.lines)
+      lines = cleaned[window(cleaned)]
+      # Names are collected from the whole log, not just the window: a player
+      # identified only outside the window (a link, an "Also here:" list) can
+      # still be named in plain text inside it. In-window names come first so
+      # their pseudonyms don't depend on the rest of the log. --scrub-names
+      # always wins over --keep.
+      names = (collect_names(lines) | collect_names(cleaned)) - (@keep - @scrub)
       map = names.each_with_index.to_h { |n, i| [n, PSEUDONYMS.fetch(i) { "Player#{i + 1}" }] }
       char_alias = map.fetch(@char, @char)
       body = lines.map { |l| scrub(l, map) }
@@ -68,9 +74,17 @@ module StreamReplay
     # Snaps --from/--to outward to prompt boundaries: the window starts just
     # after the prompt preceding --from and ends on the first prompt at or after
     # --to, so a fixture never begins or ends inside a server burst.
+    #
+    # @raise [ArgumentError] if --from is outside the cleaned log or --to
+    #   precedes it
     def window(lines)
       from = (@from || 1) - 1
       to = (@to || lines.length) - 1
+      unless from.between?(0, lines.length - 1)
+        raise ArgumentError, "--from #{from + 1} is outside the #{lines.length} cleaned lines"
+      end
+      raise ArgumentError, "--to #{to + 1} is before --from #{from + 1}" if to < from
+
       from -= 1 while from.positive? && !lines[from - 1].include?('<prompt')
       to += 1 while to < lines.length - 1 && !lines[to].include?('<prompt')
       from..to
@@ -95,7 +109,9 @@ module StreamReplay
         l.scan(/<a exist="-\d+" noun="([A-Z][a-z']+)"/) { |(n)| names << n }
         l.scan(/<preset id=['"](?:whisper|speech)['"]>(?:<a [^>]*>)?([A-Z][a-z']+)/) { |(n)| names << n }
         if (m = l.match(/Also here: (.*?)(?:<\/component>|\.?\s*\z)/))
-          plain = m[1].gsub(/<[^>]+>/, '')
+          # The list ends with a period ("... and X.</component>"); drop it so
+          # the last entry is a bare name like the others.
+          plain = m[1].gsub(/<[^>]+>/, '').sub(/\.\s*\z/, '')
           plain.split(/, | and /).each do |entry|
             entry = entry.sub(/ who .*\z/, '').sub(/ \(.*\)\z/, '').strip
             last = entry.split.last
@@ -146,5 +162,9 @@ if $PROGRAM_NAME == __FILE__
   end.parse!
   log, out = ARGV
   abort 'LOG and OUT are required' unless log && out && opts[:game] && opts[:char]
-  File.write(out, StreamReplay::Extract.new(**opts).call(File.read(log)))
+  begin
+    File.write(out, StreamReplay::Extract.new(**opts).call(File.read(log)))
+  rescue ArgumentError => e
+    abort e.message
+  end
 end
