@@ -1286,10 +1286,15 @@ module Lich
                     # assess backfill both produce. With links present the
                     # stream-order name capture below is skipped, so this is the
                     # sole name source.
+                    # The link's noun= is the server's noun and wins over the
+                    # name's last word ("a sleek golden panther with enigmatic
+                    # violet eyes" is a panther); it is occasionally sent padded
+                    # (noun=" moth"), hence the strip.
                     if @obj_exist && defined?(Lich::DragonRealms::Creature)
                       dr_name = "#{@dr_link_article}#{text_string}"
-                      dr_creature = Lich::DragonRealms::Creature.register(dr_name, @obj_exist, @obj_noun)
-                      dr_creature&.apply_room_name(dr_name)
+                      dr_noun = @obj_noun&.strip
+                      dr_creature = Lich::DragonRealms::Creature.register(dr_name, @obj_exist, dr_noun)
+                      dr_creature&.apply_room_name(dr_name, dr_noun)
                     end
                     @dr_link_article = nil
                   else
