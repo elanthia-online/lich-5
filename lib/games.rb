@@ -1540,7 +1540,8 @@ module Lich
 
       def process_game_specific_data(server_string, _stripped_server = nil)
         # Parse directly to allow inline modifications (e.g., inline exp display)
-        # The parser modifies server_string in place via line.replace()
+        # The parser modifies server_string in place via server_line.replace();
+        # its patterns match a link-stripped copy (DRParser.match_line)
         DRParser.parse(server_string)
       end
 
