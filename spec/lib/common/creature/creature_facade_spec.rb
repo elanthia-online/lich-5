@@ -48,4 +48,55 @@ RSpec.describe Lich::Common::CreatureFacade do
   ensure
     Lich::DragonRealms::Creature.clear
   end
+
+  # Each shared delegator forwards its arguments and reads its own game's
+  # registry, with no state leaking into the other game's registry.
+  {
+    Lich::Gemstone::Creature     => Lich::DragonRealms::Creature,
+    Lich::DragonRealms::Creature => Lich::Gemstone::Creature
+  }.each do |facade, other|
+    context "on #{facade}" do
+      around do |example|
+        saved = facade.stats.slice(:max_size, :auto_register, :cleanup_max_age)
+        facade.clear
+        other.clear
+        example.run
+      ensure
+        facade.configure(**saved)
+        facade.clear
+        other.clear
+      end
+
+      it 'forwards the noun to register' do
+        facade.register('a big kobold', 9101, 'beast')
+        expect(facade[9101].noun).to eq('beast')
+        expect(other[9101]).to be_nil
+      end
+
+      it 'reports the configured registry settings in stats' do
+        facade.configure(max_size: 7, auto_register: false, cleanup_max_age: 42)
+        expect(facade.stats).to include(instances: 0, max_size: 7, auto_register: false, cleanup_max_age: 42)
+        expect(other.stats[:max_size]).not_to eq(7)
+      end
+
+      it 'forwards an explicit age to cleanup_old' do
+        facade.register('a kobold', 9102, 'kobold')
+        facade.clear_room
+        facade.clear_room # out of the current and previous (sheltered) rosters
+        facade[9102].instance_variable_set(:@last_seen_at, Time.now - 100)
+        expect(facade.cleanup_old(1_000)).to eq(0)
+        expect(facade.cleanup_old(10)).to eq(1)
+        expect(facade.all).to be_empty
+      end
+
+      it 'lists in_room and clears only its own registry' do
+        facade.register('a kobold', 9103, 'kobold')
+        other.register('a kobold', 9103, 'kobold')
+        expect(facade.in_room.map(&:id)).to eq([9103])
+        facade.clear
+        expect(facade.all).to be_empty
+        expect(other.all.map(&:id)).to eq([9103])
+      end
+    end
+  end
 end
