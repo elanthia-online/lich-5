@@ -1220,7 +1220,8 @@ module Lich
                   @last_npc = GameObj.new_npc(@obj_exist, @obj_noun, text_string)
                   if XMLData.game =~ /^DR/
                     # The Saga-identity DR stream links creatures GemStone-style
-                    # (<pushBold/><pushBold/>a <a exist noun>jeol moradu</a>...).
+                    # (<pushBold/>a <a exist noun>jeol moradu</a><popBold/>, the
+                    # bold currently sent doubled; @bold is a flag, so either works).
                     # Register id-first with the inline noun via DR's own Creature
                     # (never the unqualified Gemstone Creature below, which is not
                     # loaded in DR). The name keeps the article that precedes the
