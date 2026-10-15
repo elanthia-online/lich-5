@@ -3,6 +3,7 @@ xmlparser.rb: Core lich file that defines the data extracted from SIMU's XML.
 =end
 
 require File.join(LIB_DIR, 'common', 'xml_entities.rb')
+require File.join(LIB_DIR, 'common', 'xmlparser', 'game_delta.rb')
 
 module Lich
   module Common
@@ -755,41 +756,13 @@ module Lich
           if (name == 'streamWindow')
             if (attributes['id'] == 'main') and attributes['subtitle']
               unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
-                if XMLData.game =~ /^GS/
-                  if Lich.display_uid == false && attributes['subtitle'][3..-1] =~ / - \d+$/
-                    Lich.display_uid = true
-                  end
-                  @room_title = '[' + attributes['subtitle'][3..-1].gsub(/ - \d+$/, '') + ']'
-                elsif XMLData.game =~ /^DR/
-                  # - [Bosque Deriel, Hermit's Shacks] (a trailing UID marker is present only when
-                  # the game's ShowRoomID flag is ON): " (230008)" for a room that has a UID, or
-                  # " (**)" for a room that has none. The <nav rm=.../> tag is the PRIMARY UID
-                  # source (see the nav handler above); this subtitle marker is only a FALLBACK
-                  # for arrivals where nav arrived late, was absent, or was a bare no-uid <nav/>.
-                  # When nav already supplied a real UID this arrival (@nav_uid_pending), leave
-                  # room_id alone so the subtitle never clobbers the authoritative nav value; the
-                  # subtitle consumes that flag either way, so the next arrival's marker (if its
-                  # nav is missing) is free to act as the fallback. When nav did not supply one, a
-                  # numeric marker sets the UID and "(**)" clears it to 0 (explicit "no UID",
-                  # dropping any stale id from a prior room). A ShowRoomID-OFF subtitle has no
-                  # marker at all, so room_id is left untouched (never write 0 blindly). The title
-                  # stays UID-free in every case. Guard the match: a blank/identity-less subtitle
-                  # (e.g. " - ") has no "[...]" and returns nil, so leave the prior title untouched
-                  # rather than crash.
-                  room = attributes['subtitle'].match(%r{(?<roomtitle>\[.*?\])(?:\s\((?<uid>\d+|\*+)\))?})
-                  if room
-                    @room_title = "[#{room[:roomtitle]}]"
-                    @room_id = (room[:uid] =~ /\A\d+\z/ ? room[:uid].to_i : 0) if room[:uid] && !@nav_uid_pending
-                    @nav_uid_pending = false
-                    # Record whether the game displayed the RealID this arrival (a UID
-                    # marker present == ShowRoomID ON) so the outbound room-name/subtitle
-                    # rewrite can preserve that choice GS-style. A marker-less subtitle
-                    # (flag OFF) leaves the previous room's flag stale, so clear it here.
-                    @show_room_id = !room[:uid].nil?
-                  end
-                else
-                  @room_title = String.new
-                end
+                # Game-specific grammar (GS " - [Room] - 1234", DR " - [Room] (230008)"):
+                # see Lich::Common::XMLParserDelta#main_subtitle.
+                update = XMLParserDelta.for(XMLData.game).main_subtitle(attributes['subtitle'], nav_uid_pending: @nav_uid_pending)
+                @room_title = update[:room_title] if update.key?(:room_title)
+                @room_id = update[:room_id] if update.key?(:room_id)
+                @nav_uid_pending = update[:nav_uid_pending] if update.key?(:nav_uid_pending)
+                @show_room_id = update[:show_room_id] if update.key?(:show_room_id)
               end
             end
           end
