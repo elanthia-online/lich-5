@@ -104,7 +104,8 @@ module StreamReplay
 
     def feed(conn, snapshot_path)
       @fixture.header_lines.each { |line| write_line(conn, line) }
-      wait_until(READY_TIMEOUT, 'probe ready') { File.exist?(snapshot_path) }
+      wait_until(READY_TIMEOUT, 'probe ready') { File.exist?(snapshot_path) && File.read(snapshot_path).include?("\n") }
+      verify_offline!(snapshot_path)
       # Warm-up prompt: header strings may still be queued when the probe starts,
       # so whatever they leave behind (stripped lines, state) is absorbed by this
       # snapshot, which read_snapshots discards. Body snapshots are deterministic.
@@ -127,6 +128,16 @@ module StreamReplay
         @warnings << "no snapshot for prompt line #{expected} (have #{actual}): #{line[0, 120].inspect}"
         expected = actual
       end
+    end
+
+    # The ready marker (line 1) carries the offline preload's self-check. A
+    # replay that may reach the network is refused rather than allowed to pass.
+    def verify_offline!(snapshot_path)
+      marker = JSON.parse(File.foreach(snapshot_path).first)
+      problems = marker.fetch('offline_problems', ['ready marker has no offline_problems'])
+      return if problems.empty?
+
+      raise "stream replay: the child is not offline (spec/support/stream_replay/offline_update.rb): #{problems.join('; ')}"
     end
 
     def write_line(conn, line)
