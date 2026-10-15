@@ -141,6 +141,19 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
       gameobj.commit_inv
     end
 
+    it 'gives up its worn refresh once it commits it, so a later list cannot publish an INV LIST scrape' do
+      feed(*worn_list(%w[1 cloak cloak])) # links the stream
+      feed(*worn_list(%w[2 helm helm])) # a staged refresh the parser opens and commits itself
+      expect(worn).to eq(%w[helm])
+      gameobj.begin_inv # an INV LIST scrape then owns the worn staging
+      gameobj.new_inv('3', 'boots', 'some boots')
+      feed(*worn_list(%w[4 mask mask]))
+
+      expect(gameobj.inv_refresh_open?).to be true
+      expect(worn).to eq(%w[helm])
+      gameobj.commit_inv
+    end
+
     it 'opens no worn refresh for the legacy plain-text list' do
       gameobj.new_inv('1', 'cloak', 'a wool cloak')
       feed("<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:", '  a wool cloak', '<popStream/>')
