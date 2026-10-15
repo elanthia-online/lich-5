@@ -1820,3 +1820,29 @@ RSpec.describe Lich::GameBase::Game, '.process_room_information' do
     expect(described_class.instance_variable_get(:@room_number_after_ready)).to be false
   end
 end
+
+# A Saga <room> block can arrive split across server strings (not normally; no
+# capture has one). Ox closes the open elements at the end of the first string
+# and ignores the stray closes in the second, so the parser stays balanced, the
+# desync guard does not reset it, and room_name still comes from <name>.
+RSpec.describe Lich::Common::XMLParser, 'on a Saga <room> block split across server strings' do
+  block = '<resource picture="0"/><room><name>[Area, Title] (230008)</name><description>A clearing here.</description>' \
+          '<exists>You also see a rock and a stick.</exists><crtrStatus exist="1" hostile="1"/>' \
+          '<players>Also here: Corwin.</players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>'
+
+  { 'description' => 'here.', 'exists' => 'and a stick', 'crtrStatus batch' => '<crtrStatus',
+    'players' => 'Corwin.', 'exits' => '<d>north', 'closing tag' => '</room>' }.each do |label, at|
+    it "keeps room_name and stays balanced when split in the #{label}" do
+      parser = described_class.new
+      cut = block.index(at)
+      [block[0...cut], block[cut..]].each do |fragment|
+        parser.sax_parse_errors.clear
+        Ox.sax_parse(parser, fragment, convert_special: false, symbolize: false, skip: :skip_none)
+        expect { Lich::GameBase::Game.check_stream_desync!(parser.sax_parse_errors) }.not_to raise_error
+      end
+      expect(parser.room_name).to eq('[Area, Title]')
+      expect(parser.stream_feature?(:room_element)).to be true
+      expect(parser.instance_variable_get(:@active_tags)).to be_empty
+    end
+  end
+end
