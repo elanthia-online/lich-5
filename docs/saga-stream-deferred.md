@@ -35,6 +35,7 @@ This file tracks what the Saga-dialect work has **not** verified or fixed yet. I
 | P4 | Titles containing an apostrophe (`War 'Tog X`) | same | Needs a spec first; GS behavior unknown | Fix with P1–P3 |
 | P5 | DR `GroupMembers` (`<pushStream id="group"/>  (?<member>\w+):`) misses a leader other than you (`  X (Leader): Healthy.`) and records `You` as a member | `drparser.rb` | **Pre-existing in both dialects.** Replay confirms the legacy stream uses the same `(Leader)` shape; not a Saga regression | Separate `fix(dr)` |
 | P6 | Legacy DR players splitter keeps a trailing period on the last name (`Chieftain X.`) | XMLParser DR players branch | Pre-existing legacy behavior; changing it alters legacy goldens | Separate `fix(dr)` with deliberate golden update |
+| P7 | Legacy DR players carry no status in `GameObj.pcs` (`who is ...` / `(...)` is parsed but dropped) | GameObj pc status is keyed by id; legacy players have none | Pre-existing; the Saga dialect's linked players do carry status | Separate `fix(dr)` if a consumer needs it |
 
 ## Corrections recorded during planning
 

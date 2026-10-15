@@ -88,6 +88,15 @@ module Lich
       # legitimately exceed it.
       SERVER_TIME_OFFSET_CLOCK_STEP_SECONDS = 0.25
 
+      # A bold run that is only an article: in the Saga-identity DR stream it
+      # precedes a linked creature (<pushBold/>a <a ...>jeol moradu</a>). Legacy
+      # DR bold runs are whole names and never match.
+      DR_LINKED_CREATURE_ARTICLE = /\A(?:an?|some|the) \z/i.freeze
+      # A complete legacy-dialect room players list: one tag-free text run. The
+      # Saga dialect's first fragment ("Also here: " or "Also here: Monster ")
+      # always ends in whitespace because a player link follows it.
+      DR_LEGACY_PLAYERS_RUN = /\AAlso here: .*\S\z/m.freeze
+
       def initialize
         @buffer = String.new
         # @unescape = { 'lt' => '<', 'gt' => '>', 'quot' => '"', 'apos' => "'", 'amp' => '&' }
@@ -143,6 +152,7 @@ module Lich
         # GemStone, which carries the name inline on the bold <a> tag.
         @dr_room_npc_names = []
         @dr_crtr_ids = []
+        @dr_link_article = nil
 
         @room_count = 0
         @room_title = String.new
@@ -301,6 +311,7 @@ module Lich
         # drop any captured names and collected ids.
         @dr_room_npc_names = []
         @dr_crtr_ids = []
+        @dr_link_article = nil
       end
 
       def safe_to_respond?
@@ -619,6 +630,7 @@ module Lich
               # zipped at the next <prompt>, gated on equal counts.
               @dr_room_npc_names = []
               @dr_crtr_ids = []
+              @dr_link_article = nil
             elsif attributes['id'] == 'room players'
               GameObj.begin_room_players
             elsif attributes['id'] == 'room exits'
@@ -1207,17 +1219,21 @@ module Lich
                 if @bold
                   @last_npc = GameObj.new_npc(@obj_exist, @obj_noun, text_string)
                   if XMLData.game =~ /^DR/
-                    # Future-proofing: DragonRealms room-objs creatures currently
-                    # carry no <a> tag, but if that ever changes to GemStone's
-                    # <a exist noun> shape, register id-first with the inline
-                    # name/noun via DR's own Creature (never the unqualified
-                    # Gemstone Creature below, which is not loaded in DR). With an
-                    # <a> present the stream-order capture branch is skipped, so
-                    # this becomes the sole name source - no double-set.
+                    # The Saga-identity DR stream links creatures GemStone-style
+                    # (<pushBold/><pushBold/>a <a exist noun>jeol moradu</a>...).
+                    # Register id-first with the inline noun via DR's own Creature
+                    # (never the unqualified Gemstone Creature below, which is not
+                    # loaded in DR). The name keeps the article that precedes the
+                    # link ("a jeol moradu"), the form the legacy stream and the
+                    # assess backfill both produce. With links present the
+                    # stream-order name capture below is skipped, so this is the
+                    # sole name source.
                     if @obj_exist && defined?(Lich::DragonRealms::Creature)
-                      dr_creature = Lich::DragonRealms::Creature.register(text_string, @obj_exist, @obj_noun)
-                      dr_creature&.apply_room_name(text_string)
+                      dr_name = "#{@dr_link_article}#{text_string}"
+                      dr_creature = Lich::DragonRealms::Creature.register(dr_name, @obj_exist, @obj_noun)
+                      dr_creature&.apply_room_name(dr_name)
                     end
+                    @dr_link_article = nil
                   else
                     creature = nil
                     if XMLData.current_target_ids.include?(@obj_exist) || @pending_crtr_status.key?(@obj_exist) || @mount_rider
@@ -1242,17 +1258,27 @@ module Lich
                   @mount_rider = nil
                 end
               elsif @bold && XMLData.game =~ /^DR/
-                # DragonRealms room-objs bold NPC names carry no <a> tag. Capture
-                # them in stream order so the <crtrStatus> batch that follows can
-                # pair the Nth name to the Nth id (see the crtrStatus handler).
-                # Only bold runs are names; the non-bold "(dead)"/"(immobile)"
-                # status runs fall through to the annotation branch below.
-                @dr_room_npc_names << text_string
+                if text_string.match?(DR_LINKED_CREATURE_ARTICLE)
+                  # Saga dialect: the bold text outside a link is the article
+                  # before a linked creature; keep it for that creature's name.
+                  # Decided by shape, not the session flag, so the very first
+                  # linked line of a session is handled too (legacy bold runs are
+                  # whole names, never a bare article).
+                  @dr_link_article = text_string
+                elsif !stream_feature?(:links)
+                  # Legacy dialect: bold NPC names carry no <a> tag. Capture
+                  # them in stream order so the <crtrStatus> batch that follows
+                  # can pair the Nth name to the Nth id (see the crtrStatus
+                  # handler). Only bold runs are names; the non-bold
+                  # "(dead)"/"(immobile)" status runs fall through to the
+                  # annotation branch below.
+                  @dr_room_npc_names << text_string
+                end
               elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
-                # @last_npc is nil in DragonRealms here (DR room-objs bold names
-                # carry no <a> tag, so the new_npc branch above never runs and
-                # never sets it), so the &. keeps this a safe no-op in DR while
-                # still annotating the last GemStone npc.
+                # @last_npc is nil in a legacy-dialect DR session (bold names
+                # carry no <a> tag, so the new_npc branch above never runs), so
+                # the &. keeps this a no-op there while annotating the last
+                # GemStone or Saga-dialect DR npc.
                 @last_npc&.status = $1
               end
               # GemStone: "<rider> who is riding <mount>". Its own check, not a
@@ -1278,7 +1304,13 @@ module Lich
                 @player_status = nil
                 @player_title = nil
               else
-                if @game =~ /^DR/
+                if @game =~ /^DR/ && !stream_feature?(:links) && text_string.match?(DR_LEGACY_PLAYERS_RUN)
+                  # Legacy dialect: players carry no <a> tag and arrive as one
+                  # complete text run, so split the plain text. The Saga dialect
+                  # links every player, so its runs are fragments between links
+                  # ("Also here: Monster ", ", Druid ", ".") and take the shared
+                  # title/status path below; splitting them would commit junk
+                  # entries and wipe the linked players.
                   GameObj.begin_room_players
                   text_string.sub(/^Also here\: /, '').sub(/ and ([^,]+)\./) { ", #{$1}" }.split(', ').each { |player|
                     if player =~ / who is (.+)/

@@ -37,10 +37,12 @@ DR_ASSESS = <<~XML.delete("\n")
   <prompt time="1785273425">R&gt;</prompt>
 XML
 
-# Future-proofing fixture: DragonRealms room-objs using GemStone's inline
-# <a exist noun> creature shape (does not occur today), plus the crtrStatus batch.
-DR_ROOM_WITH_A_TAGS = <<~XML.delete("\n")
-  <component id='room objs'>You also see <pushBold/><a exist="4001" noun="moradu">a jeol moradu</a><popBold/>, <pushBold/><a exist="4002" noun="kobold">a kobold</a><popBold/> and some junk.</component>
+# Saga-identity DR stream (Frontend::CLIENT_STRING since #1700), verbatim shape
+# with ids kept: creatures are linked GemStone-style, but the article sits
+# outside the link inside a doubled bold, and the crtrStatus batch follows the
+# component (GemStone sends it before each link).
+DR_SAGA_ROOM_OBJS = <<~XML.delete("\n")
+  <component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="4001" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), a <a exist="31028" noun="register">deed register</a>, <pushBold/><pushBold/>an <a exist="4002" noun="kobold">old kobold</a><popBold/><popBold/> and some junk.</component>
   <crtrStatus exist="4001" hostile="1" immobile="1"/><crtrStatus exist="4002" hostile="1"/><prompt time="1785273999">R&gt;</prompt>
 XML
 
@@ -54,8 +56,9 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
     allow(XMLData).to receive(:current_target_ids).and_return([])
     # The parser refers to GameObj unqualified, which resolves to
     # Lich::Common::GameObj (its lexical scope), so it must be stubbed there.
-    # DragonRealms room-objs carry no <a> tag, so GameObj is only touched for
-    # clear_* housekeeping and the status-annotation path (npcs&.last&.status=).
+    # Legacy-dialect DR room-objs carry no <a> tag, so GameObj is only touched
+    # for clear_* housekeeping and the status-annotation path; the Saga-dialect
+    # examples' new_npc/new_loot calls land on these stubs too.
     %i[clear_loot clear_npcs clear_pcs clear_room_desc new_npc new_loot].each do |m|
       allow(Lich::Common::GameObj).to receive(m)
     end
@@ -215,14 +218,11 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
     end
   end
 
-  describe 'future-proofing: GemStone-style <a exist noun> room-objs in DR' do
-    # If DragonRealms ever emits creatures with GemStone's inline <a exist noun>
-    # tag (the shape we already handle for GS), the DR path must register id-first
-    # from the inline name/noun -- and must not touch the unqualified Gemstone
-    # Creature (not loaded in DR). The stream-order capture branch is skipped when
-    # an <a> is present, so it degrades cleanly. Fixture: DR_ROOM_WITH_A_TAGS.
-    it 'registers id + name + noun + flags from the inline tag without raising' do
-      expect { feed(DR_ROOM_WITH_A_TAGS) }.not_to raise_error
+  describe 'Saga dialect: linked room-objs creatures' do
+    # No earlier linked line primes the session here, so this also covers the
+    # very first linked room-objs line of a session.
+    it 'registers id + noun + flags and keeps the article in the name, as the legacy stream does' do
+      expect { feed(DR_SAGA_ROOM_OBJS) }.not_to raise_error
 
       c1 = Lich::DragonRealms::Creature[4001]
       expect(c1.name).to eq('a jeol moradu')
@@ -230,12 +230,28 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(c1.has_status?('immobilized')).to be true
 
       c2 = Lich::DragonRealms::Creature[4002]
-      expect(c2.name).to eq('a kobold')
+      expect(c2.name).to eq('an old kobold')
+      expect(c2.noun).to eq('kobold')
       expect(c2.crtr_flag?(:hostile)).to be true
     end
 
+    it 'never renames a creature to the bare article at the prompt' do
+      feed(DR_SAGA_ROOM_OBJS)
+
+      names = Lich::DragonRealms::Creature.all.map(&:name)
+      expect(names).not_to include('a ', 'an ')
+      expect(Lich::DragonRealms::Creature.all.map(&:noun)).not_to include('a', 'an')
+    end
+
+    it 'keeps assess names across a later room-objs refresh' do
+      feed(DR_SAGA_ROOM_OBJS)
+      feed(DR_SAGA_ROOM_OBJS)
+
+      expect(Lich::DragonRealms::Creature[4001].name).to eq('a jeol moradu')
+    end
+
     it 'ties both creatures into the room roster' do
-      feed(DR_ROOM_WITH_A_TAGS)
+      feed(DR_SAGA_ROOM_OBJS)
 
       expect(Lich::DragonRealms::Creature.targets.map(&:id)).to contain_exactly(4001, 4002)
     end
