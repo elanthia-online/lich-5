@@ -771,6 +771,21 @@ RSpec.describe Lich::DragonRealms::DRParser do
         described_class.parse(server_line)
         expect(server_line).to eq('REWRITTEN')
       end
+
+      # The example above uses a link-free line, which match_line returns as the
+      # same object, so it passes whether the rewrite targets server_line or the
+      # normalized copy. This synthetic linked line (not a captured shape) makes
+      # match_line return a new string, so only a server_line rewrite passes.
+      it 'rewrites the server string, not the normalized copy, when the line carries links' do
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)
+        allow(Lich::DragonRealms::DRExpMonitor).to receive(:format_briefexp_off).and_return('REWRITTEN')
+        server_line = +%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>)
+
+        described_class.parse(server_line)
+        expect(server_line).to eq('REWRITTEN')
+        expect(Lich::DragonRealms::DRExpMonitor).to have_received(:format_briefexp_off)
+          .with("<component id='exp Athletics'>       Athletics: 1552 43% enthralled    0.00   </component>", 'Athletics', 'enthralled')
+      end
     end
   end
 
