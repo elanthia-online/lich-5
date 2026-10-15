@@ -61,7 +61,15 @@ RSpec.describe StreamReplay::Extract do
   it 'keeps the pseudonyms of names found inside the window stable' do
     # Out-of-window names are appended after in-window ones, so a fixture whose
     # window already identified everyone gets the same pseudonyms as before.
-    expect(body(extract)).to start_with("<component id='room players'>Also here: Sir Brenna and Corwin.")
+    # Gareth and Zed are identified before the window (lines 1-2); Yorick is
+    # identified inside it (lines 3-4), so he still gets the first pseudonym
+    # after the character, ahead of the earlier out-of-window names.
+    lines = ["<component id='room players'>Also here: Sir Gareth and Zed.</component>\n",
+             "<prompt time=\"1\">&gt;</prompt>\n",
+             "You also see <a exist=\"-7\" noun=\"Yorick\">Yorick</a>. Zed nods.\n",
+             "<prompt time=\"2\">&gt;</prompt>\n"]
+    out = body(described_class.new(game: 'DR', char: 'Hero', from: 3, to: 4).call(lines.join))
+    expect(out).to start_with('You also see <a exist="-7" noun="Brenna">Brenna</a>. Delphine nods.')
   end
 
   it 'leaves names listed in --keep alone' do
@@ -84,6 +92,8 @@ RSpec.describe StreamReplay::Extract do
 
   it 'rejects --from past the end of the log' do
     expect { extract(from: 99) }.to raise_error(ArgumentError, /--from/)
+    # With --to also past the end, the --to/--from order check can't catch it.
+    expect { extract(from: 99, to: 120) }.to raise_error(ArgumentError, /--from 99 is outside/)
   end
 
   it 'rejects --to before --from' do
