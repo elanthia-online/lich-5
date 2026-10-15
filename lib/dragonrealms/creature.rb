@@ -29,6 +29,7 @@
 # =============================================================================
 
 require_relative '../common/creature/creature_base'
+require_relative '../common/creature/creature_facade'
 require_relative 'drinfomon/drvariables' # DR_BALANCE_VALUES (assess balance parsing)
 
 module Lich
@@ -276,20 +277,16 @@ module Lich
 
     # Public Creature API for DragonRealms runtime creature tracking.
     #
-    # Mirrors `Lich::Gemstone::Creature`: registry/roster/query operations
-    # delegate to {CreatureInstance} (which carries the shared
-    # {Lich::Common::CreatureBase} class methods), plus the two DragonRealms feed
-    # entry points {sync} and {feed_assess} used by the XML parser.
+    # The registry/roster/query surface shared with `Lich::Gemstone::Creature`
+    # comes from {Lich::Common::CreatureFacade}, delegating to {CreatureInstance}
+    # (which carries the shared {Lich::Common::CreatureBase} class methods).
+    # DragonRealms adds the two feed entry points the XML parser uses: {sync}
+    # (id-first <crtrStatus>) and {feed_assess}.
     module Creature
-      # Toggles live echo of status, flag, and registration changes.
-      #
-      # @param level [Boolean, Symbol] false disables debug output; true or
-      #   `:changes` reports changes only; `:all` reports every `<crtrStatus>`
-      #   flag; `:active` reports only active `<crtrStatus>` flags.
-      # @return [Boolean, Symbol] the configured debug value.
-      def self.debug_on(level = :changes)
-        $creature_debug = level
-      end
+      extend Lich::Common::CreatureFacade
+
+      # @return [Class] the registry class the shared facade delegates to.
+      def self.instance_class = CreatureInstance
 
       # Applies a `<crtrStatus>` snapshot, registering the creature id-first if
       # it has not been seen yet.
@@ -327,91 +324,6 @@ module Lich
 
         instance.feed_assess(entry)
         instance
-      end
-
-      # Lookup creature instance by id.
-      #
-      # @param id [Integer, String] server creature id.
-      # @return [CreatureInstance, nil]
-      def self.[](id)
-        CreatureInstance[id]
-      end
-
-      # Returns attackable hostile creatures currently in the room, including
-      # once-hostile creatures now `sympathetic` (Sympathy 1120). Pass
-      # `:not_sympathetic` to exclude those.
-      #
-      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
-      # @return [Array<CreatureInstance>]
-      def self.targets(*filters)
-        CreatureInstance.targets(*filters)
-      end
-
-      # Returns all tracked creatures currently in the room.
-      #
-      # @param filters [Array<String, Symbol>] optional ANDed status/classification filters.
-      # @return [Array<CreatureInstance>]
-      def self.in_room(*filters)
-        CreatureInstance.in_room(*filters)
-      end
-
-      # Empties the current room roster.
-      #
-      # @return [void]
-      def self.clear_room
-        CreatureInstance.clear_room
-      end
-
-      # Registers a creature.
-      #
-      # @param name [String, nil] display name (may be nil for an id-first feed).
-      # @param id [Integer, String] server creature id.
-      # @param noun [String, nil] noun, when available.
-      # @return [CreatureInstance, nil]
-      def self.register(name, id, noun = nil)
-        CreatureInstance.register(name, id, noun)
-      end
-
-      # Configures the registry.
-      #
-      # @return [void]
-      def self.configure(**options)
-        CreatureInstance.configure(**options)
-      end
-
-      # @return [Hash] registry statistics.
-      def self.stats
-        {
-          instances: CreatureInstance.size,
-          max_size: CreatureInstance.max_size,
-          auto_register: CreatureInstance.auto_register?,
-          cleanup_max_age: CreatureInstance.cleanup_max_age
-        }
-      end
-
-      # Clears every instance and the room roster.
-      #
-      # @return [void]
-      def self.clear
-        CreatureInstance.clear
-      end
-
-      # Removes creatures unseen for longer than the given age (in seconds).
-      #
-      # Positional to match {CreatureInstance#cleanup_old} (supplied by
-      # {Lich::Common::CreatureBase}); a keyword-only signature would raise
-      # ArgumentError against the positional base method.
-      #
-      # @param max_age_seconds [Integer] age cutoff in seconds; defaults to
-      #   the configured cleanup_max_age.
-      # @return [Integer] number of instances removed.
-      def self.cleanup_old(max_age_seconds = CreatureInstance.cleanup_max_age)
-        CreatureInstance.cleanup_old(max_age_seconds)
-      end
-
-      # @return [Array<CreatureInstance>] every registered instance.
-      def self.all
-        CreatureInstance.all
       end
     end
   end
