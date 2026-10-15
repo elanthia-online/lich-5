@@ -665,7 +665,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
     end
   end
 
-  # The Saga-identity stream wraps names in <a exist noun> links and doubles the
+  # The Saga-identity stream wraps names in <a exist noun> links and (currently) doubles the
   # bold around linked creatures; the legacy stream does neither. Lines below are
   # verbatim Saga shapes (names pseudonymized) next to their legacy equivalents.
   describe 'Saga dialect object links' do
@@ -708,6 +708,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(described_class.match_line(line)).to eq('<pushBold/>a white-tailed leopard<popBold/>')
       end
 
+      # The doubled bold is a current server quirk; a single-bold linked line
+      # (the GemStone shape) must still lose its links and keep its one bold.
+      it 'strips links from a single-bold linked line and leaves the bold alone' do
+        line = '<pushBold/>a <a exist="1" noun="leopard">white-tailed leopard</a><popBold/>'
+        expect(described_class.match_line(line)).to eq('<pushBold/>a white-tailed leopard<popBold/>')
+      end
+
       it 'returns a link-free line unchanged, as the same object' do
         line = +"<component id='room objs'>You also see <pushBold/>a jeol moradu<popBold/>.</component>"
         expect(described_class.match_line(line)).to equal(line)
@@ -729,6 +736,13 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(saga[:dead_npcs]).to eq(['moradu'])
         expect(saga[:room_objs]).to include('pouch of lead pellets', 'junk')
         expect(saga[:room_objs].join).not_to include('<a ')
+      end
+
+      it 'derives the same DRRoom fields from a single-bold Saga room objs line as from its legacy equivalent' do
+        single_bold = saga_objs.gsub('<pushBold/><pushBold/>', '<pushBold/>').gsub('<popBold/><popBold/>', '<popBold/>')
+
+        expect(parse_room(single_bold)).to eq(parse_room(legacy_objs))
+        expect(parse_room(single_bold)[:dead_npcs]).to eq(['moradu'])
       end
 
       it 'does not report a doubled-bold dead creature as alive' do
