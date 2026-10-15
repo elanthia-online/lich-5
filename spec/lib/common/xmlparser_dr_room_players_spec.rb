@@ -44,6 +44,18 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms room players' do
                           [nil, 'Delphine', 'Druid Delphine', nil]
                         ])
     end
+
+    # The gate is the run's shape alone, not the session-long :links flag, so
+    # one stray <a exist> elsewhere in the stream cannot stop every later
+    # link-free list from splitting until the next login.
+    it 'still splits a complete list after a link elsewhere in the stream' do
+      feed('<a exist="-10514490" noun="Aldric">Aldric</a> waves.')
+      expect(parser.stream_feature?(:links)).to be true
+
+      feed(legacy)
+
+      expect(pcs.map { |pc| pc[1] }).to eq(%w[Aldric Brenna Corwin Delphine])
+    end
   end
 
   context 'Saga dialect' do
