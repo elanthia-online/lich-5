@@ -243,11 +243,15 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(Lich::DragonRealms::Creature.all.map(&:noun)).not_to include('a', 'an')
     end
 
-    it 'keeps assess names across a later room-objs refresh' do
+    it 'keeps the article-prefixed names on a later refresh, once the session is known to be linked' do
+      # The first feed is the session's first linked line (decided by shape);
+      # the second runs with stream_feature?(:links) already set.
       feed(DR_SAGA_ROOM_OBJS)
       feed(DR_SAGA_ROOM_OBJS)
 
       expect(Lich::DragonRealms::Creature[4001].name).to eq('a jeol moradu')
+      expect(Lich::DragonRealms::Creature[4002].name).to eq('an old kobold')
+      expect(Lich::DragonRealms::Creature[4002].noun).to eq('kobold')
     end
 
     it 'ties both creatures into the room roster' do
