@@ -98,6 +98,9 @@ module Lich
       DR_LEGACY_PLAYERS_RUN = /\AAlso here: .*\S\z/m.freeze
       # Text before the container link on a stow container's header line.
       STOW_HEADER = /\A(?:In|On|Under|Behind) the\z/.freeze
+      # The room number after a Saga <room><name> title: " (230008)", or
+      # " (**)" for a room without one.
+      SAGA_ROOM_NUMBER_SUFFIX = /\s*\((?:\d+|\*\*)\)\s*\z/.freeze
 
       def initialize
         @buffer = String.new
@@ -1239,9 +1242,13 @@ module Lich
             end
           end
 
-          if @current_style == 'roomName' || (@active_tags[-1] == 'name' && @active_tags[-2] == 'room')
-            # Legacy roomName style, or the Saga-identity <room><name> child.
+          if @current_style == 'roomName'
             @room_name = text_string.match(/(?<roomname>\[.*?\])/)[:roomname]
+          elsif @active_tags[-1] == 'name' && @active_tags[-2] == 'room'
+            # The Saga-identity <room><name> child. A name without a bracketed
+            # title keeps the text as sent, minus the room-number suffix,
+            # rather than going nil.
+            @room_name = text_string[/\[.*?\]/] || text_string.sub(SAGA_ROOM_NUMBER_SUFFIX, '').strip
           end
 
           if @active_tags.include?('inv')
