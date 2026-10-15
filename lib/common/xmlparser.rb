@@ -660,13 +660,15 @@ module Lich
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
             #
-            # DragonRealms differs: its room-objs carry no per-creature <a exist>
-            # tag, so there is no text() path to defer to. Its <crtrStatus> tags
-            # arrive batched after the room-objs component and carry their own id,
-            # so flags are applied immediately, id-first. The name is backfilled
-            # two ways: the stream-order pairing (bold room-objs names zipped to
-            # this batch's ids at the next <prompt>, gated on equal counts) and,
-            # authoritatively, later from the assess stream (see
+            # DragonRealms differs: its <crtrStatus> tags arrive batched after
+            # the room-objs component and carry their own id, so there is no
+            # later text() path to defer to and flags are applied immediately,
+            # id-first. The name comes from room-objs: in the Saga-identity
+            # dialect from the linked <a exist noun> creature, registered by the
+            # text() path before this batch arrives; in the legacy dialect (no
+            # <a> tag) from the stream-order pairing (bold room-objs names zipped
+            # to this batch's ids at the next <prompt>, gated on equal counts).
+            # Either way the assess stream later names it authoritatively (see
             # lib/dragonrealms/creature.rb).
             crtr_id = attributes['exist']
             if crtr_id
