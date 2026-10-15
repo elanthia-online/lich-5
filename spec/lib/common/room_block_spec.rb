@@ -35,6 +35,23 @@ RSpec.describe Lich::Common::RoomBlock do
       )
     end
 
+    it 'omits an empty exits part instead of leaving a blank line' do
+      block = '<room><name>[A] (1)</name><description>D.</description><exists></exists>' \
+              '<players>Also here: Corwin.</players><exits></exits><extra>A sign hangs here.</extra></room>'
+      expect(described_class.legacy_shape(block).split("\r\n", -1)).to eq([
+                                                                            '<style id="roomName" />[A] (1)',
+                                                                            %(<style id=""/><preset id='roomDesc'>D.</preset>),
+                                                                            'Also here: Corwin.',
+                                                                            'A sign hangs here.'
+                                                                          ])
+    end
+
+    it 'keeps the between-part tags on their own line when players and exits are both empty' do
+      block = '<room><name>[A] (1)</name><description>D.</description><crtrStatus exist="1" hostile="1"/>' \
+              '<players></players><exits></exits><extra></extra></room>'
+      expect(described_class.legacy_shape(block).lines.last).to eq('<crtrStatus exist="1" hostile="1"/>')
+    end
+
     it 'keeps a non-empty extra part as its own line' do
       block = '<room><name>[A] (1)</name><description>D.</description><exists></exists><players></players>' \
               '<exits>Obvious paths: none.</exits><extra>A sign hangs here.</extra></room>'
