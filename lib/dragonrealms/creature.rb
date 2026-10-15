@@ -144,8 +144,9 @@ module Lich
       #
       # Two producers call this, both via the XML parser: the stream-order
       # backfill that pairs the Nth bold room-objs name with the Nth
-      # `<crtrStatus>` id, and (future-proofing) a GemStone-style
-      # `<a exist noun>` room-objs tag if DragonRealms ever emits one. The
+      # `<crtrStatus>` id (legacy dialect), and the linked room-objs creature
+      # (`<a exist noun>`) of the Saga-identity dialect, named with the article
+      # that precedes the link ("a jeol moradu"). The
       # `assess` stream is the authoritative id<->name tie, so once #feed_assess
       # has named the creature this is a no-op. A nil name (e.g. an out-of-range
       # positional lookup, the count-guard) is ignored, leaving any existing name
