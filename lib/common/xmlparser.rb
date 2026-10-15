@@ -1288,11 +1288,14 @@ module Lich
                   # annotation branch below.
                   @dr_room_npc_names << text_string
                 end
-              elsif (text_string =~ /that (?:is|appears) ([\w\s]+)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
+              elsif (text_string =~ /(?:that|which) (?:is|appears) ([\w\s]+?)(?:,| and|\.)/) or (text_string =~ / \(([^\(]+)\)/)
                 # @last_npc is nil in a legacy-dialect DR session (bold names
                 # carry no <a> tag, so the new_npc branch above never runs), so
                 # the &. keeps this a no-op there while annotating the last
-                # GemStone or Saga-dialect DR npc.
+                # GemStone or Saga-dialect DR npc. GemStone words it "that
+                # is/appears ..."; DragonRealms uses "(dead)" and "which appears
+                # dead". The lazy capture stops at the first separator, so DR's
+                # one-run tail " which appears dead and some junk." gives "dead".
                 @last_npc&.status = $1
               end
               # GemStone: "<rider> who is riding <mount>". Its own check, not a
