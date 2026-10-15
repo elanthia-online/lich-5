@@ -103,6 +103,8 @@ module StreamReplay
     end
 
     def feed(conn, snapshot_path)
+      @snapshot_bytes = 0
+      @snapshot_lines = 0
       @fixture.header_lines.each { |line| write_line(conn, line) }
       wait_until(READY_TIMEOUT, 'probe ready') { File.exist?(snapshot_path) && File.read(snapshot_path).include?("\n") }
       verify_offline!(snapshot_path)
@@ -145,10 +147,18 @@ module StreamReplay
       conn.flush
     end
 
+    # Polled every few ms, so it reads only what the probe appended since the
+    # last call instead of re-reading the whole file. Counts complete lines.
     def snapshot_count(path)
       return 0 unless File.exist?(path)
 
-      File.foreach(path).count - 1 # first line is the ready marker
+      File.open(path, 'rb') do |f|
+        f.seek(@snapshot_bytes)
+        appended = f.read
+        @snapshot_bytes += appended.bytesize
+        @snapshot_lines += appended.count("\n")
+      end
+      @snapshot_lines - 1 # first line is the ready marker
     end
 
     def wait_until(timeout, what, raise_on_timeout: true)
