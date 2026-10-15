@@ -497,10 +497,14 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
         --test --platinum
       ]
       help = ([nil] + Lich::Main::HelpText::HELP_TOPICS).map { |topic| Lich::Main::HelpText.render(topic) }.join("\n")
-      options = help.scan(/--[a-z][a-z0-9-]*/).uniq - not_login_options
+      # Keep a trailing '=' so --opt=VALUE options are checked in that form:
+      # NON_INSTANCE_OPTION_KEYS matches the key before '=', NON_INSTANCE_FLAGS
+      # matches only the whole arg.
+      options = help.scan(/--[a-z][a-z0-9-]*=?/).uniq.reject { |opt| not_login_options.include?(opt.chomp('=')) }
 
-      expect(options).to include('--login', '--pipe', '--log-dir')
-      options.each do |arg|
+      expect(options).to include('--login', '--pipe', '--log-dir=')
+      options.each do |opt|
+        arg = opt.end_with?('=') ? "#{opt}x" : opt
         expect(described_class.resolve_instance(['--login', 'Tsetem', arg])).not_to be_nil, arg
       end
     end
