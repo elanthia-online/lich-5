@@ -52,25 +52,25 @@ snapshot = lambda do
   snap = {}
   snap['xmldata'] = safe.call do
     {
-      'room_title'         => XMLData.room_title,
-      'room_name'          => XMLData.room_name,
-      'room_description'   => XMLData.room_description,
-      'room_exits'         => XMLData.room_exits,
-      'room_exits_string'  => XMLData.room_exits_string,
-      'room_id'            => XMLData.room_id,
-      'room_count'         => XMLData.room_count,
-      'show_room_id'       => XMLData.show_room_id,
+      'room_title'           => XMLData.room_title,
+      'room_name'            => XMLData.room_name,
+      'room_description'     => XMLData.room_description,
+      'room_exits'           => XMLData.room_exits,
+      'room_exits_string'    => XMLData.room_exits_string,
+      'room_id'              => XMLData.room_id,
+      'room_count'           => XMLData.room_count,
+      'show_room_id'         => XMLData.show_room_id,
       'room_window_disabled' => XMLData.room_window_disabled,
-      'stow_container_id'  => XMLData.stow_container_id,
-      'indicator'          => XMLData.indicator.to_h.sort.to_h,
-      'injuries'           => XMLData.injuries.to_h.sort.to_h,
-      'injury_mode'        => XMLData.injury_mode,
-      'vitals'             => {
+      'stow_container_id'    => XMLData.stow_container_id,
+      'indicator'            => XMLData.indicator.to_h.sort.to_h,
+      'injuries'             => XMLData.injuries.to_h.sort.to_h,
+      'injury_mode'          => XMLData.injury_mode,
+      'vitals'               => {
         'health' => XMLData.health, 'mana' => XMLData.mana, 'stamina' => XMLData.stamina,
         'spirit' => XMLData.spirit, 'concentration' => XMLData.concentration
       },
-      'prepared_spell'     => XMLData.prepared_spell,
-      'dr_active_spells'   => (XMLData.dr_active_spells || {}).sort.to_h
+      'prepared_spell'       => XMLData.prepared_spell,
+      'dr_active_spells'     => (XMLData.dr_active_spells || {}).sort.to_h
     }
   end
   snap['gameobj'] = safe.call do
