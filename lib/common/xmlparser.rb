@@ -494,7 +494,8 @@ module Lich
         @stream_features.include?(feature)
       end
 
-      # @return [Array<Symbol>] the observed capabilities, sorted (read-only copy)
+      # @return [Array<Symbol>] the observed capabilities, sorted. A fresh copy:
+      #   mutating it does not change the parser.
       def stream_features
         @stream_features.to_a.sort
       end
