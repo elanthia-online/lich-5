@@ -8,9 +8,11 @@ require 'common/xmlparser'
 # Worn-items and stow-container streams, through the real GameObj.
 #
 # The Saga-identity stream (Frontend::CLIENT_STRING since #1700) links every
-# item in both. DragonRealms never sends GemStone's <container id='stow'>, so the
-# stow container is named only by its header line. Shapes are verbatim from DR
-# captures (ids kept); the legacy dialect sends the same streams as plain text.
+# item in both. Like GemStone, it sends <container id='stow' target=...> at
+# login; a parser that missed the login (the replay fixtures, whose login is
+# synthetic) has only the feed's header line to name the stow container. Shapes
+# are verbatim from DR captures (ids kept) unless an example says otherwise; the
+# legacy dialect sends the same streams as plain text.
 RSpec.describe 'Lich::Common::XMLParser inventory streams' do
   subject(:parser) { Lich::Common::XMLParser.new }
 
@@ -49,7 +51,7 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
     (gameobj.inv || []).map(&:noun)
   end
 
-  describe 'stow container (DragonRealms: no <container id=stow>)' do
+  describe 'stow container (DragonRealms, no <container id=stow> seen)' do
     it "learns the stow container from its header on the first refresh and files the items under it" do
       feed(stow_refresh('195648378', %w[195648534 nugget massive\ copper\ nugget], %w[195648529 pouch soft\ gem\ pouch]), prompt)
 
@@ -115,10 +117,39 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
     end
 
     it "keeps GemStone's authoritative <container id='stow'> even when a header names another container" do
+      allow(XMLData).to receive(:game).and_return('GS')
+      parser.instance_variable_set(:@game, 'GS')
       feed(%(<container id='stow' title='My Backpack' target='#7001' location='right' save='' resident='true'/>))
       feed(stow_refresh('9999', %w[1 gem gem]), prompt)
 
       expect(parser.stow_container_id).to eq('7001')
+      expect(gameobj.containers.keys).to eq(['7001'])
+    end
+  end
+
+  describe "stow container (DragonRealms after a login's <container id=stow>)" do
+    login_tag = %(<container id='stow' title='My Pack' target='#195648378' location='right' save='' resident='true'/>)
+
+    it 'files the stow refresh under the container the tag names' do
+      feed(login_tag, stow_refresh('195648378', %w[1 nugget nugget]), prompt)
+
+      expect(parser.stow_container_id).to eq('195648378')
+      expect(contents('195648378')).to eq(%w[nugget])
+      expect(worn).to be_empty
+    end
+
+    it 'files a feed whose header names another container under that container, not the stow container' do
+      # e.g. a pack another character handed over, held in hand: the stow feed
+      # lists it under its own header
+      feed(login_tag, stow_refresh('195648378', %w[1 nugget nugget]), prompt)
+      feed(stow_refresh('200000002', %w[5 almanac almanac], %w[6 skates skates]), prompt)
+
+      expect(parser.stow_container_id).to eq('195648378')
+      expect(contents('195648378')).to eq(%w[nugget])
+      expect(contents('200000002')).to eq(%w[almanac skates])
+
+      feed(stow_refresh('195648378', %w[1 nugget nugget], %w[7 gem gem]), prompt)
+      expect(contents('195648378')).to eq(%w[nugget gem])
     end
   end
 
