@@ -81,7 +81,7 @@ module Lich
 
           downloaded_scripts.each { |f| table_rows << ['script', f, 'downloaded'] }
           failed_scripts.each { |f| table_rows << ['script', f, 'FAILED (will retry next login)'] }
-          held_scripts.each { |f, required| table_rows << ['script', f, "needs Lich #{required}+ (kept local copy)"] }
+          held_scripts.each { |f, required| table_rows << ['script', f, "needs Lich #{required}+ (not updated)"] }
 
           downloaded_other.each do |subdir, files|
             files.each { |f| table_rows << [subdir, f, 'downloaded'] }

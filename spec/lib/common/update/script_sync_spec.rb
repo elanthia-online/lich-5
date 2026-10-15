@@ -331,7 +331,7 @@ RSpec.describe Lich::Util::Update::ScriptSync do
 
       described_class.render_sync_summary('Req', 1, [], {}, [], [], {}, [['needy.lic', '5.23.0']])
 
-      expect(output).to include('needy.lic', 'needs Lich 5.23.0+ (kept local copy)', '1 need newer Lich')
+      expect(output).to include('needy.lic', 'needs Lich 5.23.0+ (not updated)', '1 need newer Lich')
       expect(output).not_to include('all up to date')
     end
   end
