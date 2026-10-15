@@ -51,3 +51,24 @@ RSpec.describe 'stream replay goldens', :slow do
     end
   end
 end
+
+# What reaches the client for the Saga-identity <room> block, per front end:
+# only Saga (:room_element) gets the raw block; every other front end gets the
+# legacy roomName layout it already renders, and Wizard its GSL room codes.
+RSpec.describe 'stream replay: <room> block per front end', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
+  rooms = 34 # <room> blocks in the fixture
+
+  {
+    nil      => { '<room>' => 0, '<style id="roomName"' => rooms },
+    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms },
+    'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0 },
+    'wizard' => { '<room>' => 0, "\034GSo" => rooms }
+  }.each do |frontend, expected|
+    it "delivers #{expected.map { |k, v| "#{v} x #{k.inspect}" }.join(', ')} to #{frontend || 'a headless pipe'}" do
+      result = StreamReplay::Driver.new(fixture, frontend: frontend).run
+      expect(result.warnings).to be_empty
+      expected.each { |marker, count| expect(result.stdout.scan(marker).size).to eq(count), marker.inspect }
+    end
+  end
+end

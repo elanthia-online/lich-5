@@ -1820,3 +1820,69 @@ RSpec.describe Lich::GameBase::Game, '.process_room_information' do
     expect(described_class.instance_variable_get(:@room_number_after_ready)).to be false
   end
 end
+
+# The Saga-identity stream's inline <room> block reaches only front ends that
+# render it (:room_element, Saga); every other front end gets the legacy layout.
+RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> block' do
+  saga_room = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n)
+
+  def eventually(timeout: 1)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+    loop do
+      begin
+        return yield
+      rescue RSpec::Expectations::ExpectationNotMetError
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.005
+      end
+    end
+  end
+
+  before do
+    allow(Lich).to receive(:log)
+    allow(Lich).to receive(:display_lichid).and_return(false)
+    allow(Lich).to receive(:display_uid).and_return(false)
+    allow(Lich).to receive(:hide_uid_flag).and_return(false)
+    stub_const('DownstreamHook', Lich::Common::DownstreamHook)
+    stub_const('Frontend', Lich::Common::Frontend)
+    @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
+    $_DETACHABLE_CLIENT_REGISTRY_ = nil
+    $_DETACHABLE_CLIENT_ = nil
+    $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+  end
+
+  after do
+    $_CLIENT_.close rescue nil
+    $_CLIENT_ = nil
+    $frontend = nil
+    described_class.instance_variable_set(:@room_number_after_ready, false)
+  end
+
+  it 'passes the block through unchanged to Saga (behind its origin sentinel)' do
+    $frontend = 'saga'
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{saga_room}") }
+  end
+
+  %w[wrayth genie profanity frostbite].each do |fe|
+    it "rewrites the block to the legacy roomName/roomDesc layout for #{fe}" do
+      $frontend = fe
+      described_class.send(:process_downstream_hooks, +saga_room)
+      eventually do
+        expect(@raw_socket).to have_received(:write).with(
+          %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
+          %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>\r\n) +
+          %(Obvious paths: <d>north</d>.\r\n)
+        )
+      end
+    end
+  end
+
+  it 'still arms the room display after rewriting' do
+    $frontend = 'wrayth'
+    described_class.send(:process_downstream_hooks, +saga_room)
+    expect(described_class.instance_variable_get(:@room_number_after_ready)).to be true
+  end
+end

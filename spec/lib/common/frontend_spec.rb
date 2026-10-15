@@ -836,6 +836,15 @@ RSpec.describe Lich::Common::Frontend do
     end
   end
 
+  describe '.supports_room_element?' do
+    it 'is true only for Saga, the front end that renders the inline <room> block' do
+      expect(frontend.supports_room_element?('saga')).to be true
+      %w[wrayth stormfront genie profanity frostbite wizard avalon suks unknown].each do |fe|
+        expect(frontend.supports_room_element?(fe)).to be(false), fe
+      end
+    end
+  end
+
   describe '.has_capability?' do
     it 'returns true for registered capabilities' do
       expect(frontend.has_capability?('wrayth', :xml)).to be true

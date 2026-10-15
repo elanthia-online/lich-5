@@ -17,7 +17,7 @@ module Lich
   module Common
     module Frontend
       PLATFORM_KEYS = %i[darwin linux windows unsupported].freeze
-      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel].freeze
+      CAPABILITY_VOCABULARY = %i[xml gsl streams mono room_window sentinel room_element].freeze
       BUILT_IN_DEFINITION_FILES = [
         %w[stormfront wrayth],
         %w[profanity profanity],
@@ -546,6 +546,13 @@ module Lich
 
       def self.supports_room_window?(fe = $frontend)
         has_capability?(fe, :room_window)
+      end
+
+      # Whether the front end renders the Saga-identity stream's inline <room>
+      # block itself. Others get it rewritten to the legacy roomName/roomDesc
+      # layout (see Lich::Common::RoomBlock).
+      def self.supports_room_element?(fe = $frontend)
+        has_capability?(fe, :room_element)
       end
 
       # The running session also gets the sentinel when --sentinel asked for

@@ -3,6 +3,7 @@
 require 'openssl'
 require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
+require_relative 'common/room_block'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -1136,6 +1137,13 @@ module Lich
 
         def process_downstream_hooks(server_string)
           if (alt_string = DownstreamHook.run(server_string))
+            # The Saga-identity stream's inline <room> block reaches only front
+            # ends that render it (Saga); every other front end gets the legacy
+            # roomName/roomDesc layout it already handles. Rewritten before the
+            # room-number and Wizard (sf_to_wiz) conversions, which key on it.
+            if alt_string.include?('<room>') && !Frontend.supports_room_element?
+              alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string)
+            end
             process_room_information(alt_string)
 
             # Handle frontend-specific modifications
