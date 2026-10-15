@@ -1321,13 +1321,16 @@ module Lich
                 @player_status = nil
                 @player_title = nil
               else
-                if @game =~ /^DR/ && !stream_feature?(:links) && text_string.match?(DR_LEGACY_PLAYERS_RUN)
+                if @game =~ /^DR/ && text_string.match?(DR_LEGACY_PLAYERS_RUN)
                   # Legacy dialect: players carry no <a> tag and arrive as one
                   # complete text run, so split the plain text. The Saga dialect
                   # links every player, so its runs are fragments between links
                   # ("Also here: Monster ", ", Druid ", ".") and take the shared
                   # title/status path below; splitting them would commit junk
-                  # entries and wipe the linked players.
+                  # entries and wipe the linked players. Decided by the run's
+                  # shape alone: no fragment of a linked list can match, and the
+                  # session-long :links flag would let one stray link anywhere
+                  # stop every later link-free list from splitting.
                   GameObj.begin_room_players
                   text_string.sub(/^Also here\: /, '').sub(/ and ([^,]+)\./) { ", #{$1}" }.split(', ').each { |player|
                     if player =~ / who is (.+)/
