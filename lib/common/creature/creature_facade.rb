@@ -5,13 +5,14 @@ module Lich
     # The script-facing `Creature` module both games expose over their creature
     # registry, composed like {CreatureBase} (and lib/common/map): the shared
     # surface lives here, and each game's `module Creature` extends it, names its
-    # registry class with `instance_class`, and adds or overrides only what
-    # differs for that game.
+    # registry class with a private `instance_class`, and adds or overrides
+    # only what differs for that game.
     #
     # @example
     #   module Creature
     #     extend Lich::Common::CreatureFacade
     #     def self.instance_class = CreatureInstance
+    #     private_class_method :instance_class
     #   end
     module CreatureFacade
       # Toggles live echo of status, flag, and registration changes.
