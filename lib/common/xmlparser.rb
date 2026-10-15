@@ -113,6 +113,10 @@ module Lich
         # A stow clearContainer seen this burst (see the stow header learning in
         # tag_start); cleared at the prompt that ends the burst.
         @stow_clear_pending = false
+        # The container the current stow feed's header named, when that is not
+        # the stow container (see #learn_stow_container); cleared when the next
+        # feed starts (clearContainer).
+        @stow_feed_id = nil
         # Whether the parser itself opened the worn-inventory staging for the
         # current pushStream id='inv' (so it commits only its own refresh).
         @inv_stream_staging = false
@@ -311,6 +315,7 @@ module Lich
         # opened, so it no longer owns one.
         @inv_stream_staging = false
         @stow_clear_pending = false
+        @stow_feed_id = nil
         # A <crtrStatus> tag can be fully parsed and cached here while the
         # matching bold <a> text is still in an as-yet-unparsed remainder of
         # the fragment. If a malformed/truncated fragment forces a reset in
@@ -528,22 +533,38 @@ module Lich
       end
       private :observe_stream_feature
 
-      # The stow container's header line names it: <inv id='stow'>In the
-      # <a exist="195648378" noun="pack">pack</a>:</inv>. When no authoritative
-      # <container id='stow' target=...> has been seen (DragonRealms never sends
-      # one), take the stow container id from that header, so the header is
-      # skipped as the container itself and its items land in its contents
-      # rather than in worn inventory. A stow clearContainer seen this burst
-      # opens its refresh here when the id was not yet known; a refresh it
-      # opened under a previous stow container is abandoned (that container
-      # keeps its published contents) and reopened under the new id.
+      # The stow feed's header line names the container it lists:
+      # <inv id='stow'>In the <a exist="195648378" noun="pack">pack</a>:</inv>.
+      # GemStone and the DragonRealms Saga-identity stream send <container
+      # id='stow' target=...> at login, and that tag stays the authoritative
+      # stow container id. When none has been seen (a parser that missed the
+      # login, such as a replay with a synthetic login), the stow container id
+      # is taken from the header instead. (The DR legacy feed is plain text and
+      # names no container.)
+      #
+      # Either way the header is skipped as the container itself and the items
+      # after it land in its contents rather than in worn inventory. On
+      # DragonRealms the feed can also list a container that is not the stow
+      # container (a pack handed over by another character), so there the
+      # items go under the container the header names even when the tag is
+      # known, and the stow container keeps its published contents. GemStone
+      # files them under the tag's container, as before.
+      #
+      # A stow clearContainer seen this burst opens its refresh here when the
+      # id was not yet known; a refresh it opened under another container is
+      # abandoned (that container keeps its published contents) and reopened
+      # under the named one.
       def learn_stow_container(exist)
-        return if exist.nil? || stream_feature?(:stow_container_tag)
+        return if exist.nil?
         return unless @active_tags.include?('inv') && @active_ids.include?('stow')
         return unless @obj_before_name.to_s.match?(STOW_HEADER)
 
+        tagged = stream_feature?(:stow_container_tag)
+        return if tagged && XMLData.game !~ /^DR/
+
         previous = @stow_container_id
-        @stow_container_id = exist
+        @stow_container_id = exist unless tagged
+        @stow_feed_id = exist == @stow_container_id ? nil : exist
         @obj_location = exist
         return unless @stow_clear_pending && previous != exist
 
@@ -714,7 +735,7 @@ module Lich
           end
           if name == 'inv'
             if attributes['id'] == 'stow'
-              @obj_location = @stow_container_id
+              @obj_location = @stow_feed_id || @stow_container_id
             else
               @obj_location = attributes['id']
             end
@@ -890,10 +911,11 @@ module Lich
 
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
-              # Until the stow container's id is known (DragonRealms sends no
-              # <container id='stow'>), the refresh opens when its header line
+              # Until the stow container's id is known (no <container
+              # id='stow'> seen yet), the refresh opens when its header line
               # names the container; see #learn_stow_container.
               @stow_clear_pending = true
+              @stow_feed_id = nil
               GameObj.begin_container(@stow_container_id) if @stow_container_id
             else
               GameObj.begin_container(attributes['id'])
