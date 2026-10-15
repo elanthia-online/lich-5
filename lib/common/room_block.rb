@@ -21,12 +21,6 @@ module Lich
 
       module_function
 
-      # @param server_string [String]
-      # @return [Boolean] whether +server_string+ carries a complete <room> block
-      def block?(server_string)
-        server_string.include?('<room>') && server_string.match?(BLOCK)
-      end
-
       # Rewrites a <room> block into the legacy stream's layout, so code written
       # for the legacy stream (script line matching, room-number display, the
       # Wizard converter, front ends that do not understand <room>) sees the
