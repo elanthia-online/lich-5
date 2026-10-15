@@ -139,26 +139,32 @@ module Lich
         @enriched_at = Time.now
       end
 
-      # Applies a name learned from the room-objs stream, and derives the attack
-      # noun from it.
+      # Applies a name learned from the room-objs stream, with its attack noun.
       #
       # Two producers call this, both via the XML parser: the stream-order
       # backfill that pairs the Nth bold room-objs name with the Nth
       # `<crtrStatus>` id (legacy dialect), and the linked room-objs creature
       # (`<a exist noun>`) of the Saga-identity dialect, named with the article
-      # that precedes the link ("a jeol moradu"). The
+      # that precedes the link ("a jeol moradu"). The linked creature passes the
+      # link's `noun=`, which is the server's noun and wins: it need not be the
+      # last word of the name ("a sleek golden panther with enigmatic violet
+      # eyes" has noun "panther"). Without one (legacy) the noun is derived from
+      # the name's last word. The
       # `assess` stream is the authoritative id<->name tie, so once #feed_assess
       # has named the creature this is a no-op. A nil name (e.g. an out-of-range
       # positional lookup, the count-guard) is ignored, leaving any existing name
       # intact.
       #
       # @param name [String, nil] display name from the room-objs stream.
+      # @param noun [String, nil] the server's noun (the link's `noun=`); nil or
+      #   blank derives it from the name. Surrounding whitespace is trimmed.
       # @return [void]
-      def apply_room_name(name)
+      def apply_room_name(name, noun = nil)
         return if name.nil? || @name_from_assess
 
+        noun = noun&.strip
         @name = name
-        @noun = derive_noun(name)
+        @noun = noun.nil? || noun.empty? ? derive_noun(name) : noun
       end
 
       # Whether this creature should be considered attackable.
