@@ -61,7 +61,7 @@ module Lich
         lines << "#{between}#{players}" unless players.empty?
         exits = part(body, 'exits')
         exits = "#{between}#{exits}" if players.empty?
-        lines << exits
+        lines << exits unless exits.empty?
         lines << extra unless extra.empty?
         lines.join("\r\n")
       end
