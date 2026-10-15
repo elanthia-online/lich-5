@@ -147,6 +147,58 @@ RSpec.describe Lich::Common::GUI::CharacterGenerator do
 
       expect(auth_gui).not_to have_received(:authenticate_and_launch)
     end
+
+    it "preselects the account's usual frontend without re-running discovery" do
+      write_characters([
+                         { 'char_name' => 'Alpha', 'game_code' => 'DR', 'frontend' => 'genie' },
+                         { 'char_name' => 'Beta', 'game_code' => 'DR', 'frontend' => 'genie' },
+                         { 'char_name' => 'Gamma', 'game_code' => 'DR', 'frontend' => 'wizard' }
+                       ])
+
+      show_dialog
+
+      expect(Lich::Common::GUI::FrontendSelector).to have_received(:new).with(selected_id: 'genie', refresh: false)
+    end
+
+    it 'launches with the game and frontend read from the dialog before it is destroyed' do
+      destroyed = false
+      allow(widget).to receive(:run).and_return(:ok)
+      allow(widget).to receive(:destroy) { destroyed = true }
+      allow(selector).to receive(:selected_id) { destroyed ? raise('frontend read after destroy') : 'wizard' }
+      allow(game_selection).to receive(:get_selected_game_code) { destroyed ? raise('game read after destroy') : 'DRF' }
+      allow(described_class).to receive(:launch)
+
+      show_dialog
+
+      expect(described_class).to have_received(:launch).with(
+        data_dir: data_dir, account: 'MYACCOUNT', game_code: 'DRF', frontend: 'wizard',
+        button: button, on_play: on_play, msgbox: msgbox
+      )
+    end
+
+    it 'shows the Saga note only while Saga is the selected frontend' do
+      saga_label = double('Saga note label').as_null_object
+      label_class = double('Gtk::Label')
+      allow(label_class).to receive(:new) { |text = nil| text == described_class::SAGA_NOTE ? saga_label : widget }
+      stub_const('Gtk::Label', label_class)
+      change_callback = nil
+      current = 'wizard'
+      allow(selector).to receive(:on_change) { |&block| change_callback = block }
+      allow(selector).to receive(:selected_id) { current }
+      visibility = []
+      allow(saga_label).to receive(:visible=) { |value| visibility << value }
+      allow(widget).to receive(:run) do
+        current = 'saga'
+        change_callback.call(selector)
+        current = 'stormfront'
+        change_callback.call(selector)
+        :cancel
+      end
+
+      show_dialog
+
+      expect(visibility).to eq([false, true, false])
+    end
   end
 
   it 'passes other authentication errors through with context' do

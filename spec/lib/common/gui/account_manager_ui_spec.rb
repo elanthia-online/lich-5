@@ -170,6 +170,9 @@ RSpec.describe Lich::Common::GUI::AccountManagerUI do
       manager.send(:refresh_account_characters, 'MYACCOUNT')
 
       expect(stored_names).to contain_exactly('Known', 'Fresh')
+      fresh = YAML.safe_load_file(yaml_file, permitted_classes: [Symbol])
+                  .dig('accounts', 'MYACCOUNT', 'characters').find { |c| c['char_name'] == 'Fresh' }
+      expect(fresh['frontend']).to eq('wizard')
       expect(manager).to have_received(:refresh_accounts_display)
       expect(manager).to have_received(:notify_data_changed).with(:character_added, { account: 'MYACCOUNT', added: 1 })
       expect(messages).to eq(['Added 1 new character(s) to MYACCOUNT (2 found), using Wizard.'])
