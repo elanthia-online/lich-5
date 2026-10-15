@@ -820,7 +820,7 @@ module Lich
           if (name == 'streamWindow')
             if (attributes['id'] == 'main') and attributes['subtitle']
               unless attributes['subtitle'].empty? || attributes['subtitle'].nil?
-                # Game-specific grammar (GS " - [Room] - 1234", DR " - [Room] (230008)"):
+                # Game-specific grammar (GS " - Room - 1234", DR " - [Room] (230008)"):
                 # see Lich::Common::XMLParserDelta::Base#main_subtitle.
                 update = XMLParserDelta.for(XMLData.game).main_subtitle(attributes['subtitle'], nav_uid_pending: @nav_uid_pending)
                 @room_title = update[:room_title] if update.key?(:room_title)

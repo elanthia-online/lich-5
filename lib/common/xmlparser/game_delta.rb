@@ -44,9 +44,14 @@ module Lich
       # known. Game deltas extend this and override only the hooks that differ.
       module Base
         # Parses the main window's streamWindow subtitle. Returns the parser
-        # state to update; omitted keys are left as they are.
+        # state to update; omitted keys are left as they are. XMLParser applies
+        # only the keys listed under @return, so a new key needs a matching
+        # line at the call site. A hook may also update global (non-parser)
+        # state (GemStone's turns on Lich.display_uid), so call it once per
+        # subtitle and never speculatively.
         #
-        # @param subtitle [String] the subtitle attribute, e.g. " - [Town Square]"
+        # @param subtitle [String] the subtitle attribute, e.g. GemStone
+        #   " - Town Square, Central - 228", DragonRealms " - [Town Square] (1234)"
         # @param nav_uid_pending [Boolean] a <nav rm> already supplied this
         #   arrival's UID
         # @return [Hash] any of :room_title, :room_id, :show_room_id,
