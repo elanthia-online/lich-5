@@ -294,6 +294,7 @@ module Lich
 
       # @return [Class] the registry class the shared facade delegates to.
       def self.instance_class = CreatureInstance
+      private_class_method :instance_class
 
       # Applies a `<crtrStatus>` snapshot, registering the creature id-first if
       # it has not been seen yet.

@@ -13,8 +13,17 @@ RSpec.describe Lich::Common::CreatureFacade do
     { Lich::Gemstone::Creature     => Lich::Gemstone::CreatureInstance,
       Lich::DragonRealms::Creature => Lich::DragonRealms::CreatureInstance }.each do |facade, registry|
       expect(facade.singleton_class.ancestors).to include(described_class)
-      expect(facade.instance_class).to be(registry)
+      expect(facade.send(:instance_class)).to be(registry)
       shared.each { |m| expect(facade).to respond_to(m), "#{facade}.#{m}" }
+    end
+  end
+
+  # instance_class only tells the facade which registry to use. It stays
+  # private so it doesn't become part of the public Creature API.
+  it 'keeps instance_class off the public Creature API' do
+    [Lich::Gemstone::Creature, Lich::DragonRealms::Creature].each do |facade|
+      expect(facade).not_to respond_to(:instance_class)
+      expect { facade.instance_class }.to raise_error(NoMethodError, /private method/)
     end
   end
 
