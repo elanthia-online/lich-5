@@ -113,6 +113,29 @@ RSpec.describe Lich::Common::RoomBlock do
                 "Obvious exits: <d>north</d>.\r\n"].map { |l| Lich::Common::Markup.strip_xml(l) }.join
       expect(Lich::Common::Markup.strip_xml(block)).to eq(legacy)
     end
+
+    # The legacy "<style id=""/>  " line (room descriptions off, no objects)
+    # strips to whitespace, so strip_xml drops it and scripts never see it.
+    it 'gives scripts no whitespace-only line for a room sent without a description or objects' do
+      block = "<room><name>[Area, Grotto] (1)</name><description></description><exists></exists>" \
+              "<players></players><exits>Obvious exits: <d>north</d>.</exits><extra></extra></room>\r\n"
+      legacy = ["<style id=\"roomName\" />[Area, Grotto] (1)\r\n",
+                "<style id=\"\"/>  \r\n",
+                "Obvious exits: <d>north</d>.\r\n"].map { |l| Lich::Common::Markup.strip_xml(l) }.join
+      expect(Lich::Common::Markup.strip_xml(block)).to eq(legacy)
+      expect(Lich::Common::Markup.strip_xml(block).split("\r\n")).to eq(['[Area, Grotto] (1)', 'Obvious exits: north.'])
+    end
+
+    it 'drops that whitespace-only line when it ends the string' do
+      block = '<room><name>[Area, Grotto] (1)</name><description></description><exists></exists>' \
+              '<players></players><exits></exits><extra></extra></room>'
+      expect(Lich::Common::Markup.strip_xml(block)).to eq("[Area, Grotto] (1)\r\n")
+    end
+
+    it 'leaves the whitespace of a string without a complete block alone' do
+      cut = "<room><name>[Area, Grotto] (1)</name>\r\n  \r\nYou walk north.\r\n"
+      expect(Lich::Common::Markup.strip_xml(cut)).to eq("[Area, Grotto] (1)\r\n  \r\nYou walk north.\r\n")
+    end
   end
 end
 

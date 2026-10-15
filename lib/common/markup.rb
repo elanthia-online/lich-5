@@ -138,12 +138,18 @@ module Lich
           # The Saga-identity <room> block becomes the legacy layout first, so
           # scripts get the same room lines (title, description + objects,
           # players, exits) in both stream dialects.
-          line = RoomBlock.legacy_shape(line)
-          line = line.gsub(SUPPRESSED_STREAMS, '')
+          shaped = RoomBlock.legacy_shape(line)
+          room_block = shaped != line
+          line = shaped.gsub(SUPPRESSED_STREAMS, '')
           line = line.gsub(SPELLS_STREAM, '')
           line = line.gsub(DATA_ELEMENTS, '')
           line = line.gsub(ANY_TAG, '')
           line = Lich::Common::XmlEntities.decode(line)
+          # The legacy stream sends each room line as its own string, so a
+          # whitespace-only one (<style id=""/> and two spaces, for a room
+          # without a description or objects) is dropped by the check below.
+          # Drop the rewritten block's whitespace-only lines the same way.
+          line = line.gsub(/^[ \t]+(?:\r\n|\z)/, '') if room_block
 
           return nil if line.match?(/\A\s*\z/)
 
