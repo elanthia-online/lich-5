@@ -186,7 +186,7 @@ module Lich
           raise NotImplementedError, "#{self.class} must implement #clean_serverstring"
         end
 
-        # Shared by both games (the GemStone and DragonRealms copies were identical).
+        # Shared by both games; override in a subclass only if a game's stream handling diverges.
         def handle_combat_tags(server_string)
           if @combat_count > 0
             @end_combat_tags.each do |tag|
