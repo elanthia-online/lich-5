@@ -20,7 +20,7 @@ module StreamReplay
   # Unlike benchmark.rb this sends the stream paced, one prompt at a time: after
   # each line containing a <prompt>, it waits until the probe has written that
   # prompt's snapshot. That keeps the run deterministic and keeps Lich's bounded
-  # parser queue (Game::SERVER_QUEUE_MAX) from overflowing.
+  # parser queue (Game::SERVER_QUEUE_CAPACITY) from overflowing.
   #
   # Self-contained like benchmark.rb: nothing under lib/ is loaded in this
   # process; the production code runs only inside the child Lich process.
