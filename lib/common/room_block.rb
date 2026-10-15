@@ -31,8 +31,11 @@ module Lich
       #   <crtrStatus .../>Also here: ...
       #   Obvious paths: <d>north</d>.
       #
-      # Markup inside each part (object links, bold, <d>) is kept. Parts the game
-      # sent empty are omitted, as the legacy stream omits them. Every complete
+      # Markup inside each part (object links, bold, <d>) is kept. The
+      # description line is always sent, as in the legacy stream: an empty
+      # description drops the roomDesc preset, and the two spaces before the
+      # objects stay when there are none. Other parts the game sent empty are
+      # omitted, as the legacy stream omits them. Every complete
       # block in the string is rewritten (reget joins many server strings); a
       # string without one (none, or only a block cut off before </room>) is
       # returned unchanged.
@@ -55,9 +58,9 @@ module Lich
         between = body.gsub(%r{<(name|description|exists|players|exits|extra)>.*?</\1>}m, '')
 
         lines = [%(<style id="roomName" />#{name})]
-        description = %(<style id=""/><preset id='roomDesc'>#{part(body, 'description')}</preset>)
-        description += "  #{exists}" unless exists.empty?
-        lines << description
+        description = part(body, 'description')
+        description = %(<preset id='roomDesc'>#{description}</preset>) unless description.empty?
+        lines << %(<style id=""/>#{description}  #{exists})
         lines << "#{between}#{players}" unless players.empty?
         exits = part(body, 'exits')
         exits = "#{between}#{exits}" if players.empty?
