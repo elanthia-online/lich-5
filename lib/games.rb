@@ -414,6 +414,16 @@ module Lich
       # records or blocking the socket reader would both make recovery unsafe.
       SERVER_QUEUE_CAPACITY = 4_096
 
+      # A Saga-identity <room> block opening a room line, after the prefixes
+      # process_room_information allows. Only such a string starts a hold of a
+      # block split across server strings (see hold_split_room_block).
+      SPLIT_ROOM_BLOCK_START = %r{^(?:<pushStream id="familiar" ifClosedStyle="watching"/>)?(?:<resource picture="\d+"/>|<popBold/>)?<room>}.freeze
+
+      # Server strings held, counting the first, before a split <room> block
+      # that never closes is written out as received. A prompt ends the hold
+      # sooner; this bounds it if no prompt comes.
+      SPLIT_ROOM_BLOCK_MAX_STRINGS = 20
+
       class << self
         attr_reader :thread, :reader_thread, :server_queue, :buffer, :_buffer, :game_instance
 
@@ -457,6 +467,7 @@ module Lich
           @@settings_init_needed = false
           @cli_scripts = false
           @room_number_after_ready = false
+          @held_room_block = nil
           @last_id_shown_room_window = 0
           @game_instance = nil
           # strip_xml's multiline carry is a process-global; clear it here so a
@@ -1169,8 +1180,12 @@ module Lich
             # roomName/roomDesc layout it already handles. Rewritten before the
             # Wizard conversion (sf_to_wiz), which keys on that layout; the
             # room-number display (process_room_information) handles either.
-            if alt_string.include?('<room>') && !Frontend.supports_room_element?
-              alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string)
+            # Downstream hooks run first and see the block as the server sent it.
+            if (@held_room_block || alt_string.include?('<room>')) && !Frontend.supports_room_element?
+              alt_string = hold_split_room_block(alt_string)
+              return if alt_string.nil?
+
+              alt_string = Lich::Common::RoomBlock.legacy_shape(alt_string) if alt_string.include?('<room>')
             end
             process_room_information(alt_string)
 
@@ -1199,6 +1214,42 @@ module Lich
             # Send to client
             send_to_client(alt_string)
           end
+        end
+
+        # A <room> block can arrive across more than one server string.
+        # RoomBlock.legacy_shape only rewrites a complete block, so for a front
+        # end without :room_element the parts are held back and joined
+        # (keeping the server's line breaks) until </room> arrives. If a prompt
+        # comes first, or SPLIT_ROOM_BLOCK_MAX_STRINGS strings pass, the held
+        # strings go out as received, so nothing is lost or reordered.
+        #
+        # @param alt_string [String] the string after the downstream hooks
+        # @return [String, nil] the string to send on (the joined parts once a
+        #   hold ends), or nil while a split block is being held
+        def hold_split_room_block(alt_string)
+          if @held_room_block
+            @held_room_block += alt_string
+            @held_room_block_strings += 1
+            if open_room_block?(@held_room_block)
+              return nil unless alt_string.include?('<prompt') || @held_room_block_strings >= SPLIT_ROOM_BLOCK_MAX_STRINGS
+
+              Lich.log "warning: <room> block never closed; sending #{@held_room_block_strings} held strings as received: #{@held_room_block.inspect}"
+            end
+            held = @held_room_block
+            @held_room_block = nil
+            return held
+          end
+          return alt_string unless alt_string.include?('<room>') && open_room_block?(alt_string) && SPLIT_ROOM_BLOCK_START.match?(alt_string)
+
+          @held_room_block = alt_string.dup
+          @held_room_block_strings = 1
+          nil
+        end
+
+        # Whether the last <room> in the string has no </room> after it.
+        def open_room_block?(string)
+          start = string.rindex('<room>')
+          !start.nil? && !string.index('</room>', start)
         end
 
         def process_room_information(alt_string)
