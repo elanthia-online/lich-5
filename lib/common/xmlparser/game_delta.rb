@@ -17,7 +17,11 @@ module Lich
     # stream dialect (Saga identity vs legacy Wrayth handshake) branch on
     # XMLData.stream_feature? instead.
     module XMLParserDelta
-      @registry = []
+      # ||= so that re-running this file (";hmr xmlparser" load()s it, since
+      # the path matches) keeps the deltas the game files already registered;
+      # those files are not reloaded with it, so a plain = would leave every
+      # game on Default until restart.
+      @registry ||= []
 
       # Registers a game's delta module.
       #
