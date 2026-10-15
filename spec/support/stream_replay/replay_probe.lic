@@ -126,6 +126,14 @@ DownstreamHook.add('replay_probe', proc { |server_string|
 
 # Signal readiness only once the hook is registered, so no body prompt can slip
 # through unobserved. The header carries no prompt, so nothing precedes this line.
-File.open(snapshot_path, 'a') { |f| f.puts(JSON.generate({ 'ready' => true })) }
+# The marker also says whether the offline preload took effect (the driver
+# refuses to replay otherwise).
+offline_problems =
+  if defined?(StreamReplay.offline_problems)
+    StreamReplay.offline_problems((Lich::Util::Update if defined?(Lich::Util::Update)), Lich)
+  else
+    ['offline_preload.rb was not loaded']
+  end
+File.open(snapshot_path, 'a') { |f| f.puts(JSON.generate({ 'ready' => true, 'offline_problems' => offline_problems })) }
 
 loop { sleep 1 }
