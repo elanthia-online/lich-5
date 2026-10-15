@@ -237,6 +237,9 @@ module Lich
         @assess_buffer = nil
         @assess_ids = []
 
+        # Stream dialect capabilities observed this session (see #stream_feature?).
+        @stream_features = Set.new
+
         # Ox SAX bridge state (see start_element/attr/attrs_done/error below):
         # the element/attributes being accumulated and parse errors for the
         # fragment currently being parsed.
@@ -457,6 +460,49 @@ module Lich
       # The caller clears this between fragments.
       attr_reader :sax_parse_errors
 
+      # Stream dialect capabilities, observed per session.
+      #
+      # The same game can send two dialects at once depending on the client
+      # identity Lich presents: the Saga identity (Frontend::CLIENT_STRING since
+      # #1700) gets object links and the <room> block, while front ends that send
+      # their own Wrayth handshake get the legacy stream. Parser paths that
+      # depend on stream shape, not game semantics, branch on these instead of
+      # on the game:
+      #
+      # - :links              an <a exist=...> object link has been seen
+      # - :room_element       a <room> block has been seen
+      # - :stow_container_tag a <container id='stow' target=...> has been seen
+      #
+      # Cleared at login (<settingsInfo>); a mid-stream {#reset} keeps them,
+      # since a desync does not change the dialect.
+      #
+      # @param feature [Symbol]
+      # @return [Boolean]
+      def stream_feature?(feature)
+        @stream_features.include?(feature)
+      end
+
+      # @return [Array<Symbol>] the observed capabilities, sorted (read-only copy)
+      def stream_features
+        @stream_features.to_a.sort
+      end
+
+      # Records the dialect capabilities an element reveals (see #stream_feature?).
+      # Called for every element, so it only compares the name first.
+      def observe_stream_feature(name, attributes)
+        case name
+        when 'a'
+          @stream_features << :links if attributes['exist']
+        when 'room'
+          @stream_features << :room_element
+        when 'container'
+          @stream_features << :stow_container_tag if attributes['id'] == 'stow'
+        when 'settingsInfo'
+          @stream_features.clear # a new login: the dialect is re-learned
+        end
+      end
+      private :observe_stream_feature
+
       def error(message, line, column)
         @sax_parse_errors << "#{message} (line #{line}, column #{column})"
       end
@@ -502,6 +548,7 @@ module Lich
         begin
           @active_tags.push(name)
           @active_ids.push(attributes['id'].to_s)
+          observe_stream_feature(name, attributes)
 
           if name == 'nav'
             Lich::Claim.lock if defined?(Lich::Claim)
