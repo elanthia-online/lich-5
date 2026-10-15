@@ -81,6 +81,24 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
       expect(contents('195648378')).to eq(%w[nugget])
     end
 
+    it 'replaces contents already known for the container on the refresh that first names it' do
+      # e.g. filled by an INV LIST before the stow container id was learned
+      gameobj.new_inv('1', 'nugget', 'nugget', '195648378')
+      gameobj.new_inv('2', 'pouch', 'pouch', '195648378')
+      feed(stow_refresh('195648378', %w[2 pouch pouch]), prompt)
+
+      expect(contents('195648378')).to eq(%w[pouch])
+    end
+
+    it 'replaces the contents of a stow container it returns to' do
+      feed(stow_refresh('195648378', %w[1 nugget nugget], %w[2 pouch pouch]), prompt)
+      feed(stow_refresh('200000001', %w[3 gem gem]), prompt)
+      feed(stow_refresh('195648378', %w[2 pouch pouch]), prompt)
+
+      expect(contents('195648378')).to eq(%w[pouch])
+      expect(contents('200000001')).to eq(%w[gem])
+    end
+
     it 'deletes the container when its header reports it closed' do
       feed(stow_refresh('195648378', %w[1 nugget nugget]), prompt)
       feed(%(<clearContainer id="stow"/><inv id='stow'>The <a exist="195648378" noun="pack">pack</a> is closed.</inv>), prompt)
