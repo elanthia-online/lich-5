@@ -654,6 +654,101 @@ RSpec.describe 'global_defs.rb built-in script commands' do
   end
 end
 
+RSpec.describe '#detachable_client_frontend?' do
+  # Subprocess for the same reason as the specs above: loading global_defs.rb
+  # in-process redefines global methods. Returns the predicate for saga and
+  # genie under the given ARGV and resolved Frontend.client.
+  def frontend_flags(argv, client)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+
+      ARGV.replace(#{argv.inspect})
+      Frontend.define_singleton_method(:client) { #{client.inspect} }
+      puts "SAGA=\#{detachable_client_frontend?('saga')} GENIE=\#{detachable_client_frontend?('genie')}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    stdout[/^SAGA=.*$/]
+  end
+
+  it 'matches the literal --saga and --genie flags, case-insensitively' do
+    expect(frontend_flags(%w[--SAGA --detachable-client=8000], 'wrayth')).to eq('SAGA=true GENIE=false')
+    expect(frontend_flags(%w[--genie --detachable-client=8000], 'wrayth')).to eq('SAGA=false GENIE=true')
+  end
+
+  it 'matches the frontend resolved from --frontend= in --without-frontend mode' do
+    expect(frontend_flags(%w[--frontend=saga --without-frontend --detachable-client=8000], 'saga')).to eq('SAGA=true GENIE=false')
+    expect(frontend_flags(%w[--frontend=genie --without-frontend --detachable-client=8000], 'genie')).to eq('SAGA=false GENIE=true')
+  end
+
+  it 'ignores the resolved frontend outside --without-frontend mode' do
+    # There the detachable client is a second frontend, not the one Frontend.client names.
+    expect(frontend_flags(%w[--detachable-client=8000], 'saga')).to eq('SAGA=false GENIE=false')
+  end
+
+  it 'is false for other headless frontends' do
+    expect(frontend_flags(%w[--without-frontend --detachable-client=8000], 'profanity')).to eq('SAGA=false GENIE=false')
+  end
+end
+
+RSpec.describe '#handle_detachable_client' do
+  # Runs the real handler in a subprocess (see above for why) so a spec fails if
+  # it stops routing through detachable_client_frontend?. The two senders are
+  # replaced with recorders, and the client disconnects at once so the read
+  # loop ends straight away.
+  def sends_on_attach(argv, client)
+    root = File.expand_path('../..', __dir__)
+    source = <<~RUBY
+      require './spec/spec_helper'
+      require 'common/detachable_client_registry'
+      require './lib/global_defs'
+      require 'common/shutdown_log'
+
+      ARGV.replace(#{argv.inspect})
+      Frontend.define_singleton_method(:client) { #{client.inspect} }
+      $sent = Queue.new
+      Object.send(:define_method, :detachable_client_send_init) { |_client| $sent << :init }
+      Object.send(:define_method, :detachable_client_send_player_id) { |_client| $sent << :player_id }
+
+      client = Object.new
+      client.define_singleton_method(:gets) { nil }
+      client.define_singleton_method(:close) { nil }
+      before = Thread.list
+      handle_detachable_client(client)
+      (Thread.list - before).each { |thread| thread.join(5) }
+      sent = []
+      sent << $sent.pop until $sent.empty?
+      puts "SENT=\#{sent.sort.inspect}"
+    RUBY
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, "-I#{File.join(root, 'lib')}", '-e', source, :chdir => root)
+    expect(stderr).to be_empty
+    expect(status).to be_success
+    stdout[/^SENT=(.*)$/, 1]
+  end
+
+  headless = %w[--without-frontend --detachable-client=8000]
+
+  it 'sends Saga only the playerID re-emit for --frontend=saga in headless mode' do
+    expect(sends_on_attach(['--frontend=saga', *headless], 'saga')).to eq('[:player_id]')
+  end
+
+  it 'sends Genie nothing for --frontend=genie in headless mode' do
+    expect(sends_on_attach(['--frontend=genie', *headless], 'genie')).to eq('[]')
+  end
+
+  it 'sends the literal --saga flag only the playerID re-emit, as before' do
+    expect(sends_on_attach(['--saga', *headless], 'saga')).to eq('[:player_id]')
+  end
+
+  it 'sends other headless frontends the init push' do
+    expect(sends_on_attach(headless, 'profanity')).to eq('[:init]')
+  end
+end
+
 RSpec.describe '#detachable_client_send_init' do
   # Only the shared part lives in global_defs.rb: waiting until the running
   # game's module reports the login feed is ready, then sending its push. What

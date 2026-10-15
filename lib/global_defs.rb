@@ -2174,11 +2174,20 @@ rescue StandardError => e
   Lich.log "error: detachable_client_send_player_id: #{e}\n\t#{e.backtrace.first}"
 end
 
+# Whether the attaching detachable client is the named frontend: the literal
+# --NAME flag, or, in --without-frontend mode, the frontend main.rb resolved
+# from any form (e.g. --frontend=saga) via resolve_headless_frontend.
+def detachable_client_frontend?(name)
+  return true if ARGV.any? { |argument| argument.casecmp?("--#{name}") }
+
+  ARGV.include?('--without-frontend') && Frontend.client == name
+end
+
 def handle_detachable_client(client)
-  unless ARGV.any? { |argument| argument.match?(/^--(?:genie|saga)$/i) }
+  unless detachable_client_frontend?('genie') || detachable_client_frontend?('saga')
     Thread.new { detachable_client_send_init(client) }
   end
-  Thread.new { detachable_client_send_player_id(client) } if ARGV.any? { |argument| argument.match?(/^--saga$/i) }
+  Thread.new { detachable_client_send_player_id(client) } if detachable_client_frontend?('saga')
 
   while (client_string = client.gets)
     if client_string.match?(/^SET_FRONTEND_PID\s+(\d+)\s*$/)
