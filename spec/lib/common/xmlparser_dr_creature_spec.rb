@@ -259,5 +259,38 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
 
       expect(Lich::DragonRealms::Creature.targets.map(&:id)).to contain_exactly(4001, 4002)
     end
+
+    # The link's noun= is the server's noun and need not be the last word of
+    # the link text: the live stream sends long descriptive names such as
+    # "a <a noun=\"panther\">sleek golden panther with enigmatic violet eyes</a>".
+    it 'keeps the link noun when it is not the last word of the name, across a refresh' do
+      line = "<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>' \
+             '<crtrStatus exist="4003" hostile="1"/><prompt time="1785273999">R&gt;</prompt>'
+      feed(line)
+      feed(line)
+
+      c = Lich::DragonRealms::Creature[4003]
+      expect(c.name).to eq('a grizzled hound with a notched ear')
+      expect(c.noun).to eq('hound')
+    end
+
+    it 'takes the link noun for a creature crtrStatus registered first, with no noun' do
+      feed('<crtrStatus exist="4003" hostile="1"/><prompt time="1785273998">R&gt;</prompt>')
+      expect(Lich::DragonRealms::Creature[4003].noun).to be_nil
+
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4003" noun="hound">grizzled hound with a notched ear</a><popBold/><popBold/>.</component>')
+
+      expect(Lich::DragonRealms::Creature[4003].noun).to eq('hound')
+    end
+
+    # The live stream occasionally pads the attribute (noun=" moth").
+    it 'trims whitespace around the link noun' do
+      feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+           '<a exist="4004" noun=" moth">void-black umbral moth</a><popBold/><popBold/>.</component>')
+
+      expect(Lich::DragonRealms::Creature[4004].noun).to eq('moth')
+    end
   end
 end
