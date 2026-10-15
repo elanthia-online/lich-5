@@ -72,3 +72,50 @@ RSpec.describe Lich::Common::RoomBlock do
     end
   end
 end
+
+RSpec.describe Lich::Common::RoomBlock, 'in multi-line strings' do
+  block = ->(title) { "<room><name>[Area, #{title}] (1)</name><description>D.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>" }
+
+  it 'rewrites every block, not only the first' do
+    out = described_class.legacy_shape("#{block.call('One')}\r\nYou walk north.\r\n#{block.call('Two')}\r\n")
+    expect(out).not_to include('<room>')
+    expect(out.scan('<style id="roomName" />').size).to eq(2)
+  end
+
+  it 'does not let a block cut off before </room> swallow the next one' do
+    out = described_class.legacy_shape("<room><name>[Area, Cut] (1)</name>\r\nYou walk north.\r\n#{block.call('Two')}\r\n")
+    expect(out).to start_with("<room><name>[Area, Cut] (1)</name>\r\nYou walk north.\r\n")
+    expect(out).to include('<style id="roomName" />[Area, Two] (1)')
+  end
+end
+
+# reget/regetall strip the server-buffer history themselves rather than through
+# Markup.strip_xml. Evaluate the real method from lib/global_defs.rb (which this
+# suite does not load whole) so the spec exercises the shipped code.
+RSpec.describe 'reget on Saga-identity <room> blocks' do
+  let(:reget_host) do
+    source = File.read(File.join(LIB_DIR, 'global_defs.rb'))[/^def reget\(.*?^end\n/m]
+    Object.new.tap { |o| o.singleton_class.class_eval(source) }
+  end
+
+  before do
+    stub_const('Script', Class.new)
+    allow(Script).to receive(:current).and_return(double('script', want_downstream_xml: false))
+    $_SERVERBUFFER_ = [
+      %(<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>A clearing.</description><exists>You also see a <a exist="1" noun="leopard">leopard</a>.</exists><players>Also here: <a exist="-2" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n),
+      %(<prompt time="1">&gt;</prompt>\r\n)
+    ]
+  end
+
+  after { $_SERVERBUFFER_ = nil }
+
+  it 'returns the legacy room lines a script would match against' do
+    lines = reget_host.reget.map(&:strip)
+    expect(lines).to eq([
+                          "[Bosque Deriel, Hermit's Shacks] (230008)",
+                          'A clearing.  You also see a leopard.',
+                          'Also here: Corwin.',
+                          'Obvious paths: north.'
+                        ])
+  end
+end

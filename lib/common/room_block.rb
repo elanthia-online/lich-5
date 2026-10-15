@@ -15,7 +15,9 @@ module Lich
     # i.e. the legacy layout. The room components (room desc/objs/players/exits)
     # are sent in both dialects and stay the parser's source of room state.
     module RoomBlock
-      BLOCK = %r{<room>(?<body>.*?)</room>}m.freeze
+      # A complete block; the body never spans another <room>, so a block cut
+      # off before </room> cannot swallow the next one in a multi-line string.
+      BLOCK = %r{<room>(?<body>(?:(?!<room>).)*?)</room>}m.freeze
 
       module_function
 
@@ -36,16 +38,17 @@ module Lich
       #   Obvious paths: <d>north</d>.
       #
       # Markup inside each part (object links, bold, <d>) is kept. Parts the game
-      # sent empty are omitted, as the legacy stream omits them. A string without
-      # a complete block (none, or one cut off before </room>) is returned
-      # unchanged.
+      # sent empty are omitted, as the legacy stream omits them. Every complete
+      # block in the string is rewritten (reget joins many server strings); a
+      # string without one (none, or only a block cut off before </room>) is
+      # returned unchanged.
       #
       # @param server_string [String]
       # @return [String]
       def legacy_shape(server_string)
         return server_string unless server_string.include?('<room>')
 
-        server_string.sub(BLOCK) { legacy_lines(Regexp.last_match(:body)) }
+        server_string.gsub(BLOCK) { legacy_lines(Regexp.last_match(:body)) }
       end
 
       def legacy_lines(body)

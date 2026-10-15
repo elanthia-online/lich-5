@@ -1446,6 +1446,9 @@ def reget(*lines, core: false)
     history = $_SERVERBUFFER_.dup.join("\n")
   end
   unless script&.want_downstream_xml || core.eql?(true)
+    # Saga-identity <room> blocks get the legacy layout first, as in strip_xml,
+    # so reget returns the same room lines in both stream dialects.
+    history = Lich::Common::RoomBlock.legacy_shape(history)
     history.gsub!(/<pushStream id=["'](?:spellfront|inv|bounty|society)["'][^>]*\/>.*?<popStream[^>]*>/m, '')
     history.gsub!(/<stream id="Spells">.*?<\/stream>/m, '')
     history.gsub!(/<(compDef|inv|component|right|left|spell|prompt)[^>]*>.*?<\/\1>/m, '')
@@ -2020,6 +2023,7 @@ $link_highlight_end = ''
 $speech_highlight_start = ''
 $speech_highlight_end = ''
 
+require File.join(LIB_DIR, 'common', 'room_block.rb')
 require File.join(LIB_DIR, 'common', 'markup.rb')
 
 # Frontend markup translation lives in Lich::Common::Markup. These six names
