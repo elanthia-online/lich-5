@@ -45,26 +45,29 @@ RSpec.describe Lich::Common::XMLParserDelta do
     end
   end
 
+  # Real GemStone main subtitles carry no brackets (every one in 15 captured
+  # sessions reads " - Room Name - 4216037"); the delta supplies the only
+  # pair, so the title is single-bracketed.
   describe 'Gemstone::XMLDelta#main_subtitle' do
     let(:delta) { Lich::Gemstone::XMLDelta }
 
-    it 'strips the room number from the (double-bracketed) title' do
+    it 'brackets the title and strips the room number' do
       allow(Lich).to receive(:display_uid).and_return(true)
-      expect(delta.main_subtitle(' - [Town Square, Central] - 228', nav_uid_pending: false))
-        .to eq(room_title: '[[Town Square, Central]]')
+      expect(delta.main_subtitle(' - Town Square, Central - 228', nav_uid_pending: false))
+        .to eq(room_title: '[Town Square, Central]')
     end
 
     it 'turns on display_uid when the game shows a room number and it was off' do
       allow(Lich).to receive(:display_uid).and_return(false)
       expect(Lich).to receive(:display_uid=).with(true)
-      delta.main_subtitle(' - [Town Square, Central] - 228', nav_uid_pending: false)
+      delta.main_subtitle(' - Town Square, Central - 228', nav_uid_pending: false)
     end
 
     it 'leaves display_uid alone for a subtitle without a room number' do
       allow(Lich).to receive(:display_uid).and_return(false)
       expect(Lich).not_to receive(:display_uid=)
-      expect(delta.main_subtitle(' - [Town Square, Central]', nav_uid_pending: false))
-        .to eq(room_title: '[[Town Square, Central]]')
+      expect(delta.main_subtitle(' - Town Square, Central', nav_uid_pending: false))
+        .to eq(room_title: '[Town Square, Central]')
     end
   end
 
@@ -95,6 +98,23 @@ RSpec.describe Lich::Common::XMLParserDelta do
     end
   end
 
+  # XMLParser applies only these keys from the hook's update (see
+  # Base#main_subtitle); a key outside the list would be dropped silently.
+  describe 'main_subtitle update keys' do
+    applied = %i[room_title room_id nav_uid_pending show_room_id]
+    subtitles = [' - Town Square, Central - 228', ' - Town Square, Central', " - [Bosque Deriel, Hermit's Shacks] (230008)",
+                 ' - [Somewhere] (**)', ' - [Somewhere]', ' - ']
+
+    [Lich::Common::XMLParserDelta::Default, Lich::Gemstone::XMLDelta, Lich::DragonRealms::XMLDelta].each do |delta|
+      it "#{delta} returns only keys the parser applies" do
+        allow(Lich).to receive(:display_uid).and_return(true)
+        subtitles.product([true, false]).each do |subtitle, pending|
+          expect(delta.main_subtitle(subtitle, nav_uid_pending: pending).keys - applied).to be_empty
+        end
+      end
+    end
+  end
+
   describe 'XMLParser integration' do
     subject(:parser) { Lich::Common::XMLParser.new }
 
@@ -105,8 +125,8 @@ RSpec.describe Lich::Common::XMLParserDelta do
     it 'applies the GemStone delta to the main subtitle' do
       allow(XMLData).to receive(:game).and_return('GSIV')
       allow(Lich).to receive(:display_uid).and_return(true)
-      feed(%(<streamWindow id='main' title='Story' subtitle=" - [Town Square, Central] - 228" location='center' target='drop'/>))
-      expect(parser.room_title).to eq('[[Town Square, Central]]')
+      feed(%(<streamWindow id='main' title='Story' subtitle=" - Town Square, Central - 228" location='center' target='drop'/>))
+      expect(parser.room_title).to eq('[Town Square, Central]')
     end
 
     it 'applies the Default delta before the game is known' do
