@@ -99,7 +99,7 @@ RSpec.describe Lich::Common::XMLParserDelta do
   end
 
   describe '#apply_crtr_status' do
-    it 'defers (stashes) by default and on GemStone, where <crtrStatus> precedes the creature link' do
+    it 'defers (stashes) by default and on GemStone, whose room-objs <crtrStatus> precedes the creature link' do
       expect(described_class::Default.apply_crtr_status('1', { 'hostile' => '1' })).to be false
       expect(Lich::Gemstone::XMLDelta.apply_crtr_status('1', { 'hostile' => '1' })).to be false
     end
