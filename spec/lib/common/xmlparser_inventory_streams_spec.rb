@@ -203,6 +203,40 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
       gameobj.commit_inv
     end
 
+    it 'stages the first linked list of a session, before any link has been seen' do
+      # At a real login the first worn list's pushStream precedes the stream's
+      # first <a exist>, so the dialect is not known yet when it opens.
+      gameobj.new_inv('1', 'cloak', 'a wool cloak') # stale worn entry
+      expect(parser.stream_feature?(:links)).to be false
+      feed(*worn_list(%w[2 helm helm]))
+
+      expect(worn).to eq(%w[helm])
+    end
+
+    it 'leaves an INV LIST scrape alone on a first linked list' do
+      gameobj.begin_inv # an INV LIST scrape owns the worn staging
+      gameobj.new_inv('3', 'boots', 'some boots')
+      feed(*worn_list(%w[4 mask mask]))
+
+      expect(gameobj.inv_refresh_open?).to be true
+      expect(worn).to be_empty
+      gameobj.commit_inv
+      expect(worn).to contain_exactly('boots', 'mask')
+    end
+
+    it 'leaves an INV LIST scrape alone that opens while a first linked list waits for its first link' do
+      gameobj.new_inv('1', 'cloak', 'a wool cloak') # previously published
+      head, *rest = worn_list(%w[4 mask mask])
+      feed(head)
+      gameobj.begin_inv # an INV LIST scrape takes the worn staging first
+      gameobj.new_inv('3', 'boots', 'some boots')
+      feed(*rest)
+
+      expect(gameobj.inv_refresh_open?).to be true
+      expect(worn).to eq(%w[cloak])
+      gameobj.commit_inv
+    end
+
     it 'opens no worn refresh for the legacy plain-text list' do
       gameobj.new_inv('1', 'cloak', 'a wool cloak')
       feed("<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:", '  a wool cloak', '<popStream/>')
