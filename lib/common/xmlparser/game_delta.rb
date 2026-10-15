@@ -60,10 +60,16 @@ module Lich
           { room_title: String.new }
         end
 
-        # Applies a <crtrStatus> immediately, if this game can. Returns true when
-        # applied (the parser then collects the id for the stream-order name
-        # pairing), false to have the parser stash the flags until the
-        # creature's <a exist> link registers it in the room.
+        # Applies a <crtrStatus> immediately, if this game can.
+        #
+        # Returns true when applied. The parser then collects the id, but only
+        # the DragonRealms prompt handler drains that list (pairing ids to
+        # legacy-stream bold names), so another game returning true gets no
+        # pairing. Returns false to have the parser stash the flags for the
+        # creature's next room-objs <a exist> link, which registers it and
+        # applies them. Opening room objs or <nav> clears the stash, so a
+        # stashed tag whose link has already passed (GemStone's standalone
+        # combat updates) is never applied.
         #
         # @param id [String] the exist id
         # @param flags [Hash{String=>String}] the tag's other attributes
