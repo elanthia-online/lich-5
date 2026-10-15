@@ -659,22 +659,15 @@ module Lich
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
             #
-            # DragonRealms differs: its room-objs carry no per-creature <a exist>
-            # tag, so there is no text() path to defer to. Its <crtrStatus> tags
-            # arrive batched after the room-objs component and carry their own id,
-            # so flags are applied immediately, id-first. The name is backfilled
-            # two ways: the stream-order pairing (bold room-objs names zipped to
-            # this batch's ids at the next <prompt>, gated on equal counts) and,
-            # authoritatively, later from the assess stream (see
-            # lib/dragonrealms/creature.rb).
+            # A game whose delta can apply the tag at once (DragonRealms: id-first
+            # Creature.sync, see Lich::DragonRealms::XMLDelta.apply_crtr_status)
+            # does so; the id is then collected in arrival order so the prompt
+            # handler can pair it to a legacy-stream bold name when the counts
+            # match for this refresh.
             crtr_id = attributes['exist']
             if crtr_id
               crtr_flags = attributes.reject { |k, _| k == 'exist' }
-              if XMLData.game =~ /^DR/
-                # Apply flags now (id-first, name-less); collect the id in arrival
-                # order so the prompt handler can pair it to a bold name only if
-                # the counts match for this refresh.
-                Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
+              if XMLParserDelta.for(XMLData.game).apply_crtr_status(crtr_id, crtr_flags)
                 @dr_crtr_ids << crtr_id
               else
                 @pending_crtr_status[crtr_id] = crtr_flags

@@ -50,6 +50,18 @@ module Lich
         def main_subtitle(_subtitle, nav_uid_pending:) # rubocop:disable Lint/UnusedMethodArgument
           { room_title: String.new }
         end
+
+        # Applies a <crtrStatus> immediately, if this game can. Returns true when
+        # applied (the parser then collects the id for the stream-order name
+        # pairing), false to have the parser stash the flags until the
+        # creature's <a exist> link registers it in the room.
+        #
+        # @param id [String] the exist id
+        # @param flags [Hash{String=>String}] the tag's other attributes
+        # @return [Boolean]
+        def apply_crtr_status(_id, _flags)
+          false
+        end
       end
 
       # Delta for an unknown or unregistered game.

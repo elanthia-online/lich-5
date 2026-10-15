@@ -79,6 +79,20 @@ RSpec.describe Lich::Common::XMLParserDelta do
     end
   end
 
+  describe '#apply_crtr_status' do
+    it 'defers (stashes) by default and on GemStone, where <crtrStatus> precedes the creature link' do
+      expect(described_class::Default.apply_crtr_status('1', { 'hostile' => '1' })).to be false
+      expect(Lich::Gemstone::XMLDelta.apply_crtr_status('1', { 'hostile' => '1' })).to be false
+    end
+
+    it 'applies id-first on DragonRealms' do
+      require 'dragonrealms/creature'
+      Lich::DragonRealms::Creature.clear
+      expect(Lich::DragonRealms::XMLDelta.apply_crtr_status('4001', { 'hostile' => '1', 'immobile' => '1' })).to be true
+      expect(Lich::DragonRealms::Creature[4001].crtr_flag?(:hostile)).to be true
+    end
+  end
+
   describe 'XMLParser integration' do
     subject(:parser) { Lich::Common::XMLParser.new }
 

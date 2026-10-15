@@ -37,6 +37,19 @@ module Lich
         update
       end
 
+      # DragonRealms' <crtrStatus> batch carries its own id and arrives after the
+      # room-objs component, so it is applied at once, id-first: Creature.sync
+      # registers the creature and marks it in the room even when no link names
+      # it (the legacy stream has none). Names come from the room-objs link, the
+      # stream-order pairing (legacy) or the assess backfill. Because sync
+      # registers by id, this works whichever order the tag and the link arrive.
+      def self.apply_crtr_status(id, flags)
+        return false unless defined?(Lich::DragonRealms::Creature)
+
+        Lich::DragonRealms::Creature.sync(id, flags)
+        true
+      end
+
       Lich::Common::XMLParserDelta.register(/^DR/, self)
     end
   end
