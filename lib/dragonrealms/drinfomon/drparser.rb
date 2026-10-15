@@ -637,14 +637,16 @@ module Lich
             percent  = match[:percent]
             DRSkill.update(skill, rank, rate, percent)
 
-            # Inline display of cumulative gained experience (from DRExpMonitor)
+            # Inline display of cumulative gained experience (from DRExpMonitor).
+            # The formatters edit server_line, not the normalized copy, so a
+            # Saga exp line reaches the client with its links and bold intact.
             if DRExpMonitor.inline_display?
               if rate_raw.to_i > 0
                 # BRIEFEXP ON format (rate is numeric)
-                server_line.replace(DRExpMonitor.format_briefexp_on(line, skill))
+                server_line.replace(DRExpMonitor.format_briefexp_on(server_line, skill))
               else
                 # BRIEFEXP OFF format (rate is word like "learning", "pondering")
-                server_line.replace(DRExpMonitor.format_briefexp_off(line, skill, rate_raw.strip))
+                server_line.replace(DRExpMonitor.format_briefexp_off(server_line, skill, rate_raw.strip))
               end
             end
           elsif (match = line.match(Pattern::ExpClearMindstate))
