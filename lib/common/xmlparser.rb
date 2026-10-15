@@ -96,6 +96,8 @@ module Lich
       # Saga dialect's first fragment ("Also here: " or "Also here: Monster ")
       # always ends in whitespace because a player link follows it.
       DR_LEGACY_PLAYERS_RUN = /\AAlso here: .*\S\z/m.freeze
+      # Text before the container link on a stow container's header line.
+      STOW_HEADER = /\A(?:In|On|Under|Behind) the\z/.freeze
 
       def initialize
         @buffer = String.new
@@ -108,6 +110,12 @@ module Lich
         @current_stream = String.new
         @current_style = String.new
         @stow_container_id = nil
+        # A stow clearContainer seen this burst (see the stow header learning in
+        # tag_start); cleared at the prompt that ends the burst.
+        @stow_clear_pending = false
+        # Whether the parser itself opened the worn-inventory staging for the
+        # current pushStream id='inv' (so it commits only its own refresh).
+        @inv_stream_staging = false
         @obj_location = nil
         @obj_exist = nil
         @obj_noun = nil
@@ -299,6 +307,10 @@ module Lich
         # authoritative by the next <prompt>, so drop the in-flight buffers and
         # keep the previously published snapshot visible instead.
         GameObj.discard_staged_refreshes
+        # Those buffers included any worn-list or stow refresh this parser had
+        # opened, so it no longer owns one.
+        @inv_stream_staging = false
+        @stow_clear_pending = false
         # A <crtrStatus> tag can be fully parsed and cached here while the
         # matching bold <a> text is still in an as-yet-unparsed remainder of
         # the fragment. If a malformed/truncated fragment forces a reset in
@@ -515,6 +527,29 @@ module Lich
       end
       private :observe_stream_feature
 
+      # The stow container's header line names it: <inv id='stow'>In the
+      # <a exist="195648378" noun="pack">pack</a>:</inv>. When no authoritative
+      # <container id='stow' target=...> has been seen (DragonRealms never sends
+      # one), take the stow container id from that header, so the header is
+      # skipped as the container itself and its items land in its contents
+      # rather than in worn inventory. A stow refresh opened this burst before
+      # the id was known (or under a previous stow container) is reopened under
+      # the right id.
+      def learn_stow_container(exist)
+        return if exist.nil? || stream_feature?(:stow_container_tag)
+        return unless @active_tags.include?('inv') && @active_ids.include?('stow')
+        return unless @obj_before_name.to_s.match?(STOW_HEADER)
+
+        previous = @stow_container_id
+        @stow_container_id = exist
+        @obj_location = exist
+        return unless @stow_clear_pending && previous != exist
+
+        GameObj.abort_container(previous) if previous
+        GameObj.begin_container(exist)
+      end
+      private :learn_stow_container
+
       def error(message, line, column)
         @sax_parse_errors << "#{message} (line #{line}, column #{column})"
       end
@@ -645,6 +680,7 @@ module Lich
           if name =~ /^(?:a|right|left)$/
             @obj_exist = attributes['exist']
             @obj_noun = attributes['noun']
+            learn_stow_container(@obj_exist) if name == 'a'
           end
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
@@ -713,8 +749,18 @@ module Lich
               @assess_ids = []
             end
             if XMLData.game =~ /^GS/
-              GameObj.begin_inv if attributes['id'].to_s == 'inv'
+              if attributes['id'].to_s == 'inv'
+                GameObj.begin_inv
+                @inv_stream_staging = true
+              end
               GameObj.begin_reserve if attributes['id'].to_s == 'reserve'
+            elsif attributes['id'].to_s == 'inv' && stream_feature?(:links) && !GameObj.inv_refresh_open?
+              # The linked worn-items list is a complete refresh, as on GemStone.
+              # The legacy list is plain text (no GameObj entries), and an open
+              # INV LIST scrape already owns the worn staging, so neither opens
+              # one here.
+              GameObj.begin_inv
+              @inv_stream_staging = true
             end
           end
 
@@ -743,8 +789,13 @@ module Lich
             end
             @in_stream = false
             # @current_stream still names the closing stream here; commit_* is a
-            # no-op when the matching refresh was never opened (e.g. in DR).
-            GameObj.commit_inv      if @current_stream == 'inv'
+            # no-op when the matching refresh was never opened. The worn list
+            # commits only a refresh this parser opened, never another writer's
+            # (an INV LIST scrape in flight).
+            if @current_stream == 'inv' && @inv_stream_staging
+              GameObj.commit_inv
+              @inv_stream_staging = false
+            end
             GameObj.commit_reserve  if @current_stream == 'reserve'
             GameObj.commit_familiar if @current_stream == 'familiar'
             if attributes['id'] == 'bounty'
@@ -805,6 +856,7 @@ module Lich
             # signal for clearContainer/inv container fills, which have no
             # closing tag of their own. No-op when no container refresh is open.
             GameObj.commit_all_containers
+            @stow_clear_pending = false
 
             if @dr_active_spell_tracking
               @dr_active_spell_tracking = false
@@ -836,7 +888,11 @@ module Lich
 
           if name == 'clearContainer'
             if attributes['id'] == 'stow'
-              GameObj.begin_container(@stow_container_id)
+              # Until the stow container's id is known (DragonRealms sends no
+              # <container id='stow'>), the refresh opens when its header line
+              # names the container; see the stow header learning below.
+              @stow_clear_pending = true
+              GameObj.begin_container(@stow_container_id) if @stow_container_id
             else
               GameObj.begin_container(attributes['id'])
             end
