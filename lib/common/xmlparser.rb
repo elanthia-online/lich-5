@@ -891,7 +891,7 @@ module Lich
             if attributes['id'] == 'stow'
               # Until the stow container's id is known (DragonRealms sends no
               # <container id='stow'>), the refresh opens when its header line
-              # names the container; see the stow header learning below.
+              # names the container; see #learn_stow_container.
               @stow_clear_pending = true
               GameObj.begin_container(@stow_container_id) if @stow_container_id
             else
