@@ -120,6 +120,10 @@ module Lich
         # Whether the parser itself opened the worn-inventory staging for the
         # current pushStream id='inv' (so it commits only its own refresh).
         @inv_stream_staging = false
+        # A DR worn list opened before the stream's first link was seen: its
+        # refresh opens at the list's first link instead (see
+        # #open_pending_inv_refresh). Only read while that list's stream is open.
+        @inv_stream_pending = false
         @obj_location = nil
         @obj_exist = nil
         @obj_noun = nil
@@ -573,6 +577,20 @@ module Lich
       end
       private :learn_stow_container
 
+      # Opens the worn refresh a DR worn list deferred at its pushStream (see
+      # @inv_stream_pending), at the list's first linked item. Every item of the
+      # list follows, so the refresh is still complete.
+      def open_pending_inv_refresh
+        return unless @inv_stream_pending && @current_stream == 'inv'
+
+        @inv_stream_pending = false
+        return if GameObj.inv_refresh_open?
+
+        GameObj.begin_inv
+        @inv_stream_staging = true
+      end
+      private :open_pending_inv_refresh
+
       def error(message, line, column)
         @sax_parse_errors << "#{message} (line #{line}, column #{column})"
       end
@@ -703,7 +721,10 @@ module Lich
           if name =~ /^(?:a|right|left)$/
             @obj_exist = attributes['exist']
             @obj_noun = attributes['noun']
-            learn_stow_container(@obj_exist) if name == 'a'
+            if name == 'a'
+              learn_stow_container(@obj_exist)
+              open_pending_inv_refresh if @obj_exist
+            end
           end
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
@@ -777,13 +798,22 @@ module Lich
                 @inv_stream_staging = true
               end
               GameObj.begin_reserve if attributes['id'].to_s == 'reserve'
-            elsif attributes['id'].to_s == 'inv' && stream_feature?(:links) && !GameObj.inv_refresh_open?
+            elsif attributes['id'].to_s == 'inv'
               # The linked worn-items list is a complete refresh, as on GemStone.
-              # The legacy list is plain text (no GameObj entries), and an open
-              # INV LIST scrape already owns the worn staging, so neither opens
-              # one here.
-              GameObj.begin_inv
-              @inv_stream_staging = true
+              # An open INV LIST scrape already owns the worn staging, so none
+              # opens here then. The legacy list is plain text (no GameObj
+              # entries). Until the stream's first link has been seen (a login's
+              # first list arrives before it) the dialect is unknown, so the
+              # refresh waits for the list's first link; a legacy list has none.
+              @inv_stream_pending = false
+              unless GameObj.inv_refresh_open?
+                if stream_feature?(:links)
+                  GameObj.begin_inv
+                  @inv_stream_staging = true
+                else
+                  @inv_stream_pending = true
+                end
+              end
             end
           end
 
