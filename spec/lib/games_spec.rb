@@ -1976,15 +1976,51 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
       expect(writes).to eq(["\x1F#{head}", "\x1F#{tail}"])
     end
 
-    it 'gives up at a prompt that arrives before </room>, writing the held strings unchanged and in order' do
+    it 'gives up at a prompt that arrives before </room>, writing the held strings unchanged, one by one, in order' do
       $frontend = 'wrayth'
       writes = written do
         described_class.send(:process_downstream_hooks, +head)
         described_class.send(:process_downstream_hooks, +prompt)
         described_class.send(:process_downstream_hooks, +prompt)
       end
-      expect(writes).to eq([head + prompt, prompt])
+      expect(writes).to eq([head, prompt, prompt])
       expect(Lich).to have_received(:log).with(/never closed/)
+    end
+
+    context 'with the room number shown below the room' do
+      before do
+        allow(Lich).to receive_messages(display_lichid: true, display_roomid_location: 'line', display_exits: false,
+                                        display_stringprocs: false, display_room_mono: false)
+        allow(Map).to receive(:current).and_return(double('room', id: 1234))
+        @saved_game_instance = described_class.instance_variable_get(:@game_instance)
+        described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
+      end
+
+      after { described_class.instance_variable_set(:@game_instance, @saved_game_instance) }
+
+      it 'puts it before the prompt, after the held strings, when a block never closes' do
+        $frontend = 'profanity'
+        players = %(<component id='room players'></component>\r\n)
+        writes = written do
+          [head, players, prompt].each { |string| described_class.send(:process_downstream_hooks, +string) }
+        end
+        expect(writes.join).to eq(head + players + "Room Number: 1234\r\n" + prompt)
+      end
+    end
+
+    it 'adds the room number to the title of a complete block that follows a cut-off one' do
+      allow(Lich).to receive_messages(display_lichid: true, display_roomid_location: 'title')
+      allow(Map).to receive(:current).and_return(double('room', id: 1234))
+      saved_game_instance = described_class.instance_variable_get(:@game_instance)
+      described_class.instance_variable_set(:@game_instance, Lich::DragonRealms::GameInstance.new)
+      $frontend = 'profanity'
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        described_class.send(:process_downstream_hooks, +saga_room)
+      end
+      expect(writes.last).to start_with(%(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground - 1234] (230007)\r\n))
+    ensure
+      described_class.instance_variable_set(:@game_instance, saved_game_instance)
     end
 
     it "gives up after SPLIT_ROOM_BLOCK_MAX_STRINGS strings without </room>" do
@@ -1995,7 +2031,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
         described_class.send(:process_downstream_hooks, +head)
         (max - 1).times { described_class.send(:process_downstream_hooks, +filler) }
       end
-      expect(writes).to eq([head + (filler * (max - 1))])
+      expect(writes).to eq([head] + ([filler] * (max - 1)))
     end
 
     it 'rewrites the next complete block when a cut-off block is followed by one' do
@@ -2004,10 +2040,10 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
         described_class.send(:process_downstream_hooks, +head)
         described_class.send(:process_downstream_hooks, +saga_room)
       end
-      expect(writes.size).to eq(1)
-      expect(writes.first).to start_with(head)
-      expect(writes.first.scan('<room>').size).to eq(1) # only the cut-off one stays raw
-      expect(writes.first).to include(%(<style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n))
+      expect(writes.size).to eq(2)
+      expect(writes.first).to eq(head) # the cut-off block stays raw, on its own
+      expect(writes.last).to start_with(%(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n))
+      expect(Lich).to have_received(:log).with(/never closed/)
     end
 
     it 'does not hold a string whose <room> is not at the start of a room line' do
