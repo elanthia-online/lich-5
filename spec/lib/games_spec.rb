@@ -1846,6 +1846,9 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     allow(Lich).to receive(:hide_uid_flag).and_return(false)
     stub_const('DownstreamHook', Lich::Common::DownstreamHook)
     stub_const('Frontend', Lich::Common::Frontend)
+    # spec_helper sets these globals once per process; save them so the after
+    # hook restores them rather than leaving nil for later specs.
+    @saved_globals = [$_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend]
     @raw_socket = instance_double('raw_client_socket', closed?: false, write: nil, close: nil)
     $_DETACHABLE_CLIENT_REGISTRY_ = nil
     $_DETACHABLE_CLIENT_ = nil
@@ -1855,8 +1858,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
 
   after do
     $_CLIENT_.close rescue nil
-    $_CLIENT_ = nil
-    $frontend = nil
+    $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend = @saved_globals
     described_class.instance_variable_set(:@room_number_after_ready, false)
   end
 
