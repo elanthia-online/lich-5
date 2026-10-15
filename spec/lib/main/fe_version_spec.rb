@@ -141,7 +141,7 @@ RSpec.describe '--fe-version' do
     it 'sends the version-substituted client string when --fe-version is set' do
       $frontend = 'wrayth'
       run(fe_version: 'genie-5.1')
-      expected = '/FE:WRAYTH /VERSION:genie-5.1 /P:WIN_UNKNOWN /XML'
+      expected = '/FE:WRAYTH /VERSION:genie-5.1 /P:SAGA /XML'
       expect(Game.sent).to eq(['KEY', expected, '<c>', '<c>'])
       expect($_CLIENTBUFFER_).to eq([expected, "<c>\r\n", "<c>\r\n"])
     end
@@ -149,7 +149,7 @@ RSpec.describe '--fe-version' do
     it 'sends the default client string byte-for-byte when --fe-version is absent' do
       $frontend = 'wrayth'
       run({})
-      expected = '/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML'
+      expected = '/FE:WRAYTH /VERSION:saga-0.10.4 /P:SAGA /XML'
       expect(Game.sent[1].bytes).to eq(expected.bytes)
       expect($_CLIENTBUFFER_.first.bytes).to eq(expected.bytes)
     end
