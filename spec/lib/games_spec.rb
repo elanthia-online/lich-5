@@ -1861,12 +1861,14 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     $_DETACHABLE_CLIENT_ = nil
     $_CLIENT_ = Lich::Common::SynchronizedSocket.new(@raw_socket)
     described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@held_room_block, nil)
   end
 
   after do
     $_CLIENT_.close rescue nil
     $_DETACHABLE_CLIENT_REGISTRY_, $_DETACHABLE_CLIENT_, $_CLIENT_, $frontend = @saved_globals
     described_class.instance_variable_set(:@room_number_after_ready, false)
+    described_class.instance_variable_set(:@held_room_block, nil)
   end
 
   it 'passes the block through unchanged to Saga (behind its origin sentinel)' do
@@ -1907,6 +1909,107 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
         "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
         "An Elven burial ground.\r\nObvious paths: north.\r\n"
       )
+    end
+  end
+
+  # One <room> block can arrive across more than one server string. A front
+  # end without :room_element must never see the raw halves: they are held
+  # until </room> arrives and the joined block is rewritten.
+  context 'when one block is split across server strings' do
+    head = %(<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.\r\n)
+    tail = %(Saplings mark the graves.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>\r\n)
+    prompt = %(<prompt time="1">&gt;</prompt>\r\n)
+
+    def written
+      writes = []
+      allow(@raw_socket).to receive(:write) { |s| writes << s }
+      yield
+      sleep 0.05
+      writes
+    end
+
+    it 'holds the first part and writes the joined block in the legacy layout, keeping the server newline' do
+      $frontend = 'wrayth'
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        sleep 0.05
+        expect(@raw_socket).not_to have_received(:write)
+        described_class.send(:process_downstream_hooks, +tail)
+      end
+      expect(writes).to eq([
+                             %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
+                             %(<style id=""/><preset id='roomDesc'>An Elven burial ground.\r\nSaplings mark the graves.</preset>\r\n) +
+                             %(Obvious paths: <d>north</d>.\r\n)
+                           ])
+    end
+
+    it 'arms the room display only once the block is complete' do
+      $frontend = 'wrayth'
+      described_class.send(:process_downstream_hooks, +head)
+      expect(described_class.instance_variable_get(:@room_number_after_ready)).to be false
+      described_class.send(:process_downstream_hooks, +tail)
+      expect(described_class.instance_variable_get(:@room_number_after_ready)).to be true
+    end
+
+    it 'gives Wizard its GSL room codes for the joined block' do
+      $frontend = 'wizard'
+      stub_wizard_conversion
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        described_class.send(:process_downstream_hooks, +tail)
+      end
+      expect(writes.join).to include("\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n")
+      expect(writes.join).not_to include('<room>')
+    end
+
+    it 'passes each part straight through to Saga' do
+      $frontend = 'saga'
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        described_class.send(:process_downstream_hooks, +tail)
+      end
+      expect(writes).to eq(["\x1F#{head}", "\x1F#{tail}"])
+    end
+
+    it 'gives up at a prompt that arrives before </room>, writing the held strings unchanged and in order' do
+      $frontend = 'wrayth'
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        described_class.send(:process_downstream_hooks, +prompt)
+        described_class.send(:process_downstream_hooks, +prompt)
+      end
+      expect(writes).to eq([head + prompt, prompt])
+      expect(Lich).to have_received(:log).with(/never closed/)
+    end
+
+    it "gives up after SPLIT_ROOM_BLOCK_MAX_STRINGS strings without </room>" do
+      $frontend = 'wrayth'
+      filler = "More text.\r\n"
+      max = Lich::GameBase::Game::SPLIT_ROOM_BLOCK_MAX_STRINGS
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        (max - 1).times { described_class.send(:process_downstream_hooks, +filler) }
+      end
+      expect(writes).to eq([head + (filler * (max - 1))])
+    end
+
+    it 'rewrites the next complete block when a cut-off block is followed by one' do
+      $frontend = 'wrayth'
+      writes = written do
+        described_class.send(:process_downstream_hooks, +head)
+        described_class.send(:process_downstream_hooks, +saga_room)
+      end
+      expect(writes.size).to eq(1)
+      expect(writes.first).to start_with(head)
+      expect(writes.first.scan('<room>').size).to eq(1) # only the cut-off one stays raw
+      expect(writes.first).to include(%(<style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n))
+    end
+
+    it 'does not hold a string whose <room> is not at the start of a room line' do
+      $frontend = 'wrayth'
+      speech = %(You say, "Meet me in the <room> later."\r\n)
+      writes = written { described_class.send(:process_downstream_hooks, +speech) }
+      expect(writes).to eq([speech])
     end
   end
 end
