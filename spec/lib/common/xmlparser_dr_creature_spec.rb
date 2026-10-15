@@ -322,5 +322,43 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
       expect(Lich::DragonRealms::Creature[4002].name).to eq('an old kobold')
       expect(Lich::DragonRealms::Creature.all.map(&:name)).not_to include('a ', 'an ')
     end
+
+    context 'GameObj npc status (real GameObj)' do
+      before do
+        %i[clear_npcs clear_loot new_npc new_loot npcs].each do |m|
+          allow(Lich::Common::GameObj).to receive(m).and_call_original
+        end
+        Lich::Common::GameObj.clear_npcs
+        Lich::Common::GameObj.clear_loot
+      end
+
+      after do
+        Lich::Common::GameObj.clear_npcs
+        Lich::Common::GameObj.clear_loot
+      end
+
+      def npc_status(id)
+        Lich::Common::GameObj.npcs.find { |npc| npc.id == id }&.status
+      end
+
+      # DR words a corpse two ways in room objs: "(dead)" and "which appears dead".
+      it 'marks a linked creature dead from either DR wording' do
+        feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4007" noun="cougar">cougar</a><popBold/><popBold/> which appears dead, ' \
+             '<pushBold/><pushBold/>a <a exist="4008" noun="cougar">cougar</a><popBold/><popBold/> (dead) and ' \
+             '<pushBold/><pushBold/>a <a exist="4009" noun="cougar">cougar</a><popBold/><popBold/>.</component>')
+
+        expect(npc_status('4007')).to eq('dead')
+        expect(npc_status('4008')).to eq('dead')
+        expect(npc_status('4009')).to be_nil
+      end
+
+      it 'stops the status at "and" when the room-objs tail follows in the same run' do
+        feed("<component id='room objs'>You also see <pushBold/><pushBold/>a " \
+             '<a exist="4007" noun="cougar">cougar</a><popBold/><popBold/> which appears dead and some junk.</component>')
+
+        expect(npc_status('4007')).to eq('dead')
+      end
+    end
   end
 end
