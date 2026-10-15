@@ -50,6 +50,13 @@ REPO = File.expand_path(__dir__)
 FIXTURE_DIR = File.join(REPO, 'benchmark', 'fixtures')
 MARKER = '### benchmark:body-repeats-below ###'
 SENTINEL = 'LICH_BENCH_SENTINEL_END'
+CHUNK_SENTINEL = 'LICH_BENCH_CHUNK_END'
+# Lich's game reader feeds a bounded parser queue (Game::SERVER_QUEUE_CAPACITY,
+# 4096 records) and treats overflow as unrecoverable. A run's flood is therefore
+# sent in chunks of at most this many lines; each chunk ends with
+# CHUNK_SENTINEL and the next is sent only once Lich has echoed it, i.e. once
+# the chunk has been fully parsed. Keep this well under the queue capacity.
+CHUNK_LINES = 2_000
 CLOCK = Process::CLOCK_MONOTONIC
 
 options = {
@@ -111,12 +118,14 @@ def benchmark(fx, opts)
   body_payload = fx[:body] * fx[:iterations]
   body_bytes   = body_payload.bytesize
   body_lines   = fx[:body_lines] * fx[:iterations]
+  body_chunks  = body_payload.lines.each_slice(CHUNK_LINES).map(&:join)
 
   server  = TCPServer.new('127.0.0.1', 0)
   port    = server.addr[1]
   trigger = Queue.new # main -> server: :go / :stop
   starts  = Queue.new # server -> main: t_start per run
   dones   = Queue.new # reader -> main: [t_end, bytes, lines] per run
+  acks    = Queue.new # reader -> server: one per echoed CHUNK_SENTINEL
 
   srv = Thread.new do
     conn = server.accept
@@ -136,7 +145,16 @@ def benchmark(fx, opts)
     loop do
       break if trigger.pop == :stop
       starts.push(Process.clock_gettime(CLOCK))
-      conn.write(body_payload)
+      body_chunks.each_with_index do |chunk, i|
+        conn.write(chunk)
+        next if i == body_chunks.length - 1
+
+        # Wait for Lich to finish parsing this chunk before sending the next, so
+        # the bounded parser queue never overflows (see CHUNK_LINES).
+        conn.write("#{CHUNK_SENTINEL}\r\n")
+        conn.flush
+        Timeout.timeout(120) { acks.pop }
+      end
       conn.write("#{SENTINEL}\r\n")
       conn.flush
     end
@@ -176,6 +194,10 @@ def benchmark(fx, opts)
         bytes += chunk.bytesize
         lines += chunk.count("\n")
         buf << chunk
+        while (idx = buf.index(CHUNK_SENTINEL))
+          acks.push(true)
+          buf = buf[(idx + CHUNK_SENTINEL.length)..] || +''
+        end
         while (idx = buf.index(SENTINEL))
           # Output after the sentinel belongs to the next run, not this one;
           # subtract the trailing bytes/lines and carry them forward so a

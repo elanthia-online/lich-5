@@ -1,0 +1,368 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195816642" noun="casket">moldy wooden casket</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035854">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035854">&gt;</prompt>
+Brenna drops a moldy wooden casket into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035854">&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195815978" noun="strongbox">worm-eaten pine strongbox</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035855">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035855">&gt;</prompt>
+<indicator id='IconJOINED' visible='y'/>You join <a exist="-10614301" noun="Corwin">Corwin</a>'s group.
+By the way, <a exist="-10614301" noun="Corwin">Corwin</a> is teaching a class on Scholarship.
+<prompt time="1792035855">J&gt;</prompt>
+Brenna drops a worm-eaten pine strongbox into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035855">J&gt;</prompt>
+<indicator id="IconJOINED" visible="y"/>
+<clearStream id='group'/>
+<pushStream id="group"/>Members of your group:
+<popStream/><pushStream id="group"/>  You: Healthy.
+<popStream/><pushStream id="group"/>  Corwin (Leader): Healthy.
+<popStream/><pushStream id="group"/>There are 2 members in your group.
+<popStream/><prompt time="1792035856">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195807592" noun="coffer">mud-stained deobar coffer</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035856">J&gt;</prompt>
+Brenna drops a mud-stained deobar coffer into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035857">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195805312" noun="box">salt-stained steel box</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035857">J&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035858">J&gt;</prompt>
+Brenna drops a salt-stained steel box into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035858">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195803852" noun="box">worm-eaten mahogany box</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035858">J&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035859">J&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1792035859">J&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792035859">J&gt;</prompt>
+Brenna drops a worm-eaten mahogany box into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035859">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195803143" noun="caddy">sturdy steel caddy</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035860">J&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035860">J&gt;</prompt>
+Brenna drops a sturdy steel caddy into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035860">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195796761" noun="casket">copper-edged pine casket</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035861">J&gt;</prompt>
+<indicator id="IconJOINED" visible="y"/>
+<clearStream id='group'/>
+<pushStream id="group"/>Members of your group:
+<popStream/>Members of your group:
+<pushStream id="group"/>  You: Healthy.
+<popStream/>  You: Healthy.
+<pushStream id="group"/>  Corwin (Leader): Healthy.
+<popStream/>  Corwin (Leader): Healthy.
+<pushStream id="group"/>There are 2 members in your group.
+<popStream/>There are 2 members in your group.
+<prompt time="1792035861">J&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035861">J&gt;</prompt>
+Brenna drops a copper-edged pine casket into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035862">J&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792035862">J&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195796375" noun="crate">worm-eaten ironwood crate</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035862">J&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035862">J&gt;</prompt>
+Brenna drops a worm-eaten ironwood crate into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035863">J&gt;</prompt>
+Brenna drums her fingers on her bucket rhythmically.
+<prompt time="1792035863">J&gt;</prompt>
+Brenna drums her fingers on her bucket rhythmically.
+After a moment, a dull *THUD* echoes from within the bucket.
+<prompt time="1792035864">J&gt;</prompt>
+Defaulting to GROUP disband.  Type DISBAND HELP for more info.
+There was no one to disband.
+<prompt time="1792035864">J&gt;</prompt>
+A cloud-ridden sky hides all but the faintest hint of the rising sun.  Dim grey light devoid of color or warmth creeps across the land, diluting the dark but not quite chasing it away.
+<prompt time="1792035865">J&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792035865">J&gt;</prompt>
+<a exist="-10614301" noun="Corwin">Corwin</a> seems to glow with an inner light, trailing rutilant sparks with every movement.
+<prompt time="1792035865">J&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><prompt time="1792035866">J&gt;</prompt>
+<indicator id='IconJOINED' visible='n'/>You leave the group.
+<prompt time="1792035867">&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195785516" noun="crate">poorly made mahogany crate</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035868">&gt;</prompt>
+<a exist="-10623441" noun="Delphine">Delphine</a> gestures.
+<prompt time="1792035868">&gt;</prompt>
+<indicator id="IconJOINED" visible="n"/>
+<clearStream id='group'/>
+<pushStream id="group"/>Members of your group:
+<popStream/><pushStream id="group"/>  You (Leader): Healthy.
+<popStream/><pushStream id="group"/>There is 1 member in your group.
+<popStream/><prompt time="1792035868">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035868">&gt;</prompt>
+Brenna drops a poorly made mahogany crate into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035869">&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195785191" noun="trunk">sturdy ironwood trunk</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035869">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035869">&gt;</prompt>
+<a exist="-10614301" noun="Corwin">Corwin</a> touches you.
+You feel a warmth radiate from <a exist="-10614301" noun="Corwin">Corwin</a>'s touch.
+You have a brief sensation that leaves your wounds tingling.
+<prompt time="1792035870">&gt;</prompt>
+Brenna drops a sturdy ironwood trunk into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035870">&gt;</prompt>
+<pushStream id="whispers"/><preset id="whisper">Corwin whispers,</preset> "Done!"
+<popStream/><preset id="whisper">Corwin whispers,</preset> "Done!"
+<prompt time="1792035870">&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195783969" noun="strongbox">deeply gouged deobar strongbox</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035870">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035871">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792035871">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792035871">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Paintress <a exist="-10614513" noun="Brenna">Brenna</a>, <a exist="-10623441" noun="Delphine">Delphine</a> and Druid <a exist="-10614301" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792035871">&gt;</prompt>
+Brenna drops a deeply gouged deobar strongbox into a portable silversteel bucket with a flared rim.  She glances inside and draws back quickly from the sight.
+<prompt time="1792035871">&gt;</prompt>
+<a exist="-10614513" noun="Brenna">Brenna</a> gets a <a exist="195783350" noun="caddy">poorly made pine caddy</a> from inside <a exist="-10614513" noun="Brenna">her</a> <a exist="195463992" noun="lootsack">cloth lootsack</a>.
+<prompt time="1792035872">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (100%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792035872">&gt;</prompt>
+<component id='room objs'></component>
+<prompt time="1792035872">&gt;</prompt>
+You stroll north.
+<nav rm='230009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230009)</name><description>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</description><exists></exists><players></players><exits>Obvious paths: <d>south</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035872">&gt;</prompt>
+You stroll northwest.
+<nav rm='230010'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230010)</name><description>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You stroll north.
+<nav rm='230011'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Trelda's Faery Ring] (230011)</name><description>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You stroll west.
+<nav rm='230029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</component>
+<component id='room objs'>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Grove Lawn] (230029)</name><description>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</description><exists>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southwest.
+<nav rm='100065'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, E'erdream Bower Gate] (100065)</name><description>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</description><exists></exists><players></players><exits>Obvious paths: <d>southwest</d>.</exits><extra></extra></room>
+<component id='room objs'></component>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southwest.
+<nav rm='100029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</component>
+<component id='room objs'>You also see <pushBold/><pushBold/>an <a exist="34362" noun="Warden">Elven Warden</a><popBold/><popBold/>.</component>
+<crtrStatus exist="34362" disengaged="1"/><component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Elder Bark Circle] (100029)</name><description>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</description><exists>You also see <pushBold/><pushBold/>an <a exist="34362" noun="Warden">Elven Warden</a><popBold/><popBold/>.</exists><crtrStatus exist="34362" disengaged="1"/><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room objs'>You also see <pushBold/><pushBold/>an <a exist="34362" noun="Warden">Elven Warden</a><popBold/><popBold/>.</component>
+<crtrStatus exist="34362" disengaged="1"/><component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southwest.
+<nav rm='100064'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100064)</name><description>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room objs'></component>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southwest.
+<nav rm='100063'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100063)</name><description>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room objs'></component>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southwest.
+<nav rm='100062'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100062)</name><description>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southeast.
+<nav rm='100084'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</component>
+<component id='room objs'>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100084)</name><description>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</description><exists>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</exists><players></players><exits>Obvious paths: <d>southeast</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room objs'>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</component>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run southeast.
+<nav rm='100051'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100051)</name><description>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room objs'></component>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run west.
+<nav rm='100050'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Dragon Tree Road] (100050)</name><description>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+[Assuming you mean an <a exist="-851" noun="door">ebony door</a>.]
+<nav rm='103021'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You run up.
+<nav rm='103022'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Domestic Branch] (103022)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Domestic Branch] (103022)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</component>
+<component id='room objs'>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>down</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035873">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792035873">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<prompt time="1792035873">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<prompt time="1792035873">&gt;</prompt>
+The clerk pages through her ledger.  "<a exist="-10539485" noun="Aldric">Aldric</a>, it looks like your current balance is 9142 platinum, 6 gold, 8 silver, and 8 bronze Kronars."
+<prompt time="1792035875">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792035877">&gt;</prompt>
+Stow what?  Type 'STOW HELP' for details.
+<prompt time="1792035880">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792035880">&gt;</prompt>
+You stroll down.
+<nav rm='103021'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792035880">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<prompt time="1792035881">&gt;</prompt>

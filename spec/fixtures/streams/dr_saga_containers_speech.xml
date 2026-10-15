@@ -1,0 +1,752 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040353">&gt;</prompt>
+<a exist="-11031" noun="Brenna">Brenna</a> sets, slowly dropping below the horizon.
+<prompt time="1792040356">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040359">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1792040359">&gt;</prompt>
+In the traveler's pack you see a glass egg, a soft gem pouch, a bourde book bag, a glowing Kuniyo orb, a black prayer tapestry, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, some straight pins, some cotton thread, a cloth titanese deed, some blank scrolls, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, a frosty black tablet, a memory orb, a polished mahogany tankard, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an intricate decay sigil-scroll, an intricate decay sigil-scroll, an intricate decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, a warm amber bolus, a warm amber bolus, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an engineering logbook, an enchanting logbook, a piece of black flint, a tiny wild sirese seed, a curved wood shaper, a golden owl, a toy clockwork electrum dirigible, some titanese cloth, a pair of blue ice skates, a glittery black hedgehog, a glowing Tamsine orb, a small Wayerd pyramid, a fine marble mortar, a master shaping book, some wood stain, some wood glue, a master artificing book, a Bardic Spirit Knot pick, some metal clamps, some grain alcohol, a master blacksmithing book, a forging logbook, a master remedies book, some water, an alchemy logbook, a large bowl, a metal sieve, a master tailoring book, an outfitting logbook, an engineering logbook, a wire brush, an iron pestle, a journeyman shaping book, a small blue-green booklet and a lot of other stuff.
+<prompt time="1792040362">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040363">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040365">&gt;</prompt>
+<a exist="-10623441" noun="Corwin">Corwin</a> gestures.
+<prompt time="1792040366">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040371">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040373">&gt;</prompt>
+In the traveler's pack you see a glass egg, a soft gem pouch, a bourde book bag, a glowing Kuniyo orb, a black prayer tapestry, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, some straight pins, some cotton thread, a cloth titanese deed, some blank scrolls, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, an exquisite paradox sigil-scroll, a frosty black tablet, a memory orb, a polished mahogany tankard, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an intricate decay sigil-scroll, an intricate decay sigil-scroll, an intricate decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, a warm amber bolus, a warm amber bolus, an exquisite decay sigil-scroll, an exquisite decay sigil-scroll, an engineering logbook, an enchanting logbook, a piece of black flint, a tiny wild sirese seed, a curved wood shaper, a golden owl, a toy clockwork electrum dirigible, some titanese cloth, a pair of blue ice skates, a glittery black hedgehog, a glowing Tamsine orb, a small Wayerd pyramid, a fine marble mortar, a master shaping book, some wood stain, some wood glue, a master artificing book, a Bardic Spirit Knot pick, some metal clamps, some grain alcohol, a master blacksmithing book, a forging logbook, a master remedies book, some water, an alchemy logbook, a large bowl, a metal sieve, a master tailoring book, an outfitting logbook, an engineering logbook, a wire brush, an iron pestle, a journeyman shaping book, a small blue-green booklet and a lot of other stuff.
+<prompt time="1792040375">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040377">&gt;</prompt>
+You rummage through a scuffed traveler's pack and see a glass egg inlaid in rencate with a magnificent rooster, a soft gem pouch, an ink-stained isabelline bourde book bag clasped by a silversteel quill, a glowing Kuniyo orb, a nightmare-black prayer tapestry embroidered with three crystal-green eyes, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, a parchment wolf primer, some straight iron pins, some cotton thread, a deed for some heavy titanese cloth, some blank scrolls, an exquisite paradox sigil-scroll etched in delicate detail, an exquisite paradox sigil-scroll etched in delicate detail, an exquisite paradox sigil-scroll etched in delicate detail, an exquisite paradox sigil-scroll etched in delicate detail, a frosty black tablet, a memory orb, a polished mahogany tankard with a kidskin-wrapped handle, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an intricate decay sigil-scroll etched in delicate detail, an intricate decay sigil-scroll etched in delicate detail, an intricate decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, a warm amber bolus, a warm amber bolus, an exquisite decay sigil-scroll etched in delicate detail, an exquisite decay sigil-scroll etched in delicate detail, an engineering work order logbook, an enchanting work order logbook, a piece of black flint, a tiny wild sirese seed, a curved wood shaper with an osage grip, a golden owl, a toy clockwork electrum dirigible, some titanese cloth, a pair of dark blue ice skates decorated with silvery glitter, a glittery black hedgehog formed from fine silky sand, a glowing Tamsine orb, a small Wayerd pyramid, a fine marble mortar with platinum accents, a book of master shaping instructions, some wood stain, some wood glue, a book of master artificing instructions, a silversteel Bardic Spirit Knot pick framed in cambrinth, some metal clamps, some grain alcohol, a book of master blacksmithing instructions, a forging work order logbook, a book of master remedies instructions, some water, an alchemy work order logbook, a large metal bowl, a metal sieve, a book of master tailoring instructions, an outfitting work order logbook, an engineering work order logbook, an iron wire brush, an iron pestle, a book of journeyman shaping instructions, a small blue-green booklet stamped with a blade set upon a grindstone, a grooved covellite mixing stick, some cotton thread, some straight iron pins, a crystalline collection of rainbow hematite prisms, a dark watersilk bag bearing a detailed cambrinth medallion, a mug of zombie's revenge, a piece of black flint, a coral wool sarong, some steel-bladed knives with polished bloodwood hilts, a frosty black tablet, a frosty black tablet, an intricate decay sigil-scroll etched in delicate detail, a warm amber bolus, a warm amber bolus, an intricate paradox sigil-scroll etched in delicate detail, an intricate paradox sigil-scroll etched in delicate detail, an intricate paradox sigil-scroll etched in delicate detail, an intricate paradox sigil-scroll etched in delicate detail, a frosty black tablet, a deed for a large diamondique rock, a deed for a large diamondique rock, a deed for some morgawr-scale leather, a deed for some crusty barkhide leather, a deed for a mammoth-bone stack, a deed for some mammoth-hide leather, a deed for a morgawr-bone stack, a deed for some punka leather, a deed for a mammoth-bone stack, a deed for a large anjisis rock, a deed for some shadowleaf leather, a deed for a morgawr-bone stack, a deed for some punka leather, a deed for some morgawr-scale leather, a deed for a mammoth-bone stack, a deed for a charred-bone stack, a deed for a large anjisis rock, a deed for a morgawr-bone stack, a deed for a morgawr-bone stack, a deed for a large anjisis rock, a deed for some shadowleaf leather, a deed for some punka leather, a deed for some morgawr-scale leather, a deed for a mammoth-bone stack, a deed for a crystal-bone stack, a deed for a ghostspine branch, a deed for some punka leather, a deed for a morgawr-bone stack, a large packet of deed claim forms, a deed register, a chamois cloth, a cut crystal chalice wrapped with silver wire, some burnt incense, some bundling rope and a <a exist="195648379" noun="rope">coil of heavy rope</a>.
+<prompt time="1792040381">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040383">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040383">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040389">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040393">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040395">&gt;</prompt>
+<right exist="195648380" noun="rope">bundling rope</right><clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a <a exist="195648608" noun="helm">diacan lamellar helm sculpted with the visage of a Saendalen shark</a>
+  a <a exist="195648607" noun="mask">silversteel light plate mask brushed with black gold filigree</a>
+  a <a exist="195648606" noun="amulet">cobra-engraved anlora-avtoma amulet suspended on a burnished chain</a>
+  a <a exist="195648605" noun="outfit">shimmering outfit</a>
+  a <a exist="195648604" noun="yiamura">gold-speckled coralite yiamura with sharkstone spines</a>
+  an <a exist="195648603" noun="brooch">achromatic tyrium brooch graced with a witchclaw flying dragon</a>
+  a <a exist="195648602" noun="spider">silversteel biomechanical harvester spider</a>
+  an <a exist="195648601" noun="crystal">argent sanowret crystal set within a palladium blade spider</a>
+  a <a exist="195648600" noun="hunter">vermillion woodlouse hunter with massive chelicerae</a>
+  a <a exist="195648598" noun="eddy">swirling eddy of incandescent light bound by a gold-striated coralite frame</a>
+  a <a exist="195648597" noun="pin">cabochon yellow diamond pin with a dark animite setting</a>
+  a <a exist="195648581" noun="quiver">soft white thigh quiver of snow leopard fur artfully wrapped with silver thread</a>
+  a <a exist="195648580" noun="bag">dark watersilk bag bearing a detailed cambrinth medallion</a>
+  a <a exist="195648579" noun="badge">pilgrim's badge</a>
+  a <a exist="195648578" noun="charm">mystic topaz charm inscribed with a thirteen-pointed star</a>
+  a <a exist="195648573" noun="bag">battered black duffel bag</a>
+  a <a exist="195648552" noun="haversack">jet-black nightsilk haversack clasped with a series of polished white fangs</a>
+  <a exist="195648535" noun="shadows">some dark encompassing shadows of twilight dreamweave</a>
+  a <a exist="195648378" noun="pack">scuffed traveler's pack</a>
+  a <a exist="195648377" noun="jacket">bespoke chocolate-brown khaddar jacket lined with teal paisley silk</a>
+  a <a exist="195648376" noun="hauberk">densely forged ka'hurst mail hauberk richly padded with electroweave</a>
+  a <a exist="195648375" noun="armband">berrybomb bast devotional armband dangling a cluster of jelly opals</a>
+  a <a exist="195648374" noun="shield">small morgawr leather shield embedded with yellowed fangs</a>
+  a <a exist="195648373" noun="knife">small steel skinning knife with a leather-wrapped hilt</a>
+  a <a exist="195648372" noun="cowbell">gold cowbell with a sinuous dragon handle</a>
+  a <a exist="195648371" noun="bracer">Dwarven iron bracer studded with kertig spikes</a>
+  <a exist="195648370" noun="gloves">some burgundy leather gloves trimmed with raven feathers</a>
+  an <a exist="195648369" noun="ring">ornate alerce ring</a>
+  a <a exist="195648361" noun="toolbelt">slender onyx-hide tailor's toolbelt plentifully bestrewn with jaspe ties</a>
+  a <a exist="195648357" noun="pouch">tiny taupe pouch with light yellow embroidery</a>
+  a <a exist="195648338" noun="lootsack">heavy Imperial weave cloth lootsack</a>
+  a <a exist="195648317" noun="pocket">pale kirmiko pocket with reinforced seams</a>
+  a <a exist="195648316" noun="ring">lockpick ring</a>
+  a <a exist="195648315" noun="bucket">portable silversteel bucket with a flared rim</a>
+  a <a exist="195648314" noun="pouch">soft gem pouch</a>
+  a <a exist="195648312" noun="harness">leaf-green leather harness with a smooth brass clasp</a>
+<popStream/>
+<clearContainer id="stow"/><inv id='stow'>In the <a exist="195648378" noun="pack">pack</a>:</inv><inv id='stow'> a <a exist="195648530" noun="egg">glass egg inlaid in rencate with a magnificent rooster</a></inv><inv id='stow'> a <a exist="195648529" noun="pouch">soft gem pouch</a></inv><inv id='stow'> an <a exist="195648528" noun="bag">ink-stained isabelline bourde book bag clasped by a silversteel quill</a></inv><inv id='stow'> a <a exist="195648527" noun="orb">glowing Kuniyo orb</a></inv><inv id='stow'> a <a exist="195648526" noun="tapestry">nightmare-black prayer tapestry embroidered with three crystal-green eyes</a></inv><inv id='stow'> a <a exist="195648525" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648524" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648523" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648522" noun="primer">parchment wolf primer</a></inv><inv id='stow'> <a exist="195648521" noun="pins">some straight iron pins</a></inv><inv id='stow'> <a exist="195648520" noun="thread">some cotton thread</a></inv><inv id='stow'> a <a exist="195648518" noun="deed">deed for some heavy titanese cloth</a></inv><inv id='stow'> <a exist="195648517" noun="scrolls">some blank scrolls</a></inv><inv id='stow'> an <a exist="195648516" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648515" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648514" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648513" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648512" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648511" noun="orb">memory orb</a></inv><inv id='stow'> a <a exist="195648510" noun="tankard">polished mahogany tankard with a kidskin-wrapped handle</a></inv><inv id='stow'> an <a exist="195648509" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648508" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648507" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648506" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648505" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648504" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648503" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648502" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648501" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648500" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648499" noun="bolus">warm amber bolus</a></inv><inv id='stow'> a <a exist="195648498" noun="bolus">warm amber bolus</a></inv><inv id='stow'> an <a exist="195648497" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648496" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648495" noun="logbook">engineering work order logbook</a></inv><inv id='stow'> an <a exist="195648494" noun="logbook">enchanting work order logbook</a></inv><inv id='stow'> a <a exist="195648493" noun="flint">piece of black flint</a></inv><inv id='stow'> a <a exist="195648492" noun="seed">tiny wild sirese seed</a></inv><inv id='stow'> a <a exist="195648491" noun="shaper">curved wood shaper with an osage grip</a></inv><inv id='stow'> a <a exist="195648490" noun="owl">golden owl</a></inv><inv id='stow'> a <a exist="195648489" noun="dirigible">toy clockwork electrum dirigible</a></inv><inv id='stow'> <a exist="195648488" noun="cloth">some titanese cloth</a></inv><inv id='stow'> a <a exist="195648487" noun="skates">pair of dark blue ice skates decorated with silvery glitter</a></inv><inv id='stow'> a <a exist="195648486" noun="hedgehog">glittery black hedgehog formed from fine silky sand</a></inv><inv id='stow'> a <a exist="195648485" noun="orb">glowing Tamsine orb</a></inv><inv id='stow'> a <a exist="195648484" noun="pyramid">small Wayerd pyramid</a></inv><inv id='stow'> a <a exist="195648483" noun="mortar">fine marble mortar with platinum accents</a></inv><inv id='stow'> a <a exist="195648482" noun="book">book of master shaping instructions</a></inv><inv id='stow'> <a exist="195648481" noun="stain">some wood stain</a></inv><inv id='stow'> <a exist="195648480" noun="glue">some wood glue</a></inv><inv id='stow'> a <a exist="195648479" noun="book">book of master artificing instructions</a></inv><inv id='stow'> a <a exist="195648478" noun="pick">silversteel Bardic Spirit Knot pick framed in cambrinth</a></inv><inv id='stow'> <a exist="195648477" noun="clamps">some metal clamps</a></inv><inv id='stow'> <a exist="195648476" noun="alcohol">some grain alcohol</a></inv><inv id='stow'> a <a exist="195648475" noun="book">book of master blacksmithing instructions</a></inv><inv id='stow'> a <a exist="195648474" noun="logbook">forging work order logbook</a></inv><inv id='stow'> a <a exist="195648473" noun="book">book of master remedies instructions</a></inv><inv id='stow'> <a exist="195648472" noun="water">some water</a></inv><inv id='stow'> an <a exist="195648471" noun="logbook">alchemy work order logbook</a></inv><inv id='stow'> a <a exist="195648470" noun="bowl">large metal bowl</a></inv><inv id='stow'> a <a exist="195648469" noun="sieve">metal sieve</a></inv><inv id='stow'> a <a exist="195648468" noun="book">book of master tailoring instructions</a></inv><inv id='stow'> an <a exist="195648467" noun="logbook">outfitting work order logbook</a></inv><inv id='stow'> an <a exist="195648466" noun="logbook">engineering work order logbook</a></inv><inv id='stow'> an <a exist="195648465" noun="brush">iron wire brush</a></inv><inv id='stow'> an <a exist="195648464" noun="pestle">iron pestle</a></inv><inv id='stow'> a <a exist="195648463" noun="book">book of journeyman shaping instructions</a></inv><inv id='stow'> a <a exist="195648462" noun="booklet">small blue-green booklet stamped with a blade set upon a grindstone</a></inv><inv id='stow'> a <a exist="195648461" noun="stick">grooved covellite mixing stick</a></inv><inv id='stow'> <a exist="195648460" noun="thread">some cotton thread</a></inv><inv id='stow'> <a exist="195648459" noun="pins">some straight iron pins</a></inv><inv id='stow'> a <a exist="195648458" noun="prisms">crystalline collection of rainbow hematite prisms</a></inv><inv id='stow'> a <a exist="195648457" noun="bag">dark watersilk bag bearing a detailed cambrinth medallion</a></inv><inv id='stow'> a <a exist="195648456" noun="revenge">mug of zombie's revenge</a></inv><inv id='stow'> a <a exist="195648455" noun="flint">piece of black flint</a></inv><inv id='stow'> a <a exist="195648454" noun="sarong">coral wool sarong</a></inv><inv id='stow'> <a exist="195648453" noun="knives">some steel-bladed knives with polished bloodwood hilts</a></inv><inv id='stow'> a <a exist="195648452" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648451" noun="tablet">frosty black tablet</a></inv><inv id='stow'> an <a exist="195648450" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648449" noun="bolus">warm amber bolus</a></inv><inv id='stow'> a <a exist="195648448" noun="bolus">warm amber bolus</a></inv><inv id='stow'> an <a exist="195648447" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648446" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648445" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648444" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648443" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648441" noun="deed">deed for a large diamondique rock</a></inv><inv id='stow'> a <a exist="195648439" noun="deed">deed for a large diamondique rock</a></inv><inv id='stow'> a <a exist="195648437" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648435" noun="deed">deed for some crusty barkhide leather</a></inv><inv id='stow'> a <a exist="195648433" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648431" noun="deed">deed for some mammoth-hide leather</a></inv><inv id='stow'> a <a exist="195648429" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648427" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648425" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648423" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648421" noun="deed">deed for some shadowleaf leather</a></inv><inv id='stow'> a <a exist="195648419" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648417" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648415" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648413" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648411" noun="deed">deed for a charred-bone stack</a></inv><inv id='stow'> a <a exist="195648409" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648407" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648405" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648403" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648401" noun="deed">deed for some shadowleaf leather</a></inv><inv id='stow'> a <a exist="195648399" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648397" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648395" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648393" noun="deed">deed for a crystal-bone stack</a></inv><inv id='stow'> a <a exist="195648391" noun="deed">deed for a ghostspine branch</a></inv><inv id='stow'> a <a exist="195648389" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648387" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648386" noun="packet">large packet of deed claim forms</a></inv><inv id='stow'> a <a exist="195648385" noun="register">deed register</a></inv><inv id='stow'> a <a exist="195648384" noun="cloth">chamois cloth</a></inv><inv id='stow'> a <a exist="195648382" noun="chalice">cut crystal chalice wrapped with silver wire</a></inv><inv id='stow'> <a exist="195648381" noun="incense">some burnt incense</a></inv><inv id='stow'> a <a exist="195648379" noun="rope">coil of heavy rope</a></inv>You get <a exist="195648380" noun="rope">some bundling rope</a> from inside your <a exist="195648378" noun="pack">traveler's pack</a>.
+<prompt time="1792040396">&gt;</prompt>
+Freezing water drips from Corwin's thin-edged zills.
+<prompt time="1792040400">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040401">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040403">&gt;</prompt>
+<right>Empty</right><clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a <a exist="195648608" noun="helm">diacan lamellar helm sculpted with the visage of a Saendalen shark</a>
+  a <a exist="195648607" noun="mask">silversteel light plate mask brushed with black gold filigree</a>
+  a <a exist="195648606" noun="amulet">cobra-engraved anlora-avtoma amulet suspended on a burnished chain</a>
+  a <a exist="195648605" noun="outfit">shimmering outfit</a>
+  a <a exist="195648604" noun="yiamura">gold-speckled coralite yiamura with sharkstone spines</a>
+  an <a exist="195648603" noun="brooch">achromatic tyrium brooch graced with a witchclaw flying dragon</a>
+  a <a exist="195648602" noun="spider">silversteel biomechanical harvester spider</a>
+  an <a exist="195648601" noun="crystal">argent sanowret crystal set within a palladium blade spider</a>
+  a <a exist="195648600" noun="hunter">vermillion woodlouse hunter with massive chelicerae</a>
+  a <a exist="195648598" noun="eddy">swirling eddy of incandescent light bound by a gold-striated coralite frame</a>
+  a <a exist="195648597" noun="pin">cabochon yellow diamond pin with a dark animite setting</a>
+  a <a exist="195648581" noun="quiver">soft white thigh quiver of snow leopard fur artfully wrapped with silver thread</a>
+  a <a exist="195648580" noun="bag">dark watersilk bag bearing a detailed cambrinth medallion</a>
+  a <a exist="195648579" noun="badge">pilgrim's badge</a>
+  a <a exist="195648578" noun="charm">mystic topaz charm inscribed with a thirteen-pointed star</a>
+  a <a exist="195648573" noun="bag">battered black duffel bag</a>
+  a <a exist="195648552" noun="haversack">jet-black nightsilk haversack clasped with a series of polished white fangs</a>
+  <a exist="195648535" noun="shadows">some dark encompassing shadows of twilight dreamweave</a>
+  a <a exist="195648378" noun="pack">scuffed traveler's pack</a>
+  a <a exist="195648377" noun="jacket">bespoke chocolate-brown khaddar jacket lined with teal paisley silk</a>
+  a <a exist="195648376" noun="hauberk">densely forged ka'hurst mail hauberk richly padded with electroweave</a>
+  a <a exist="195648375" noun="armband">berrybomb bast devotional armband dangling a cluster of jelly opals</a>
+  a <a exist="195648374" noun="shield">small morgawr leather shield embedded with yellowed fangs</a>
+  a <a exist="195648373" noun="knife">small steel skinning knife with a leather-wrapped hilt</a>
+  a <a exist="195648372" noun="cowbell">gold cowbell with a sinuous dragon handle</a>
+  a <a exist="195648371" noun="bracer">Dwarven iron bracer studded with kertig spikes</a>
+  <a exist="195648370" noun="gloves">some burgundy leather gloves trimmed with raven feathers</a>
+  an <a exist="195648369" noun="ring">ornate alerce ring</a>
+  a <a exist="195648361" noun="toolbelt">slender onyx-hide tailor's toolbelt plentifully bestrewn with jaspe ties</a>
+  a <a exist="195648357" noun="pouch">tiny taupe pouch with light yellow embroidery</a>
+  a <a exist="195648338" noun="lootsack">heavy Imperial weave cloth lootsack</a>
+  a <a exist="195648317" noun="pocket">pale kirmiko pocket with reinforced seams</a>
+  a <a exist="195648316" noun="ring">lockpick ring</a>
+  a <a exist="195648315" noun="bucket">portable silversteel bucket with a flared rim</a>
+  a <a exist="195648314" noun="pouch">soft gem pouch</a>
+  a <a exist="195648312" noun="harness">leaf-green leather harness with a smooth brass clasp</a>
+<popStream/>
+<clearContainer id="stow"/><inv id='stow'>In the <a exist="195648378" noun="pack">pack</a>:</inv><inv id='stow'> <a exist="195648380" noun="rope">some bundling rope</a></inv><inv id='stow'> a <a exist="195648530" noun="egg">glass egg inlaid in rencate with a magnificent rooster</a></inv><inv id='stow'> a <a exist="195648529" noun="pouch">soft gem pouch</a></inv><inv id='stow'> an <a exist="195648528" noun="bag">ink-stained isabelline bourde book bag clasped by a silversteel quill</a></inv><inv id='stow'> a <a exist="195648527" noun="orb">glowing Kuniyo orb</a></inv><inv id='stow'> a <a exist="195648526" noun="tapestry">nightmare-black prayer tapestry embroidered with three crystal-green eyes</a></inv><inv id='stow'> a <a exist="195648525" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648524" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648523" noun="primer">parchment wolf primer</a></inv><inv id='stow'> a <a exist="195648522" noun="primer">parchment wolf primer</a></inv><inv id='stow'> <a exist="195648521" noun="pins">some straight iron pins</a></inv><inv id='stow'> <a exist="195648520" noun="thread">some cotton thread</a></inv><inv id='stow'> a <a exist="195648518" noun="deed">deed for some heavy titanese cloth</a></inv><inv id='stow'> <a exist="195648517" noun="scrolls">some blank scrolls</a></inv><inv id='stow'> an <a exist="195648516" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648515" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648514" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648513" noun="sigil-scroll">exquisite paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648512" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648511" noun="orb">memory orb</a></inv><inv id='stow'> a <a exist="195648510" noun="tankard">polished mahogany tankard with a kidskin-wrapped handle</a></inv><inv id='stow'> an <a exist="195648509" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648508" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648507" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648506" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648505" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648504" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648503" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648502" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648501" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648500" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648499" noun="bolus">warm amber bolus</a></inv><inv id='stow'> a <a exist="195648498" noun="bolus">warm amber bolus</a></inv><inv id='stow'> an <a exist="195648497" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648496" noun="sigil-scroll">exquisite decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648495" noun="logbook">engineering work order logbook</a></inv><inv id='stow'> an <a exist="195648494" noun="logbook">enchanting work order logbook</a></inv><inv id='stow'> a <a exist="195648493" noun="flint">piece of black flint</a></inv><inv id='stow'> a <a exist="195648492" noun="seed">tiny wild sirese seed</a></inv><inv id='stow'> a <a exist="195648491" noun="shaper">curved wood shaper with an osage grip</a></inv><inv id='stow'> a <a exist="195648490" noun="owl">golden owl</a></inv><inv id='stow'> a <a exist="195648489" noun="dirigible">toy clockwork electrum dirigible</a></inv><inv id='stow'> <a exist="195648488" noun="cloth">some titanese cloth</a></inv><inv id='stow'> a <a exist="195648487" noun="skates">pair of dark blue ice skates decorated with silvery glitter</a></inv><inv id='stow'> a <a exist="195648486" noun="hedgehog">glittery black hedgehog formed from fine silky sand</a></inv><inv id='stow'> a <a exist="195648485" noun="orb">glowing Tamsine orb</a></inv><inv id='stow'> a <a exist="195648484" noun="pyramid">small Wayerd pyramid</a></inv><inv id='stow'> a <a exist="195648483" noun="mortar">fine marble mortar with platinum accents</a></inv><inv id='stow'> a <a exist="195648482" noun="book">book of master shaping instructions</a></inv><inv id='stow'> <a exist="195648481" noun="stain">some wood stain</a></inv><inv id='stow'> <a exist="195648480" noun="glue">some wood glue</a></inv><inv id='stow'> a <a exist="195648479" noun="book">book of master artificing instructions</a></inv><inv id='stow'> a <a exist="195648478" noun="pick">silversteel Bardic Spirit Knot pick framed in cambrinth</a></inv><inv id='stow'> <a exist="195648477" noun="clamps">some metal clamps</a></inv><inv id='stow'> <a exist="195648476" noun="alcohol">some grain alcohol</a></inv><inv id='stow'> a <a exist="195648475" noun="book">book of master blacksmithing instructions</a></inv><inv id='stow'> a <a exist="195648474" noun="logbook">forging work order logbook</a></inv><inv id='stow'> a <a exist="195648473" noun="book">book of master remedies instructions</a></inv><inv id='stow'> <a exist="195648472" noun="water">some water</a></inv><inv id='stow'> an <a exist="195648471" noun="logbook">alchemy work order logbook</a></inv><inv id='stow'> a <a exist="195648470" noun="bowl">large metal bowl</a></inv><inv id='stow'> a <a exist="195648469" noun="sieve">metal sieve</a></inv><inv id='stow'> a <a exist="195648468" noun="book">book of master tailoring instructions</a></inv><inv id='stow'> an <a exist="195648467" noun="logbook">outfitting work order logbook</a></inv><inv id='stow'> an <a exist="195648466" noun="logbook">engineering work order logbook</a></inv><inv id='stow'> an <a exist="195648465" noun="brush">iron wire brush</a></inv><inv id='stow'> an <a exist="195648464" noun="pestle">iron pestle</a></inv><inv id='stow'> a <a exist="195648463" noun="book">book of journeyman shaping instructions</a></inv><inv id='stow'> a <a exist="195648462" noun="booklet">small blue-green booklet stamped with a blade set upon a grindstone</a></inv><inv id='stow'> a <a exist="195648461" noun="stick">grooved covellite mixing stick</a></inv><inv id='stow'> <a exist="195648460" noun="thread">some cotton thread</a></inv><inv id='stow'> <a exist="195648459" noun="pins">some straight iron pins</a></inv><inv id='stow'> a <a exist="195648458" noun="prisms">crystalline collection of rainbow hematite prisms</a></inv><inv id='stow'> a <a exist="195648457" noun="bag">dark watersilk bag bearing a detailed cambrinth medallion</a></inv><inv id='stow'> a <a exist="195648456" noun="revenge">mug of zombie's revenge</a></inv><inv id='stow'> a <a exist="195648455" noun="flint">piece of black flint</a></inv><inv id='stow'> a <a exist="195648454" noun="sarong">coral wool sarong</a></inv><inv id='stow'> <a exist="195648453" noun="knives">some steel-bladed knives with polished bloodwood hilts</a></inv><inv id='stow'> a <a exist="195648452" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648451" noun="tablet">frosty black tablet</a></inv><inv id='stow'> an <a exist="195648450" noun="sigil-scroll">intricate decay sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648449" noun="bolus">warm amber bolus</a></inv><inv id='stow'> a <a exist="195648448" noun="bolus">warm amber bolus</a></inv><inv id='stow'> an <a exist="195648447" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648446" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648445" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> an <a exist="195648444" noun="sigil-scroll">intricate paradox sigil-scroll etched in delicate detail</a></inv><inv id='stow'> a <a exist="195648443" noun="tablet">frosty black tablet</a></inv><inv id='stow'> a <a exist="195648441" noun="deed">deed for a large diamondique rock</a></inv><inv id='stow'> a <a exist="195648439" noun="deed">deed for a large diamondique rock</a></inv><inv id='stow'> a <a exist="195648437" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648435" noun="deed">deed for some crusty barkhide leather</a></inv><inv id='stow'> a <a exist="195648433" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648431" noun="deed">deed for some mammoth-hide leather</a></inv><inv id='stow'> a <a exist="195648429" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648427" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648425" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648423" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648421" noun="deed">deed for some shadowleaf leather</a></inv><inv id='stow'> a <a exist="195648419" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648417" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648415" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648413" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648411" noun="deed">deed for a charred-bone stack</a></inv><inv id='stow'> a <a exist="195648409" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648407" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648405" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648403" noun="deed">deed for a large anjisis rock</a></inv><inv id='stow'> a <a exist="195648401" noun="deed">deed for some shadowleaf leather</a></inv><inv id='stow'> a <a exist="195648399" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648397" noun="deed">deed for some morgawr-scale leather</a></inv><inv id='stow'> a <a exist="195648395" noun="deed">deed for a mammoth-bone stack</a></inv><inv id='stow'> a <a exist="195648393" noun="deed">deed for a crystal-bone stack</a></inv><inv id='stow'> a <a exist="195648391" noun="deed">deed for a ghostspine branch</a></inv><inv id='stow'> a <a exist="195648389" noun="deed">deed for some punka leather</a></inv><inv id='stow'> a <a exist="195648387" noun="deed">deed for a morgawr-bone stack</a></inv><inv id='stow'> a <a exist="195648386" noun="packet">large packet of deed claim forms</a></inv><inv id='stow'> a <a exist="195648385" noun="register">deed register</a></inv><inv id='stow'> a <a exist="195648384" noun="cloth">chamois cloth</a></inv><inv id='stow'> a <a exist="195648382" noun="chalice">cut crystal chalice wrapped with silver wire</a></inv><inv id='stow'> <a exist="195648381" noun="incense">some burnt incense</a></inv><inv id='stow'> a <a exist="195648379" noun="rope">coil of heavy rope</a></inv>You put your <a exist="195648380" noun="rope">rope</a> in your <a exist="195648378" noun="pack">traveler's pack</a>.
+<prompt time="1792040404">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040407">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040413">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040413">&gt;</prompt>
+You close your <a exist="195648378" noun="pack">traveler's pack</a>.
+<prompt time="1792040414">&gt;</prompt>
+That is closed.
+<prompt time="1792040417">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040419">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="rightArm" height="0" width="0"/><image id="leftArm" name="leftArm" height="0" width="0"/><image id="rightLeg" name="rightLeg" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="chest" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1792040419">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040423">&gt;</prompt>
+You open your <a exist="195648378" noun="pack">traveler's pack</a>.
+<prompt time="1792040424">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040425">&gt;</prompt>
+You rummage through a heavy Imperial weave cloth lootsack and see a durian branch and a <a exist="195648339" noun="stack">barghest-bone stack</a>.
+<prompt time="1792040426">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040431">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040433">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792040436">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792040436">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040437">&gt;</prompt>
+You stroll north.
+<nav rm='230009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230009)</name><description>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</description><exists></exists><players></players><exits>Obvious paths: <d>south</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040437">&gt;</prompt>
+You stroll northwest.
+<nav rm='230010'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230010)</name><description>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You stroll north.
+<nav rm='230011'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Trelda's Faery Ring] (230011)</name><description>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You stroll west.
+<nav rm='230029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</component>
+<component id='room objs'>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Grove Lawn] (230029)</name><description>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</description><exists>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southwest.
+<nav rm='100065'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, E'erdream Bower Gate] (100065)</name><description>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</description><exists></exists><players></players><exits>Obvious paths: <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southwest.
+<nav rm='100029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Elder Bark Circle] (100029)</name><description>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southwest.
+<nav rm='100064'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100064)</name><description>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southwest.
+<nav rm='100063'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100063)</name><description>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southwest.
+<nav rm='100062'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100062)</name><description>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southeast.
+<nav rm='100084'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</component>
+<component id='room objs'>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100084)</name><description>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</description><exists>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</exists><players></players><exits>Obvious paths: <d>southeast</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run southeast.
+<nav rm='100051'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100051)</name><description>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room objs'></component>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run west.
+<nav rm='100050'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Dragon Tree Road] (100050)</name><description>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+[Assuming you mean an <a exist="-851" noun="door">ebony door</a>.]
+<nav rm='103021'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You run up.
+<nav rm='103022'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Domestic Branch] (103022)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Domestic Branch] (103022)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</component>
+<component id='room objs'>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>down</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040438">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792040438">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<prompt time="1792040438">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Domestic Branch] (103022)</name><description>Here at the inside of a large fork is a chamber that houses the tellers for local currency transactions.  Despite their rather conservative nature, the local merchants, traders and citizens seem to be conducting a fair amount of business.  A sign points up for the Foreign Branch.</description><exists>You also see a <a exist="46497" noun="calendar">small calendar</a> and a <a exist="46495" noun="scroll">beautifully penned scroll</a>.</exists><players></players><exits>Obvious exits: <d>up</d>, <d>down</d>.</exits><extra></extra></room>
+<prompt time="1792040438">&gt;</prompt>
+You don't have that many platinum Kronars.
+<prompt time="1792040440">&gt;</prompt>
+<output class="mono"/>
+
+Name: Meraud's Hand Aldric Rotschreck of Meraud   Race: Human   Guild: Cleric
+Gender: Male   Age: 79   Circle: 200
+You were born on the 5th day of the 2nd month of Ka'len the Sea Drake in the year of the Silver Unicorn, 378 years after the victory of Lanival the Redeemer.
+
+Your birthday is more than 1 months away.
+
+     Strength : 100 +20          Reflex : 120 +24
+      Agility : 100 +20        Charisma : 100 +20
+   Discipline : 138              Wisdom : 138 +25
+ Intelligence : 164             Stamina : 100    
+
+Concentration : 680    Max : 680
+
+       Favors : 82
+         TDPs : 3984
+  PIRP Points : 0
+  Encumbrance : None
+         Luck : Average (0/3)
+
+Wealth:
+  No Kronars.
+  No Lirums.
+  No Dokoras.
+
+Debt:
+  No debt.
+
+
+You have 2 active purchases:
+  Urchin Guides, charges remaining: 281
+  Urchin Runners (limited use), charges remaining: 127
+<output class=""/>
+<prompt time="1792040442">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040443">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040443">&gt;</prompt>
+The clerk counts out 10 platinum Kronars and hands them over, making a notation in her ledger.
+<prompt time="1792040446">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040449">&gt;</prompt>
+The clerk slides a small metal box across the counter into which you drop 1 platinum Kronars.  She counts them carefully and records the deposit in her ledger.
+<prompt time="1792040449">&gt;</prompt>
+The clerk pages through her ledger.  "<a exist="-10539485" noun="Aldric">Aldric</a>, it looks like your current balance is 9133 platinum, 6 gold, 8 silver, and 8 bronze Kronars."
+<prompt time="1792040451">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040453">&gt;</prompt>
+Stow what?  Type 'STOW HELP' for details.
+<prompt time="1792040453">&gt;</prompt>
+You will no longer see room descriptions.
+<prompt time="1792040454">&gt;</prompt>
+You stroll down.
+<nav rm='103021'/>
+<streamWindow id='main' title='Story' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Imperial Depository, Lobby] (103021)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious exits: <d>up</d>, <d>out</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+<resource picture="0"/><room><name>[Imperial Depository, Lobby] (103021)</name><description>The inside of the lobby here is breathtaking, unlike anything else you have seen so far in Leth Deriel in terms of its display of wealth and worldliness.  The interior of the ebonwood tree has been polished and grooved to resemble rich paneling.  A brass sign along the far wall points up.</description><exists></exists><players></players><exits>Obvious exits: <d>up</d>, <d>out</d>.</exits><extra></extra></room>
+<prompt time="1792040454">&gt;</prompt>
+You stroll out.
+<nav rm='100050'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Dragon Tree Road] (100050)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Dragon Tree Road] (100050)</name><description>A tall, smooth barked ebonwood tree dominates the southwest side of the road here.  Its strong, black walls form a perfect circular trunk of huge diameter.  All the low hanging branches have been trimmed to prevent climbing.  An ebony door, fashioned with exquisite metal fittings and inlaid with semi-precious gems, marks this tree as the seat of Leth Deriel's financial life, the Imperial Depository.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You stroll east.
+<nav rm='100051'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100051)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100051)</name><description>This is a busy junction, leading to and from the main clearing of town, as well as a good many vital shops and institutions, such as the Imperial Depository due west, the provisions store due east, and the main temple to the northwest.  The well trodden path extends a bit beneath shady plane trees on either side, fading off into a dense cover of large bracken, their tough stalks and lacy fronds sprouting up at all angles.</description><exists></exists><players></players><exits>Obvious paths: <d>east</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You stroll northwest.
+<nav rm='100084'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100084)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</component>
+<component id='room objs'>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100084)</name><description>One great tree, looking almost as old as Sana'ati Dyaus itself, nearly blocks the path here.  Its roots are a jumbled network of tendrils reaching above the surface and out across the road.  Sheets of bark are sloughing off the trunk in spots, and the tree throws its branches out wildly in all directions, as though casting jealously about to snare those beings fortunate enough not be rooted where they stand.</description><exists>You also see <a exist="34336" noun="construction">some construction around the base of the tree</a>.</exists><players></players><exits>Obvious paths: <d>southeast</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run northwest.
+<nav rm='100062'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Cambium Circle] (100062)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Cambium Circle] (100062)</name><description>An ancient banyan tree, the town's main temple, looms to the southwest, as pilgrims come and go in a steady, quiet stream.  Not only are there clerics, empaths, mages and other devotees of the spiritual in the mix, but more secular types also seem to cluster around the temple.  Its dark, leathery leaves rustle on high, maintaining rhythm with the intoned prayers, chants and hymns of worshippers gathered in its precincts.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run northeast.
+<nav rm='100063'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100063)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100063)</name><description>The leafy tunnel overhead provides a highway for fuzzy tailed squirrels, fat-cheeked chipmunks, and darting greenish-brown lizards.  A few stray acorns fall to the ground with a dull thud, missing you by a narrow margin.  A break in the hedgerow to the south leads to a hut with a smoking chimney, from which wafts the unmistakable aroma of baking bread.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run northeast.
+<nav rm='100064'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Lorethew Lerili Road] (100064)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Lorethew Lerili Road] (100064)</name><description>The trees converge here, and their crowns spread out to meet in a canopy of leafy boughs.  Passing through this soothing and shady tunnel of foliage, the songs of the feathered sylvan orchestra overhead are amplified as they warble their myriad hymns to the ageless deities who watch over Leth Deriel.</description><exists></exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run northeast.
+<nav rm='100029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, Elder Bark Circle] (100029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</component>
+<component id='room objs'>You also see <pushBold/><pushBold/>an <a exist="34361" noun="Warden">Elven Warden</a><popBold/><popBold/>.</component>
+<crtrStatus exist="34361" disengaged="1"/><component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, Elder Bark Circle] (100029)</name><description>The deobars thin out, leaving the path northeast to E'erdream Bower Gate lined only with straight, wispy E'erdream trees.  Their lacy foliage sways lazily overhead and the fragrance of their flowers fills your nostrils.  The soft beds of fallen leaves at their bases look like the perfect spot for a short nap.</description><exists>You also see <pushBold/><pushBold/>an <a exist="34361" noun="Warden">Elven Warden</a><popBold/><popBold/>.</exists><crtrStatus exist="34361" disengaged="1"/><players></players><exits>Obvious paths: <d>northeast</d>, <d>southeast</d>, <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room objs'>You also see <pushBold/><pushBold/>an <a exist="34361" noun="Warden">Elven Warden</a><popBold/><popBold/>.</component>
+<crtrStatus exist="34361" disengaged="1"/><component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run northeast.
+<nav rm='100065'/>
+<streamWindow id='main' title='Story' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Leth Deriel, E'erdream Bower Gate] (100065)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Leth Deriel, E'erdream Bower Gate] (100065)</name><description>You could listen to the melody of the calling birds here in the greenwood for what would seem to be mere minutes but when roused from your reverie, actual years, so enchanting and vibrant are their songs at this gate.  Brilliant E'erdream trees form colonnades on either side of the way, leading southwest back into the heart of town, and northeast to a grassy hillock.</description><exists></exists><players></players><exits>Obvious paths: <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+<nav rm='230029'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Grove Lawn] (230029)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</component>
+<component id='room objs'>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Grove Lawn] (230029)</name><description>Due east, a clearing atop a small grassy hill rises to a point.  At its summit you can barely make out a circular growth of plants at regularly-spaced intervals.  To the southwest is E'erdream Bower gate, through which lies the Elven stronghold of Leth Deriel.  Thick stands of deobar trees form an impenetrable wall around the city on either side of the arching canopy of E'erdream trees.</description><exists>You also see an <a exist="31042" noun="tree">ancient deobar tree</a>.</exists><players></players><exits>Obvious paths: <d>northeast</d>, <d>east</d>, <d>southwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run east.
+<nav rm='230011'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Trelda's Faery Ring] (230011)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Trelda's Faery Ring] (230011)</name><description>You come upon a circular clearing, wreathed in mist and ringed by the largest toadstools you have ever seen.  The haze curls around the base and beneath the caps of the gigantic mushrooms, creeping noiselessly along and from time to time assuming fanciful Elven shapes.  Inside the ring, the dirt is trodden down, and the grass does not grow, as if a circle dance of intense frenzy had been performed here night after night, since before time was.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>south</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run south.
+<nav rm='230010'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230010)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>southeast</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230010)</name><description>Something brownish-green darts through the branches overhead, and suddenly falls at your feet with a *THWAP*!  The chameleon skitters away, and hot on its tail, out of nowhere, bursts an Elven child, clad in brownish green like its quarry.  Amid shrieks of delight, the child pursues the lizard as they both melt into the forest.  To the north, the land becomes more open and grassy, rising slightly, while to the south are clumps of trees.</description><exists></exists><players></players><exits>Obvious paths: <d>north</d>, <d>southeast</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run southeast.
+<nav rm='230009'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Dense Woods] (230009)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>south</d>, <d>northwest</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Dense Woods] (230009)</name><description>The darkness of the woods is almost absolute here, making you lose all sense of time and place.  Low locust trees line the path, their long, thin pods hanging down like serpents ready to drop and squeeze your last life's breath out of you.  Looking at the ground, you notice a diamond-backed snake slowly coiling its way into a hollow root cave.</description><exists></exists><players></players><exits>Obvious paths: <d>south</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792040454">&gt;</prompt>
+You run south.
+<nav rm='230008'/>
+<streamWindow id='main' title='Story' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [Bosque Deriel, Hermit's Shacks] (230008)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</component>
+<component id='room objs'></component>
+<component id='room players'>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</component>
+<component id='room exits'>Obvious paths: <d>north</d>, <d>south</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<component id='room players'>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792040454">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792040455">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792040455">&gt;</prompt>
+<a exist="-10614301" noun="Delphine">Delphine</a> begins to lecture you on the proper usage of the Scholarship skill.
+To learn from <a exist="-10614301" noun="Delphine">her</a>, you must LISTEN TO <a exist="-10614301" noun="Delphine">Delphine</a>.
+  (LISTEN HELP for more options)
+<prompt time="1792040455">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040455">&gt;</prompt>
+<resource picture="0"/><room><name>[Bosque Deriel, Hermit's Shacks] (230008)</name><description>Here on the route between the sacred sites of the Observatory and the Faery Ring is a semi-circular clearing.  At its center stands a hut made of lashed branches, roofed with broad leaves.  A certain sect of Elven clerics, who are renowned for their devotion to contemplation, are wont to retire into the solitudes of the woods and groves hereabouts.  They are not, however, renowned for their hospitality.</description><exists></exists><players>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</players><exits>Obvious paths: <d>north</d>, <d>south</d>.</exits><extra></extra></room>
+<prompt time="1792040455">&gt;</prompt>
+<a exist="-10614301" noun="Delphine">Delphine</a> touches you.
+You feel a warmth radiate from <a exist="-10614301" noun="Delphine">Delphine</a>'s touch.
+You have a brief sensation that leaves your wounds tingling.
+<prompt time="1792040455">&gt;</prompt>
+<pushStream id="atmospherics"/>Delicate phofe flowers slowly drift and swirl across the ethereal surface of Delphine's dreamweave kimono.
+<popStream/><prompt time="1792040458">&gt;</prompt>
+<roundTime value='1792040462'/><indicator id='IconHIDDEN' visible='y'/>You melt into the background, convinced that your attempt to hide went unobserved.
+Roundtime: 3 sec.
+<component id='room players'>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792040459">HR&gt;</prompt>
+The light snow falls silently down on the surface of Corwin's thin-edged zills.
+<prompt time="1792040460">HR&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040461">HR&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040463">H&gt;</prompt>
+<indicator id='IconHIDDEN' visible='n'/>You come out of hiding.
+<component id='room players'>Also here: Druid <a exist="-10614301" noun="Delphine">Delphine</a> and <a exist="-10623441" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792040463">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040467">&gt;</prompt>
+<pushStream id="talk"/><preset id='speech'>You politely say</preset>, "Hello."
+<popStream/><preset id='speech'>You politely say</preset>, "Hello."
+<prompt time="1792040468">&gt;</prompt>
+<pushStream id="talk"/><preset id='speech'><a exist="-10614301" noun="Delphine">Delphine</a> politely says</preset>, "Hello."
+<popStream/><preset id='speech'><a exist="-10614301" noun="Delphine">Delphine</a> politely says</preset>, "Hello."
+<prompt time="1792040472">&gt;</prompt>
+
+Thank you for logging into DragonRealms for 11 consecutive days!
+For logging in for 11 consecutive days, you have earned 1 +5 to a Stat boost.
+[You may use BOOST to access your Login Rewards.]
+<prompt time="1792040473">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792040473">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (91%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792040473">&gt;</prompt>

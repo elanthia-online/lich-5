@@ -1,0 +1,150 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# extract.rb - turn a ;logxml capture into a stream-replay fixture.
+#
+#   ruby spec/support/stream_replay/extract.rb LOG OUT --game DR --char NAME \
+#        [--from N] [--to N] [--keep NAME,...]
+#
+# Cleaning, in order:
+#   1. drop everything up to logxml's "full logging now active" marker (reget
+#      replay is out of order and partial), plus logxml's own date header and
+#      trailing timestamp lines;
+#   2. strip the per-line "YYYY-MM-DD HH:MM:SS TZ: " prefix;
+#   3. drop "<!-- CLIENT -->...<!-- ENDCLIENT -->" lines (upstream echoes, not
+#      server output);
+#   4. keep cleaned lines --from..--to (1-based, inclusive), snapped outward to
+#      prompt boundaries;
+#   5. pseudonymize: every player name (a negative-exist <a> noun, the logging
+#      character, names in "Also here:" lists, whisper/speech speakers, the group
+#      stream, and any name listed in --scrub-names) is replaced by a stable fake
+#      name, word-bounded, everywhere; account names are replaced by ACCOUNT.
+#      Names in --keep are left alone.
+#
+# The fixture gets a synthetic login header (settingsInfo/app char) so Lich
+# identifies the game and character and autostarts the replay probe.
+#
+# NOTE: logxml records strings after GameInstance#clean_serverstring, so a
+# fixture is post-clean input. Re-cleaning is idempotent for the transforms
+# clean_serverstring applies today; keep that in mind when changing them.
+
+require 'optparse'
+
+module StreamReplay
+  class Extract
+    LOGGING_ACTIVE = '<!-- Above contents from reget; full logging now active -->'
+    TS_PREFIX = /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(?:\.\d+)? [A-Z+\-:\d]+: /
+    LOG_DATE_HEADER = /\A\d{4}-\d\d-\d\d \d{1,2}:\d\d[ap]m\s*\z/
+    LOG_TRAILER = /\A\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d:\d\d\s*\z/
+    CLIENT_ECHO = /<!-- CLIENT -->/
+    MARKER = '### stream-replay:body-below ###'
+    PSEUDONYMS = %w[
+      Aldric Brenna Corwin Delphine Edric Fiora Gareth Helsa Ivor Jessamy Kael Liora
+      Maddoc Nerys Orrin Perrin Quenna Rhosyn Sabine Tamsin Ulric Vesna Wystan Yselde
+      Zarek Anwen Bastian Calla Dorian Elowen Faelan Gwyn Haldor Isolde Jory Kerrin
+    ].freeze
+
+    def initialize(game:, char:, from: nil, to: nil, keep: [], scrub: [])
+      @game = game
+      @char = char
+      @from = from
+      @to = to
+      @keep = keep
+      @scrub = scrub
+    end
+
+    def call(raw)
+      lines = clean(raw.lines)
+      lines = lines[window(lines)] || []
+      names = collect_names(lines) - @keep
+      map = names.each_with_index.to_h { |n, i| [n, PSEUDONYMS.fetch(i) { "Player#{i + 1}" }] }
+      char_alias = map.fetch(@char, @char)
+      body = lines.map { |l| scrub(l, map) }
+      header(char_alias) + "#{MARKER}\n" + body.join
+    end
+
+    private
+
+    # Snaps --from/--to outward to prompt boundaries: the window starts just
+    # after the prompt preceding --from and ends on the first prompt at or after
+    # --to, so a fixture never begins or ends inside a server burst.
+    def window(lines)
+      from = (@from || 1) - 1
+      to = (@to || lines.length) - 1
+      from -= 1 while from.positive? && !lines[from - 1].include?('<prompt')
+      to += 1 while to < lines.length - 1 && !lines[to].include?('<prompt')
+      from..to
+    end
+
+    def clean(lines)
+      start = lines.index { |l| l.include?(LOGGING_ACTIVE) }
+      lines = lines.drop(start + 1) if start
+      lines.filter_map do |l|
+        next if l.match?(LOG_DATE_HEADER) || l.match?(LOG_TRAILER)
+
+        l = l.sub(TS_PREFIX, '')
+        next if l.match?(CLIENT_ECHO)
+
+        l
+      end
+    end
+
+    def collect_names(lines)
+      names = [@char]
+      lines.each do |l|
+        l.scan(/<a exist="-\d+" noun="([A-Z][a-z']+)"/) { |(n)| names << n }
+        l.scan(/<preset id=['"](?:whisper|speech)['"]>(?:<a [^>]*>)?([A-Z][a-z']+)/) { |(n)| names << n }
+        if (m = l.match(/Also here: (.*?)(?:<\/component>|\.?\s*\z)/))
+          plain = m[1].gsub(/<[^>]+>/, '')
+          plain.split(/, | and /).each do |entry|
+            entry = entry.sub(/ who .*\z/, '').sub(/ \(.*\)\z/, '').strip
+            last = entry.split.last
+            names << last if last&.match?(/\A[A-Z][a-z']+\z/)
+          end
+        end
+        l.scan(%r{<pushStream id="group"/>\s+([A-Z][a-z']+)[ :(]}) { |(n)| names << n }
+      end
+      text = lines.join
+      names += @scrub.select { |n| text.match?(/\b#{Regexp.escape(n)}\b/) }
+      names.uniq - %w[You Also Members There]
+    end
+
+    def scrub(line, map)
+      line = line.gsub(/(Account Info for )[A-Z0-9_]+/, '\1ACCOUNT')
+      return line if map.empty?
+
+      line.gsub(/\b(#{map.keys.map { |n| Regexp.escape(n) }.join('|')})\b/) { map[Regexp.last_match(1)] }
+    end
+
+    def header(char)
+      instance = @game == 'DR' ? 'DR' : 'GS4'
+      title = @game == 'DR' ? "[DR: #{char}]" : "GemStone IV: #{char}"
+      <<~XML
+        <mode id="GAME"/>
+        <playerID id='700001'/>
+        <settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='#{instance}'/>
+        <app char="#{char}" game="#{@game}" title="#{title}"/>
+        <streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+        <endSetup/>
+      XML
+    end
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  opts = { keep: [] }
+  OptionParser.new do |o|
+    o.banner = 'Usage: extract.rb LOG OUT --game DR|GS --char NAME [--from N] [--to N] [--keep A,B]'
+    o.on('--game G') { |v| opts[:game] = v }
+    o.on('--char C') { |v| opts[:char] = v }
+    o.on('--from N', Integer) { |v| opts[:from] = v }
+    o.on('--to N', Integer) { |v| opts[:to] = v }
+    o.on('--keep LIST') { |v| opts[:keep] = v.split(',') }
+    # One name per line; always pseudonymized when present. Keep this file out
+    # of the repo: it exists so real character names never get committed.
+    o.on('--scrub-names FILE') { |v| opts[:scrub] = File.readlines(v, chomp: true).reject(&:empty?) }
+  end.parse!
+  log, out = ARGV
+  abort 'LOG and OUT are required' unless log && out && opts[:game] && opts[:char]
+  File.write(out, StreamReplay::Extract.new(**opts).call(File.read(log)))
+end

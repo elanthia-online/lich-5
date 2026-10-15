@@ -1,0 +1,1015 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>
+<app char="Aldric" game="DR" title="[DR: Aldric]"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+<pushStream id="combat" />* A jeol moradu slices an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and in dominating position.]
+<popStream id="combat" /><prompt time="1792034126">&gt;</prompt>
+<pushBold/>A <a exist="195764001" noun="moradu">jeol moradu</a><popBold/> melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764049" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195764049" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><prompt time="1792034126">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that lightly bruises the moradu's side with an attack which fails to pierce the skin.  <popBold/>
+<popStream id="combat" /><prompt time="1792034126">&gt;</prompt>
+<pushStream id="atmospherics"/>The eyes of <a exist="-10603802" noun="Brenna">Brenna</a>'s <a exist="195458177" noun="pendant">monk pendant</a> flash white for a moment.
+<popStream/><prompt time="1792034126">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Hydra Hex  (Indefinite)
+Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034126">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu sweeps low at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034127">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushBold/>The <a exist="195765494" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034127">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764049" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195764049" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><prompt time="1792034127">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034127">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034127">&gt;</prompt>
+<pushBold/>The <a exist="195764033" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034128">&gt;</prompt>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+<a exist="-10522707" noun="Corwin">He</a> manages to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034128">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that draws a light scratch across the moradu's right wrist.  <popBold/>
+<popStream id="combat" /><prompt time="1792034128">&gt;</prompt>
+<pushBold/>The <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10522707" noun="Corwin">Corwin</a>.
+<prompt time="1792034128">&gt;</prompt>
+Appearing to have lost sight of <pushBold/><a exist="195769080" noun="moradu">its</a><popBold/> target, <pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> stops advancing.
+<prompt time="1792034128">&gt;</prompt>
+<pushBold/>The <a exist="195769060" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10522707" noun="Corwin">Corwin</a>.
+<prompt time="1792034128">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792034128">&gt;</prompt>
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034129">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195764049" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a strong hit that drives the ribcage clean through the heart in a great display of bone-snapping and spurting blood.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034129">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that skewers a perfect hole between the shoulder blades (Heart Burn!).  <popBold/>
+<pushBold/>A <a exist="195764049" noun="moradu">jeol moradu</a><popBold/> comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<a exist="-10603802" noun="Brenna">Brenna</a> manages to remain upright!
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195765494" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195764049" noun="moradu">jeol moradu</a><popBold/> breathes his last, and the ground finally stops heaving.
+<a exist="-10522707" noun="Corwin">Corwin</a> bends over the <pushBold/><a exist="195764049" noun="moradu">moradu</a><popBold/>'s corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764049" noun="moradu">jeol moradu</a><popBold/><popBold/> (dead), an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195764049" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><prompt time="1792034129">&gt;</prompt>
+<dialogData id="injuries"><image id="head" name="head" height="0" width="0"/><image id="neck" name="neck" height="0" width="0"/><image id="rightArm" name="Injury1" height="0" width="0"/><image id="leftArm" name="Injury1" height="0" width="0"/><image id="rightLeg" name="Injury1" height="0" width="0"/><image id="leftLeg" name="leftLeg" height="0" width="0"/><image id="rightHand" name="rightHand" height="0" width="0"/><image id="leftHand" name="leftHand" height="0" width="0"/><image id="chest" name="Injury1" height="0" width="0"/><image id="abdomen" name="abdomen" height="0" width="0"/><image id="back" name="back" height="0" width="0"/><image id="rightEye" name="rightEye" height="0" width="0"/><image id="leftEye" name="leftEye" height="0" width="0"/><image id="rightFoot" name="rightFoot" height="0" width="0"/><image id="nsys" name="nsys" height="0" width="0"/></dialogData>
+<dialogData id="injuries"><skin id="healthSkin" name="healthBar2" controls="health2" align="n" top="160" width="140" left="0" height="15"/><progressBar id="health2" value="100" text="HEALTH 100%" customText="t" align="n" top="160" width="140" left="0" height="15"/></dialogData><prompt time="1792034129">&gt;</prompt>
+<pushBold/>A <a exist="195764049" noun="moradu">jeol moradu</a><popBold/> melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><prompt time="1792034130">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034130">&gt;</prompt>
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034130">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's right eye.  <popBold/>
+<popStream id="combat" /><prompt time="1792034130">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+<prompt time="1792034131">&gt;</prompt>
+The <pushBold/><a exist="195762608" noun="moradu">jeol moradu</a><popBold/> moves into a position to dodge.
+<prompt time="1792034131">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a hard hit to the moradu's head.  <popBold/>
+<popStream id="combat" /><prompt time="1792034131">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034131">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" /><prompt time="1792034132">&gt;</prompt>
+<pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034132">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's right leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034132">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034132">&gt;</prompt>
+A thunderous din peals from the south as the earth shudders.
+<prompt time="1792034132">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034133">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034133">&gt;</prompt>
+The <pushBold/><a exist="195769080" noun="moradu">jeol moradu</a><popBold/> retreats from combat.
+<prompt time="1792034133">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> roars in frustration as it lifts a massive, meaty foot high into the air and suddenly slams it down!  The ground shakes violently!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<prompt time="1792034133">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034133">&gt;</prompt>
+<pushBold/>A <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> walks northeast with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034133">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, <pushBold/><pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195765494" hostile="1" disengaged="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034133">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034133">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu slices an ice-edged sword at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" />Your <a exist="195648376" noun="hauberk">ka'hurst hauberk</a> begins to grow cooler.
+<prompt time="1792034134">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left hand.  <popBold/>
+<popStream id="combat" /><prompt time="1792034134">&gt;</prompt>
+Your <a exist="195648376" noun="hauberk">hauberk</a> blazes, sending a <a exist="-42696" noun="lightning">green globe of lightning</a> towards <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>!
+
+Your <a exist="-42696" noun="lightning">globe of lightning</a> lands<pushBold/> a twitching strike<popBold/> to <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>'s right leg!
+<prompt time="1792034134">&gt;</prompt>
+Appearing to have lost sight of <pushBold/><a exist="195765494" noun="moradu">its</a><popBold/> target, <pushBold/>a <a exist="195765494" noun="moradu">jeol moradu</a><popBold/> stops advancing.
+<prompt time="1792034134">&gt;</prompt>
+A thunderous din peals from the southwest as the earth shudders.
+<prompt time="1792034134">&gt;</prompt>
+<pushBold/>The <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034135">&gt;</prompt>
+<pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034135">&gt;</prompt>
+The <pushBold/><a exist="195760646" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+<prompt time="1792034135">&gt;</prompt>
+<pushBold/>A <a exist="195765494" noun="moradu">jeol moradu</a><popBold/> walks west with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034135">&gt;</prompt>
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> walks northeast with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769072" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769072" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034135">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034135">&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195762608'><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: cursed and nimbly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195760646'><pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/></d> (2: adeptly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195760646'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195761641'><pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/></d> (3: cursed and nimbly balanced) is behind you at melee range.  | <d cmd='face #195761641'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762608'><pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4: cursed and nimbly balanced) is facing you at melee range.  | <d cmd='face #195762608'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195764033'><pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/></d> (5: cursed and adeptly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195764033'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762664'><pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/></d> (6: cursed and nimbly balanced) is behind you at melee range.  | <d cmd='face #195762664'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195769060'><pushBold/>A <a exist="195769060" noun="moradu">jeol moradu</a><popBold/></d> (7: slightly off balance) is facing <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195769060'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195769088'><pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/></d> (9: solidly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195769088'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> (incredibly balanced) is facing <d cmd='look #195769060'><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/></d> (7) at melee range.  | <d cmd='face #195769060'>F</d>
+<popStream/><pushStream id="assess"/>
+(You are also defending against a jeol moradu.)
+<popStream/><prompt time="1792034135">&gt;</prompt>
+<pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+<a exist="-10522707" noun="Corwin">He</a> manages to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034136">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that scratches the left elbow.  <popBold/>
+<popStream id="combat" /><prompt time="1792034136">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034136">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Hydra Hex  (Indefinite)
+Osrel Meraud  (94%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034136">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu feints low at you.  You repulse nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" /><prompt time="1792034137">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu jabs an ice-edged sword at you.  You slap away nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034137">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit to the moradu's back.  <popBold/>
+<popStream id="combat" /><prompt time="1792034137">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792034137">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034137">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034138">&gt;</prompt>
+<pushBold/>A <a exist="195769060" noun="moradu">jeol moradu</a><popBold/> gestures.
+A faint breeze surrounds <pushBold/><a exist="195769060" noun="moradu">it</a><popBold/>.
+<prompt time="1792034138">&gt;</prompt>
+Corwin opens his soft gem pouch and quickly fills it with gems from his cloth lootsack, closing it quickly.
+<prompt time="1792034138">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034139">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu feints low at you.  You slap away nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034139">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's right arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034139">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's right leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034140">&gt;</prompt>
+<pushBold/>A <a exist="195769072" noun="moradu">jeol moradu</a><popBold/> walks west with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034141">&gt;</prompt>
+<pushBold/>The <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034141">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> gestures.
+A faint breeze surrounds <pushBold/><a exist="195769088" noun="moradu">it</a><popBold/>.
+<prompt time="1792034141">&gt;</prompt>
+<pushBold/>A <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> walks northeast with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034141">&gt;</prompt>
+<pushBold/>The <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034141">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034141">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You counter most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" /><prompt time="1792034142">&gt;</prompt>
+The <pushBold/><a exist="195761641" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+<prompt time="1792034142">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034143">&gt;</prompt>
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034143">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034143">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792034143">&gt;</prompt>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+<a exist="-10522707" noun="Corwin">He</a> manages to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034144">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" /><prompt time="1792034144">&gt;</prompt>
+Your Login Rewards information:
+<output class="mono"/>
+      Current login streak : 10 days
+  Completed 30-day streaks : 38
+
+Login Bridge Information:
+      Login Bridges earned : 85
+   Minimum Days before use : 1
+    Maximum to use at once : 29
+[You can manage your login bridge settings with <d>BOOST BRIDGE</d>.]
+
+You have the following boosts available to use:
+    268 <d>BOOST BURDEN</d>..............1-hour Featherstone
+     22 <d>BOOST CRAFTING</d>............Crafting Material Grabbag
+     86 <d>BOOST DEATH</d>...............Death's Sting Removal
+    132 <d>BOOST DRAIN</d>...............Experience Drain
+     49 <d>BOOST DYE</d>.................Collector Bag
+     36 <d>BOOST EXP</d>.................Rested EXP Refill/Reset
+     11 <d>BOOST HASTE</d>...............1-Hour Minor Haste
+     42 <d>BOOST HEALME</d>..............HEALME Charge
+     47 <d>BOOST LUCK1</d>...............Lesser Luck
+     44 <d>BOOST LUCK2</d>...............Greater Luck
+     49 <d>BOOST MEMORY</d>..............A Memory Orb (50%)
+     42 <d>BOOST NEXUS</d>...............Nexus Activation
+    274 <d>BOOST RECOVERY</d>............1-Hour of Bonus Resource Recovery
+     88 <d>BOOST REPAIR</d>..............Repair Worn and/or Held Items
+     46 <d>BOOST SKILL</d>...............Skill Boost
+     45 <d>BOOST STAT</d>................+5 to a Stat
+     22 <d>BOOST TASK</d>................2-Hours of No TASK Cooldown
+    170 <d>BOOST TRAVEL</d>..............Translocation Orb
+
+You have the following active boosts:
+
+[You can type <d>BOOST HELP</d> for additional information.]
+<output class=""/>
+<prompt time="1792034144">&gt;</prompt>
+You tap a <a exist="195648602" noun="spider">silversteel biomechanical harvester spider</a> that you are wearing.
+<prompt time="1792034144">&gt;</prompt>
+You're already wearing a <a exist="195648338" noun="lootsack">heavy Imperial weave cloth lootsack</a>!  You can only wear one lootsack at a time.
+<prompt time="1792034144">&gt;</prompt>
+You tap a <a exist="195648372" noun="cowbell">gold cowbell with a sinuous dragon handle</a> that you are wearing.
+<prompt time="1792034144">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu sidesteps and bashes at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and in dominating position.]
+<popStream id="combat" /><prompt time="1792034145">&gt;</prompt>
+All autoloot options are now disabled.
+See <d>AUTOLOOT</d> to confirm.
+<prompt time="1792034145">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a powerful strike that bruises the neck into an ugly purple.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034145">&gt;</prompt>
+You will now automatically pick up coins when looting creatures or treasure chests.
+<prompt time="1792034145">&gt;</prompt>
+You will now automatically pick up gems when looting creatures or treasure chests.
+<prompt time="1792034145">&gt;</prompt>
+You will now automatically pick up scrolls when looting creatures or treasure chests.
+<prompt time="1792034145">&gt;</prompt>
+You will now automatically pick up boxes when looting creatures or treasure chests.
+<prompt time="1792034145">&gt;</prompt>
+The deadening murk around you subsides.
+<prompt time="1792034146">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034146">&gt;</prompt>
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034146">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034146">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that stabs the fleshy portion of the right arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034146">&gt;</prompt>
+You are already wearing that.
+<prompt time="1792034146">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034146">&gt;</prompt>
+Remove what?
+<prompt time="1792034146">&gt;</prompt>
+<spell exist='spell'>Hydra Hex</spell>That won't affect your current attunement very much.
+<castTime value='1792034160'/>
+You begin chanting a psalm to invoke the Hydra Hex spell.
+<prompt time="1792034146">&gt;</prompt>
+<pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/> roars in frustration as it lifts a massive, meaty foot high into the air and suddenly slams it down!  The ground shakes violently!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<a exist="-10603802" noun="Brenna">Brenna</a> manages to remain upright!
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<prompt time="1792034147">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that pokes the fingers into the moradu's rear end (more embarrassing than painful!).  <popBold/>
+<popStream id="combat" /><prompt time="1792034147">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034147">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu feints to the side at you.  You deflect nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034148">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034148">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a strong hit that pokes a nasty hole in the moradu's neck.  <popBold/>
+<popStream id="combat" /><prompt time="1792034148">&gt;</prompt>
+The janitor was recently summoned to this room.  Please wait 221 seconds.
+<prompt time="1792034148">&gt;</prompt>
+<pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034149">&gt;</prompt>
+The <pushBold/><a exist="195769080" noun="moradu">jeol moradu</a><popBold/> retreats from combat.
+<prompt time="1792034149">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> traces arcane sigils in the air that glow icy blue.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034149">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034149">&gt;</prompt>
+<pushBold/>The <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034149">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a heavy strike that pierces clean through from one side of the neck to the other (Looks like a party gag, except for being quite dead).  <popBold/>
+<pushBold/>A <a exist="195769060" noun="moradu">jeol moradu</a><popBold/> comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<pushBold/>A <a exist="195769060" noun="moradu">jeol moradu</a><popBold/> breathes his last, and the ground finally stops heaving.
+<a exist="-10522707" noun="Corwin">Corwin</a> bends over the <pushBold/><a exist="195769060" noun="moradu">moradu</a><popBold/>'s corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769060" noun="moradu">jeol moradu</a><popBold/><popBold/> (dead), <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769060" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034149">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034149">&gt;</prompt>
+A thunderous din peals from the southwest as the earth shudders.
+<prompt time="1792034149">&gt;</prompt>
+Brenna comes out of hiding.
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034149">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu sweeps low at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034150">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034150">&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195762608'><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: cursed and adeptly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195760646'><pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/></d> (2: nimbly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195760646'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195761641'><pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/></d> (3: cursed and nimbly balanced) is behind you at melee range.  | <d cmd='face #195761641'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762608'><pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4: adeptly balanced) is facing you at melee range.  | <d cmd='face #195762608'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195764033'><pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/></d> (5: cursed and incredibly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195764033'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762664'><pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/></d> (6: cursed and nimbly balanced) is behind you at melee range.  | <d cmd='face #195762664'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195769088'><pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/></d> (9: cursed and nimbly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195769088'>F</d>
+<popStream/><pushStream id="assess"/>
+(You are also defending against a jeol moradu.)
+<popStream/><prompt time="1792034150">&gt;</prompt>
+A thunderous din peals from the south as the earth shudders.
+<prompt time="1792034150">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's back.  <popBold/>
+<popStream id="combat" /><prompt time="1792034150">&gt;</prompt>
+<pushBold/>A <a exist="195769060" noun="moradu">jeol moradu</a><popBold/> melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034151">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You fend off nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in excellent position.]
+<popStream id="combat" /><prompt time="1792034151">&gt;</prompt>
+<pushBold/>The <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034151">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034151">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034151">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034151">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a light hit to the moradu's abdomen.  <popBold/>
+<popStream id="combat" /><prompt time="1792034152">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You fend off nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in dominating position.]
+<popStream id="combat" /><prompt time="1792034153">&gt;</prompt>
+<pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+The frost-bladed scythe impacts harmlessly with <a exist="-10522707" noun="Corwin">his</a> <a exist="193810683" noun="shield">demonscale shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034153">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034153">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034154">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's chest.  <popBold/>
+<popStream id="combat" /><prompt time="1792034154">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034155">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu slices an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034155">&gt;</prompt>
+<pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034155">&gt;</prompt>
+The ground shakes as <pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> thunders in with a blast of frigid air.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034155">&gt;</prompt>
+<pushBold/>A <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> growls out a spell in a thunderous voice.
+
+<pushBold/>The <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10522707" noun="Corwin">Corwin</a>.
+<prompt time="1792034155">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's abdomen.  <popBold/>
+<popStream id="combat" /><prompt time="1792034155">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034155">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu jabs an ice-edged sword at you.  You fend off most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in superior position.]
+<popStream id="combat" /><prompt time="1792034156">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a very heavy hit that knocks the larynx clear back to the vertebrae (So much for last words!).  <popBold/>
+<pushBold/>A <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<a exist="-10603802" noun="Brenna">Brenna</a> manages to remain upright!
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> breathes his last, and the ground finally stops heaving.
+<a exist="-10603802" noun="Brenna">Brenna</a> bends over the <pushBold/><a exist="195769080" noun="moradu">moradu</a><popBold/>'s corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see a <a exist="195770410" noun="nugget">tiny electrum nugget</a>, <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769080" noun="moradu">jeol moradu</a><popBold/><popBold/> (dead), <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769080" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034156">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that lightly bruises the moradu's side with an attack which fails to pierce the skin.  <popBold/>
+<popStream id="combat" /><prompt time="1792034156">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034156">&gt;</prompt>
+<pushBold/>A <a exist="195769080" noun="moradu">jeol moradu</a><popBold/> melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see a <a exist="195770410" noun="nugget">tiny electrum nugget</a>, <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><prompt time="1792034157">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and in dominating position.]
+<popStream id="combat" /><prompt time="1792034157">&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, a <a exist="195770410" noun="nugget">tiny electrum nugget</a> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><prompt time="1792034157">&gt;</prompt>
+<pushBold/>A <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> growls out a spell in a thunderous voice.
+
+<pushBold/>The <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034157">&gt;</prompt>
+<pushBold/>A <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> growls out a spell in a thunderous voice.
+
+<pushBold/>The <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034157">&gt;</prompt>
+<a exist="-10522707" noun="Corwin">Corwin</a> picks up a <a exist="195770410" noun="nugget">tiny electrum nugget</a>.
+<a exist="-10522707" noun="Corwin">Corwin</a> puts <a exist="-10522707" noun="Corwin">his</a> <a exist="195770410" noun="nugget">nugget</a> in <a exist="-10522707" noun="Corwin">his</a> <a exist="193810696" noun="pack">traveler's pack</a>.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><prompt time="1792034157">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and in strong position.]
+<popStream id="combat" /><prompt time="1792034158">&gt;</prompt>
+<pushBold/>The <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10522707" noun="Corwin">Corwin</a>.
+<prompt time="1792034158">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />A sheet of slippery ice forms beneath <a exist="-10522707" noun="Corwin">Corwin</a>!
+<a exist="-10522707" noun="Corwin">Corwin</a> barely manages to stay on <a exist="-10522707" noun="Corwin">his</a> feet.
+<popStream id="combat" /><prompt time="1792034159">&gt;</prompt>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+<a exist="-10522707" noun="Corwin">He</a> manages to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034159">&gt;</prompt>
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> growls out a spell in a thunderous voice.
+
+<pushBold/>The <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034159">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that lightly bruises the moradu's side with an attack which fails to pierce the skin.  <popBold/>
+<popStream id="combat" /><prompt time="1792034159">&gt;</prompt>
+The <pushBold/><a exist="195764033" noun="moradu">jeol moradu</a><popBold/> moves into a position to dodge.
+<prompt time="1792034160">&gt;</prompt>
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034160">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that scratches a long swath of skin along the abdomen (A fine wound to show to friends!).  <popBold/>
+<popStream id="combat" /><prompt time="1792034160">&gt;</prompt>
+<pushStream id="atmospherics"/>The ka'hurst rivets on <a exist="-10603802" noun="Brenna">Brenna</a>'s <a exist="195458034" noun="thighband">thighband</a> shimmer with a strikingly green sheen.
+<popStream/><prompt time="1792034160">&gt;</prompt>
+<pushBold/>The <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034160">&gt;</prompt>
+You feel fully prepared to cast your spell.
+<prompt time="1792034160">&gt;</prompt>
+<pushBold/>The <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034160">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792034160">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034161">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034161">&gt;</prompt>
+The <pushBold/><a exist="195758165" noun="moradu">jeol moradu</a><popBold/> moves into a position to dodge.
+<prompt time="1792034161">&gt;</prompt>
+<clearStream id="percWindow"/>
+<roundTime value='1792034164'/><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='99' text='fatigue 99%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='98' text='concentration 98%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<spell>None</spell>You gesture.
+<pushStream id="combat" />Swirls of malefic darkness gather in a wide matrix near your body, continuously drawing brief-lived iterations of the Malediction pattern to malign your enemies' offensive abilities.
+<popStream id="combat" /><pushStream id="percWindow"/>Hydra Hex  (Indefinite)
+Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><castTime value='1792034161'/>
+Roundtime: 3 sec.
+<prompt time="1792034161">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit to the moradu's left arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034161">R&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='40%' top='0%' width='20%' height='100%'/><progressBar id='stamina' value='100' text='fatigue 100%' left='40%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<dialogData id='minivitals'><progressBar id='concentration' value='100' text='concentration 100%' left='80%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully rested.
+You feel fully attuned to the mana streams again.
+<prompt time="1792034161">R&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+<prompt time="1792034162">R&gt;</prompt>
+The <pushBold/><a exist="195762608" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.
+<prompt time="1792034162">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that barely punctures the skin on the upper chest causing a slight welt.  <popBold/>
+<popStream id="combat" /><prompt time="1792034162">R&gt;</prompt>
+<pushBold/>The <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034162">R&gt;</prompt>
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034163">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034163">R&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195770319" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770319" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770319" hostile="1" disengaged="1"/><prompt time="1792034163">R&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770319" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770319" hostile="1" disengaged="1"/><crtrStatus exist="195770375" hostile="1" disengaged="1"/><prompt time="1792034163">R&gt;</prompt>
+With a thunderous stride, <pushBold/>a <a exist="195770395" noun="moradu">jeol moradu</a><popBold/> arrives.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770319" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770395" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770319" hostile="1" disengaged="1"/><crtrStatus exist="195770375" hostile="1" disengaged="1"/><crtrStatus exist="195770395" hostile="1" disengaged="1"/><prompt time="1792034163">R&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good hit that punches a hole through the skin on its side.  <popBold/>
+<popStream id="combat" /><prompt time="1792034163">R&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034164">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that embeds the fingers into the top of the moradu's left foot.  <popBold/>
+<popStream id="combat" /><prompt time="1792034164">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu jabs an ice-edged sword at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<pushBold/>A <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> roars in frustration as it lifts a massive, meaty foot high into the air and suddenly slams it down!  The ground shakes violently!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<a exist="-10603802" noun="Brenna">Brenna</a> manages to remain upright!
+<pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<pushBold/>A <a exist="195770375" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<prompt time="1792034165">&gt;</prompt>
+<pushBold/>The <a exist="195769136" noun="moradu">jeol moradu</a><popBold/> stomps a foot in rage.
+<prompt time="1792034165">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034165">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that slides the fingers deeply into the stomach.  <popBold/>
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034165">&gt;</prompt>
+<pushStream id="assess"/><clearStream id="assess"/>You assess your combat situation...
+
+<popStream/><pushStream id="assess"/>You (incredibly balanced) are facing <d cmd='look #195762608'><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4) at melee range.
+<popStream/><pushStream id="assess"/><d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: adeptly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195760646'><pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/></d> (2: nimbly balanced) is facing <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195760646'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195761641'><pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/></d> (3: cursed and nimbly balanced) is behind you at melee range.  | <d cmd='face #195761641'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762608'><pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/></d> (4: nimbly balanced) is facing you at melee range.  | <d cmd='face #195762608'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195764033'><pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/></d> (5: incredibly balanced) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195764033'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195762664'><pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/></d> (6: nimbly balanced) is behind you at melee range.  | <d cmd='face #195762664'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195769088'><pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/></d> (7: cursed and slightly off balance) is behind <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195769088'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #195770315'><pushBold/>A <a exist="195770315" noun="moradu">jeol moradu</a><popBold/></d> (11: nimbly balanced) is flanking <d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> at melee range.  | <d cmd='face #195770315'>F</d>
+<popStream/><pushStream id="assess"/><d cmd='look #-10522707'><a exist="-10522707" noun="Corwin">Corwin</a></d> (incredibly balanced) is facing <d cmd='look #195760646'><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/></d> (2) at melee range.  | <d cmd='face #195760646'>F</d>
+<popStream/><pushStream id="assess"/>
+(You are also defending against a jeol moradu.)
+<popStream/><prompt time="1792034165">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu feints low at you.  You turn aside most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034166">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu feints to the side at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and in dominating position.]
+<popStream id="combat" /><prompt time="1792034166">&gt;</prompt>
+The <pushBold/><a exist="195769088" noun="moradu">jeol moradu</a><popBold/> moves into a position to dodge.
+<prompt time="1792034166">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034166">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034166">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Hydra Hex  (Indefinite)
+Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034166">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu feints to the side at you.  You fend off most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in excellent position.]
+<popStream id="combat" /><prompt time="1792034167">&gt;</prompt>
+The <pushBold/><a exist="195765562" noun="moradu">jeol moradu</a><popBold/> retreats from combat.
+<prompt time="1792034167">&gt;</prompt>
+A thunderous din peals from the south as the earth shudders.
+<prompt time="1792034167">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a very heavy hit that staggers it with a bruising drive between the shoulders.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034167">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that spills bile upon the ground as the fingers drills a hole straight through the moradu's spleen.  <popBold/>
+<popStream id="combat" /><prompt time="1792034167">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034167">&gt;</prompt>
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770319" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770395" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770319" hostile="1" disengaged="1"/><crtrStatus exist="195770375" hostile="1" disengaged="1"/><crtrStatus exist="195770395" hostile="1" disengaged="1"/><prompt time="1792034167">&gt;</prompt>
+<pushBold/>A <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> gestures.
+A faint breeze surrounds <pushBold/><a exist="195770315" noun="moradu">it</a><popBold/>.
+<prompt time="1792034168">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that stabs the fleshy portion of the right arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034168">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='98' text='mana 98%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<pushStream id="combat" />A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/>.
+A cage of shadowy tendrils coalesces around <pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034168">&gt;</prompt>
+A thunderous din peals from the southwest as the earth shudders.
+<prompt time="1792034168">&gt;</prompt>
+<pushBold/>A <a exist="195764033" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+The frost-bladed scythe impacts harmlessly with <a exist="-10522707" noun="Corwin">his</a> <a exist="193810683" noun="shield">demonscale shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034169">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that pokes the fingers into the moradu's rear end (more embarrassing than painful!).  <popBold/>
+<popStream id="combat" /><prompt time="1792034169">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034169">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034170">&gt;</prompt>
+<pushBold/>The <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> searches around for a moment.
+<prompt time="1792034170">&gt;</prompt>
+The <pushBold/><a exist="195769140" noun="moradu">jeol moradu</a><popBold/> retreats from combat.
+<prompt time="1792034170">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that painfully jabs the fingers underneath a nail on the moradu's hand.  <popBold/>
+<popStream id="combat" /><prompt time="1792034170">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034171">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034171">&gt;</prompt>
+<pushBold/>A <a exist="195762608" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You manage to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034171">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>A jeol moradu lands a solid hit to Corwin's left arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034171">&gt;</prompt>
+<pushBold/>A <a exist="195770319" noun="moradu">jeol moradu</a><popBold/> walks northwest with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770375" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770395" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770375" hostile="1" disengaged="1"/><crtrStatus exist="195770395" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034171">&gt;</prompt>
+<pushBold/>A <a exist="195770375" noun="moradu">jeol moradu</a><popBold/> walks west with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770395" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><crtrStatus exist="195770395" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034171">&gt;</prompt>
+<pushBold/>A <a exist="195770395" noun="moradu">jeol moradu</a><popBold/> walks northwest with thundering steps.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034171">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a heavy strike that drives the ribcage clean through the heart in a great display of bone-snapping and spurting blood.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034171">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a solid hit that drills the fingers through the left hamstring, lodging it in the bone.  <popBold/>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> comes crashing down.  The impact of the giant causes the ground to tremble beneath you!
+<a exist="-10522707" noun="Corwin">Corwin</a> manages to remain upright!
+You manage to remain upright!
+<a exist="-10603802" noun="Brenna">Brenna</a> manages to remain upright!
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> howls in encouragement!
+<popStream id="combat" /><prompt time="1792034171">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You counter most of the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in very strong position.]
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/> (prone), <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1" prone="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><prompt time="1792034172">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a hard hit that tears the left leg from the socket when the fingers gets jammed between thigh and hip.  <popBold/>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> breathes his last.
+<a exist="-10522707" noun="Corwin">Corwin</a> bends over the <pushBold/><a exist="195760646" noun="moradu">moradu</a><popBold/>'s corpse briefly.
+<popStream id="combat" /><component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195760646" noun="moradu">jeol moradu</a><popBold/><popBold/> (dead), <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195760646" hostile="1" disengaged="1" dead="1" sleeping="1" prone="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><prompt time="1792034172">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+<pushStream id="combat" />* A jeol moradu lunges an ice-edged sword at you.  You beat off nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in excellent position.]
+<popStream id="combat" /><prompt time="1792034173">&gt;</prompt>
+<pushBold/>A <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> growls out a spell in a thunderous voice.
+
+<pushBold/>The <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> begins to advance on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034173">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+You feel fully attuned to the mana streams again.
+<prompt time="1792034173">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034173">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.</component>
+<prompt time="1792034173">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034174">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> gestures at <a exist="-10522707" noun="Corwin">Corwin</a>.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at <a exist="-10522707" noun="Corwin">him</a>!
+<a exist="-10522707" noun="Corwin">He</a> manages to get out of the way of the spinning scythe!
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034175">&gt;</prompt>
+<pushBold/>A <a exist="195765562" noun="moradu">jeol moradu</a><popBold/> gestures.
+A faint breeze surrounds <pushBold/><a exist="195765562" noun="moradu">it</a><popBold/>.
+<prompt time="1792034175">&gt;</prompt>
+<a exist="-10603802" noun="Brenna">Brenna</a> leaps from hiding and ambushes <pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/>!
+<pushStream id="combat" /><pushBold/>Brenna's pernach lands a heavy strike that deeply bruises the right bicep.  <popBold/>
+<popStream id="combat" /><component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</component>
+<prompt time="1792034175">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's left hand.  <popBold/>
+<popStream id="combat" /><prompt time="1792034175">&gt;</prompt>
+<pushStream id="atmospherics"/>The ka'hurst rivets on <a exist="-10603802" noun="Brenna">Brenna</a>'s <a exist="195458033" noun="thighband">thighband</a> shimmer with a strikingly green sheen.
+<popStream/><prompt time="1792034175">&gt;</prompt>
+<pushBold/>A <a exist="195760646" noun="moradu">jeol moradu</a><popBold/> melts away, its remains soaked up by the ground.
+<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/>, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> (immobile), <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> and some junk.</component>
+<crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><prompt time="1792034176">&gt;</prompt>
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034176">&gt;</prompt>
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034176">&gt;</prompt>
+<pushBold/>A <a exist="195770315" noun="moradu">jeol moradu</a><popBold/> traces arcane sigils in the air that glow icy blue.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034176">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's right arm.  <popBold/>
+<popStream id="combat" /><prompt time="1792034176">&gt;</prompt>
+<clearStream id="percWindow"/>
+<pushStream id="percWindow"/>Hydra Hex  (Indefinite)
+Osrel Meraud  (93%)
+Bless  (OM)
+Auspice  (OM)
+Divine Radiance  (OM)
+Shield of Light  (OM)
+Glythtide's Gift  (OM)
+Benediction  (OM)
+Centering  (OM)
+Starry Waters  (OM)
+Visage  (OM)
+Persistence of Mana  (OM)
+<popStream/><prompt time="1792034176">&gt;</prompt>
+<pushBold/>The <a exist="195769124" noun="moradu">jeol moradu</a><popBold/> closes to melee range on <a exist="-10603802" noun="Brenna">Brenna</a>.
+<prompt time="1792034176">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792034176">&gt;</prompt>
+The deadening murk around you subsides.
+<prompt time="1792034176">&gt;</prompt>
+<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217403)</name><description>Curiously mummified creatures, contorted into odd postures by the slow movement of the ice, rest beneath the surface of the walls and floor.  Their baleful eyes gaze blankly from behind the faceted flow, almost pleading for release from their frigid tombs.  A tracery of faint cracks emanates from beneath a twisted stone that has fallen from the ceiling; an oval of tortuous white imperfections marks the collision, stark upon a sea of blue ice.</description><exists>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> that appears immobilized, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness and some junk.</exists><crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><players>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> who is blurred by hazy afterimages and Death's Messenger <a exist="-10603802" noun="Brenna">Brenna</a>.</players><exits>Obvious exits: <d>northeast</d>, <d>south</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.</exits><extra></extra></room>
+<prompt time="1792034176">&gt;</prompt>
+<pushBold/>A <a exist="195769088" noun="moradu">jeol moradu</a><popBold/> traces arcane sigils in the air that glow icy blue.
+
+<pushStream id="combat" />
+<popStream id="combat" /><prompt time="1792034177">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You evade.  
+[You're winded (100%), mighty (100%), incredibly balanced and in excellent position.]
+<popStream id="combat" /><prompt time="1792034177">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good hit to the moradu's right leg.  <popBold/>
+<popStream id="combat" /><prompt time="1792034177">&gt;</prompt>
+Release what?
+[Check RELEASE HELP for more information.]
+<prompt time="1792034177">&gt;</prompt>
+A thunderous din peals from the west as the earth shudders.
+<prompt time="1792034177">&gt;</prompt>
+You aren't preparing a spell.
+<prompt time="1792034177">&gt;</prompt>
+<pushBold/>A <a exist="195762664" noun="moradu">jeol moradu</a><popBold/> traces arcane sigils in the air that glow icy blue.
+
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You dodge.  
+[You're winded (100%), mighty (100%), incredibly balanced and overwhelming your opponent.]
+<popStream id="combat" /><prompt time="1792034178">&gt;</prompt>
+<pushStream id="combat" />* A jeol moradu thrusts an ice-edged sword at you.  You deflect nearly all the sword with a Dwarven iron bracer studded with kertig spikes.  
+[You're winded (100%), mighty (100%), incredibly balanced and in excellent position.]
+<popStream id="combat" /><prompt time="1792034178">&gt;</prompt>
+<pushBold/>A <a exist="195761641" noun="moradu">jeol moradu</a><popBold/> gestures at you.
+<pushStream id="combat" />Sparkling crystals of ice appear and coalesce into a scythe of frost which flies through the air at you!
+You block the frost-bladed scythe with your <a exist="195648374" noun="shield">morgawr leather shield</a>.
+The scythe swiftly melts away.
+<popStream id="combat" /><prompt time="1792034178">&gt;</prompt>
+<pushBold/>A <a exist="195769140" noun="moradu">jeol moradu</a><popBold/> gestures.
+A faint breeze surrounds <pushBold/><a exist="195769140" noun="moradu">it</a><popBold/>.
+<prompt time="1792034178">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike to the moradu's chest.  <popBold/>
+<popStream id="combat" /><prompt time="1792034178">&gt;</prompt>
+<component id='room players'>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> who is blurred by hazy afterimages.</component>
+<prompt time="1792034178">&gt;</prompt>
+You will now see room descriptions.
+<prompt time="1792034178">&gt;</prompt>
+<resource picture="0"/><room><name>[Jeol'gelvmoraen, Ice Grottos] (4217403)</name><description>Curiously mummified creatures, contorted into odd postures by the slow movement of the ice, rest beneath the surface of the walls and floor.  Their baleful eyes gaze blankly from behind the faceted flow, almost pleading for release from their frigid tombs.  A tracery of faint cracks emanates from beneath a twisted stone that has fallen from the ceiling; an oval of tortuous white imperfections marks the collision, stark upon a sea of blue ice.</description><exists>You also see <pushBold/><pushBold/>a <a exist="195758165" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, an <a exist="195754251" noun="sword">ice-edged sword</a>, <a exist="195762342" noun="oil">some holy oil</a>, <pushBold/><pushBold/>a <a exist="195762608" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195764033" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195762664" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, an <a exist="195753210" noun="sword">ice-edged sword</a>, a <a exist="195765455" noun="bar">huge brass bar</a>, a <a exist="195755625" noun="card">Guildleader Yaziyi card</a>, a <a exist="195747242" noun="card">Guildleader Anhh'shre card</a>, <pushBold/><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195769136" noun="moradu">jeol moradu</a><popBold/><popBold/> that appears immobilized, <pushBold/><pushBold/>a <a exist="195765562" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness, <pushBold/><pushBold/>a <a exist="195770315" noun="moradu">jeol moradu</a><popBold/><popBold/>, <pushBold/><pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/><popBold/> that is caught in a cage of swirling darkness and some junk.</exists><crtrStatus exist="195758165" hostile="1"/><crtrStatus exist="195761641" hostile="1"/><crtrStatus exist="195762608" hostile="1"/><crtrStatus exist="195764033" hostile="1" disengaged="1"/><crtrStatus exist="195762664" hostile="1"/><crtrStatus exist="195769088" hostile="1" disengaged="1"/><crtrStatus exist="195769140" hostile="1" disengaged="1"/><crtrStatus exist="195769136" hostile="1" disengaged="1" immobile="1"/><crtrStatus exist="195765562" hostile="1" disengaged="1"/><crtrStatus exist="195770315" hostile="1" disengaged="1"/><crtrStatus exist="195769124" hostile="1" disengaged="1"/><players>Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a> who is blurred by hazy afterimages.</players><exits>Obvious exits: <d>northeast</d>, <d>south</d>, <d>southwest</d>, <d>west</d>, <d>northwest</d>.</exits><extra></extra></room>
+<prompt time="1792034179">&gt;</prompt>
+Stow what?  Type 'STOW HELP' for details.
+<prompt time="1792034179">&gt;</prompt>
+<pushStream id="combat" /><pushBold/>Corwin's fingers lands a good strike that scratches the left elbow.  <popBold/>
+<popStream id="combat" /><prompt time="1792034179">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195769140" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034179">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195769124" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034179">&gt;</prompt>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='20%' top='0%' width='20%' height='100%'/><progressBar id='mana' value='100' text='mana 100%' left='20%' customText='t' top='0%' width='20%' height='100%'/></dialogData>
+<prompt time="1792034179">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034179">&gt;</prompt>
+<pushStream id="combat" />The swirling confines of malevolent darkness wane from about <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>.
+<popStream id="combat" /><prompt time="1792034179">&gt;</prompt>
+Release what?
+[Check RELEASE HELP for more information.]
+<prompt time="1792034179">&gt;</prompt>
+Icy blue frost crackles up <pushBold/>a <a exist="195761641" noun="moradu">jeol moradu</a><popBold/>'s arms with the ferocity of a blizzard as he begins preparing a spell.
+
+The <pushBold/><a exist="195761641" noun="moradu">jeol moradu</a><popBold/> moves into a position to dodge.
+<prompt time="1792034180">&gt;</prompt>
+All of your items worn attached to the belt:
+
+  a soft gem pouch (closed)
+  a lockpick ring
+  a pale kirmiko pocket with reinforced seams
+  a heavy Imperial weave cloth lootsack
+
+[Use <d cmd='inventory help'>INVENTORY HELP</d> for more options.]
+<prompt time="1792034180">&gt;</prompt>

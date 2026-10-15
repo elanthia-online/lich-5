@@ -1,0 +1,130 @@
+# frozen_string_literal: true
+
+# replay_probe.lic - in-process state probe for the stream replay harness
+# (spec/support/stream_replay/driver.rb). Not a user script.
+#
+# The driver boots `lich.rbw --pipe` against a loopback game server, starts this
+# script with --start-scripts, and feeds a captured server stream line by line.
+# This script registers a DownstreamHook, which runs on the game parser thread
+# after XMLData, the game's own parser (DRParser / Infomon) and GameObj have
+# consumed each server string. On every string containing a <prompt>, it
+# appends one JSON snapshot of the parsed state to the file named by
+# LICH_REPLAY_SNAPSHOTS. Running on the parser thread is what makes the
+# snapshot deterministic: no later server string can have been parsed yet.
+#
+# Time-dependent values (server time, roundtime ends, status expiries) are
+# deliberately omitted so snapshots are reproducible across runs.
+
+require 'json'
+
+snapshot_path = ENV.fetch('LICH_REPLAY_SNAPSHOTS')
+prompt_index = 0
+stripped_since_prompt = []
+
+safe = lambda do |&block|
+  block.call
+rescue StandardError => e
+  { 'error' => "#{e.class}: #{e.message}" }
+end
+
+obj = lambda do |o|
+  next nil if o.nil?
+
+  { 'id' => o.id, 'noun' => o.noun, 'name' => o.name, 'status' => o.status }
+end
+
+objs = ->(list) { (list || []).map { |o| obj.call(o) } }
+
+creature = lambda do |c|
+  flags = c.instance_variable_get(:@crtr_flags) || {}
+  {
+    'id'            => c.id,
+    'name'          => c.name,
+    'noun'          => c.noun,
+    'flags'         => flags.select { |_k, v| v }.keys.map(&:to_s).sort,
+    'assess_number' => (c.assess_number if c.respond_to?(:assess_number)),
+    'relation'      => (c.relation if c.respond_to?(:relation)),
+    'range'         => (c.range if c.respond_to?(:range))
+  }
+end
+
+snapshot = lambda do
+  snap = {}
+  snap['xmldata'] = safe.call do
+    {
+      'room_title'         => XMLData.room_title,
+      'room_name'          => XMLData.room_name,
+      'room_description'   => XMLData.room_description,
+      'room_exits'         => XMLData.room_exits,
+      'room_exits_string'  => XMLData.room_exits_string,
+      'room_id'            => XMLData.room_id,
+      'room_count'         => XMLData.room_count,
+      'show_room_id'       => XMLData.show_room_id,
+      'room_window_disabled' => XMLData.room_window_disabled,
+      'stow_container_id'  => XMLData.stow_container_id,
+      'indicator'          => XMLData.indicator.to_h.sort.to_h,
+      'injuries'           => XMLData.injuries.to_h.sort.to_h,
+      'injury_mode'        => XMLData.injury_mode,
+      'vitals'             => {
+        'health' => XMLData.health, 'mana' => XMLData.mana, 'stamina' => XMLData.stamina,
+        'spirit' => XMLData.spirit, 'concentration' => XMLData.concentration
+      },
+      'prepared_spell'     => XMLData.prepared_spell,
+      'dr_active_spells'   => (XMLData.dr_active_spells || {}).sort.to_h
+    }
+  end
+  snap['gameobj'] = safe.call do
+    {
+      'right_hand' => obj.call(GameObj.right_hand),
+      'left_hand'  => obj.call(GameObj.left_hand),
+      'npcs'       => objs.call(GameObj.npcs),
+      'pcs'        => objs.call(GameObj.pcs),
+      'loot'       => objs.call(GameObj.loot),
+      'room_desc'  => objs.call(GameObj.room_desc),
+      'inv'        => objs.call(GameObj.inv),
+      'containers' => (GameObj.containers || {}).map { |k, v| [k.to_s, objs.call(v)] }.sort.to_h
+    }
+  end
+  if defined?(Lich::DragonRealms::Creature)
+    snap['dr_creatures'] = safe.call do
+      Lich::DragonRealms::Creature.all.map { |c| creature.call(c) }.sort_by { |c| c['id'].to_i }
+    end
+  end
+  if defined?(DRRoom)
+    snap['drroom'] = safe.call do
+      {
+        'npcs' => DRRoom.npcs, 'dead_npcs' => DRRoom.dead_npcs, 'pcs' => DRRoom.pcs,
+        'pcs_prone' => DRRoom.pcs_prone, 'pcs_sitting' => DRRoom.pcs_sitting,
+        'room_objs' => DRRoom.room_objs, 'group_members' => DRRoom.group_members
+      }
+    end
+  end
+  if defined?(DRSpells)
+    snap['drspells'] = safe.call { { 'active_spells' => (DRSpells.active_spells || {}).sort.to_h } }
+  end
+  snap
+end
+
+DownstreamHook.add('replay_probe', proc { |server_string|
+  begin
+    stripped = Lich::Common::Markup.strip_xml(server_string, type: 'replay_probe')
+    stripped_since_prompt.concat(stripped.split("\r\n")) if stripped
+    if server_string.include?('<prompt')
+      prompt_index += 1
+      snap = snapshot.call
+      snap['prompt'] = prompt_index
+      snap['stripped'] = stripped_since_prompt
+      stripped_since_prompt = []
+      File.open(snapshot_path, 'a') { |f| f.puts(JSON.generate(snap)) }
+    end
+  rescue StandardError => e
+    File.open(snapshot_path, 'a') { |f| f.puts(JSON.generate({ 'probe_error' => "#{e.class}: #{e.message}" })) }
+  end
+  server_string
+}, priority: 1_000_000) # highest priority: see each string before any other hook rewrites or drops it
+
+# Signal readiness only once the hook is registered, so no body prompt can slip
+# through unobserved. The header carries no prompt, so nothing precedes this line.
+File.open(snapshot_path, 'a') { |f| f.puts(JSON.generate({ 'ready' => true })) }
+
+loop { sleep 1 }
