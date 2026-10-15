@@ -1884,7 +1884,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
       eventually do
         expect(@raw_socket).to have_received(:write).with(
           %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
-          %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>\r\n) +
+          %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
           %(Obvious paths: <d>north</d>.\r\n)
         )
       end
@@ -1907,7 +1907,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     eventually do
       expect(@raw_socket).to have_received(:write).with(
         "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
-        "An Elven burial ground.\r\nObvious paths: north.\r\n"
+        "An Elven burial ground.  \r\nObvious paths: north.\r\n"
       )
     end
   end
@@ -1938,7 +1938,7 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
       end
       expect(writes).to eq([
                              %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
-                             %(<style id=""/><preset id='roomDesc'>An Elven burial ground.\r\nSaplings mark the graves.</preset>\r\n) +
+                             %(<style id=""/><preset id='roomDesc'>An Elven burial ground.\r\nSaplings mark the graves.</preset>  \r\n) +
                              %(Obvious paths: <d>north</d>.\r\n)
                            ])
     end
