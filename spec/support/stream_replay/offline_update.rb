@@ -4,6 +4,9 @@
 # replay child, plus the self-check the probe reports in its ready marker.
 # Kept apart from offline_preload.rb so specs can load it without enabling
 # that file's process-wide TracePoint.
+# The self-check catches renames of the three entry points handle_autostart
+# calls today (lib/games.rb), not new network calls added there later: it is
+# not a general "the replay is offline" guarantee.
 
 module StreamReplay
   # Prepended onto Lich::Util::Update's singleton class: no core update, no
