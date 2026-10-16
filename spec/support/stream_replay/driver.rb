@@ -36,9 +36,12 @@ module StreamReplay
 
     # @param fixture [StreamReplay::Fixture] the stream to replay
     # @param frontend [String, nil] value for --frontend= (nil: pipe default)
-    def initialize(fixture, frontend: nil)
+    # @param client_lines [Array<String>] lines the client sends Lich after
+    #   its handshake, before the stream starts (e.g. SET_FRONTEND_CAPS)
+    def initialize(fixture, frontend: nil, client_lines: [])
       @fixture = fixture
       @frontend = frontend
+      @client_lines = client_lines
       @warnings = []
     end
 
@@ -59,6 +62,7 @@ module StreamReplay
             end
             stdin.puts('LICH_REPLAY_KEY')
             stdin.puts('/FE:STORMFRONT /VERSION:1.0 /P:REPLAY /XML')
+            @client_lines.each { |line| stdin.puts(line) }
             stdin.flush
             conn = Timeout.timeout(30) { server.accept }
             conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)

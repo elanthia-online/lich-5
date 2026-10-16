@@ -5,6 +5,7 @@ require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
 require_relative 'common/room_block'
 require_relative 'common/markup'
+require_relative 'common/client_capabilities'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -1136,59 +1137,103 @@ module Lich
           @@settings_init_needed = true
         end
 
+        # Sends one server string to every client, after the downstream hooks
+        # (which, like XMLParser and scripts, see the stream as the server sent
+        # it). Each client gets the rich-stream rewrites its capabilities call
+        # for (Lich::Common::ClientCapabilities): the string is rewritten once
+        # per distinct capability set, then finished once per distinct result,
+        # so clients that share a set (the usual case: one set for all) cost
+        # one pass, as before per-client capabilities.
         def process_downstream_hooks(server_string)
-          if (alt_string = DownstreamHook.run(server_string))
-            # The Saga-identity stream's inline <room> block reaches only front
-            # ends that render it (Saga); every other front end gets the legacy
-            # roomName/roomDesc layout it already handles. Rewritten before the
-            # Wizard conversion (sf_to_wiz), which keys on that layout; the
-            # room-number display (process_room_information) handles either.
-            # They also get the legacy <compass> line the Saga-identity stream
-            # dropped, except Wizard/Avalon (GSL), which get exits from
-            # XMLParser's GSL codes and would see the line as a blank one.
-            if alt_string.include?('<room>') && !Frontend.supports_room_element?
-              alt_string = if Frontend.supports_gsl?
-                             Lich::Common::RoomBlock.legacy_shape(alt_string)
-                           else
-                             Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
-                           end
-            end
-            # DragonRealms' links and doubled bold go only to front ends that
-            # handle them; the rest get the legacy line. After the <room>
-            # rewrite, which keeps the parts' markup, and before sf_to_wiz,
-            # which turns each bold into a GSL code. GemStone has always sent
-            # both, and its front ends expect them, so it is left alone.
-            if XMLData.game =~ /^DR/
-              alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless Frontend.supports_game_links?
-              alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless Frontend.supports_double_bold?
-            end
-            process_room_information(alt_string)
+          return unless (alt_string = DownstreamHook.run(server_string))
 
-            # Handle frontend-specific modifications
-            if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-            end
-
-            if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
-              alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
-            end
-
-            # Handle room number display
-            if @room_number_after_ready && alt_string =~ /<prompt /
-              alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
-              @room_number_after_ready = false
-            end
-
-            # Handle frontend-specific conversions
-            if Frontend.supports_gsl?
-              alt_string = sf_to_wiz(alt_string)
-            end
-            # Handle prefix origin sentinel if FE supports it
-            alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
-
-            # Send to client
-            send_to_client(alt_string)
+          outputs = []
+          Lich::Common::ClientCapabilities.group(client_write_targets).each do |capabilities, clients|
+            line = rich_stream_rewrite(alt_string, capabilities)
+            same = outputs.find { |output| output[:line] == line }
+            same ? same[:clients].concat(clients) : outputs << { line: line, clients: clients }
           end
+
+          # Every result starts the finishing steps from the same room-number
+          # state; they make the same decision for each, since no rewrite adds
+          # or removes the room-name start or the prompt they look for.
+          room_number_after_ready = @room_number_after_ready
+          outputs.each do |output|
+            @room_number_after_ready = room_number_after_ready
+            line = finish_client_line(output[:line])
+            output[:clients].each { |client| client.write(line) if client.alive? }
+          end
+        end
+
+        # The rewrites that depend on a client's capabilities.
+        #
+        # The Saga-identity stream's inline <room> block reaches only front
+        # ends that render it (:room_element, Saga); every other front end gets
+        # the legacy roomName/roomDesc layout it already handles. Rewritten
+        # before the Wizard conversion (sf_to_wiz), which keys on that layout;
+        # the room-number display (process_room_information) handles either.
+        # They also get the legacy <compass> line the Saga-identity stream
+        # dropped, except Wizard/Avalon (GSL), which get exits from XMLParser's
+        # GSL codes and would see the line as a blank one.
+        #
+        # DragonRealms' links and doubled bold go only to front ends that
+        # handle them (:game_links, :double_bold); the rest get the legacy
+        # line. After the <room> rewrite, which keeps the parts' markup, and
+        # before sf_to_wiz, which turns each bold into a GSL code. GemStone has
+        # always sent both, and its front ends expect them, so it is left alone.
+        #
+        # Never modifies alt_string: the other capability sets start from it.
+        #
+        # @param alt_string [String] the server string after the downstream hooks
+        # @param capabilities [Array<Symbol>] the client's rich-stream capabilities
+        # @return [String] alt_string itself when nothing applies, else a new string
+        def rich_stream_rewrite(alt_string, capabilities)
+          if alt_string.include?('<room>') && !capabilities.include?(:room_element)
+            alt_string = if Frontend.supports_gsl?
+                           Lich::Common::RoomBlock.legacy_shape(alt_string)
+                         else
+                           Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
+                         end
+          end
+          if XMLData.game =~ /^DR/
+            alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless capabilities.include?(:game_links)
+            alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless capabilities.include?(:double_bold)
+          end
+          alt_string
+        end
+
+        # The steps that follow the session's front end ($frontend), whatever
+        # the client's capabilities: room-number display, the Genie and
+        # Frostbite subtitle edits, Wizard's GSL conversion and the origin
+        # sentinel.
+        #
+        # @param alt_string [String] a rewritten server string (may be modified in place)
+        # @return [String] the bytes to write to the client
+        def finish_client_line(alt_string)
+          process_room_information(alt_string)
+
+          # Handle frontend-specific modifications
+          if Frontend.client.eql?('genie') && alt_string =~ /^<streamWindow id='room' title='Room' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+          end
+
+          if Frontend.client.eql?('frostbite') && alt_string =~ /^<streamWindow id='main' title='Story' subtitle=" - \[.*\] \((?:\d+|\*\*)\)"/
+            alt_string.sub!(/] \((?:\d+|\*\*)\)/) { "]" }
+          end
+
+          # Handle room number display
+          if @room_number_after_ready && alt_string =~ /<prompt /
+            alt_string = @game_instance ? @game_instance.process_room_display(alt_string) : alt_string
+            @room_number_after_ready = false
+          end
+
+          # Handle frontend-specific conversions
+          if Frontend.supports_gsl?
+            alt_string = sf_to_wiz(alt_string)
+          end
+          # Handle prefix origin sentinel if FE supports it
+          alt_string = prefix_origin_sentinel(alt_string) if Frontend.supports_sentinel?
+          alt_string
         end
 
         def process_room_information(alt_string)
@@ -1203,14 +1248,22 @@ module Lich
           end
         end
 
+        # Writes the same string to every client that receives game output.
         def send_to_client(alt_string)
+          client_write_targets.each { |client| client.write(alt_string) if client.alive? }
+        end
+
+        # The clients that receive game output: every attached detachable
+        # client, else the primary client. While a detachable client is
+        # attached, the primary gets none.
+        #
+        # @return [Array] a snapshot; the registry may change while it is used
+        def client_write_targets
           detachable_clients = $_DETACHABLE_CLIENT_REGISTRY_&.snapshot || []
           detachable_clients = [$_DETACHABLE_CLIENT_] if detachable_clients.empty? && $_DETACHABLE_CLIENT_
-          if !detachable_clients.empty?
-            detachable_clients.each { |client| client.write(alt_string) if client.alive? }
-          elsif $_CLIENT_
-            $_CLIENT_.write(alt_string)
-          end
+          return detachable_clients unless detachable_clients.empty?
+
+          $_CLIENT_ ? [$_CLIENT_] : []
         end
 
         def handle_thread_error(error)
