@@ -96,6 +96,28 @@ RSpec.configure do |config|
     end
   end
 
+  # Fail any example that leaves one of the globals set up below (see "Global
+  # Variables") holding a different object than it started with. Under
+  # parallel_rspec, a spec that nils or replaces one of these in an `after`
+  # breaks whichever unrelated file happens to run next in the same process.
+  # Mutate the object in place, or save it and restore it. This is a
+  # config-level around hook, so it runs outside every group's own
+  # around/after hooks and sees the value after they have restored it.
+  # $_LASTUPSTREAM_ is left out because the before hook below resets it to nil
+  # for every example.
+  config.around do |example|
+    before = SPEC_HELPER_GLOBALS.transform_values { |(read, _write)| read.call }
+    example.run
+    leaked = SPEC_HELPER_GLOBALS.reject { |name, (read, _write)| read.call.equal?(before[name]) }
+    unless leaked.empty?
+      # Put the originals back first, so one leaking example fails on its own
+      # instead of taking every later example in the process down with it.
+      leaked.each { |name, (_read, write)| write.call(before[name]) }
+      raise "#{example.location} left #{leaked.keys.join(', ')} holding a different object; " \
+            'save and restore spec_helper globals instead of reassigning them'
+    end
+  end
+
   # Reset shared state before each example to ensure test isolation.
   # This prevents state leakage between tests and allows random ordering.
   config.before do
@@ -1161,6 +1183,22 @@ $safe_pause_lock ||= Mutex.new
 # Same 20 words as Lich::DragonRealms::ORDINALS (drvariables.rb), so specs see
 # production behaviour whether or not drvariables has been loaded first.
 $ORDINALS ||= %w[first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth].freeze
+
+# Reader and writer for each global above that a spec must not reassign, used
+# by the leak check in RSpec.configure. Add an entry when adding a global.
+SPEC_HELPER_GLOBALS = {
+  '$_SERVERBUFFER_'      => [-> { $_SERVERBUFFER_ }, ->(value) { $_SERVERBUFFER_ = value }],
+  '$_CLIENTBUFFER_'      => [-> { $_CLIENTBUFFER_ }, ->(value) { $_CLIENTBUFFER_ = value }],
+  '$SEND_CHARACTER'      => [-> { $SEND_CHARACTER }, ->(value) { $SEND_CHARACTER = value }],
+  '$cmd_prefix'          => [-> { $cmd_prefix }, ->(value) { $cmd_prefix = value }],
+  '$frontend'            => [-> { $frontend }, ->(value) { $frontend = value }],
+  '$fake_stormfront'     => [-> { $fake_stormfront }, ->(value) { $fake_stormfront = value }],
+  '$_CLIENT_'            => [-> { $_CLIENT_ }, ->(value) { $_CLIENT_ = value }],
+  '$_DETACHABLE_CLIENT_' => [-> { $_DETACHABLE_CLIENT_ }, ->(value) { $_DETACHABLE_CLIENT_ = value }],
+  '$pause_all_lock'      => [-> { $pause_all_lock }, ->(value) { $pause_all_lock = value }],
+  '$safe_pause_lock'     => [-> { $safe_pause_lock }, ->(value) { $safe_pause_lock = value }],
+  '$ORDINALS'            => [-> { $ORDINALS }, ->(value) { $ORDINALS = value }]
+}.freeze unless defined?(SPEC_HELPER_GLOBALS)
 
 # =============================================================================
 # Spell Data Loading
