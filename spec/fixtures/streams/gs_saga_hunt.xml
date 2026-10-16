@@ -1,0 +1,136 @@
+<mode id="GAME"/>
+<playerID id='700001'/>
+<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='GS4'/>
+<app char="Aldric" game="GS" title="GemStone IV: Aldric"/>
+<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+<endSetup/>
+### stream-replay:body-below ###
+<style id=""/><style id="roomDesc"/>Narrow paneled windows provide an ample view of the courtyard's remnants and the vast desert beyond.  The sun's rays bathe the large dunes in a warm amber glow, the same light piercing through to halo the pallid columns in an eerie luminosity.  The tiled ground is chipped, resembling run down cobblestones.<style id=""/>
+Obvious exits: <a exist="-11223064" coord="2524,1864" noun="north">north</a>, <a exist="-11223064" coord="2524,1864" noun="east">east</a>
+<compass><dir value="n"/><dir value="e"/></compass><prompt time="1792091316">&gt;</prompt>
+<dialogData id='Cooldowns' clear='t'></dialogData><dialogData id='Cooldowns'><progressBar id='1253901988' value='89' text="Mana Tap" left='22%' top='0' width='76%' height='15' time='00:13:28'/><label id='l1253901988' value='0:13 ' top='0' left='0' justify='2' anchor_right=''/></dialogData>
+<prompt time="1792091317">&gt;</prompt>
+<component id='room objs'>  You also see the <a exist="781927405" noun="disk">purple Aldric disk</a>.</component>
+Your <a exist="781927405" noun="disk">disk</a> arrives, following you dutifully.
+<prompt time="1792091317">&gt;</prompt>
+<dialogData id='combat'><dropDownBox id='dDBTarget' value="none" cmd="target %dDBTarget%" tooltip='Select Target' content_text="none,veiled sentinel" content_value="target help,#784142402" anchor_left='cmdTarget' anchor_right='cmdAttack' height='20' width='80'  top='93' left='0' align='n'/></dialogData>
+<nav rm='4216015'/><streamWindow id='main' title='Story' subtitle=" - Sanctum of Scales, Columns - 4216015" location='center' target='drop'/><streamWindow id='room' title='Room' subtitle=" - Sanctum of Scales, Columns - 4216015" location='center' target='drop' ifClosed='' resident='true'/><clearStream id='room'/><pushStream id='room'/><compDef id='room desc'>Stark white columns stretch up toward curved glass domes in the ceiling, each slender pillar adorned with rows of pale peridots and accents of bronze and copper leaf.  The floor is a mosaic of blue and green hues, the stones chiseled into the shape of a thick, shimmering scale.</compDef><compDef id='room objs'>  You also see<crtrStatus exist="784142402" health="300" maxhealth="300" hostile="1"/><b> <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/></b>.</compDef>
+<compDef id='room players'></compDef>
+<compDef id='room exits'>Obvious exits: <d>north</d>, <d>east</d>, <d>west</d></compDef>
+<compDef id='sprite'></compDef><popStream id='room'/>
+<roommeta weather="0" bonfire="0" inside="1" water="0" sanctuary="0" realm="57" climate="12" terrain="1"/>
+<component id='room players'></component>
+<resource picture="0"/><style id="roomName" />[Sanctum of Scales, Columns] (4216015)
+<style id=""/><style id="roomDesc"/>Stark white columns stretch up toward curved glass domes in the ceiling, each slender pillar adorned with rows of pale peridots and accents of bronze and copper leaf.  The floor is a mosaic of blue and green hues, the stones chiseled into the shape of a thick, shimmering scale.  <style id=""/>You also see <crtrStatus exist="784142402" health="300" maxhealth="300" hostile="1"/><pushBold/><pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/><popBold/>.
+Obvious exits: <a exist="-11223064" coord="2524,1864" noun="north">north</a>, <a exist="-11223064" coord="2524,1864" noun="east">east</a>, <a exist="-11223064" coord="2524,1864" noun="west">west</a>
+<compass><dir value="n"/><dir value="e"/><dir value="w"/></compass><prompt time="1792091317">&gt;</prompt>
+<dialogData id='combat'><cmdButton id='cmdTarget' value='target' cmd='target random' tooltip='Select a Random Target' height='20' width='55' top='93' left='0' align='nw'/><cmdButton id='cmdAttack' value='attack' cmd='attack' height='20' width='50' left='0' top='93' tooltip='Attack Current Target' align='ne'/></dialogData>
+<dialogData id='combat'><dropDownBox id='dDBTarget' value="veiled sentinel" cmd="target %dDBTarget%" tooltip='Select Target' content_text="veiled sentinel" content_value="#784142402" anchor_left='cmdTarget' anchor_right='cmdAttack' height='20' width='80'  top='93' left='0' align='n'/></dialogData>
+<dialogData id='combat'><cmdButton id='cmdTarget' value='target' cmd='target random' tooltip='Select a Random Target' height='20' width='55' top='93' left='0' align='nw'/><cmdButton id='cmdAttack' value='attack' cmd='attack' height='20' width='50' left='0' top='93' tooltip='Attack Current Target' align='ne'/></dialogData>
+<dialogData id='combat'><dropDownBox id='dDBTarget' value="veiled sentinel" cmd="target %dDBTarget%" tooltip='Select Target' content_text="veiled sentinel" content_value="#784142402" anchor_left='cmdTarget' anchor_right='cmdAttack' height='20' width='80'  top='93' left='0' align='n'/></dialogData>
+You are now targeting <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/>.
+<prompt time="1792091317">&gt;</prompt>
+<dialogData id='encum'><progressBar id='encumlevel' value='0' text='None' top='5' left='-5' align='n' width='160' height='15'/><label id='encumblurb' value='You are not encumbered enough to notice.' top='10' left='0' align='n' width='160' height='50' justify='0' anchor_top='encumlevel'/></dialogData><dialogData id='Buffs' clear='t'></dialogData><dialogData id='Buffs'><progressBar id='515' value='46' text="Rapid Fire" left='22%' top='0' width='76%' height='15' time='00:00:28'/><label id='l515' value='28s ' top='0' left='0' justify='2' anchor_right='wave'/><progressBar id='3011' value='3' text="Symbol of Protection" left='22%' top='16' width='76%' height='15' time='00:08:09'/><label id='l3011' value='0:08 ' top='16' left='0' justify='2' anchor_right='wave'/><progressBar id='201221794' value='41' text="Thrill of Adventure" left='22%' top='32' width='76%' height='15' time='01:39:24'/><label id='l201221794' value='1:39 ' top='32' left='0' justify='2' anchor_right='wave'/><progressBar id='1253901986' value='48' text="Mana Tap" left='22%' top='48' width='76%' height='15' time='00:01:27'/><label id='l1253901986' value='87s ' top='48' left='0' justify='2' anchor_right='wave'/></dialogData>
+<dialogData id='Buffs' clear='t'></dialogData><dialogData id='Buffs'><progressBar id='515' value='46' text="Rapid Fire" left='22%' top='0' width='76%' height='15' time='00:00:28'/><label id='l515' value='28s ' top='0' left='0' justify='2' anchor_right='wave'/><progressBar id='3011' value='3' text="Symbol of Protection" left='22%' top='16' width='76%' height='15' time='00:08:09'/><label id='l3011' value='0:08 ' top='16' left='0' justify='2' anchor_right='wave'/><progressBar id='201221794' value='41' text="Thrill of Adventure" left='22%' top='32' width='76%' height='15' time='01:39:24'/><label id='l201221794' value='1:39 ' top='32' left='0' justify='2' anchor_right='wave'/><progressBar id='1253901986' value='48' text="Mana Tap" left='22%' top='48' width='76%' height='15' time='00:01:27'/><label id='l1253901986' value='87s ' top='48' left='0' justify='2' anchor_right='wave'/></dialogData>
+<crtrStatus exist="784142402" health="177" maxhealth="300" hostile="1"/><crtrStatus exist="784142402" health="177" maxhealth="300" hostile="1" dead="1" prone="1"/><component id='room objs'>  You also see<crtrStatus exist="784142402" health="177" maxhealth="300" hostile="1" dead="1" prone="1"/><b> <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/></b> that appears dead.</component>
+<castTime value='1792091318'/>You wave your <a exist="784142301" noun="corndog">glitter-coated corndog</a> at <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/>.
+  1d100: 20 + Modifiers: 372 == 392
+
+  CS: +618 - TD: +443 + CvA: +25 + d125: +61 + Bonus: +1 == +262
+  Warding failed!
+Wisps of black smoke swirl around <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/> and <pushBold/><a exist="784142402" noun="sentinel">he</a><popBold/> bursts into flame causing 123 points of damage!
+   ... 60 points of damage!
+   Flame engulfs back: <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/> flambe!
+<pushBold/>A <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/> lets out a ragged gasp, collapsing to one knee and looking sightlessly to the heavens.  <pushBold/><a exist="784142402" noun="sentinel">He</a><popBold/> dies with a knowing smile on <pushBold/><a exist="784142402" noun="sentinel">his</a><popBold/> face.
+<pushBold/>A <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/> seems a bit less imposing.
+The guiding force leaves <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel</a><popBold/>.
+Cast Roundtime 1 Second.
+<prompt time="1792091317">&gt;</prompt>
+<dialogData id='combat'><dropDownBox id='dDBTarget' value="none" cmd="target %dDBTarget%" tooltip='Select Target' content_text="none" content_value="target help" anchor_left='cmdTarget' anchor_right='cmdAttack' height='20' width='80'  top='93' left='0' align='n'/></dialogData>
+<component id='room objs'>  You also see a <a exist="784142683" noun="stone">pink rhodochrosite stone</a> and <a exist="784142682" noun="coins">some silver coins</a>.</component>
+<dialogData id='expr'><label id='yourLvl' value='Level 100' top='0' left='0' align='n' width='160' height='15'/><progressBar id='mindState' value='100' text='must rest' top='45' left='3' field_exp='1123' max_field_exp='1123' ascension_exp='6309994' exp='55040404' until_next='2096' align='n' width='160' height='15'/><progressBar id='nextLvlPB' value='100' text='55040404 experience' top='20' left='3' align='n' width='160' height='15'/></dialogData><dialogData id='combat'><cmdButton id='cmdTarget' value='target' cmd='target random' tooltip='Select a Random Target' height='20' width='55' top='93' left='0' align='nw'/><cmdButton id='cmdAttack' value='attack' cmd='attack' height='20' width='50' left='0' top='93' tooltip='Attack Current Target' align='ne'/></dialogData>
+<dialogData id='combat'><dropDownBox id='dDBTarget' value="none" cmd="target %dDBTarget%" tooltip='Select Target' content_text="none" content_value="target help" anchor_left='cmdTarget' anchor_right='cmdAttack' height='20' width='80'  top='93' left='0' align='n'/></dialogData>
+You search the <pushBold/><a exist="784142402" noun="sentinel">veiled sentinel</a><popBold/>.
+You discard the <pushBold/><a exist="784142402" noun="sentinel">sentinel's</a><popBold/> useless equipment.
+<pushBold/><a exist="784142402" noun="sentinel">He</a><popBold/> had 167 silvers on <pushBold/><a exist="784142402" noun="sentinel">him</a><popBold/>.
+<pushBold/><a exist="784142402" noun="sentinel">He</a><popBold/> had a <a exist="784142683" noun="stone">pink rhodochrosite stone</a> on <pushBold/><a exist="784142402" noun="sentinel">him</a><popBold/>!
+<pushBold/><a exist="784142402" noun="sentinel">He</a><popBold/> had nothing else of value.
+
+A brightly shining emerald cinder wells up from beneath <pushBold/>a <a exist="784142402" noun="sentinel">lithe veiled sentinel's</a><popBold/> flesh and darts toward you, suffusing your <a exist="782715668" noun="periapt">bone periapt</a> with a radiant glow.
+
+<pushBold/>A <a exist="784142402" noun="sentinel">lithe veiled sentinel's</a><popBold/> features crumple in upon themselves and <pushBold/><a exist="784142402" noun="sentinel">his</a><popBold/> garb begins to unravel before <pushBold/><a exist="784142402" noun="sentinel">he</a><popBold/> turns to greyish-green dust.
+<prompt time="1792091318">&gt;</prompt>
+<component id='room objs'>  You also see a <a exist="784142683" noun="stone">pink rhodochrosite stone</a>.</component>
+You summon a swarm of winged armored bugs from your <a exist="782715667" noun="charm">shell fossil charm</a>, which takes off in search of silvers.  They locate a stack of 167 <a exist="784142682" noun="coins">coins</a> on the floor, reclaiming them and returning to you.  The winged armored bugs retreat back inside the <a exist="782715667" noun="charm">charm</a>.
+<prompt time="1792091318">&gt;</prompt>
+<left>Empty</left><dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='25%' top='0%' width='25%' height='100%'/><progressBar id='mana' value='100' text='mana 508/508' left='25%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='minivitals'><skin id='spiritSkin' name='spiritBar' controls='spirit' left='75%' top='0%' width='25%' height='100%'/><progressBar id='spirit' value='100' text='spirit 13/13' left='75%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='minivitals'><skin id='healthSkin' name='healthBar' controls='health' left='0%' top='0%' width='25%' height='100%'/><progressBar id='health' value='100' text='health 176/176' left='0%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='injuries'><skin id='healthSkin' name='healthBar2' controls='health2' align='n' top='160' width='140' left='0' height='15'/><progressBar id='health2' value='100' text='health 176/176' customText='t' align='n' top='160' width='140' left='0' height='15'/></dialogData><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='50%' top='0%' width='25%' height='100%'/><progressBar id='stamina' value='100' text='stamina 117/117' left='50%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='expr'><label id='yourLvl' value='Level 100' top='0' left='0' align='n' width='160' height='15'/><progressBar id='mindState' value='100' text='must rest' top='45' left='3' field_exp='1123' max_field_exp='1123' ascension_exp='6309994' exp='55040404' until_next='2096' align='n' width='160' height='15'/><progressBar id='nextLvlPB' value='100' text='55040404 experience' top='20' left='3' align='n' width='160' height='15'/></dialogData><dialogData id='encum'><progressBar id='encumlevel' value='0' text='None' top='5' left='-5' align='n' width='160' height='15'/><label id='encumblurb' value='You are not encumbered enough to notice.' top='10' left='0' align='n' width='160' height='50' justify='0' anchor_top='encumlevel'/></dialogData><clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a <a exist="782715624" noun="cloak">voluminous mist tartan cloak</a> lined in silver-tipped aquerne
+  a <a exist="782715664" noun="tattoo">hotdog-shaped tattoo</a>
+  a <a exist="782715666" noun="tattoo">visible tattoo</a>
+  a <a exist="782715667" noun="charm">rigid shell fossil charm</a>
+  a <a exist="782715668" noun="periapt">small bone periapt</a>
+  a <a exist="782715669" noun="pin">glowbark pin</a>
+  a <a exist="782715670" noun="badge">tin-bound linen badge</a>
+  a <a exist="782715671" noun="brooch">quintuple orb brooch</a>
+  a <a exist="782715672" noun="satchel">brushed nubuck satchel</a> traced in red squirrel fur
+  a <a exist="782715712" noun="baldric">waern fur baldric</a>
+  a <a exist="782715717" noun="backpack">screaming wizard's face backpack</a>
+  a <a exist="782715731" noun="apron">singed black cordovan apron</a>
+  an <a exist="782715733" noun="robe">ensigiled aganjira robe</a>
+  a <a exist="782715734" noun="gown">square-necked blueberry linen gown</a>
+  an <a exist="782715735" noun="gauntlet">articulated mithglin gauntlet</a>
+  an <a exist="782715736" noun="band">enruned urglaes band</a>
+  a <a exist="782715737" noun="ring">smooth bone ring</a> pierced by tiny crystal shards
+  a <a exist="782715738" noun="holster">well-filled meat holster</a>
+  a <a exist="782715739" noun="pouch">sturdy dark leather gem pouch</a>
+  a <a exist="782715781" noun="sling">pyrographed leather sling</a> with an ensigiled rune staff scorched into the leather
+  a <a exist="782715783" noun="locus">gilded locus</a>
+  a <a exist="782715784" noun="bag">tooled leather drawstring coin bag</a>
+<popStream/>
+<dialogData id='minivitals'><skin id='manaSkin' name='manaBar' controls='mana' left='25%' top='0%' width='25%' height='100%'/><progressBar id='mana' value='100' text='mana 508/508' left='25%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='minivitals'><skin id='spiritSkin' name='spiritBar' controls='spirit' left='75%' top='0%' width='25%' height='100%'/><progressBar id='spirit' value='100' text='spirit 13/13' left='75%' customText='t' top='0%' width='25%' height='100%'/></dialogData><dialogData id='minivitals'><skin id='staminaSkin' name='staminaBar' controls='stamina' left='50%' top='0%' width='25%' height='100%'/><progressBar id='stamina' value='100' text='stamina 117/117' left='50%' customText='t' top='0%' width='25%' height='100%'/></dialogData><clearContainer id="stow"/><inv id='stow'>In the <a exist="782715624" noun="cloak">cloak</a>:</inv><inv id='stow'> a <a exist="784142301" noun="corndog">glitter-coated ominous corndog</a> dripping with shimmering golden butter</inv><inv id='stow'> a <a exist="784142384" noun="crystal">n'ayanad crystal</a></inv><inv id='stow'> a <a exist="784133268" noun="chest">scuffed mithril chest</a></inv><inv id='stow'> a <a exist="782715662" noun="statue">small statue</a></inv><inv id='stow'> a <a exist="782715661" noun="statue">small statue</a></inv><inv id='stow'> a <a exist="782715660" noun="statue">small statue</a></inv><inv id='stow'> a <a exist="782715659" noun="statue">small statue</a></inv><inv id='stow'> a <a exist="782715638" noun="dagger">drake dagger</a></inv><inv id='stow'> a <a exist="782715628" noun="statue">small statue</a></inv>You slip a <a exist="784142301" noun="corndog">glitter-coated ominous corndog</a> dripping with shimmering golden butter beneath your <a exist="782715624" noun="cloak">mist tartan cloak</a> and into one of several concealed pockets.
+<prompt time="1792091318">&gt;</prompt>
+<dialogData id='encum'><progressBar id='encumlevel' value='0' text='None' top='5' left='-5' align='n' width='160' height='15'/><label id='encumblurb' value='You are not encumbered enough to notice.' top='10' left='0' align='n' width='160' height='50' justify='0' anchor_top='encumlevel'/></dialogData><left exist="784142683" noun="stone">rhodochrosite stone</left><left>Empty</left><dialogData id='encum'><progressBar id='encumlevel' value='0' text='None' top='5' left='-5' align='n' width='160' height='15'/><label id='encumblurb' value='You are not encumbered enough to notice.' top='10' left='0' align='n' width='160' height='50' justify='0' anchor_top='encumlevel'/></dialogData><component id='room objs'></component>
+<clearStream id='inv' ifClosed=''/><pushStream id='inv'/>Your worn items are:
+  a <a exist="782715624" noun="cloak">voluminous mist tartan cloak</a> lined in silver-tipped aquerne
+  a <a exist="782715664" noun="tattoo">hotdog-shaped tattoo</a>
+  a <a exist="782715666" noun="tattoo">visible tattoo</a>
+  a <a exist="782715667" noun="charm">rigid shell fossil charm</a>
+  a <a exist="782715668" noun="periapt">small bone periapt</a>
+  a <a exist="782715669" noun="pin">glowbark pin</a>
+  a <a exist="782715670" noun="badge">tin-bound linen badge</a>
+  a <a exist="782715671" noun="brooch">quintuple orb brooch</a>
+  a <a exist="782715672" noun="satchel">brushed nubuck satchel</a> traced in red squirrel fur
+  a <a exist="782715712" noun="baldric">waern fur baldric</a>
+  a <a exist="782715717" noun="backpack">screaming wizard's face backpack</a>
+  a <a exist="782715731" noun="apron">singed black cordovan apron</a>
+  an <a exist="782715733" noun="robe">ensigiled aganjira robe</a>
+  a <a exist="782715734" noun="gown">square-necked blueberry linen gown</a>
+  an <a exist="782715735" noun="gauntlet">articulated mithglin gauntlet</a>
+  an <a exist="782715736" noun="band">enruned urglaes band</a>
+  a <a exist="782715737" noun="ring">smooth bone ring</a> pierced by tiny crystal shards
+  a <a exist="782715738" noun="holster">well-filled meat holster</a>
+  a <a exist="782715739" noun="pouch">sturdy dark leather gem pouch</a>
+  a <a exist="782715781" noun="sling">pyrographed leather sling</a> with an ensigiled rune staff scorched into the leather
+  a <a exist="782715783" noun="locus">gilded locus</a>
+  a <a exist="782715784" noun="bag">tooled leather drawstring coin bag</a>
+<popStream/>
+<clearContainer id="782715739"/><inv id='782715739'>In the <a exist="782715739" noun="pouch">pouch</a>:</inv><inv id='782715739'> a <a exist="784142683" noun="stone">pink rhodochrosite stone</a></inv><inv id='782715739'> a <a exist="784133384" noun="cinderstone">radiant green cinderstone</a></inv><inv id='782715739'> a <a exist="784131660" noun="amber">droplet of honey amber</a></inv>With a discerning eye, you gather up what treasure you find worthwhile and casually stow it away.
+<pushStream id='loot'/>
+You search the room and find:
+  (stowed in a <a exist="782715739" noun="pouch">sturdy dark leather gem pouch</a>)
+   a <a exist="784142683" noun="stone">pink rhodochrosite stone</a>
+Looted 1 items.
+<popStream id='loot'/>
+<prompt time="1792091318">&gt;</prompt>
+You have 167 silver with you.
+You are carrying 295 silver stored within your coin pouch.
+You are carrying a total of 462 silver.
+
+[Enter <d>WEALTH HELP</d> for more details.]
+<prompt time="1792091319">&gt;</prompt>
+<component id='room objs'>  You also see the <a exist="781927405" noun="disk">purple Aldric disk</a>.</component>
+Your <a exist="781927405" noun="disk">disk</a> arrives, following you dutifully.
+<prompt time="1792091319">&gt;</prompt>
+<dialogData id='encum'><progressBar id='encumlevel' value='0' text='None' top='5' left='-5' align='n' width='160' height='15'/><label id='encumblurb' value='You are not encumbered enough to notice.' top='10' left='0' align='n' width='160' height='50' justify='0' anchor_top='encumlevel'/></dialogData><prompt time="1792091319">&gt;</prompt>
+You place 167 silver coins inside your <a exist="782715784" noun="bag">leather coin bag</a>.
+<prompt time="1792091319">&gt;</prompt>
