@@ -99,4 +99,92 @@ RSpec.describe StreamReplay::Extract do
   it 'rejects --to before --from' do
     expect { extract(from: 3, to: 1) }.to raise_error(ArgumentError, /--to/)
   end
+  it 'keeps everything when the log has no reget marker (a login, or a window cut from a longer log)' do
+    no_marker = log.lines.reject { |l| l.include?('full logging now active') }.join
+    out = body(described_class.new(game: 'DR', char: 'Hero').call(no_marker))
+    # The first prompt, which the marker would have dropped, is kept.
+    expect(out.lines.length).to eq(5)
+    expect(out).to start_with('<prompt time="0">')
+  end
+
+  describe 'a window that starts at a real login' do
+    let(:login) do
+      <<~LOG
+        2026-10-16 9:00am
+        <mode id="GAME"/><settings client="1.0.1.26" major="1"><presets><p id='roomName'/></presets><vars><v name='x' value='Hero'/></vars></settings>
+        <playerID id='614301'/>
+        <settingsInfo  client="1.0.1.26" major="9" crc='1' instance='DR'/>
+        <app char="Hero" game="DR" title="[DR: Hero] Wrayth"/>
+        <streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>
+        <prompt time="1">&gt;</prompt>
+        Hero waves.
+      LOG
+    end
+
+    def split(fixture)
+      fixture.split("### stream-replay:body-below ###\n", 2)
+    end
+
+    # Lich starts --start-scripts (the probe) on the line after the one that
+    # names the character, and the driver waits for the probe before it sends
+    # the body, so the header must include that next line.
+    it 'keeps the login lines and ends the header one line after <app char> instead of adding a synthetic one' do
+      header, rest = split(described_class.new(game: 'DR', char: 'Hero', real_login: true).call(login))
+      expect(header.lines.length).to eq(5)
+      expect(header).to include("<settingsInfo  client=\"1.0.1.26\" major=\"9\" crc='1' instance='DR'/>")
+      expect(header.lines.last(2)).to eq([%(<app char="Aldric" game="DR" title="[DR: Aldric] Wrayth"/>\n),
+                                          %(<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>\n)])
+      expect(header).not_to include('1.0.1.28', '700001')
+      expect(rest).to start_with('<prompt time="1">')
+    end
+
+    it 'adds a synthetic <app> line after <settingsInfo> when the login has none (GemStone)' do
+      gs = login.lines.reject { |l| l.include?('<app ') }.join.sub("instance='DR'", "instance='GSF'")
+      header, rest = split(described_class.new(game: 'GS', char: 'Hero', real_login: true).call(gs))
+      expect(header.lines.last(3)).to eq(["<settingsInfo  client=\"1.0.1.26\" major=\"9\" crc='1' instance='GSF'/>\n",
+                                          %(<app char="Aldric" game="GS" title="GemStone IV: Aldric"/>\n),
+                                          %(<streamWindow id="main" title="Story" location="center" target="drop" resident="true"/>\n)])
+      expect(rest).to start_with('<prompt time="1">')
+    end
+
+    it 'refuses a window that ends at the <app> line' do
+      cut = login.lines.take(5).join
+      expect { described_class.new(game: 'DR', char: 'Hero', real_login: true).call(cut) }
+        .to raise_error(ArgumentError, /nothing follows/)
+    end
+
+    it 'refuses a window with no <settingsInfo>' do
+      no_login = login.lines.reject { |l| l.include?('<settingsInfo') }.join
+      expect { described_class.new(game: 'DR', char: 'Hero', real_login: true).call(no_login) }
+        .to raise_error(ArgumentError, /--real-login/)
+    end
+
+    it 'reduces the <settings> blob to its empty element with --drop-settings-body' do
+      out = described_class.new(game: 'DR', char: 'Hero', real_login: true, drop_settings_body: true).call(login)
+      expect(out).to include(%(<mode id="GAME"/><settings client="1.0.1.26" major="1"></settings>\n))
+      expect(out).not_to include('presets', 'vars')
+    end
+
+    it 'leaves the <settings> blob alone without --drop-settings-body' do
+      expect(described_class.new(game: 'DR', char: 'Hero', real_login: true).call(login)).to include('<presets>')
+    end
+  end
+
+  describe '--end-prompt' do
+    let(:unfinished) { "<prompt time=\"1\">&gt;</prompt>\nYou wave.\n" }
+
+    it 'appends the warm-up prompt when the window ends without one' do
+      out = body(described_class.new(game: 'DR', char: 'Hero', end_prompt: true).call(unfinished))
+      expect(out.lines.last).to eq("<prompt time=\"0\">&gt;</prompt>\n")
+    end
+
+    it 'adds nothing when the window already ends on a prompt' do
+      out = body(described_class.new(game: 'DR', char: 'Hero', end_prompt: true).call(log))
+      expect(out.lines.length).to eq(4)
+    end
+
+    it 'adds nothing without the option' do
+      expect(body(described_class.new(game: 'DR', char: 'Hero').call(unfinished)).lines.last).to eq("You wave.\n")
+    end
+  end
 end
