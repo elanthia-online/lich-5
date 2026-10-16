@@ -186,9 +186,10 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
       "<exists></exists><players></players><exits>#{exits}</exits><extra>#{extra}</extra></room>\r\n"
   end
   two_exits = 'Obvious paths: <d>north</d>, <d>southeast</d>.'
+  fixtures = File.expand_path('../../fixtures', __dir__)
 
-  it 'follows the exits line of the current room with the legacy compass, on its own line' do
-    out = described_class.legacy_shape_with_compass(block.call(two_exits), room_id: 230_007, room_exits: [])
+  it 'follows the exits line with the legacy compass, on its own line' do
+    out = described_class.legacy_shape_with_compass(block.call(two_exits))
     expect(out).to eq(
       %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
       %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
@@ -200,7 +201,7 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
   it 'maps every exit name the game lists, in the order it lists them' do
     names = %w[out down up northwest west southwest south southeast east northeast north]
     exits = "Obvious paths: #{names.map { |n| "<d>#{n}</d>" }.join(', ')}."
-    out = described_class.legacy_shape_with_compass(block.call(exits), room_id: 230_007, room_exits: [])
+    out = described_class.legacy_shape_with_compass(block.call(exits))
     expect(out.lines.last).to eq(
       '<compass><dir value="out"/><dir value="down"/><dir value="up"/><dir value="nw"/><dir value="w"/>' \
       '<dir value="sw"/><dir value="s"/><dir value="se"/><dir value="e"/><dir value="ne"/><dir value="n"/></compass>' + "\r\n"
@@ -208,71 +209,75 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
   end
 
   it 'leaves out an exit name that has no compass value' do
-    out = described_class.legacy_shape_with_compass(block.call('Obvious paths: <d>north</d>, <d>gate</d>.'), room_id: 230_007, room_exits: [])
+    out = described_class.legacy_shape_with_compass(block.call('Obvious paths: <d>north</d>, <d>gate</d>.'))
     expect(out.lines.last).to eq(%(<compass><dir value="n"/></compass>\r\n))
   end
 
+  it 'reads the text of an attributed <d> exit' do
+    out = described_class.legacy_shape_with_compass(block.call('Obvious paths: <d cmd="go gate">gate</d>, <d cmd="west">west</d>.'))
+    expect(out.lines.last).to eq(%(<compass><dir value="w"/></compass>\r\n))
+  end
+
+  # "Obvious exits: none." and the fog wording are synthetic: no capture has
+  # either in a <room> block (the fog text's real wording is not known).
   ['Obvious paths: none.', 'Obvious exits: none.', 'Obvious paths: obscured by a thick fog'].each do |exits|
     it "sends an empty compass, clearing the last room's, for #{exits.inspect}" do
-      out = described_class.legacy_shape_with_compass(block.call(exits), room_id: 230_007, room_exits: [])
+      out = described_class.legacy_shape_with_compass(block.call(exits))
       expect(out.lines.last(2)).to eq(["#{exits}\r\n", "<compass></compass>\r\n"])
     end
   end
 
+  # A captured Saga block with "Obvious paths: none." gives the lines a captured
+  # legacy view of a room without exits ends with (room_block/README section in
+  # spec/fixtures/README.md).
+  it 'gives a captured Saga room without exits the legacy view\'s exits line and empty compass' do
+    saga_block = File.foreach(File.join(fixtures, 'room_block/dr_saga_no_exits.xml')).find { |l| l.include?('<room>') }
+    legacy_tail = File.readlines(File.join(fixtures, 'room_block/dr_legacy_no_exits.xml'), chomp: true).last(2)
+    out = described_class.legacy_shape_with_compass(saga_block.chomp).split("\r\n")
+    expect(out.last(2)).to eq(legacy_tail)
+  end
+
   it 'puts the compass before a non-empty extra part, right after the exits line' do
-    out = described_class.legacy_shape_with_compass(block.call(two_exits, extra: 'A sign hangs here.'), room_id: 230_007, room_exits: [])
+    out = described_class.legacy_shape_with_compass(block.call(two_exits, extra: 'A sign hangs here.'))
     expect(out.lines.last(3)).to eq(["#{two_exits}\r\n", %(<compass><dir value="n"/><dir value="se"/></compass>\r\n), "A sign hangs here.\r\n"])
   end
 
-  # A Moon Mage's Locate shows the target's room as a bare <room> block.
-  it 'sends no compass for a room the character is not in' do
-    remote = block.call(two_exits, name: "[Bosque Deriel, Hermit's Shacks] (230008)")
-    out = described_class.legacy_shape_with_compass(remote, room_id: 230_007, room_exits: %w[north southeast])
-    expect(out).not_to include('<compass>')
-    expect(out).to eq(described_class.legacy_shape(remote))
+  # A Moon Mage's Locate shows the target's room as a bare <room> block. The
+  # legacy stream followed that view with the located room's compass
+  # (room_block/dr_legacy_locate.xml), not the character's.
+  it 'gives a block of a room the character is not in the compass of that room' do
+    remote = block.call('Obvious paths: <d>north</d>, <d>south</d>.', name: "[Bosque Deriel, Hermit's Shacks] (230008)")
+    expect(described_class.legacy_shape_with_compass(remote).lines.last).to eq(%(<compass><dir value="n"/><dir value="s"/></compass>\r\n))
   end
 
-  it 'sends no compass before the character has a room number' do
-    out = described_class.legacy_shape_with_compass(block.call(two_exits), room_id: 0, room_exits: [])
-    expect(out).not_to include('<compass>')
+  # The same located room (230008) in both dialects: the legacy Locate view in
+  # dr_legacy_locate.xml (character in 230007) and the Saga Locate view in
+  # streams/dr_saga_locate_descflag.xml (character in 230007).
+  it 'sends after a captured Saga Locate view the exits line and compass the legacy stream sent after its Locate view' do
+    legacy = File.readlines(File.join(fixtures, 'room_block/dr_legacy_locate.xml'), chomp: true)
+    cast = legacy.index { |l| l.include?('the equation of the Locate spell') }
+    exits_at = legacy.each_index.find { |i| i > cast && legacy[i].start_with?('Obvious paths:') }
+    legacy_exits = legacy[exits_at]
+    legacy_compass = legacy[exits_at + 1][%r{\A<compass>.*?</compass>}]
+    expect(legacy[exits_at - 3]).to include("[Bosque Deriel, Hermit's Shacks] (230008)")
+
+    saga_lines = File.readlines(File.join(fixtures, 'streams/dr_saga_locate_descflag.xml'), chomp: true)
+    saga_block = saga_lines.find { |l| l.include?('(230008)</name>') }
+    out = described_class.legacy_shape_with_compass(saga_block).split("\r\n")
+    expect(out.last(2)).to eq([legacy_exits, legacy_compass])
   end
 
-  context 'with a room name that has no room number (ShowRoomID off, or "(**)")' do
-    ['[Bosque Deriel, Burial Ground]', '[Bosque Deriel, Burial Ground] (**)'].each do |name|
-      it "sends the compass for #{name.inspect} when its exits are the current room's" do
-        out = described_class.legacy_shape_with_compass(block.call(two_exits, name: name), room_id: 230_007, room_exits: %w[north southeast])
-        expect(out.lines.last).to eq(%(<compass><dir value="n"/><dir value="se"/></compass>\r\n))
-      end
-
-      it "sends none for #{name.inspect} when its exits differ from the current room's" do
-        out = described_class.legacy_shape_with_compass(block.call(two_exits, name: name), room_id: 230_007, room_exits: %w[west])
-        expect(out).not_to include('<compass>')
-      end
-    end
-
-    # XMLParser pushes the text of every <d> in the room exits component,
-    # attributed or not, into XMLData.room_exits.
-    it 'compares the text of an attributed <d> exit with the current room exits' do
-      exits = 'Obvious paths: <d>north</d>, <d cmd="go gate">gate</d>.'
-      name = '[Bosque Deriel, Burial Ground]'
-      out = described_class.legacy_shape_with_compass(block.call(exits, name: name), room_id: 230_007, room_exits: %w[north gate])
-      expect(out.lines.last(2)).to eq(["#{exits}\r\n", %(<compass><dir value="n"/></compass>\r\n)])
-      out = described_class.legacy_shape_with_compass(block.call(exits, name: name), room_id: 230_007, room_exits: %w[north])
-      expect(out).not_to include('<compass>')
-    end
-  end
-
-  it 'gives each block in a multi-block string its own decision' do
+  it 'gives each block in a multi-block string the compass of its own exits' do
     here = block.call(two_exits)
     there = block.call('Obvious paths: <d>west</d>.', name: '[Bosque Deriel, Dense Woods] (230010)')
-    out = described_class.legacy_shape_with_compass("#{here}#{there}", room_id: 230_007, room_exits: [])
-    expect(out.scan('<compass>')).to eq(['<compass>'])
+    out = described_class.legacy_shape_with_compass("#{here}#{there}")
+    expect(out.scan(%r{<compass>.*?</compass>})).to eq([%(<compass><dir value="n"/><dir value="se"/></compass>), %(<compass><dir value="w"/></compass>)])
     expect(out).to include(%(<compass><dir value="n"/><dir value="se"/></compass>\r\n<resource picture="0"/><style id="roomName" />[Bosque Deriel, Dense Woods]))
   end
 
   it 'returns a string without a block unchanged, as the same object' do
     line = +"Obvious paths: <d>north</d>.\r\n"
-    expect(described_class.legacy_shape_with_compass(line, room_id: 1, room_exits: ['north'])).to equal(line)
+    expect(described_class.legacy_shape_with_compass(line)).to equal(line)
   end
 
   it 'never reaches scripts: legacy_shape and strip_xml add no compass' do
@@ -281,9 +286,11 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
   end
 
   # Every legacy exits line in the legacy captures is followed by a compass;
-  # the compass built from that exits line must be the one the game sent.
+  # the compass built from that exits line must be the one the game sent. The
+  # captures include a Locate view of another room and a room without exits.
   it 'rebuilds the compass the legacy stream sent after every exits line in the legacy captures' do
-    files = Dir[File.expand_path('../../fixtures/streams/dr_legacy_*.xml', __dir__)] +
+    files = Dir[File.join(fixtures, 'streams/dr_legacy_*.xml')] +
+            %w[dr_legacy_locate.xml dr_legacy_no_exits.xml].map { |f| File.join(fixtures, 'room_block', f) } +
             Dir[File.expand_path('../../../benchmark/fixtures/dr_{sample,inventory_sample}.xml', __dir__)]
     pairs = files.flat_map do |file|
       lines = File.readlines(file, chomp: true)
@@ -291,11 +298,34 @@ RSpec.describe Lich::Common::RoomBlock, '.legacy_shape_with_compass' do
       lines.each_index.select { |i| lines[i].match?(/\A(?:<crtrStatus[^>]*>)*Obvious (?:paths|exits):/) }
                       .map { |i| [lines[i].sub(/\A(?:<crtrStatus[^>]*>)*/, ''), lines[i + 1][%r{\A<compass>.*?</compass>}]] }
     end
-    expect(pairs.size).to be >= 39
+    expect(pairs.size).to be >= 43
+    expect(pairs.map(&:last)).to include('<compass></compass>', '<compass><dir value="n"/><dir value="s"/></compass>')
     pairs.each do |exits, sent|
-      out = described_class.legacy_shape_with_compass(block.call(exits), room_id: 230_007, room_exits: [])
+      out = described_class.legacy_shape_with_compass(block.call(exits))
       expect(out.lines.last.chomp).to eq(sent), exits
     end
+  end
+end
+
+# One arrival in the Saga logs had no room exits component
+# (room_block/dr_saga_arrival_without_exits_component.xml): the parser keeps
+# the last room's exits, so the compass has to come from the block itself.
+RSpec.describe Lich::Common::RoomBlock, 'on a captured arrival without a room exits component' do
+  require 'rexml/document'
+  require 'rexml/streamlistener'
+  require 'common/gameobj'
+  require 'common/xmlparser'
+
+  it 'sends the compass of the block, not the exits XMLParser kept from the last room' do
+    parser = Lich::Common::XMLParser.new
+    lines = File.readlines(File.expand_path('../../fixtures/room_block/dr_saga_arrival_without_exits_component.xml', __dir__), chomp: true)
+    lines.each { |line| REXML::Document.parse_stream("<root>#{line}</root>", parser) }
+    block = lines.reverse.find { |l| l.include?('<room>') }
+
+    expect(block).to include('(2108013)</name>')
+    expect(parser.room_id).to eq(2_108_013)
+    expect(parser.room_exits).to eq(%w[southeast west])
+    expect(described_class.legacy_shape_with_compass(block).lines.last).to eq('<compass><dir value="sw"/><dir value="nw"/></compass>')
   end
 end
 
