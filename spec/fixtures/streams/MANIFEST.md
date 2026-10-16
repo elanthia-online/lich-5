@@ -80,6 +80,11 @@ Each PR in the series records its own rows under its heading.
 
 ### #1703
 
+| Absent or counted | Corpus |
+|---|---|
+| `<settingsInfo>`: 3 occurrences, each at line 5 of a real login (C8 09:00; GS 11:29 and 12:38). 0 mid-session; 0 on the same line as a main `streamWindow` subtitle; 0 creature tags before it in any of the 3 logins; 0 captures that start at a login without one. `dr_saga_login.xml` and `gs_saga_login.xml` are two of the three logins | DR-16 + GS-15 (131 captures) |
+| 0 links with `exist=""` | DR-16 + GS-15; FIX |
+
 ### #1704
 
 ### #1705
