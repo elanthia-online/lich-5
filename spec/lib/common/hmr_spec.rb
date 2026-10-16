@@ -59,3 +59,109 @@ RSpec.describe HMR, "#reload" do
     end
   end
 end
+
+RSpec.describe HMR, "#reload error handling" do
+  let(:messages) { [] }
+
+  before do
+    allow(Lich::Common::HMR).to receive(:msg) { |m| messages << m }
+  end
+
+  def loaded_file(suffix, body)
+    filename = HMR::Helpers.unique_filename(suffix)
+    File.write(filename, body)
+    require(filename)
+    filename
+  end
+
+  # A typo in the file being edited is the most common reload failure.
+  # SyntaxError is a ScriptError, not a StandardError, so a bare rescue
+  # let it escape into the client thread.
+  it "reports a SyntaxError in the reloaded file instead of raising it" do
+    filename = loaded_file("syntax", HMR::Helpers::First)
+    File.write(filename, "module HMR\n  def broken(\nend\n")
+
+    expect { Lich::Common::HMR.reload(filename) }.not_to raise_error
+    expect(messages.join("\n")).to match(/syntax/i)
+    expect(messages).not_to include(a_string_matching(/reloaded #{Regexp.escape(filename)}/))
+  end
+
+  it "reports a SystemStackError raised while reloading instead of raising it" do
+    filename = loaded_file("stack", HMR::Helpers::First)
+    File.write(filename, <<~RUBY)
+      module HMR
+        def self.hmr_spec_recurse(depth) = hmr_spec_recurse(depth + 1)
+        hmr_spec_recurse(0)
+      end
+    RUBY
+
+    expect { Lich::Common::HMR.reload(filename) }.not_to raise_error
+    expect(messages.join("\n")).to include("stack level too deep")
+  end
+
+  it "keeps reloading the remaining files after one fails" do
+    bad = loaded_file("bad-first", HMR::Helpers::First)
+    good = loaded_file("good-second", "module HMR\n  TestAfterFailure = 1\nend\n")
+    File.write(bad, "module HMR\n  def broken(\nend\n")
+    File.write(good, "module HMR\n  remove_const(:TestAfterFailure)\n  TestAfterFailure = 2\nend\n")
+
+    Lich::Common::HMR.reload(Regexp.union(bad, good))
+
+    expect(HMR::TestAfterFailure).to eq(2)
+  end
+end
+
+RSpec.describe HMR, "#reload candidate selection" do
+  let(:messages) { [] }
+
+  before do
+    require 'rexml/document'
+    allow(Lich::Common::HMR).to receive(:msg) { |m| messages << m }
+    # Never let a regression really re-run a gem or stdlib file in a shared
+    # rspec worker; record the attempt instead.
+    allow(Lich::Common::HMR).to receive(:load)
+  end
+
+  # rexml is a gem Lich loads at boot (lich.rbw, gameobj.rb). Re-running its
+  # files overflows the stack in REXML::XMLDecl#encoding= and leaves REXML
+  # unusable for the rest of the process, so `;hmr xml` must not touch them.
+  it "does not reload files that belong to an installed gem" do
+    rexml = $LOADED_FEATURES.find { |f| f.end_with?('/rexml/document.rb') }
+    expect(rexml).not_to be_nil
+
+    Lich::Common::HMR.reload(%r{/rexml/document\.rb\z})
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  it "does not reload files from Ruby's own library directory" do
+    stdlib = Lich::Common::HMR.loaded.find { |f| f.start_with?(File.join(RbConfig::CONFIG['rubylibdir'], '')) }
+    expect(stdlib).not_to be_nil
+
+    Lich::Common::HMR.reload(/\A#{Regexp.escape(stdlib)}\z/)
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  it "does not reload Ruby's built-in features recorded without a path" do
+    builtin = Lich::Common::HMR.loaded.find { |f| !File.absolute_path?(f) }
+    skip "no path-less feature in this Ruby" if builtin.nil?
+
+    Lich::Common::HMR.reload(/\A#{Regexp.escape(builtin)}\z/)
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  it "still reloads Lich's own files when the pattern also matches gem files" do
+    Lich::Common::HMR.reload(%r{/lib/common/hmr\.rb\z|/rexml/document\.rb\z})
+
+    expect(Lich::Common::HMR).to have_received(:load).once
+    expect(Lich::Common::HMR).to have_received(:load).with(a_string_ending_with('/lib/common/hmr.rb'))
+  end
+
+  it "says why nothing was reloaded when every match is a gem or Ruby file" do
+    Lich::Common::HMR.reload(%r{/rexml/document\.rb\z})
+
+    expect(messages.join("\n")).to match(%r{skipped 1 file.*Ruby or an installed gem}i)
+  end
+end
