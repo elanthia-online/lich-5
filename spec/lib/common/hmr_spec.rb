@@ -198,5 +198,86 @@ RSpec.describe HMR, "#reload candidate selection" do
     Lich::Common::HMR.reload(%r{/rexml/document\.rb\z})
 
     expect(messages.join("\n")).to match(%r{skipped 1 file.*Ruby or an installed gem}i)
+    expect(messages.join("\n")).not_to include("nothing matching")
+  end
+end
+
+RSpec.describe HMR, "#reload path comparison" do
+  let(:messages) { [] }
+  let(:tmp) { File.realpath(Dir.mktmpdir("hmr-roots-")) }
+
+  before do
+    allow(Lich::Common::HMR).to receive(:msg) { |m| messages << m }
+    allow(Lich::Common::HMR).to receive(:load)
+  end
+
+  after { FileUtils.rm_rf(tmp) }
+
+  def required_file(path)
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, "# hmr path spec\n")
+    require(path)
+    $LOADED_FEATURES.find { |f| f.end_with?(File.basename(path)) }
+  end
+
+  def reload_basename(path)
+    Lich::Common::HMR.reload(/#{Regexp.escape(File.basename(path))}\z/)
+  end
+
+  # Homebrew's Gem.path holds /opt/homebrew/lib/... while the gem files are
+  # recorded under Cellar/. Both sides must resolve symlinks.
+  it "skips a gem file when Gem.path names the gem dir through a symlink" do
+    File.symlink(FileUtils.mkdir_p(File.join(tmp, "realgems")).first, File.join(tmp, "linkgems"))
+    file = required_file(File.join(tmp, "realgems", "gems", "g-1.0", "lib", "hmr-link-root-#{SecureRandom.hex(4)}.rb"))
+    allow(Gem).to receive(:path).and_return([File.join(tmp, "linkgems")])
+
+    reload_basename(file)
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  it "skips a gem file that was required through a symlinked path" do
+    real = FileUtils.mkdir_p(File.join(tmp, "realgems", "gems", "g-1.0", "lib")).first
+    File.symlink(File.join(tmp, "realgems"), File.join(tmp, "linkgems"))
+    name = "hmr-link-file-#{SecureRandom.hex(4)}.rb"
+    File.write(File.join(real, name), "# hmr path spec\n")
+    require(File.join(tmp, "linkgems", "gems", "g-1.0", "lib", name))
+    allow(Gem).to receive(:path).and_return([File.join(tmp, "realgems")])
+
+    Lich::Common::HMR.reload(/#{Regexp.escape(name)}\z/)
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  it "reloads a file in a sibling directory whose name starts with a gem dir's name" do
+    file = required_file(File.join(tmp, "gemstone", "hmr-sibling-#{SecureRandom.hex(4)}.rb"))
+    FileUtils.mkdir_p(File.join(tmp, "gem"))
+    allow(Gem).to receive(:path).and_return([File.join(tmp, "gem")])
+
+    reload_basename(file)
+
+    expect(Lich::Common::HMR).to have_received(:load).with(file)
+  end
+
+  # Bundler path:/git: gems live outside Gem.path; only the activated spec
+  # knows where.
+  it "skips a file of an activated gem that lives outside Gem.path" do
+    file = required_file(File.join(tmp, "pathgem", "lib", "hmr-pathgem-#{SecureRandom.hex(4)}.rb"))
+    spec = instance_double(Gem::Specification, full_gem_path: File.join(tmp, "pathgem"))
+    allow(Gem).to receive(:loaded_specs).and_return({ "pathgem" => spec })
+
+    reload_basename(file)
+
+    expect(Lich::Common::HMR).not_to have_received(:load)
+  end
+
+  # A loaded file deleted since has no realpath. It is not a gem file, so it
+  # goes to load, whose LoadError the per-file rescue reports.
+  it "does not raise for a loaded file that has since been deleted" do
+    file = required_file(File.join(tmp, "gone", "hmr-deleted-#{SecureRandom.hex(4)}.rb"))
+    File.delete(file)
+
+    expect { reload_basename(file) }.not_to raise_error
+    expect(Lich::Common::HMR).to have_received(:load).with(file)
   end
 end
