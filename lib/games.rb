@@ -4,6 +4,7 @@ require 'openssl'
 require_relative 'common/shutdown_log'
 require_relative 'common/game_transport'
 require_relative 'common/room_block'
+require_relative 'common/markup'
 
 # Modernized version of games.rb with separated DR and GS functionality
 # Original module carve out from lich.rbw
@@ -1151,6 +1152,15 @@ module Lich
                            else
                              Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
                            end
+            end
+            # DragonRealms' links and doubled bold go only to front ends that
+            # handle them; the rest get the legacy line. After the <room>
+            # rewrite, which keeps the parts' markup, and before sf_to_wiz,
+            # which turns each bold into a GSL code. GemStone has always sent
+            # both, and its front ends expect them, so it is left alone.
+            if XMLData.game =~ /^DR/
+              alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless Frontend.supports_game_links?
+              alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless Frontend.supports_double_bold?
             end
             process_room_information(alt_string)
 

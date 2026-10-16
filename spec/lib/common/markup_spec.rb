@@ -256,3 +256,99 @@ RSpec.describe Lich::Common::Markup do
     end
   end
 end
+
+# DragonRealms' Saga-identity stream links objects and doubles the bold around
+# linked creatures; the legacy stream did neither. Shapes are verbatim from
+# the stream (names pseudonymized).
+RSpec.describe Lich::Common::Markup, 'legacy line shape' do
+  describe '.strip_game_links' do
+    it 'removes an object link, keeping its text' do
+      expect(described_class.strip_game_links(%(Also here: Universalist <a exist="-10522707" noun="Corwin">Corwin</a>.\r\n)))
+        .to eq("Also here: Universalist Corwin.\r\n")
+    end
+
+    it 'removes every link in the string' do
+      line = %(You also see a <a exist="195648374" noun="shield">morgawr leather shield</a> and a <a exist="1" noun="bar">brass bar</a>.)
+      expect(described_class.strip_game_links(line)).to eq('You also see a morgawr leather shield and a brass bar.')
+    end
+
+    it 'removes a link inside a <d> command link, keeping the <d>' do
+      line = %(<d cmd='look #195769088'><pushBold/>a <a exist="195769088" noun="moradu">jeol moradu</a><popBold/></d>)
+      expect(described_class.strip_game_links(line)).to eq(%(<d cmd='look #195769088'><pushBold/>a jeol moradu<popBold/></d>))
+    end
+
+    it "accepts single-quoted attributes and exist after another attribute" do
+      expect(described_class.strip_game_links(%(<a noun='bar' exist='1'>bar</a>))).to eq('bar')
+    end
+
+    # dr-scripts' textsubs injects <a href> from a downstream hook.
+    it 'keeps a script link and its end tag, around or inside a game link' do
+      expect(described_class.strip_game_links(%(<a href="x">see the <a exist="1" noun="bar">bar</a></a>)))
+        .to eq(%(<a href="x">see the bar</a>))
+      expect(described_class.strip_game_links(%(<a exist="1" noun="bar">a <a href="x">brass</a> bar</a>)))
+        .to eq(%(a <a href="x">brass</a> bar))
+    end
+
+    it 'keeps an </a> that closes nothing opened in the string' do
+      expect(described_class.strip_game_links(%(bar</a> and <a exist="2" noun="rock">rock</a>))).to eq('bar</a> and rock')
+    end
+
+    it 'leaves other elements whose name starts with a alone' do
+      expect(described_class.strip_game_links(%(<abbr exist="1">x</abbr> <a exist="1" noun="x">x</a>))).to eq(%(<abbr exist="1">x</abbr> x))
+    end
+
+    it 'returns a string without a game link unchanged, as the same object' do
+      line = +%(<a href="x">bar</a> exist=1\r\n)
+      expect(described_class.strip_game_links(line)).to equal(line)
+    end
+  end
+
+  describe '.collapse_double_bold' do
+    it 'collapses the doubled bold around a linked creature to one pair' do
+      line = %(You also see <pushBold/><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/>, an ice-edged sword.)
+      expect(described_class.collapse_double_bold(line))
+        .to eq(%(You also see <pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/>, an ice-edged sword.))
+    end
+
+    it 'returns a string without doubled bold unchanged, as the same object' do
+      line = +%(<pushBold/>A jeol moradu<popBold/> gestures.\r\n)
+      expect(described_class.collapse_double_bold(line)).to equal(line)
+    end
+  end
+
+  # Fixture-backed: the transforms must turn the rich captures into lines the
+  # legacy captures actually contain, and leave nothing of either feature.
+  describe 'on the committed DragonRealms captures' do
+    root = File.expand_path('../../..', __dir__)
+    read = ->(glob) { Dir[File.join(root, glob)].flat_map { |f| File.readlines(f, chomp: true) } }
+    no_time = ->(line) { line.gsub(/time="\d+"/, 'time="T"') }
+    legacy = (read.call('spec/fixtures/streams/dr_legacy_*.xml') + read.call('benchmark/fixtures/dr_{sample,inventory_sample}.xml')).to_set { |l| no_time.call(l) }
+    rich = read.call('spec/fixtures/streams/dr_saga_*.xml').select { |l| l.include?('<a exist') || l.include?('<pushBold/><pushBold/>') }
+    let(:shaped) { rich.map { |l| no_time.call(described_class.collapse_double_bold(described_class.strip_game_links(l))) } }
+
+    it 'leaves no game link and no doubled bold' do
+      expect(rich.size).to be > 800
+      expect(shaped.grep(/<a exist|<pushBold\/><pushBold\/>|<popBold\/><popBold\/>/)).to be_empty
+    end
+
+    it 'reproduces legacy lines byte for byte' do
+      expect(rich.count { |l| legacy.include?(no_time.call(l)) }).to eq(0)
+      expect(shaped.uniq.count { |l| legacy.include?(l) }).to be >= 45
+    end
+
+    # Genie4 counts creatures with one bold pair per creature over the room
+    # objs component as .NET serializes it (Core/Game.cs CountMonsters).
+    it 'lets a one-pair-per-creature matcher find every bold creature in room objs' do
+      monster = %r{<pushBold />([^<]*)<popBold />([^,.]*)}
+      genie_count = lambda do |line|
+        inner = line[%r{<component id='room objs'>(.*?)</component>}, 1].to_s.gsub('<pushBold/>', '<pushBold />').gsub('<popBold/>', '<popBold />')
+        inner.gsub(' and ', ', ').scan(monster).size
+      end
+      objs = rich.grep(/<component id='room objs'>.*<pushBold/)
+      creatures = objs.sum { |l| l[%r{<component id='room objs'>(.*?)</component>}, 1].scan('<pushBold/><pushBold/>').size }
+      expect(creatures).to be > 30
+      expect(objs.sum { |l| genie_count.call(l) }).to eq(0)
+      expect(objs.sum { |l| genie_count.call(described_class.collapse_double_bold(described_class.strip_game_links(l))) }).to eq(creatures)
+    end
+  end
+end

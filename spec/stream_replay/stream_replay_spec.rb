@@ -76,3 +76,29 @@ RSpec.describe 'stream replay: <room> block per front end', :slow do
     end
   end
 end
+
+# DragonRealms' links and doubled bold reach only Saga (:game_links,
+# :double_bold); every other front end gets the legacy line. Scripts see the
+# same stream whatever the front end: the parsed state and script lines
+# (the per-prompt snapshots) do not depend on it.
+RSpec.describe 'stream replay: DragonRealms links and doubled bold per front end', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_hunt.xml', __dir__))
+  links = fixture.body_lines.sum { |l| l.scan('<a exist').size }
+  doubled = fixture.body_lines.sum { |l| l.scan('<pushBold/><pushBold/>').size }
+  results = {}
+  replay = ->(frontend) { results[frontend] ||= StreamReplay::Driver.new(fixture, frontend: frontend).run }
+
+  it 'replays a fixture that has both' do
+    expect([links, doubled]).to all(be > 100)
+  end
+
+  { nil => [0, 0], 'genie' => [0, 0], 'saga' => [links, doubled] }.each do |frontend, (want_links, want_doubled)|
+    it "delivers #{want_links} links and #{want_doubled} doubled bolds to #{frontend || 'a headless pipe'}, with Saga's snapshots" do
+      result = replay.call(frontend)
+      expect(result.warnings).to be_empty
+      expect(result.stdout.scan('<a exist').size).to eq(want_links)
+      expect(result.stdout.scan('<pushBold/><pushBold/>').size).to eq(want_doubled)
+      expect(result.snapshots).to eq(replay.call('saga').snapshots)
+    end
+  end
+end
