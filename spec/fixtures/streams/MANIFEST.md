@@ -1,6 +1,6 @@
 # Stream replay fixtures
 
-Captured DragonRealms server streams, replayed by
+Captured DragonRealms and GemStone server streams, replayed by
 `spec/stream_replay/stream_replay_spec.rb` through a real `lich.rbw --pipe`
 process (see `spec/support/stream_replay/`). Each fixture's per-prompt parsed
 state must match `goldens/<name>.jsonl`.
@@ -9,7 +9,7 @@ All fixtures come from `;logxml streams` captures and were produced with
 `spec/support/stream_replay/extract.rb`:
 - timestamps, client echoes and reget content stripped;
 - windows snapped to prompt boundaries;
-- a synthetic login header added;
+- a synthetic login header added, or, for a window that starts at a real login, the login's own lines kept (`--real-login`, with the stored `<settings>` blob emptied by `--drop-settings-body`);
 - every player name pseudonymized and account names replaced.
 
 Character names below are the pseudonyms used inside the fixture.
@@ -30,10 +30,13 @@ DragonRealms has two dialects:
 | `dr_saga_stow.xml` | saga | 2026-10-15 16:15 | 10 | linked stow container feed (`<inv id='stow'>` with links, no `<container>`) |
 | `dr_saga_group_bank.xml` | saga | 2026-10-15 16:37 | 79 | group join/list/leave with another leader, bank balance with linked name |
 | `dr_saga_containers_speech.xml` | saga | 2026-10-15 17:49 | 100 | open/close/look in/rummage, bank deposit/withdraw, hide/unhide, linked speech preset |
+| `gs_saga_login.xml` | GS, Saga identity | 2026-10-15 11:29 | 1 | GS-15 capture `2026-10-15_11-29-55`, lines 1–80, cut with `--real-login --end-prompt` (the window ends mid-login, so the closing prompt is the driver's synthetic one). Real login: `<settingsInfo instance='GSF'>` at line 5, then bracketless main/room subtitles (` - Shattered Nexus - 7199`), `compDef` room parts, a linked worn list, and `<exposeContainer>`/`<container id='stow' target>` + `clearContainer` + the first stow header on one line; no `<room>`. GS sends no `<app char>` in these 80 lines, so extract.rb adds one |
+| `gs_saga_hunt.xml` | GS, Saga identity | 2026-10-15 15:08 | 14 | GS-15 capture `2026-10-15_15-08-37`, lines 2–130 (synthetic header). A move with `<nav>`, bracketless subtitles, `compDef` room parts, `<roommeta>`, the `roomName`/`roomDesc` styles and a `<dir>` compass; the main-text room view with `<crtrStatus>` before a doubled-bold (`<pushBold/><pushBold/>`) creature link; standalone `<crtrStatus>` tags before a `room objs` component whose own tag precedes a single-bold `<b> <pushBold/>…<popBold/></b>` link; linked combat lines in single bold |
 
-`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` is the only committed GemStone stream (captured under the legacy identity, `client="1.0.1.26"`) and serves as the GS replay oracle for shared-path changes. GemStone has one dialect, the rich stream with `<a exist>` links and no `<room>` block, whichever identity Lich sends (see E11 in `docs/saga-stream-deferred.md`).
+`benchmark/fixtures/gs_sample.xml` and `dr_sample.xml` are also replayed (goldens `gs_sample.jsonl`, `dr_sample.jsonl`). `gs_sample` was committed in 6366dc03 (#1396) on 2026-06-28, before #1700 made Saga the default identity, so it was captured under the legacy identity. Its `settingsInfo client=` value doesn't show the identity: that attribute belongs to the stored settings record, and the Saga-identity `gs_saga_login.xml` carries `client="1.0.1.28"` while DR Saga logins carry `1.0.1.26`. `gs_sample` and the two `gs_saga_*` captures are the GS replay oracles for shared-path changes. All three have `<a exist>` links and no `<room>` block (see E11 in `docs/saga-stream-deferred.md`); doubled bold is covered under Negative evidence.
 
 ## Regenerating
 
 - **A fixture:** run `extract.rb` against the source log with the same `--from`/`--to`, and pass `--scrub-names` a local, uncommitted list of names that must never appear in the repo.
 - **Goldens:** `UPDATE_STREAM_GOLDENS=1 bundle exec rspec spec/stream_replay`. Review every golden diff in the PR; a changed golden is a behavior change.
+
