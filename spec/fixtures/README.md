@@ -184,10 +184,14 @@ the one arrival without a `room exits` component in the Saga logs.
 ## flag/dr_saga_flag_listing.xml
 
 The reply to a bare `FLAG` command on the DragonRealms Saga-identity stream,
-captured 2026-10-17: the usage help, then the table in a mono block. Each row
-links the flag name with a `<d>` whose `cmd` is the toggle (the opposite of
-the Status column), and the first row leads with `<popBold/>`. Log timestamps
-were stripped; it holds no character names.
+captured from C6's session on 2026-10-17 at 07:27 (corpus labels in
+`spec/fixtures/streams/MANIFEST.md`): the usage help, then the table in a mono
+block. Each row links the flag name with a `<d>` whose `cmd` is the toggle
+(the opposite of the Status column), and the first row leads with
+`<popBold/>`. Log timestamps were stripped; it holds no character names.
 
 Used by `room_description_filter_spec` and `games_spec`, which read the
-Description row from it.
+Description row from it. The listing was taken with descriptions ON. No
+capture has it with descriptions OFF, so the specs' OFF row is derived from
+the ON row (status and toggle swapped); a fresh capture would settle its
+exact shape.

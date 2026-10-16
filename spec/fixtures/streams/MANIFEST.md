@@ -140,3 +140,9 @@ Each PR in the series records its own rows under its heading.
 | Creature bold outside room-object listings. Legacy: of the 327 `moradu` mentions in `dr_legacy_hunt.xml` outside `room objs`, assess and `You also see` lines, 0 have a bold pair of their own; the 3 in bold are inside whole bold combat damage lines. All 14 legacy assess lines that name a creature (from `dr_legacy_hunt.xml:135`) name it plain. Saga: 217 single bold pairs hold a creature link, each around nothing but an optional article and the link, all in action or assess lines, 0 in `room objs` (room-object listings double their bold, see #1702) | FIX |
 
 ### #1725
+
+| Absent or counted | Corpus |
+|---|---|
+| FLAG DESCRIPTION replies: exactly `You will no longer see room descriptions.` and `You will now see room descriptions.`, each on a whole line. 968 and 756 (960 and 747 in Saga captures); 0 other wordings | DR-16 + DR-extra |
+| Locate: 1 Saga Locate view (`dr_saga_locate_descflag.xml`; a second attempt fizzled). 0 legacy Locate views taken with descriptions off; the one legacy Locate capture (`spec/fixtures/room_block/dr_legacy_locate.xml`, outside DR-16) has them on | DR-16 + DR-extra |
+| GemStone: 0 FLAG DESCRIPTION replies and 0 `<room>` blocks. That GemStone follows the flag in its own room view is the maintainer's word, not a capture. DR Saga sessions with RoomBrief or RoomNames off: 0 | GS-15; DR-16 |
