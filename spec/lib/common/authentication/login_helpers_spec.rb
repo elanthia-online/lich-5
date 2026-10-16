@@ -489,6 +489,12 @@ RSpec.describe Lich::Common::Authentication::LoginHelpers do
       expect(described_class.resolve_instance(['--frostbite'])).to eq(:__unset)
     end
 
+    # --login with an unlisted --flag exits "Invalid game code".
+    it 'ignores --frontend-caps, which is not a game-instance selector' do
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--frontend-caps=game_links,double_bold'])).to eq(:__unset)
+      expect(described_class.resolve_instance(['--login', 'Tsetem', '--frontend-caps='])).to eq(:__unset)
+    end
+
     it 'ignores the CLI-only SUKS flag without treating it as a frontend selector' do
       expect(described_class.resolve_instance(['--login', 'Tsetem', '--suks'])).to eq(:__unset)
       expect(described_class.resolve_login_args(['--login', 'Tsetem', '--suks']))
