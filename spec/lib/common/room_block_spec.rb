@@ -132,9 +132,9 @@ RSpec.describe Lich::Common::RoomBlock do
       expect(Lich::Common::Markup.strip_xml(block)).to eq("[Area, Grotto] (1)\r\n")
     end
 
-    it 'leaves the whitespace of a string without a complete block alone' do
-      cut = "<room><name>[Area, Grotto] (1)</name>\r\n  \r\nYou walk north.\r\n"
-      expect(Lich::Common::Markup.strip_xml(cut)).to eq("[Area, Grotto] (1)\r\n  \r\nYou walk north.\r\n")
+    it 'leaves the whitespace of a string without a <room> block alone' do
+      text = "<pushBold/>You walk north.<popBold/>\r\n  \r\nObvious paths: <d>north</d>.\r\n"
+      expect(Lich::Common::Markup.strip_xml(text)).to eq("You walk north.\r\n  \r\nObvious paths: north.\r\n")
     end
   end
 end
