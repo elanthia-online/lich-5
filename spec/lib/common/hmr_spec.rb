@@ -200,6 +200,24 @@ RSpec.describe HMR, "#reload candidate selection" do
     expect(messages.join("\n")).to match(%r{skipped 1 file.*Ruby or an installed gem}i)
     expect(messages.join("\n")).not_to include("nothing matching")
   end
+
+  # A bare count leaves the user guessing whether the file they meant to
+  # reload was one of those skipped.
+  it "names the skipped files" do
+    Lich::Common::HMR.reload(%r{/rexml/document\.rb\z})
+
+    expect(messages.join("\n")).to match(/skipped 1 file.*: document\.rb\b/)
+  end
+
+  it "names at most the first few skipped files and counts the rest" do
+    Lich::Common::HMR.reload(%r{/rexml/})
+
+    line = messages.find { |m| m.include?("skipped") }
+    count = line[/skipped (\d+)/, 1].to_i
+    expect(count).to be > Lich::Common::HMR::SKIPPED_NAMES
+    expect(line.scan(/\w+\.rb/).size).to eq(Lich::Common::HMR::SKIPPED_NAMES)
+    expect(line).to include("and #{count - Lich::Common::HMR::SKIPPED_NAMES} more")
+  end
 end
 
 RSpec.describe HMR, "#reload path comparison" do

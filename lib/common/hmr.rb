@@ -16,6 +16,10 @@ module Lich
       # flood the frontend.
       BACKTRACE_LINES = 25
 
+      # Most skipped file names printed; the rest are counted. `;hmr xml`
+      # alone skips about 34 rexml files.
+      SKIPPED_NAMES = 5
+
       # RbConfig keys for Ruby's own library directories.
       RUBY_LIB_DIR_KEYS = %w[rubylibdir rubyarchdir sitelibdir sitearchdir vendorlibdir vendorarchdir].freeze
 
@@ -84,13 +88,23 @@ module Lich
         shown.join("\n")
       end
 
+      # @param skipped [Array<String>] the matched files that were not reloaded
+      # @return [String] the count, the first {SKIPPED_NAMES} basenames, and
+      #   how many more were left out
+      def self.skipped_message(skipped)
+        names = skipped.first(SKIPPED_NAMES).map { |file| File.basename(file) }.join(", ")
+        more = skipped.size - SKIPPED_NAMES
+        names += " and #{more} more" if more.positive?
+        "<b>[lich.hmr] skipped %d file(s) that belong to Ruby or an installed gem: %s</b>" % [skipped.size, names]
+      end
+
       def self.reload(pattern)
         self.clear_cache
         matched = self.loaded.grep(pattern)
         roots = self.foreign_roots unless matched.empty?
         skipped, loaded_paths = matched.partition { |file| self.foreign?(file, roots) }
         unless skipped.empty?
-          self.msg "<b>[lich.hmr] skipped %d file(s) that belong to Ruby or an installed gem</b>" % skipped.size
+          self.msg self.skipped_message(skipped)
         end
         unless loaded_paths.empty?
           loaded_paths.each { |file|
