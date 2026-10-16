@@ -433,6 +433,32 @@ RSpec.describe 'Lich::Common::XMLParser DragonRealms creature feed' do
         expect(npc_status('197122645')).to be_nil
         expect(Lich::Common::GameObj.npcs.size).to eq(14)
       end
+
+      # The fixture's second line is a room objs line captured verbatim from a
+      # 2026-10-17 Saga session (see spec/fixtures/README.md) whose first moth
+      # link is padded, noun=" moth", while its four siblings send noun="moth".
+      # The DR Creature roster gets the trimmed noun, as for the unpadded
+      # siblings. GameObj.new_npc is handed the attribute as sent, so the
+      # GameObj npc keeps the leading space (GameObj does not trim nouns, on
+      # either game); this pins that.
+      it 'trims the padded noun=" moth" for the DR roster and keeps it on the GameObj npc' do
+        path = File.expand_path('../../fixtures/creature/dr_saga_room_objs_shapes.xml', __dir__)
+        line = File.read(path).lines.grep(/noun=" moth"/).first.chomp
+        expect(line).to include('<a exist="201844186" noun=" moth">void-black umbral moth</a>')
+        feed(line)
+
+        padded = Lich::DragonRealms::Creature[201844186]
+        expect(padded.name).to eq('a void-black umbral moth')
+        expect(padded.noun).to eq('moth')
+        expect(Lich::DragonRealms::Creature[201782502].noun).to eq('moth')
+
+        npcs = Lich::Common::GameObj.npcs
+        expect(npcs.map(&:id)).to eq(%w[201844186 201782502 201786219 201799029 201834532])
+        expect(npcs.find { |npc| npc.id == '201844186' }.noun).to eq(' moth')
+        expect(npcs.find { |npc| npc.id == '201782502' }.noun).to eq('moth')
+        expect(npc_status('201799029')).to eq('immobile')
+        expect(npc_status('201834532')).to be_nil
+      end
     end
   end
 end
