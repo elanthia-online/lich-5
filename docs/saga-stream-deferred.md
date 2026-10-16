@@ -1,8 +1,8 @@
 # Saga XML stream support: deferred items
 
-Since #1700, Lich identifies as Saga (`/VERSION:saga-… /P:SAGA`) on the handshakes that use `Frontend::CLIENT_STRING`: Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`. Front ends that send their own handshake (Genie, Profanity, Warlock, Wrayth) still get the legacy stream. **DragonRealms therefore has two stream dialects live at once**, and Lich must parse both: DR Saga captures carry the `<room>` block and `<a exist>` links in room objects, players and the stow feed, and DR legacy captures carry neither.
+Since #1700, Lich identifies as Saga (`/VERSION:saga-… /P:SAGA`) on the handshakes that use `Frontend::CLIENT_STRING`: Wizard/Avalon, Frostbite, Mudlet and `--without-frontend`. Profanity is in that group: it runs Lich with `--without-frontend --detachable-client` (ProfanityFE's USER_GUIDE) and sends no handshake of its own, and a Profanity session's logs (2026-10-16) show the Saga stream. Front ends that send their own handshake (Genie, Warlock, Wrayth) still get the legacy stream. **DragonRealms therefore has two stream dialects live at once**, and Lich must parse both: DR Saga captures carry the `<room>` block and `<a exist>` links in room objects, players and the stow feed, and DR legacy captures carry neither.
 
-For GemStone only one stream is verified. Logs from 15 GS Shattered sessions (2026-10-15, not committed) show `<a exist>` links in room objects, players and the stow feed, `roomName`/`roomDesc` styles, `compDef`/`component` room parts, and no `<room>` element. They don't record the handshake, and `<settingsInfo client="1.0.1.28">` reports the character's stored client-settings record (Lich seeds exactly that value for a character that has none, `gameloader.rb`), so it doesn't identify the handshake either. Whether GemStone answers the Saga identity with a different stream is still open (E11).
+GemStone has one dialect. Its XML stream has been the rich stream (links, doubled bold) for a long time; DragonRealms only now sends one, to the Saga identity. Logs from 15 GS Shattered sessions (2026-10-15, not committed), recorded with Lich sending the Saga client string, show `<a exist>` links in room objects, players and the stow feed, doubled bold (`<pushBold/><pushBold/>`), `roomName`/`roomDesc` styles, `compDef`/`component` room parts, `<roommeta>`, and main `streamWindow` subtitles with no brackets (` - Name - 1234`). They carry no `<room>` element, so **the `<room>` block is DragonRealms-only**. The committed `gs_sample` stream has the same links. This closes E11.
 
 This file tracks what the Saga-dialect work has **not** verified or fixed yet. It exists so nothing is dropped silently.
 
@@ -25,15 +25,15 @@ This file tracks what the Saga-dialect work has **not** verified or fixed yet. I
 | E8 | Scar images in the injuries dialog | Captures in both dialects | injuries `<image>` handler (`Scar\d`) | Scars not tracked | Captures in both dialects (overlaps E1) |
 | E9 | IconSTUNNED / IconWEBBED | Saga capture | `stunned?` / `webbed?` | Low: the tag is the same in both dialects | Saga capture while stunned or webbed |
 | E10 | ESP thoughts stream | Saga capture | DR Flags and scripts on thought text | Name-anchored thought Flags break if names are linked | Saga capture with a telepathy source |
-| E11 | GemStone under the Saga identity | GS captures under a known handshake, in both identities (the 2026-10-15 GS logs show links and no `<room>`, but not which handshake) | every shared parser path | GS regressions go undetected beyond specs and the legacy `gs_sample` golden | GS captures under both identities. Until then, no GS-observable changes; GS maintainers smoke-test shared-path PRs |
+| E11 | GemStone under the Saga identity: **closed 2026-10-16** | Nothing: GemStone has always sent the rich stream (links, no `<room>`), and the 2026-10-15 GS logs were recorded under the Saga client string | every shared parser path | None from a dialect switch: GemStone doesn't switch. Shared-path changes can still break GS, so they are checked against `gs_sample` and the GS logs | Closed: GS answers the Saga identity with the stream it always sent |
 
 ## Parked fixes (known bugs, intentionally not fixed yet)
 
 | # | Item | Where | Why parked | Unpark when |
 |---|---|---|---|---|
-| P1 | Title lost after `" and "`: `and Druid X` drops `Druid` | room players title capture (XMLParser text handler) | Shared with GS; no GS oracle (E11) | E11 closed |
-| P2 | Greedy status regex eats the next title: `who is sitting and Druid` | same | same | E11 closed |
-| P3 | `@pc` not reset at the start of a players refresh, so status can attach to the previous room's pc | `begin_room_players` path | same | E11 closed |
+| P1 | Title lost after `" and "`: `and Druid X` drops `Druid` | room players title capture (XMLParser text handler) | Shared with GS, so a fix changes what GS sees; not part of this series | A separate fix PR, checked against `gs_sample` and the GS logs (E11 is closed, so GS's stream is known) |
+| P2 | Greedy status regex eats the next title: `who is sitting and Druid` | same | same | same |
+| P3 | `@pc` not reset at the start of a players refresh, so status can attach to the previous room's pc | `begin_room_players` path | same | same |
 | P4 | Titles containing an apostrophe (`War 'Tog X`) | same | Needs a spec first; GS behavior unknown | Fix with P1–P3 |
 | P5 | DR `GroupMembers` (`<pushStream id="group"/>  (?<member>\w+):`) misses a leader other than you (`  X (Leader): Healthy.`) and records `You` as a member | `drparser.rb` | **Pre-existing in both dialects.** Replay confirms the legacy stream uses the same `(Leader)` shape; not a Saga regression | Separate `fix(dr)` |
 | P6 | Legacy DR players splitter keeps a trailing period on the last name (`Chieftain X.`) | XMLParser DR players branch | Pre-existing legacy behavior; changing it alters legacy goldens | Separate `fix(dr)` with deliberate golden update |
