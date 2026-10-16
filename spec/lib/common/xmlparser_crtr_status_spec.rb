@@ -197,6 +197,91 @@ RSpec.describe 'Lich::Common::XMLParser <crtrStatus> handling' do
     end
   end
 
+  # GemStone also sends <crtrStatus> outside room objs: runs of combat updates
+  # for one creature (one tag per hit, often several to a line), and the
+  # main-text "You also see" listing of LOOK/arrival. Shapes from GS Shattered
+  # captures, ids and names pseudonymised.
+  describe 'standalone <crtrStatus> outside room objs' do
+    before do
+      allow(Lich::Common::GameObj).to receive(:clear_npcs)
+      allow(Lich::Common::GameObj).to receive(:clear_pcs)
+      allow(Lich::Common::GameObj).to receive(:clear_room_desc)
+    end
+
+    let(:viper_in_room) do
+      %(<component id='room objs'>You also see<crtrStatus exist="700100" health="240" maxhealth="240" hostile="1"/><b> <pushBold/>a <a exist="700100" noun="viper">dune viper</a><popBold/></b>.</component>)
+    end
+
+    it 'applies a combat run to a creature already in the room, last snapshot winning' do
+      feed(viper_in_room)
+      feed(%(<crtrStatus exist="700100" health="176" maxhealth="240" hostile="1"/><crtrStatus exist="700100" health="131" maxhealth="240" hostile="1" stunned="1" prone="1"/><crtrStatus exist="700100" health="56" maxhealth="240" hostile="1" stunned="1" prone="1"/><dialogData id='Buffs' clear='t'></dialogData>))
+
+      viper = Lich::Gemstone::Creature[700100]
+      expect(viper.health).to eq(56)
+      expect(viper.max_health).to eq(240)
+      expect(viper.has_status?('stunned')).to be true
+      expect(viper.has_status?('prone')).to be true
+    end
+
+    it 'treats each standalone tag as a full snapshot, clearing a flag the next one omits' do
+      feed(viper_in_room)
+      feed(%(<crtrStatus exist="700100" health="131" maxhealth="240" hostile="1" stunned="1"/>))
+      feed(%(<crtrStatus exist="700100" health="-12" maxhealth="240" hostile="1" dead="1" prone="1"/>))
+
+      viper = Lich::Gemstone::Creature[700100]
+      expect(viper.has_status?('stunned')).to be false
+      expect(viper.crtr_flag?(:dead)).to be true
+      expect(viper.health).to eq(-12)
+    end
+
+    it 'applies the tag in a main-text "You also see" listing to a creature already in the room' do
+      feed(viper_in_room)
+      feed(%(<style id=""/><style id="roomDesc"/>Sandstone tiles cover the floor.  <style id=""/>You also see <crtrStatus exist="700100" health="201" maxhealth="240" hostile="1" prone="1"/><pushBold/>a <a exist="700100" noun="viper">dune viper</a><popBold/>.))
+
+      viper = Lich::Gemstone::Creature[700100]
+      expect(viper.health).to eq(201)
+      expect(viper.has_status?('prone')).to be true
+    end
+
+    it 'leaves the room roster and GameObj alone when it applies' do
+      feed(viper_in_room)
+      expect(Lich::Common::GameObj).not_to receive(:new_npc)
+      feed(%(<crtrStatus exist="700100" health="176" maxhealth="240" hostile="1"/>))
+
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to eq([700100])
+      expect(parser.instance_variable_get(:@pending_crtr_status)).to be_empty
+    end
+
+    it 'does not register an id the room has never linked' do
+      feed(viper_in_room)
+      feed(%(<crtrStatus exist="700200" health="90" maxhealth="90" hostile="1"/>))
+
+      expect(Lich::Gemstone::Creature[700200]).to be_nil
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to eq([700100])
+    end
+
+    it 'does not apply to a creature the registry remembers but the current room does not list' do
+      feed(viper_in_room)
+      feed(%(<nav rm='7355'/>))
+      feed(%(<crtrStatus exist="700100" health="12" maxhealth="240" hostile="1" stunned="1"/>))
+
+      viper = Lich::Gemstone::Creature[700100]
+      expect(viper.health).to eq(240)
+      expect(viper.has_status?('stunned')).to be false
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to be_empty
+    end
+
+    it 'still defers a room-objs tag for a known creature to its link' do
+      feed(viper_in_room)
+      feed(%(<component id='room objs'>You also see<crtrStatus exist="700100" health="99" maxhealth="240" hostile="1"/> a <a exist="-4401" noun="statue">cobra statue</a>.</component>))
+
+      # The refresh no longer lists the viper, so its tag never reaches it.
+      viper = Lich::Gemstone::Creature[700100]
+      expect(viper.health).to eq(240)
+      expect(Lich::Gemstone::CreatureInstance.current_room_ids).to be_empty
+    end
+  end
+
   describe 'pending crtrStatus does not leak across a reused exist id' do
     it 'reset clears it, so a fragment abandoned mid-parse cannot misapply to a later creature with the same id' do
       feed(%(<crtrStatus exist="999999" hostile="1" dead="1"/>)) # arrives, but its matching <a> never does - fragment truncated

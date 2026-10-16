@@ -589,15 +589,23 @@ module Lich
           if name == 'crtrStatus'
             # Self-closing and self-contained (carries its own id), so it needs
             # no surrounding-tag context, unlike the bolded <a> name path below.
-            # Always stash rather than applying directly even when the
-            # creature is already known: Creature.register (and the room-in
-            # marking it does) only ever runs from the <a> text path below, so
-            # syncing here and skipping that path would update the instance's
-            # flags correctly while silently leaving it out of the room
-            # roster after the next clear_room - it would sync but never
+            # Inside room objs, always stash rather than applying directly even
+            # when the creature is already known: Creature.register (and the
+            # room-in marking it does) only ever runs from the <a> text path
+            # below, so syncing here and skipping that path would update the
+            # instance's flags correctly while silently leaving it out of the
+            # room roster after the next clear_room - it would sync but never
             # reappear in Creature.targets/.in_room. Deferring to the text()
             # handler keeps registration/room-marking and flag application on
             # the same path for both new and already-known creatures.
+            #
+            # GemStone also sends the tag outside room objs: combat updates
+            # (one per hit) and the main-text "You also see" listing. No room-objs
+            # text path ever consumes a stash from there (opening room objs
+            # clears it), so a standalone tag for a creature already in the
+            # current room roster is applied at once. Registration and
+            # room-marking stay on the link path; any other standalone tag is
+            # stashed as before.
             #
             # DragonRealms differs: its room-objs carry no per-creature <a exist>
             # tag, so there is no text() path to defer to. Its <crtrStatus> tags
@@ -616,6 +624,8 @@ module Lich
                 # the counts match for this refresh.
                 Lich::DragonRealms::Creature.sync(crtr_id, crtr_flags) if defined?(Lich::DragonRealms::Creature)
                 @dr_crtr_ids << crtr_id
+              elsif !@active_ids.include?('room objs') && (room_creature = gs_room_creature(crtr_id))
+                room_creature.sync_crtr_status(crtr_flags)
               else
                 @pending_crtr_status[crtr_id] = crtr_flags
               end
@@ -1466,6 +1476,21 @@ module Lich
           respond "--- warning: #{script_name} is using deprecated method XMLData.spellfront; this method will be removed in a future version of Lich"
         end
         @active_spells.keys
+      end
+
+      private
+
+      # The GemStone creature a standalone `<crtrStatus>` may update: one already
+      # registered and in the current room roster. Ids only enter the roster
+      # from a room-objs link, so a recycled or never-linked id is never touched.
+      #
+      # @param crtr_id [String] the tag's `exist` id.
+      # @return [Lich::Gemstone::CreatureInstance, nil]
+      def gs_room_creature(crtr_id)
+        return nil unless defined?(Lich::Gemstone::CreatureInstance)
+        return nil unless Lich::Gemstone::CreatureInstance.current_room_ids.include?(crtr_id.to_i)
+
+        Lich::Gemstone::CreatureInstance[crtr_id]
       end
     end
   end
