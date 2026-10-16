@@ -2055,96 +2055,71 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{saga_room}") }
   end
 
+  # The legacy stream followed the exits line of every room view with a
+  # top-level compass; the Saga-identity stream sends none.
   %w[wrayth genie profanity frostbite].each do |fe|
-    it "rewrites the block to the legacy roomName/roomDesc layout for #{fe}" do
+    it "rewrites the block to the legacy roomName/roomDesc layout and compass for #{fe}" do
       $frontend = fe
       described_class.send(:process_downstream_hooks, +saga_room)
       eventually do
         expect(@raw_socket).to have_received(:write).with(
           %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
           %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
-          %(Obvious paths: <d>north</d>.\r\n)
+          %(Obvious paths: <d>north</d>.\r\n) +
+          %(<compass><dir value="n"/></compass>\r\n)
         )
       end
     end
   end
 
-  # The legacy stream followed the exits line of the character's own room
-  # with a top-level compass; the Saga-identity stream sends none.
-  context 'when the block is the room the character is in' do
-    before do
-      XMLData.room_id = 230_007
-      XMLData.room_exits = ['north']
-    end
-
-    %w[wrayth genie profanity frostbite].each do |fe|
-      it "follows the legacy exits line with the legacy compass for #{fe}" do
-        $frontend = fe
-        described_class.send(:process_downstream_hooks, +saga_room)
-        eventually do
-          expect(@raw_socket).to have_received(:write).with(
-            %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
-            %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
-            %(Obvious paths: <d>north</d>.\r\n) +
-            %(<compass><dir value="n"/></compass>\r\n)
-          )
-        end
-      end
-    end
-
-    it 'still passes the block through unchanged to Saga' do
-      $frontend = 'saga'
-      described_class.send(:process_downstream_hooks, +saga_room)
-      eventually { expect(@raw_socket).to have_received(:write).with("\x1F#{saga_room}") }
-    end
-
-    # Wizard gets exits from XMLParser's GSL code; a compass line would only
-    # strip to a blank line.
-    it 'gives Wizard no compass and no blank line' do
-      $frontend = 'wizard'
-      stub_wizard_conversion
-      described_class.send(:process_downstream_hooks, +saga_room)
-      eventually do
-        expect(@raw_socket).to have_received(:write).with(
-          "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
-          "An Elven burial ground.  \r\nObvious paths: north.\r\n"
-        )
-      end
-    end
-
-    # Scripts see what the server sent: downstream hooks run before the
-    # rewrite, and the compass is added only on the way to the client.
-    it 'hands downstream hooks the block as the server sent it' do
-      $frontend = 'genie'
-      seen = []
-      DownstreamHook.add('spec_room_compass_hook', proc { |line| seen << line.dup; line })
-      described_class.send(:process_downstream_hooks, +saga_room)
-      expect(seen).to eq([saga_room])
-    ensure
-      DownstreamHook.remove('spec_room_compass_hook')
+  # Wizard gets exits from XMLParser's GSL code; a compass line would only
+  # strip to a blank line.
+  it 'gives Wizard no compass and no blank line' do
+    $frontend = 'wizard'
+    stub_wizard_conversion
+    described_class.send(:process_downstream_hooks, +saga_room)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        "\034GSo\r\n[Bosque Deriel, Burial Ground] (230007)\r\n\034GSp\r\n" \
+        "An Elven burial ground.  \r\nObvious paths: north.\r\n"
+      )
     end
   end
 
-  # A Moon Mage's Locate shows the target's room as a bare <room> block.
-  it 'sends no compass for a block of a room the character is not in' do
+  # Scripts see what the server sent: downstream hooks run before the
+  # rewrite, and the compass is added only on the way to the client.
+  it 'hands downstream hooks the block as the server sent it' do
+    $frontend = 'genie'
+    seen = []
+    DownstreamHook.add('spec_room_compass_hook', proc { |line| seen << line.dup; line })
+    described_class.send(:process_downstream_hooks, +saga_room)
+    expect(seen).to eq([saga_room])
+  ensure
+    DownstreamHook.remove('spec_room_compass_hook')
+  end
+  # A Moon Mage's Locate shows the target's room as a bare <room> block; the
+  # legacy stream followed it with that room's compass
+  # (spec/fixtures/room_block/dr_legacy_locate.xml).
+  it 'sends the compass of a block of a room the character is not in' do
     XMLData.room_id = 230_008
-    XMLData.room_exits = ['north']
+    XMLData.room_exits = %w[north south]
     $frontend = 'frostbite'
     described_class.send(:process_downstream_hooks, +saga_room)
     eventually do
       expect(@raw_socket).to have_received(:write).with(
         %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground] (230007)\r\n) +
         %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
-        %(Obvious paths: <d>north</d>.\r\n)
+        %(Obvious paths: <d>north</d>.\r\n) +
+        %(<compass><dir value="n"/></compass>\r\n)
       )
     end
   end
 
-  # With ShowRoomID off the name carries no room number, so the block counts
-  # as the character's room when its exits are XMLData.room_exits.
-  it 'sends the compass for a block without a room number whose exits are the current room exits' do
+  # With ShowRoomID off the name carries no room number; the compass still
+  # comes from the block's own exits.
+  it 'sends the compass for a block without a room number' do
     XMLData.room_id = 230_008
-    XMLData.room_exits = ['north']
+    XMLData.room_exits = %w[west]
     $frontend = 'genie'
     unnumbered = saga_room.sub(' (230007)', '')
     described_class.send(:process_downstream_hooks, +unnumbered)

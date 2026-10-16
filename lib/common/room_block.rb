@@ -27,9 +27,6 @@ module Lich
         'up' => 'up', 'down' => 'down', 'out' => 'out'
       }.freeze
 
-      # The room number the game ends a room name with: "[Area, Title] (230008)".
-      NAME_UID = /\((\d+)\)\s*\z/.freeze
-
       module_function
 
       # Rewrites a <room> block into the legacy stream's layout, so code written
@@ -60,9 +57,9 @@ module Lich
       end
 
       # The legacy layout for a front end, which also gets the line the
-      # Saga-identity stream no longer sends: after a view of the character's
-      # own room, the legacy stream followed the exits line with a top-level
-      # compass built from those exits,
+      # Saga-identity stream no longer sends: the legacy stream followed the
+      # exits line of every room view with a top-level compass built from
+      # those exits,
       #
       #   Obvious paths: <d>north</d>, <d>southeast</d>.
       #   <compass><dir value="n"/><dir value="se"/></compass>
@@ -74,28 +71,21 @@ module Lich
       # gets an empty compass, which clears the last room's.
       #
       # The game also sends a <room> block for a room the character is not in
-      # (a Moon Mage's Locate shows the target's room). The compass shows
-      # where the character stands, so such a block gets none. A block is the
-      # character's room when the room number its name ends with is room_id
-      # (XMLData.room_id, from <nav>). A name without one (ShowRoomID off, or
-      # "(**)" for a room without a number) counts when its exits are
-      # room_exits (XMLData.room_exits, from the room exits component), so the
-      # compass is never lit with any exits but the current room's.
+      # (a Moon Mage's Locate shows the target's room). The legacy stream sent
+      # that room's compass after such a view too, so every block gets the
+      # compass of its own exits, whatever room the character is in.
       #
       # Only for the client: scripts, reget and the parser use legacy_shape
       # and never see the compass line.
       #
       # @param server_string [String]
-      # @param room_id [Integer] the character's room number
-      # @param room_exits [Array<String>] the character's room's exit names
       # @return [String]
-      def legacy_shape_with_compass(server_string, room_id:, room_exits:)
+      def legacy_shape_with_compass(server_string)
         return server_string unless server_string.include?('<room>')
 
         server_string.gsub(BLOCK) do
           body = Regexp.last_match(:body)
-          exits = exit_names(body)
-          legacy_lines(body, compass: (compass(exits) if current_room?(body, exits, room_id, room_exits)))
+          legacy_lines(body, compass: compass(exit_names(body)))
         end
       end
 
@@ -126,12 +116,6 @@ module Lich
         part(body, 'exits').scan(%r{<d(?:\s[^>]*)?>(.*?)</d>}m).flatten
       end
       private_class_method :exit_names
-
-      def current_room?(body, exits, room_id, room_exits)
-        uid = part(body, 'name')[NAME_UID, 1]
-        uid ? uid.to_i == room_id : exits == room_exits
-      end
-      private_class_method :current_room?
 
       # The legacy stream's top-level compass for a room's exit names, in their
       # order: <compass><dir value="n"/><dir value="se"/></compass>. Names

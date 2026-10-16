@@ -1212,7 +1212,7 @@ module Lich
             alt_string = if Frontend.supports_gsl?
                            Lich::Common::RoomBlock.legacy_shape(alt_string)
                          else
-                           Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string, room_id: XMLData.room_id, room_exits: XMLData.room_exits)
+                           Lich::Common::RoomBlock.legacy_shape_with_compass(alt_string)
                          end
           end
           alt_string = @game_instance.adapt_for_frontend(alt_string, capabilities) if @game_instance
