@@ -94,7 +94,7 @@ A heading with no rows belongs to a PR that hasn't merged yet; its rows are on t
 | Absent or counted | Corpus |
 |---|---|
 | GemStone main subtitles: 11,004 of 11,004 have no brackets (` - Area, Title - N`); 0 without a number; 0 shorter than 3 characters. `gs_saga_login.xml` and `gs_saga_hunt.xml` carry the shape | GS-15 |
-| DragonRealms main subtitles: 0 of 51,722 without a room marker (a number or `(**)`); 10 with `(**)`, all `[The Heavens]` (`dr_saga_no_room_heavens.xml` carries two) | DR-16 |
+| DragonRealms main subtitles: 0 of 51,722 without a room marker (a number or `(**)`); 10 with `(**)`, all `[The Heavens]` (`dr_saga_no_room_heavens.xml` carries one, plus its room-window twin). That fixture's golden never snapshots the Heavens state: the `(**)` subtitle and the return to `(230008)` fall between the same two prompts, so the `(**)` → room id 0 mapping is covered only by `xmlparser_game_delta_spec.rb` | DR-16 |
 
 ### #1705
 
