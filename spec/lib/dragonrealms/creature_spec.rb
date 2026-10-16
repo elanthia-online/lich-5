@@ -123,6 +123,19 @@ RSpec.describe Lich::DragonRealms::Creature do
       expect(described_class[4003].noun).to eq('hound')
     end
 
+    it 'keeps the server noun\'s case while it downcases the name' do
+      creature = described_class.sync('34361', 'hostile' => '1')
+      creature.apply_room_name('an Elven Warden', 'Warden')
+      expect(creature.noun).to eq('Warden')
+
+      described_class.feed_assess(name: 'An Elven Warden', id: '34361', noun: 'Warden', self: false, pc: false)
+      described_class.feed_assess(name: 'An Elven Warden', id: '34362', noun: nil, self: false, pc: false)
+
+      expect(described_class[34361].name).to eq('an elven warden')
+      expect(described_class[34361].noun).to eq('Warden')
+      expect(described_class[34362].noun).to eq('warden')
+    end
+
     it 'derives the noun when the assess entry carries none or a blank one' do
       described_class.feed_assess(name: 'A jeol moradu', id: '4001', noun: nil, self: false, pc: false)
       described_class.feed_assess(name: 'A jeol moradu', id: '4002', noun: ' ', self: false, pc: false)
