@@ -129,6 +129,11 @@ Each PR in the series records its own rows under its heading.
 
 ### #1711
 
+| Absent or counted | Corpus |
+|---|---|
+| DragonRealms sends 0 `nextLvlPB` and 0 Active Spells/Buffs/Debuffs/Cooldowns `dialogData`; the DR dialog ids seen are `minivitals` and `injuries` | DR-16; the `dr_*` fixtures (`minivitals` 189, `injuries` 19) |
+| GemStone's `nextLvlPB` text never changes mid-session; GemStone sends 0 combat, atmospherics or familiar streams (this also backs #1710) | GS-15; `gs_sample.xml`, `gs_saga_login.xml`, `gs_saga_hunt.xml` |
+
 ### #1713
 
 ### #1721
