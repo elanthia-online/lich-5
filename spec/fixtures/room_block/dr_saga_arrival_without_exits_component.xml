@@ -1,0 +1,22 @@
+You go east.
+<nav rm='2108012'/>
+<streamWindow id='main' title='Story' subtitle=" - [The Western Road, Atop the Ridge] (2108012)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [The Western Road, Atop the Ridge] (2108012)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>The tread of many, many patient boots and hooves has worn the roadway down, and it crosses the top of the ridge several feet below the shoulders on either side.  But the sunken path proves to be a blessing because the higher sides keep travelers on the road, even in the gloom of the forested ridge.</component>
+<component id='room objs'></component>
+<component id='room players'></component>
+<component id='room exits'>Obvious paths: <d>southeast</d>, <d>west</d>.<compass></compass></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[The Western Road, Atop the Ridge] (2108012)</name><description>The tread of many, many patient boots and hooves has worn the roadway down, and it crosses the top of the ridge several feet below the shoulders on either side.  But the sunken path proves to be a blessing because the higher sides keep travelers on the road, even in the gloom of the forested ridge.</description><exists></exists><players></players><exits>Obvious paths: <d>southeast</d>, <d>west</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792069696">&gt;</prompt>
+You run southeast.
+<nav rm='2108013'/>
+<streamWindow id='main' title='Story' subtitle=" - [The Western Road, Foothills] (2108013)" location='center' target='drop'/>
+<streamWindow id='room' title='Room' subtitle=" - [The Western Road, Foothills] (2108013)" location='center' target='drop' ifClosed='' resident='true'/>
+<component id='room desc'>Although the road is not terribly steep, a dislodged stone or a kicked pine cone may well roll a good distance before coming to rest.  One might enjoy a good view of the countryside from here, midway up the side of the ridge, were it not for the thick stand of pines that lines the road.</component>
+<component id='room objs'></component>
+<component id='room extra'></component>
+<resource picture="0"/><room><name>[The Western Road, Foothills] (2108013)</name><description>Although the road is not terribly steep, a dislodged stone or a kicked pine cone may well roll a good distance before coming to rest.  One might enjoy a good view of the countryside from here, midway up the side of the ridge, were it not for the thick stand of pines that lines the road.</description><exists></exists><players></players><exits>Obvious paths: <d>southwest</d>, <d>northwest</d>.</exits><extra></extra></room>
+<component id='room players'></component>
+<prompt time="1792069696">&gt;</prompt>

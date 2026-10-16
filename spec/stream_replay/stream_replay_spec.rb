@@ -55,17 +55,16 @@ end
 # What reaches the client for the Saga-identity <room> block, per front end:
 # only Saga (:room_element) gets the raw block; every other front end gets the
 # legacy roomName layout it already renders, and Wizard its GSL room codes.
-# The legacy layout carries the legacy compass after each view of the room the
-# character is in: every block but the first, a LOOK sent before the capture's
-# first <nav> gave Lich a room number.
+# The legacy layout carries the legacy compass after every view, as the legacy
+# stream did.
 RSpec.describe 'stream replay: <room> block per front end', :slow do
   fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_containers_speech.xml', __dir__))
   rooms = 34 # <room> blocks in the fixture
   compass = '<compass><dir value='
 
   {
-    nil      => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms - 1 },
-    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms - 1 },
+    nil      => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms },
+    'genie'  => { '<room>' => 0, '<style id="roomName"' => rooms, compass => rooms },
     'saga'   => { '<room>' => rooms, '<style id="roomName"' => 0, compass => 0 },
     'wizard' => { '<room>' => 0, "\034GSo" => rooms, compass => 0 }
   }.each do |frontend, expected|
@@ -74,5 +73,24 @@ RSpec.describe 'stream replay: <room> block per front end', :slow do
       expect(result.warnings).to be_empty
       expected.each { |marker, count| expect(result.stdout.scan(marker).size).to eq(count), marker.inspect }
     end
+  end
+end
+
+# A Locate view of another room (230008) while the character stands in
+# 230007: the legacy stream followed it with 230008's compass
+# (spec/fixtures/room_block/dr_legacy_locate.xml), and so does the rewrite.
+RSpec.describe 'stream replay: Locate view per front end', :slow do
+  fixture = StreamReplay::Fixture.load(File.expand_path('../fixtures/streams/dr_saga_locate_descflag.xml', __dir__))
+  own = %(Obvious paths: <d>north</d>, <d>southeast</d>.\r\n<compass><dir value="n"/><dir value="se"/></compass>\r\n)
+  located = %(Obvious paths: <d>north</d>, <d>south</d>.\r\n<compass><dir value="n"/><dir value="s"/></compass>\r\n)
+
+  it 'gives a legacy front end the located room\'s compass after the Locate view, between two own-room views' do
+    result = StreamReplay::Driver.new(fixture, frontend: 'genie').run
+    expect(result.warnings).to be_empty
+    out = result.stdout
+    expect(out.scan(own).size).to eq(2)
+    expect(out.scan(located).size).to eq(1)
+    expect(out.index(own)).to be < out.index(located)
+    expect(out.index(located)).to be < out.rindex(own)
   end
 end
