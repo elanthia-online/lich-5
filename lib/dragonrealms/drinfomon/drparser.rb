@@ -639,8 +639,11 @@ module Lich
             DRSkill.update(skill, rank, rate, percent)
 
             # Inline display of cumulative gained experience (from DRExpMonitor).
-            # The formatters edit server_line, not the normalized copy, so a
-            # Saga exp line reaches the client with its links and bold intact.
+            # The formatters edit server_line, the string the client receives,
+            # not the normalized copy. No captured exp component, in either
+            # dialect, carries a link or doubled bold, so match_line returns
+            # server_line itself for them; editing server_line keeps the client's
+            # line right if one ever did.
             if DRExpMonitor.inline_display?
               if rate_raw.to_i > 0
                 # BRIEFEXP ON format (rate is numeric)
