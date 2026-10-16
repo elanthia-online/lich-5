@@ -153,6 +153,18 @@ RSpec.describe 'Lich::Common::XMLParser inventory streams' do
       feed(stow_refresh('195648378', %w[1 nugget nugget], %w[7 gem gem]), prompt)
       expect(contents('195648378')).to eq(%w[nugget gem])
     end
+
+    it "follows the header again after a new login whose tag it has not seen (the old login's id is not kept)" do
+      # A relogin gives every item a new id. A parser that misses the new
+      # login's tag must not keep the previous login's stow container id.
+      feed(login_tag, stow_refresh('195648378', %w[1 nugget nugget]), prompt)
+      feed(%(<settingsInfo  client="1.0.1.28" major="32" crc='1009451187' instance='DR'/>))
+      expect(parser.stream_feature?(:stow_container_tag)).to be false
+
+      feed(stow_refresh('200000003', %w[8 nugget nugget]), prompt)
+      expect(parser.stow_container_id).to eq('200000003')
+      expect(contents('200000003')).to eq(%w[nugget])
+    end
   end
 
   describe 'worn items list' do
