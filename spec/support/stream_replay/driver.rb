@@ -32,7 +32,7 @@ module StreamReplay
     READY_TIMEOUT = 60
     PROMPT_TIMEOUT = 10
 
-    Result = Struct.new(:snapshots, :stdout, :warnings, keyword_init: true)
+    Result = Struct.new(:snapshots, :stdout, :warnings, :game_input, keyword_init: true)
 
     # @param fixture [StreamReplay::Fixture] the stream to replay
     # @param frontend [String, nil] value for --frontend= (nil: pipe default)
@@ -53,6 +53,7 @@ module StreamReplay
         snapshot_path = File.join(tmp, 'snapshots.jsonl')
         server = TCPServer.new('127.0.0.1', 0)
         stdout = +''
+        game_input = +''
         begin
           Open3.popen2e(child_env(snapshot_path), *child_args(tmp, server.addr[1]), chdir: REPO) do |stdin, out, wait_thr|
             reader = Thread.new do
@@ -68,7 +69,7 @@ module StreamReplay
             conn.setsockopt(Socket::IPPROTO_TCP, Socket::TCP_NODELAY, 1)
             conn.gets # login key
             drain = Thread.new do
-              loop { break unless conn.readpartial(4096) }
+              loop { game_input << conn.readpartial(4096) }
             rescue StandardError
               nil
             end
@@ -83,7 +84,7 @@ module StreamReplay
         ensure
           server.close rescue nil
         end
-        Result.new(snapshots: read_snapshots(snapshot_path), stdout: stdout, warnings: @warnings)
+        Result.new(snapshots: read_snapshots(snapshot_path), stdout: stdout, warnings: @warnings, game_input: game_input)
       end
     end
 

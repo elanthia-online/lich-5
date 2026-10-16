@@ -134,6 +134,13 @@ RSpec.describe 'stream replay: a client that declares its capabilities', :slow d
     expect(declared.snapshots).to eq(replay.call('genie').snapshots)
   end
 
+  it 'never forwards the declaration to the game' do
+    declared = replay.call('genie', ['SET_FRONTEND_CAPS room_element game_links double_bold'])
+    # The client's handshake line does reach the game, so the recording works.
+    expect(declared.game_input).to include('/FE:')
+    expect(declared.game_input).not_to include('SET_FRONTEND_CAPS')
+  end
+
   it 'gives a genie client that declared only game_links the legacy room with links kept' do
     declared = replay.call('genie', ['SET_FRONTEND_CAPS game_links'])
     expect(declared.warnings).to be_empty
