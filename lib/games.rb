@@ -1695,16 +1695,22 @@ module Lich
         alt_string
       end
 
-      # DragonRealms' links and doubled bold go only to clients whose
-      # capabilities include them (:game_links, :double_bold); the rest get
-      # the legacy line. GemStone has always sent both, and its front ends
-      # expect them, so it keeps the base no-op. Never modifies alt_string.
+      # DragonRealms' links and bold go only to clients whose capabilities
+      # include them (:game_links, :double_bold); the rest get the legacy line.
+      # Without :double_bold a client also loses the single bold around a
+      # creature in action and assess lines, which the legacy stream sent
+      # plain; it runs first, while the link it keys on is still there.
+      # GemStone sends links under both client identities, so it keeps the
+      # base no-op. Doubled bold appears only in the GemStone captures recorded
+      # under the Saga identity; whether it depends on the identity is not
+      # known. Never modifies alt_string.
       # @param alt_string [String] the server string on its way to the client
       # @param capabilities [Array<Symbol>] the client's rich-stream
       #   capabilities; defaults to the session's set
       # @return [String] the string to send
       # @see Lich::GameBase::GameInstance::Base#adapt_for_frontend
       def adapt_for_frontend(alt_string, capabilities = Lich::Common::ClientCapabilities.session_default)
+        alt_string = Lich::Common::Markup.strip_link_bold(alt_string) unless capabilities.include?(:double_bold)
         alt_string = Lich::Common::Markup.strip_game_links(alt_string) unless capabilities.include?(:game_links)
         alt_string = Lich::Common::Markup.collapse_double_bold(alt_string) unless capabilities.include?(:double_bold)
         alt_string

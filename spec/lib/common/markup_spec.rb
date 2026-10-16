@@ -305,6 +305,50 @@ RSpec.describe Lich::Common::Markup, 'legacy line shape' do
     end
   end
 
+  describe '.strip_link_bold' do
+    # Verbatim shapes from dr_saga_hunt.xml; the legacy stream sends these
+    # names plain (dr_legacy_hunt.xml:135-137 for assess).
+    it 'removes the single bold around a linked creature in an action line, keeping the link' do
+      line = %(The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.)
+      expect(described_class.strip_link_bold(line)).to eq(%(The <a exist="195762664" noun="moradu">jeol moradu</a> moves into a position to parry.))
+    end
+
+    it 'removes it with the article inside the bold, and around a linked pronoun' do
+      line = %(Appearing to have lost sight of <pushBold/><a exist="1" noun="moradu">its</a><popBold/> target, <pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/> stops advancing.)
+      expect(described_class.strip_link_bold(line))
+        .to eq(%(Appearing to have lost sight of <a exist="1" noun="moradu">its</a> target, a <a exist="1" noun="moradu">jeol moradu</a> stops advancing.))
+    end
+
+    it 'removes it inside an assess <d> command link' do
+      line = %(<d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: cursed) is flanking you.)
+      expect(described_class.strip_link_bold(line)).to eq(%(<d cmd='look #195758165'>A <a exist="195758165" noun="moradu">jeol moradu</a></d> (1: cursed) is flanking you.))
+    end
+
+    it 'keeps the doubled bold of a room-object listing' do
+      line = %(<component id='room objs'>You also see <pushBold/><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/>.</component>)
+      expect(described_class.strip_link_bold(line)).to equal(line)
+    end
+
+    # The legacy stream bolds whole combat damage lines; one with more text
+    # than an article and a link inside the bold keeps it.
+    it 'keeps a bold that holds more than an article and one link' do
+      line = %(<pushBold/>The <a exist="1" noun="moradu">jeol moradu</a> lands a heavy hit.  <popBold/>)
+      expect(described_class.strip_link_bold(line)).to equal(line)
+      two = %(<pushBold/><a exist="1" noun="a">a</a> and <a exist="2" noun="b">b</a><popBold/>)
+      expect(described_class.strip_link_bold(two)).to equal(two)
+    end
+
+    it 'keeps a bold around a script link or plain text' do
+      line = %(<pushBold/>a <a href="x">jeol moradu</a><popBold/> and <pushBold/>a jeol moradu<popBold/>)
+      expect(described_class.strip_link_bold(line)).to equal(line)
+    end
+
+    it 'returns a string without such a bold unchanged, as the same object' do
+      line = +%(<pushBold/>A jeol moradu<popBold/> gestures.\r\n)
+      expect(described_class.strip_link_bold(line)).to equal(line)
+    end
+  end
+
   describe '.collapse_double_bold' do
     it 'collapses the doubled bold around a linked creature to one pair' do
       line = %(You also see <pushBold/><pushBold/>a <a exist="1" noun="moradu">jeol moradu</a><popBold/><popBold/>, an ice-edged sword.)
@@ -326,16 +370,39 @@ RSpec.describe Lich::Common::Markup, 'legacy line shape' do
     no_time = ->(line) { line.gsub(/time="\d+"/, 'time="T"') }
     legacy = (read.call('spec/fixtures/streams/dr_legacy_*.xml') + read.call('benchmark/fixtures/dr_{sample,inventory_sample}.xml')).to_set { |l| no_time.call(l) }
     rich = read.call('spec/fixtures/streams/dr_saga_*.xml').select { |l| l.include?('<a exist') || l.include?('<pushBold/><pushBold/>') }
-    let(:shaped) { rich.map { |l| no_time.call(described_class.collapse_double_bold(described_class.strip_game_links(l))) } }
+    legacy_shape = ->(l) { described_class.collapse_double_bold(described_class.strip_game_links(described_class.strip_link_bold(l))) }
+    let(:shaped) { rich.map { |l| no_time.call(legacy_shape.call(l)) } }
+    # A single bold pair holding a game link and no other bold.
+    link_bold = %r{(?<!<pushBold/>)<pushBold/>(?:(?!<pushBold/>|<popBold/>).)*?<a\s[^>]*exist=(?:(?!<pushBold/>|<popBold/>).)*?<popBold/>(?!<popBold/>)}
 
     it 'leaves no game link and no doubled bold' do
       expect(rich.size).to be > 800
       expect(shaped.grep(/<a exist|<pushBold\/><pushBold\/>|<popBold\/><popBold\/>/)).to be_empty
     end
 
+    # 217 single bold pairs around a linked creature, all in action and
+    # assess lines (room-object listings double theirs).
+    it 'leaves no single bold around a linked creature, and keeps every doubled one for collapsing' do
+      spans = rich.sum { |l| l.scan(link_bold).size }
+      expect(spans).to be > 200
+      expect(rich.sum { |l| described_class.strip_link_bold(l).scan(link_bold).size }).to eq(0)
+      expect(rich.sum { |l| described_class.strip_link_bold(l).scan('<pushBold/><pushBold/>').size }).to eq(rich.sum { |l| l.scan('<pushBold/><pushBold/>').size })
+    end
+
+    it 'changes no line of the legacy captures' do
+      legacy_lines = read.call('spec/fixtures/streams/dr_legacy_*.xml') + read.call('benchmark/fixtures/dr_{sample,inventory_sample}.xml')
+      expect(legacy_lines.reject { |l| described_class.strip_link_bold(l).equal?(l) }).to be_empty
+    end
+
+    # Of the 928 rich lines, 460 (46 distinct) were legacy lines byte for byte
+    # with the links stripped and the doubled bold collapsed; also removing
+    # the creature bold makes it 569 (68 distinct), and loses none.
     it 'reproduces legacy lines byte for byte' do
       expect(rich.count { |l| legacy.include?(no_time.call(l)) }).to eq(0)
-      expect(shaped.uniq.count { |l| legacy.include?(l) }).to be >= 45
+      expect(shaped.uniq.count { |l| legacy.include?(l) }).to be >= 68
+      expect(shaped.count { |l| legacy.include?(l) }).to be >= 569
+      without_link_bold = rich.map { |l| no_time.call(described_class.collapse_double_bold(described_class.strip_game_links(l))) }
+      expect(without_link_bold.each_index.select { |i| legacy.include?(without_link_bold[i]) && !legacy.include?(shaped[i]) }).to be_empty
     end
 
     # Genie4 counts creatures with one bold pair per creature over the room
@@ -350,7 +417,7 @@ RSpec.describe Lich::Common::Markup, 'legacy line shape' do
       creatures = objs.sum { |l| l[%r{<component id='room objs'>(.*?)</component>}, 1].scan('<pushBold/><pushBold/>').size }
       expect(creatures).to be > 30
       expect(objs.sum { |l| genie_count.call(l) }).to eq(0)
-      expect(objs.sum { |l| genie_count.call(described_class.collapse_double_bold(described_class.strip_game_links(l))) }).to eq(creatures)
+      expect(objs.sum { |l| genie_count.call(legacy_shape.call(l)) }).to eq(creatures)
     end
   end
 end

@@ -1896,6 +1896,40 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
     end
   end
 
+  # The legacy stream sends creature names in assess and action lines plain
+  # (dr_legacy_hunt.xml:135-137); the Saga stream bolds them once.
+  assess = %(<popStream/><pushStream id="assess"/><d cmd='look #195758165'><pushBold/>A <a exist="195758165" noun="moradu">jeol moradu</a><popBold/></d> (1: cursed and nimbly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>\r\n)
+  action = %(The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.\r\n)
+
+  %w[genie frostbite].each do |fe|
+    it "gives #{fe} assess and action lines with the creature names plain" do
+      $frontend = fe
+      described_class.send(:process_downstream_hooks, +assess)
+      described_class.send(:process_downstream_hooks, +action)
+      eventually do
+        expect(@raw_socket).to have_received(:write).with(
+          %(<popStream/><pushStream id="assess"/><d cmd='look #195758165'>A jeol moradu</d> (1: cursed and nimbly balanced) is flanking you at melee range.  | <d cmd='face #195758165'>F</d>\r\n)
+        )
+        expect(@raw_socket).to have_received(:write).with("The jeol moradu moves into a position to parry.\r\n")
+      end
+    end
+  end
+
+  it 'keeps the creature bold for a front end that handles doubled bold' do
+    $frontend = 'genie'
+    allow(Lich::Common::Frontend).to receive(:has_capability?).and_call_original
+    allow(Lich::Common::Frontend).to receive(:has_capability?).with('genie', :double_bold).and_return(true)
+    described_class.send(:process_downstream_hooks, +action)
+    eventually { expect(@raw_socket).to have_received(:write).with("The <pushBold/>jeol moradu<popBold/> moves into a position to parry.\r\n") }
+  end
+
+  it 'keeps a whole bold combat line' do
+    $frontend = 'genie'
+    line = %(<pushStream id="combat" /><pushBold/>Corwin's fingers lands a hard hit to the moradu's head.  <popBold/>\r\n)
+    described_class.send(:process_downstream_hooks, +line)
+    eventually { expect(@raw_socket).to have_received(:write).with(line) }
+  end
+
   it 'gives a front end Lich does not know the legacy line' do
     $frontend = 'unknown'
     described_class.send(:process_downstream_hooks, +objs)
@@ -1926,7 +1960,8 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with DragonRealm
     eventually { expect(@raw_socket).to have_received(:write).with(Lich::Common::Markup.collapse_double_bold(objs)) }
   end
 
-  # GemStone has always sent links and doubled bold, and its front ends use them.
+  # GemStone sends links under both client identities; its front ends get its
+  # bold unchanged too.
   it 'leaves a GemStone line alone' do
     XMLData.game = 'GS'
     described_class.instance_variable_set(:@game_instance, Lich::Gemstone::GameInstance.new)
@@ -2269,6 +2304,24 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with per-client 
     eventually do
       expect(links_only).to eq([objs.gsub('<pushBold/><pushBold/>', '<pushBold/>').gsub('<popBold/><popBold/>', '<popBold/>')])
       expect(bold_only).to eq([objs.gsub(/<a exist="\d+" noun="\w+">|<\/a>/, '')])
+    end
+  end
+
+  # The creature bold in action lines follows double_bold: the legacy stream
+  # named the creature plain.
+  it 'keeps the creature bold in an action line only for a client that declared double_bold' do
+    $frontend = 'genie'
+    action = %(The <pushBold/><a exist="195762664" noun="moradu">jeol moradu</a><popBold/> moves into a position to parry.\r\n)
+    rich = attach_client(all_caps)
+    bold_only = attach_client('SET_FRONTEND_CAPS double_bold')
+    links_only = attach_client('SET_FRONTEND_CAPS game_links')
+    legacy = attach_client
+    described_class.send(:process_downstream_hooks, +action)
+    eventually do
+      expect(rich).to eq([action])
+      expect(bold_only).to eq(["The <pushBold/>jeol moradu<popBold/> moves into a position to parry.\r\n"])
+      expect(links_only).to eq([%(The <a exist="195762664" noun="moradu">jeol moradu</a> moves into a position to parry.\r\n)])
+      expect(legacy).to eq(["The jeol moradu moves into a position to parry.\r\n"])
     end
   end
 
