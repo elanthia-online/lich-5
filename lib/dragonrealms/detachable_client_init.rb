@@ -28,7 +28,8 @@ module Lich
       # [progressBar id, text label]. The game labels stamina as "fatigue".
       VITALS = [%w[health health], %w[mana mana], %w[stamina fatigue], %w[spirit spirit], %w[concentration concentration]].freeze
 
-      # The same compass values the <room> rewrite sends after a room view.
+      # The compass values of RoomBlock::COMPASS_DIRS, kept for callers; the
+      # compass itself comes from RoomBlock.compass.
       SHORT_DIRS = Lich::Common::RoomBlock::COMPASS_DIRS
 
       # Whether enough of the login feed has been parsed to build the push. In
@@ -78,9 +79,10 @@ module Lich
         end.join
       end
 
+      # The same compass, byte for byte, the <room> rewrite sends after a view
+      # of the current room.
       def self.compass
-        dirs = XMLData.room_exits.filter_map { |direction| "<dir value='#{SHORT_DIRS[direction]}'/>" if SHORT_DIRS.key?(direction) }
-        "<compass>#{dirs.join}</compass>"
+        Lich::Common::RoomBlock.compass(XMLData.room_exits)
       end
 
       def self.encode(value)
