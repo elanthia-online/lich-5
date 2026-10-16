@@ -55,7 +55,7 @@ RSpec.describe Lich::Common::RoomBlock do
     # The legacy description line is <style id=""/>, the roomDesc preset when
     # there is a description, two spaces, then the objects (dr_legacy_hunt.xml
     # sends "<style id=""/>  You also see ..." and "<style id=""/>  " with room
-    # descriptions off; ProfanityFE's dr_look_after_players.xml capture sends
+    # descriptions off; room_block/dr_legacy_desc_no_objects.xml sends
     # "...</preset>  " for a room without objects).
     {
       'an empty description'                => ['', 'You also see a rock.', %(<style id=""/>  You also see a rock.)],
@@ -67,6 +67,20 @@ RSpec.describe Lich::Common::RoomBlock do
                 '<players></players><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>'
         expect(described_class.legacy_shape(block).split("\r\n", -1)).to eq(['<style id="roomName" />[A] (1)', line, 'Obvious paths: <d>north</d>.'])
       end
+    end
+
+    # The same room (230007, no objects) captured in both dialects:
+    # spec/fixtures/room_block/dr_legacy_desc_no_objects.xml is the legacy view
+    # (2026-10-07) and the Saga block is the one in dr_saga_locate_descflag.xml
+    # (2026-10-16). The rewrite gives the legacy lines byte for byte, including
+    # the description line's two trailing spaces when there are no objects.
+    it 'rewrites a captured Saga block into the captured legacy lines for the same room' do
+      fixtures = File.expand_path('../../fixtures', __dir__)
+      legacy_view = File.read(File.join(fixtures, 'room_block/dr_legacy_desc_no_objects.xml')).lines.map(&:chomp)
+      saga_block = File.foreach(File.join(fixtures, 'streams/dr_saga_locate_descflag.xml')).find { |l| l.include?('(230007)</name>') }
+
+      expect(legacy_view[1]).to end_with('</preset>  ')
+      expect(described_class.legacy_shape(saga_block.chomp).split("\r\n", -1)).to eq(legacy_view)
     end
 
     it 'keeps a non-empty extra part as its own line' do
