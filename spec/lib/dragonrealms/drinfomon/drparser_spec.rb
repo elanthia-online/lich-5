@@ -818,9 +818,11 @@ RSpec.describe Lich::DragonRealms::DRParser do
 
       # The example above uses a link-free line, which match_line returns as the
       # same object, so it passes whether the rewrite targets server_line or the
-      # normalized copy. This synthetic linked line (not a captured shape) makes
-      # match_line return a new string, so only a server_line rewrite passes.
-      it 'rewrites the server string, not the normalized copy, when the line carries links' do
+      # normalized copy. Real exp components carry no links (none in the
+      # captures, either dialect), so this input is synthetic: the link only
+      # makes match_line return a new string, so that only a rewrite of the
+      # client-bound server_line passes.
+      it 'rewrites the server string, not the normalized copy (synthetic linked input)' do
         received = nil
         allow(Lich::DragonRealms::DRExpMonitor).to receive(:inline_display?).and_return(true)
         # Copy the argument at call time: the formatter is handed server_line
@@ -838,11 +840,12 @@ RSpec.describe Lich::DragonRealms::DRParser do
         expect(received).to eq([%(<component id='exp Athletics'>       <a exist="1" noun="x">Athletics</a>: 1552 43% enthralled    0.00   </component>), 'Athletics', 'enthralled'])
       end
 
-      # Exp components can carry object links and doubled bold under the Saga
-      # identity. The client must get the gained-exp column added to the line
-      # the server sent, links and bold intact, not to the link-stripped copy.
-      # These run the real DRExpMonitor formatters. The lines are synthetic (no
-      # linked exp component has been captured yet).
+      # These run the real DRExpMonitor formatters. The linked and doubled-bold
+      # lines are synthetic: no captured exp component carries a link or
+      # doubled bold, in either dialect. They guard that the formatter edits
+      # the client-bound string (server_line), so whatever markup it holds
+      # survives the rewrite, and that only the skill and rate come from the
+      # normalized copy.
       describe 'with the real formatters' do
         before do
           described_class.class_variable_set(:@@parsing_exp_mods_output, false)
@@ -855,7 +858,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
           allow(drskill_class).to receive(:gained_exp).and_return(1.5)
         end
 
-        it 'keeps the links and doubled bold of a BRIEFEXP OFF line' do
+        it 'edits the client-bound string of a BRIEFEXP OFF line (synthetic links and doubled bold kept)' do
           server_line = +%(<component id='exp Athletics'><pushBold/><pushBold/>       <a exist="1" noun="Athletics">Athletics</a>: 1552 43% enthralled    0.00   <popBold/><popBold/></component>)
           normalized = described_class.match_line(server_line).dup
 
@@ -865,7 +868,7 @@ RSpec.describe Lich::DragonRealms::DRParser do
           expect(described_class.match_line(server_line)).to eq(drexpmonitor_class.format_briefexp_off(normalized, 'Athletics', 'enthralled'))
         end
 
-        it 'keeps the links of a BRIEFEXP ON line' do
+        it 'edits the client-bound string of a BRIEFEXP ON line (synthetic links kept)' do
           server_line = +%(<component id='exp Athletics'><d cmd='skill Athletics'><a exist="1" noun="Athletics">Athletics</a></d>:  1552 43%  [ 2/34]</component>)
           normalized = described_class.match_line(server_line).dup
 
