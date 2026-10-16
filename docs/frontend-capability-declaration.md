@@ -23,7 +23,7 @@ SET_FRONTEND_CAPS room_element game_links double_bold
 - The command name is case-sensitive, like `SET_FRONTEND_PID`, and must start the line.
 - The names follow, separated by spaces, tabs or commas, in any order and any case.
 - Names Lich does not know are ignored and logged, so a newer client can declare capabilities an older Lich lacks.
-- `SET_FRONTEND_CAPS` with no known name (bare, or `SET_FRONTEND_CAPS none`) declares the empty set: the client gets every rewrite, the full legacy stream.
+- A bare `SET_FRONTEND_CAPS` declares the empty set: the client gets every rewrite, the full legacy stream. A line whose names are all unknown declares the empty set too, but logs each name as unknown, so send the bare line.
 - Lich consumes the line. It never reaches the game, scripts or upstream hooks.
 - A later declaration replaces the earlier one from the same client. It takes effect from the next server line Lich sends.
 - Lich sends no reply.
@@ -50,7 +50,9 @@ A client that declares nothing, in a session without `--frontend-caps`, gets exa
 
 ## Several clients on one session
 
-Lich groups the attached clients by capability set and rewrites each server line once per distinct set, not once per client. Clients with the same set share one rewrite, so the usual case (every client with the same set) costs what a single client did. A Saga client and a released Profanity client attached to the same listener therefore get the rich line and the legacy line respectively.
+Lich groups the attached clients by capability set and rewrites each server line once per distinct set, not once per client. Clients with the same set share one rewrite, so the usual case (every client with the same set) costs what a single client did.
+
+Two clients on one session get different streams only when at least one of them declares. Every client that has not declared gets the session's set (rules 2 and 3 above), so two undeclared clients always get the same bytes. Neither the Saga client nor a released Profanity build sends the line: attached to the same session, both get the rich stream under `--frontend=saga` and both get the legacy stream under a Profanity launch (`--without-frontend` with a detachable port and no front-end flag). A mixed session works once one side declares, for example a Profanity build that sends a bare `SET_FRONTEND_CAPS` under a Saga session gets the legacy rewrites while Saga keeps the rich stream. The steps that follow `$frontend`, such as Saga's origin sentinel, still apply to both (see above).
 
 ## Backward compatibility
 
@@ -65,7 +67,7 @@ A rich-stream-aware ProfanityFE build renders `<room>`, links and doubled bold, 
 SET_FRONTEND_CAPS room_element game_links double_bold
 ```
 
-It then gets the stream as the game sent it. A released Profanity build sends nothing and keeps getting the legacy shape. To test without a client change, launch Lich with `--frontend-caps=room_element,game_links,double_bold`.
+It then gets the stream as the game sent it. A released Profanity build sends nothing and gets the session's set, which under a Profanity launch is the legacy shape. To test without a client change, launch Lich with `--frontend-caps=room_element,game_links,double_bold`.
 
 ## Code
 
