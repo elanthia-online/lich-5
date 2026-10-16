@@ -132,6 +132,15 @@ RSpec.describe Lich::Common::RoomBlock do
       expect(Lich::Common::Markup.strip_xml(block)).to eq("[Area, Grotto] (1)\r\n")
     end
 
+    # With no players and no exits the <crtrStatus> batch keeps its own line,
+    # which strips to an empty one; the legacy stream would send it as its own
+    # string, and strip_xml would drop it.
+    it 'drops the empty line left by between-part tags on their own line' do
+      block = '<room><name>[A, B] (1)</name><description>Desc.</description><exists>You also see a rock.</exists>' \
+              "<crtrStatus exist=\"1\" hostile=\"1\"/><players></players><exits></exits><extra></extra></room>\r\n"
+      expect(Lich::Common::Markup.strip_xml(block)).to eq("[A, B] (1)\r\nDesc.  You also see a rock.\r\n")
+    end
+
     it 'leaves the whitespace of a string without a <room> block alone' do
       text = "<pushBold/>You walk north.<popBold/>\r\n  \r\nObvious paths: <d>north</d>.\r\n"
       expect(Lich::Common::Markup.strip_xml(text)).to eq("You walk north.\r\n  \r\nObvious paths: north.\r\n")
