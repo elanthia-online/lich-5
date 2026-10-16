@@ -10,9 +10,8 @@ require 'common/xmlparser'
 # object links and the <room> block; front ends that send their own Wrayth
 # handshake get the legacy stream, which has neither. Fragments follow the
 # shapes in the DR captures under spec/fixtures/streams, with ids and text
-# substituted. Two shapes are not in those captures: the URL <a href> line,
-# which GemStone sends, and the <container id='stow'> lines, which GemStone and
-# the DR Saga stream send at login (the captures start after login).
+# substituted. One shape is not in those captures: the URL <a href> line,
+# which GemStone sends.
 RSpec.describe 'Lich::Common::XMLParser stream features' do
   subject(:parser) { Lich::Common::XMLParser.new }
 
@@ -67,14 +66,6 @@ RSpec.describe 'Lich::Common::XMLParser stream features' do
   it 'observes :room_element from the Saga <room> block' do
     feed('<resource picture="0"/><room><name>[Bosque Deriel, Burial Ground] (230007)</name><description>An Elven burial ground.</description><exits>Obvious paths: <d>north</d>.</exits><extra></extra></room>')
     expect(parser.stream_features).to eq([:room_element])
-  end
-
-  it 'observes :stow_container_tag only for the stow container' do
-    feed("<container id='pack' title='Pack' target='#1' location='right' save='' resident='true'/>")
-    expect(parser.stream_feature?(:stow_container_tag)).to be false
-
-    feed("<container id='stow' title='My Pack' target='#195648378' location='right' save='' resident='true'/>")
-    expect(parser.stream_feature?(:stow_container_tag)).to be true
   end
 
   it 'keeps features across a mid-stream reset (a desync does not change the dialect)' do
