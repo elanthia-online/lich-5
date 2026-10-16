@@ -2106,6 +2106,24 @@ RSpec.describe Lich::GameBase::Game, '.process_downstream_hooks with a <room> bl
     end
   end
 
+  # With ShowRoomID off the name carries no room number, so the block counts
+  # as the character's room when its exits are XMLData.room_exits.
+  it 'sends the compass for a block without a room number whose exits are the current room exits' do
+    XMLData.room_id = 230_008
+    XMLData.room_exits = ['north']
+    $frontend = 'genie'
+    unnumbered = saga_room.sub(' (230007)', '')
+    described_class.send(:process_downstream_hooks, +unnumbered)
+    eventually do
+      expect(@raw_socket).to have_received(:write).with(
+        %(<resource picture="0"/><style id="roomName" />[Bosque Deriel, Burial Ground]\r\n) +
+        %(<style id=""/><preset id='roomDesc'>An Elven burial ground.</preset>  \r\n) +
+        %(Obvious paths: <d>north</d>.\r\n) +
+        %(<compass><dir value="n"/></compass>\r\n)
+      )
+    end
+  end
+
   it 'still arms the room display after rewriting' do
     $frontend = 'wrayth'
     described_class.send(:process_downstream_hooks, +saga_room)
