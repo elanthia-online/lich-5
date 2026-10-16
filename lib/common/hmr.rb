@@ -65,7 +65,7 @@ module Lich
       # @param path [String] a $LOADED_FEATURES entry
       # @param roots [Array<String>] from {foreign_roots}
       # @return [Boolean]
-      def self.foreign?(path, roots = foreign_roots)
+      def self.foreign?(path, roots)
         # Ruby records some built-in features (thread.rb, set.rb) without a
         # path; load would resolve them against $LOAD_PATH.
         return true unless File.absolute_path?(path)
