@@ -314,13 +314,8 @@ module Lich
         # Compiles a pattern the user typed after a ;command, or tells them
         # it is not a valid regex.
         #
-        # An unbalanced "(" or "[", or a stray backslash, is an easy typo, and
-        # building the Regexp inline let it escape the handler: a RegexpError
-        # skipped the rest of do_client and surfaced as a client_thread error
-        # with a backtrace line, and an ArgumentError from an interpolated
-        # literal (/#{text}/ raises that, not RegexpError, for bad escapes)
-        # printed a backtrace too. Regexp.new raises RegexpError for every
-        # one of those cases, so a single rescue covers them.
+        # Regexp.new raises RegexpError for bad escapes too, unlike an
+        # interpolated literal (/#{text}/), which raises ArgumentError.
         #
         # @param text [String] what the user typed
         # @param prefix [String] regex source put in front of +text+, such as
