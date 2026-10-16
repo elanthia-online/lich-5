@@ -172,6 +172,11 @@ module Lich
         # bold as a flag, or match creatures with one pushBold/popBold pair
         # (Genie's monster count, Frostbite's bold creature list), need it.
         #
+        # It runs after the downstream hooks and collapses pushes and pops
+        # separately, so it trusts a hook that adds bold not to make a new
+        # double: a hook <pushBold/> right before a single game <pushBold/>,
+        # with its <popBold/> elsewhere, leaves one push and two pops.
+        #
         # @param line [String] one server string on its way to the client
         # @return [String] the line, or the same object when it has no doubled bold
         def collapse_double_bold(line)
