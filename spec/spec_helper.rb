@@ -112,8 +112,12 @@ RSpec.configure do |config|
     leaked.each { |name, (_read, write)| write.call(before[name]) }
     leaked.keys
   end
-  leak_message = lambda do |where, names|
-    "#{where} left #{names.join(', ')} holding a different object; " \
+  # The check compares snapshots, so it cannot tell who made the change: a
+  # thread started earlier that reassigns a global later is reported against
+  # whatever was running when it did.
+  leak_message = lambda do |names, during|
+    "#{names.join(', ')} changed to a different object #{during} " \
+      '(possibly from a background thread started earlier); ' \
       'save and restore spec_helper globals instead of reassigning them'
   end
 
@@ -132,7 +136,7 @@ RSpec.configure do |config|
     before = snapshot_globals.call
     example.run
     leaked = restore_globals.call(before)
-    raise leak_message.call(example.location, leaked) unless leaked.empty?
+    raise leak_message.call(leaked, "during the example at #{example.location}") unless leaked.empty?
   end
 
   # The reporter's example_started and example_finished notifications come
@@ -154,7 +158,7 @@ RSpec.configure do |config|
 
     leaked = restore_globals.call(early_before)
     early_before = nil
-    early_leaks << leak_message.call(notification.example.location, leaked) unless leaked.empty?
+    early_leaks << leak_message.call(leaked, "during the example at #{notification.example.location}") unless leaked.empty?
   end
   config.before(:suite) { config.reporter.register_listener(early_listener, :example_started, :example_finished) }
 
@@ -176,7 +180,7 @@ RSpec.configure do |config|
     messages = early_leaks.dup
     early_leaks.clear
     leaked = before ? restore_globals.call(before) : []
-    messages << leak_message.call("#{self.class.metadata[:location]} (a before/after(:context) hook)", leaked) unless leaked.empty?
+    messages << leak_message.call(leaked, "in a before/after(:context) hook of the group at #{self.class.metadata[:location]}") unless leaked.empty?
     raise messages.join("\n") unless messages.empty?
   end
 

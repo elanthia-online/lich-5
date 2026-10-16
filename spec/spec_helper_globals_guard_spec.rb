@@ -184,39 +184,39 @@ RSpec.describe 'spec_helper global leak guard' do
   it 'fails an example whose after hook reassigns a global, naming it, and restores it for the next group' do
     status, message = status_of('after leak leaks')
     expect(status).to eq('failed')
-    expect(message).to include('left $_CLIENT_ holding a different object')
+    expect(message).to include('$_CLIENT_ changed to a different object during the example at ')
     expect(status_of('after the after leak sees the original client').first).to eq('passed')
   end
 
   it 'reports a global reassigned in a before(:context) or after(:context) hook and restores it' do
     messages = Array(probe_result['messages']).join("\n")
     expect(probe_result['summary']['errors_outside_of_examples_count']).to eq(5)
-    expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$cmd_prefix holding a different object/)
-    expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$SEND_CHARACTER holding a different object/)
+    expect(messages).to match(%r{\$cmd_prefix changed to a different object in a before/after\(:context\) hook of the group at \S*guard_probe_spec\.rb:\d+})
+    expect(messages).to match(%r{\$SEND_CHARACTER changed to a different object in a before/after\(:context\) hook of the group at \S*guard_probe_spec\.rb:\d+})
     expect(status_of('after the before context leak sees the original prefix').first).to eq('passed')
     expect(status_of('after the after context leak sees the original send character').first).to eq('passed')
   end
 
   it 'checks the context hooks of a group defined before spec_helper loaded' do
     messages = Array(probe_result['messages']).join("\n")
-    expect(messages).to match(/guard_probe_spec\.rb:\d+.*left \$SEND_CHARACTER, \$cmd_prefix holding a different object/)
+    expect(messages).to match(%r{\$SEND_CHARACTER, \$cmd_prefix changed to a different object in a before/after\(:context\) hook of the group at \S*guard_probe_spec\.rb:\d+})
     expect(status_of('after the early group sees the original prefix, send character and client').first).to eq('passed')
   end
 
   it "judges a group defined before spec_helper loaded only after the group's own around hooks have run" do
     expect(status_of('early group with an around nested changes a global the outer around restores').first).to eq('passed')
     expect(status_of('early group with an around leaks a global').first).to eq('passed')
-    expect(Array(probe_result['messages']).join("\n")).to match(/guard_probe_spec\.rb:\d+.*left \$_CLIENT_ holding a different object/)
+    expect(Array(probe_result['messages']).join("\n")).to match(/\$_CLIENT_ changed to a different object during the example at \S*guard_probe_spec\.rb:\d+/)
   end
 
   it 'checks each example of a group defined before spec_helper loaded, as it does for later groups' do
     line = probe_line.call('changes a global in the example')
-    expect(Array(probe_result['messages']).join("\n")).to include("guard_probe_spec.rb:#{line} left $frontend holding a different object")
+    expect(Array(probe_result['messages']).join("\n")).to match(/\$frontend changed to a different object during the example at \S*guard_probe_spec\.rb:#{line} /)
     expect(status_of('early group restoring in after(:context) sees the original value after it').first).to eq('passed')
 
     status, message = status_of('restoring in after(:context) changes a global in the example')
     expect(status).to eq('failed')
-    expect(message).to include('left $frontend holding a different object')
+    expect(message).to include('$frontend changed to a different object during the example at ')
     expect(status_of('restoring in after(:context) sees the original value after it').first).to eq('passed')
   end
 end
