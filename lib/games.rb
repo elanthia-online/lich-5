@@ -1173,8 +1173,10 @@ module Lich
         # The Saga-identity stream's inline <room> block reaches only front
         # ends that render it (:room_element, Saga); every other front end gets
         # the legacy roomName/roomDesc layout it already handles. Rewritten
-        # before the Wizard conversion (sf_to_wiz), which keys on that layout;
-        # the room-number display (process_room_information) handles either.
+        # after DownstreamHook.run, so script hooks see the block as the server
+        # sent it, and before the Wizard conversion (sf_to_wiz), which keys on
+        # that layout; the room-number display (process_room_information)
+        # handles either.
         # They also get the legacy <compass> line the Saga-identity stream
         # dropped, except Wizard/Avalon (GSL), which get exits from XMLParser's
         # GSL codes and would see the line as a blank one.
