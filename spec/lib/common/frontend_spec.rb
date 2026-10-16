@@ -729,11 +729,26 @@ RSpec.describe Lich::Common::Frontend do
       expect(frontend.proxy_handshake('FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML', frontend: 'genie')).to eq(lich_string)
     end
 
-    it 'defaults the front end to the current client and leaves $frontend alone' do
-      allow(frontend).to receive(:client).and_return('genie')
-      frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n")
-      expect(frontend).to have_received(:client).at_least(:once)
-      expect(frontend.supports_game_links?('genie')).to be(false)
+    context 'with $frontend global (default argument)' do
+      around do |example|
+        original = $frontend
+        example.run
+      ensure
+        $frontend = original
+      end
+
+      it 'defaults the front end to the current client' do
+        $frontend = 'saga'
+        expect(frontend.proxy_handshake("/FE:WRAYTH /VERSION:1.0.1.28 /P:WIN_UNKNOWN /XML\n"))
+          .to eq("/FE:WRAYTH /VERSION:saga-unknown /P:SAGA /XML\n")
+      end
+
+      it 'leaves $frontend alone, so capability lookups still answer for the real front end' do
+        $frontend = 'genie'
+        expect(frontend.proxy_handshake("FE:WRAYTH /VERSION:1.0.1.22 /P:WIN_UNKNOWN /XML\n")).to eq("#{lich_string}\n")
+        expect($frontend).to eq('genie')
+        expect(frontend.supports_game_links?).to be(false)
+      end
     end
 
     it "uses a front end's registry :client_string" do
